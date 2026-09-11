@@ -510,6 +510,7 @@ export class DefaultPiLiveService implements PiLiveService {
         this.persistSessionIfChanged(runtime, readyState)
         this.updateRuntimeResources(runtime, readyState)
         this.persistStartupResourcesBestEffort(runtime, readyState)
+        this.persistPackageUpdatesBestEffort(runtime, generation)
       } else {
         let probe: Promise<void>
         probe = handle.state().then(state => {
@@ -517,6 +518,7 @@ export class DefaultPiLiveService implements PiLiveService {
           this.persistSessionIfChanged(runtime, state)
           this.updateRuntimeResources(runtime, state)
           this.persistStartupResourcesBestEffort(runtime, state)
+          this.persistPackageUpdatesBestEffort(runtime, generation)
         }).catch(error => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
@@ -558,6 +560,7 @@ export class DefaultPiLiveService implements PiLiveService {
     this.persistSessionIfChanged(runtime, snapshot.state)
     this.updateRuntimeResources(runtime, snapshot.state)
     this.persistStartupResourcesBestEffort(runtime, snapshot.state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
 
@@ -617,9 +620,16 @@ export class DefaultPiLiveService implements PiLiveService {
       await runtime.startupPackageAuditTask?.catch(() => undefined)
       if (runtime.status === 'ready' && runtime.handle) {
         const state = await runtime.handle.state().catch(() => undefined)
-        if (state?.sessionFile) {
-          this.adoptRuntimeSession(runtime, state.sessionFile)
-          await this.persistRuntime(runtime).catch(error => this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error))
+        if (state) {
+          if (state.sessionFile) {
+            this.adoptRuntimeSession(runtime, state.sessionFile)
+            await this.persistRuntime(runtime).catch(error => this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error))
+          }
+          this.updateRuntimeResources(runtime, state)
+          this.persistStartupResourcesBestEffort(runtime, state)
+          this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+          await runtime.startupAuditTask?.catch(() => undefined)
+          await runtime.startupPackageAuditTask?.catch(() => undefined)
         }
       }
       await this.terminateRuntime(runtime, false)
@@ -674,6 +684,7 @@ export class DefaultPiLiveService implements PiLiveService {
       this.persistSessionIfChanged(runtime, state)
       this.updateRuntimeResources(runtime, state)
       this.persistStartupResourcesBestEffort(runtime, state)
+      this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
       return this.decorateReadyState(runtime, state)
     }
     return {
