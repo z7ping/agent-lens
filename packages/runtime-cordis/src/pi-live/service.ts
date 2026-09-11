@@ -5,6 +5,7 @@ import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
+import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
@@ -35,6 +36,10 @@ interface OwnedRuntime {
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
   recoveryCheckpointTask?: Promise<void> | undefined
+  startupResourcesCapturedAt?: string | undefined
+  startupAuditCompleted?: string | undefined
+  startupAuditPending?: string | undefined
+  startupAuditTask?: Promise<void> | undefined
 }
 
 function taskSummary(message: string): string | undefined {
@@ -118,6 +123,17 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
   return Object.values(result).some(items => items.length) ? result : undefined
 }
 
+function copyStartupResources(resources: PiLiveStartupResources): PiLiveStartupResources {
+  return {
+    contexts: [...resources.contexts],
+    skills: [...resources.skills],
+    prompts: [...resources.prompts],
+    extensions: [...resources.extensions],
+    themes: [...resources.themes],
+    diagnostics: [...resources.diagnostics],
+  }
+}
+
 function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefined {
   const capabilities = record(value)
   if (typeof capabilities.protocolVersion !== 'number') return undefined
@@ -162,7 +178,11 @@ export class DefaultPiLiveService implements PiLiveService {
   private recoveryLoaded = false
   private disposed = false
 
-  constructor(dependency?: PiSdkLoader | PiRuntimeHost, recoveryStore?: PiLiveRecoveryStore) {
+  constructor(
+    dependency?: PiSdkLoader | PiRuntimeHost,
+    recoveryStore?: PiLiveRecoveryStore,
+    private readonly startupAudit?: PiLiveStartupAuditSink,
+  ) {
     this.host = typeof dependency === 'function' ? new InProcessPiRuntimeHost(dependency) : dependency ?? new WorkerPiRuntimeHost()
     this.recoveryStore = recoveryStore
   }
@@ -230,6 +250,10 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
     runtime.startupResources = undefined
+    runtime.startupResourcesCapturedAt = undefined
+    runtime.startupAuditCompleted = undefined
+    runtime.startupAuditPending = undefined
+    runtime.startupAuditTask = undefined
     runtime.startupOutput = []
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
@@ -373,7 +397,11 @@ export class DefaultPiLiveService implements PiLiveService {
           }
           if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
         } else if (event.type === 'runtime_resources') {
-          runtime.startupResources = startupResources(event.resources) ?? runtime.startupResources
+          const resources = startupResources(event.resources)
+          if (resources) {
+            runtime.startupResources = resources
+            runtime.startupResourcesCapturedAt ??= new Date().toISOString()
+          }
         } else if (event.type === 'runtime_output') {
           if (typeof event.message === 'string' && event.message.trim()) {
             runtime.startupOutput = [...runtime.startupOutput, event.message.trim()].slice(-80)
@@ -427,10 +455,16 @@ export class DefaultPiLiveService implements PiLiveService {
 
       if (readyState) {
         this.persistSessionIfChanged(runtime, readyState)
+        this.persistStartupResourcesBestEffort(runtime, readyState)
       } else {
         void handle.state().then(state => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.persistSessionIfChanged(runtime, state)
+          if (state.startupResources) {
+            runtime.startupResources ??= state.startupResources
+            runtime.startupResourcesCapturedAt ??= new Date().toISOString()
+          }
+          this.persistStartupResourcesBestEffort(runtime, state)
         }).catch(error => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
@@ -467,6 +501,11 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }
     const snapshot = await runtime.handle.snapshot(since)
     this.persistSessionIfChanged(runtime, snapshot.state)
+    if (snapshot.state.startupResources) {
+      runtime.startupResources ??= snapshot.state.startupResources
+      runtime.startupResourcesCapturedAt ??= new Date().toISOString()
+    }
+    this.persistStartupResourcesBestEffort(runtime, snapshot.state)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
 
@@ -505,6 +544,7 @@ export class DefaultPiLiveService implements PiLiveService {
     await this.ensureRecoveryLoaded()
     const runtime = this.runtimes.get(id)
     if (runtime) {
+      await runtime.startupAuditTask?.catch(() => undefined)
       await this.terminateRuntime(runtime, true)
       await runtime.recoveryCheckpointTask?.catch(() => undefined)
     }
@@ -518,6 +558,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtimes = [...this.runtimes.values()]
     await Promise.allSettled(runtimes.map(async runtime => {
       await runtime.recoveryCheckpointTask?.catch(() => undefined)
+      await runtime.startupAuditTask?.catch(() => undefined)
       if (runtime.status === 'ready' && runtime.handle) {
         const state = await runtime.handle.state().catch(() => undefined)
         if (state?.sessionFile) {
@@ -575,7 +616,11 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
       this.persistSessionIfChanged(runtime, state)
-      if (state.startupResources) runtime.startupResources = state.startupResources
+      if (state.startupResources) {
+        runtime.startupResources ??= state.startupResources
+        runtime.startupResourcesCapturedAt ??= new Date().toISOString()
+      }
+      this.persistStartupResourcesBestEffort(runtime, state)
       return this.decorateReadyState(runtime, state)
     }
     return {
@@ -621,6 +666,43 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
     }
+  }
+
+  private persistStartupResourcesBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    if (!this.startupAudit || !runtime.startupResources) return
+    const nativeSessionId = state.nativeSessionId?.trim()
+    if (!nativeSessionId) return
+
+    const attempt = `${runtime.generation}:${runtime.initializationStartedAt}`
+    if (runtime.startupAuditCompleted === attempt || runtime.startupAuditPending === attempt) return
+
+    const capturedAt = runtime.startupResourcesCapturedAt ?? new Date().toISOString()
+    const snapshot = {
+      runtimeSessionId: runtime.id,
+      attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
+      capturedAt,
+      nativeSessionId,
+      workspacePath: runtime.workspacePath,
+      startupResources: copyStartupResources(runtime.startupResources),
+      ...(runtime.input.executable ? { executable: runtime.input.executable } : {}),
+      ...(state.sdkVersion ?? runtime.capabilities?.sdkVersion
+        ? { sdkVersion: state.sdkVersion ?? runtime.capabilities?.sdkVersion }
+        : {}),
+      ...(state.sessionName ?? runtime.input.name
+        ? { sessionName: state.sessionName ?? runtime.input.name }
+        : {}),
+    }
+
+    runtime.startupAuditPending = attempt
+    const task = this.startupAudit.recordStartupResources(snapshot).then(() => {
+      if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
+    }).catch(error => {
+      console.warn('[AgentLens] Pi Live startup resource audit failed', error)
+    }).finally(() => {
+      if (runtime.startupAuditPending === attempt) runtime.startupAuditPending = undefined
+      if (runtime.startupAuditTask === task) runtime.startupAuditTask = undefined
+    })
+    runtime.startupAuditTask = task
   }
 
   private captureTaskSummary(runtime: OwnedRuntime, message: string): void {
