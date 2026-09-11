@@ -67,6 +67,7 @@ export function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategor
 function eventLabel(kind: TimelineItemDto['kind']): string {
   const labels: Partial<Record<TimelineItemDto['kind'], string>> = {
     'session.lifecycle': '会话生命周期',
+    'runtime.startup': 'Runtime 启动信息',
     'model.call': '模型调用',
     'model.changed': '模型切换',
     'tool.progress': '工具进度',
