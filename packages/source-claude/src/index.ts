@@ -48,6 +48,7 @@ import {
   isMissingPathError,
   readJsonlLines,
   sourceFileIdentity,
+  startHistoryFileWatch,
 } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'claude-code'
@@ -215,6 +216,122 @@ function historyCheckpointKey(filePath: string): string {
   return `claude:history:v2-session-title:${sha256(filePath)}`
 }
 
+export async function* ingestClaudeFile(
+  ctx: SourceExecutionContext,
+  filePath: string,
+): AsyncIterable<SourceRecord> {
+  if (ctx.abortSignal.aborted) return
+
+  let fileStat
+  try {
+    fileStat = await stat(filePath)
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
+  }
+
+  const initialFileId = sourceFileIdentity(fileStat)
+  const key = historyCheckpointKey(filePath)
+  const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+  const sameKnownFile = previous?.fileId === undefined || previous.fileId === initialFileId
+  const unchanged = previous
+    && previous.path === filePath
+    && sameKnownFile
+    && previous.offset === fileStat.size
+    && previous.size === fileStat.size
+    && previous.mtimeMs === fileStat.mtimeMs
+
+  if (unchanged) {
+    if (!previous.fileId) {
+      await ctx.checkpoint.set(key, { ...previous, fileId: initialFileId })
+    }
+    return
+  }
+
+  const reset = !previous
+    || previous.path !== filePath
+    || (previous.fileId !== undefined && previous.fileId !== initialFileId)
+    || fileStat.size < previous.offset
+  let offset = reset ? 0 : previous.offset
+  let sequence = reset ? 0 : previous.sequence
+  let lastCwd: string | undefined
+  let incompleteTail = false
+
+  const persistCheckpoint = async (
+    size: number,
+    mtimeMs: number,
+  ): Promise<void> => {
+    await ctx.checkpoint.set(key, {
+      path: filePath,
+      offset,
+      sequence,
+      size,
+      mtimeMs,
+      fileId: initialFileId,
+    })
+  }
+
+  for await (const line of readJsonlLines(filePath, offset)) {
+    if (ctx.abortSignal.aborted) return
+    if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) {
+      incompleteTail = true
+      break
+    }
+
+    sequence += 1
+    offset = line.endOffset
+    if (!line.text.trim()) {
+      await persistCheckpoint(fileStat.size, fileStat.mtimeMs)
+      continue
+    }
+
+    const entry = parseHistoryLine(line.text)
+    const cwd = stringField(entry, 'cwd') ?? lastCwd
+    if (cwd) lastCwd = cwd
+    const sessionId = nativeSessionId(entry, filePath)
+    const nativeId = nativeEntryId(entry)
+    const fingerprint = sha256(line.text)
+    const timestamp = stringField(entry, 'timestamp', 'ts')
+    const envelope: ClaudeStoredEnvelope = {
+      entry,
+      session: {
+        nativeSessionId: sessionId,
+        ...(cwd ? { cwd } : {}),
+      },
+    }
+
+    yield {
+      id: `claude-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
+      sourceId: SOURCE_ID,
+      installationId: ctx.installation.id,
+      ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
+      nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
+      ...(nativeId ? { nativeId } : {}),
+      sourceSequence: sequence,
+      ...(timestamp ? { occurredAt: timestamp } : {}),
+      capturedAt: new Date().toISOString(),
+      locator: { kind: 'file', path: filePath, offset: line.startOffset },
+      fingerprint,
+      payload: envelope,
+      parserVersion: PARSER_VERSION,
+    }
+
+    await persistCheckpoint(fileStat.size, fileStat.mtimeMs)
+  }
+
+  // Keep EOF metadata current without confusing a path replacement with an append.
+  if (!ctx.abortSignal.aborted && !incompleteTail) {
+    try {
+      const finalStat = await stat(filePath)
+      if (sourceFileIdentity(finalStat) === initialFileId) {
+        await persistCheckpoint(finalStat.size, finalStat.mtimeMs)
+      }
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error
+    }
+  }
+}
+
 export async function* ingestClaudeHistory(
   ctx: SourceHistoryExecutionContext,
 ): AsyncIterable<SourceRecord> {
@@ -224,115 +341,7 @@ export async function* ingestClaudeHistory(
 
   for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
-
-    let fileStat
-    try {
-      fileStat = await stat(filePath)
-    } catch (error) {
-      if (isMissingPathError(error)) continue
-      throw error
-    }
-
-    const initialFileId = sourceFileIdentity(fileStat)
-    const key = historyCheckpointKey(filePath)
-    const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
-    const sameKnownFile = previous?.fileId === undefined || previous.fileId === initialFileId
-    const unchanged = previous
-      && previous.path === filePath
-      && sameKnownFile
-      && previous.offset === fileStat.size
-      && previous.size === fileStat.size
-      && previous.mtimeMs === fileStat.mtimeMs
-
-    if (unchanged) {
-      if (!previous.fileId) {
-        await ctx.checkpoint.set(key, { ...previous, fileId: initialFileId })
-      }
-      continue
-    }
-
-    const reset = !previous
-      || previous.path !== filePath
-      || (previous.fileId !== undefined && previous.fileId !== initialFileId)
-      || fileStat.size < previous.offset
-    let offset = reset ? 0 : previous.offset
-    let sequence = reset ? 0 : previous.sequence
-    let lastCwd: string | undefined
-    let incompleteTail = false
-
-    const persistCheckpoint = async (
-      size: number,
-      mtimeMs: number,
-    ): Promise<void> => {
-      await ctx.checkpoint.set(key, {
-        path: filePath,
-        offset,
-        sequence,
-        size,
-        mtimeMs,
-        fileId: initialFileId,
-      })
-    }
-
-    for await (const line of readJsonlLines(filePath, offset)) {
-      if (ctx.abortSignal.aborted) return
-      if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) {
-        incompleteTail = true
-        break
-      }
-
-      sequence += 1
-      offset = line.endOffset
-      if (!line.text.trim()) {
-        await persistCheckpoint(fileStat.size, fileStat.mtimeMs)
-        continue
-      }
-
-      const entry = parseHistoryLine(line.text)
-      const cwd = stringField(entry, 'cwd') ?? lastCwd
-      if (cwd) lastCwd = cwd
-      const sessionId = nativeSessionId(entry, filePath)
-      const nativeId = nativeEntryId(entry)
-      const fingerprint = sha256(line.text)
-      const timestamp = stringField(entry, 'timestamp', 'ts')
-      const envelope: ClaudeStoredEnvelope = {
-        entry,
-        session: {
-          nativeSessionId: sessionId,
-          ...(cwd ? { cwd } : {}),
-        },
-      }
-
-      yield {
-        id: `claude-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
-        sourceId: SOURCE_ID,
-        installationId: ctx.installation.id,
-        ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
-        nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
-        ...(nativeId ? { nativeId } : {}),
-        sourceSequence: sequence,
-        ...(timestamp ? { occurredAt: timestamp } : {}),
-        capturedAt: new Date().toISOString(),
-        locator: { kind: 'file', path: filePath, offset: line.startOffset },
-        fingerprint,
-        payload: envelope,
-        parserVersion: PARSER_VERSION,
-      }
-
-      await persistCheckpoint(fileStat.size, fileStat.mtimeMs)
-    }
-
-    // Keep EOF metadata current without confusing a path replacement with an append.
-    if (!ctx.abortSignal.aborted && !incompleteTail) {
-      try {
-        const finalStat = await stat(filePath)
-        if (sourceFileIdentity(finalStat) === initialFileId) {
-          await persistCheckpoint(finalStat.size, finalStat.mtimeMs)
-        }
-      } catch (error) {
-        if (!isMissingPathError(error)) throw error
-      }
-    }
+    yield* ingestClaudeFile(ctx, filePath)
   }
 }
 
@@ -432,10 +441,38 @@ export async function startClaudeRuntimeCapture(
     }
   })()
 
+  const projectsDir = ctx.installation.dataRoot
+    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
+  const historyWatch = projectsDir
+    ? await startHistoryFileWatch({
+        root: projectsDir,
+        signal: ctx.abortSignal,
+        accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
+        listFiles: limit => listJsonlFiles(
+          projectsDir,
+          limit === undefined ? undefined : { sessionLimit: limit },
+        ),
+        onFile: async filePath => {
+          for await (const record of ingestClaudeFile(ctx, filePath)) {
+            await emitter.emit(record)
+          }
+        },
+        debounceMs: 180,
+        fallbackPollMs: 60_000,
+        fallbackReconcileLimit: 20,
+        reconcilePollMs: 5 * 60_000,
+        reconcileLimit: 20,
+        onError: error => {
+          console.error('[AgentLens] Claude history reconcile failed', error)
+        },
+      })
+    : null
+
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
+      await historyWatch?.dispose()
       await task
     },
   }
