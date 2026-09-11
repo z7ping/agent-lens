@@ -363,7 +363,8 @@ export async function startClaudeRuntimeCapture(
       let files: string[] = []
       try {
         files = (await readdir(inbox)).filter(name => name.endsWith('.json')).sort()
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
         files = []
       }
 
@@ -394,16 +395,18 @@ export async function startClaudeRuntimeCapture(
 async function safeStat(path: string) {
   try {
     return await stat(path)
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
 async function safeEntries(path: string) {
   try {
     return await readdir(path, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error)) return []
+    throw error
   }
 }
 
@@ -425,13 +428,11 @@ function staticEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -442,14 +443,17 @@ function assetStates(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
   values: Array<{
     state: 'installed' | 'configured' | 'enabled' | 'discoverable'
     value: boolean | 'unknown'
   }>,
 ): NonNullable<DiscoveredAsset['states']> {
-  const evidence = staticEvidence(path, observedAt, capturedAt, nativeStableId)
-  return values.map(value => ({ ...value, observedAt, evidenceCandidates: [evidence] }))
+  const evidence = staticEvidence(path, observedAt, capturedAt)
+  return values.map(value => ({
+    ...value,
+    observedAt,
+    ...(value.value === 'unknown' ? {} : { evidenceCandidates: [evidence] }),
+  }))
 }
 
 async function* discoverSkillAssets(
@@ -469,10 +473,9 @@ async function* discoverSkillAssets(
         skillFile,
         observedAt,
         capturedAt,
-        `skill:${skillFile}`,
         [
           { state: 'installed', value: true },
-          { state: 'discoverable', value: true },
+          { state: 'discoverable', value: 'unknown' },
         ],
       ),
     }
@@ -498,10 +501,9 @@ async function* discoverCommandAssets(
         filePath,
         observedAt,
         capturedAt,
-        `command:${filePath}`,
         [
-          { state: 'configured', value: true },
-          { state: 'discoverable', value: true },
+          { state: 'installed', value: true },
+          { state: 'discoverable', value: 'unknown' },
         ],
       ),
     }
@@ -526,7 +528,6 @@ async function* discoverPluginAssets(
         path,
         observedAt,
         capturedAt,
-        `plugin:${path}`,
         [{ state: 'installed', value: true }],
       ),
     }
@@ -546,8 +547,9 @@ async function* discoverSettingsAssets(
     let settings: Record<string, unknown>
     try {
       settings = asRecord(JSON.parse(await readFile(settingsPath, 'utf8')))
-    } catch {
-      continue
+    } catch (error) {
+      if (isMissingPathError(error) || error instanceof SyntaxError) continue
+      throw error
     }
     const observedAt = meta.mtime.toISOString()
     const mcp = asRecord(settings.mcpServers ?? settings.mcp_servers)
@@ -559,10 +561,9 @@ async function* discoverSettingsAssets(
           settingsPath,
           observedAt,
           capturedAt,
-          `mcp:${settingsPath}:${name}`,
           [
             { state: 'configured', value: true },
-            { state: 'discoverable', value: true },
+            { state: 'discoverable', value: 'unknown' },
           ],
         ),
       }
@@ -582,10 +583,9 @@ async function* discoverSettingsAssets(
           settingsPath,
           observedAt,
           capturedAt,
-          `hook:${settingsPath}:${eventName}`,
           [
             { state: 'configured', value: true },
-            { state: 'enabled', value: true },
+            { state: 'enabled', value: 'unknown' },
           ],
         ),
       }
