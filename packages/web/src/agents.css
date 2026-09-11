@@ -165,6 +165,41 @@
 .integration-capability-badges .ui-status-badge {
   font-weight: 560;
 }
+.integration-authorization-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+}
+.integration-authorization-action > span {
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.integration-authorization-list {
+  display: grid;
+  gap: 8px;
+}
+.integration-authorization-list > div {
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+}
+.integration-authorization-list b {
+  font-size: 13px;
+}
+.integration-authorization-list span,
+.integration-authorization-note {
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.integration-authorization-note {
+  margin: 10px 0 0;
+}
 .source-capture-switch {
   display: flex;
   min-width: 92px;
