@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -17,6 +18,7 @@ import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound,
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 import { workspaceDisplayName } from './task-detail-model'
+import { agentLensI18n } from '../i18n/runtime'
 
 type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
@@ -32,18 +34,20 @@ interface ExtensionRequest {
 }
 
 const PI_LIVE_EAGER_CHUNKS = 2
-const PI_LIVE_STARTUP_BACKGROUND = {
-  model: {
-    id: 'background:startup',
-    label: '后台活动',
-    state: 'settled' as const,
-    toolCount: 0,
-    errorCount: 0,
-    durationMs: 0,
-    highLatency: false,
-  },
-  items: [] as PiLiveHistoryItem[],
-  continuation: false,
+function piLiveStartupBackground() {
+  return {
+    model: {
+      id: 'background:startup',
+      label: agentLensI18n.t('piLive:common.backgroundActivity'),
+      state: 'settled' as const,
+      toolCount: 0,
+      errorCount: 0,
+      durationMs: 0,
+      highLatency: false,
+    },
+    items: [] as PiLiveHistoryItem[],
+    continuation: false,
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -110,18 +114,18 @@ function modelLabel(state: PiLiveStateDto | null): string {
 }
 
 function modelCompactLabel(state: PiLiveStateDto | null): string {
-  if (!state?.model) return '模型'
+  if (!state?.model) return agentLensI18n.t('piLive:common.model')
   const model = record(state.model)
-  return stringValue(model.name || model.id || model.modelId) || '模型'
+  return stringValue(model.name || model.id || model.modelId) || agentLensI18n.t('piLive:common.model')
 }
 
 function thinkingLevelLabel(level: string): string {
   const normalized = level.trim().toLowerCase()
-  if (normalized === 'minimal' || normalized === 'none' || normalized === 'off') return '极简'
-  if (normalized === 'low') return '低'
-  if (normalized === 'medium') return '中'
-  if (normalized === 'high') return '高'
-  if (normalized === 'xhigh' || normalized === 'max' || normalized === 'maximum') return '极高'
+  if (normalized === 'minimal' || normalized === 'none' || normalized === 'off') return agentLensI18n.t('piLive:common.thinkingMinimal')
+  if (normalized === 'low') return agentLensI18n.t('piLive:common.thinkingLow')
+  if (normalized === 'medium') return agentLensI18n.t('piLive:common.thinkingMedium')
+  if (normalized === 'high') return agentLensI18n.t('piLive:common.thinkingHigh')
+  if (normalized === 'xhigh' || normalized === 'max' || normalized === 'maximum') return agentLensI18n.t('piLive:common.thinkingXHigh')
   return level
 }
 
@@ -133,18 +137,28 @@ function modelSelection(state: PiLiveStateDto | null): string {
   return provider && id ? JSON.stringify([provider, id]) : ''
 }
 
+function currentLocale(): string {
+  return agentLensI18n.resolvedLanguage ?? agentLensI18n.language ?? 'zh-CN'
+}
+
 function formatTaskDateTime(value: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(currentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
 }
 
 function formatTaskDuration(ms: number): string {
   const value = Math.max(0, ms)
-  if (value < 60_000) return `${Math.floor(value / 1000)} 秒`
-  if (value < 3_600_000) return `${Math.floor(value / 60_000)} 分钟`
-  if (value < 86_400_000) return `${Math.floor(value / 3_600_000)} 小时 ${Math.floor(value % 3_600_000 / 60_000)} 分钟`
-  return `${Math.floor(value / 86_400_000)} 天 ${Math.floor(value % 86_400_000 / 3_600_000)} 小时`
+  if (value < 60_000) return agentLensI18n.t('piLive:common.seconds', { count: Math.floor(value / 1000) })
+  if (value < 3_600_000) return agentLensI18n.t('piLive:common.minutes', { count: Math.floor(value / 60_000) })
+  if (value < 86_400_000) return agentLensI18n.t('piLive:common.hoursMinutes', {
+    hours: Math.floor(value / 3_600_000),
+    minutes: Math.floor(value % 3_600_000 / 60_000),
+  })
+  return agentLensI18n.t('piLive:common.daysHours', {
+    days: Math.floor(value / 86_400_000),
+    hours: Math.floor(value % 86_400_000 / 3_600_000),
+  })
 }
 
 function PiLiveElapsed({ startedAt }: { startedAt: string }) {
@@ -206,7 +220,7 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
   return {
     id,
     method,
-    title: stringValue(event.title) || 'Pi 需要你的确认',
+    title: stringValue(event.title) || agentLensI18n.t('piLive:common.confirmationTitle'),
     message: stringValue(event.message),
     options: Array.isArray(event.options) ? event.options.filter((item): item is string => typeof item === 'string') : [],
     placeholder: stringValue(event.placeholder),
