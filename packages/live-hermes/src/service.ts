@@ -80,12 +80,12 @@ export class DefaultHermesLiveService {
   async start(input: unknown): Promise<LiveRuntimeState> {
     if (this.disposed) throw new Error('Hermes Live service is disposed')
     const parsed = parseStartInput(input)
+    const id = randomUUID()
     const runtime: OwnedRuntime = {
-      id: randomUUID(),
+      id,
       status: 'initializing',
-      events: new LiveEventChannel('pending'),
+      events: new LiveEventChannel(id),
     }
-    runtime.events = new LiveEventChannel(runtime.id)
     this.runtimes.set(runtime.id, runtime)
 
     try {
@@ -103,6 +103,8 @@ export class DefaultHermesLiveService {
         status: 'failed',
         error: safeError(error),
       })
+      this.runtimes.delete(runtime.id)
+      runtime.events.clear()
       throw error
     }
 
@@ -184,8 +186,6 @@ export class DefaultHermesLiveService {
     await runtime.streamTask?.catch(() => undefined)
 
     runtime.activeRunId = undefined
-    runtime.streamAbort = undefined
-    runtime.streamTask = undefined
     runtime.status = 'terminated'
     runtime.events.publish({ type: 'runtime_status', status: 'terminated' })
     runtime.events.clear()
@@ -202,13 +202,14 @@ export class DefaultHermesLiveService {
     runId: string,
     signal: AbortSignal,
   ): Promise<void> {
+    let terminalEventSeen = false
     try {
       for await (const event of this.client.runEvents(runId, signal)) {
         if (runtime.activeRunId !== runId) return
         runtime.events.publish(event)
         const name = typeof event.event === 'string' ? event.event : ''
         if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(name)) {
-          this.finishRun(runtime, runId)
+          terminalEventSeen = true
         }
       }
     } catch (error) {
@@ -220,8 +221,13 @@ export class DefaultHermesLiveService {
         })
       }
     } finally {
-      if (signal.aborted || runtime.status === 'terminated') return
-      await this.refreshActiveRun(runtime).catch(() => undefined)
+      if (runtime.activeRunId === runId && terminalEventSeen) {
+        this.finishRun(runtime, runId)
+      } else if (!signal.aborted && runtime.status !== 'terminated') {
+        await this.refreshActiveRun(runtime).catch(() => undefined)
+      }
+      if (runtime.streamAbort?.signal === signal) runtime.streamAbort = undefined
+      if (runtime.streamTask) runtime.streamTask = undefined
     }
   }
 
@@ -231,8 +237,8 @@ export class DefaultHermesLiveService {
     const state = await this.client.runState(runId)
     if (TERMINAL_RUN_STATUSES.has(state.status)) {
       runtime.events.publish({
-        event: `run.${state.status}`,
         ...state,
+        event: `run.${state.status}`,
       })
       this.finishRun(runtime, runId)
     }
