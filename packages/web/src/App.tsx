@@ -6,6 +6,7 @@ import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } fr
 import { useReviewUrlSync } from './client/useReviewUrlSync'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
+import { IntegrationOrderProvider } from './components/IntegrationOrderProvider'
 import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
@@ -173,12 +174,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     return <IntegrationOnboarding model={model} snapshot={snapshot}/>
   }
 
-  return <PinnedAgentsProvider
-    agents={agents}
+  return <IntegrationOrderProvider
     management={snapshot.integrationManagement}
     model={model}
   >
-    <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
+    <PinnedAgentsProvider agents={agents}>
+      <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
@@ -233,7 +234,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label={t('navigation:agentOverview')} hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       </div>
     </div>
-  </PinnedAgentsProvider>
+    </PinnedAgentsProvider>
+  </IntegrationOrderProvider>
 }
 
 export function App({ model }: { model: AgentLensClientModel }) {
