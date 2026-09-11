@@ -26,9 +26,9 @@ import {
 import {
   abortableDelay,
   defineAgentLensPlugin,
-  isMissingPathError,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'opencode'
 const PARSER_VERSION = '3'
