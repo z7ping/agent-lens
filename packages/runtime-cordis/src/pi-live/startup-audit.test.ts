@@ -155,10 +155,12 @@ test('Pi startup audit event identity separates retry generations', () => {
   const first = piLiveStartupAuditInternals.auditEventId({
     ...base,
     attemptStartedAt: '2026-09-11T10:00:00.000Z',
+    attemptGeneration: 1,
   })
   const retry = piLiveStartupAuditInternals.auditEventId({
     ...base,
-    attemptStartedAt: '2026-09-11T10:01:00.000Z',
+    attemptStartedAt: '2026-09-11T10:00:00.000Z',
+    attemptGeneration: 2,
   })
   assert.notEqual(first, retry)
 })
