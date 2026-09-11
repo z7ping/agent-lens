@@ -5,6 +5,7 @@ import {
   DefaultCoverageService,
   DefaultEvidenceService,
   DefaultIdentityService,
+  DefaultLiveService,
   DefaultObservationService,
   DefaultProjectionService,
   DefaultSourceService,
@@ -21,6 +22,7 @@ import {
 const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const storage = ctx.storage
   const sources = new DefaultSourceService()
+  const lives = new DefaultLiveService()
   const identity = new DefaultIdentityService(storage)
   const evidence = new DefaultEvidenceService(storage)
   const observations = new EventingObservationService(
@@ -40,6 +42,7 @@ const applyCoreServices: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const projections = new DefaultProjectionService()
 
   ctx.provide('sources', sources)
+  ctx.provide('lives', lives)
   ctx.provide('identity', identity)
   ctx.provide('evidence', evidence)
   ctx.provide('observations', observations)
