@@ -267,31 +267,36 @@ function runtimeSuccess(response: unknown): { success: boolean; exitCode?: numbe
 }
 
 function runtimeEnvelope(record: SourceRecord): {
-  envelope: CodexStoredEnvelope
+  envelope?: CodexStoredEnvelope
   event: Record<string, unknown>
 } {
   const payload = asRecord(record.payload)
   const session = asRecord(payload.session)
   const event = asRecord(payload.runtimeEvent)
   const cwd = stringField(session, 'cwd')
+  const storedSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId
+  const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
+    ? undefined
+    : storedSessionId
   return {
-    envelope: {
-      entry: event,
-      session: {
-        nativeSessionId: stringField(session, 'nativeSessionId')
-          ?? record.sourceSessionNativeId
-          ?? 'runtime-unknown',
-        ...(cwd ? { cwd } : {}),
+    ...(nativeSessionId ? {
+      envelope: {
+        entry: event,
+        session: {
+          nativeSessionId,
+          ...(cwd ? { cwd } : {}),
+        },
       },
-    },
+    } : {}),
     event,
   }
 }
 
 function normalizeRuntimeRecord(
   record: SourceRecord,
-): ObservationCandidate {
+): ObservationCandidate | null {
   const { envelope, event } = runtimeEnvelope(record)
+  if (!envelope) return null
   const hookName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'UnknownHookEvent'
   const callId = stringField(event, 'call_id', 'tool_use_id')
   const toolName = stringField(event, 'tool_name', 'name', 'tool') ?? 'unknown'
@@ -392,8 +397,9 @@ export async function normalizeCodexRecord(
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   if (record.locator.kind === 'runtime-hook') {
+    const observation = normalizeRuntimeRecord(record)
     return {
-      observations: [normalizeRuntimeRecord(record)],
+      observations: observation ? [observation] : [],
       evidenceCandidates: [evidenceFor(record)],
     }
   }
