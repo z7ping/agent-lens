@@ -15,7 +15,7 @@ import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { usePinnedAgents } from '../components/PinnedAgentsProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { Button, Dialog, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, Dialog, IconButton, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 
 const capabilityLabelKey: Record<string, string> = {
@@ -875,25 +875,60 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
-  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
-  const items = useOrderedAgents(snapshot.agents?.items ?? [])
-  const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
-  const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
-  const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
+  const overviewItems = useOrderedAgents(snapshot.agents?.items ?? [])
+  const managementItems = snapshot.integrationManagement?.items ?? []
   const discovery = snapshot.integrationDiscovery
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || discovery?.status === 'scanning'
-  const managementByProduct = new Map((snapshot.integrationManagement?.items ?? []).map(item => [item.productId, item]))
-  const managementById = new Map((snapshot.integrationManagement?.items ?? []).map(item => [item.integrationId, item]))
-  const discoveryByProduct = new Map((discovery?.items ?? []).map(item => [item.productId, item]))
+  const { canReorder, move, moveBy, reset } = usePinnedAgents()
+  const [managingOrder, setManagingOrder] = useState(false)
+  const [draggedId, setDraggedId] = useState('')
+
+  const discoveryItems = discovery?.items ?? []
+  const claimedSourceIds = new Set<string>()
+  const managedRows = managementItems.map(management => {
+    const agent = overviewItems.find(item =>
+      item.productId === management.productId || item.sourceId === management.integrationId
+    )
+    if (agent) claimedSourceIds.add(agent.sourceId)
+    const tool = management.tool ?? discoveryItems.find(item =>
+      item.productId === management.productId || item.integrationId === management.integrationId
+    )
+    return {
+      id: management.integrationId,
+      displayName: management.displayName,
+      agent,
+      management,
+      discovery: tool,
+    }
+  })
+  const rows = [
+    ...managedRows,
+    ...overviewItems
+      .filter(agent => !claimedSourceIds.has(agent.sourceId))
+      .map(agent => ({
+        id: agent.sourceId,
+        displayName: agent.displayName,
+        agent,
+        management: undefined,
+        discovery: discoveryItems.find(item =>
+          item.productId === agent.productId || item.integrationId === agent.sourceId
+        ),
+      })),
+  ]
+
+  const fallbackRow = rows.find(row =>
+    row.agent?.detected
+    || row.discovery?.presence === 'present'
+    || row.discovery?.presence === 'data-only'
+  ) ?? rows[0]
+  const selectedSourceId = rows.some(row => row.id === sourceId) ? sourceId : fallbackRow?.id ?? ''
+  const selectedRow = rows.find(row => row.id === selectedSourceId)
+  const selectedAgent = selectedRow?.agent
+  const selectedManagement = selectedRow?.management
+  const selectedDiscovery = selectedRow?.discovery
   const discoveryErrors = discovery?.items.filter(item => item.presence === 'error') ?? []
-  const selectedManagement = selectedAgent
-    ? managementByProduct.get(selectedAgent.productId) ?? managementById.get(selectedAgent.sourceId)
-    : undefined
-  const selectedDiscovery = selectedManagement?.tool ?? (selectedAgent
-    ? discoveryByProduct.get(selectedAgent.productId) ?? discoveryByProduct.get(selectedAgent.sourceId)
-    : undefined)
   const rescan = snapshot.agentsRescanResult
   const rescanning = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
   const scanBusy = rescanning || discoveryScanning
@@ -915,6 +950,21 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
               </StatusBadge>
             : null
 
+  const installIntegration = async (integrationId: string) => {
+    const result = await model.installIntegration(integrationId)
+    if (result.operation.status === 'completed' && result.state.installed) {
+      await model.acknowledgeIntegration(integrationId).catch(() => undefined)
+    }
+    return result
+  }
+
+  const selectRow = (integrationId: string, isNew: boolean | undefined) => {
+    onSourceIdChange(integrationId)
+    if (isNew) void model.acknowledgeIntegration(integrationId).catch(() => undefined)
+  }
+
+  const reorderableRows = rows.filter(row => canReorder(row.id))
+
   return <main className="workspace-page">
     <div className="page-content agents-content">
       <CompactPageHeading title={t('page.title')} description={t('page.description')}>
@@ -923,35 +973,109 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           {rescanStatus}
         </Toolbar>
       </CompactPageHeading>
-      {items.length ? <div className="agents-browser">
+      {rows.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label={t('page.list')}>
-          <div className="agent-source-nav-head"><b>{t('page.localAgents')}</b><span>{items.length}</span></div>
-          {items.map(agent => {
-            const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
-            const agentDiscovery = discoveryByProduct.get(agent.productId) ?? discoveryByProduct.get(agent.sourceId)
-            const agentManagement = managementByProduct.get(agent.productId) ?? managementById.get(agent.sourceId)
-            const status = captureState(agent, agentManagement, agentDiscovery, discoveryScanning, t)
-            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
-              <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
-              <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
+          <div className="agent-source-nav-head"><b>{managingOrder ? t('page.orderTitle') : t('page.localAgents')}</b><span>{rows.length}</span></div>
+          <div className="agent-source-nav-actions">
+            {managingOrder ? <>
+              <Button size="small" onClick={reset}>{t('scope.reset')}</Button>
+              <Button size="small" variant="primary" onClick={() => { setManagingOrder(false); setDraggedId('') }}>{t('page.orderDone')}</Button>
+            </> : <Button size="small" onClick={() => setManagingOrder(true)}>{t('page.manageOrder')}</Button>}
+          </div>
+
+          {managingOrder ? <div className="agent-order-list">
+            {rows.map(row => {
+              const reorderable = canReorder(row.id)
+              const reorderIndex = reorderableRows.findIndex(item => item.id === row.id)
+              return <div
+                key={row.id}
+                className={`agent-order-option ${draggedId === row.id ? 'is-dragging' : ''} ${reorderable ? '' : 'is-fixed'}`}
+                draggable={reorderable}
+                onDragStart={(event: DragEvent<HTMLDivElement>) => {
+                  if (!reorderable) return
+                  setDraggedId(row.id)
+                  event.dataTransfer.effectAllowed = 'move'
+                }}
+                onDragOver={event => {
+                  if (!reorderable) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                }}
+                onDrop={event => {
+                  if (!reorderable) return
+                  event.preventDefault()
+                  if (draggedId) move(draggedId, row.id)
+                  setDraggedId('')
+                }}
+                onDragEnd={() => setDraggedId('')}
+              >
+                <UiIcon name="drag" size={15} className="agent-order-drag"/>
+                <span className={`source-dot ${sourceDot(row.id)}`}/>
+                <b>{row.displayName}</b>
+                <span className="agent-order-buttons">
+                  <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(row.id, -1)} aria-label={t('scope.moveUp', { agent: row.displayName })}><UiIcon name="arrow-big-up" size={13}/></IconButton>
+                  <IconButton size="small" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableRows.length - 1} onClick={() => moveBy(row.id, 1)} aria-label={t('scope.moveDown', { agent: row.displayName })}><UiIcon name="arrow-big-down" size={13}/></IconButton>
+                </span>
+              </div>
+            })}
+          </div> : rows.map(row => {
+            const assetCount = row.agent?.assetInventory.filter(asset => asset.type !== 'builtin').length ?? 0
+            const status = captureState(row.agent, row.management, row.discovery, discoveryScanning, t)
+            const packageState = row.management?.packageState
+            const subtitle = row.management && packageState && !packageState.installed
+              ? t('page.notAddedSubtitle')
+              : !row.agent && packageState?.restartRequired
+                ? t('page.waitingRestart')
+                : row.agent
+                  ? t('page.userAssets', { count: assetCount })
+                  : t('page.detailsUnavailable')
+            return <button
+              key={row.id}
+              className={`agent-source-option ${row.id === selectedSourceId ? 'is-active' : ''}`}
+              onClick={() => selectRow(row.id, row.management?.isNew)}
+              aria-current={row.id === selectedSourceId ? 'true' : undefined}
+              title={status.title}
+            >
+              <span className={`source-dot large ${sourceDot(row.id)}`}/>
+              <span className="agent-source-copy">
+                <span className="agent-source-name-line">
+                  <b>{row.displayName}</b>
+                  {row.management?.isNew && <em>{t('status.new')}</em>}
+                </span>
+                <small>{subtitle}</small>
+              </span>
               <span className={`agent-source-state ${status.className}`}>{status.label}</span>
             </button>
           })}
         </nav>
-        <div className="agent-detail-pane">{selectedAgent && <AgentCard
-          key={selectedAgent.sourceId}
-          agent={selectedAgent}
-          management={selectedManagement}
-          discovery={selectedDiscovery}
-          discoveryScanning={discoveryScanning}
-          discoveryError={snapshot.integrationDiscoveryError}
-          policy={snapshot.capturePolicy}
-          onCaptureChange={(id, enabled) => selectedManagement
-            ? model.setIntegrationEnabled(id, enabled).then(() => undefined)
-            : model.setSourceEnabled(id, enabled)}
-          onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
-        />}</div>
+        <div className="agent-detail-pane">
+          {selectedAgent ? <AgentCard
+            key={selectedAgent.sourceId}
+            agent={selectedAgent}
+            management={selectedManagement}
+            discovery={selectedDiscovery}
+            discoveryScanning={discoveryScanning}
+            discoveryError={snapshot.integrationDiscoveryError}
+            policy={snapshot.capturePolicy}
+            onCaptureChange={(id, enabled) => selectedManagement
+              ? model.setIntegrationEnabled(id, enabled).then(() => undefined)
+              : model.setSourceEnabled(id, enabled)}
+            onInstall={installIntegration}
+            onRemove={id => model.removeIntegration(id)}
+            onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
+          /> : selectedManagement ? <IntegrationOnlyCard
+            key={selectedManagement.integrationId}
+            management={selectedManagement}
+            discovery={selectedDiscovery}
+            discoveryScanning={discoveryScanning}
+            discoveryError={snapshot.integrationDiscoveryError}
+            onChange={(id, enabled) => model.setIntegrationEnabled(id, enabled).then(() => undefined)}
+            onInstall={installIntegration}
+            onRemove={id => model.removeIntegration(id)}
+          /> : null}
+        </div>
       </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
     </div>
   </main>
 }
+
