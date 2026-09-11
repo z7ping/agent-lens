@@ -40,6 +40,7 @@ interface InstalledPointer {
   integrationId: string
   version: string
   installedAt: string
+  manifestSha256?: string | undefined
 }
 
 interface TrustedBundle {
@@ -250,11 +251,21 @@ function parseInstalledPointer(text: string, integrationId: string): InstalledPo
   if (typeof value.installedAt !== 'string' || !Number.isFinite(Date.parse(value.installedAt))) {
     throw new Error('Installed Integration pointer installedAt is invalid')
   }
+  const manifestSha256 = value.manifestSha256
+  if (
+    manifestSha256 !== undefined
+    && (typeof manifestSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(manifestSha256))
+  ) {
+    throw new Error('Installed Integration pointer manifestSha256 is invalid')
+  }
   return {
     schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
     integrationId,
     version: value.version,
     installedAt: value.installedAt,
+    ...(typeof manifestSha256 === 'string'
+      ? { manifestSha256: manifestSha256.toLowerCase() }
+      : {}),
   }
 }
 
@@ -491,8 +502,12 @@ export class IntegrationPackageService {
       await mkdir(versionsRoot, { recursive: true, mode: 0o700 })
       const target = join(versionsRoot, trusted.manifest.version)
       if (existsSync(target)) {
-        const existing = await this.verifyInstalledPackage(target, integrationId, trusted.manifest.version)
-          .catch(() => null)
+        const existing = await this.verifyInstalledPackage(
+          target,
+          integrationId,
+          trusted.manifest.version,
+          sha256(trusted.manifestText),
+        ).catch(() => null)
         if (!existing || existing.integrity !== 'verified') {
           const trashRoot = join(this.options.installRoot, '.trash')
           await mkdir(trashRoot, { recursive: true, mode: 0o700 })
@@ -502,15 +517,22 @@ export class IntegrationPackageService {
       if (!existsSync(target)) await rename(staging, target)
       else await rm(staging, { recursive: true, force: true })
 
+      const manifestSha256 = sha256(trusted.manifestText)
+      const verified = await this.verifyInstalledPackage(
+        target,
+        integrationId,
+        trusted.manifest.version,
+        manifestSha256,
+      )
       const pointer: InstalledPointer = {
         schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
         integrationId,
         version: trusted.manifest.version,
         installedAt: new Date().toISOString(),
+        manifestSha256,
       }
       await writeJsonAtomic(join(this.integrationRoot(integrationId), 'current.json'), pointer)
-      const state = await this.readInstalledState(integrationId)
-      this.states.set(integrationId, { ...state, restartRequired: true })
+      this.states.set(integrationId, { ...verified, restartRequired: true })
     } catch (error) {
       await rm(staging, { recursive: true, force: true }).catch(() => undefined)
       throw error
@@ -600,8 +622,28 @@ export class IntegrationPackageService {
     }
 
     const packageDir = join(this.integrationRoot(integrationId), 'versions', pointer.version)
-    const verified = await this.verifyInstalledPackage(packageDir, integrationId, pointer.version)
-      .catch(error => ({
+    const trustedManifestSha256 = pointer.manifestSha256
+      ?? (bundled?.manifest.version === pointer.version
+        ? sha256(bundled.manifestText)
+        : undefined)
+    if (!trustedManifestSha256) {
+      return {
+        integrationId,
+        installed: true,
+        installedVersion: pointer.version,
+        ...(availableVersion ? { availableVersion } : {}),
+        compatibility: 'unknown',
+        integrity: 'invalid',
+        restartRequired: false,
+        reason: 'Installed Integration pointer has no trusted manifest hash',
+      }
+    }
+    const verified = await this.verifyInstalledPackage(
+      packageDir,
+      integrationId,
+      pointer.version,
+      trustedManifestSha256,
+    ).catch(error => ({
         integrationId,
         installed: true,
         installedVersion: pointer.version,
@@ -618,8 +660,12 @@ export class IntegrationPackageService {
     packageDir: string,
     integrationId: string,
     version: string,
+    trustedManifestSha256?: string,
   ): Promise<IntegrationPackageState> {
     const manifestText = await readFile(join(packageDir, 'manifest.json'), 'utf8')
+    if (trustedManifestSha256 && sha256(manifestText) !== trustedManifestSha256) {
+      throw new Error(`Installed Integration manifest checksum mismatch: ${integrationId}`)
+    }
     const manifest = parsePackageManifest(manifestText)
     const official = assertOfficialIntegration(integrationId)
     if (
