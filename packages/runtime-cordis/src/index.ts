@@ -1,6 +1,7 @@
 export * from './context'
 export * from './plugin'
 export * from './integration'
+export * from './integration-authorization'
 export * from './application'
 export * from './core-services'
 export * from './source-sync'
