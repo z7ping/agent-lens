@@ -186,7 +186,7 @@ export class AgentLensApplication {
     const liveComponent = registered.integration.components.find(component =>
       component.capabilities.includes('live')
     )
-    const affected = liveComponent?.capabilities ?? ['live']
+    const affected: readonly AgentIntegrationCapability[] = liveComponent?.capabilities ?? ['live']
 
     if (!adapter) {
       for (const capability of affected) {
