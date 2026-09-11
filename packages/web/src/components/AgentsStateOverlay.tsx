@@ -22,7 +22,7 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
     </div>
   }
 
-  if (!response.items.some(agent => agent.detected)) {
+  if (!response.items.some(agent => agent.detected) && !snapshot.integrationManagement?.items.length) {
     return <div className={`${shellClass} is-empty`}>
       <div className="agents-state-inner">
         <EmptyStatePanel
