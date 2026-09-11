@@ -78,6 +78,7 @@ function auditEventId(snapshot: PiLiveStartupAuditSnapshot): string {
 export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStartupAuditSink {
   return {
     async recordStartupResources(snapshot) {
+      if (!ctx.capturePolicy.isSourceEnabled(PI_SOURCE_ID)) return
       const host = await resolveRuntimeHost(ctx)
       const installation = await resolvePiInstallation(ctx, host, snapshot)
       const eventId = auditEventId(snapshot)
