@@ -86,9 +86,9 @@ const agentDescription: Record<string, string> = {
 
 function captureState(agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>): { label: string; title: string; className: string } {
   if (!agent.supported) return { label: '未支持', title: '当前版本未声明支持该智能体', className: 'is-unsupported' }
-  if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用采集' : '未检测 · 未启用采集', title: agent.enabled ? '已允许采集，但本机尚未检测到该智能体' : '本机尚未检测到该智能体，当前也未启用采集', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
-  if (!agent.enabled) return { label: '已检测 · 未启用采集', title: '本机已检测到该智能体，但当前采集策略未启用此来源', className: 'is-disabled' }
-  return { label: '已检测 · 采集中', title: '本机已检测到该智能体，且当前采集策略已启用此来源', className: 'is-enabled is-detected' }
+  if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用' : '未检测 · 未启用', title: agent.enabled ? '该智能体集成已启用，但本机尚未检测到对应产品或数据' : '本机尚未检测到该智能体，集成当前也未启用', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
+  if (!agent.enabled) return { label: '已检测 · 未启用', title: '本机已检测到该智能体，但当前没有启用此智能体集成', className: 'is-disabled' }
+  return { label: '已检测 · 已启用', title: '本机已检测到该智能体，且对应 AgentLens 集成已启用', className: 'is-enabled is-detected' }
 }
 
 function capabilityDetail(cap: AgentOverviewDto['capabilities'][number]): string {
@@ -224,7 +224,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   </section>
 }
 
-function SourceCaptureControl({
+function IntegrationControl({
   agent,
   policy,
   onChange,
@@ -256,12 +256,12 @@ function SourceCaptureControl({
 
   return <section className="source-capture-control">
     <div>
-      <h3>用户级采集</h3>
+      <h3>智能体集成</h3>
       <p>{pending
-        ? `已保存为${configured ? '开启' : '关闭'}；重启 AgentLens 运行时后完全生效。Hook 会从下一次调用起读取新设置。`
+        ? `已保存为${configured ? '开启' : '关闭'}；Hook 会从下一次调用起读取新设置，Live / Runtime 在重启 AgentLens 后完全生效。`
         : configured
-          ? '允许 AgentLens 采集此来源的新任务、工具事件与资产；正文仍受独立隐私档位保护。'
-          : 'AgentLens 不会启动此来源的历史、运行时或资产采集。已有数据不会自动删除。'}</p>
+          ? '启用此智能体在 AgentLens 中声明的 Source / Hook / Runtime / Live 能力；具体可用能力取决于该智能体集成。'
+          : '不会启动此智能体的新采集、Hook 处理或 Live / Runtime 控制能力；已有历史数据不会删除。'}</p>
       {!editable && settings && <p className="source-capture-note">当前由{settings.managedBy === 'environment' ? '兼容环境变量' : '运行时配置'}管理，界面只读。</p>}
       {error && <p className="source-capture-error">{error}</p>}
     </div>
@@ -324,7 +324,7 @@ function AgentCard({ agent, policy, onCaptureChange }: {
       <span className="agent-config"><small>配置目录</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? '路径未取得' : '未检测'}</code></span>
     </div>
 
-    <SourceCaptureControl agent={agent} policy={policy} onChange={onCaptureChange}/>
+    <IntegrationControl agent={agent} policy={policy} onChange={onCaptureChange}/>
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>我的资产</h3><p>用户安装、配置或维护的能力；内建工具单独放在后面。</p></div><span className="section-total">{userAssetCount}</span></div>
@@ -391,7 +391,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。">
+      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、集成状态、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用对应集成。">
         <Toolbar aria-label="智能体扫描" className="agents-rescan-toolbar">
           <Button size="small" loading={snapshot.agentsRescanning} disabled={snapshot.agentsRescanning} onClick={() => void model.rescanAgents().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{snapshot.agentsRescanning ? '正在扫描…' : '重新扫描'}</Button>
           {rescanStatus}
