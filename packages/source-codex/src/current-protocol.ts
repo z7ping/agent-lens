@@ -419,17 +419,14 @@ function normalizedEventValue(value: unknown): string {
 function withNativeCallId(output: NormalizedSourceOutput, callId: string): NormalizedSourceOutput {
   return {
     ...output,
-    observations: output.observations.map(observation => {
-      const duplicateEventIdentity = observation.nativeEventId === callId
-      const dedup = { ...observation.dedupHints, nativeCallId: callId }
-      if (duplicateEventIdentity) delete dedup.nativeEventId
-      return {
-        ...observation,
-        ...(duplicateEventIdentity ? { nativeEventId: undefined } : {}),
+    observations: output.observations.map(observation => ({
+      ...observation,
+      nativeCallId: callId,
+      dedupHints: {
+        ...observation.dedupHints,
         nativeCallId: callId,
-        dedupHints: dedup,
-      }
-    }),
+      },
+    })),
   }
 }
 
