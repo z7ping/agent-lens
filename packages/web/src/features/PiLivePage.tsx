@@ -334,7 +334,8 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
 }
 
 export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
-  const { t } = useTranslation('piLive')
+  const { t, i18n } = useTranslation('piLive')
+  const localeRevision = i18n.resolvedLanguage ?? i18n.language
   const navigate = useNavigate()
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
@@ -692,8 +693,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [runtimeId])
 
-  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
-  const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
+  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot, localeRevision])
+  const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history, localeRevision])
   const visibleHistoryRounds = useMemo(() => currentOrdinal === null
     ? historyRounds
     : historyRounds.filter(round => round.model.ordinal !== currentOrdinal), [currentOrdinal, historyRounds])
@@ -706,13 +707,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
     if (!optimisticPrompt && !state?.isStreaming && currentItems.length === 0) return undefined
     return projectPiLiveRunningRound({ items: currentItems, isStreaming: optimisticStreaming })
-  }, [currentItems, currentOrdinal, historyRounds, optimisticPrompt, optimisticStreaming, state?.isStreaming])
+  }, [currentItems, currentOrdinal, historyRounds, localeRevision, optimisticPrompt, optimisticStreaming, state?.isStreaming])
   const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
     state: state ? { ...state, pendingMessageCount: visiblePendingCount } : state,
     connected,
     historyRounds,
     runningRound,
-  }), [connected, historyRounds, runningRound, state, visiblePendingCount])
+  }), [connected, historyRounds, localeRevision, runningRound, state, visiblePendingCount])
   const headerTitle = taskDetailModel.title
 
   const beginOptimisticPrompt = useCallback((text: string) => {
