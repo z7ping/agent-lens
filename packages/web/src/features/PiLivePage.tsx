@@ -166,7 +166,7 @@ function PiLiveElapsed({ startedAt }: { startedAt: string }) {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [t])
+  }, [])
   const started = Date.parse(startedAt)
   return <>{Number.isFinite(started) ? formatTaskDuration(now - started) : '—'}</>
 }
@@ -249,7 +249,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       if (!cancelled) setAvailability(reason instanceof Error ? reason.message : String(reason))
     })
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   const start = async () => {
     if (!cwd.trim() || starting) return
