@@ -87,6 +87,38 @@ async function fixture() {
   }
 }
 
+test('one broken bundled Integration does not block package lifecycle for other Integrations', async () => {
+  const f = await fixture()
+  try {
+    await writeFile(
+      join(f.bundleDir, 'pi', 'manifest.json'),
+      '{"corrupt":true}\n',
+      'utf8',
+    )
+
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const piState = service.state('pi')
+    assert.equal(piState.installed, false)
+    assert.match(piState.reason ?? '', /bundle source unavailable/i)
+
+    const codexInstall = await service.install('codex')
+    assert.equal(codexInstall.status, 'completed')
+    assert.equal(service.state('codex').installed, true)
+    assert.equal(service.state('codex').integrity, 'verified')
+
+    const piInstall = await service.install('pi')
+    assert.equal(piInstall.status, 'failed')
+    assert.equal(piInstall.errorCode, 'bundle-source-unavailable')
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('installed Integration remains verifiable and loadable when bundled catalog is unavailable', async () => {
   const f = await fixture()
   try {
@@ -368,6 +400,85 @@ test('installed package with incompatible Plugin API stays installed but is not 
     assert.equal(state.compatibility, 'incompatible')
     assert.match(state.reason ?? '', /incompatible/)
     assert.equal(upgradedCore.installedEntryPath('pi'), null)
+  } finally {
+    await f.cleanup()
+  }
+})
+
+test('install repairs an already-installed incompatible package before reporting success', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+    assert.equal((await service.install('pi')).status, 'completed')
+
+    const integration = OFFICIAL_INTEGRATION_CATALOG.find(item => item.integrationId === 'pi')
+    assert.ok(integration)
+    const manifestPath = join(
+      f.installRoot,
+      'pi',
+      'versions',
+      integration.package.bundledVersion,
+      'manifest.json',
+    )
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
+    manifest.apiVersion = '999.0'
+    const incompatibleManifestText = `${JSON.stringify(manifest, null, 2)}\n`
+    await writeFile(manifestPath, incompatibleManifestText, 'utf8')
+
+    const pointerPath = join(f.installRoot, 'pi', 'current.json')
+    const pointer = JSON.parse(await readFile(pointerPath, 'utf8')) as Record<string, unknown>
+    pointer.manifestSha256 = sha256(incompatibleManifestText)
+    await writeFile(pointerPath, `${JSON.stringify(pointer, null, 2)}\n`, 'utf8')
+
+    const restarted = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await restarted.initialize()
+    assert.equal(restarted.state('pi').compatibility, 'incompatible')
+
+    const install = await restarted.install('pi')
+    assert.equal(install.status, 'completed')
+    assert.equal(restarted.state('pi').compatibility, 'compatible')
+    assert.equal(restarted.state('pi').integrity, 'verified')
+    assert.ok(restarted.installedEntryPath('pi'))
+  } finally {
+    await f.cleanup()
+  }
+})
+
+test('operation retention never drops queued work and prunes only terminal history', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const pending = Array.from({ length: 129 }, () => service.install('pi'))
+    const internals = service as unknown as {
+      operationOrder: string[]
+      operations: Map<string, { status: string }>
+    }
+
+    assert.equal(internals.operationOrder.length, 129)
+    assert.equal(internals.operations.size, 129)
+    assert.equal(
+      [...internals.operations.values()].every(operation => operation.status === 'queued'),
+      true,
+    )
+
+    const completed = await Promise.all(pending)
+    assert.equal(completed.every(operation => operation.status === 'completed'), true)
+    assert.equal(internals.operationOrder.length, 128)
+    assert.equal(internals.operations.size, 128)
+    assert.equal(service.operation(completed[0]!.operationId), null)
+    assert.ok(service.operation(completed.at(-1)!.operationId))
   } finally {
     await f.cleanup()
   }

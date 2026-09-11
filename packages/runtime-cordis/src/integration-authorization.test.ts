@@ -59,6 +59,24 @@ test('legacy authorization bootstrap only restores historically privileged Pi/He
   )
 })
 
+test('concurrent authorization grants are serialized without losing capabilities', async () => {
+  const path = join(tmpdir(), `agent-lens-integration-authorization-${process.pid}-concurrent.json`)
+  try {
+    await Promise.all([
+      grantIntegrationCapabilities(path, 'pi', ['runtime']),
+      grantIntegrationCapabilities(path, 'pi', ['live']),
+      grantIntegrationCapabilities(path, 'hermes', ['live']),
+    ])
+
+    assert.deepEqual(readIntegrationAuthorizationSync(path)?.grants, {
+      pi: ['runtime', 'live'],
+      hermes: ['live'],
+    })
+  } finally {
+    await rm(path, { force: true })
+  }
+})
+
 test('granting a new capability merges with existing grants instead of replacing them', async () => {
   const path = join(tmpdir(), `agent-lens-integration-authorization-${process.pid}.json`)
   try {

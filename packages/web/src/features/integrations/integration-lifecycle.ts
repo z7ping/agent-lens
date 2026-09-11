@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next'
 import type {
   AgentOverviewDto,
   IntegrationManagementItemDto,
+  IntegrationPackageStateDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
 
@@ -9,6 +10,14 @@ export interface IntegrationLifecyclePresentation {
   label: string
   title: string
   className: string
+}
+
+export function integrationPackageReady(
+  state: IntegrationPackageStateDto | null | undefined,
+): boolean {
+  return state?.installed === true
+    && state.integrity === 'verified'
+    && state.compatibility === 'compatible'
 }
 
 export function integrationLifecycleState(
@@ -53,6 +62,14 @@ export function integrationLifecycleState(
         label: t('status.notFound'),
         title: t('status.notFoundTitle'),
         className: 'is-missing',
+      }
+    }
+
+    if (!integrationPackageReady(packageState)) {
+      return {
+        label: t('status.abnormal'),
+        title: packageState.reason || t('status.abnormalTitle'),
+        className: 'is-error',
       }
     }
 

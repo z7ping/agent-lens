@@ -34,6 +34,17 @@ function requestPayload(value: unknown): IntegrationAuthorizationRequestDto {
   return { capabilities: normalized as IntegrationAuthorizationCapabilityDto[] }
 }
 
+function decodeProductId(raw: string | undefined): string {
+  let value = ''
+  try {
+    value = decodeURIComponent(raw ?? '').trim().toLowerCase()
+  } catch {
+    throw badRequest('productId is not valid URL encoding')
+  }
+  if (!value) throw badRequest('productId is required')
+  return value
+}
+
 export async function handleIntegrationAuthorizationRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -51,8 +62,7 @@ export async function handleIntegrationAuthorizationRequest(
     return true
   }
 
-  const productId = decodeURIComponent(match[1] ?? '').trim().toLowerCase()
-  if (!productId) throw badRequest('productId is required')
+  const productId = decodeProductId(match[1])
   const payload = requestPayload(await readJsonBody(request, { maxBytes: MAX_JSON_BODY_BYTES }))
   const allowed = new Set(controller.available(productId))
   if (!allowed.size) throw badRequest('Integration has no authorizable capabilities')
@@ -71,4 +81,10 @@ export async function handleIntegrationAuthorizationRequest(
   }
   writeJson(response, 200, body)
   return true
+}
+
+
+export const integrationAuthorizationHttpInternals = {
+  requestPayload,
+  decodeProductId,
 }

@@ -64,6 +64,20 @@ test('migrated display order remains authoritative across later non-order prefer
   }
 })
 
+test('acknowledged Integration ids are monotonic and cannot be lost by stale updates', async () => {
+  const path = join(tmpdir(), `agent-lens-integration-preferences-${process.pid}-acknowledged.json`)
+  const service = new IntegrationPreferenceService(path, null)
+  try {
+    const first = await service.update({ acknowledgedIntegrationIds: ['pi'] })
+    assert.deepEqual(first.acknowledgedIntegrationIds, ['pi'])
+
+    const staleSecond = await service.update({ acknowledgedIntegrationIds: ['codex'] })
+    assert.deepEqual(staleSecond.acknowledgedIntegrationIds, ['pi', 'codex'])
+  } finally {
+    await rm(path, { force: true })
+  }
+})
+
 test('onboarding completion is monotonic and preserves its first completion timestamp', async () => {
   const path = join(tmpdir(), `agent-lens-integration-preferences-${process.pid}-onboarding.json`)
   const service = new IntegrationPreferenceService(path, null)
