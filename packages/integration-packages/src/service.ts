@@ -301,6 +301,7 @@ export class IntegrationPackageService {
   private readonly operations = new Map<string, IntegrationPackageOperation>()
   private readonly operationOrder: string[] = []
   private readonly queues = new Map<string, Promise<void>>()
+  private bundleSourceError: string | null = null
   private initialized = false
 
   constructor(private readonly options: IntegrationPackageServiceOptions) {}
@@ -308,7 +309,15 @@ export class IntegrationPackageService {
   async initialize(): Promise<void> {
     await mkdir(this.options.installRoot, { recursive: true, mode: 0o700 })
     await this.cleanupTransientDirectories()
-    await this.loadTrustedBundles()
+    try {
+      await this.loadTrustedBundles()
+      this.bundleSourceError = null
+    } catch (error) {
+      // Installed packages are self-describing and independently verifiable.
+      // A missing/corrupt bundled catalog must block new installs/updates, not
+      // make already-installed Integrations disappear during offline startup.
+      this.bundleSourceError = errorMessage(error)
+    }
     await this.reconcile()
     this.initialized = true
   }
@@ -323,25 +332,24 @@ export class IntegrationPackageService {
     const ids = [...new Set(integrationIds.map(id => assertOfficialIntegration(id).integrationId))]
     const operations: IntegrationPackageOperation[] = []
     for (const id of ids) {
-      const operation = await this.install(id)
-      operations.push(operation)
-      if (operation.status !== 'completed') {
-        throw new Error(
-          `Legacy Integration physicalization failed for ${id}: ${operation.message ?? operation.errorCode ?? 'unknown error'}`,
-        )
-      }
+      // Migration is reconcile-style and failure-isolated. A broken package
+      // must not prevent another legacy-enabled Integration from becoming
+      // usable, and the missing marker makes the failed item retry next start.
+      operations.push(await this.install(id))
     }
 
-    await writeJsonAtomic(markerPath, {
-      schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
-      completedAt: new Date().toISOString(),
-      integrationIds: ids,
-    })
-    // These installs happened before Runtime registration in the same process,
-    // so they are already eligible for this startup and do not require a
-    // second restart.
+    const completed = operations.every(operation => operation.status === 'completed')
+    if (completed) {
+      await writeJsonAtomic(markerPath, {
+        schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+        completedAt: new Date().toISOString(),
+        integrationIds: ids,
+      })
+    }
+    // Successful installs happened before Runtime registration in this same
+    // process, so reconcile them immediately even when another item failed.
     await this.reconcile()
-    return { migrated: true, operations }
+    return { migrated: completed, operations }
   }
 
   catalog(): IntegrationPackageCatalogItem[] {
@@ -387,7 +395,6 @@ export class IntegrationPackageService {
   }
 
   async reconcile(): Promise<IntegrationPackageState[]> {
-    await this.assertBundleSourceReady()
     for (const entry of OFFICIAL_INTEGRATION_CATALOG) {
       this.states.set(entry.integrationId, await this.readInstalledState(entry.integrationId))
     }
@@ -411,7 +418,7 @@ export class IntegrationPackageService {
     return this.enqueue(integrationId, 'update', async id => {
       const current = this.states.get(id) ?? await this.readInstalledState(id)
       if (!current.installed) throw new Error('Integration is not installed')
-      const bundled = this.requireTrustedBundle(id)
+      const bundled = await this.requireAvailableBundle(id)
       if (
         current.installedVersion === bundled.manifest.version
         && current.integrity === 'verified'
@@ -453,7 +460,7 @@ export class IntegrationPackageService {
   }
 
   private async installAvailable(integrationId: string): Promise<void> {
-    const trusted = this.requireTrustedBundle(integrationId)
+    const trusted = await this.requireAvailableBundle(integrationId)
     if (trusted.manifest.apiVersion !== AGENT_LENS_PLUGIN_API_VERSION) {
       throw Object.assign(
         new Error(
@@ -652,12 +659,32 @@ export class IntegrationPackageService {
       compatibility: bundled ? compatibilityFor(bundled.manifest.apiVersion) : 'unknown',
       integrity: 'unknown',
       restartRequired,
+      ...(!bundled && this.bundleSourceError
+        ? { reason: `Bundled Integration source unavailable: ${this.bundleSourceError}` }
+        : {}),
     }
   }
 
-  private requireTrustedBundle(integrationId: string): TrustedBundle {
+  private async requireAvailableBundle(integrationId: string): Promise<TrustedBundle> {
+    const current = this.bundled.get(integrationId)
+    if (current) return current
+    try {
+      await this.loadTrustedBundles()
+      this.bundleSourceError = null
+    } catch (error) {
+      this.bundleSourceError = errorMessage(error)
+      throw Object.assign(
+        new Error(`Bundled Integration source unavailable: ${this.bundleSourceError}`),
+        { code: 'bundle-source-unavailable' },
+      )
+    }
     const bundled = this.bundled.get(integrationId)
-    if (!bundled) throw new Error(`No trusted bundled package is available for ${integrationId}`)
+    if (!bundled) {
+      throw Object.assign(
+        new Error(`No trusted bundled package is available for ${integrationId}`),
+        { code: 'bundle-source-unavailable' },
+      )
+    }
     return bundled
   }
 
@@ -730,11 +757,6 @@ export class IntegrationPackageService {
         await rm(join(root, entry), { recursive: true, force: true }).catch(() => undefined)
       }
     }
-  }
-
-  private async assertBundleSourceReady(): Promise<void> {
-    if (this.bundled.size) return
-    await this.loadTrustedBundles()
   }
 
   private assertInitialized(): void {
