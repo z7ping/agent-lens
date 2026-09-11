@@ -1,15 +1,11 @@
-import {
-readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type {
   DiscoveredAsset,
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
-import { isMissingPathError,
-  asRecord,
-} from '@agent-lens/source-support'
-
+import { asRecord, isMissingPathError } from '@agent-lens/source-support'
 
 async function safeStat(path: string) {
   try {
