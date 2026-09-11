@@ -113,6 +113,7 @@ app.use(httpSurfacePlugin, {
       error: failure.error instanceof Error ? failure.error.message : String(failure.error),
     })),
   }),
+  integrationStatus: productId => app.resolveIntegrationStatus(productId),
 })
 app.use(webPlugin, { staticDir: webRoot })
 
