@@ -5,6 +5,7 @@ import { installLiveRecovery } from './client/live-recovery'
 import { clientModel } from './client/model'
 import { installPiLiveKeyboard } from './client/pi-live-keyboard'
 import { readTheme, writeTheme } from './client/preferences'
+import { initializeLocaleRuntime } from './i18n'
 import './styles.css'
 import './tokens.css'
 import './theme.css'
@@ -46,16 +47,21 @@ import './components/ui/ui-primitives.css'
 import './components/ui/overlay.css'
 import './components/select-menu.css'
 
-writeTheme(readTheme())
-const disposeLiveRecovery = installLiveRecovery(clientModel)
-const disposePiLiveKeyboard = installPiLiveKeyboard()
-void clientModel.start()
-window.addEventListener('pagehide', () => {
-  disposePiLiveKeyboard()
-  disposeLiveRecovery()
-  clientModel.stop()
-}, { once: true })
+async function bootstrap(): Promise<void> {
+  writeTheme(readTheme())
+  await initializeLocaleRuntime()
+  const disposeLiveRecovery = installLiveRecovery(clientModel)
+  const disposePiLiveKeyboard = installPiLiveKeyboard()
+  void clientModel.start()
+  window.addEventListener('pagehide', () => {
+    disposePiLiveKeyboard()
+    disposeLiveRecovery()
+    clientModel.stop()
+  }, { once: true })
 
-const root = document.getElementById('root')
-if (!root) throw new Error('AgentLens Web root is missing')
-createRoot(root).render(<StrictMode><App model={clientModel} /></StrictMode>)
+  const root = document.getElementById('root')
+  if (!root) throw new Error('AgentLens Web root is missing')
+  createRoot(root).render(<StrictMode><App model={clientModel} /></StrictMode>)
+}
+
+void bootstrap()
