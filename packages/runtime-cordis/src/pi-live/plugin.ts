@@ -31,5 +31,5 @@ const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
 
 applyPiLiveRuntime.inject = ['storage', 'lives', 'sources', 'identity', 'observations', 'capturePolicy']
 
-/** Internal runtime service. Pi observation remains owned by @agent-lens/source-pi; Live is registered through ctx.lives. */
+/** Internal runtime service. Native Pi history remains owned by @agent-lens/source-pi; Live only adds runtime-only audit facts such as the startup resource snapshot. */
 export const piLiveRuntimePlugin = applyPiLiveRuntime
