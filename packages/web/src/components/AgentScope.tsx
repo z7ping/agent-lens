@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { orderAgentsByPreference } from './agent-order'
+import { useIntegrationOrder } from './IntegrationOrderProvider'
 import { usePinnedAgents } from './PinnedAgentsProvider'
 import { UiIcon } from './UiIcon'
 
@@ -30,7 +31,7 @@ function AgentIcon({ sourceId }: { sourceId: string }) {
 }
 
 export function useOrderedAgents<T extends { sourceId: string }>(agents: readonly T[]): T[] {
-  const { ordered } = usePinnedAgents()
+  const { ordered } = useIntegrationOrder()
   return useMemo(() => orderAgentsByPreference(agents, ordered), [agents, ordered])
 }
 
@@ -43,7 +44,8 @@ interface ScopeMenuPosition {
 export function AgentScope({ agents, value, onChange, allLabel }: { agents: AgentFacetDto[]; value: string; onChange(value: string): void; allLabel?: string | false }) {
   const { t } = useTranslation('agents')
   const resolvedAllLabel = allLabel === undefined ? t('scope.all') : allLabel
-  const { ordered, pinned, canReorder, toggle, move, moveBy, reset } = usePinnedAgents()
+  const { pinned, toggle } = usePinnedAgents()
+  const { ordered, canReorder, move, moveBy, reset } = useIntegrationOrder()
   const orderedAgents = useOrderedAgents(agents)
   const reorderableAgents = orderedAgents.filter(agent => canReorder(agent.sourceId))
   const visible = orderedAgents.filter(agent => pinned.includes(agent.sourceId))
