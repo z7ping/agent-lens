@@ -35,7 +35,7 @@ export interface PiLiveStartupAuditSnapshot {
 }
 
 export interface PiLiveStartupAuditSink {
-  recordStartupResources(snapshot: PiLiveStartupAuditSnapshot): Promise<void>
+  recordStartupAudit(snapshot: PiLiveStartupAuditSnapshot): Promise<void>
 }
 
 function executableKey(value: string | undefined): string {
@@ -79,25 +79,25 @@ async function resolvePiInstallation(
 }
 
 function auditEventId(snapshot: PiLiveStartupAuditSnapshot): string {
-  return `pi-live:${snapshot.runtimeSessionId}:startup-resources:${snapshot.attemptStartedAt}`
+  return `pi-live:${snapshot.runtimeSessionId}:startup-audit:${snapshot.attemptStartedAt}`
 }
 
 export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStartupAuditSink {
   return {
-    async recordStartupResources(snapshot) {
+    async recordStartupAudit(snapshot) {
       if (!ctx.capturePolicy.isSourceEnabled(PI_SOURCE_ID)) return
       const host = await resolveRuntimeHost(ctx)
       const installation = await resolvePiInstallation(ctx, host, snapshot)
       const eventId = auditEventId(snapshot)
       const normalized: NormalizedSourceOutput = {
         observations: [{
-          kind: 'runtime.resources',
+          kind: 'runtime.startup',
           nativeEventId: eventId,
           occurredAt: snapshot.capturedAt,
           capturedAt: snapshot.capturedAt,
           payload: {
             schemaVersion: 1,
-            event: 'runtime.startup.resources',
+            event: 'runtime.startup.audit',
             runtimeSessionId: snapshot.runtimeSessionId,
             ...(snapshot.sdkVersion ? { sdkVersion: snapshot.sdkVersion } : {}),
             resources: snapshot.startupResources,
