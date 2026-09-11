@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { SourceRecord } from '@agent-lens/core'
-import { normalizeClaudeRecord } from './index'
+import { claudeManifest, normalizeClaudeRecord } from './index'
 
 function historyRecord(entry: Record<string, unknown>, nativeType: string): SourceRecord {
   return {
@@ -14,7 +14,7 @@ function historyRecord(entry: Record<string, unknown>, nativeType: string): Sour
     capturedAt: '2026-08-31T00:30:00.000Z',
     locator: { kind: 'file', path: '/tmp/.claude/projects/demo/claude-session-1.jsonl', offset: 128 },
     fingerprint: `${nativeType}-fingerprint`,
-    parserVersion: '3',
+    parserVersion: claudeManifest.parserVersion,
     payload: {
       entry: {
         sessionId: 'claude-session-1',
