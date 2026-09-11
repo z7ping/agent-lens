@@ -287,6 +287,7 @@ export const officialChineseLocalePack: LocalePackDto = {
         hook: 'Hook',
         runtime: 'Runtime',
         live: 'Live',
+        assets: '资产',
       },
       availability: {
         available: '可用',
@@ -414,7 +415,7 @@ export const officialChineseLocalePack: LocalePackDto = {
         detailsPendingRepair: '当前 Integration 包需要修复；修复完成后才能启用并加载能力。',
         pendingEnabled: '已保存为开启；Hook 会从下一次调用起读取新设置，Live / Runtime 在重启 AgentLens 后完全生效。',
         pendingDisabled: '已保存为关闭；Hook 会从下一次调用起读取新设置，Live / Runtime 在重启 AgentLens 后完全生效。',
-        enabledDescription: '启用此智能体在 AgentLens 中声明的 Source / Hook / Runtime / Live 能力；具体可用能力取决于该智能体集成。',
+        enabledDescription: '启用此智能体在 AgentLens 中声明的 Source / Hook / Runtime / Live / Assets 能力；具体可用能力取决于该智能体集成。',
         disabledDescription: '不会启动此智能体的新采集、Hook 处理或 Live / Runtime 控制能力；已有历史数据不会删除。',
         currentAvailability: '当前可用性',
         pendingRestart: '待重启',
