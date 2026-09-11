@@ -286,7 +286,10 @@ export class AgentLensClientModel {
     })
     try {
       const [agents, capturePolicy, management] = await Promise.all([
-        this.api.agents(),
+        this.api.agents().then(
+          value => ({ value, error: '' }),
+          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+        ),
         this.api.capturePolicy().catch(() => null),
         this.api.integrations().then(
           value => ({ value, error: '' }),
@@ -309,9 +312,10 @@ export class AgentLensClientModel {
       }
 
       this.patch({
-        agents,
+        agents: agents.value ?? this.snapshot.agents,
         capturePolicy,
         agentsLoading: false,
+        agentsError: agents.error ? translateProduct('errors:agentsOverviewFailed') : '',
         agentsHasNewData: this.agentsInvalidation !== invalidation,
         integrationManagement: management.value ?? this.snapshot.integrationManagement,
         integrationManagementLoading: false,
