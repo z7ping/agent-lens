@@ -13,7 +13,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
-import { usePinnedAgents } from '../components/PinnedAgentsProvider'
+import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { Button, IconButton, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
@@ -389,7 +389,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || discovery?.status === 'scanning'
-  const { ordered, canReorder, move, moveBy, reset } = usePinnedAgents()
+  const { ordered, canReorder, move, moveBy, reset } = useIntegrationOrder()
   const [managingOrder, setManagingOrder] = useState(false)
   const [draggedId, setDraggedId] = useState('')
 
