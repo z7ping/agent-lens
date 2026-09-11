@@ -21,6 +21,12 @@ export interface ToolDiscoveryPathCandidateDescriptor {
   append?: readonly string[] | undefined
   platforms?: readonly NodeJS.Platform[] | undefined
   expandHome?: boolean | undefined
+  /**
+   * When this environment variable is explicitly set, later candidates for
+   * the same root must not be considered. This prevents a stale default
+   * directory from overriding the user's configured product location.
+   */
+  exclusiveWhenSet?: boolean | undefined
 }
 
 export interface ToolDiscoveryRootDescriptor {
@@ -105,14 +111,14 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
       executable: { commands: ['pi'], explicitEnvVar: 'PI_BIN' },
       roots: [
         ...roots('config',
-          { envVar: 'PI_CODING_AGENT_DIR' },
-          { envVar: 'PI_HOME', append: ['agent'] },
+          { envVar: 'PI_CODING_AGENT_DIR', exclusiveWhenSet: true },
+          { envVar: 'PI_HOME', append: ['agent'], exclusiveWhenSet: true },
           { path: '~/.pi/agent' },
         ),
         ...roots('data',
-          { envVar: 'PI_CODING_AGENT_SESSION_DIR' },
-          { envVar: 'PI_CODING_AGENT_DIR', append: ['sessions'] },
-          { envVar: 'PI_HOME', append: ['agent', 'sessions'] },
+          { envVar: 'PI_CODING_AGENT_SESSION_DIR', exclusiveWhenSet: true },
+          { envVar: 'PI_CODING_AGENT_DIR', append: ['sessions'], exclusiveWhenSet: true },
+          { envVar: 'PI_HOME', append: ['agent', 'sessions'], exclusiveWhenSet: true },
           { path: '~/.pi/agent/sessions' },
         ),
       ],
@@ -127,11 +133,11 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
       executable: { commands: ['codex'], explicitEnvVar: 'CODEX_BIN' },
       roots: [
         ...roots('config',
-          { envVar: 'CODEX_HOME' },
+          { envVar: 'CODEX_HOME', exclusiveWhenSet: true },
           { path: '~/.codex' },
         ),
         ...roots('data',
-          { envVar: 'CODEX_HOME', append: ['sessions'] },
+          { envVar: 'CODEX_HOME', append: ['sessions'], exclusiveWhenSet: true },
           { path: '~/.codex/sessions' },
         ),
       ],
@@ -146,13 +152,13 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
       executable: { commands: ['claude'], explicitEnvVar: 'CLAUDE_BIN' },
       roots: [
         ...roots('config',
-          { envVar: 'CLAUDE_CODE_HOME' },
-          { envVar: 'CLAUDE_HOME' },
+          { envVar: 'CLAUDE_CODE_HOME', exclusiveWhenSet: true },
+          { envVar: 'CLAUDE_HOME', exclusiveWhenSet: true },
           { path: '~/.claude' },
         ),
         ...roots('data',
-          { envVar: 'CLAUDE_CODE_HOME', append: ['projects'] },
-          { envVar: 'CLAUDE_HOME', append: ['projects'] },
+          { envVar: 'CLAUDE_CODE_HOME', append: ['projects'], exclusiveWhenSet: true },
+          { envVar: 'CLAUDE_HOME', append: ['projects'], exclusiveWhenSet: true },
           { path: '~/.claude/projects' },
         ),
       ],
@@ -178,7 +184,7 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
           role: 'data',
           marker: 'state.db',
           candidates: [
-            { envVar: 'HERMES_HOME', expandHome: false },
+            { envVar: 'HERMES_HOME', expandHome: false, exclusiveWhenSet: true },
             { envVar: 'LOCALAPPDATA', append: ['hermes'], platforms: ['win32'], expandHome: false },
             { path: '~/AppData/Local/hermes', platforms: ['win32'] },
             { path: '~/.hermes' },
@@ -239,22 +245,26 @@ export function resolveToolDiscoveryRoots(
 
   for (const root of entry.discovery.roots) {
     for (const candidate of root.candidates) {
+      const explicitValue = candidate.envVar ? env[candidate.envVar]?.trim() : undefined
       const path = resolveToolDiscoveryCandidatePath(candidate, {
         env,
         platform,
         homeDir,
         absoluteOnly: true,
       })
-      if (!path) continue
-      const key = `${root.role}\u0000${path}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      result.push({
-        descriptorId: root.id,
-        role: root.role,
-        path,
-        ...(root.marker ? { marker: root.marker } : {}),
-      })
+      if (path) {
+        const key = `${root.role}\u0000${path}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          result.push({
+            descriptorId: root.id,
+            role: root.role,
+            path,
+            ...(root.marker ? { marker: root.marker } : {}),
+          })
+        }
+      }
+      if (candidate.exclusiveWhenSet && explicitValue) break
     }
   }
   return result
