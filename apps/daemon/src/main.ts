@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
-import { capturePolicyPlugin } from '@agent-lens/capture-policy'
+import { capturePolicyPlugin, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
 import { hermesIntegration } from '@agent-lens/integration-hermes'
 import { piIntegration } from '@agent-lens/integration-pi'
 import {
@@ -83,6 +83,8 @@ const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 const DATA_RUNTIME_RECOVERY_POLL_MS = 500
 let foregroundGate: ForegroundActivityGate | null = null
 const projectDirectoryPicker = createProjectDirectoryPicker()
+const capturePolicyStartup = resolveCapturePolicyPluginState()
+const enabledSourceIds = new Set(capturePolicyStartup.settings.enabledSources)
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -91,8 +93,8 @@ app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
 if (capabilities.localCapture) {
-  app.useIntegration(piIntegration)
-  app.useIntegration(hermesIntegration)
+  app.useIntegration(piIntegration, { enabled: enabledSourceIds.has(piIntegration.manifest.productId) })
+  app.useIntegration(hermesIntegration, { enabled: enabledSourceIds.has(hermesIntegration.manifest.productId) })
   app.use(codexSourcePlugin)
   app.use(claudeSourcePlugin)
   app.use(openCodeSourcePlugin)
