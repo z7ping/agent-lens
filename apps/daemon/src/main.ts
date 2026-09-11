@@ -3,7 +3,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
+import { claudeIntegration } from '@agent-lens/integration-claude'
+import { codexIntegration } from '@agent-lens/integration-codex'
 import { hermesIntegration } from '@agent-lens/integration-hermes'
+import { openCodeIntegration } from '@agent-lens/integration-opencode'
 import { piIntegration } from '@agent-lens/integration-pi'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
@@ -22,9 +25,6 @@ import {
   syncRegisteredSourceHistory,
   type RegisteredSourceFailure,
 } from '@agent-lens/runtime-cordis'
-import { claudeSourcePlugin } from '@agent-lens/source-claude'
-import { codexSourcePlugin } from '@agent-lens/source-codex'
-import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
@@ -95,9 +95,9 @@ app.useRuntime(capturePolicyPlugin)
 if (capabilities.localCapture) {
   app.useIntegration(piIntegration, { enabled: enabledSourceIds.has(piIntegration.manifest.productId) })
   app.useIntegration(hermesIntegration, { enabled: enabledSourceIds.has(hermesIntegration.manifest.productId) })
-  app.use(codexSourcePlugin)
-  app.use(claudeSourcePlugin)
-  app.use(openCodeSourcePlugin)
+  app.useIntegration(codexIntegration, { enabled: enabledSourceIds.has(codexIntegration.manifest.productId) })
+  app.useIntegration(claudeIntegration, { enabled: enabledSourceIds.has(claudeIntegration.manifest.productId) })
+  app.useIntegration(openCodeIntegration, { enabled: enabledSourceIds.has(openCodeIntegration.manifest.productId) })
   app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
