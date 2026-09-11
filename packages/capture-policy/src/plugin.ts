@@ -53,7 +53,7 @@ export function resolveCapturePolicyPluginState(
     settings,
     configurationPath,
     configurationSource,
-    editable: resolved.editable,
+    editable: !config.enabledSources && !environmentOverridesSources,
   }
 }
 
@@ -65,9 +65,9 @@ const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
   const { settings, configurationPath, configurationSource } = resolved
   ctx.provide('capturePolicy', new DefaultCapturePolicyService(settings, {
     source: configurationSource,
-    editable: !config.enabledSources && !environmentOverridesSources,
+    editable: resolved.editable,
     configurationPath,
-    configuredEnabledSources: enabledSources,
+    configuredEnabledSources: settings.enabledSources,
     writeEnabledSources: async next => {
       await writeCapturePolicyConfiguration(configurationPath, next)
     },
