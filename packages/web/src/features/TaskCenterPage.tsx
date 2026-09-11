@@ -177,7 +177,7 @@ function NewTaskPanel({
       if (!cancelled) setAvailability({ checked: true, available: false, label: reason instanceof Error ? reason.message : String(reason) })
     })
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   const selected = options.find(option => option.key === selectedKey)
   const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
