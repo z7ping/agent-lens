@@ -312,6 +312,7 @@ export class IntegrationPackageService {
   private readonly operations = new Map<string, IntegrationPackageOperation>()
   private readonly operationOrder: string[] = []
   private readonly queues = new Map<string, Promise<void>>()
+  private bundleErrors = new Map<string, string>()
   private bundleSourceError: string | null = null
   private initialized = false
 
@@ -549,50 +550,59 @@ export class IntegrationPackageService {
     const catalog = parseBundledCatalog(catalogText)
     const next = new Map<string, TrustedBundle>()
 
+    const errors = new Map<string, string>()
     for (const item of catalog.entries) {
-      const official = assertOfficialIntegration(item.integrationId)
-      if (
-        item.productId !== official.productId
-        || item.packageName !== official.package.packageName
-        || item.version !== official.package.bundledVersion
-      ) {
-        throw new Error(`Bundled Integration catalog identity mismatch: ${item.integrationId}`)
-      }
+      try {
+        const official = assertOfficialIntegration(item.integrationId)
+        if (
+          item.productId !== official.productId
+          || item.packageName !== official.package.packageName
+          || item.version !== official.package.bundledVersion
+        ) {
+          throw new Error(`Bundled Integration catalog identity mismatch: ${item.integrationId}`)
+        }
 
-      const manifestPath = resolveWithin(this.options.bundleDir, item.relativeManifestPath)
-      const manifestText = await readFile(manifestPath, 'utf8')
-      if (sha256(Buffer.from(manifestText)) !== item.manifestSha256.toLowerCase()) {
-        throw new Error(`Bundled Integration manifest checksum mismatch: ${item.integrationId}`)
+        const manifestPath = resolveWithin(this.options.bundleDir, item.relativeManifestPath)
+        const manifestText = await readFile(manifestPath, 'utf8')
+        if (sha256(Buffer.from(manifestText)) !== item.manifestSha256.toLowerCase()) {
+          throw new Error(`Bundled Integration manifest checksum mismatch: ${item.integrationId}`)
+        }
+        const manifest = parsePackageManifest(manifestText)
+        if (
+          manifest.integrationId !== official.integrationId
+          || manifest.productId !== official.productId
+          || manifest.packageName !== official.package.packageName
+          || manifest.version !== item.version
+          || manifest.apiVersion !== official.package.apiVersion
+          || manifest.entryExport !== official.package.entryExport
+        ) {
+          throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
+        }
+        const packageDir = dirname(manifestPath)
+        // The bundled catalog + manifest are the release trust root. Large bundle
+        // files are hashed only when that package is actually installed, keeping
+        // startup O(installed packages) rather than O(all available packages).
+        next.set(item.integrationId, {
+          catalog: item,
+          manifest,
+          manifestText,
+          packageDir,
+        })
+      } catch (error) {
+        errors.set(item.integrationId, errorMessage(error))
       }
-      const manifest = parsePackageManifest(manifestText)
-      if (
-        manifest.integrationId !== official.integrationId
-        || manifest.productId !== official.productId
-        || manifest.packageName !== official.package.packageName
-        || manifest.version !== item.version
-        || manifest.apiVersion !== official.package.apiVersion
-        || manifest.entryExport !== official.package.entryExport
-      ) {
-        throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
-      }
-      const packageDir = dirname(manifestPath)
-      // The bundled catalog + manifest are the release trust root. Large bundle
-      // files are hashed only when that package is actually installed, keeping
-      // startup O(installed packages) rather than O(all available packages).
-      next.set(item.integrationId, {
-        catalog: item,
-        manifest,
-        manifestText,
-        packageDir,
-      })
     }
 
     for (const official of OFFICIAL_INTEGRATION_CATALOG) {
-      if (!next.has(official.integrationId)) {
-        throw new Error(`Trusted Integration bundle is missing: ${official.integrationId}`)
+      if (!next.has(official.integrationId) && !errors.has(official.integrationId)) {
+        errors.set(
+          official.integrationId,
+          `Trusted Integration bundle is missing: ${official.integrationId}`,
+        )
       }
     }
     this.bundled = next
+    this.bundleErrors = errors
   }
 
   private async readInstalledState(integrationId: string): Promise<IntegrationPackageState> {
@@ -709,8 +719,12 @@ export class IntegrationPackageService {
       compatibility: bundled ? compatibilityFor(bundled.manifest.apiVersion) : 'unknown',
       integrity: 'unknown',
       restartRequired,
-      ...(!bundled && this.bundleSourceError
-        ? { reason: `Bundled Integration source unavailable: ${this.bundleSourceError}` }
+      ...(!bundled && (this.bundleErrors.get(integrationId) || this.bundleSourceError)
+        ? {
+            reason: `Bundled Integration source unavailable: ${
+              this.bundleErrors.get(integrationId) ?? this.bundleSourceError
+            }`,
+          }
         : {}),
     }
   }
@@ -730,8 +744,10 @@ export class IntegrationPackageService {
     }
     const bundled = this.bundled.get(integrationId)
     if (!bundled) {
+      const reason = this.bundleErrors.get(integrationId)
+        ?? `No trusted bundled package is available for ${integrationId}`
       throw Object.assign(
-        new Error(`No trusted bundled package is available for ${integrationId}`),
+        new Error(reason),
         { code: 'bundle-source-unavailable' },
       )
     }
