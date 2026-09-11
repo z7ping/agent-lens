@@ -97,3 +97,30 @@ test('Codex asset discovery is explicitly partial after static-state tightening'
   const capabilities = await declareCodexCapabilities({} as never)
   assert.equal(capabilities.find(item => item.name === 'asset-discovery')?.status, 'partial')
 })
+
+test('Codex sessionless runtime hook remains evidence-only', async () => {
+  const envelope = codexRuntimeInternals.parseEnvelope(JSON.stringify({
+    id: 'agent-lens-sessionless-envelope',
+    capturedAt: '2026-09-11T00:00:00.000Z',
+    event: {
+      hook_event_name: 'PreToolUse',
+      call_id: 'native-call-sessionless',
+      tool_name: 'exec',
+    },
+  }), 'sessionless.json')
+  const value = codexRuntimeInternals.sourceRecordFromEnvelope(envelope, '/tmp/sessionless.json', {
+    installation: {
+      id: 'installation-codex',
+      hostId: 'host',
+      productId: 'codex',
+      firstSeenAt: '2026-09-11T00:00:00.000Z',
+      lastSeenAt: '2026-09-11T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+  } as SourceExecutionContext)
+
+  assert.equal(value.sourceSessionNativeId, undefined)
+  const normalized = await normalizeCurrentCodexRecord(value, {} as never)
+  assert.deepEqual(normalized.observations, [])
+  assert.equal(normalized.evidenceCandidates.length, 1)
+})
