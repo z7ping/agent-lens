@@ -108,6 +108,62 @@ export class AgentLensApplication {
     return this.listIntegrationStatuses().find(status => status.productId === productId) ?? null
   }
 
+  async resolveIntegrationStatus(productId: string): Promise<AgentIntegrationRuntimeStatus | null> {
+    const base = this.integrationStatus(productId)
+    if (!base || !base.enabled) return base
+
+    const registered = this.integrations.get(base.integrationId)
+    if (!registered || !registered.integration.manifest.capabilities.includes('live')) return base
+    const currentLive = base.capabilities.find(item => item.capability === 'live')
+    if (currentLive?.availability !== 'available') return base
+
+    const lives = this.context.get('lives')
+    const adapter = lives?.get(base.integrationId) ?? lives?.get(productId) ?? null
+    const next = base.capabilities.map(item => ({ ...item }))
+    const liveComponent = registered.integration.components.find(component =>
+      component.capabilities.includes('live')
+    )
+    const affected = liveComponent?.capabilities ?? ['live']
+
+    if (!adapter) {
+      for (const capability of affected) {
+        const index = next.findIndex(item => item.capability === capability)
+        if (index < 0 || next[index]!.availability !== 'available') continue
+        next[index] = {
+          capability,
+          availability: 'unavailable',
+          reason: 'Live Adapter 未加载',
+        }
+      }
+      return { ...base, availability: integrationAvailability(next), capabilities: next }
+    }
+
+    try {
+      const availability = await adapter.availability()
+      if (availability.available) return base
+      for (const capability of affected) {
+        const index = next.findIndex(item => item.capability === capability)
+        if (index < 0 || next[index]!.availability !== 'available') continue
+        next[index] = {
+          capability,
+          availability: 'unavailable',
+          ...(availability.reason ? { reason: availability.reason } : {}),
+        }
+      }
+    } catch {
+      for (const capability of affected) {
+        const index = next.findIndex(item => item.capability === capability)
+        if (index < 0 || next[index]!.availability !== 'available') continue
+        next[index] = {
+          capability,
+          availability: 'error',
+          reason: 'Live 可用性检查失败',
+        }
+      }
+    }
+    return { ...base, availability: integrationAvailability(next), capabilities: next }
+  }
+
   /** Register an AgentLens extension plugin with Plugin API validation. */
   use(plugin: AgentLensCordisPlugin<unknown>, config?: unknown): this {
     this.assertConfigurable()
