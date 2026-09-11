@@ -107,10 +107,17 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     assert.equal(identities.has('rule:codex-global-instructions'), true)
 
     const stateRows = storage.db.prepare(
-      'SELECT evidence_refs_json AS evidenceRefs FROM asset_state_observations',
-    ).all() as Array<{ evidenceRefs: string }>
+      'SELECT state, value, evidence_refs_json AS evidenceRefs FROM asset_state_observations',
+    ).all() as Array<{ state: string; value: string; evidenceRefs: string }>
     assert.ok(stateRows.length > 0)
-    assert.equal(stateRows.every(row => JSON.parse(row.evidenceRefs).length >= 1), true)
+    assert.equal(
+      stateRows
+        .filter(row => row.value !== 'unknown')
+        .every(row => JSON.parse(row.evidenceRefs).length >= 1),
+      true,
+    )
+    assert.ok(stateRows.some(row => row.state === 'discoverable' && row.value === 'unknown'))
+    assert.ok(stateRows.some(row => row.state === 'enabled' && row.value === 'unknown'))
 
     const staticEvidence = storage.db.prepare(
       "SELECT COUNT(*) AS count FROM evidence WHERE capture_method = 'static-scan'",

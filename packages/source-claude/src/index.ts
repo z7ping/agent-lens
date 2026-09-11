@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import {
   access,
   mkdir,
@@ -16,24 +15,26 @@ import {
   extname,
   join,
 } from 'node:path'
-import type {
-  DetectedSource,
-  DiscoveredAsset,
-  Disposable,
-  EvidenceCandidate,
-  NormalizedSourceOutput,
-  ObservationCapability,
-  ObservationCandidate,
-  ObservationIdentityHints,
-  SourceDefinition,
-  SourceDetectionContext,
-  SourceExecutionContext,
-  SourceHistoryExecutionContext,
-  SourceHistoryWindow,
-  SourceNormalizationContext,
-  SourcePluginManifest,
-  SourceRecord,
-  SourceRecordEmitter,
+import {
+  evidenceFromSourceRecord,
+  observationFromSourceRecord,
+  type DetectedSource,
+  type DiscoveredAsset,
+  type Disposable,
+  type EvidenceCandidate,
+  type NormalizedSourceOutput,
+  type ObservationCapability,
+  type ObservationCandidate,
+  type ObservationIdentityHints,
+  type SourceDefinition,
+  type SourceDetectionContext,
+  type SourceExecutionContext,
+  type SourceHistoryExecutionContext,
+  type SourceHistoryWindow,
+  type SourceNormalizationContext,
+  type SourcePluginManifest,
+  type SourceRecord,
+  type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
   abortableDelay,
@@ -42,12 +43,16 @@ import {
   resolveExecutable,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import {
+  isCompleteJson,
+  isMissingPathError,
+  readJsonlLines,
+  sourceFileIdentity,
+} from '@agent-lens/source-support'
 
 const SOURCE_ID = 'claude-code'
-const PARSER_VERSION = '2'
-const MAX_STRING = 64 * 1024
+const PARSER_VERSION = '4'
 const RUNTIME_POLL_MS = 250
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface ClaudeSessionMetadata {
   nativeSessionId: string
@@ -65,13 +70,9 @@ interface HistoryCheckpoint {
   sequence: number
   size: number
   mtimeMs: number
+  fileId?: string
 }
 
-interface JsonlLine {
-  text: string
-  startOffset: number
-  endOffset: number
-}
 
 interface RuntimeInboxEnvelope {
   id: string
@@ -83,23 +84,6 @@ function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function truncate(value: string, limit = MAX_STRING): string {
-  return value.length <= limit ? value : `${value.slice(0, limit)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -134,8 +118,9 @@ async function exists(path: string): Promise<boolean> {
   try {
     await access(path)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    if (isMissingPathError(error)) return false
+    throw error
   }
 }
 
@@ -168,8 +153,9 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   let directory
   try {
     directory = await opendir(root)
-  } catch {
-    return
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
   }
 
   for await (const entry of directory) {
@@ -185,8 +171,9 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
   const candidates = (await Promise.all(paths.map(async path => {
     try {
       return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch {
-      return null
+    } catch (error) {
+      if (isMissingPathError(error)) return null
+      throw error
     }
   }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
@@ -200,48 +187,11 @@ async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow)
     .map(candidate => candidate.path)
 }
 
-async function* readJsonlLines(filePath: string, startOffset: number): AsyncIterable<JsonlLine> {
-  const stream = createReadStream(filePath, { start: startOffset })
-  let carry = Buffer.alloc(0)
-  let carryOffset = startOffset
-
-  for await (const rawChunk of stream) {
-    const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
-    const data = carry.length ? Buffer.concat([carry, chunk]) : chunk
-    const dataOffset = carryOffset
-    let cursor = 0
-
-    while (true) {
-      const newline = data.indexOf(0x0a, cursor)
-      if (newline < 0) break
-      let line = data.subarray(cursor, newline)
-      if (line.length && line[line.length - 1] === 0x0d) line = line.subarray(0, -1)
-      yield {
-        text: line.toString('utf8'),
-        startOffset: dataOffset + cursor,
-        endOffset: dataOffset + newline + 1,
-      }
-      cursor = newline + 1
-    }
-
-    carry = data.subarray(cursor)
-    carryOffset = dataOffset + cursor
-  }
-
-  if (carry.length) {
-    yield {
-      text: carry.toString('utf8'),
-      startOffset: carryOffset,
-      endOffset: carryOffset + carry.length,
-    }
-  }
-}
-
 function parseHistoryLine(text: string): Record<string, unknown> {
   try {
-    return asRecord(sanitize(JSON.parse(text)))
+    return asRecord(JSON.parse(text))
   } catch {
-    return { type: 'malformed-json', raw: truncate(text, 16 * 1024) }
+    return { type: 'malformed-json', raw: text }
   }
 }
 
@@ -252,6 +202,13 @@ function nativeSessionId(entry: Record<string, unknown>, filePath: string): stri
 
 function nativeEntryId(entry: Record<string, unknown>): string | undefined {
   return stringField(entry, 'uuid', 'id', 'messageId', 'message_id')
+}
+
+function sourceNativeEventId(record: SourceRecord, envelope: ClaudeStoredEnvelope): string | undefined {
+  if (record.locator.kind === 'runtime-hook') {
+    return stringField(envelope.entry, 'source_event_id', 'hook_invocation_id')
+  }
+  return nativeEntryId(envelope.entry)
 }
 
 function historyCheckpointKey(filePath: string): string {
@@ -267,33 +224,67 @@ export async function* ingestClaudeHistory(
 
   for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
-    const fileStat = await stat(filePath)
+
+    let fileStat
+    try {
+      fileStat = await stat(filePath)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
+
+    const initialFileId = sourceFileIdentity(fileStat)
     const key = historyCheckpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
+    const sameKnownFile = previous?.fileId === undefined || previous.fileId === initialFileId
     const unchanged = previous
       && previous.path === filePath
+      && sameKnownFile
       && previous.offset === fileStat.size
       && previous.size === fileStat.size
       && previous.mtimeMs === fileStat.mtimeMs
-    if (unchanged) continue
 
-    const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
+    if (unchanged) {
+      if (!previous.fileId) {
+        await ctx.checkpoint.set(key, { ...previous, fileId: initialFileId })
+      }
+      continue
+    }
+
+    const reset = !previous
+      || previous.path !== filePath
+      || (previous.fileId !== undefined && previous.fileId !== initialFileId)
+      || fileStat.size < previous.offset
     let offset = reset ? 0 : previous.offset
     let sequence = reset ? 0 : previous.sequence
     let lastCwd: string | undefined
+    let incompleteTail = false
+
+    const persistCheckpoint = async (
+      size: number,
+      mtimeMs: number,
+    ): Promise<void> => {
+      await ctx.checkpoint.set(key, {
+        path: filePath,
+        offset,
+        sequence,
+        size,
+        mtimeMs,
+        fileId: initialFileId,
+      })
+    }
 
     for await (const line of readJsonlLines(filePath, offset)) {
       if (ctx.abortSignal.aborted) return
+      if (!line.terminated && line.text.trim() && !isCompleteJson(line.text)) {
+        incompleteTail = true
+        break
+      }
+
       sequence += 1
       offset = line.endOffset
       if (!line.text.trim()) {
-        await ctx.checkpoint.set(key, {
-          path: filePath,
-          offset,
-          sequence,
-          size: fileStat.size,
-          mtimeMs: fileStat.mtimeMs,
-        })
+        await persistCheckpoint(fileStat.size, fileStat.mtimeMs)
         continue
       }
 
@@ -311,11 +302,12 @@ export async function* ingestClaudeHistory(
           ...(cwd ? { cwd } : {}),
         },
       }
-      const record: SourceRecord = {
+
+      yield {
         id: `claude-record-${sha256(`${filePath}|${line.startOffset}|${fingerprint}`).slice(0, 32)}`,
         sourceId: SOURCE_ID,
         installationId: ctx.installation.id,
-        sourceSessionNativeId: sessionId,
+        ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
         nativeType: `history/${stringField(entry, 'type') ?? 'unknown'}`,
         ...(nativeId ? { nativeId } : {}),
         sourceSequence: sequence,
@@ -327,14 +319,19 @@ export async function* ingestClaudeHistory(
         parserVersion: PARSER_VERSION,
       }
 
-      yield record
-      await ctx.checkpoint.set(key, {
-        path: filePath,
-        offset,
-        sequence,
-        size: fileStat.size,
-        mtimeMs: fileStat.mtimeMs,
-      })
+      await persistCheckpoint(fileStat.size, fileStat.mtimeMs)
+    }
+
+    // Keep EOF metadata current without confusing a path replacement with an append.
+    if (!ctx.abortSignal.aborted && !incompleteTail) {
+      try {
+        const finalStat = await stat(filePath)
+        if (sourceFileIdentity(finalStat) === initialFileId) {
+          await persistCheckpoint(finalStat.size, finalStat.mtimeMs)
+        }
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
+      }
     }
   }
 }
@@ -349,11 +346,7 @@ function runtimeEventName(event: Record<string, unknown>): string {
 }
 
 function runtimeNativeId(event: Record<string, unknown>): string | undefined {
-  const name = runtimeEventName(event)
-  if (name === 'PreToolUse' || name === 'PostToolUse') {
-    return stringField(event, 'tool_use_id', 'call_id')
-  }
-  return stringField(event, 'source_event_id', 'hook_invocation_id', 'turn_id', 'agent_id')
+  return stringField(event, 'source_event_id', 'hook_invocation_id')
 }
 
 function parseRuntimeEnvelope(text: string, fileName: string): RuntimeInboxEnvelope {
@@ -362,13 +355,13 @@ function parseRuntimeEnvelope(text: string, fileName: string): RuntimeInboxEnvel
     return {
       id: stringField(parsed, 'id') ?? fileName,
       capturedAt: stringField(parsed, 'capturedAt') ?? new Date().toISOString(),
-      event: asRecord(sanitize(parsed.event)),
+      event: asRecord(parsed.event),
     }
   } catch {
     return {
       id: fileName,
       capturedAt: new Date().toISOString(),
-      event: { hook_event_name: 'MalformedInboxEvent', raw: truncate(text, 16 * 1024) },
+      event: { hook_event_name: 'MalformedInboxEvent', raw: text },
     }
   }
 }
@@ -379,7 +372,7 @@ function runtimeRecord(
   ctx: SourceExecutionContext,
 ): SourceRecord {
   const event = envelope.event
-  const sessionId = stringField(event, 'session_id', 'sessionId') ?? 'runtime-unknown'
+  const sessionId = stringField(event, 'session_id', 'sessionId')
   const hookName = runtimeEventName(event)
   const nativeId = runtimeNativeId(event)
   const cwd = stringField(event, 'cwd', 'working_directory')
@@ -398,7 +391,7 @@ function runtimeRecord(
     payload: {
       runtimeEvent: event,
       session: {
-        nativeSessionId: sessionId,
+        ...(sessionId ? { nativeSessionId: sessionId } : {}),
         ...(cwd ? { cwd } : {}),
       },
     },
@@ -419,7 +412,8 @@ export async function startClaudeRuntimeCapture(
       let files: string[] = []
       try {
         files = (await readdir(inbox)).filter(name => name.endsWith('.json')).sort()
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
         files = []
       }
 
@@ -450,16 +444,18 @@ export async function startClaudeRuntimeCapture(
 async function safeStat(path: string) {
   try {
     return await stat(path)
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
 async function safeEntries(path: string) {
   try {
     return await readdir(path, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error)) return []
+    throw error
   }
 }
 
@@ -481,13 +477,11 @@ function staticEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -498,14 +492,17 @@ function assetStates(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
   values: Array<{
     state: 'installed' | 'configured' | 'enabled' | 'discoverable'
     value: boolean | 'unknown'
   }>,
 ): NonNullable<DiscoveredAsset['states']> {
-  const evidence = staticEvidence(path, observedAt, capturedAt, nativeStableId)
-  return values.map(value => ({ ...value, observedAt, evidenceCandidates: [evidence] }))
+  const evidence = staticEvidence(path, observedAt, capturedAt)
+  return values.map(value => ({
+    ...value,
+    observedAt,
+    ...(value.value === 'unknown' ? {} : { evidenceCandidates: [evidence] }),
+  }))
 }
 
 async function* discoverSkillAssets(
@@ -525,10 +522,9 @@ async function* discoverSkillAssets(
         skillFile,
         observedAt,
         capturedAt,
-        `skill:${skillFile}`,
         [
           { state: 'installed', value: true },
-          { state: 'discoverable', value: true },
+          { state: 'discoverable', value: 'unknown' },
         ],
       ),
     }
@@ -554,10 +550,9 @@ async function* discoverCommandAssets(
         filePath,
         observedAt,
         capturedAt,
-        `command:${filePath}`,
         [
-          { state: 'configured', value: true },
-          { state: 'discoverable', value: true },
+          { state: 'installed', value: true },
+          { state: 'discoverable', value: 'unknown' },
         ],
       ),
     }
@@ -582,7 +577,6 @@ async function* discoverPluginAssets(
         path,
         observedAt,
         capturedAt,
-        `plugin:${path}`,
         [{ state: 'installed', value: true }],
       ),
     }
@@ -602,8 +596,9 @@ async function* discoverSettingsAssets(
     let settings: Record<string, unknown>
     try {
       settings = asRecord(JSON.parse(await readFile(settingsPath, 'utf8')))
-    } catch {
-      continue
+    } catch (error) {
+      if (isMissingPathError(error) || error instanceof SyntaxError) continue
+      throw error
     }
     const observedAt = meta.mtime.toISOString()
     const mcp = asRecord(settings.mcpServers ?? settings.mcp_servers)
@@ -615,10 +610,9 @@ async function* discoverSettingsAssets(
           settingsPath,
           observedAt,
           capturedAt,
-          `mcp:${settingsPath}:${name}`,
           [
             { state: 'configured', value: true },
-            { state: 'discoverable', value: true },
+            { state: 'discoverable', value: 'unknown' },
           ],
         ),
       }
@@ -638,10 +632,9 @@ async function* discoverSettingsAssets(
           settingsPath,
           observedAt,
           capturedAt,
-          `hook:${settingsPath}:${eventName}`,
           [
             { state: 'configured', value: true },
-            { state: 'enabled', value: true },
+            { state: 'enabled', value: 'unknown' },
           ],
         ),
       }
@@ -669,19 +662,15 @@ export async function* discoverClaudeAssets(
   }
 }
 
-function evidenceFor(record: SourceRecord): EvidenceCandidate {
+function evidenceFor(record: SourceRecord, envelope: ClaudeStoredEnvelope): EvidenceCandidate {
   const runtime = record.locator.kind === 'runtime-hook'
-  return {
+  const nativeStableId = sourceNativeEventId(record, envelope)
+  return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-log',
     derivation: runtime ? 'observed' : 'reported',
-    sourceRecordId: record.id,
-    sourceLocator: record.locator,
-    parserVersion: record.parserVersion,
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
-    confidenceHint: record.nativeId ? 'exact' : 'high',
-  }
+    ...(nativeStableId ? { nativeStableId } : {}),
+    confidenceHint: nativeStableId ? 'exact' : 'high',
+  })
 }
 
 function baseIdentity(
@@ -689,7 +678,7 @@ function baseIdentity(
   envelope: ClaudeStoredEnvelope,
 ): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId,
+    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
   }
 }
@@ -702,30 +691,27 @@ function candidate(
   options: {
     nativeCallId?: string
     nativeEventId?: string
+    sharedEventKey?: string
+    sequenceOffset?: number
     identity?: Partial<ObservationIdentityHints>
   } = {},
 ): ObservationCandidate {
-  const nativeCallId = options.nativeCallId
-  const eventId = options.nativeEventId ?? (!nativeCallId ? record.nativeId : undefined)
-  return {
+  const nativeEventId = options.nativeEventId
+    ?? (!options.nativeCallId && !options.sharedEventKey
+      ? sourceNativeEventId(record, envelope)
+      : undefined)
+  return observationFromSourceRecord(record, {
     kind,
-    ...(eventId ? { nativeEventId: eventId } : {}),
-    ...(nativeCallId ? { nativeCallId } : {}),
-    ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
-    ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     payload,
     identityHints: {
       ...baseIdentity(record, envelope),
       ...(options.identity ?? {}),
     },
-    dedupHints: {
-      ...(eventId ? { nativeEventId: eventId } : {}),
-      ...(nativeCallId ? { nativeCallId } : {}),
-      ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
-      ...(record.fingerprint ? { payloadFingerprint: record.fingerprint } : {}),
-    },
-  }
+    ...(nativeEventId ? { nativeEventId } : {}),
+    ...(options.nativeCallId ? { nativeCallId: options.nativeCallId } : {}),
+    ...(options.sharedEventKey ? { sharedEventKey: options.sharedEventKey } : {}),
+    ...(options.sequenceOffset === undefined ? {} : { sequenceOffset: options.sequenceOffset }),
+  })
 }
 
 function textFromContent(content: unknown): string {
@@ -741,29 +727,34 @@ function textFromContent(content: unknown): string {
 }
 
 function runtimeEnvelope(record: SourceRecord): {
-  envelope: ClaudeStoredEnvelope
+  envelope?: ClaudeStoredEnvelope
   event: Record<string, unknown>
 } {
   const payload = asRecord(record.payload)
   const event = asRecord(payload.runtimeEvent)
   const session = asRecord(payload.session)
   const cwd = stringField(session, 'cwd')
+  const storedSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId
+  const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
+    ? undefined
+    : storedSessionId
   return {
-    envelope: {
-      entry: event,
-      session: {
-        nativeSessionId: stringField(session, 'nativeSessionId')
-          ?? record.sourceSessionNativeId
-          ?? 'runtime-unknown',
-        ...(cwd ? { cwd } : {}),
+    ...(nativeSessionId ? {
+      envelope: {
+        entry: event,
+        session: {
+          nativeSessionId,
+          ...(cwd ? { cwd } : {}),
+        },
       },
-    },
+    } : {}),
     event,
   }
 }
 
-function normalizeRuntime(record: SourceRecord): ObservationCandidate {
+function normalizeRuntime(record: SourceRecord): ObservationCandidate | null {
   const { envelope, event } = runtimeEnvelope(record)
+  if (!envelope) return null
   const hookName = runtimeEventName(event)
   const callId = stringField(event, 'tool_use_id', 'call_id')
   const toolName = stringField(event, 'tool_name', 'name') ?? 'unknown'
@@ -774,16 +765,17 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate {
     : {}
 
   if (hookName === 'PreToolUse') {
-    const stableCallId = callId ?? `claude-runtime-call-${record.id}`
     return candidate(record, envelope, 'tool.call', {
-      callId: stableCallId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       input: event.tool_input ?? {},
       ...(turnId ? { turnId } : {}),
-    }, { nativeCallId: stableCallId, identity })
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey: `claude-runtime:${record.id}` }),
+      identity,
+    })
   }
   if (hookName === 'PostToolUse') {
-    const stableCallId = callId ?? `claude-runtime-call-${record.id}`
     const response = event.tool_response ?? event.output ?? event.result ?? null
     const responseRecord = asRecord(response)
     const success = event.success === false
@@ -792,12 +784,15 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate {
       ? false
       : true
     return candidate(record, envelope, 'tool.result', {
-      callId: stableCallId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       success,
       ...(response == null ? {} : { output: response }),
       ...(typeof event.duration_ms === 'number' ? { durationMs: event.duration_ms } : {}),
-    }, { nativeCallId: stableCallId, identity })
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey: `claude-runtime:${record.id}` }),
+      identity,
+    })
   }
   if (hookName === 'SessionStart' || hookName === 'SessionEnd') {
     return candidate(record, envelope, 'session.lifecycle', {
@@ -855,9 +850,11 @@ export async function normalizeClaudeRecord(
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   if (record.locator.kind === 'runtime-hook') {
+    const runtime = runtimeEnvelope(record)
+    const observation = runtime.envelope ? normalizeRuntime(record) : null
     return {
-      observations: [normalizeRuntime(record)],
-      evidenceCandidates: [evidenceFor(record)],
+      observations: observation ? [observation] : [],
+      evidenceCandidates: runtime.envelope ? [evidenceFor(record, runtime.envelope)] : [],
     }
   }
 
@@ -870,27 +867,32 @@ export async function normalizeClaudeRecord(
 
   if (type === 'user') {
     if (typeof content === 'string') {
-      if (content.trim()) observations.push(candidate(record, envelope, 'message.user', { text: truncate(content) }))
+      if (content.trim()) observations.push(candidate(record, envelope, 'message.user', { text: content }))
     } else if (Array.isArray(content)) {
       const text = textFromContent(content).trim()
-      if (text) observations.push(candidate(record, envelope, 'message.user', { text: truncate(text) }))
-      for (const rawBlock of content) {
+      if (text) observations.push(candidate(record, envelope, 'message.user', { text }))
+      for (const [blockIndex, rawBlock] of content.entries()) {
         const block = asRecord(rawBlock)
         if (block.type !== 'tool_result') continue
-        const callId = stringField(block, 'tool_use_id') ?? `claude-result-${record.id}`
+        const callId = stringField(block, 'tool_use_id')
         const output = textFromContent(block.content)
         observations.push(candidate(record, envelope, 'tool.result', {
-          callId,
+          ...(callId ? { callId } : {}),
           success: block.is_error !== true && block.is_error !== 'true',
-          ...(output ? { output: truncate(output) } : {}),
-        }, { nativeCallId: callId }))
+          ...(output ? { output } : {}),
+        }, {
+          ...(callId
+            ? { nativeCallId: callId }
+            : { sharedEventKey: `claude-result:${record.id}:${blockIndex}` }),
+          sequenceOffset: blockIndex + 1,
+        }))
       }
     }
   } else if (type === 'assistant') {
     if (Array.isArray(content)) {
       const textParts: string[] = []
       const reasoningParts: string[] = []
-      for (const rawBlock of content) {
+      for (const [blockIndex, rawBlock] of content.entries()) {
         const block = asRecord(rawBlock)
         const blockType = stringField(block, 'type') ?? 'unknown'
         if (blockType === 'text') {
@@ -900,23 +902,28 @@ export async function normalizeClaudeRecord(
           const thinking = stringField(block, 'thinking', 'text')
           if (thinking) reasoningParts.push(thinking)
         } else if (blockType === 'tool_use') {
-          const callId = stringField(block, 'id') ?? `claude-call-${record.id}`
+          const callId = stringField(block, 'id')
           observations.push(candidate(record, envelope, 'tool.call', {
-            callId,
+            ...(callId ? { callId } : {}),
             nativeToolName: stringField(block, 'name') ?? 'unknown',
             input: block.input ?? {},
-          }, { nativeCallId: callId }))
+          }, {
+            ...(callId
+              ? { nativeCallId: callId }
+              : { sharedEventKey: `claude-call:${record.id}:${blockIndex}` }),
+            sequenceOffset: blockIndex + 1,
+          }))
         }
       }
       if (textParts.length) observations.push(candidate(record, envelope, 'message.assistant', {
-        text: truncate(textParts.join('\n\n')),
+        text: textParts.join('\n\n'),
       }))
       if (reasoningParts.length) observations.push(candidate(record, envelope, 'message.reasoning', {
-        text: truncate(reasoningParts.join('\n\n')),
-      }))
+        text: reasoningParts.join('\n\n'),
+      }, { sharedEventKey: `claude-reasoning:${record.id}` }))
     } else {
       const text = textFromContent(content).trim()
-      if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: truncate(text) }))
+      if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: text }))
     }
   } else if (type === 'custom-title') {
     const title = stringField(entry, 'customTitle', 'custom_title')?.trim()
@@ -926,7 +933,7 @@ export async function normalizeClaudeRecord(
     }, { identity: title ? { sessionTitle: title } : {} }))
   } else if (type === 'summary') {
     observations.push(candidate(record, envelope, 'context.summary', {
-      text: truncate(textFromContent(entry.summary ?? content)),
+      text: textFromContent(entry.summary ?? content),
     }))
   }
 
@@ -936,7 +943,7 @@ export async function normalizeClaudeRecord(
       rawPayload: entry,
     }))
   }
-  return { observations, evidenceCandidates: [evidenceFor(record)] }
+  return { observations, evidenceCandidates: [evidenceFor(record, envelope)] }
 }
 
 export async function declareClaudeCapabilities(
@@ -951,7 +958,7 @@ export async function declareClaudeCapabilities(
     { sourceId: SOURCE_ID, name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'runtime-hook'], reason: 'Summary and compaction lifecycle are visible; full context is not' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible thinking blocks are captured' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static user configuration is observable; merged scope, trust, plugin activation and runtime discoverability require stronger Claude Code runtime evidence' },
     { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Invocation attribution is handled by later usage projections' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Stable usage mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not implemented' },
@@ -990,6 +997,7 @@ const applyClaudeSource = Object.assign(
 export const claudeSourcePlugin = defineAgentLensPlugin(claudeManifest, applyClaudeSource)
 
 export const claudeInternals = {
+  historyCheckpointKey,
   listJsonlFiles,
   runtimeInboxDirectory,
   parseRuntimeEnvelope,
