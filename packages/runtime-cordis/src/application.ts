@@ -124,6 +124,18 @@ export class AgentLensApplication {
     return this.listIntegrationStatuses().find(status => status.productId === productId) ?? null
   }
 
+  authorizableCapabilities(productId: string): AgentIntegrationCapability[] {
+    const registered = [...this.integrations.values()].find(
+      item => item.integration.manifest.productId === productId,
+    )
+    if (!registered) return []
+    return [...new Set(
+      registered.integration.components
+        .filter(component => component.authorization === 'explicit')
+        .flatMap(component => component.capabilities),
+    )]
+  }
+
   async resolveIntegrationStatus(productId: string): Promise<AgentIntegrationRuntimeStatus | null> {
     const base = this.integrationStatus(productId)
     if (!base || !base.enabled) return base
