@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
@@ -14,11 +16,11 @@ import { Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
 
 const toolDetailApi = new AgentLensApi()
 
-function duration(ms: number): string {
-  if (ms <= 0) return '未观察到'
-  if (ms < 1000) return `${ms} 毫秒`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} 秒`
-  return `${(ms / 60_000).toFixed(1)} 分钟`
+function duration(ms: number, t: TFunction): string {
+  if (ms <= 0) return t('duration.unobserved')
+  if (ms < 1000) return t('duration.milliseconds', { value: ms })
+  if (ms < 60_000) return t('duration.seconds', { value: (ms / 1000).toFixed(1) })
+  return t('duration.minutes', { value: (ms / 60_000).toFixed(1) })
 }
 
 function rateValue(success: number, error: number): number | null {
@@ -34,24 +36,24 @@ function rate(success: number, error: number): string {
   return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}%`
 }
 
-function formatSessionTime(value: string | undefined): string {
+function formatSessionTime(value: string | undefined, locale: string): string {
   if (!value) return ''
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function assetTypeLabel(type: string): string {
-  if (type === 'skill') return '技能'
-  if (type === 'mcp') return 'MCP（模型上下文协议）'
-  return '其他'
+function assetTypeLabel(type: string, t: TFunction): string {
+  if (type === 'skill') return t('assetType.skill')
+  if (type === 'mcp') return t('assetType.mcp')
+  return t('assetType.other')
 }
 
-function confidenceLabel(confidence: string): string {
-  if (confidence === 'high') return '高可信'
-  if (confidence === 'medium') return '中可信'
-  if (confidence === 'low') return '低可信'
-  return '可信度未知'
+function confidenceLabel(confidence: string, t: TFunction): string {
+  if (confidence === 'high') return t('confidence.high')
+  if (confidence === 'medium') return t('confidence.medium')
+  if (confidence === 'low') return t('confidence.low')
+  return t('confidence.unknown')
 }
 
 function toolKey(sourceIds: string[], nativeToolName: string): string {
@@ -90,6 +92,8 @@ function sortMetric(tool: ToolUsageDto, key: SortKey): number {
 }
 
 export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel; sidebarHost?: HTMLDivElement | null }) {
+  const { t, i18n } = useTranslation('tools')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const snapshot = useClientSnapshot(model)
   const navigate = useNavigate()
   const usage = snapshot.usage
@@ -99,7 +103,11 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const projects = snapshot.facets?.projects ?? []
-  const agentSelectionSummary = usage.filters.sourceIds === null ? '全部智能体' : usage.filters.sourceIds.length ? `已选 ${usage.filters.sourceIds.length} 个` : '未选择'
+  const agentSelectionSummary = usage.filters.sourceIds === null
+    ? t('filters.allAgents')
+    : usage.filters.sourceIds.length
+      ? t('filters.selectedAgents', { count: usage.filters.sourceIds.length })
+      : t('filters.none')
   const tools = data?.tools ?? []
   const assets = data?.assets ?? []
   const mostUsed = [...tools].sort((a, b) => b.callCount - a.callCount)[0]
@@ -185,21 +193,21 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     navigate(`/review/${encodeURIComponent(logicalSessionId)}?${params.toString()}`)
   }
   const projectFilterOptions = [
-    { value: '', label: '全部项目' },
+    { value: '', label: t('filters.allProjects') },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
-  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label="工具分析筛选">
+  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label={t('filters.aria')}>
     <div className="workspace-context-utility">
       <span>{agentSelectionSummary}</span>
-      <IconButton size="small" onClick={() => void model.refreshUsage()} title="刷新工具分析" aria-label="刷新工具分析"><UiIcon name="refresh" size={14}/></IconButton>
+      <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
     <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields">
-        <label><span>项目</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-        <label><span>时间</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-          { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+        <label><span>{t('filters.project')}</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
+        <label><span>{t('filters.time')}</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel={t('filters.timeAria')} menuWidth={156} options={[
+          { value: 'today', label: t('filters.today') }, { value: '7d', label: t('filters.sevenDays') }, { value: '30d', label: t('filters.thirtyDays') }, { value: 'all', label: t('filters.all') },
         ]}/></label>
-        {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>清除筛选</button>}
+        {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>{t('filters.clear')}</button>}
       </div>
     </SidebarFilterDisclosure>
   </div>
