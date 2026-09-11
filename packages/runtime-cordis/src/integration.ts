@@ -8,12 +8,14 @@ import type { AgentLensCordisPlugin } from './plugin'
 export type AgentLensIntegrationComponent =
   | {
       pluginId: string
+      activation: 'catalog' | 'enabled'
       lifecycle: 'plugin'
       plugin: AgentLensCordisPlugin<unknown>
       config?: unknown
     }
   | {
       pluginId: string
+      activation: 'catalog' | 'enabled'
       lifecycle: 'runtime'
       plugin: Plugin<unknown>
       config?: unknown
