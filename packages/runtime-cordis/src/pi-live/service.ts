@@ -789,7 +789,7 @@ export class DefaultPiLiveService implements PiLiveService {
 
     runtime.startupAuditPending = attempt
     let task: Promise<void>
-    task = this.startupAudit.recordStartupResources(snapshot).then(() => {
+    task = this.startupAudit.recordStartupAudit(snapshot).then(() => {
       if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
       if (packageStatus) runtime.startupPackageAuditCompleted = attempt
     }).catch(error => {
@@ -822,7 +822,7 @@ export class DefaultPiLiveService implements PiLiveService {
       if (!nativeSessionId || !runtime.startupAuditResources) return
 
       const capturedAt = runtime.startupResourcesCapturedAt ?? new Date().toISOString()
-      await this.startupAudit.recordStartupResources({
+      await this.startupAudit.recordStartupAudit({
         runtimeSessionId: runtime.id,
         attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
         capturedAt,
