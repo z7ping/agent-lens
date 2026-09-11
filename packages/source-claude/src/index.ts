@@ -978,6 +978,7 @@ const applyClaudeSource = Object.assign(
 export const claudeSourcePlugin = defineAgentLensPlugin(claudeManifest, applyClaudeSource)
 
 export const claudeInternals = {
+  historyCheckpointKey,
   listJsonlFiles,
   runtimeInboxDirectory,
   parseRuntimeEnvelope,
