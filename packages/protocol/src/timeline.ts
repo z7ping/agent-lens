@@ -22,6 +22,7 @@ export const TIMELINE_OBSERVATION_KINDS = [
   'context.compaction',
   'context.summary',
   'context.injected',
+  'runtime.resources',
   'artifact.action',
   'usage',
   'unknown',
