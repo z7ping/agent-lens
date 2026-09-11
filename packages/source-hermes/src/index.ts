@@ -36,9 +36,9 @@ import {
 import {
   abortableDelay,
   defineAgentLensPlugin,
-  isMissingPathError,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
