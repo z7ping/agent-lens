@@ -15,6 +15,10 @@ const LOCALE_PREFERENCE_KEY = 'agent-lens.locale.v1'
 
 export const agentLensI18n: i18n = createInstance()
 
+export function currentProductLocale(): string {
+  return agentLensI18n.resolvedLanguage ?? agentLensI18n.language ?? OFFICIAL_AGENT_LENS_LOCALE
+}
+
 export function translateProduct(key: string, options: Record<string, unknown> = {}): string {
   if (agentLensI18n.isInitialized) return String(agentLensI18n.t(key, options))
 
