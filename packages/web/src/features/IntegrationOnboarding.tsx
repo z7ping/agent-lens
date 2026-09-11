@@ -140,9 +140,17 @@ export function IntegrationOnboarding({
           <h1 id="integration-onboarding-title">{t('onboarding.title')}</h1>
           <p>{t('onboarding.description')}</p>
         </div>
-        <StatusBadge tone={scanning ? 'accent' : 'success'} dot>
-          {scanning ? t('onboarding.scanning') : t('onboarding.scanComplete')}
-        </StatusBadge>
+        <div className="integration-onboarding-scan-actions">
+          <StatusBadge tone={scanning ? 'accent' : 'success'} dot>
+            {scanning ? t('onboarding.scanning') : t('onboarding.scanComplete')}
+          </StatusBadge>
+          <Button
+            size="small"
+            loading={snapshot.integrationDiscoveryRescanning}
+            disabled={scanning && !snapshot.integrationDiscoveryRescanning}
+            onClick={() => void model.rescanIntegrationDiscovery().catch(() => undefined)}
+          >{t('onboarding.rescan')}</Button>
+        </div>
       </header>
 
       <div className="integration-onboarding-list">
@@ -191,7 +199,7 @@ export function IntegrationOnboarding({
         <span>{t('onboarding.noneFoundDescription')}</span>
       </div>}
 
-      {missing.length > 0 && <p className="integration-onboarding-missing">
+      {!scanning && missing.length > 0 && <p className="integration-onboarding-missing">
         {t('onboarding.notFound', { agents: missing.map(item => item.displayName).join('、') })}
       </p>}
 
