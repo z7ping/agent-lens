@@ -9,6 +9,7 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
@@ -131,7 +132,8 @@ export async function startCodexRuntimeCapture(
         files = (await readdir(inbox))
           .filter(name => name.endsWith('.json'))
           .sort((a, b) => a.localeCompare(b))
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
         files = []
       }
 
