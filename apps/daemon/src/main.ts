@@ -22,6 +22,7 @@ import {
   grantIntegrationCapabilities,
   integrationAuthorizationPath,
   nodeRuntimePlugin,
+  OfficialToolDiscoveryService,
   prepareRegisteredSources,
   readIntegrationAuthorizationSync,
   replayRegisteredSourceHistory,
@@ -70,6 +71,9 @@ import { createProjectDirectoryPicker } from './project-directory-picker.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
 const { dataRoot, profile: runtimeProfile, capabilities } = nodeRuntime
+const officialToolDiscovery = capabilities.localCapture
+  ? new OfficialToolDiscoveryService()
+  : null
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(dataRoot, 'agent-lens.db')
 const vaultPath = process.env.AGENT_LENS_VAULT_PATH
@@ -139,6 +143,17 @@ app.use(httpSurfacePlugin, {
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
   healthDetails: () => ({
     ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
+    ...(officialToolDiscovery
+      ? {
+          toolDiscovery: (() => {
+            const snapshot = officialToolDiscovery.snapshot()
+            return {
+              status: snapshot.status,
+              ...(snapshot.completedAt ? { completedAt: snapshot.completedAt } : {}),
+            }
+          })(),
+        }
+      : {}),
     integrationFailures: app.integrationFailures.map(failure => ({
       integrationId: failure.integrationId,
       componentPluginId: failure.componentPluginId,
@@ -146,6 +161,14 @@ app.use(httpSurfacePlugin, {
     })),
   }),
   integrationStatus: productId => app.resolveIntegrationStatus(productId),
+  ...(officialToolDiscovery
+    ? {
+        integrationDiscovery: {
+          snapshot: () => officialToolDiscovery.snapshot(),
+          rescan: () => officialToolDiscovery.rescan(),
+        },
+      }
+    : {}),
   integrationAuthorization: {
     available: productId => app.authorizableCapabilities(productId)
       .filter((capability): capability is 'hook' | 'runtime' | 'live' => capability !== 'source'),
@@ -261,6 +284,17 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
+  if (officialToolDiscovery) {
+    void officialToolDiscovery.rescan()
+      .then(snapshot => {
+        const present = snapshot.items.filter(item => item.presence === 'present').length
+        const dataOnly = snapshot.items.filter(item => item.presence === 'data-only').length
+        console.info(`[AgentLens] tool discovery completed: present=${present} dataOnly=${dataOnly}`)
+      })
+      .catch(error => {
+        console.warn('[AgentLens] tool discovery failed', error)
+      })
+  }
   foregroundGate = new ForegroundActivityGate({
     loadProbe: () => ({
       foregroundPending: app.context.dataRuntime.foregroundPending(),
