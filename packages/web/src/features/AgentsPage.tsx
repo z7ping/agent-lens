@@ -161,6 +161,12 @@ function captureState(
       return { label: t('status.notFound'), title: t('status.notFoundTitle'), className: 'is-missing' }
     }
 
+    if (!agent?.detected && discoveryScanning) {
+      return { label: t('status.scanning'), title: t('status.scanningTitle'), className: 'is-scanning' }
+    }
+    if (!agent?.detected && discovery?.presence !== 'present') {
+      return { label: t('status.notDetected'), title: t('status.notDetectedTitle'), className: 'is-missing' }
+    }
     if (!management.enabled.configured) {
       if (management.enabled.restartRequired || packageState.restartRequired) {
         return { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
@@ -170,9 +176,6 @@ function captureState(
 
     if (management.enabled.restartRequired || packageState.restartRequired) {
       return { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
-    }
-    if (!agent?.detected && discovery?.presence !== 'present') {
-      return { label: t('status.notDetected'), title: t('status.notDetectedTitle'), className: 'is-missing' }
     }
     if (management.availability === 'error') {
       return { label: t('status.abnormal'), title: t('status.abnormalTitle'), className: 'is-error' }
@@ -815,6 +818,7 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
     <div className="agent-installation">
       <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{toolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
+      {management?.packageState && <span><small>{t('installation.integrationVersion')}</small><b>{management.packageState.installedVersion ?? management.packageState.availableVersion ?? t('installation.notAdded')}</b></span>}
       <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
