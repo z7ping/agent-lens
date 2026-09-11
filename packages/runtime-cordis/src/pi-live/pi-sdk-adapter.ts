@@ -56,7 +56,7 @@ export interface PiSdkSession {
   readonly isCompacting: AgentSession['isCompacting']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
-  readonly settingsManager: AgentSession['settingsManager']
+  readonly settingsManager?: AgentSession['settingsManager']
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
