@@ -16,6 +16,7 @@ import type {
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
+import { translateProduct } from '../i18n/runtime'
 
 export interface ClientSnapshot {
   health: HealthResponseDto | null
@@ -224,7 +225,7 @@ export class AgentLensClientModel {
     } catch {
       // Existing data remains visible on refresh failure.
       if (generation !== this.agentsGeneration) return
-      this.patch({ agentsLoading: false, agentsError: '智能体概览查询失败。请重试；若持续失败，请运行诊断命令。' })
+      this.patch({ agentsLoading: false, agentsError: translateProduct('errors:agentsOverviewFailed') })
     }
   }
 
@@ -265,7 +266,7 @@ export class AgentLensClientModel {
 
   async setSourceEnabled(sourceId: string, enabled: boolean): Promise<void> {
     const current = this.snapshot.capturePolicy
-    if (!current) throw new Error('采集策略状态尚未加载')
+    if (!current) throw new Error(translateProduct('errors:capturePolicyNotLoaded'))
     const next = new Set(current.settings.configuredEnabledSources)
     if (enabled) next.add(sourceId)
     else next.delete(sourceId)
