@@ -2,6 +2,7 @@ const PINNED_KEY = 'agent-lens.pinned-agents.v1'
 const AGENT_FILTER_KEY = 'agent-lens.agent-filter.v2'
 const THEME_KEY = 'agent-lens.theme.v1'
 const SIDEBAR_COLLAPSED_KEY = 'agent-lens.sidebar-collapsed.v1'
+const LOCALE_KEY = 'agent-lens.locale.v1'
 
 export interface AgentFilterPreference {
   orderedAgentIds: string[]
@@ -57,4 +58,15 @@ export function readSidebarCollapsed(): boolean {
 
 export function writeSidebarCollapsed(collapsed: boolean): void {
   try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed)) } catch { /* ignore unavailable storage */ }
+}
+
+export function readLocale(): string | null {
+  try {
+    const value = localStorage.getItem(LOCALE_KEY)?.trim()
+    return value || null
+  } catch { return null }
+}
+
+export function writeLocale(locale: string): void {
+  try { localStorage.setItem(LOCALE_KEY, locale) } catch { /* ignore unavailable storage */ }
 }
