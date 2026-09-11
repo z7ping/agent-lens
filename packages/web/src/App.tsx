@@ -145,7 +145,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     replace: replaceReviewUrl,
   })
 
-  return <PinnedAgentsProvider agents={agents}>
+  return <PinnedAgentsProvider
+    agents={agents}
+    management={snapshot.integrationManagement}
+    model={model}
+  >
     <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
