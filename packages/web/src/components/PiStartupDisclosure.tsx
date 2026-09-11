@@ -106,14 +106,19 @@ export function PiStartupDisclosure({
     { label: t('startup.resource.extensions'), values: resources?.extensions ?? [] },
     { label: t('startup.resource.themes'), values: resources?.themes ?? [] },
   ].filter(group => group.values.length)
+  const resourceDiagnostics = resources?.diagnostics ?? []
+  const resourceReadIncomplete = resourceDiagnostics.length > 0
   const packageUpdates = state.packageUpdates ?? []
   const packageUpdateSummary = packageUpdates.length
     ? t('startup.packageUpdatesAvailable', { count: packageUpdates.length })
     : ''
   const resourceSummary = resourceGroups.length
-    ? resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · ')
+    ? [
+        resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · '),
+        ...(resourceReadIncomplete ? [t('startup.resource.partialSummary')] : []),
+      ].join(' · ')
     : resourcesKnown
-      ? t('startup.resource.noneSummary')
+      ? t(resourceReadIncomplete ? 'startup.resource.partialSummary' : 'startup.resource.noneSummary')
       : ''
   const readySummary = [resourceSummary, packageUpdateSummary].filter(Boolean).join(' · ')
   const startupOutput = state.startupOutput ?? []
@@ -140,7 +145,7 @@ export function PiStartupDisclosure({
       {state.processId && <span>Worker PID {state.processId}</span>}
     </div>}
     {resourcesKnown && resourceGroups.length === 0 && <div className="pi-startup-diagnostics">
-      <b>{t('startup.resource.title')}</b><span>{t('startup.resource.noneLoaded')}</span>
+      <b>{t('startup.resource.title')}</b><span>{t(resourceReadIncomplete ? 'startup.resource.incomplete' : 'startup.resource.noneLoaded')}</span>
     </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
       <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
