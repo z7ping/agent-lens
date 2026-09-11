@@ -17,6 +17,7 @@ interface OwnedRuntime {
   status: LiveRuntimeState['status']
   events: LiveEventChannel
   activeRunId?: string
+  streamRunId?: string
   streamAbort?: AbortController
   streamTask?: Promise<void>
 }
@@ -145,6 +146,7 @@ export class DefaultHermesLiveService {
     const runId = await this.client.createRun(runtime.nativeSessionId, message)
     runtime.activeRunId = runId
     const controller = new AbortController()
+    runtime.streamRunId = runId
     runtime.streamAbort = controller
     runtime.events.publish({
       event: 'run.created',
@@ -186,6 +188,9 @@ export class DefaultHermesLiveService {
     await runtime.streamTask?.catch(() => undefined)
 
     runtime.activeRunId = undefined
+    runtime.streamRunId = undefined
+    runtime.streamAbort = undefined
+    runtime.streamTask = undefined
     runtime.status = 'terminated'
     runtime.events.publish({ type: 'runtime_status', status: 'terminated' })
     runtime.events.clear()
@@ -223,11 +228,15 @@ export class DefaultHermesLiveService {
     } finally {
       if (runtime.activeRunId === runId && terminalEventSeen) {
         this.finishRun(runtime, runId)
-      } else if (!signal.aborted && runtime.status !== 'terminated') {
+      }
+      if (runtime.streamRunId === runId) {
+        runtime.streamRunId = undefined
+        runtime.streamAbort = undefined
+        runtime.streamTask = undefined
+      }
+      if (!terminalEventSeen && !signal.aborted && runtime.status !== 'terminated') {
         await this.refreshActiveRun(runtime).catch(() => undefined)
       }
-      if (runtime.streamAbort?.signal === signal) runtime.streamAbort = undefined
-      if (runtime.streamTask) runtime.streamTask = undefined
     }
   }
 
@@ -240,15 +249,13 @@ export class DefaultHermesLiveService {
         ...state,
         event: `run.${state.status}`,
       })
-      this.finishRun(runtime, runId)
+      if (runtime.streamRunId !== runId) this.finishRun(runtime, runId)
     }
   }
 
   private finishRun(runtime: OwnedRuntime, runId: string): void {
     if (runtime.activeRunId !== runId) return
     runtime.activeRunId = undefined
-    runtime.streamAbort = undefined
-    runtime.streamTask = undefined
   }
 
   private runtime(runtimeSessionId: string): OwnedRuntime {
