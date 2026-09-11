@@ -310,6 +310,7 @@ function IntegrationControl({
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
   ): Promise<unknown>
 }) {
+  const { t } = useTranslation('agents')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [authorizationOpen, setAuthorizationOpen] = useState(false)
@@ -365,37 +366,39 @@ function IntegrationControl({
 
   return <section className="source-capture-control">
     <div>
-      <h3>智能体集成</h3>
+      <h3>{t('integration.title')}</h3>
       <p>{pending
-        ? `已保存为${configured ? '开启' : '关闭'}；Hook 会从下一次调用起读取新设置，Live / Runtime 在重启 AgentLens 后完全生效。`
+        ? configured ? t('integration.pendingEnabled') : t('integration.pendingDisabled')
         : configured
-          ? '启用此智能体在 AgentLens 中声明的 Source / Hook / Runtime / Live 能力；具体可用能力取决于该智能体集成。'
-          : '不会启动此智能体的新采集、Hook 处理或 Live / Runtime 控制能力；已有历史数据不会删除。'}</p>
+          ? t('integration.enabledDescription')
+          : t('integration.disabledDescription')}</p>
       {agent.integration && <div className="integration-availability">
         <span className="integration-availability-overall">
-          <small>当前可用性</small>
+          <small>{t('integration.currentAvailability')}</small>
           <StatusBadge tone={integrationAvailabilityTone(agent.integration.availability)} dot>
-            {integrationAvailabilityLabel[agent.integration.availability] ?? agent.integration.availability}
+            {translatedLabel(integrationAvailabilityLabelKey, agent.integration.availability, t)}
           </StatusBadge>
         </span>
         <span className="integration-capability-badges">
           {agent.integration.capabilities.map(item => <StatusBadge
             key={item.capability}
             tone={integrationAvailabilityTone(item.availability)}
-            title={item.reason}
-          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {item.reason === '授权已保存，等待重启加载'
-              ? '待重启'
+            title={item.reasonCode ? translatedLabel(integrationReasonKey, item.reasonCode, t) : item.reason}
+          >{translatedLabel(integrationCapabilityLabelKey, item.capability, t)} · {item.reasonCode === 'authorization-restart-required'
+              ? t('integration.pendingRestart')
               : item.authorization === 'required'
-                ? '待授权'
-                : integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
+                ? t('integration.pendingAuthorization')
+                : translatedLabel(integrationAvailabilityLabelKey, item.availability, t)}</StatusBadge>)}
         </span>
       </div>}
       {configured && pendingAuthorization.length > 0 && !authorizationSaved && <div className="integration-authorization-action">
-        <Button size="small" disabled={saving} onClick={() => setAuthorizationOpen(true)}>授权控制能力</Button>
-        <span>Runtime / Live 等主动控制能力尚未授权，不会启动。</span>
+        <Button size="small" disabled={saving} onClick={() => setAuthorizationOpen(true)}>{t('integration.authorizeControl')}</Button>
+        <span>{t('integration.authorizeHint')}</span>
       </div>}
-      {authorizationSaved && <p className="source-capture-note">授权已保存；重启 AgentLens 后控制能力生效。</p>}
-      {!editable && settings && <p className="source-capture-note">当前由{settings.managedBy === 'environment' ? '兼容环境变量' : '运行时配置'}管理，界面只读。</p>}
+      {authorizationSaved && <p className="source-capture-note">{t('integration.authorizationSaved')}</p>}
+      {!editable && settings && <p className="source-capture-note">{t('integration.managedReadonly', {
+        manager: settings.managedBy === 'environment' ? t('integration.environmentManager') : t('integration.runtimeManager'),
+      })}</p>}
       {error && <p className="source-capture-error">{error}</p>}
     </div>
     <button
@@ -406,29 +409,29 @@ function IntegrationControl({
       data-enabled={configured || undefined}
       disabled={!editable || saving}
       onClick={toggle}
-    ><span aria-hidden="true"/><b>{saving ? '保存中' : configured ? '已开启' : '已关闭'}</b></button>
+    ><span aria-hidden="true"/><b>{saving ? t('integration.saving') : configured ? t('integration.enabled') : t('integration.disabled')}</b></button>
     <Dialog
       open={authorizationOpen}
-      title={`授权 ${agentLabel(agent.sourceId, agent.displayName)} 控制能力`}
-      description="Source 只读检测与历史采集不需要这项授权；以下能力可能启动智能体运行时或建立实时控制连接。"
+      title={t('integration.dialogTitle', { agent: agentLabel(agent.sourceId, agent.displayName) })}
+      description={t('integration.dialogDescription')}
       onClose={() => { if (!saving) setAuthorizationOpen(false) }}
       closeDisabled={saving}
       footer={<>
-        <Button disabled={saving} onClick={() => setAuthorizationOpen(false)}>取消</Button>
-        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{configured ? '确认授权' : '确认授权并启用'}</Button>
+        <Button disabled={saving} onClick={() => setAuthorizationOpen(false)}>{t('integration.cancel')}</Button>
+        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{configured ? t('integration.confirm') : t('integration.confirmAndEnable')}</Button>
       </>}
     >
       <div className="integration-authorization-list">
         {pendingAuthorization.map(capability => <div key={capability}>
-          <b>{integrationCapabilityLabel[capability] ?? capability}</b>
+          <b>{translatedLabel(integrationCapabilityLabelKey, capability, t)}</b>
           <span>{capability === 'runtime'
-            ? '允许 AgentLens 启动并管理该智能体的运行会话。'
+            ? t('integration.runtimePermission')
             : capability === 'live'
-              ? '允许 AgentLens 建立实时消息、流式事件与中断控制。'
-              : '允许 AgentLens 写入或启用该智能体的观察 Hook。'}</span>
+              ? t('integration.livePermission')
+              : t('integration.hookPermission')}</span>
         </div>)}
       </div>
-      <p className="integration-authorization-note">授权会持久化保存；以后关闭再开启不会重复询问。禁用集成不会删除历史数据。</p>
+      <p className="integration-authorization-note">{t('integration.persistedNote')}</p>
     </Dialog>
   </section>
 }
