@@ -39,6 +39,15 @@ function call(
   })
 }
 
+test('Integration management decoder rejects malformed URL encoding as a bad request', () => {
+  assert.throws(
+    () => integrationManagementHttpInternals.decodeIntegrationId('%E0%A4%A'),
+    error => error instanceof Error
+      && error.name === 'HttpError'
+      && error.message === 'integrationId is not valid URL encoding',
+  )
+})
+
 test('management preference parser rejects reopening completed onboarding', () => {
   assert.throws(
     () => integrationManagementHttpInternals.preferencePayload({ onboardingCompleted: false }),
