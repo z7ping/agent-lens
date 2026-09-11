@@ -23,3 +23,5 @@ export const claudeIntegration = defineAgentLensIntegration(
     },
   ],
 )
+
+export default claudeIntegration
