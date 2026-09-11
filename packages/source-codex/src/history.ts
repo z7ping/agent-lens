@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
-import { isCompleteJson, isMissingPathError, readJsonlLines, type JsonlLine } from '@agent-lens/runtime-cordis'
+import { isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/runtime-cordis'
 import {
   nativeIdForEntry,
   nativeTypeForEntry,
@@ -16,6 +16,7 @@ interface HistoryCheckpoint {
   sequence: number
   size: number
   mtimeMs: number
+  fileId?: string
   parserVersion?: string
 }
 
@@ -264,6 +265,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
     if (ctx.abortSignal.aborted) return
 
     const fileStat = await stat(filePath)
+    const initialFileId = sourceFileIdentity(fileStat)
     const key = checkpointKey(filePath)
     const metadataKey = metadataCheckpointKey(filePath)
     const previous = await ctx.checkpoint.get<HistoryCheckpoint>(key)
@@ -290,18 +292,30 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
 
     // Parser 升级由 SourceHistoryRunner 直接重规范化数据库中的 SourceRecord；
     // 检查点只升级版本，不再重新读取已消费的完整 JSONL 前缀。
-    if (previous && previous.parserVersion !== CODEX_PARSER_VERSION) {
-      await ctx.checkpoint.set(key, { ...previous, parserVersion: CODEX_PARSER_VERSION })
+    if (previous && (
+      previous.parserVersion !== CODEX_PARSER_VERSION
+      || previous.fileId === undefined
+    )) {
+      await ctx.checkpoint.set(key, {
+        ...previous,
+        fileId: previous.fileId ?? initialFileId,
+        parserVersion: CODEX_PARSER_VERSION,
+      })
     }
 
+    const sameKnownFile = previous?.fileId === undefined || previous.fileId === initialFileId
     const unchanged = previous
       && previous.path === filePath
+      && sameKnownFile
       && previous.offset === fileStat.size
       && previous.size === fileStat.size
       && previous.mtimeMs === fileStat.mtimeMs
     if (unchanged) continue
 
-    const reset = !previous || previous.path !== filePath || fileStat.size < previous.offset
+    const reset = !previous
+      || previous.path !== filePath
+      || (previous.fileId !== undefined && previous.fileId !== initialFileId)
+      || fileStat.size < previous.offset
     let offset = reset ? 0 : previous.offset
     let sequence = reset ? 0 : previous.sequence
     let pendingCheckpointLines = 0
@@ -313,6 +327,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
         sequence,
         size: fileStat.size,
         mtimeMs: fileStat.mtimeMs,
+        fileId: initialFileId,
         parserVersion: CODEX_PARSER_VERSION,
       })
       pendingCheckpointLines = 0
