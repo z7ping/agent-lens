@@ -137,16 +137,12 @@ function captureState(
   agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
   discovery: IntegrationToolDiscoveryItemDto | undefined,
   discoveryScanning: boolean,
-  discoveryError: string,
   t: TFunction,
 ): { label: string; title: string; className: string } {
   if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
   if (agent.detected) {
     if (!agent.enabled) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
     return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
-  }
-  if (discoveryError) {
-    return { label: t('status.scanFailed'), title: discoveryError, className: 'is-error' }
   }
   if (discovery?.presence === 'error') {
     return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
@@ -510,7 +506,7 @@ function AgentCard({ agent, discovery, discoveryScanning, discoveryError, policy
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = captureState(agent, discovery, discoveryScanning, discoveryError, t)
+  const status = captureState(agent, discovery, discoveryScanning, t)
   const presencePath = toolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
 
@@ -629,7 +625,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
             const agentDiscovery = discoveryByProduct.get(agent.productId) ?? discoveryByProduct.get(agent.sourceId)
-            const status = captureState(agent, agentDiscovery, discoveryScanning, snapshot.integrationDiscoveryError, t)
+            const status = captureState(agent, agentDiscovery, discoveryScanning, t)
             return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
               <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
