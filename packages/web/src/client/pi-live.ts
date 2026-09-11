@@ -17,6 +17,7 @@ import {
   type PiLiveStateDto,
   type PiLiveStreamingBehaviorDto,
 } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 const HIDDEN_FLUSH_MS = 250
 
@@ -41,7 +42,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
   if (!response.ok) {
     let message = ''
     try { message = responseErrorMessage(await response.json()) ?? '' } catch { /* ignore non-json error */ }
-    throw new PiLiveRequestError(message || `Pi Live 请求失败（${response.status}）`, response.status)
+    throw new PiLiveRequestError(message || translateProduct('errors:piLiveRequestFailed', { status: response.status }), response.status)
   }
   return response.json() as Promise<T>
 }
@@ -405,7 +406,7 @@ export class PiLiveApi {
       } catch (error) {
         if (disposed || terminal || generation !== probeGeneration) return
         if (error instanceof PiLiveRequestError && error.status === 404) {
-          const message = 'Pi Live 任务已结束，或当前版本没有可用于恢复该任务的持久状态。'
+          const message = translateProduct('errors:piLiveEnded')
           terminal = true
           recoveryGeneration += 1
           source.close()
@@ -414,7 +415,7 @@ export class PiLiveApi {
               runtimeSessionId,
               status: 'failed',
               initializationStage: 'starting_worker',
-              initializationMessage: 'Pi Runtime 无法恢复',
+              initializationMessage: translateProduct('errors:piRuntimeRestoreFailed'),
               error: message,
               isStreaming: false,
               isCompacting: false,
