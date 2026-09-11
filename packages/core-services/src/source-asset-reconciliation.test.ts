@@ -9,6 +9,7 @@ import type {
   CapturePolicyService,
   CapabilityService,
   DetectedSource,
+  DiscoveredAsset,
   EvidenceService,
   Host,
   IdentityService,
@@ -40,7 +41,7 @@ const detected: DetectedSource = {
   confidence: 'exact',
 }
 
-function sourceWithInventory(inventory: { current: boolean }): SourceDefinition {
+function sourceWithInventory(inventory: { current: boolean; discoverable?: boolean; fail?: boolean }): SourceDefinition {
   return {
     manifest: {
       pluginId: 'test-source-plugin',
@@ -55,7 +56,20 @@ function sourceWithInventory(inventory: { current: boolean }): SourceDefinition 
     async detect() { return [detected] },
     async declareCapabilities() { return [] },
     async *discoverAssets() {
+      if (inventory.fail) throw new Error('simulated asset scan failure')
       if (!inventory.current) return
+      const states: NonNullable<DiscoveredAsset['states']> = [{
+        state: 'installed',
+        value: true,
+        observedAt: '2026-09-10T01:00:00.000Z',
+      }]
+      if (inventory.discoverable) {
+        states.push({
+          state: 'discoverable',
+          value: true,
+          observedAt: '2026-09-10T01:00:00.000Z',
+        })
+      }
       yield {
         definition: {
           type: 'skill',
@@ -66,19 +80,14 @@ function sourceWithInventory(inventory: { current: boolean }): SourceDefinition 
           path: '/tmp/skills/skill-one',
           source: 'test:skills',
         },
-        states: [{
-          state: 'installed',
-          value: true,
-          observedAt: '2026-09-10T01:00:00.000Z',
-        }],
+        states,
       }
     },
     async normalize() { return { observations: [], evidenceCandidates: [] } },
   }
 }
 
-test('资产扫描以快照收敛已删除资产，而不是保留幽灵 installed=true', async () => {
-  const inventory = { current: true }
+function harness() {
   const checkpoints = new Map<string, unknown>()
   const writes: AssetStateInput[] = []
   const definition: AssetDefinition = {
@@ -130,6 +139,13 @@ test('资产扫描以快照收敛已删除资产，而不是保留幽灵 install
       sanitizeDiscoveredAsset(value: unknown) { return value },
     } as unknown as CapturePolicyService,
   )
+
+  return { runner, writes }
+}
+
+test('资产扫描不再把未声明 discoverable 自动提升为 true', async () => {
+  const inventory = { current: true }
+  const { runner, writes } = harness()
   const source = sourceWithInventory(inventory)
   const signal = new AbortController().signal
 
@@ -137,8 +153,10 @@ test('资产扫描以快照收敛已删除资产，而不是保留幽灵 install
   assert.equal(first.assetsDiscovered, 1)
   assert.equal(first.assetsRemoved, 0)
   assert.equal(first.statesCleared, 0)
-  assert.ok(writes.some(item => item.state === 'installed' && item.value === true))
-  assert.ok(writes.some(item => item.state === 'discoverable' && item.value === true))
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]),
+    [['installed', true]],
+  )
 
   writes.length = 0
   inventory.current = false
@@ -146,9 +164,83 @@ test('资产扫描以快照收敛已删除资产，而不是保留幽灵 install
 
   assert.equal(second.assetsDiscovered, 0)
   assert.equal(second.assetsRemoved, 1)
+  assert.equal(second.statesCleared, 1)
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]),
+    [['installed', false]],
+  )
+})
+
+test('资产消失时只对库存状态写 false，运行/发现状态退回 unknown', async () => {
+  const inventory = { current: true, discoverable: true }
+  const { runner, writes } = harness()
+  const source = sourceWithInventory(inventory)
+  const signal = new AbortController().signal
+
+  const first = await runner.scan({ source, host, detected, abortSignal: signal })
+  assert.equal(first.statesRecorded, 2)
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]).sort(),
+    [['discoverable', true], ['installed', true]],
+  )
+
+  writes.length = 0
+  inventory.current = false
+  const second = await runner.scan({ source, host, detected, abortSignal: signal })
+
+  assert.equal(second.assetsRemoved, 1)
   assert.equal(second.statesCleared, 2)
   assert.deepEqual(
     writes.map(item => [item.state, item.value]).sort(),
-    [['discoverable', false], ['installed', false]],
+    [['discoverable', 'unknown'], ['installed', false]],
   )
 })
+
+test('同一资产仍存在但不再声明旧状态时，旧状态退回 unknown', async () => {
+  const inventory = { current: true, discoverable: true }
+  const { runner, writes } = harness()
+  const source = sourceWithInventory(inventory)
+  const signal = new AbortController().signal
+
+  await runner.scan({ source, host, detected, abortSignal: signal })
+  writes.length = 0
+
+  inventory.discoverable = false
+  const second = await runner.scan({ source, host, detected, abortSignal: signal })
+
+  assert.equal(second.assetsDiscovered, 1)
+  assert.equal(second.assetsRemoved, 0)
+  assert.equal(second.statesCleared, 1)
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]),
+    [['installed', true], ['discoverable', 'unknown']],
+  )
+})
+
+test('资产扫描失败时保留上一次成功快照，不把失败当成空清单', async () => {
+  const inventory = { current: true, fail: false }
+  const { runner, writes } = harness()
+  const source = sourceWithInventory(inventory)
+  const signal = new AbortController().signal
+
+  await runner.scan({ source, host, detected, abortSignal: signal })
+  writes.length = 0
+
+  inventory.fail = true
+  await assert.rejects(
+    runner.scan({ source, host, detected, abortSignal: signal }),
+    /simulated asset scan failure/,
+  )
+  assert.deepEqual(writes, [])
+
+  inventory.fail = false
+  inventory.current = false
+  const third = await runner.scan({ source, host, detected, abortSignal: signal })
+
+  assert.equal(third.assetsRemoved, 1)
+  assert.deepEqual(
+    writes.map(item => [item.state, item.value]),
+    [['installed', false]],
+  )
+})
+

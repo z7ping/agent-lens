@@ -5,6 +5,7 @@ import type {
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
+import { isMissingPathError } from '@agent-lens/source-support'
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -15,16 +16,18 @@ function asRecord(value: unknown): Record<string, unknown> {
 async function safeStat(path: string) {
   try {
     return await stat(path)
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
 async function safeEntries(path: string) {
   try {
     return await readdir(path, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error)) return []
+    throw error
   }
 }
 
@@ -49,13 +52,11 @@ function staticEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -66,14 +67,13 @@ function states(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
   values: Array<{ state: 'installed' | 'configured' | 'enabled' | 'discoverable'; value: boolean | 'unknown' }>,
 ): NonNullable<DiscoveredAsset['states']> {
-  const evidence = staticEvidence(path, observedAt, capturedAt, nativeStableId)
+  const evidence = staticEvidence(path, observedAt, capturedAt)
   return values.map(value => ({
     ...value,
     observedAt,
-    evidenceCandidates: [evidence],
+    ...(value.value === 'unknown' ? {} : { evidenceCandidates: [evidence] }),
   }))
 }
 
@@ -93,7 +93,6 @@ async function* discoverSkills(
       const skillDir = dirname(skillFile)
       const name = basename(skillDir)
       const observedAt = meta.mtime.toISOString()
-      const nativeStableId = `skill:${candidate.source}:${skillFile}`
       yield {
         definition: {
           type: 'skill',
@@ -108,10 +107,9 @@ async function* discoverSkills(
           skillFile,
           observedAt,
           capturedAt,
-          nativeStableId,
           [
             { state: 'installed', value: true },
-            { state: 'discoverable', value: true },
+            { state: 'discoverable', value: 'unknown' },
           ],
         ),
       }
@@ -141,13 +139,13 @@ async function* discoverMcpServers(
   let content = ''
   try {
     content = await readFile(configPath, 'utf8')
-  } catch {
-    return
+  } catch (error) {
+    if (isMissingPathError(error)) return
+    throw error
   }
   const observedAt = meta.mtime.toISOString()
 
   for (const name of mcpNamesFromToml(content)) {
-    const nativeStableId = `mcp:${name}`
     yield {
       definition: {
         type: 'mcp',
@@ -162,10 +160,9 @@ async function* discoverMcpServers(
         configPath,
         observedAt,
         capturedAt,
-        nativeStableId,
         [
           { state: 'configured', value: true },
-          { state: 'discoverable', value: true },
+          { state: 'discoverable', value: 'unknown' },
         ],
       ),
     }
@@ -185,8 +182,9 @@ async function* discoverPluginManifests(
     let manifest: Record<string, unknown> = {}
     try {
       manifest = asRecord(JSON.parse(await readFile(manifestPath, 'utf8')))
-    } catch {
-      // A malformed manifest still proves that a plugin binding exists at this path.
+    } catch (error) {
+      if (!isMissingPathError(error) && !(error instanceof SyntaxError)) throw error
+      // Missing/malformed metadata does not erase the independently observed plugin directory.
     }
 
     const name = typeof manifest.name === 'string' && manifest.name
@@ -205,7 +203,6 @@ async function* discoverPluginManifests(
     if (seen.has(key)) continue
     seen.add(key)
     const observedAt = meta.mtime.toISOString()
-    const nativeStableId = `plugin:${bindingPath}`
 
     yield {
       definition: {
@@ -223,7 +220,6 @@ async function* discoverPluginManifests(
         manifestPath,
         observedAt,
         capturedAt,
-        nativeStableId,
         [{ state: 'installed', value: true }],
       ),
     }
@@ -252,7 +248,6 @@ async function* discoverPluginManifests(
         bindingPath,
         observedAt,
         capturedAt,
-        `plugin:${bindingPath}`,
         [{ state: 'installed', value: true }],
       ),
     }
@@ -270,15 +265,15 @@ async function* discoverHooks(
   let hooks: Record<string, unknown> = {}
   try {
     hooks = asRecord(JSON.parse(await readFile(hooksPath, 'utf8')))
-  } catch {
-    return
+  } catch (error) {
+    if (isMissingPathError(error) || error instanceof SyntaxError) return
+    throw error
   }
 
   const root = asRecord(hooks.hooks)
   const observedAt = meta.mtime.toISOString()
   for (const [eventName, groups] of Object.entries(root)) {
     if (!Array.isArray(groups) || groups.length === 0) continue
-    const nativeStableId = `hook:${eventName}`
     yield {
       definition: {
         type: 'hook',
@@ -293,10 +288,9 @@ async function* discoverHooks(
         hooksPath,
         observedAt,
         capturedAt,
-        nativeStableId,
         [
           { state: 'configured', value: true },
-          { state: 'enabled', value: true },
+          { state: 'enabled', value: 'unknown' },
         ],
       ),
     }
@@ -326,10 +320,9 @@ async function* discoverGlobalRule(
         filePath,
         observedAt,
         capturedAt,
-        `rule:${filePath}`,
         [
           { state: 'configured', value: true },
-          { state: 'discoverable', value: true },
+          { state: 'discoverable', value: 'unknown' },
         ],
       ),
     }

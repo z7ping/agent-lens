@@ -17,7 +17,7 @@ function sourceRecord(entry: Record<string, unknown>): SourceRecord {
     capturedAt: '2026-09-10T00:00:01.000Z',
     locator: { kind: 'file', path: '/tmp/pi/session.jsonl', offset: 1 },
     fingerprint: `fingerprint-${id ?? 'unknown'}`,
-    parserVersion: '7',
+    parserVersion: '8',
     payload: {
       entry,
       session: {

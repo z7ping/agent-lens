@@ -238,3 +238,42 @@ test('parser replay keeps a promoted relationship while another SourceRecord sti
     await storage.close()
   }
 })
+
+test('deterministic SourceRecord upsert refreshes native identity and source metadata', async () => {
+  const { storage, now } = await setup()
+  try {
+    insertSourceRecord(storage, 'record-refresh', '10', now)
+    storage.db.prepare(`
+      UPDATE source_records
+      SET native_id = 'legacy-synthetic-id',
+          native_type = 'legacy/type',
+          source_sequence = 1,
+          occurred_at = '2026-09-01T00:00:00.000Z'
+      WHERE id = 'record-refresh'
+    `).run()
+
+    await storage.repositories.sourceRecords.put({
+      id: 'record-refresh',
+      sourceId: 'codex',
+      installationId: 'install',
+      sourceSessionNativeId: 'native-session',
+      nativeType: 'response_item/message',
+      nativeId: 'upstream-native-id',
+      sourceSequence: 2000,
+      occurredAt: '2026-09-04T00:00:01.000Z',
+      capturedAt: now,
+      locator: { kind: 'file', path: '/tmp/rollout.jsonl', offset: 1 },
+      payload: { type: 'response_item' },
+      parserVersion: '11',
+    })
+
+    const refreshed = await storage.repositories.sourceRecords.get('record-refresh')
+    assert.equal(refreshed?.nativeId, 'upstream-native-id')
+    assert.equal(refreshed?.nativeType, 'response_item/message')
+    assert.equal(refreshed?.sourceSequence, 2000)
+    assert.equal(refreshed?.occurredAt, '2026-09-04T00:00:01.000Z')
+  } finally {
+    await storage.close()
+  }
+})
+

@@ -31,6 +31,7 @@ const PARSER_REPLAY_TRANSACTION_SIZE = 50
 const PARSER_REPLAY_TRANSACTION_BUDGET_MS = 20
 const PARSER_REPLAY_CHECKPOINT_SCOPE = 'parser-replay'
 const ASSET_DISCOVERY_SNAPSHOT_KEY = 'asset-discovery-inventory-v1'
+const ASSET_INVENTORY_STATES = new Set<AssetState>(['installed', 'configured'])
 const ASSET_PRESENCE_STATES = new Set<AssetState>(['installed', 'configured', 'enabled', 'discoverable', 'exposed'])
 
 interface CooperativeSchedulerOptions {
@@ -879,8 +880,8 @@ export class SourceAssetRunner {
       )
       const previousSnapshot = await checkpoint.get<AssetDiscoverySnapshot>(ASSET_DISCOVERY_SNAPSHOT_KEY)
       const currentBindings = new Map<string, Set<AssetState>>()
+      const reportedBindingStates = new Map<string, Set<AssetState>>()
       const yieldForInteractivity = createCooperativeScheduler()
-      const scanObservedAt = new Date().toISOString()
 
       for await (const discovered of source.discoverAssets({
         host,
@@ -907,8 +908,8 @@ export class SourceAssetRunner {
         result.assetsDiscovered += 1
         const bindingStates = currentBindings.get(binding.id) ?? new Set<AssetState>()
         currentBindings.set(binding.id, bindingStates)
-        let discoverableReported = false
-
+        const reportedStates = reportedBindingStates.get(binding.id) ?? new Set<AssetState>()
+        reportedBindingStates.set(binding.id, reportedStates)
         for (const state of safeDiscovered.states ?? []) {
           const evidenceRefs: string[] = []
           for (const candidate of state.evidenceCandidates ?? []) {
@@ -921,25 +922,11 @@ export class SourceAssetRunner {
             observedAt: state.observedAt,
             evidenceRefs,
           })
-          if (state.state === 'discoverable') discoverableReported = true
+          reportedStates.add(state.state)
           if (state.value === true && ASSET_PRESENCE_STATES.has(state.state)) bindingStates.add(state.state)
           result.statesRecorded += 1
         }
 
-        if (!discoverableReported) {
-          bindingStates.add('discoverable')
-          const previouslyDiscoverable = previousSnapshot?.bindings[binding.id]?.includes('discoverable') ?? false
-          if (!previouslyDiscoverable) {
-            await this.assets.recordState({
-              assetBindingId: binding.id,
-              state: 'discoverable',
-              value: true,
-              observedAt: scanObservedAt,
-              evidenceRefs: [],
-            })
-            result.statesRecorded += 1
-          }
-        }
         await yieldForInteractivity()
       }
 
@@ -951,6 +938,24 @@ export class SourceAssetRunner {
           ),
           completedAt,
         }
+
+        // Omission means unknown. This also neutralizes optimistic states written by older
+        // SourceAssetRunner versions when the binding still exists but the source no longer
+        // reports enough evidence for that state.
+        for (const [bindingId, reportedStates] of reportedBindingStates) {
+          for (const state of previousSnapshot?.bindings[bindingId] ?? []) {
+            if (!ASSET_PRESENCE_STATES.has(state) || reportedStates.has(state)) continue
+            await this.assets.recordState({
+              assetBindingId: bindingId,
+              state,
+              value: 'unknown',
+              observedAt: completedAt,
+              evidenceRefs: [],
+            })
+            result.statesCleared += 1
+          }
+        }
+
         for (const [bindingId, states] of Object.entries(previousSnapshot?.bindings ?? {})) {
           if (currentBindings.has(bindingId)) continue
           result.assetsRemoved += 1
@@ -959,7 +964,7 @@ export class SourceAssetRunner {
             await this.assets.recordState({
               assetBindingId: bindingId,
               state,
-              value: false,
+              value: ASSET_INVENTORY_STATES.has(state) ? false : 'unknown',
               observedAt: completedAt,
               evidenceRefs: [],
             })
@@ -988,5 +993,6 @@ export const sourceRunnerInternals = {
   PARSER_REPLAY_TRANSACTION_BUDGET_MS,
   PARSER_REPLAY_CHECKPOINT_SCOPE,
   ASSET_DISCOVERY_SNAPSHOT_KEY,
+  ASSET_INVENTORY_STATES,
   ASSET_PRESENCE_STATES,
 }

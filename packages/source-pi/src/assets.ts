@@ -6,6 +6,7 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 import { resolvePiResourceAssets } from './resource-resolver'
 
 interface SkillMetadata {
@@ -22,16 +23,18 @@ type PiSkillLoader = (options: { dir: string; source: string }) => PiSkillLoader
 async function safeStat(path: string) {
   try {
     return await stat(path)
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
 }
 
 async function safeEntries(path: string) {
   try {
     return await readdir(path, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error)) return []
+    throw error
   }
 }
 
@@ -39,13 +42,11 @@ function staticEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -56,18 +57,17 @@ function installationOnlyStates(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): NonNullable<DiscoveredAsset['states']> {
   return [
     {
       state: 'installed',
       value: true,
       observedAt,
-      evidenceCandidates: [staticEvidence(path, observedAt, capturedAt, nativeStableId)],
+      evidenceCandidates: [staticEvidence(path, observedAt, capturedAt)],
     },
     {
-      // SourceAssetRunner otherwise treats an omitted discoverable state as true.
-      // Resource presence alone does not prove activation for every Pi invocation.
+      // Keep uncertainty explicit so existing optimistic state observations are superseded.
+      // Resource presence alone does not prove discoverability for every Pi invocation.
       state: 'discoverable',
       value: 'unknown',
       observedAt: capturedAt,
@@ -116,7 +116,10 @@ async function loadSkillsWithInstalledPi(
     if (!loader) return null
     const result = loader({ dir: root, source: 'user' })
     return normalizeLoadedSkills(result.skills)
-  } catch {
+  } catch (error) {
+    // Missing/permission/IO errors mean the installed Pi view is currently unavailable, not that
+    // the richer asset inventory disappeared. Only non-filesystem incompatibility may fall back.
+    if (error && typeof error === 'object' && 'code' in error) throw error
     return null
   }
 }
@@ -173,8 +176,9 @@ async function readSkillMetadata(filePath: string): Promise<SkillMetadata | null
   let text: string
   try {
     text = await readFile(filePath, 'utf8')
-  } catch {
-    return null
+  } catch (error) {
+    if (isMissingPathError(error)) return null
+    throw error
   }
   const frontmatter = skillFrontmatter(text)
   if (!frontmatter?.description?.trim()) return null
@@ -240,7 +244,6 @@ async function* discoverPiSkills(
         skill.filePath,
         observedAt,
         capturedAt,
-        `skill:${skill.filePath}`,
       ),
     }
   }
@@ -269,8 +272,9 @@ async function piManifestExtensions(directory: string): Promise<string[]> {
       if (entryMeta?.isFile()) paths.push(path)
     }
     return paths
-  } catch {
-    return []
+  } catch (error) {
+    if (isMissingPathError(error) || error instanceof SyntaxError) return []
+    throw error
   }
 }
 
@@ -317,7 +321,6 @@ async function* discoverPiExtensions(
           extensionPath,
           observedAt,
           capturedAt,
-          `extension:${extensionPath}`,
         ),
       }
     }

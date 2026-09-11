@@ -9,11 +9,10 @@ import type {
   SourceRecordEmitter,
 } from '@agent-lens/core'
 import { abortableDelay } from '@agent-lens/runtime-cordis'
+import { isMissingPathError } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
 
 const POLL_INTERVAL_MS = 250
-const MAX_STRING = 32 * 1024
-const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
 
 interface CodexInboxEnvelope {
   id: string
@@ -25,23 +24,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function truncate(value: string): string {
-  return value.length <= MAX_STRING ? value : `${value.slice(0, MAX_STRING)}…[truncated]`
-}
-
-function sanitize(value: unknown, depth = 0): unknown {
-  if (depth > 8) return '[max-depth]'
-  if (typeof value === 'string') return truncate(value)
-  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.slice(0, 200).map(item => sanitize(item, depth + 1))
-  if (typeof value !== 'object') return String(value)
-
-  const result: Record<string, unknown> = {}
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    result[key] = SENSITIVE_KEY.test(key) ? '[redacted]' : sanitize(item, depth + 1)
-  }
-  return result
-}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -66,29 +48,18 @@ function eventName(event: Record<string, unknown>): string {
   return stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'UnknownHookEvent'
 }
 
-function nativeSessionId(event: Record<string, unknown>): string {
-  return stringField(event, 'session_id', 'conversation_id', 'sessionId') ?? 'runtime-unknown'
+function nativeSessionId(event: Record<string, unknown>): string | undefined {
+  return stringField(event, 'session_id', 'conversation_id', 'sessionId')
 }
 
 function nativeId(event: Record<string, unknown>): string | undefined {
-  const name = eventName(event)
-  if (name === 'PreToolUse' || name === 'PostToolUse') {
-    return stringField(event, 'call_id', 'tool_use_id')
-  }
-  return stringField(
-    event,
-    'source_event_id',
-    'hook_invocation_id',
-    'turn_id',
-    'agent_id',
-    'subagent_id',
-  )
+  return stringField(event, 'source_event_id', 'hook_invocation_id')
 }
 
 function parseEnvelope(text: string, fileName: string): CodexInboxEnvelope {
   try {
     const parsed = asRecord(JSON.parse(text))
-    const event = asRecord(sanitize(parsed.event))
+    const event = asRecord(parsed.event)
     return {
       id: typeof parsed.id === 'string' && parsed.id ? parsed.id : fileName,
       capturedAt: typeof parsed.capturedAt === 'string' && parsed.capturedAt
@@ -102,7 +73,7 @@ function parseEnvelope(text: string, fileName: string): CodexInboxEnvelope {
       capturedAt: new Date().toISOString(),
       event: {
         hook_event_name: 'MalformedInboxEvent',
-        raw: truncate(text),
+        raw: text,
       },
     }
   }
@@ -124,7 +95,7 @@ function sourceRecordFromEnvelope(
     id: `codex-runtime-${sha256(envelope.id).slice(0, 32)}`,
     sourceId: 'codex',
     installationId: ctx.installation.id,
-    sourceSessionNativeId: sessionId,
+    ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
     nativeType: `hook/${hookName}`,
     ...(stableNativeId ? { nativeId: stableNativeId } : {}),
     occurredAt,
@@ -138,7 +109,7 @@ function sourceRecordFromEnvelope(
     payload: {
       runtimeEvent: event,
       session: {
-        nativeSessionId: sessionId,
+        ...(sessionId ? { nativeSessionId: sessionId } : {}),
         ...(cwd ? { cwd } : {}),
       },
     },
@@ -161,7 +132,8 @@ export async function startCodexRuntimeCapture(
         files = (await readdir(inbox))
           .filter(name => name.endsWith('.json'))
           .sort((a, b) => a.localeCompare(b))
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error
         files = []
       }
 

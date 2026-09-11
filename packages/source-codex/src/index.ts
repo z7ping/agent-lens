@@ -41,7 +41,7 @@ export async function declareCodexCapabilities(
     { sourceId: 'codex', name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: 'codex', name: 'usage', status: 'available', captureModes: ['history'] },
     { sourceId: 'codex', name: 'context', status: 'available', captureModes: ['history', 'runtime-hook'] },
-    { sourceId: 'codex', name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
+    { sourceId: 'codex', name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static files and configuration are observable; runtime discoverability and enablement require stronger Codex runtime evidence' },
     { sourceId: 'codex', name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset invocation attribution is not yet implemented' },
     { sourceId: 'codex', name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible reasoning records can be observed' },
     { sourceId: 'codex', name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not yet implemented' },

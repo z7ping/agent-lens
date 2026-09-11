@@ -1,14 +1,17 @@
-import type {
-  EvidenceCandidate,
-  NormalizedSourceOutput,
-  ObservationCandidate,
-  ObservationIdentityHints,
-  SessionRelationshipType,
-  SourceNormalizationContext,
-  SourceRecord,
+import {
+  evidenceFromSourceRecord,
+  observationFromSourceRecord,
+  type EvidenceCandidate,
+  type NormalizedSourceOutput,
+  type ObservationCandidate,
+  type ObservationIdentityHints,
+  type SessionRelationshipType,
+  type SourceNormalizationContext,
+  type SourceRecord,
 } from '@agent-lens/core'
 import {
   messageText,
+  nativeIdForEntry,
   parseFunctionOutput,
   type CodexStoredEnvelope,
 } from './format'
@@ -86,6 +89,17 @@ function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
       ...(startedAt ? { startedAt } : {}),
     },
   }
+}
+
+function sourceNativeEventId(
+  record: SourceRecord,
+  envelope?: CodexStoredEnvelope,
+): string | undefined {
+  if (record.locator.kind === 'runtime-hook') {
+    const event = envelope?.entry ?? asRecord(asRecord(record.payload).runtimeEvent)
+    return stringField(event, 'source_event_id', 'hook_invocation_id')
+  }
+  return envelope ? nativeIdForEntry(envelope.entry) : undefined
 }
 
 function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
@@ -176,19 +190,15 @@ function sessionActivity(payload: Record<string, unknown>): {
   return { kind: 'user-task', relationship: 'related' }
 }
 
-function evidenceFor(record: SourceRecord): EvidenceCandidate {
+function evidenceFor(record: SourceRecord, envelope?: CodexStoredEnvelope): EvidenceCandidate {
   const runtime = record.locator.kind === 'runtime-hook'
-  return {
+  const nativeStableId = sourceNativeEventId(record, envelope)
+  return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-log',
     derivation: runtime ? 'observed' : 'reported',
-    sourceRecordId: record.id,
-    sourceLocator: record.locator,
-    parserVersion: record.parserVersion,
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
-    confidenceHint: record.nativeId ? 'exact' : 'high',
-  }
+    ...(nativeStableId ? { nativeStableId } : {}),
+    confidenceHint: nativeStableId ? 'exact' : 'high',
+  })
 }
 
 function identityHints(record: SourceRecord, envelope: CodexStoredEnvelope): ObservationIdentityHints {
@@ -207,25 +217,22 @@ function candidate(
   dedup: Partial<NonNullable<ObservationCandidate['dedupHints']>> = {},
   extraIdentity: Partial<ObservationIdentityHints> = {},
 ): ObservationCandidate {
-  return {
+  const nativeCallId = typeof dedup.nativeCallId === 'string' ? dedup.nativeCallId : undefined
+  const sharedEventKey = typeof dedup.sharedEventKey === 'string' ? dedup.sharedEventKey : undefined
+  const nativeEventId = !nativeCallId && !sharedEventKey
+    ? sourceNativeEventId(record, envelope)
+    : undefined
+  return observationFromSourceRecord(record, {
     kind,
-    ...(record.nativeId ? { nativeEventId: record.nativeId } : {}),
-    ...(typeof dedup.nativeCallId === 'string' ? { nativeCallId: dedup.nativeCallId } : {}),
-    ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
-    ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     payload,
     identityHints: {
       ...identityHints(record, envelope),
       ...extraIdentity,
     },
-    dedupHints: {
-      ...(record.nativeId ? { nativeEventId: record.nativeId } : {}),
-      ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
-      ...(record.fingerprint ? { payloadFingerprint: record.fingerprint } : {}),
-      ...dedup,
-    },
-  }
+    ...(nativeCallId ? { nativeCallId } : {}),
+    ...(nativeEventId ? { nativeEventId } : {}),
+    ...(sharedEventKey ? { sharedEventKey } : {}),
+  })
 }
 
 function unknownCandidate(
@@ -275,31 +282,36 @@ function runtimeSuccess(response: unknown): { success: boolean; exitCode?: numbe
 }
 
 function runtimeEnvelope(record: SourceRecord): {
-  envelope: CodexStoredEnvelope
+  envelope?: CodexStoredEnvelope
   event: Record<string, unknown>
 } {
   const payload = asRecord(record.payload)
   const session = asRecord(payload.session)
   const event = asRecord(payload.runtimeEvent)
   const cwd = stringField(session, 'cwd')
+  const storedSessionId = stringField(session, 'nativeSessionId') ?? record.sourceSessionNativeId
+  const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
+    ? undefined
+    : storedSessionId
   return {
-    envelope: {
-      entry: event,
-      session: {
-        nativeSessionId: stringField(session, 'nativeSessionId')
-          ?? record.sourceSessionNativeId
-          ?? 'runtime-unknown',
-        ...(cwd ? { cwd } : {}),
+    ...(nativeSessionId ? {
+      envelope: {
+        entry: event,
+        session: {
+          nativeSessionId,
+          ...(cwd ? { cwd } : {}),
+        },
       },
-    },
+    } : {}),
     event,
   }
 }
 
 function normalizeRuntimeRecord(
   record: SourceRecord,
-): ObservationCandidate {
+): ObservationCandidate | null {
   const { envelope, event } = runtimeEnvelope(record)
+  if (!envelope) return null
   const hookName = stringField(event, 'hook_event_name', 'event_name', 'type') ?? 'UnknownHookEvent'
   const callId = stringField(event, 'call_id', 'tool_use_id')
   const toolName = stringField(event, 'tool_name', 'name', 'tool') ?? 'unknown'
@@ -310,27 +322,25 @@ function normalizeRuntimeRecord(
     : {}
 
   if (hookName === 'PreToolUse') {
-    const stableCallId = callId ?? `codex-runtime-call-${record.id}`
     return candidate(record, envelope, 'tool.call', {
-      callId: stableCallId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       input: event.tool_input ?? event.input ?? {},
       ...(turnId ? { turnId } : {}),
-    }, { nativeCallId: stableCallId }, actorIdentity)
+    }, callId ? { nativeCallId: callId } : {}, actorIdentity)
   }
 
   if (hookName === 'PostToolUse') {
-    const stableCallId = callId ?? `codex-runtime-call-${record.id}`
     const response = event.tool_response ?? event.output ?? event.result ?? null
     const outcome = runtimeSuccess(response)
     return candidate(record, envelope, 'tool.result', {
-      callId: stableCallId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       success: outcome.success,
       ...(outcome.exitCode === undefined ? {} : { exitCode: outcome.exitCode }),
       ...(response == null ? {} : { output: response }),
       ...(typeof event.duration_ms === 'number' ? { durationMs: event.duration_ms } : {}),
-    }, { nativeCallId: stableCallId }, actorIdentity)
+    }, callId ? { nativeCallId: callId } : {}, actorIdentity)
   }
 
   if (hookName === 'SessionStart' || hookName === 'SessionEnd') {
@@ -402,8 +412,9 @@ export async function normalizeCodexRecord(
   ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   if (record.locator.kind === 'runtime-hook') {
+    const observation = normalizeRuntimeRecord(record)
     return {
-      observations: [normalizeRuntimeRecord(record)],
+      observations: observation ? [observation] : [],
       evidenceCandidates: [evidenceFor(record)],
     }
   }
@@ -538,56 +549,62 @@ export async function normalizeCodexRecord(
       text: messageText(payload.content ?? payload.text ?? ''),
     }))
   } else if (topType === 'response_item' && (innerType === 'function_call' || innerType === 'custom_tool_call')) {
-    const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
+    const callId = stringField(payload, 'call_id')
+    const sharedEventKey = callId ? undefined : `codex-call:${record.id}`
     const name = stringField(payload, 'name') ?? innerType
     const rawInput = innerType === 'custom_tool_call' ? payload.input : payload.arguments
     let input: unknown = rawInput ?? null
     if (typeof rawInput === 'string') {
       try { input = JSON.parse(rawInput) } catch { input = rawInput }
     }
-    push(candidate(record, envelope, 'tool.call', { callId, nativeToolName: name, input }, { nativeCallId: callId }))
-  } else if (topType === 'response_item' && innerType === 'local_shell_call') {
-    const callId = stringField(payload, 'call_id', 'id') ?? `local-shell-${record.sourceSequence ?? record.id}`
     push(candidate(record, envelope, 'tool.call', {
-      callId,
+      ...(callId ? { callId } : {}),
+      nativeToolName: name,
+      input,
+    }, callId ? { nativeCallId: callId } : { sharedEventKey }))
+  } else if (topType === 'response_item' && innerType === 'local_shell_call') {
+    const callId = stringField(payload, 'call_id', 'id')
+    push(candidate(record, envelope, 'tool.call', {
+      ...(callId ? { callId } : {}),
       nativeToolName: 'local_shell',
       input: payload.action ?? payload,
       ...(payload.status === undefined ? {} : { status: payload.status }),
       raw: payload,
-    }, { nativeCallId: callId }))
+    }, callId ? { nativeCallId: callId } : { sharedEventKey: `local-shell:${record.id}` }))
   } else if (topType === 'response_item' && innerType === 'tool_search_call') {
-    const callId = stringField(payload, 'call_id', 'id') ?? `tool-search-${record.sourceSequence ?? record.id}`
+    const callId = stringField(payload, 'call_id', 'id')
     push(candidate(record, envelope, 'tool.call', {
-      callId,
+      ...(callId ? { callId } : {}),
       nativeToolName: 'tool_search',
       input: payload.arguments ?? {},
       ...(payload.execution === undefined ? {} : { execution: payload.execution }),
       ...(payload.status === undefined ? {} : { status: payload.status }),
       raw: payload,
-    }, { nativeCallId: callId }))
+    }, callId ? { nativeCallId: callId } : { sharedEventKey: `tool-search:${record.id}` }))
   } else if (topType === 'response_item' && (innerType === 'function_call_output' || innerType === 'custom_tool_call_output' || innerType === 'tool_search_output')) {
-    const callId = stringField(payload, 'call_id') ?? `codex-call-${record.sourceSequence ?? record.id}`
+    const callId = stringField(payload, 'call_id')
+    const sharedEventKey = callId ? undefined : `codex-call:${record.id}`
     const outputValue = payload.output ?? payload.result ?? payload.content
     const result = parseFunctionOutput(messageText(outputValue))
     push(candidate(record, envelope, 'tool.result', {
-      callId,
+      ...(callId ? { callId } : {}),
       ...(innerType === 'tool_search_output' ? { nativeToolName: 'tool_search' } : {}),
       success: result.success,
       ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode }),
       ...(result.output ? { output: result.output } : outputValue === undefined ? {} : { output: outputValue }),
       ...(innerType === 'tool_search_output' ? { raw: payload } : {}),
-    }, { nativeCallId: callId }))
+    }, callId ? { nativeCallId: callId } : { sharedEventKey }))
   } else if (topType === 'response_item' && innerType === 'web_search_call') {
-    const callId = stringField(payload, 'call_id') ?? `web-search-${record.sourceSequence ?? record.id}`
+    const callId = stringField(payload, 'call_id')
     push(candidate(record, envelope, 'tool.call', {
-      callId,
+      ...(callId ? { callId } : {}),
       nativeToolName: 'web_search',
       input: {
         action: payload.action ?? null,
         ...(payload.status === undefined ? {} : { status: payload.status }),
       },
       raw: payload,
-    }, { nativeCallId: callId }))
+    }, callId ? { nativeCallId: callId } : { sharedEventKey: `codex-call:${record.id}` }))
   } else if (topType === 'response_item' && innerType === 'image_generation_call') {
     push(candidate(record, envelope, 'artifact.action', {
       action: 'image.generation',
@@ -620,7 +637,7 @@ export async function normalizeCodexRecord(
 
   return {
     observations,
-    evidenceCandidates: [evidenceFor(record)],
+    evidenceCandidates: [evidenceFor(record, envelope)],
     ...(relationships.length ? { sessionRelationshipHints: relationships } : {}),
   }
 }

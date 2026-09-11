@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { isMissingPathError, readJsonlLines } from '@agent-lens/source-support'
 import type {
   DiscoveredAsset,
   DiscoveredAssetStateHint,
@@ -12,7 +13,7 @@ import {
   resolvePiSdkResourceApi,
   type PiSdkResourceApi,
 } from '@agent-lens/runtime-cordis'
-import { listJsonlFiles, readJsonlLines } from './session'
+import { listJsonlFiles } from './session'
 
 type PiResolvedPaths = Awaited<ReturnType<InstanceType<PiSdkResourceApi['DefaultPackageManager']>['resolve']>>
 type PiResolvedResource = PiResolvedPaths['skills'][number]
@@ -40,24 +41,27 @@ function pathContains(parent: string, child: string): boolean {
 async function isDirectory(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isDirectory()
-  } catch {
-    return false
+  } catch (error) {
+    if (isMissingPathError(error)) return false
+    throw error
   }
 }
 
 async function fileMtime(path: string): Promise<string | undefined> {
   try {
     return (await stat(path)).mtime.toISOString()
-  } catch {
-    return undefined
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined
+    throw error
   }
 }
 
 async function readUtf8(path: string): Promise<string | undefined> {
   try {
     return await readFile(path, 'utf8')
-  } catch {
-    return undefined
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined
+    throw error
   }
 }
 
@@ -80,13 +84,11 @@ function observedEvidence(
   path: string,
   observedAt: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'observed',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     eventTime: observedAt,
     capturedAt,
     confidenceHint: 'exact',
@@ -96,13 +98,11 @@ function observedEvidence(
 function derivedEvidence(
   path: string,
   capturedAt: string,
-  nativeStableId: string,
 ): EvidenceCandidate {
   return {
     captureMethod: 'static-scan',
     derivation: 'derived',
     sourceLocator: { kind: 'file', path },
-    nativeStableId,
     capturedAt,
     confidenceHint: 'high',
   }
@@ -117,7 +117,6 @@ function resourceStates(input: {
   path: string
   observedAt: string
   capturedAt: string
-  nativeStableId: string
   configured: boolean
   enabled: EffectiveResourceState
   discoverable: EffectiveResourceState
@@ -126,12 +125,10 @@ function resourceStates(input: {
     input.path,
     input.observedAt,
     input.capturedAt,
-    `${input.nativeStableId}:installed`,
   )
-  const stateEvidence = (state: 'configured' | 'enabled' | 'discoverable') => derivedEvidence(
+  const stateEvidence = (_state: 'configured' | 'enabled' | 'discoverable') => derivedEvidence(
     input.path,
     input.capturedAt,
-    `${input.nativeStableId}:${state}`,
   )
   return [
     {
@@ -208,11 +205,7 @@ function loadSkills(
 ): PiSkill[] {
   const skillPaths = resources.filter(resource => resource.enabled).map(resource => resource.path)
   if (!skillPaths.length) return []
-  try {
-    return api.loadSkills({ cwd, agentDir, skillPaths, includeDefaults: false }).skills
-  } catch {
-    return []
-  }
+  return api.loadSkills({ cwd, agentDir, skillPaths, includeDefaults: false }).skills
 }
 
 function discoverableSkillPaths(
@@ -239,8 +232,11 @@ function validatedSkills(
         skillPaths: [resource.path],
         includeDefaults: false,
       }).skills)
-    } catch {
-      // Invalid or unreadable resources are not valid Pi skills and remain unclaimed.
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && !isMissingPathError(error)) {
+        throw error
+      }
+      // Missing or syntactically invalid resources are not valid Pi skills and remain unclaimed.
     }
   }
   const seen = new Set<string>()
@@ -324,7 +320,6 @@ async function resolvedPromptsAsAssets(input: {
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `prompt:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -392,7 +387,6 @@ async function resolvedThemesAsAssets(input: {
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `theme:${resource.path}:${resourceSource(resource, input.projectCwd)}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -418,7 +412,6 @@ async function contextAsset(
       path,
       observedAt,
       capturedAt,
-      nativeStableId: `context:${path}:${source}`,
       configured: false,
       enabled,
       discoverable,
@@ -445,8 +438,8 @@ async function globalContextAssets(
       )
       if (asset) assets.push(asset)
     }
-  } catch {
-    // Context discovery remains independent from package/settings parsing failures.
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error
   }
 
   for (const name of ['SYSTEM.md', 'APPEND_SYSTEM.md']) {
@@ -486,8 +479,8 @@ async function projectContextAssets(
       )
       if (asset) assets.push(asset)
     }
-  } catch {
-    // One unreadable context chain must not suppress other resource families.
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error
   }
 
   for (const name of ['SYSTEM.md', 'APPEND_SYSTEM.md']) {
@@ -523,8 +516,9 @@ async function readSessionCwd(filePath: string): Promise<string | undefined> {
       const cwd = typeof entry.cwd === 'string' ? entry.cwd.trim() : ''
       return cwd && isAbsolute(cwd) ? resolve(cwd) : undefined
     }
-  } catch {
-    return undefined
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined
+    throw error
   }
   return undefined
 }
@@ -620,7 +614,6 @@ async function resolvedSkillsAsAssets(input: {
         path: skill.filePath,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `skill:${skill.filePath}:${source}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -663,7 +656,6 @@ async function resolvedExtensionsAsAssets(input: {
         path: resource.path,
         observedAt,
         capturedAt: input.capturedAt,
-        nativeStableId: `extension:${resource.path}:${source}`,
         configured: configuredResource(resource),
         enabled,
         discoverable,
@@ -675,7 +667,8 @@ async function resolvedExtensionsAsAssets(input: {
 
 /**
  * Resolve Pi resources through the actual installed Pi package manager. null means the installed
- * SDK is too old or unavailable, allowing the caller to use its conservative filesystem fallback.
+ * SDK does not expose the required resource API, allowing the caller to use its conservative
+ * filesystem fallback. Runtime filesystem/IO failures are errors, not an empty inventory.
  */
 export async function resolvePiResourceAssets(
   ctx: SourceExecutionContext,
@@ -684,15 +677,10 @@ export async function resolvePiResourceAssets(
   const agentDir = ctx.installation.configRoot
   if (!executable || !agentDir || ctx.abortSignal.aborted) return null
 
-  let api: PiSdkResourceApi
-  try {
-    const installed = await loadInstalledPiSdk(executable)
-    const resourceApi = resolvePiSdkResourceApi(installed.module)
-    if (!resourceApi) return null
-    api = resourceApi
-  } catch {
-    return null
-  }
+  const installed = await loadInstalledPiSdk(executable)
+  const resourceApi = resolvePiSdkResourceApi(installed.module)
+  if (!resourceApi) return null
+  const api: PiSdkResourceApi = resourceApi
 
   const capturedAt = new Date().toISOString()
   const assets: DiscoveredAsset[] = []
@@ -703,13 +691,7 @@ export async function resolvePiResourceAssets(
 
   // Resolve user scope with project settings disabled. This includes ~/.pi/agent resources,
   // ~/.agents/skills, settings paths and installed user package resources.
-  let userPaths: PiResolvedPaths = { extensions: [], skills: [], prompts: [], themes: [] }
-  try {
-    userPaths = await resolvePaths(api, process.cwd(), agentDir, false)
-  } catch {
-    // Keep independently proven context assets; unresolved configured/package resources remain
-    // absent rather than guessed.
-  }
+  const userPaths = await resolvePaths(api, process.cwd(), agentDir, false)
 
   const userSkills = userPaths.skills.filter(resource => resource.metadata.scope === 'user')
   const userExtensions = userPaths.extensions.filter(resource => resource.metadata.scope === 'user')
@@ -757,48 +739,44 @@ export async function resolvePiResourceAssets(
 
     assets.push(...await projectContextAssets(api, cwd, agentDir, trust, capturedAt))
 
-    try {
-      // Resolve the potential trusted view so installed project resources are visible even when
-      // current trust is false/unknown. Trust is represented as state, not by hiding files.
-      const paths = await resolvePaths(api, cwd, agentDir, true)
-      const projectSkills = paths.skills.filter(resource => resource.metadata.scope === 'project')
-      const projectExtensions = paths.extensions.filter(resource => resource.metadata.scope === 'project')
-      const projectPrompts = paths.prompts.filter(resource => resource.metadata.scope === 'project')
-      const projectThemes = paths.themes.filter(resource => resource.metadata.scope === 'project')
+    // Resolve the potential trusted view so installed project resources are visible even when
+    // current trust is false/unknown. Trust is represented as state, not by hiding files.
+    const paths = await resolvePaths(api, cwd, agentDir, true)
+    const projectSkills = paths.skills.filter(resource => resource.metadata.scope === 'project')
+    const projectExtensions = paths.extensions.filter(resource => resource.metadata.scope === 'project')
+    const projectPrompts = paths.prompts.filter(resource => resource.metadata.scope === 'project')
+    const projectThemes = paths.themes.filter(resource => resource.metadata.scope === 'project')
 
-      assets.push(...await resolvedSkillsAsAssets({
-        api,
-        cwd,
-        agentDir,
-        resources: projectSkills,
-        allResourcesForPrecedence: paths.skills,
-        trust,
-        capturedAt,
-        projectCwd: cwd,
-      }))
-      assets.push(...await resolvedExtensionsAsAssets({
-        resources: projectExtensions,
-        trust,
-        capturedAt,
-        projectCwd: cwd,
-      }))
-      assets.push(...await resolvedPromptsAsAssets({
-        api,
-        resources: projectPrompts,
-        allResourcesForPrecedence: paths.prompts,
-        trust,
-        capturedAt,
-        projectCwd: cwd,
-      }))
-      assets.push(...await resolvedThemesAsAssets({
-        resources: projectThemes,
-        trust,
-        capturedAt,
-        projectCwd: cwd,
-      }))
-    } catch {
-      // One stale/corrupt workspace must not hide resources from other observed Pi projects.
-    }
+    assets.push(...await resolvedSkillsAsAssets({
+      api,
+      cwd,
+      agentDir,
+      resources: projectSkills,
+      allResourcesForPrecedence: paths.skills,
+      trust,
+      capturedAt,
+      projectCwd: cwd,
+    }))
+    assets.push(...await resolvedExtensionsAsAssets({
+      resources: projectExtensions,
+      trust,
+      capturedAt,
+      projectCwd: cwd,
+    }))
+    assets.push(...await resolvedPromptsAsAssets({
+      api,
+      resources: projectPrompts,
+      allResourcesForPrecedence: paths.prompts,
+      trust,
+      capturedAt,
+      projectCwd: cwd,
+    }))
+    assets.push(...await resolvedThemesAsAssets({
+      resources: projectThemes,
+      trust,
+      capturedAt,
+      projectCwd: cwd,
+    }))
   }
 
   const dedup = new Map<string, DiscoveredAsset>()

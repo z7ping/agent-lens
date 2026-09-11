@@ -33,8 +33,8 @@ export async function normalizePaginatedFunctionOutput(
   const itemType = typeof item.type === 'string' ? item.type.replace(/[_-]/g, '').toLowerCase() : ''
   if (itemType !== 'functioncalloutput') return null
 
-  const callId = stringField(item, 'id')
-  if (!callId) return normalizeCodexRecord(record, ctx)
+  const itemId = stringField(item, 'id')
+  const callId = stringField(item, 'call_id', 'callId', 'tool_call_id', 'toolCallId')
   const name = stringField(item, 'name') ?? 'function_call'
   const outputValue = item.output
   const text = typeof outputValue === 'string'
@@ -43,14 +43,14 @@ export async function normalizePaginatedFunctionOutput(
 
   const normalized = await normalizeCodexRecord({
     ...record,
-    nativeId: callId,
+    ...(itemId ? { nativeId: itemId } : {}),
     payload: {
       ...envelope,
       entry: {
         type: 'response_item',
         payload: {
           type: 'function_call_output',
-          call_id: callId,
+          ...(callId ? { call_id: callId } : {}),
           output: text,
         },
       },

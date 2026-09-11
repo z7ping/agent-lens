@@ -406,6 +406,11 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             source_sequence, occurred_at, captured_at, locator_json, fingerprint, payload_json, parser_version
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+            source_session_native_id = excluded.source_session_native_id,
+            native_type = excluded.native_type,
+            native_id = excluded.native_id,
+            source_sequence = excluded.source_sequence,
+            occurred_at = excluded.occurred_at,
             captured_at = excluded.captured_at,
             locator_json = excluded.locator_json,
             fingerprint = excluded.fingerprint,
