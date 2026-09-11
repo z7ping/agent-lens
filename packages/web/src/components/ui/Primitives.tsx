@@ -7,6 +7,7 @@ import type {
   SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UiIcon } from '../UiIcon'
 
 function classes(...values: Array<string | false | null | undefined>): string {
@@ -141,7 +142,8 @@ export interface BreadcrumbProps extends HTMLAttributes<HTMLElement> {
 }
 
 export function Breadcrumb({ items, className, ...props }: BreadcrumbProps) {
-  return <nav className={classes('ui-breadcrumb', className)} aria-label="面包屑" {...props}>
+  const { t } = useTranslation('common')
+  return <nav className={classes('ui-breadcrumb', className)} aria-label={t('breadcrumb.aria')} {...props}>
     <ol>
       {items.map((item, index) => <li key={index} aria-current={index === items.length - 1 ? 'page' : undefined}>
         {index > 0 && <UiIcon className="ui-breadcrumb-separator" name="chevron-right" size={12}/>}
