@@ -26,13 +26,15 @@ import type {
 } from '@agent-lens/core'
 import {
   discoverInstalledPiSdk,
+  resolveExecutable,
+  resolvePiLocation,
+} from '@agent-lens/runtime-cordis'
+import {
   isCompleteJson,
   isMissingPathError,
   readJsonlLines,
-  resolveExecutable,
   sourceFileIdentity,
-  resolvePiLocation,
-} from '@agent-lens/runtime-cordis'
+} from '@agent-lens/source-support'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 
 const RUNTIME_FALLBACK_POLL_MS = 5000
