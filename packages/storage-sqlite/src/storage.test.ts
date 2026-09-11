@@ -15,12 +15,12 @@ async function createStorage() {
   return storage
 }
 
-test('SQLite storage migrates to schema version 21 and exposes required tables', async () => {
+test('SQLite storage migrates to schema version 22 and exposes required tables', async () => {
   const storage = await createStorage()
   try {
     const health = await storage.health()
     assert.equal(health.ok, true)
-    assert.equal(health.schemaVersion, 21)
+    assert.equal(health.schemaVersion, 22)
     const details = health.details as {
       dataGrowth: { capacity: { softLimitBytes: number, state: string }, reclaimableBytes: number, totals?: unknown, last7Days?: unknown }
       unknownObservations?: unknown
@@ -97,6 +97,8 @@ test('SQLite storage migrates to schema version 21 and exposes required tables',
     assert.equal(sourceSessionColumns.some(column => column.name === 'runtime_profile_id'), true)
     const bindingColumns = storage.db.prepare('PRAGMA table_info(asset_bindings)').all() as Array<{ name: string }>
     assert.equal(bindingColumns.some(column => column.name === 'runtime_profile_id'), true)
+    assert.equal(bindingColumns.some(column => column.name === 'scope'), true)
+    assert.equal(bindingColumns.some(column => column.name === 'scope_root'), true)
     const sourceRecordColumns = storage.db.prepare('PRAGMA table_info(source_records)').all() as Array<{ name: string }>
     assert.equal(sourceRecordColumns.some(column => column.name === 'payload_encoding'), true)
     assert.equal(sourceRecordColumns.some(column => column.name === 'payload_blob'), true)
