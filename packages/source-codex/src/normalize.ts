@@ -11,6 +11,7 @@ import {
 } from '@agent-lens/core'
 import {
   messageText,
+  nativeIdForEntry,
   parseFunctionOutput,
   type CodexStoredEnvelope,
 } from './format'
@@ -88,6 +89,13 @@ function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
       ...(startedAt ? { startedAt } : {}),
     },
   }
+}
+
+function sourceNativeEventId(record: SourceRecord, envelope: CodexStoredEnvelope): string | undefined {
+  if (record.locator.kind === 'runtime-hook') {
+    return stringField(envelope.entry, 'source_event_id', 'hook_invocation_id')
+  }
+  return nativeIdForEntry(envelope.entry)
 }
 
 function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
@@ -178,13 +186,14 @@ function sessionActivity(payload: Record<string, unknown>): {
   return { kind: 'user-task', relationship: 'related' }
 }
 
-function evidenceFor(record: SourceRecord): EvidenceCandidate {
+function evidenceFor(record: SourceRecord, envelope: CodexStoredEnvelope): EvidenceCandidate {
   const runtime = record.locator.kind === 'runtime-hook'
+  const nativeStableId = sourceNativeEventId(record, envelope)
   return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-log',
     derivation: runtime ? 'observed' : 'reported',
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    confidenceHint: record.nativeId ? 'exact' : 'high',
+    ...(nativeStableId ? { nativeStableId } : {}),
+    confidenceHint: nativeStableId ? 'exact' : 'high',
   })
 }
 
@@ -206,7 +215,7 @@ function candidate(
 ): ObservationCandidate {
   const nativeCallId = typeof dedup.nativeCallId === 'string' ? dedup.nativeCallId : undefined
   const sharedEventKey = typeof dedup.sharedEventKey === 'string' ? dedup.sharedEventKey : undefined
-  const nativeEventId = record.nativeId
+  const nativeEventId = sourceNativeEventId(record, envelope)
   return observationFromSourceRecord(record, {
     kind,
     payload,
@@ -400,7 +409,7 @@ export async function normalizeCodexRecord(
     const observation = normalizeRuntimeRecord(record)
     return {
       observations: observation ? [observation] : [],
-      evidenceCandidates: [evidenceFor(record)],
+      evidenceCandidates: [evidenceFor(record, envelope)],
     }
   }
 
@@ -622,7 +631,7 @@ export async function normalizeCodexRecord(
 
   return {
     observations,
-    evidenceCandidates: [evidenceFor(record)],
+    evidenceCandidates: [evidenceFor(record, envelope)],
     ...(relationships.length ? { sessionRelationshipHints: relationships } : {}),
   }
 }
