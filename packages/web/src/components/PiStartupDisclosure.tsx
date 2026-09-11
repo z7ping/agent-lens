@@ -162,7 +162,7 @@ export function PiStartupDisclosure({
       <div className="pi-startup-resources" aria-label={t('startup.packageUpdates')}>
         {packageUpdates.map((update, index) => <div className="pi-startup-resource-row" key={`${update.scope}:${update.type}:${update.displayName}:${index}`}>
           <b>{update.displayName}</b>
-          <span>{t(update.scope === 'project' ? 'startup.packageScopeProject' : 'startup.packageScopeUser')} · {update.type}</span>
+          <span>{update.scope === 'project' ? t('startup.packageScopeProject') : t('startup.packageScopeUser')} · {update.type}</span>
         </div>)}
       </div>
     </details>}
