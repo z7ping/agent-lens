@@ -119,8 +119,8 @@ function statusForError(error: unknown): number {
 function writeError(response: ServerResponse, error: unknown): void {
   const status = statusForError(error)
   writeJson(response, status, {
-    error: status === 404 ? 'not_found' : status === 503 ? 'pi_unavailable' : status < 500 ? 'bad_request' : 'internal_error',
-    ...(error instanceof Error && (status < 500 || status === 503) ? { message: error.message } : {}),
+    error: status === 404 ? 'not_found' : status === 502 ? 'pi_snapshot_failed' : status === 503 ? 'pi_unavailable' : status < 500 ? 'bad_request' : 'internal_error',
+    ...(error instanceof Error && (status < 500 || status === 502 || status === 503) ? { message: error.message } : {}),
   })
 }
 
@@ -272,7 +272,13 @@ export async function handlePiLiveRequest(
     }
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
-      writeJson(response, 200, jsonValue(await service.snapshot(runtimeSessionId, since)))
+      try {
+        writeJson(response, 200, jsonValue(await service.snapshot(runtimeSessionId, since)))
+      } catch (error) {
+        if (error && typeof error === 'object' && 'statusCode' in error) throw error
+        if (error instanceof Error && error.message.startsWith('Unknown Pi Live runtime session:')) throw error
+        throw httpError(502, 'Pi Live 历史快照加载失败')
+      }
       return true
     }
     if (action === 'events' && request.method === 'GET') {
