@@ -615,17 +615,12 @@ export async function* discoverClaudeAssets(
 
 function evidenceFor(record: SourceRecord): EvidenceCandidate {
   const runtime = record.locator.kind === 'runtime-hook'
-  return {
+  return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-log',
     derivation: runtime ? 'observed' : 'reported',
-    sourceRecordId: record.id,
-    sourceLocator: record.locator,
-    parserVersion: record.parserVersion,
     ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    ...(record.occurredAt ? { eventTime: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     confidenceHint: record.nativeId ? 'exact' : 'high',
-  }
+  })
 }
 
 function baseIdentity(
@@ -633,7 +628,7 @@ function baseIdentity(
   envelope: ClaudeStoredEnvelope,
 ): ObservationIdentityHints {
   return {
-    nativeSessionId: envelope.session.nativeSessionId,
+    nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
   }
 }
@@ -646,30 +641,24 @@ function candidate(
   options: {
     nativeCallId?: string
     nativeEventId?: string
+    sharedEventKey?: string
+    sequenceOffset?: number
     identity?: Partial<ObservationIdentityHints>
   } = {},
 ): ObservationCandidate {
-  const nativeCallId = options.nativeCallId
-  const eventId = options.nativeEventId ?? (!nativeCallId ? record.nativeId : undefined)
-  return {
+  const nativeEventId = options.nativeEventId ?? record.nativeId
+  return observationFromSourceRecord(record, {
     kind,
-    ...(eventId ? { nativeEventId: eventId } : {}),
-    ...(nativeCallId ? { nativeCallId } : {}),
-    ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
-    ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
-    capturedAt: record.capturedAt,
     payload,
     identityHints: {
       ...baseIdentity(record, envelope),
       ...(options.identity ?? {}),
     },
-    dedupHints: {
-      ...(eventId ? { nativeEventId: eventId } : {}),
-      ...(nativeCallId ? { nativeCallId } : {}),
-      ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
-      ...(record.fingerprint ? { payloadFingerprint: record.fingerprint } : {}),
-    },
-  }
+    ...(nativeEventId ? { nativeEventId } : {}),
+    ...(options.nativeCallId ? { nativeCallId: options.nativeCallId } : {}),
+    ...(options.sharedEventKey ? { sharedEventKey: options.sharedEventKey } : {}),
+    ...(options.sequenceOffset === undefined ? {} : { sequenceOffset: options.sequenceOffset }),
+  })
 }
 
 function textFromContent(content: unknown): string {
@@ -718,16 +707,17 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate {
     : {}
 
   if (hookName === 'PreToolUse') {
-    const stableCallId = callId ?? `claude-runtime-call-${record.id}`
     return candidate(record, envelope, 'tool.call', {
-      callId: stableCallId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       input: event.tool_input ?? {},
       ...(turnId ? { turnId } : {}),
-    }, { nativeCallId: stableCallId, identity })
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey: `claude-runtime:${record.id}` }),
+      identity,
+    })
   }
   if (hookName === 'PostToolUse') {
-    const stableCallId = callId ?? `claude-runtime-call-${record.id}`
     const response = event.tool_response ?? event.output ?? event.result ?? null
     const responseRecord = asRecord(response)
     const success = event.success === false
@@ -736,12 +726,15 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate {
       ? false
       : true
     return candidate(record, envelope, 'tool.result', {
-      callId: stableCallId,
+      ...(callId ? { callId } : {}),
       nativeToolName: toolName,
       success,
       ...(response == null ? {} : { output: response }),
       ...(typeof event.duration_ms === 'number' ? { durationMs: event.duration_ms } : {}),
-    }, { nativeCallId: stableCallId, identity })
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey: `claude-runtime:${record.id}` }),
+      identity,
+    })
   }
   if (hookName === 'SessionStart' || hookName === 'SessionEnd') {
     return candidate(record, envelope, 'session.lifecycle', {
@@ -814,10 +807,10 @@ export async function normalizeClaudeRecord(
 
   if (type === 'user') {
     if (typeof content === 'string') {
-      if (content.trim()) observations.push(candidate(record, envelope, 'message.user', { text: truncate(content) }))
+      if (content.trim()) observations.push(candidate(record, envelope, 'message.user', { text: content }))
     } else if (Array.isArray(content)) {
       const text = textFromContent(content).trim()
-      if (text) observations.push(candidate(record, envelope, 'message.user', { text: truncate(text) }))
+      if (text) observations.push(candidate(record, envelope, 'message.user', { text: text }))
       for (const rawBlock of content) {
         const block = asRecord(rawBlock)
         if (block.type !== 'tool_result') continue
@@ -826,7 +819,7 @@ export async function normalizeClaudeRecord(
         observations.push(candidate(record, envelope, 'tool.result', {
           callId,
           success: block.is_error !== true && block.is_error !== 'true',
-          ...(output ? { output: truncate(output) } : {}),
+          ...(output ? { output: output } : {}),
         }, { nativeCallId: callId }))
       }
     }
@@ -834,7 +827,7 @@ export async function normalizeClaudeRecord(
     if (Array.isArray(content)) {
       const textParts: string[] = []
       const reasoningParts: string[] = []
-      for (const rawBlock of content) {
+      for (const [blockIndex, rawBlock] of content.entries()) {
         const block = asRecord(rawBlock)
         const blockType = stringField(block, 'type') ?? 'unknown'
         if (blockType === 'text') {
@@ -844,23 +837,28 @@ export async function normalizeClaudeRecord(
           const thinking = stringField(block, 'thinking', 'text')
           if (thinking) reasoningParts.push(thinking)
         } else if (blockType === 'tool_use') {
-          const callId = stringField(block, 'id') ?? `claude-call-${record.id}`
+          const callId = stringField(block, 'id')
           observations.push(candidate(record, envelope, 'tool.call', {
-            callId,
+            ...(callId ? { callId } : {}),
             nativeToolName: stringField(block, 'name') ?? 'unknown',
             input: block.input ?? {},
-          }, { nativeCallId: callId }))
+          }, {
+            ...(callId
+              ? { nativeCallId: callId }
+              : { sharedEventKey: `claude-call:${record.id}:${blockIndex}` }),
+            sequenceOffset: blockIndex + 1,
+          }))
         }
       }
       if (textParts.length) observations.push(candidate(record, envelope, 'message.assistant', {
-        text: truncate(textParts.join('\n\n')),
+        text: textParts.join('\n\n'),
       }))
       if (reasoningParts.length) observations.push(candidate(record, envelope, 'message.reasoning', {
-        text: truncate(reasoningParts.join('\n\n')),
+        text: reasoningParts.join('\n\n'),
       }))
     } else {
       const text = textFromContent(content).trim()
-      if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: truncate(text) }))
+      if (text) observations.push(candidate(record, envelope, 'message.assistant', { text: text }))
     }
   } else if (type === 'custom-title') {
     const title = stringField(entry, 'customTitle', 'custom_title')?.trim()
@@ -870,7 +868,7 @@ export async function normalizeClaudeRecord(
     }, { identity: title ? { sessionTitle: title } : {} }))
   } else if (type === 'summary') {
     observations.push(candidate(record, envelope, 'context.summary', {
-      text: truncate(textFromContent(entry.summary ?? content)),
+      text: textFromContent(entry.summary ?? content),
     }))
   }
 
@@ -895,7 +893,7 @@ export async function declareClaudeCapabilities(
     { sourceId: SOURCE_ID, name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'runtime-hook'], reason: 'Summary and compaction lifecycle are visible; full context is not' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible thinking blocks are captured' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static user configuration is observable; merged scope, trust, plugin activation and runtime discoverability require stronger Claude Code runtime evidence' },
     { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Invocation attribution is handled by later usage projections' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Stable usage mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not implemented' },
