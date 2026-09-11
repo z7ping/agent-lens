@@ -14,7 +14,7 @@ function historyRecord(entry: Record<string, unknown>, nativeType: string): Sour
     capturedAt: '2026-08-31T00:30:00.000Z',
     locator: { kind: 'file', path: '/tmp/.claude/projects/demo/claude-session-1.jsonl', offset: 128 },
     fingerprint: `${nativeType}-fingerprint`,
-    parserVersion: '2',
+    parserVersion: '3',
     payload: {
       entry: {
         sessionId: 'claude-session-1',
