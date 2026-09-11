@@ -14,7 +14,8 @@
     "@agent-lens/core": "1.0.0-alpha.5",
     "@agent-lens/runtime-cordis": "1.0.0-alpha.5",
     "better-sqlite3": "13.0.3",
-    "yaml": "2.9.0"
+    "yaml": "2.9.0",
+    "@agent-lens/source-support": "1.0.0-alpha.5"
   },
   "devDependencies": {
     "@agent-lens/core-services": "1.0.0-alpha.5",
