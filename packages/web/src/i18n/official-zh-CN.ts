@@ -415,6 +415,7 @@ export const officialChineseLocalePack: LocalePackDto = {
         failureCluster: '失败集中',
         failureSummary: '{{failures}} 次已知失败 · 成功率 {{rate}}',
         countTimes: '{{count}} 次',
+        times: '次',
         slowestBadge: '平均最慢',
         attributedAssets: '可归因能力资产',
         attributedAssetsDescription: '有证据能够关联到具体技能和 MCP（模型上下文协议）的真实调用',
