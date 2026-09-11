@@ -202,6 +202,13 @@ function nativeEntryId(entry: Record<string, unknown>): string | undefined {
   return stringField(entry, 'uuid', 'id', 'messageId', 'message_id')
 }
 
+function sourceNativeEventId(record: SourceRecord, envelope: ClaudeStoredEnvelope): string | undefined {
+  if (record.locator.kind === 'runtime-hook') {
+    return stringField(envelope.entry, 'source_event_id', 'hook_invocation_id')
+  }
+  return nativeEntryId(envelope.entry)
+}
+
 function historyCheckpointKey(filePath: string): string {
   return `claude:history:v2-session-title:${sha256(filePath)}`
 }
@@ -653,13 +660,14 @@ export async function* discoverClaudeAssets(
   }
 }
 
-function evidenceFor(record: SourceRecord): EvidenceCandidate {
+function evidenceFor(record: SourceRecord, envelope: ClaudeStoredEnvelope): EvidenceCandidate {
   const runtime = record.locator.kind === 'runtime-hook'
+  const nativeStableId = sourceNativeEventId(record, envelope)
   return evidenceFromSourceRecord(record, {
     captureMethod: runtime ? 'runtime-hook' : 'native-log',
     derivation: runtime ? 'observed' : 'reported',
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
-    confidenceHint: record.nativeId ? 'exact' : 'high',
+    ...(nativeStableId ? { nativeStableId } : {}),
+    confidenceHint: nativeStableId ? 'exact' : 'high',
   })
 }
 
@@ -687,7 +695,9 @@ function candidate(
   } = {},
 ): ObservationCandidate {
   const nativeEventId = options.nativeEventId
-    ?? (!options.nativeCallId && !options.sharedEventKey ? record.nativeId : undefined)
+    ?? (!options.nativeCallId && !options.sharedEventKey
+      ? sourceNativeEventId(record, envelope)
+      : undefined)
   return observationFromSourceRecord(record, {
     kind,
     payload,
@@ -838,10 +848,11 @@ export async function normalizeClaudeRecord(
   _ctx: SourceNormalizationContext,
 ): Promise<NormalizedSourceOutput> {
   if (record.locator.kind === 'runtime-hook') {
-    const observation = normalizeRuntime(record)
+    const runtime = runtimeEnvelope(record)
+    const observation = runtime.envelope ? normalizeRuntime(record) : null
     return {
       observations: observation ? [observation] : [],
-      evidenceCandidates: [evidenceFor(record)],
+      evidenceCandidates: runtime.envelope ? [evidenceFor(record, runtime.envelope)] : [],
     }
   }
 
@@ -930,7 +941,7 @@ export async function normalizeClaudeRecord(
       rawPayload: entry,
     }))
   }
-  return { observations, evidenceCandidates: [evidenceFor(record)] }
+  return { observations, evidenceCandidates: [evidenceFor(record, envelope)] }
 }
 
 export async function declareClaudeCapabilities(
