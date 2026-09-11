@@ -205,23 +205,42 @@ function runtimeResourcesValue(value: JsonValue): JsonValue | undefined {
 }
 
 function runtimeResourceSummary(value: JsonValue): string {
-  const resources = runtimeResourcesValue(value)
+  const payload = payloadRecord(value)
+  const resources = payload.resources
   if (!resources || typeof resources !== 'object' || Array.isArray(resources)) {
     return agentLensI18n.t('review:local.event.runtimeResourcesNotCaptured')
   }
   const record = payloadRecord(resources)
-  return agentLensI18n.t('review:local.event.runtimeResourceCounts', {
+  const parts = [agentLensI18n.t('review:local.event.runtimeResourceCounts', {
     contexts: arrayCount(record.contexts),
     skills: arrayCount(record.skills),
     prompts: arrayCount(record.prompts),
     extensions: arrayCount(record.extensions),
     themes: arrayCount(record.themes),
-  })
+  })]
+  const packageStatus = typeof payload.packageUpdateCheck === 'string' ? payload.packageUpdateCheck : ''
+  if (packageStatus === 'complete') {
+    parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesCount', {
+      count: arrayCount(payload.packageUpdates),
+    }))
+  } else if (packageStatus === 'unavailable') {
+    parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesUnavailable'))
+  } else if (packageStatus === 'failed') {
+    parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesFailed'))
+  }
+  return parts.join(' · ')
 }
 
 function runtimeResourceJson(value: JsonValue): string {
-  const resources = runtimeResourcesValue(value)
-  return resources === undefined ? '' : JSON.stringify(resources, null, 2)
+  const payload = payloadRecord(value)
+  const resources = payload.resources
+  if (resources === undefined) return ''
+  const detail: Record<string, JsonValue> = { resources }
+  for (const key of ['packageUpdateCheck', 'packageUpdates', 'packageUpdatesCheckedAt']) {
+    const item = payload[key]
+    if (item !== undefined) detail[key] = item
+  }
+  return JSON.stringify(detail, null, 2)
 }
 
 const evidenceCaptureKey: Record<TimelineEvidenceDto['captureMethod'], string> = {
