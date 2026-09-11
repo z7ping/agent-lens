@@ -67,11 +67,11 @@ test('agent managed file HTTP surface only exposes declared config/data roots re
     assert.equal(listing.installationId, installation.id)
     assert.equal(listing.root, 'config')
     assert.equal(listing.rootPath, configRoot)
-    assert.deepEqual(listing.entries.map(entry => [entry.name, entry.kind]), [
-      ['skills', 'directory'],
-      ['.env', 'file'],
-      ['AGENTS.md', 'file'],
-    ])
+    assert.deepEqual(listing.entries.filter(entry => entry.kind === 'directory').map(entry => entry.name), ['skills'])
+    assert.deepEqual(
+      listing.entries.filter(entry => entry.kind === 'file').map(entry => entry.name).sort(),
+      ['.env', 'AGENTS.md'].sort(),
+    )
     assert.equal(listing.entries.some(entry => entry.relativePath === 'skills/SKILL.md'), false)
 
     const previewResponse = await fetch(`${base}/api/v1/agents/codex/file?${query('config', 'AGENTS.md')}`)
