@@ -150,7 +150,12 @@ let integrationAuthorization = readIntegrationAuthorizationSync(integrationAutho
 const integrationAuthorizationBootstrapConfiguration = integrationAuthorizationBootstrap(
   integrationAuthorization,
   {
-    existingInstallation: legacyInstallation || explicitSourceOverride,
+    // Only a pre-#148 installation has no persisted Integration preferences.
+    // A fresh #148 user may have a DB/config by their second restart, but must
+    // never receive Runtime/Live grants unless they explicitly authorize them.
+    legacyMigrationEligible:
+      persistedIntegrationPreferences === null
+      && (legacyInstallation || explicitSourceOverride),
     selectedIntegrationIds: [...enabledSourceIds],
   },
 )
