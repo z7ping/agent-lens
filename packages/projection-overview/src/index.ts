@@ -326,6 +326,8 @@ export class AgentOverviewProjection {
             ...(entry.binding.path ? { path: entry.binding.path } : {}),
             ...(entry.binding.source ? { source: entry.binding.source } : {}),
             ...(entry.binding.version ? { version: entry.binding.version } : {}),
+            ...(entry.binding.scope ? { scope: entry.binding.scope } : {}),
+            ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
             states,
           })
         }
