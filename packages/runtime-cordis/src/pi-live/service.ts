@@ -115,8 +115,9 @@ function textList(value: unknown, limit = 240): string[] {
 }
 
 function startupResources(value: unknown): PiLiveStartupResources | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const resources = record(value)
-  const result: PiLiveStartupResources = {
+  return {
     contexts: textList(resources.contexts),
     skills: textList(resources.skills),
     prompts: textList(resources.prompts),
@@ -124,7 +125,6 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
     themes: textList(resources.themes),
     diagnostics: textList(resources.diagnostics, 80),
   }
-  return Object.values(result).some(items => items.length) ? result : undefined
 }
 
 function packageUpdates(value: unknown): PiLivePackageUpdate[] {
