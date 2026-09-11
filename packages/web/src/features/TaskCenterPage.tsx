@@ -451,7 +451,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [launchablePage?.nextCursor, mode, projectLoading, projectLoadingMore, projectSearch])
 
   const localSessions = review.response?.items ?? []
-  const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects])
+  const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t)), [hubSessions, review, t])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
