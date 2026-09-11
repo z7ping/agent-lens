@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { AGENT_LENS_PROTOCOL_VERSION, type AgentOverviewResponseDto, type CapturePolicyResponseDto } from '@agent-lens/protocol'
+import {
+  AGENT_LENS_PROTOCOL_VERSION,
+  type AgentOverviewResponseDto,
+  type CapturePolicyResponseDto,
+  type IntegrationManagementResponseDto,
+} from '@agent-lens/protocol'
 import { AgentLensApi } from './api'
 import { AgentLensClientModel } from './model'
 
@@ -23,6 +28,25 @@ class PendingAgentsApi extends AgentLensApi {
   complete(): void {
     this.resolveAgents?.(agentsResponse)
   }
+}
+
+const integrationManagementResponse: IntegrationManagementResponseDto = {
+  items: [],
+  discovery: {
+    status: 'complete',
+    generatedAt: '2026-09-12T00:00:00.000Z',
+  },
+  preferences: {
+    onboarding: { completed: true },
+    displayOrder: [],
+    displayOrderConfigured: true,
+    acknowledgedIntegrationIds: [],
+    updatedAt: '2026-09-12T00:00:00.000Z',
+  },
+  meta: {
+    protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+    generatedAt: '2026-09-12T00:00:00.000Z',
+  },
 }
 
 class FailingAgentsApi extends AgentLensApi {
@@ -50,6 +74,22 @@ test('智能体概览在请求尚未完成时保持加载态，而非错误态',
   assert.equal(model.getSnapshot().agentsLoading, false)
   assert.equal(model.getSnapshot().agentsError, '')
   assert.deepEqual(model.getSnapshot().agents, agentsResponse)
+})
+
+test('智能体概览失败时仍保留成功返回的 Integration 管理投影', async () => {
+  class AgentsFailManagementSucceedsApi extends FailingAgentsApi {
+    override integrations(): Promise<IntegrationManagementResponseDto> {
+      return Promise.resolve(integrationManagementResponse)
+    }
+  }
+
+  const model = new AgentLensClientModel(new AgentsFailManagementSucceedsApi())
+  await model.refreshAgents()
+
+  assert.equal(model.getSnapshot().agentsError, '智能体概览查询失败。请重试；若持续失败，请运行诊断命令。')
+  assert.deepEqual(model.getSnapshot().integrationManagement, integrationManagementResponse)
+  assert.equal(model.getSnapshot().integrationManagementError, '')
+  assert.equal(model.getSnapshot().integrationManagementLoading, false)
 })
 
 test('智能体概览仅在请求真实失败后进入错误态', async () => {
