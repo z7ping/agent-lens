@@ -335,6 +335,7 @@ export const officialChineseLocalePack: LocalePackDto = {
         description: '已扫描本机。此步骤只读取工具状态；只有你明确选择后，AgentLens 才会安装对应集成。',
         scanning: '正在扫描',
         scanComplete: '扫描完成',
+        rescan: '重新扫描',
         discovered: '已发现',
         historyData: '发现历史数据',
         installing: '正在安装…',
