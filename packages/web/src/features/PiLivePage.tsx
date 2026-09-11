@@ -166,7 +166,7 @@ function PiLiveElapsed({ startedAt }: { startedAt: string }) {
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [t])
   const started = Date.parse(startedAt)
   return <>{Number.isFinite(started) ? formatTaskDuration(now - started) : '—'}</>
 }
@@ -229,13 +229,14 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
 }
 
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
+  const { t } = useTranslation('piLive')
   const navigate = useNavigate()
   const [cwd, setCwd] = useState(() => {
     try { return localStorage.getItem('agent-lens:pi-live-last-cwd') ?? '' } catch { return '' }
   })
   const [model, setModel] = useState('')
   const [provider, setProvider] = useState('')
-  const [availability, setAvailability] = useState<string>('正在检测 Pi…')
+  const [availability, setAvailability] = useState<string>(() => t('start.checking'))
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
 
@@ -243,7 +244,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
     let cancelled = false
     void piLiveApi.availability().then(value => {
       if (cancelled) return
-      setAvailability(value.available ? `Pi 已就绪 · ${value.executable ?? 'PATH'}` : `Pi 不可用 · ${value.reason ?? '未找到可执行文件'}`)
+      setAvailability(value.available ? t('start.ready', { executable: value.executable ?? 'PATH' }) : t('start.unavailable', { reason: value.reason ?? t('start.executableMissing') }))
     }, reason => {
       if (!cancelled) setAvailability(reason instanceof Error ? reason.message : String(reason))
     })
@@ -272,47 +273,48 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
 
   return <main className="pi-live-start-page">
     <section className="pi-live-start-card">
-      <div className="pi-live-start-kicker">任务复盘 · Pi 实时任务</div>
-      <h1>开始一个 Pi 任务</h1>
-      <p>Pi 由 AgentLens 后台服务持有。关闭页面、刷新浏览器或切去任务复盘，不会自动结束正在执行的任务。</p>
-      <label>工作目录<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder="例如 F:\\workspace\\agent-lens 或 /workspace/agent-lens" autoFocus/></label>
-      <Disclosure summary="模型设置（可选）" className="pi-live-start-model-settings">
+      <div className="pi-live-start-kicker">{t('start.kicker')}</div>
+      <h1>{t('start.title')}</h1>
+      <p>{t('start.description')}</p>
+      <label>{t('start.cwd')}<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder={t('start.cwdPlaceholder')} autoFocus/></label>
+      <Disclosure summary={t('start.modelSettings')} className="pi-live-start-model-settings">
         <div className="pi-live-start-grid">
-          <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
-          <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
+          <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder={t('start.providerPlaceholder')}/></label>
+          <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder={t('start.modelPlaceholder')}/></label>
         </div>
       </Disclosure>
       <div className="pi-live-start-status">{availability}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       <div className="pi-live-start-actions">
-        <Button onClick={() => navigate('/review')}>返回任务复盘</Button>
-        <Button variant="primary" loading={starting} disabled={!cwd.trim()} onClick={() => void start()}>启动 Pi</Button>
+        <Button onClick={() => navigate('/review')}>{t('start.back')}</Button>
+        <Button variant="primary" loading={starting} disabled={!cwd.trim()} onClick={() => void start()}>{t('start.launch')}</Button>
       </div>
     </section>
     {known.length > 0 && <section className="pi-live-known-card">
-      <div><b>仍在后台的 Pi 任务</b><span>来自本浏览器最近启动的运行时</span></div>
+      <div><b>{t('start.backgroundTitle')}</b><span>{t('start.backgroundDescription')}</span></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
         <span>{piLiveSessionTitle(item)}</span>
-        <small>{modelLabel(item)} · {item.status === 'initializing' ? '正在初始化' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
+        <small>{modelLabel(item)} · {item.status === 'initializing' ? t('start.initializing') : item.status === 'failed' ? t('start.failed') : item.isStreaming ? t('start.working') : t('start.waiting')}</small>
       </button>)}
     </section>}
   </main>
 }
 
 function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onAnswer(value: JsonValue): void }) {
+  const { t } = useTranslation('piLive')
   const [value, setValue] = useState(request.prefill)
   useEffect(() => setValue(request.prefill), [request.id, request.prefill])
 
   if (request.method === 'confirm') {
     return <div className="pi-live-blocking" role="dialog" aria-label={request.title}>
       <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ confirmed: false })}>拒绝</Button><Button size="small" variant="primary" onClick={() => onAnswer({ confirmed: true })}>允许</Button></div>
+      <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ confirmed: false })}>{t('blocking.reject')}</Button><Button size="small" variant="primary" onClick={() => onAnswer({ confirmed: true })}>{t('blocking.allow')}</Button></div>
     </div>
   }
   if (request.method === 'select') {
     return <div className="pi-live-blocking" role="dialog" aria-label={request.title}>
       <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-options">{request.options.map(option => <Button size="small" key={option} onClick={() => onAnswer({ value: option })}>{option}</Button>)}<Button size="small" onClick={() => onAnswer({ cancelled: true })}>取消</Button></div>
+      <div className="pi-live-blocking-options">{request.options.map(option => <Button size="small" key={option} onClick={() => onAnswer({ value: option })}>{option}</Button>)}<Button size="small" onClick={() => onAnswer({ cancelled: true })}>{t('blocking.cancel')}</Button></div>
     </div>
   }
   return <div className="pi-live-blocking pi-live-blocking-input" role="dialog" aria-label={request.title}>
@@ -320,11 +322,12 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
     {request.method === 'editor'
       ? <Textarea className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>
       : <Input className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>}
-    <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ cancelled: true })}>取消</Button><Button size="small" variant="primary" onClick={() => onAnswer({ value })}>提交</Button></div>
+    <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ cancelled: true })}>{t('blocking.cancel')}</Button><Button size="small" variant="primary" onClick={() => onAnswer({ value })}>{t('blocking.submit')}</Button></div>
   </div>
 }
 
 export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
+  const { t } = useTranslation('piLive')
   const navigate = useNavigate()
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
@@ -359,7 +362,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [interruptNotice, setInterruptNotice] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
-  const [syncWarning, setSyncWarning] = useState('')
+  const [syncWarningCode, setSyncWarningCode] = useState<'' | 'controls-refresh-failed' | 'history-reconcile-failed' | 'snapshot-sync-failed'>('')
   const [busy, setBusy] = useState(false)
   const [sendPending, setSendPending] = useState(false)
   const [abortPending, setAbortPending] = useState(false)
@@ -395,7 +398,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
-    setSyncWarning('')
+    setSyncWarningCode('')
     setInterruptNotice(false)
     setShowAllEvents(true)
     setStartupQueued('')
@@ -418,12 +421,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         if (!active) return
         controlsLoaded = true
         setControls(value)
-        setSyncWarning(current => current.startsWith('模型控制状态刷新失败') ? '' : current)
+        setSyncWarningCode(current => current === 'controls-refresh-failed' ? '' : current)
       }).catch(reason => {
         if (!active) return
         const detail = reason instanceof Error ? reason.message : String(reason)
         console.warn('[AgentLens] Pi Live controls refresh failed:', detail)
-        setSyncWarning('模型控制状态刷新失败；当前对话不受影响。')
+        setSyncWarningCode('controls-refresh-failed')
       }).finally(() => {
         if (controlsRefreshTask === task) controlsRefreshTask = null
       })
@@ -476,13 +479,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           setOptimisticPrompt(resolvedPrompt)
         }
         activePromptRef.current = ''
-        setSyncWarning(current => current.startsWith('历史对账失败') ? '' : current)
+        setSyncWarningCode(current => current === 'history-reconcile-failed' ? '' : current)
       } catch (reason) {
         if (!active) return
         const detail = reason instanceof Error ? reason.message : String(reason)
         console.warn('[AgentLens] Pi Live settled snapshot reconciliation failed:', detail)
         setCurrentItems(current => settlePiLiveItems(current))
-        setSyncWarning('历史对账失败；本轮已完成的回复已保留，可以继续对话。')
+        setSyncWarningCode('history-reconcile-failed')
       }
     }
 
@@ -512,7 +515,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       onError: reason => {
         if (!active) return
         if (reason instanceof PiLiveRequestError && reason.status === 502) {
-          setSyncWarning('历史快照同步失败；当前已显示内容不会被清空。')
+          setSyncWarningCode('snapshot-sync-failed')
           return
         }
         setError(reason.message)
@@ -645,16 +648,16 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, reason => {
                 const detail = reason instanceof Error ? reason.message : String(reason)
                 console.warn('[AgentLens] Pi Live ready snapshot refresh failed:', detail)
-                if (active) setSyncWarning('历史快照同步失败；当前已显示内容不会被清空。')
+                if (active) setSyncWarningCode('snapshot-sync-failed')
               })
               void refreshControls()
             }
           } else {
             const request = extensionRequest(event)
             if (request) setExtension(request)
-            if (type === 'extension_error') setError(stringValue(event.error) || 'Pi Extension 执行失败')
+            if (type === 'extension_error') setError(stringValue(event.error) || t('warning.extensionFailed'))
             if (type === 'runtime_exit') {
-              setError(stringValue(event.errorMessage) || 'Pi Runtime 已退出')
+              setError(stringValue(event.errorMessage) || t('warning.runtimeExited'))
               statePatch = { ...statePatch, isStreaming: false, isCompacting: false }
             }
           }
