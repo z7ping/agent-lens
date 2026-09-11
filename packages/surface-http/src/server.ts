@@ -72,6 +72,7 @@ export interface HttpSurfaceOptions {
     productId: string,
   ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
   integrationAuthorization?: IntegrationAuthorizationController
+  localeDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -218,6 +219,7 @@ export async function startHttpSurface(
         url,
         options.integrationAuthorization,
       )) return
+      if (await handleLocaleRequest(request, response, url, options.localeDirectory)) return
 
       if (url.pathname === '/api/v1/agents/rescan') {
         if (request.method !== 'POST') {
