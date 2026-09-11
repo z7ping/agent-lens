@@ -40,6 +40,8 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
       path: '/tmp/.codex/skills/review',
       source: 'skills-dir',
       version: '1.2.0',
+      scope: 'project',
+      scopeRoot: '/tmp/project',
     })
     await storage.repositories.assets.putState({
       id: 'state:installed:old',
@@ -62,6 +64,8 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
     assert.equal(rows.length, 1)
     assert.equal(rows[0]?.definition.canonicalName, 'review')
     assert.equal(rows[0]?.binding.version, '1.2.0')
+    assert.equal(rows[0]?.binding.scope, 'project')
+    assert.equal(rows[0]?.binding.scopeRoot, '/tmp/project')
     assert.deepEqual(rows[0]?.states.map(state => [state.id, state.value]), [
       ['state:installed:new', true],
       ['state:installed:old', false],
