@@ -101,16 +101,15 @@ export async function writeIntegrationAuthorization(
   path: string,
   configuration: Pick<IntegrationAuthorizationConfiguration, 'grants'>,
 ): Promise<IntegrationAuthorizationConfiguration> {
+  const grants: Record<string, PrivilegedIntegrationCapability[]> = {}
+  for (const [rawProductId, capabilities] of Object.entries(configuration.grants)) {
+    const productId = normalizeProductId(rawProductId)
+    if (!productId) continue
+    grants[productId] = normalizeCapabilities(capabilities)
+  }
   const normalized: IntegrationAuthorizationConfiguration = {
     version: INTEGRATION_AUTHORIZATION_VERSION,
-    grants: Object.fromEntries(
-      Object.entries(configuration.grants)
-        .map(([productId, capabilities]) => [
-          normalizeProductId(productId),
-          normalizeCapabilities(capabilities),
-        ])
-        .filter(([productId]) => Boolean(productId)),
-    ),
+    grants,
     updatedAt: new Date().toISOString(),
   }
 
