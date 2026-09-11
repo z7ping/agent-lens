@@ -4,6 +4,7 @@ import {
   assertAgentLensPluginCompatible,
   type AgentLensCordisPlugin,
 } from './plugin'
+import type { AgentLensIntegration } from './integration'
 
 export type AgentLensApplicationState =
   | 'idle'
@@ -52,6 +53,24 @@ export class AgentLensApplication {
       ...(config === undefined ? {} : { config }),
       validateManifest: true,
     })
+    return this
+  }
+
+  /**
+   * Register one product-level Agent Integration.
+   *
+   * This is only composition metadata: each component is still loaded by the
+   * existing AgentLens/Cordis plugin lifecycle.
+   */
+  useIntegration(integration: AgentLensIntegration): this {
+    this.assertConfigurable()
+    for (const component of integration.components) {
+      if (component.lifecycle === 'plugin') {
+        this.use(component.plugin, component.config)
+      } else {
+        this.useRuntime(component.plugin, component.config)
+      }
+    }
     return this
   }
 
