@@ -8,7 +8,8 @@ import { serialize } from 'node:v8'
 const VERSION = 1
 const MAX_MESSAGE_BYTES = 1024 * 1024
 const SNAPSHOT_CHUNK_BYTES = 384 * 1024
-const MAX_SNAPSHOT_TRANSFERS = 4
+const MAX_SNAPSHOT_TRANSFERS = 8
+const SNAPSHOT_TRANSFER_TTL_MS = 30_000
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -275,9 +276,17 @@ function samePath(left, right) {
   return normalized(left) === normalized(right)
 }
 
+function pruneSnapshotTransfers(now = Date.now()) {
+  for (const [transferId, transfer] of snapshotTransfers) {
+    if (transfer.expiresAt <= now) snapshotTransfers.delete(transferId)
+  }
+}
+
 function nextSnapshotChunk(transferId) {
+  pruneSnapshotTransfers()
   const transfer = snapshotTransfers.get(transferId)
   if (!transfer) throw new Error('Unknown or expired Pi Runtime snapshot transfer')
+  transfer.expiresAt = Date.now() + SNAPSHOT_TRANSFER_TTL_MS
   const start = transfer.offset
   const end = Math.min(transfer.bytes.length, start + SNAPSHOT_CHUNK_BYTES)
   const chunk = transfer.bytes.subarray(start, end)
@@ -296,14 +305,18 @@ function beginSnapshotTransfer(since) {
   const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId() }
   const bytes = serialize(snapshot)
 
-  while (snapshotTransfers.size >= MAX_SNAPSHOT_TRANSFERS) {
-    const oldest = snapshotTransfers.keys().next().value
-    if (oldest === undefined) break
-    snapshotTransfers.delete(oldest)
+  pruneSnapshotTransfers()
+  if (snapshotTransfers.size >= MAX_SNAPSHOT_TRANSFERS) {
+    throw new Error('Pi Runtime has too many concurrent snapshot transfers')
   }
 
   const transferId = randomUUID()
-  snapshotTransfers.set(transferId, { bytes, offset: 0, sequence: 0 })
+  snapshotTransfers.set(transferId, {
+    bytes,
+    offset: 0,
+    sequence: 0,
+    expiresAt: Date.now() + SNAPSHOT_TRANSFER_TTL_MS,
+  })
   return nextSnapshotChunk(transferId)
 }
 
