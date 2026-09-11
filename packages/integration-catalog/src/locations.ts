@@ -1,5 +1,11 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import {
+  officialIntegrationCatalogEntry,
+  resolveToolDiscoveryCandidatePath,
+  type OfficialIntegrationId,
+  type ToolDiscoveryPathCandidateDescriptor,
+  type ToolDiscoveryRootRole,
+} from './catalog'
 
 export interface ResolvedSourceLocation {
   configRoot: string
@@ -14,9 +20,45 @@ function value(env: SourceEnvironment, name: string): string | undefined {
   return resolved || undefined
 }
 
-function expandHomePath(path: string, homeDir: string): string {
-  if (path === '~') return homeDir
-  if (path.startsWith('~/') || path.startsWith('~\\')) return join(homeDir, path.slice(2))
+function roleCandidates(
+  integrationId: OfficialIntegrationId,
+  role: ToolDiscoveryRootRole,
+): readonly ToolDiscoveryPathCandidateDescriptor[] {
+  const entry = officialIntegrationCatalogEntry(integrationId)
+  return entry?.discovery.roots
+    .filter(root => root.role === role)
+    .flatMap(root => root.candidates) ?? []
+}
+
+function resolveCandidates(
+  integrationId: OfficialIntegrationId,
+  role: ToolDiscoveryRootRole,
+  env: SourceEnvironment,
+  homeDir: string,
+  platform: NodeJS.Platform,
+): string[] {
+  const result: string[] = []
+  for (const candidate of roleCandidates(integrationId, role)) {
+    const path = resolveToolDiscoveryCandidatePath(candidate, {
+      env,
+      homeDir,
+      platform,
+      absoluteOnly: false,
+    })
+    if (path && !result.includes(path)) result.push(path)
+  }
+  return result
+}
+
+function firstResolved(
+  integrationId: OfficialIntegrationId,
+  role: ToolDiscoveryRootRole,
+  env: SourceEnvironment,
+  homeDir: string,
+  platform = process.platform,
+): string {
+  const path = resolveCandidates(integrationId, role, env, homeDir, platform)[0]
+  if (!path) throw new Error(`Official Integration Catalog has no ${role} root for ${integrationId}`)
   return path
 }
 
@@ -24,12 +66,10 @@ export function resolveCodexLocation(
   env: SourceEnvironment = process.env,
   homeDir = homedir(),
 ): ResolvedSourceLocation {
-  const configured = value(env, 'CODEX_HOME')
-  const configRoot = configured ? expandHomePath(configured, homeDir) : join(homeDir, '.codex')
   return {
-    configRoot,
-    dataRoot: join(configRoot, 'sessions'),
-    explicit: Boolean(configured),
+    configRoot: firstResolved('codex', 'config', env, homeDir),
+    dataRoot: firstResolved('codex', 'data', env, homeDir),
+    explicit: Boolean(value(env, 'CODEX_HOME')),
   }
 }
 
@@ -37,12 +77,10 @@ export function resolveClaudeLocation(
   env: SourceEnvironment = process.env,
   homeDir = homedir(),
 ): ResolvedSourceLocation {
-  const configured = value(env, 'CLAUDE_CODE_HOME') ?? value(env, 'CLAUDE_HOME')
-  const configRoot = configured ? expandHomePath(configured, homeDir) : join(homeDir, '.claude')
   return {
-    configRoot,
-    dataRoot: join(configRoot, 'projects'),
-    explicit: Boolean(configured),
+    configRoot: firstResolved('claude-code', 'config', env, homeDir),
+    dataRoot: firstResolved('claude-code', 'data', env, homeDir),
+    explicit: Boolean(value(env, 'CLAUDE_CODE_HOME') ?? value(env, 'CLAUDE_HOME')),
   }
 }
 
@@ -50,18 +88,14 @@ export function resolvePiLocation(
   env: SourceEnvironment = process.env,
   homeDir = homedir(),
 ): ResolvedSourceLocation {
-  const configuredAgentDir = value(env, 'PI_CODING_AGENT_DIR')
-  const configuredPiHome = value(env, 'PI_HOME')
-  const configRoot = configuredAgentDir
-    ? expandHomePath(configuredAgentDir, homeDir)
-    : join(configuredPiHome ? expandHomePath(configuredPiHome, homeDir) : join(homeDir, '.pi'), 'agent')
-  const configuredSessionDir = value(env, 'PI_CODING_AGENT_SESSION_DIR')
   return {
-    configRoot,
-    dataRoot: configuredSessionDir
-      ? expandHomePath(configuredSessionDir, homeDir)
-      : join(configRoot, 'sessions'),
-    explicit: Boolean(configuredAgentDir || configuredPiHome || configuredSessionDir),
+    configRoot: firstResolved('pi', 'config', env, homeDir),
+    dataRoot: firstResolved('pi', 'data', env, homeDir),
+    explicit: Boolean(
+      value(env, 'PI_CODING_AGENT_DIR')
+      || value(env, 'PI_HOME')
+      || value(env, 'PI_CODING_AGENT_SESSION_DIR'),
+    ),
   }
 }
 
@@ -70,20 +104,14 @@ export function resolveHermesRoots(
   homeDir = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): string[] {
-  const explicit = value(env, 'HERMES_HOME')
-  if (explicit) return [expandHomePath(explicit, homeDir)]
-  const result: string[] = []
-  if (platform === 'win32') {
-    result.push(join(value(env, 'LOCALAPPDATA') ?? join(homeDir, 'AppData', 'Local'), 'hermes'))
-  }
-  result.push(join(homeDir, '.hermes'))
-  return [...new Set(result)]
+  const roots = resolveCandidates('hermes', 'data', env, homeDir, platform)
+  return value(env, 'HERMES_HOME') ? roots.slice(0, 1) : roots
 }
 
 export function resolveHermesConfigRoots(
   homeDir = homedir(),
 ): string[] {
-  return [join(homeDir, '.hermes')]
+  return resolveCandidates('hermes', 'config', {}, homeDir, process.platform)
 }
 
 export function resolveOpenCodeRoots(
@@ -91,23 +119,11 @@ export function resolveOpenCodeRoots(
   homeDir = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): string[] {
-  const result: string[] = []
-  const add = (path: string | undefined) => {
-    const normalized = path?.trim()
-    if (normalized && !result.includes(normalized)) result.push(normalized)
-  }
-
-  add(value(env, 'OPENCODE_HOME'))
-  if (platform === 'win32') {
-    add(join(value(env, 'APPDATA') ?? join(homeDir, 'AppData', 'Roaming'), 'opencode'))
-  } else {
-    add(join(value(env, 'XDG_DATA_HOME') ?? join(homeDir, '.local', 'share'), 'opencode'))
-  }
-  add(join(homeDir, '.local', 'share', 'opencode'))
-  return result
+  return resolveCandidates('opencode', 'data', env, homeDir, platform)
 }
 
 export const sourceLocationInternals = {
   value,
-  expandHomePath,
+  roleCandidates,
+  resolveCandidates,
 }
