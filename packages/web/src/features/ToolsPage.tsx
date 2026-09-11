@@ -284,7 +284,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
 
           {assets.length ? <section className="attributed-assets">
             <div className="section-heading-row"><div><h3>{t('page.attributedAssets')}</h3><p>{t('page.attributedAssetsDescription')}</p></div></div>
-            <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type, t)}</span><span title={t('page.attributionMethod', { method: asset.attribution })}>{confidenceLabel(asset.confidence, t)}</span><span className="asset-usage-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, asset.callCount / maxAssetCalls * 100)}%` }}/></span><strong>{asset.callCount}</strong><small>{t('page.countTimes', { count: '' }).replace(String(''), '').trim()}</small></div>)}</div>
+            <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type, t)}</span><span title={t('page.attributionMethod', { method: asset.attribution })}>{confidenceLabel(asset.confidence, t)}</span><span className="asset-usage-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, asset.callCount / maxAssetCalls * 100)}%` }}/></span><strong>{asset.callCount}</strong><small>{t('page.times')}</small></div>)}</div>
           </section> : null}
         </>}
       </div>
