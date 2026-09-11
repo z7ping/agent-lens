@@ -94,8 +94,6 @@ function usage(): string {
     '  agent-lens plugin install <id> [--json]',
     '  agent-lens plugin update <id> [--json]',
     '  agent-lens plugin remove <id> [--json]',
-    '  agent-lens plugin enable <id> [--json]',
-    '  agent-lens plugin disable <id> [--json]',
     '  agent-lens --version',
   ].join('\n')
 }
