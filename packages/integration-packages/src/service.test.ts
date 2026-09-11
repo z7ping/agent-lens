@@ -223,6 +223,54 @@ test('startup completes an interrupted remove whose Integration root was already
   }
 })
 
+test('installed manifest cannot self-authorize coordinated manifest and file tampering', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+    assert.equal((await service.install('pi')).status, 'completed')
+
+    const integration = OFFICIAL_INTEGRATION_CATALOG.find(item => item.integrationId === 'pi')
+    assert.ok(integration)
+    const packageDir = join(
+      f.installRoot,
+      'pi',
+      'versions',
+      integration.package.bundledVersion,
+    )
+    const entryPath = join(packageDir, 'index.js')
+    const manifestPath = join(packageDir, 'manifest.json')
+    const tamperedEntry = "export default { id: 'pi', tampered: true }\n"
+    await writeFile(entryPath, tamperedEntry, 'utf8')
+
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      files: Array<{ path: string; size: number; sha256: string }>
+    }
+    const entry = manifest.files.find(file => file.path === 'index.js')
+    assert.ok(entry)
+    entry.size = Buffer.byteLength(tamperedEntry)
+    entry.sha256 = sha256(tamperedEntry)
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+
+    const recovered = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await recovered.initialize()
+
+    const state = recovered.state('pi')
+    assert.equal(state.installed, true)
+    assert.equal(state.integrity, 'invalid')
+    assert.match(state.reason ?? '', /manifest checksum mismatch/)
+    assert.equal(recovered.installedEntryPath('pi'), null)
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('installed package with incompatible Plugin API stays installed but is not loadable', async () => {
   const f = await fixture()
   try {
@@ -244,7 +292,16 @@ test('installed package with incompatible Plugin API stays installed but is not 
     )
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
     manifest.apiVersion = '999.0'
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
+    const manifestText = `${JSON.stringify(manifest, null, 2)}\n`
+    await writeFile(manifestPath, manifestText, 'utf8')
+
+    // Simulate a package that was trusted by the previous Core version: the
+    // pointer still anchors the exact manifest, while the new Core rejects its
+    // Plugin API as incompatible rather than mislabeling it as corrupt.
+    const pointerPath = join(f.installRoot, 'pi', 'current.json')
+    const pointer = JSON.parse(await readFile(pointerPath, 'utf8')) as Record<string, unknown>
+    pointer.manifestSha256 = sha256(manifestText)
+    await writeFile(pointerPath, `${JSON.stringify(pointer, null, 2)}\n`, 'utf8')
 
     const upgradedCore = new IntegrationPackageService({
       bundleDir: f.bundleDir,
