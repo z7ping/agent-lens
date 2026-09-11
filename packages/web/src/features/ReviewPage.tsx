@@ -196,6 +196,34 @@ function numberValue(record: Record<string, JsonValue>, ...keys: string[]): numb
   return undefined
 }
 
+function arrayCount(value: JsonValue | undefined): number {
+  return Array.isArray(value) ? value.length : 0
+}
+
+function runtimeResourcesValue(value: JsonValue): JsonValue | undefined {
+  return payloadRecord(value).resources
+}
+
+function runtimeResourceSummary(value: JsonValue): string {
+  const resources = runtimeResourcesValue(value)
+  if (!resources || typeof resources !== 'object' || Array.isArray(resources)) {
+    return agentLensI18n.t('review:local.event.runtimeResourcesNotCaptured')
+  }
+  const record = payloadRecord(resources)
+  return agentLensI18n.t('review:local.event.runtimeResourceCounts', {
+    contexts: arrayCount(record.contexts),
+    skills: arrayCount(record.skills),
+    prompts: arrayCount(record.prompts),
+    extensions: arrayCount(record.extensions),
+    themes: arrayCount(record.themes),
+  })
+}
+
+function runtimeResourceJson(value: JsonValue): string {
+  const resources = runtimeResourcesValue(value)
+  return resources === undefined ? '' : JSON.stringify(resources, null, 2)
+}
+
 const evidenceCaptureKey: Record<TimelineEvidenceDto['captureMethod'], string> = {
   'runtime-hook': 'review:local.evidence.capture.runtimeHook',
   'native-log': 'review:local.evidence.capture.nativeLog',
@@ -260,6 +288,7 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
 }
 
 function sourceEventLabel(node: ReviewEventNodeDto): string {
+  if (node.kind === 'runtime.resources') return agentLensI18n.t('review:local.event.runtimeStartupResources')
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
@@ -292,6 +321,7 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
 function sourceEventSummary(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status')
+  if (node.kind === 'runtime.resources') return runtimeResourceSummary(node.payload)
   if (node.kind === 'model.changed' || node.kind === 'model.call') {
     const model = stringValue(payload, 'model', 'modelName', 'model_name')
     const provider = stringValue(payload, 'provider', 'modelProvider', 'model_provider')
@@ -545,6 +575,9 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     : node.type === 'message'
       ? brief(node.text, 280)
       : ''
+  const runtimeResources = node.type === 'event' && node.kind === 'runtime.resources'
+    ? runtimeResourceJson(node.payload)
+    : ''
 
   return <Drawer
     open
@@ -561,9 +594,11 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     {tab === 'detail' && <>
       {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
         <h3 className="section-label">{t('local.event.summary')}</h3>
-        {node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
-          ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
-          : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
+        {runtimeResources
+          ? <CopyableCodeBlock className="raw-json" copyValue={runtimeResources}>{runtimeResources}</CopyableCodeBlock>
+          : node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
+            ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
+            : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
       </section>}
     </>}
     {tab === 'evidence' && <section className="inspector-section">
