@@ -291,7 +291,7 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
                 <div className="session-item-foot">
                   {remote
                     ? <><span>{entry.item.title.state === 'redacted' ? t('hub.availability.redacted') : entry.item.title.state === 'omitted' ? t('hub.list.partialFields') : t('hub.list.hubSession')}</span><span>{nodeId}</span></>
-                    : <><span>{local?.projectName ?? local?.workspacePath?.split(/[\\/]/).pop() ?? t('hub.list.noProject')}</span><span>{local?.toolCount ?? 0} 调用{(local?.errorCount ?? 0) > 0 ? ` · ${local?.errorCount} 错误` : ''}</span></>}
+                    : <><span>{local?.projectName ?? local?.workspacePath?.split(/[\\/]/).pop() ?? t('hub.list.noProject')}</span><span>{t('hub.list.calls', { count: local?.toolCount ?? 0 })}{(local?.errorCount ?? 0) > 0 ? t('hub.list.errors', { count: local?.errorCount ?? 0 }) : ''}</span></>}
                 </div>
               </button>
             })}
