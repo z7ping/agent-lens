@@ -922,7 +922,7 @@ export function ReviewPage({
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
-  const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters])
+  const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters, t])
   const sessionGroups = useMemo(() => {
     const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
     const now = new Date()
@@ -1319,52 +1319,54 @@ export function ReviewPage({
   }
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
-    {!embedded && <Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">
+    {!embedded && <Toolbar className="workspace-toolbar" aria-label={t('local.filters.toolbarAria')}>
       <AgentScope agents={agents} value={review.filters.sourceIds?.[0] ?? ''} onChange={sourceId => model.setReviewFilters({ sourceIds: sourceId ? [sourceId] : [] })}/>
       <span className="toolbar-divider" />
-      <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
-        { value: '', label: '全部项目' },
+      <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel={t('local.filters.projectAria')} placeholder={t('local.filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('local.filters.searchProject')} options={[
+        { value: '', label: t('local.filters.allProjects') },
         ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
       ]}/>
-      <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-        { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('local.filters.timeAria')} menuWidth={156} options={[
+        { value: 'today', label: t('local.filters.today') }, { value: '7d', label: t('local.filters.sevenDays') }, { value: '30d', label: t('local.filters.thirtyDays') }, { value: 'all', label: t('local.filters.allTime') },
       ]}/>
-      <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-        { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+      <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('local.filters.statusAria')} menuWidth={150} options={[
+        { value: 'all', label: t('local.filters.allStatus') }, { value: 'clean', label: t('local.filters.clean') }, { value: 'with-errors', label: t('local.filters.withErrors') },
       ]}/>
-      <Input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
-      <IconButton onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><UiIcon name="refresh" size={16}/></IconButton>
+      <Input className="filter search-filter" placeholder={t('local.filters.searchPlaceholder')} value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
+      <IconButton onClick={() => void model.refreshReview()} title={t('local.filters.refresh')} aria-label={t('local.filters.refresh')}><UiIcon name="refresh" size={16}/></IconButton>
     </Toolbar>}
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按最近活动倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="session-panel-head"><div><b>{t('local.list.sessions')}</b><span>{t('local.list.ordering')}</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
-          {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
-          {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
+          {review.loading && !review.response && <div className="empty-state">{t('local.list.loading')}</div>}
+          {sessionGroups.map(group => <section className="session-group-block" key={group.key}>
             <div className="session-group">{group.label}</div>
             {group.items.map(entry => entry.origin === 'local' ? (() => {
               const item = entry.local
               const presentation = historyTaskPresentation(
                 item,
-                item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`,
+                item.projectName
+                  ? t('local.session.projectSession', { project: item.projectName })
+                  : t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }),
               )
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, item.sourceIds)}</div>{item.sourceIds.includes('pi') ? <StatusBadge tone="success">可继续</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
-                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><time title={`最近活动：${formatTime(entry.activityAt)}`}>{sessionRelativeTime(entry.activityAt)}</time></div>
+                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }), item.sourceIds)}</div>{item.sourceIds.includes('pi') ? <StatusBadge tone="success">{t('local.session.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? t('local.session.noProject')}</span><time title={t('local.list.recentActivity', { time: formatTime(entry.activityAt) })}>{sessionRelativeTime(entry.activityAt)}</time></div>
               </button>
             })() : (() => {
               const item = entry.remote
               const time = hubSessionTime(item)
               return <button key={`remote:${item.id}`} className="session-item" onClick={() => navigate(`/review/hub/${encodeURIComponent(item.id)}`)}>
-                <div className="session-item-title-row"><div className="session-item-title" title={hubSessionTitle(item)}>{sessionListTitle(hubSessionTitle(item), '远程会话')}</div></div>
-                <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time title={time || '时间未同步'}>{time ? sessionRelativeTime(time) : '时间未同步'}</time></div>
+                <div className="session-item-title-row"><div className="session-item-title" title={hubSessionTitle(item)}>{sessionListTitle(hubSessionTitle(item), t('local.session.remote'))}</div></div>
+                <div className="session-item-meta"><span className="hub-session-source remote">{t('local.session.remoteSource', { node: item.origin.nodeId })}</span><time title={time || t('local.session.timeNotSynced')}>{time ? sessionRelativeTime(time) : t('local.session.timeNotSynced')}</time></div>
               </button>
             })())}
           </section>)}
-          {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '正在加载更多会话…' : review.error ? '加载失败 · 点击重试' : '继续向下滚动，自动加载更多会话'}</button>}
-          {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">已加载全部会话</div>}
-          {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">当前筛选范围没有会话</div>}
+          {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? t('local.list.loadMoreLoading') : review.error ? t('local.list.loadMoreFailed') : t('local.list.loadMoreAuto')}</button>}
+          {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">{t('local.list.allLoaded')}</div>}
+          {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">{t('local.list.empty')}</div>}
         </div>
       </aside>}
 
@@ -1381,26 +1383,26 @@ export function ReviewPage({
         {detail && <TaskHeader
           marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
           agent={taskDetailModel?.agentLabel ?? ''}
-          context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? '未关联项目'}
+          context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? t('local.session.unlinkedProject')}
           showStatus={false}
           title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title, 15)}</span>}
           metrics={[]}
           infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
-            { label: '项目', value: taskDetailModel.projectLabel ?? '未关联项目' },
-            { label: '开始时间', value: formatDateTime(taskDetailModel.startedAt) },
-            { label: '结束时间', value: formatDateTime(taskDetailModel.endedAt) },
-            { label: '持续时间', value: duration(detail.durationMs) },
-            ...(taskDetailModel.workspacePath ? [{ label: '工作区', value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
-            ...taskDetailModel.metrics.filter(metric => metric.label !== '跨度').map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
+            { label: t('local.header.project'), value: taskDetailModel.projectLabel ?? t('local.session.unlinkedProject') },
+            { label: t('local.header.startTime'), value: formatDateTime(taskDetailModel.startedAt) },
+            { label: t('local.header.endTime'), value: formatDateTime(taskDetailModel.endedAt) },
+            { label: t('local.header.duration'), value: duration(detail.durationMs) },
+            ...(taskDetailModel.workspacePath ? [{ label: t('local.header.workspace'), value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
+            ...taskDetailModel.metrics.filter(metric => metric.label !== t('local.interaction.metricSpan')).map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
           ] : []}
           actions={<>
             {onResumePiSession && detail.sourceIds.includes('pi') ? <>
-              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>{resumingPiSession ? '正在打开 Pi…' : '继续会话'}</Button>
-              <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
-              {resumingPiSession && <StatusBadge tone="accent" dot role="status">正在准备历史会话</StatusBadge>}
-              {piResumeError && <StatusBadge tone="danger" title={piResumeError}>继续失败：{piResumeError}</StatusBadge>}
+              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>{resumingPiSession ? t('local.header.openingPi') : t('local.header.continueSession')}</Button>
+              <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>
+              {resumingPiSession && <StatusBadge tone="accent" dot role="status">{t('local.header.preparingHistory')}</StatusBadge>}
+              {piResumeError && <StatusBadge tone="danger" title={piResumeError}>{t('local.header.continueFailed', { error: piResumeError })}</StatusBadge>}
             </> : null}
-            <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
+            <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? t('local.header.viewAll') : t('local.header.viewCore')}</button>
           </>}
         />}
 
@@ -1414,31 +1416,31 @@ export function ReviewPage({
           onKeyDownCapture={noteReaderUserIntent}
         >
           {review.error && <div className="page-error">{review.error}</div>}
-          {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
+          {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
 
             {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>Pi 会话树 · {review.relationships.items.length} 条关系</span></summary>
+              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.piTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
             </details> : null}
 
-            <div className="round-nav" aria-label="轮次快速导航">
-              <div className="round-nav-filters" aria-label="轮次筛选">
-                <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            <div className="round-nav" aria-label={t('local.roundNav.aria')}>
+              <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
+                <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')} {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')} {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')} {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
               </div>
-              <div className="round-nav-actions" aria-label="轮次操作">
-                <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
-                {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 <UiIcon name="arrow-down" size={14}/></button>}
+              <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
+                <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</button>
+                {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')} <UiIcon name="arrow-down" size={14}/></button>}
               </div>
-              {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
-              <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
+              {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
+              <small>{t('local.roundNav.latencyNote')}</small>
             </div>
 
             <div className="review-flow">
               {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
-                {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
+                {review.detailLoadingMore ? t('local.roundNav.loadingOlder') : review.error ? <button onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</button> : <button onClick={() => void loadOlder()}>{t('local.roundNav.loadOlder')}</button>}
               </div>}
               {annotatedInteractions.map((item, index) => <VirtualRoundMount
                 key={item.round.id}
@@ -1460,14 +1462,14 @@ export function ReviewPage({
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
               {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
                 {review.detailLoadingMore
-                  ? `正在加载${isFiltered ? '后续匹配' : '后续'}轮次…`
+                  ? t('local.roundNav.loadingFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
                   : detail.page.hasMore
                     ? review.error
-                      ? <button onClick={() => void loadFollowing()}>加载失败 · 重试</button>
-                      : `继续向下滚动，${isFiltered ? '后续匹配' : '后续'}轮次会自动加载`
+                      ? <button onClick={() => void loadFollowing()}>{t('local.roundNav.loadFailedRetry')}</button>
+                      : t('local.roundNav.autoLoadFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
                     : isFiltered
-                      ? `已加载全部 ${detail.interactions.length} 个匹配轮次`
-                      : `已完整加载 ${detail.interactions.length} 轮`}
+                      ? t('local.roundNav.allMatchesLoaded', { count: detail.interactions.length })
+                      : t('local.roundNav.allLoaded', { count: detail.interactions.length })}
               </div>}
             </div>
           </div>}
