@@ -21,6 +21,7 @@ export type AgentIntegrationAvailability =
 export interface AgentIntegrationCapabilityStatus {
   capability: AgentIntegrationCapability
   availability: AgentIntegrationCapabilityAvailability
+  authorization?: 'required' | 'granted'
   reason?: string
 }
 
