@@ -126,7 +126,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   const service = new DefaultPiLiveService(
     async () => installed,
     undefined,
-    { recordStartupResources: async snapshot => { startupAudits.push(snapshot) } },
+    { recordStartupAudit: async snapshot => { startupAudits.push(snapshot) } },
   )
   const initializing = await service.start({ cwd: '/workspace', provider: 'openai', model: 'gpt-test', name: 'AgentLens task' })
   assert.equal(initializing.status, 'initializing')
