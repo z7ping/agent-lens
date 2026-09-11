@@ -144,6 +144,12 @@ function openCodeEnvelope(value: unknown, record: SourceRecord): OpenCodeEnvelop
   }
 }
 
+function sourceNativeEventId(record: SourceRecord): string | undefined {
+  const rowId = record.locator.kind === 'database' ? record.locator.rowId : undefined
+  if (rowId && record.nativeId === `row-${rowId}`) return undefined
+  return record.nativeId
+}
+
 function normalizeTimestamp(value: unknown): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const millis = value < 10_000_000_000 ? value * 1000 : value
@@ -444,10 +450,11 @@ export async function startOpenCodeRuntimeCapture(
 }
 
 function evidenceFor(record: SourceRecord, envelope: OpenCodeEnvelope): EvidenceCandidate {
+  const nativeStableId = sourceNativeEventId(record)
   return evidenceFromSourceRecord(record, {
     captureMethod: 'native-db',
     derivation: 'reported',
-    ...(record.nativeId ? { nativeStableId: record.nativeId } : {}),
+    ...(nativeStableId ? { nativeStableId } : {}),
     ...(envelope.captureChannel === 'history'
       ? { confidenceHint: 'exact' as const }
       : envelope.captureChannel === 'native-tail'
@@ -476,7 +483,7 @@ function candidate(
     offset?: number
   } = {},
 ): ObservationCandidate {
-  const nativeEventId = options.nativeEventId ?? record.nativeId
+  const nativeEventId = options.nativeEventId ?? sourceNativeEventId(record)
   return observationFromSourceRecord(record, {
     kind,
     payload,
