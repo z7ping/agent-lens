@@ -24,6 +24,7 @@ const integrationCapabilityLabelKey: Record<string, string> = {
   hook: 'integrationCapability.hook',
   runtime: 'integrationCapability.runtime',
   live: 'integrationCapability.live',
+  assets: 'integrationCapability.assets',
 }
 
 const integrationAvailabilityLabelKey: Record<string, string> = {
