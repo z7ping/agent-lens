@@ -138,6 +138,12 @@ export class IntegrationManagementService {
     return this.options.preferences.update(request)
   }
 
+  enabled(integrationId: string): IntegrationEnabledState | null {
+    const normalized = integrationId.trim().toLowerCase()
+    if (!officialIntegrationCatalogEntry(normalized)) return null
+    return enabledState(normalized, this.options.capturePolicy.getSourceConfiguration())
+  }
+
   async setEnabled(integrationId: string, enabled: boolean): Promise<IntegrationEnabledState> {
     const normalized = integrationId.trim().toLowerCase()
     if (!officialIntegrationCatalogEntry(normalized)) {
