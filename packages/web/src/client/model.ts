@@ -8,6 +8,7 @@ import type {
   IntegrationAuthorizationResponseDto,
   IntegrationEnabledUpdateResponseDto,
   IntegrationManagementResponseDto,
+  IntegrationPackageOperationResponseDto,
   IntegrationPreferenceUpdateRequestDto,
   IntegrationPreferencesResponseDto,
   IntegrationToolDiscoveryResponseDto,
@@ -417,6 +418,11 @@ export class AgentLensClientModel {
           integrationDiscoveryLoading: false,
           integrationDiscoveryError: '',
         })
+        if (discovery.status === 'idle' || discovery.status === 'scanning') {
+          this.scheduleIntegrationDiscoveryRefresh()
+        } else if (discovery.status === 'complete') {
+          this.integrationDiscoveryPolls = 0
+        }
       },
       error => {
         this.patch({
@@ -444,6 +450,14 @@ export class AgentLensClientModel {
       }, result.preferences)
       this.patch({ integrationManagement: management })
     }
+    return result
+  }
+
+  async installIntegration(
+    integrationId: string,
+  ): Promise<IntegrationPackageOperationResponseDto> {
+    const result = await this.api.installIntegration(integrationId)
+    await this.refreshIntegrationManagement().catch(() => undefined)
     return result
   }
 
@@ -540,6 +554,15 @@ export class AgentLensClientModel {
 
   ensureUsage(): Promise<void> {
     return this.snapshot.usage.response ? Promise.resolve() : this.refreshUsage()
+  }
+
+  ensureIntegrationManagement(): Promise<void> {
+    if (this.snapshot.integrationManagement) {
+      const status = this.snapshot.integrationManagement.discovery.status
+      if (status === 'idle' || status === 'scanning') this.scheduleIntegrationDiscoveryRefresh()
+      return Promise.resolve()
+    }
+    return this.refreshIntegrationManagement()
   }
 
   ensureAgents(): Promise<void> {
