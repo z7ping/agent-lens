@@ -20,7 +20,7 @@ export type PiSdkPromptOptions = Pick<PromptOptions, 'streamingBehavior' | 'sour
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
-export type PiSdkPackageUpdate = Pick<OfficialPackageUpdate, 'source' | 'displayName' | 'type' | 'scope'>
+export type PiSdkPackageUpdate = Pick<OfficialPackageUpdate, 'displayName' | 'type' | 'scope'>
 
 export interface PiSdkSessionManager {
   getSessionId(): ReturnType<SessionManager['getSessionId']>
