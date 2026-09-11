@@ -51,7 +51,7 @@ for (const path of await collect(ROOT)) {
     if (text && CJK.test(text)) {
       const { line, column } = location(file, node)
       violations.push({
-        path: relative(process.cwd(), path).replaceAll('\\\\', '/'),
+        path: relative(process.cwd(), path).replaceAll('\\', '/'),
         line,
         column,
         text: text.replace(/\s+/g, ' ').trim().slice(0, 140),
