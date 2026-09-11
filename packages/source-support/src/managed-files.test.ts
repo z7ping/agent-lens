@@ -53,11 +53,13 @@ test('managed text preview returns safe UTF-8 text and blocks sensitive content'
     await writeFile(join(root, '.env'), 'TOKEN=secret\n', 'utf8')
     await writeFile(join(root, 'config.toml'), 'api_key = "super-secret-value"\n', 'utf8')
     await writeFile(join(root, 'binary.bin'), Buffer.from([0, 1, 2, 3]))
+    await writeFile(join(root, 'session.jsonl'), '{"type":"session"}\n', 'utf8')
 
     assert.equal((await previewManagedTextFile(root, 'AGENTS.md')).content, '# instructions\n')
     await assert.rejects(previewManagedTextFile(root, '.env'), error => errorCode(error) === 'sensitive')
     await assert.rejects(previewManagedTextFile(root, 'config.toml'), error => errorCode(error) === 'sensitive')
     await assert.rejects(previewManagedTextFile(root, 'binary.bin'), error => errorCode(error) === 'binary')
+    await assert.rejects(previewManagedTextFile(root, 'session.jsonl'), error => errorCode(error) === 'protected-data')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
