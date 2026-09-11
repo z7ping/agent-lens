@@ -105,7 +105,14 @@ app.use(httpSurfacePlugin, {
   port: configuredPort,
   selectProjectDirectory: () => projectDirectoryPicker.select(),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
-  healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
+  healthDetails: () => ({
+    ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
+    integrationFailures: app.integrationFailures.map(failure => ({
+      integrationId: failure.integrationId,
+      componentPluginId: failure.componentPluginId,
+      error: failure.error instanceof Error ? failure.error.message : String(failure.error),
+    })),
+  }),
 })
 app.use(webPlugin, { staticDir: webRoot })
 
