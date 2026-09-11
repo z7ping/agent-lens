@@ -68,8 +68,17 @@ export function PinnedAgentsProvider({
     [management],
   )
   const serverOrder = management?.preferences.displayOrder ?? []
+  const pendingLegacyMigration = Boolean(
+    management
+    && !management.preferences.displayOrderConfigured
+    && legacyOrder.current.length,
+  )
   const ordered = optimisticOrder
-    ?? (serverOrder.length ? serverOrder : legacyOrder.current)
+    ?? (pendingLegacyMigration
+      ? legacyOrder.current
+      : serverOrder.length
+        ? serverOrder
+        : legacyOrder.current)
 
   useEffect(() => {
     if (!agents.length) return
