@@ -7,7 +7,7 @@ import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
-import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -29,6 +29,8 @@ interface OwnedRuntime {
   startupResources?: PiLiveStartupResources | undefined
   startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
+  packageUpdates: PiLivePackageUpdate[]
+  packageUpdateCheck: PiLivePackageUpdateCheckStatus
   capabilities?: PiLiveRuntimeCapabilities | undefined
   workspacePath: string
   projectName: string
@@ -123,6 +125,30 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
     diagnostics: textList(resources.diagnostics, 80),
   }
   return Object.values(result).some(items => items.length) ? result : undefined
+}
+
+function packageUpdates(value: unknown): PiLivePackageUpdate[] {
+  if (!Array.isArray(value)) return []
+  const updates: PiLivePackageUpdate[] = []
+  for (const item of value) {
+    const row = record(item)
+    if (typeof row.source !== 'string' || typeof row.displayName !== 'string') continue
+    if (row.type !== 'npm' && row.type !== 'git') continue
+    if (row.scope !== 'user' && row.scope !== 'project') continue
+    updates.push({
+      source: row.source.slice(0, 500),
+      displayName: row.displayName.slice(0, 240),
+      type: row.type,
+      scope: row.scope,
+    })
+  }
+  return updates.slice(0, 240)
+}
+
+function packageUpdateStatus(value: unknown): PiLivePackageUpdateCheckStatus | undefined {
+  return value === 'checking' || value === 'complete' || value === 'unavailable' || value === 'failed'
+    ? value
+    : undefined
 }
 
 function copyStartupResources(resources: PiLiveStartupResources): PiLiveStartupResources {
@@ -259,6 +285,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.startupAuditTask = undefined
     runtime.startupAuditProbeTask = undefined
     runtime.startupOutput = []
+    runtime.packageUpdates = []
+    runtime.packageUpdateCheck = 'checking'
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
@@ -290,6 +318,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: 0,
       initializationTimings: [],
       startupOutput: [],
+      packageUpdates: [],
+      packageUpdateCheck: 'checking',
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -407,6 +437,9 @@ export class DefaultPiLiveService implements PiLiveService {
             runtime.startupAuditResources ??= copyStartupResources(resources)
             runtime.startupResourcesCapturedAt ??= new Date().toISOString()
           }
+        } else if (event.type === 'package_updates') {
+          runtime.packageUpdates = packageUpdates(event.updates)
+          runtime.packageUpdateCheck = packageUpdateStatus(event.status) ?? runtime.packageUpdateCheck
         } else if (event.type === 'runtime_output') {
           if (typeof event.message === 'string' && event.message.trim()) {
             runtime.startupOutput = [...runtime.startupOutput, event.message.trim()].slice(-80)
@@ -635,6 +668,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
+      packageUpdateCheck: runtime.packageUpdateCheck,
+      ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
@@ -661,6 +696,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
+      packageUpdateCheck: runtime.packageUpdateCheck,
+      ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
@@ -672,6 +709,8 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private updateRuntimeResources(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    if (state.packageUpdateCheck) runtime.packageUpdateCheck = state.packageUpdateCheck
+    if (state.packageUpdates) runtime.packageUpdates = [...state.packageUpdates]
     if (!state.startupResources) return
     runtime.startupResources = state.startupResources
     if (!runtime.startupAuditResources) {
