@@ -1,4 +1,5 @@
 import { isValidElement, useEffect, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { copyText } from '../client/clipboard'
 import { UiIcon } from './UiIcon'
 
@@ -17,6 +18,7 @@ function textFromChildren(children: ReactNode): string {
 }
 
 export function CopyableCodeBlock({ children, copyValue, containerClassName = '', ...preProps }: CopyableCodeBlockProps) {
+  const { t } = useTranslation('common')
   const [state, setState] = useState<CopyState>('idle')
   const resetTimer = useRef<number | undefined>(undefined)
 
@@ -33,10 +35,10 @@ export function CopyableCodeBlock({ children, copyValue, containerClassName = ''
     resetTimer.current = window.setTimeout(() => setState('idle'), 1800)
   }
 
-  const label = state === 'copied' ? '已复制' : state === 'error' ? '复制失败' : '复制'
+  const label = state === 'copied' ? t('codeBlock.copied') : state === 'error' ? t('codeBlock.failed') : t('codeBlock.copy')
   return <div className={`copyable-code-block ${containerClassName}`.trim()} data-copy-state={state}>
     <pre {...preProps}>{children}</pre>
-    <button type="button" className="code-block-copy" onClick={() => void copy()} aria-label={`${label}代码块`} title={label}>
+    <button type="button" className="code-block-copy" onClick={() => void copy()} aria-label={t('codeBlock.aria', { label })} title={label}>
       <UiIcon name={state === 'copied' ? 'check' : 'copy'} size={16}/>
       <span>{label}</span>
     </button>
