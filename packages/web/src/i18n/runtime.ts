@@ -59,7 +59,7 @@ export async function initializeI18n(): Promise<i18n> {
       lng: available,
       fallbackLng: OFFICIAL_AGENT_LENS_LOCALE,
       defaultNS: 'common',
-      ns: ['common', 'navigation', 'shell', 'settings', 'agents', 'errors'],
+      ns: ['common', 'navigation', 'shell', 'settings', 'agents', 'insights', 'tools', 'errors'],
       interpolation: { escapeValue: false },
       returnNull: false,
       react: { useSuspense: false },
