@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -10,6 +10,7 @@ import type {
 } from '@agent-lens/core'
 import {
   claudeInternals,
+  claudeManifest,
   declareClaudeCapabilities,
   discoverClaudeAssets,
   ingestClaudeHistory,
@@ -28,7 +29,7 @@ function record(entry: Record<string, unknown>, nativeId?: string): SourceRecord
     capturedAt: '2026-09-11T00:00:00.000Z',
     locator: { kind: 'file', path: '/tmp/claude.jsonl', offset: 10 },
     fingerprint: 'claude-fingerprint',
-    parserVersion: '3',
+    parserVersion: claudeManifest.parserVersion,
     payload: {
       entry,
       session: { nativeSessionId: 'session-claude', cwd: '/workspace' },
@@ -36,36 +37,90 @@ function record(entry: Record<string, unknown>, nativeId?: string): SourceRecord
   }
 }
 
-test('Claude tool blocks without upstream ids stay internal', async () => {
-  const assistant = await normalizeClaudeRecord(record({
+function historyContext(
+  projects: string,
+  checkpoints: Map<string, unknown>,
+): SourceHistoryExecutionContext {
+  return {
+    installation: {
+      id: 'installation-claude',
+      hostId: 'host',
+      productId: 'claude-code',
+      dataRoot: projects,
+      firstSeenAt: '2026-09-11T00:00:00.000Z',
+      lastSeenAt: '2026-09-11T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+    checkpoint: {
+      async get<T>(key: string) { return (checkpoints.get(key) as T | undefined) ?? null },
+      async set<T>(key: string, value: T) { checkpoints.set(key, structuredClone(value)) },
+      async clear(key: string) { checkpoints.delete(key) },
+    },
+  } as SourceHistoryExecutionContext
+}
+
+test('Claude assistant entry separates native entry identity from derived thinking/tool facts', async () => {
+  const normalized = await normalizeClaudeRecord(record({
     type: 'assistant',
     uuid: 'assistant-entry',
     message: {
-      content: [{ type: 'tool_use', name: 'Bash', input: { command: 'pwd' } }],
+      content: [
+        { type: 'text', text: 'visible answer' },
+        { type: 'thinking', thinking: 'visible thinking' },
+        { type: 'tool_use', name: 'Bash', input: { command: 'pwd' } },
+      ],
     },
   }, 'assistant-entry'), {} as never)
-  const call = assistant.observations.find(item => item.kind === 'tool.call')
-  assert.ok(call)
-  assert.equal(call.nativeEventId, 'assistant-entry')
-  assert.equal(call.nativeCallId, undefined)
-  assert.equal(call.dedupHints?.sharedEventKey, 'claude-call:claude-record-contract:0')
-  assert.equal((call.payload as { callId?: string }).callId, undefined)
 
-  const user = await normalizeClaudeRecord(record({
+  const message = normalized.observations.find(item => item.kind === 'message.assistant')
+  const reasoning = normalized.observations.find(item => item.kind === 'message.reasoning')
+  const call = normalized.observations.find(item => item.kind === 'tool.call')
+  assert.ok(message)
+  assert.ok(reasoning)
+  assert.ok(call)
+
+  assert.equal(message.nativeEventId, 'assistant-entry')
+  assert.equal(reasoning.nativeEventId, undefined)
+  assert.equal(reasoning.dedupHints?.sharedEventKey, 'claude-reasoning:claude-record-contract')
+  assert.equal(call.nativeEventId, undefined)
+  assert.equal(call.nativeCallId, undefined)
+  assert.equal(call.dedupHints?.sharedEventKey, 'claude-call:claude-record-contract:2')
+  assert.equal((call.payload as { callId?: string }).callId, undefined)
+})
+
+test('Claude real tool_use id is nativeCallId but never doubles as nativeEventId', async () => {
+  const normalized = await normalizeClaudeRecord(record({
+    type: 'assistant',
+    uuid: 'assistant-entry',
+    message: {
+      content: [{ type: 'tool_use', id: 'tool-native-1', name: 'Bash', input: { command: 'pwd' } }],
+    },
+  }, 'assistant-entry'), {} as never)
+
+  const call = normalized.observations[0]
+  assert.equal(call?.kind, 'tool.call')
+  assert.equal(call?.nativeCallId, 'tool-native-1')
+  assert.equal(call?.nativeEventId, undefined)
+  assert.equal(call?.dedupHints?.nativeEventId, undefined)
+})
+
+test('Claude tool result without tool_use_id remains unpaired and non-native', async () => {
+  const normalized = await normalizeClaudeRecord(record({
     type: 'user',
     uuid: 'result-entry',
     message: {
       content: [{ type: 'tool_result', content: 'done', is_error: false }],
     },
   }, 'result-entry'), {} as never)
-  const result = user.observations.find(item => item.kind === 'tool.result')
+
+  const result = normalized.observations.find(item => item.kind === 'tool.result')
   assert.ok(result)
-  assert.equal(result.nativeEventId, 'result-entry')
+  assert.equal(result.nativeEventId, undefined)
   assert.equal(result.nativeCallId, undefined)
   assert.equal(result.dedupHints?.sharedEventKey, 'claude-result:claude-record-contract:0')
 })
 
-test('Claude runtime tool_use_id is native call identity, not SourceRecord event identity', () => {
+test('Claude runtime tool_use_id is native call identity, not SourceRecord event identity', async () => {
   const envelope = claudeInternals.parseRuntimeEnvelope(JSON.stringify({
     id: 'agent-lens-envelope',
     capturedAt: '2026-09-11T00:00:00.000Z',
@@ -87,7 +142,10 @@ test('Claude runtime tool_use_id is native call identity, not SourceRecord event
     abortSignal: new AbortController().signal,
   } as SourceExecutionContext)
   assert.equal(value.nativeId, undefined)
-  assert.equal((value.payload as { runtimeEvent?: { tool_use_id?: string } }).runtimeEvent?.tool_use_id, 'tool-native-1')
+
+  const normalized = await normalizeClaudeRecord(value, {} as never)
+  assert.equal(normalized.observations[0]?.nativeCallId, 'tool-native-1')
+  assert.equal(normalized.observations[0]?.nativeEventId, undefined)
 })
 
 test('Claude normalizer leaves generic text bounding to central CapturePolicy', async () => {
@@ -114,40 +172,62 @@ test('Claude EOF partial JSON is not consumed and is reconstructed after append'
   const partial = '{"type":"user","sessionId":"session-claude","uuid":"user-2","message":{"content":"sec'
   await writeFile(path, `${first}\n${partial}`, 'utf8')
   const checkpoints = new Map<string, unknown>()
-  const ctx = {
-    installation: {
-      id: 'installation-claude',
-      hostId: 'host',
-      productId: 'claude-code',
-      configRoot: root,
-      dataRoot: projects,
-      firstSeenAt: '2026-09-11T00:00:00.000Z',
-      lastSeenAt: '2026-09-11T00:00:00.000Z',
-    },
-    abortSignal: new AbortController().signal,
-    checkpoint: {
-      async get<T>(key: string) { return (checkpoints.get(key) as T | undefined) ?? null },
-      async set<T>(key: string, value: T) { checkpoints.set(key, value) },
-      async clear(key: string) { checkpoints.delete(key) },
-    },
-  } as SourceHistoryExecutionContext
+  const ctx = historyContext(projects, checkpoints)
 
   try {
     const firstPass = []
     for await (const item of ingestClaudeHistory(ctx)) firstPass.push(item)
     assert.equal(firstPass.length, 1)
-    const checkpoint = [...checkpoints.values()][0] as { offset: number; sequence: number }
+    const checkpoint = checkpoints.get(claudeInternals.historyCheckpointKey(path)) as {
+      offset: number
+      sequence: number
+      fileId?: string
+    }
     assert.equal(checkpoint.offset, Buffer.byteLength(first) + 1)
     assert.equal(checkpoint.sequence, 1)
+    assert.ok(checkpoint.fileId)
 
     await appendFile(path, 'ond"}}\n', 'utf8')
     const secondPass = []
     for await (const item of ingestClaudeHistory(ctx)) secondPass.push(item)
     assert.equal(secondPass.length, 1)
-    assert.equal(
-      ((secondPass[0]?.payload as { entry?: { message?: { content?: string } } }).entry?.message?.content),
-      'second',
-    )
+    assert.equal(secondPass[0]?.nativeId, 'user-2')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Claude legacy checkpoint gains file identity without replaying unchanged history', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-claude-file-id-'))
+  const projects = join(root, 'projects')
+  const path = join(projects, 'session.jsonl')
+  await mkdir(projects, { recursive: true })
+  const line = JSON.stringify({
+    type: 'user',
+    sessionId: 'session-claude',
+    uuid: 'user-1',
+    message: { content: 'hello' },
+  })
+  await writeFile(path, `${line}\n`, 'utf8')
+  const meta = await stat(path)
+  const checkpoints = new Map<string, unknown>([[
+    claudeInternals.historyCheckpointKey(path),
+    {
+      path,
+      offset: meta.size,
+      sequence: 1,
+      size: meta.size,
+      mtimeMs: meta.mtimeMs,
+    },
+  ]])
+  const ctx = historyContext(projects, checkpoints)
+
+  try {
+    const records = []
+    for await (const item of ingestClaudeHistory(ctx)) records.push(item)
+    assert.deepEqual(records, [])
+    const checkpoint = checkpoints.get(claudeInternals.historyCheckpointKey(path)) as { fileId?: string }
+    assert.ok(checkpoint.fileId)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
