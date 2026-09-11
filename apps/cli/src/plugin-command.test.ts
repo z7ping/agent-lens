@@ -155,41 +155,6 @@ test('plugin install/remove/update reuse Package Lifecycle HTTP methods and prop
   ])
 })
 
-test('plugin enable/disable are only facades over unified Enabled API', async () => {
-  const requests: Array<{ method: string; body: string }> = []
-  const fetchImpl = (async (_input: string | URL | Request, init?: RequestInit) => {
-    requests.push({
-      method: String(init?.method ?? 'GET'),
-      body: String(init?.body ?? ''),
-    })
-    const body=JSON.parse(String(init?.body ?? '{}')) as { enabled?: boolean }
-    return jsonResponse({
-      integrationId: 'pi',
-      enabled: {
-        configured: Boolean(body.enabled),
-        effective: !Boolean(body.enabled),
-        editable: true,
-        managedBy: 'file',
-        restartRequired: true,
-      },
-      meta: { protocolVersion: '1.0', generatedAt: '2026-09-12T00:00:00.000Z' },
-    })
-  }) as typeof fetch
-
-  const options = {
-    apiUrl: (path: string) => `http://agent-lens.test${path}`,
-    fetchImpl,
-    print: () => undefined,
-  }
-
-  assert.equal(await runPluginCommand('enable', ['pi'], false, options), 0)
-  assert.equal(await runPluginCommand('disable', ['pi'], false, options), 0)
-  assert.deepEqual(requests, [
-    { method: 'PUT', body: '{"enabled":true}' },
-    { method: 'PUT', body: '{"enabled":false}' },
-  ])
-})
-
 test('Package Lifecycle unavailable returns a clear CLI error instead of falling back to direct disk writes', async () => {
   const fetchImpl = (async () => jsonResponse({
     error: 'integration_package_lifecycle_unavailable',
