@@ -168,6 +168,19 @@ function resourceSource(resource: PiResolvedResource, cwd?: string): string {
   return `pi:resource:${scope}${context}:${resource.metadata.origin}:${resource.metadata.source}`
 }
 
+function resourceBindingScope(
+  resource: PiResolvedResource,
+  projectCwd?: string,
+): Pick<NonNullable<DiscoveredAsset['binding']>, 'scope' | 'scopeRoot'> {
+  if (resource.metadata.scope === 'project') {
+    return {
+      scope: 'project',
+      ...(projectCwd ? { scopeRoot: resolve(projectCwd) } : {}),
+    }
+  }
+  return { scope: 'user' }
+}
+
 async function resourceVersion(resource: PiResolvedResource): Promise<string | undefined> {
   if (resource.metadata.origin !== 'package' || !resource.metadata.baseDir) return undefined
   const manifest = await readUtf8(resolve(resource.metadata.baseDir, 'package.json'))
@@ -314,6 +327,7 @@ async function resolvedPromptsAsAssets(input: {
       binding: {
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
+        ...resourceBindingScope(resource, input.projectCwd),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -381,6 +395,7 @@ async function resolvedThemesAsAssets(input: {
       binding: {
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
+        ...resourceBindingScope(resource, input.projectCwd),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -402,12 +417,19 @@ async function contextAsset(
   capturedAt: string,
   enabled: EffectiveResourceState,
   discoverable: EffectiveResourceState,
+  scope: 'user' | 'project',
+  scopeRoot?: string,
 ): Promise<DiscoveredAsset | undefined> {
   const observedAt = await fileMtime(path)
   if (!observedAt) return undefined
   return {
     definition: contextDefinition(path),
-    binding: { path, source },
+    binding: {
+      path,
+      source,
+      scope,
+      ...(scopeRoot ? { scopeRoot: resolve(scopeRoot) } : {}),
+    },
     states: resourceStates({
       path,
       observedAt,
@@ -435,6 +457,7 @@ async function globalContextAssets(
         capturedAt,
         true,
         true,
+        'user',
       )
       if (asset) assets.push(asset)
     }
@@ -450,6 +473,7 @@ async function globalContextAssets(
       capturedAt,
       true,
       'unknown',
+      'user',
     )
     if (asset) assets.push(asset)
   }
@@ -476,6 +500,8 @@ async function projectContextAssets(
         capturedAt,
         true,
         true,
+        'project',
+        cwd,
       )
       if (asset) assets.push(asset)
     }
@@ -492,6 +518,8 @@ async function projectContextAssets(
       capturedAt,
       enabled,
       enabled,
+      'project',
+      cwd,
     )
     if (asset) assets.push(asset)
   }
@@ -608,6 +636,7 @@ async function resolvedSkillsAsAssets(input: {
       binding: {
         path: dirname(skill.filePath),
         source,
+        ...resourceBindingScope(resource, input.projectCwd),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -650,6 +679,7 @@ async function resolvedExtensionsAsAssets(input: {
       binding: {
         path: resource.path,
         source,
+        ...resourceBindingScope(resource, input.projectCwd),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
