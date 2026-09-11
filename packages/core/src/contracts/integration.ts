@@ -6,6 +6,7 @@ export type AgentIntegrationCapability =
   | 'hook'
   | 'runtime'
   | 'live'
+  | 'assets'
 
 export type AgentIntegrationCapabilityAvailability =
   | 'available'
