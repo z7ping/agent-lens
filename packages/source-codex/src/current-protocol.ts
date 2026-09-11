@@ -21,7 +21,6 @@ const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'inter_agent_communication_metadata',
 ])
 
-
 function stringField(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = record[key]
