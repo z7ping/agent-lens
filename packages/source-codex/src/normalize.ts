@@ -91,11 +91,15 @@ function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
   }
 }
 
-function sourceNativeEventId(record: SourceRecord, envelope: CodexStoredEnvelope): string | undefined {
+function sourceNativeEventId(
+  record: SourceRecord,
+  envelope?: CodexStoredEnvelope,
+): string | undefined {
   if (record.locator.kind === 'runtime-hook') {
-    return stringField(envelope.entry, 'source_event_id', 'hook_invocation_id')
+    const event = envelope?.entry ?? asRecord(asRecord(record.payload).runtimeEvent)
+    return stringField(event, 'source_event_id', 'hook_invocation_id')
   }
-  return nativeIdForEntry(envelope.entry)
+  return envelope ? nativeIdForEntry(envelope.entry) : undefined
 }
 
 function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
@@ -186,7 +190,7 @@ function sessionActivity(payload: Record<string, unknown>): {
   return { kind: 'user-task', relationship: 'related' }
 }
 
-function evidenceFor(record: SourceRecord, envelope: CodexStoredEnvelope): EvidenceCandidate {
+function evidenceFor(record: SourceRecord, envelope?: CodexStoredEnvelope): EvidenceCandidate {
   const runtime = record.locator.kind === 'runtime-hook'
   const nativeStableId = sourceNativeEventId(record, envelope)
   return evidenceFromSourceRecord(record, {
@@ -215,7 +219,9 @@ function candidate(
 ): ObservationCandidate {
   const nativeCallId = typeof dedup.nativeCallId === 'string' ? dedup.nativeCallId : undefined
   const sharedEventKey = typeof dedup.sharedEventKey === 'string' ? dedup.sharedEventKey : undefined
-  const nativeEventId = sourceNativeEventId(record, envelope)
+  const nativeEventId = !nativeCallId && !sharedEventKey
+    ? sourceNativeEventId(record, envelope)
+    : undefined
   return observationFromSourceRecord(record, {
     kind,
     payload,
@@ -409,7 +415,7 @@ export async function normalizeCodexRecord(
     const observation = normalizeRuntimeRecord(record)
     return {
       observations: observation ? [observation] : [],
-      evidenceCandidates: [evidenceFor(record, envelope)],
+      evidenceCandidates: [evidenceFor(record)],
     }
   }
 
