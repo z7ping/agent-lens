@@ -31,6 +31,7 @@ import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { readLaunchableProjects } from './launchable-projects'
+import { discoverLocalePacks } from './locale-packs'
 import { handlePiLiveRequest } from './pi-live'
 import {
   parseInsightsQuery,
@@ -63,6 +64,7 @@ export interface HttpSurfaceOptions {
   piLive?: PiLiveService
   rescanAgents?: () => Promise<AgentRescanSummaryDto>
   sourceDetection?: (sourceId: string) => boolean | undefined
+  localePackDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -234,6 +236,10 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/background-activity') {
         writeJson(response, 200, await readBackgroundActivity(storage))
+        return
+      }
+      if (url.pathname === '/api/v1/locales') {
+        writeJson(response, 200, await discoverLocalePacks(options.localePackDirectory))
         return
       }
       if (url.pathname === '/api/v1/ready') {
