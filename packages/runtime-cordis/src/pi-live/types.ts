@@ -1,3 +1,5 @@
+import type { LiveRuntimeEvent } from '@agent-lens/core'
+
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 export type PiLiveInitializationStage = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
@@ -104,12 +106,7 @@ export interface PiLiveQueueState {
   followUp: string[]
 }
 
-export interface PiLiveRuntimeEvent {
-  runtimeSessionId: string
-  sequence: number
-  receivedAt: string
-  event: Record<string, unknown>
-}
+export type PiLiveRuntimeEvent = LiveRuntimeEvent
 
 export type PiLiveRuntimeListener = (event: PiLiveRuntimeEvent) => void
 

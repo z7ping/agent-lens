@@ -23,6 +23,8 @@ import type {
   HostIdentityHint,
   IdentityService,
   InstallationIdentityHint,
+  LiveAdapter,
+  LiveService,
   LogicalSession,
   LogicalSessionIdentityHint,
   ObservationCapability,
@@ -89,6 +91,31 @@ export class DefaultSourceService implements SourceService {
   async detect(context: SourceDetectionContext): Promise<DetectedSource[]> {
     const detected = await Promise.all(this.list().map(source => source.detect(context)))
     return detected.flat()
+  }
+}
+
+export class DefaultLiveService implements LiveService {
+  private readonly adapters = new Map<string, LiveAdapter>()
+
+  register(adapter: LiveAdapter): Disposable {
+    const id = adapter.manifest.liveId
+    if (this.adapters.has(id)) {
+      throw new Error(`AgentLens live adapter already registered: ${id}`)
+    }
+    this.adapters.set(id, adapter)
+    return {
+      dispose: () => {
+        if (this.adapters.get(id) === adapter) this.adapters.delete(id)
+      },
+    }
+  }
+
+  list(): LiveAdapter[] {
+    return [...this.adapters.values()]
+  }
+
+  get(liveId: string): LiveAdapter | null {
+    return this.adapters.get(liveId) ?? null
   }
 }
 

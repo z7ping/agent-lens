@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import { LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
-import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeEvent, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -17,8 +18,7 @@ interface OwnedRuntime {
   message: string
   error?: string | undefined
   handle?: PiRuntimeHandle | undefined
-  listeners: Set<PiLiveRuntimeListener>
-  sequence: number
+  events: LiveEventChannel
   generation: number
   initialization: AbortController
   initializationStartedAt: number
@@ -261,8 +261,7 @@ export class DefaultPiLiveService implements PiLiveService {
       status: 'initializing',
       stage: 'starting_worker',
       message: restored ? '正在恢复 Pi Runtime' : '正在启动独立 Pi Runtime Worker',
-      listeners: new Set(),
-      sequence: 0,
+      events: new LiveEventChannel(id),
       generation: 1,
       initialization: new AbortController(),
       initializationStartedAt: now,
@@ -506,8 +505,7 @@ export class DefaultPiLiveService implements PiLiveService {
   /** HTTP events calls state() before subscribe(), so lazy recovery is complete before this synchronous registration. */
   subscribe(id: string, listener: PiLiveRuntimeListener): () => void {
     const runtime = this.requireRuntime(id)
-    runtime.listeners.add(listener)
-    return () => runtime.listeners.delete(listener)
+    return runtime.events.subscribe(listener)
   }
 
   async terminate(id: string): Promise<void> {
@@ -555,7 +553,7 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.message = 'Pi Runtime 已结束'
       this.publish(runtime, { type: 'runtime_status', status: 'terminated', stage: runtime.stage, message: runtime.message })
     }
-    runtime.listeners.clear()
+    runtime.events.clear()
     this.runtimes.delete(runtime.id)
   }
 
@@ -641,13 +639,6 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {
-    runtime.sequence += 1
-    const value: PiLiveRuntimeEvent = {
-      runtimeSessionId: runtime.id,
-      sequence: runtime.sequence,
-      receivedAt: new Date().toISOString(),
-      event,
-    }
-    for (const listener of runtime.listeners) listener(value)
+    runtime.events.publish(event)
   }
 }
