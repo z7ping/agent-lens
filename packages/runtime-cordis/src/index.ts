@@ -1,5 +1,6 @@
 export * from './context'
 export * from './plugin'
+export * from './integration'
 export * from './application'
 export * from './core-services'
 export * from './source-sync'
