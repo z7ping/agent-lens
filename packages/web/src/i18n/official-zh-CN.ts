@@ -209,6 +209,7 @@ export const officialChineseLocalePack: LocalePackDto = {
       openMenu: '打开设置与维护菜单',
       menu: '设置与维护',
       maintenanceAndAppearance: '维护与外观',
+      agentsAndIntegrations: '智能体与集成',
       switchToLight: '切换为浅色主题',
       switchToDark: '切换为深色主题',
       language: '界面语言',
