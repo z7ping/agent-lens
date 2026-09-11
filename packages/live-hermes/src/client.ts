@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -136,7 +137,7 @@ export class HermesApiClient {
     const response = asRecord(await this.requestJson('/v1/runs', {
       method: 'POST',
       headers: {
-        'Idempotency-Key': `agent-lens-${crypto.randomUUID()}`,
+        'Idempotency-Key': `agent-lens-${randomUUID()}`,
       },
       body: JSON.stringify({
         input,
@@ -176,7 +177,7 @@ export class HermesApiClient {
   ): AsyncIterable<Record<string, unknown>> {
     const response = await this.request(
       `/v1/runs/${encodeURIComponent(runId)}/events`,
-      { method: 'GET', signal },
+      { method: 'GET', ...(signal ? { signal } : {}) },
     )
     if (!response.body) throw new HermesApiError('Hermes run event stream has no response body')
 
