@@ -169,7 +169,7 @@ export function PiStartupDisclosure({
 
   if (embedded) return <OperationProgress
     title={title}
-    description={state.status === 'failed' ? state.error || fallbackError || 'Pi Runtime 未能完成初始化。' : state.initializationMessage || t('startup.loadingDescription')}
+    description={state.status === 'failed' ? state.error || fallbackError || t('startup.initializationFailed') : state.initializationMessage || t('startup.loadingDescription')}
     statusLabel={state.status === 'failed' ? t('startup.failedStatus') : t('startup.initializingStatus')}
     elapsedMs={elapsed}
     tone={state.status === 'failed' ? 'danger' : 'accent'}
