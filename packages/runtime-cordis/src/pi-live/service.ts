@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import { LiveEventChannel } from '@agent-lens/live-support'
+import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
@@ -35,13 +35,6 @@ interface OwnedRuntime {
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
   recoveryCheckpointTask?: Promise<void> | undefined
-}
-
-function safeError(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error))
-    .replace(/(?:api[_-]?key|token|authorization|password)\s*[:=]\s*\S+/gi, '[redacted]')
-    .replace(/[\r\n]+/g, ' ')
-    .slice(0, 2_000)
 }
 
 function taskSummary(message: string): string | undefined {
@@ -320,7 +313,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private recoveryDiagnostic(runtime: OwnedRuntime, prefix: string, error: unknown): void {
-    const message = `${prefix}: ${safeError(error)}`
+    const message = `${prefix}: ${formatLiveError(error)}`
     if (!runtime.startupOutput.includes(message)) runtime.startupOutput = [...runtime.startupOutput, message].slice(-80)
     console.warn(`[AgentLens] ${message}`)
   }
@@ -447,7 +440,7 @@ export class DefaultPiLiveService implements PiLiveService {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
       runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
       runtime.status = 'failed'
-      runtime.error = safeError(error)
+      runtime.error = formatLiveError(error)
       runtime.message = runtime.restored
         ? `Pi Runtime 恢复失败 · ${formatElapsed(runtime.initializationElapsedMs)}`
         : `Pi Runtime 初始化失败 · ${formatElapsed(runtime.initializationElapsedMs)}`
@@ -460,7 +453,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.handle = undefined
     runtime.initializationElapsedMs = Math.max(runtime.initializationElapsedMs, Date.now() - runtime.initializationStartedAt)
     runtime.status = 'failed'
-    runtime.error = safeError(error)
+    runtime.error = formatLiveError(error)
     runtime.message = 'Pi Runtime Worker 已退出'
     this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error, initializationElapsedMs: runtime.initializationElapsedMs, initializationTimings: runtime.initializationTimings })
   }
