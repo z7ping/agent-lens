@@ -66,7 +66,13 @@ test('Tool disappearance/recovery never mutates Installed or Enabled and acknowl
     capturePolicy: capturePolicy(),
     packageState,
     integrationStatus: productId => productId === 'pi'
-      ? { productId: 'pi', availability: 'available', capabilities: [] }
+      ? {
+          integrationId: 'pi',
+          productId: 'pi',
+          enabled: true,
+          availability: 'available',
+          capabilities: [],
+        }
       : null,
   })
 
