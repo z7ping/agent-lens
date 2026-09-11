@@ -44,6 +44,17 @@ function requiredQuery(url: URL, name: string): string {
   return value
 }
 
+function decodeSourceId(value: string): string {
+  try {
+    const decoded = decodeURIComponent(value).trim()
+    if (!decoded) throw badRequest('sourceId is required')
+    return decoded
+  } catch (error) {
+    if (error instanceof URIError) throw badRequest('sourceId contains invalid URL encoding')
+    throw error
+  }
+}
+
 async function managedRoot(input: {
   sourceId: string
   installationId: string
@@ -79,7 +90,7 @@ export async function handleAgentFilesRequest(
     return true
   }
 
-  const sourceId = decodeURIComponent(match[1]!)
+  const sourceId = decodeSourceId(match[1]!)
   const action = match[2]!
   const installationId = requiredQuery(url, 'installationId')
   const root = parseRoot(url.searchParams.get('root'))
