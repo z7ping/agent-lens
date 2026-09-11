@@ -445,6 +445,7 @@ function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
   ): Promise<unknown>
 }) {
+  const { t } = useTranslation('agents')
   const [showAllBindings, setShowAllBindings] = useState(false)
   const installation = agent.installations[0]
   const grouped = useMemo(() => {
@@ -471,34 +472,34 @@ function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = captureState(agent)
+  const status = captureState(agent, t)
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
     <header className="agent-card-head">
       <div className="agent-identity">
         <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
-        <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2><p>{agentDescription[agent.sourceId] ?? '本机智能体的安装、资产与使用情况'}</p></div>
+        <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2><p>{agentDescriptionKey[agent.sourceId] ? t(agentDescriptionKey[agent.sourceId]!) : t('description.fallback')}</p></div>
       </div>
       <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
     </header>
 
     <div className="agent-installation">
-      <span><small>版本</small><b>{installation?.version ?? (agent.detected ? '版本未取得' : '未检测')}</b></span>
-      <span className="agent-config"><small>配置目录</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? '路径未取得' : '未检测'}</code></span>
+      <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
+      <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
     </div>
 
     <IntegrationControl agent={agent} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
 
     <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>我的资产</h3><p>用户安装、配置或维护的能力；内建工具单独放在后面。</p></div><span className="section-total">{userAssetCount}</span></div>
+      <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3><p>{t('sections.myAssetsDescription')}</p></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
-        {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{assetTypeLabel[type] ?? type}</span></div>) : <div className="muted-empty compact">暂无可识别的用户资产</div>}
+        {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{translatedLabel(assetTypeLabelKey, type, t)}</span></div>) : <div className="muted-empty compact">{t('sections.noUserAssets')}</div>}
       </div>
-      {userUsageCount > 0 && <div className="reliable-usage">可靠归因调用 <b>{userUsageCount}</b> 次</div>}
+      {userUsageCount > 0 && <div className="reliable-usage">{t('sections.reliableCalls', { count: userUsageCount })}</div>}
     </section>
 
     <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>最近真正用过</h3><p>只统计有证据支撑的技能和 MCP（模型上下文协议），不把内建工具混进来。</p></div></div>
+      <div className="section-heading-row"><div><h3>{t('sections.recentUsed')}</h3><p>{t('sections.recentUsedDescription')}</p></div></div>
       <FrequentAssets agent={agent} assets={priorityAssets}/>
     </section>
 
@@ -506,26 +507,26 @@ function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
 
     <section className="agent-disclosures">
       {userGrouped.map(([type, assets]) => <AssetGroup key={type} agent={agent} type={type} assets={assets}/>)}
-      {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">当前存储未提供资产库存查询能力</div>}
+      {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">{t('sections.inventoryUnavailable')}</div>}
     </section>
 
     <section className="agent-secondary">
       {builtinAssets.length > 0 && <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>} 
       <details className="disclosure-group">
-        <summary><DisclosureChevron/><span>装配路径</span><span className="disclosure-count">{bindings.length}</span></summary>
+        <summary><DisclosureChevron/><span>{t('sections.assemblyPaths')}</span><span className="disclosure-count">{bindings.length}</span></summary>
         <div className="assembly-list">
-          {installation?.executable && <div><span>可执行文件</span><code>{installation.executable}</code></div>}
-          {installation?.configRoot && <div><span>配置</span><code>{installation.configRoot}</code></div>}
-          {installation?.dataRoot && <div><span>数据</span><code>{installation.dataRoot}</code></div>}
-          {visibleBindings.map(({ asset, binding }) => binding.path ? <div key={binding.id}><span>{assetTypeLabel[asset.type] ?? asset.type}</span><code>{binding.path}</code></div> : null)}
-          {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">暂无装配路径</div>}
+          {installation?.executable && <div><span>{t('sections.executable')}</span><code>{installation.executable}</code></div>}
+          {installation?.configRoot && <div><span>{t('sections.config')}</span><code>{installation.configRoot}</code></div>}
+          {installation?.dataRoot && <div><span>{t('sections.data')}</span><code>{installation.dataRoot}</code></div>}
+          {visibleBindings.map(({ asset, binding }) => binding.path ? <div key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
+          {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noAssemblyPaths')}</div>}
         </div>
-        {bindings.length > ASSEMBLY_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? '收起' : `查看更多 ${bindings.length - ASSEMBLY_PATH_LIMIT} 条路径`}</button>}
+        {bindings.length > ASSEMBLY_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - ASSEMBLY_PATH_LIMIT })}</button>}
       </details>
       <details className="disclosure-group">
-        <summary title="这里展示的是 AgentLens 适配器声明的采集支持，不代表当前智能体安装实例自报告的产品能力。"><DisclosureChevron/><span>AgentLens 采集支持</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
+        <summary title={t('sections.captureSupportTitle')}><DisclosureChevron/><span>{t('sections.captureSupport')}</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
         <div className="capability-list">
-          {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap)}><span>{capabilityLabel[cap.name] ?? cap.name} · {capabilityDetail(cap)}</span><b data-status={cap.status}>{capabilityStatusLabel[cap.status] ?? cap.status}</b></div>)}
+          {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap, t)}><span>{translatedLabel(capabilityLabelKey, cap.name, t)} · {capabilityDetail(cap, t)}</span><b data-status={cap.status}>{translatedLabel(capabilityStatusLabelKey, cap.status, t)}</b></div>)}
         </div>
       </details>
     </section>
@@ -533,6 +534,7 @@ function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
 }
 
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
+  const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const items = useOrderedAgents(snapshot.agents?.items ?? [])
@@ -541,34 +543,36 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
   const rescan = snapshot.agentsRescanResult
   const rescanStatus = snapshot.agentsRescanning
-    ? <StatusBadge tone="accent" dot>正在重新扫描本机智能体与资产</StatusBadge>
+    ? <StatusBadge tone="accent" dot>{t('page.rescanning')}</StatusBadge>
     : snapshot.agentsRescanError
-      ? <StatusBadge tone="danger" title={snapshot.agentsRescanError}>重新扫描失败</StatusBadge>
+      ? <StatusBadge tone="danger" title={snapshot.agentsRescanError}>{t('page.rescanFailed')}</StatusBadge>
       : rescan
         ? <StatusBadge tone={rescan.status === 'completed' ? 'success' : 'danger'} title={rescan.failures.map(item => `${item.sourceId}: ${item.message}`).join('\n') || undefined}>
             {rescan.status === 'completed'
-              ? `扫描完成 · ${rescan.sourcesDetected} 个来源 · ${rescan.assetsDiscovered} 项资产${rescan.assetsRemoved ? ` · ${rescan.assetsRemoved} 项已移除` : ''}`
-              : `扫描${rescan.status === 'partial' ? '部分完成' : '失败'} · ${rescan.failures.length} 个来源异常`}
+              ? `${t('page.scanCompleted', { sources: rescan.sourcesDetected, assets: rescan.assetsDiscovered })}${rescan.assetsRemoved ? t('page.removedSuffix', { count: rescan.assetsRemoved }) : ''}`
+              : rescan.status === 'partial'
+                ? t('page.scanPartial', { count: rescan.failures.length })
+                : t('page.scanFailedSummary', { count: rescan.failures.length })}
           </StatusBadge>
         : null
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、集成状态、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用对应集成。">
-        <Toolbar aria-label="智能体扫描" className="agents-rescan-toolbar">
-          <Button size="small" loading={snapshot.agentsRescanning} disabled={snapshot.agentsRescanning} onClick={() => void model.rescanAgents().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{snapshot.agentsRescanning ? '正在扫描…' : '重新扫描'}</Button>
+      <CompactPageHeading title={t('page.title')} description={t('page.description')}>
+        <Toolbar aria-label={t('page.scanToolbar')} className="agents-rescan-toolbar">
+          <Button size="small" loading={snapshot.agentsRescanning} disabled={snapshot.agentsRescanning} onClick={() => void model.rescanAgents().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{snapshot.agentsRescanning ? t('page.scanning') : t('page.rescan')}</Button>
           {rescanStatus}
         </Toolbar>
       </CompactPageHeading>
       {items.length ? <div className="agents-browser">
-        <nav className="agent-source-nav" aria-label="智能体列表">
-          <div className="agent-source-nav-head"><b>本机智能体</b><span>{items.length}</span></div>
+        <nav className="agent-source-nav" aria-label={t('page.list')}>
+          <div className="agent-source-nav-head"><b>{t('page.localAgents')}</b><span>{items.length}</span></div>
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
-            const status = captureState(agent)
+            const status = captureState(agent, t)
             return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
-              <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{assetCount} 项用户资产</small></span>
+              <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
               <span className={`agent-source-state ${status.className}`}>{status.label}</span>
             </button>
           })}
@@ -580,7 +584,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
           onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
         />}</div>
-      </div> : <div className="empty-state roomy">没有可显示的智能体</div>}
+      </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
     </div>
   </main>
 }
