@@ -153,6 +153,9 @@ export function PiStartupDisclosure({
         </div>)}
       </div>
     </details>}
+    {packageUpdates.length === 0 && state.packageUpdateCheck === 'complete' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdatesCurrent')}</span>
+    </div>}
     {packageUpdates.length === 0 && state.packageUpdateCheck === 'checking' && <div className="pi-startup-diagnostics">
       <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateChecking')}</span>
     </div>}
