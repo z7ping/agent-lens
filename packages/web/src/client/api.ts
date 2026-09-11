@@ -14,6 +14,7 @@ import {
   type InsightsResponseDto,
   type IntegrationAuthorizationCapabilityDto,
   type IntegrationAuthorizationResponseDto,
+  type IntegrationToolDiscoveryResponseDto,
   type LiveUpdateEventDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -162,6 +163,12 @@ export class AgentLensApi {
   }
   rescanAgents(): Promise<AgentRescanResponseDto> {
     return requestJson('/api/v1/agents/rescan', { method: 'POST' })
+  }
+  integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
+    return requestJson('/api/v1/integrations/discovery')
+  }
+  rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
+    return requestJson('/api/v1/integrations/discovery/rescan', { method: 'POST' })
   }
   capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
 
