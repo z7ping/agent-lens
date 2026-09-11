@@ -62,9 +62,14 @@ export class AgentLensApplication {
    * This is only composition metadata: each component is still loaded by the
    * existing AgentLens/Cordis plugin lifecycle.
    */
-  useIntegration(integration: AgentLensIntegration): this {
+  useIntegration(
+    integration: AgentLensIntegration,
+    options: { enabled?: boolean } = {},
+  ): this {
     this.assertConfigurable()
+    const enabled = options.enabled ?? true
     for (const component of integration.components) {
+      if (component.activation === 'enabled' && !enabled) continue
       if (component.lifecycle === 'plugin') {
         this.use(component.plugin, component.config)
       } else {
