@@ -103,12 +103,13 @@ async function checkPackageUpdates(
 ): Promise<PackageUpdateState> {
   if (process.env.PI_OFFLINE) return { status: 'unavailable', updates: [] }
   const api = resolvePiSdkPackageUpdateApi(module)
-  if (!api) return { status: 'unavailable', updates: [] }
+  const settingsManager = session.settingsManager
+  if (!api || !settingsManager) return { status: 'unavailable', updates: [] }
   try {
     const manager = new api.DefaultPackageManager({
       cwd,
       agentDir: api.getAgentDir(),
-      settingsManager: session.settingsManager,
+      settingsManager,
     })
     if (typeof manager.checkForAvailableUpdates !== 'function') {
       return { status: 'unavailable', updates: [] }
