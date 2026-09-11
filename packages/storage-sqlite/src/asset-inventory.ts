@@ -3,6 +3,7 @@ import type {
   AssetDefinition,
   AssetInventoryEntry,
   AssetInventoryReader,
+  AssetScope,
   AssetState,
   AssetStateObservation,
   AssetType,
@@ -11,6 +12,7 @@ import { SqliteExecutor } from './executor'
 
 type AssetRow = Record<string, unknown>
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'prompt', 'theme', 'context', 'rule', 'builtin', 'unknown'] as const
+const ASSET_SCOPES = ['installation', 'user', 'project', 'workspace'] as const
 const ASSET_STATES = ['installed', 'configured', 'enabled', 'discoverable', 'exposed', 'invoked'] as const
 
 function rowRecord(value: unknown): AssetRow {
@@ -73,6 +75,13 @@ function mapBinding(value: unknown): AssetBinding {
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
   const version = optionalString(row, 'version')
+  const rawScope = optionalString(row, 'scope')
+  const scope = rawScope === undefined
+    ? undefined
+    : (ASSET_SCOPES as readonly string[]).includes(rawScope)
+      ? rawScope as AssetScope
+      : (() => { throw new TypeError(`SQLite asset inventory field scope has unsupported value: ${rawScope}`) })()
+  const scopeRoot = optionalString(row, 'scope_root')
   return {
     id: requiredString(row, 'binding_id'),
     assetId: requiredString(row, 'asset_id'),
@@ -80,6 +89,8 @@ function mapBinding(value: unknown): AssetBinding {
     ...(path === undefined ? {} : { path }),
     ...(source === undefined ? {} : { source }),
     ...(version === undefined ? {} : { version }),
+    ...(scope === undefined ? {} : { scope }),
+    ...(scopeRoot === undefined ? {} : { scopeRoot }),
   }
 }
 
@@ -111,6 +122,8 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
           b.path AS path,
           b.source AS source,
           b.version AS version,
+          b.scope AS scope,
+          b.scope_root AS scope_root,
           d.type AS asset_type,
           d.canonical_name AS canonical_name,
           d.display_name AS display_name,
