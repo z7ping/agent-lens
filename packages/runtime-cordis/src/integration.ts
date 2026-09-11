@@ -1,6 +1,7 @@
 import type { Plugin } from '@deepseek-ai/cordis'
 import {
   AGENT_LENS_PLUGIN_API_VERSION,
+  type AgentIntegrationCapability,
   type AgentIntegrationManifest,
 } from '@agent-lens/core'
 import type { AgentLensCordisPlugin } from './plugin'
@@ -8,6 +9,7 @@ import type { AgentLensCordisPlugin } from './plugin'
 export type AgentLensIntegrationComponent =
   | {
       pluginId: string
+      capabilities: readonly AgentIntegrationCapability[]
       activation: 'catalog' | 'enabled'
       lifecycle: 'plugin'
       plugin: AgentLensCordisPlugin<unknown>
@@ -15,6 +17,7 @@ export type AgentLensIntegrationComponent =
     }
   | {
       pluginId: string
+      capabilities: readonly AgentIntegrationCapability[]
       activation: 'catalog' | 'enabled'
       lifecycle: 'runtime'
       plugin: Plugin<unknown>
@@ -54,6 +57,13 @@ export function defineAgentLensIntegration(
     throw new Error(`Agent Integration component manifest mismatch: ${manifest.integrationId}`)
   }
   for (const component of components) {
+    for (const capability of component.capabilities) {
+      if (!capabilities.has(capability)) {
+        throw new Error(
+          `Agent Integration component declares capability outside manifest: ${manifest.integrationId} / ${capability}`,
+        )
+      }
+    }
     if (component.lifecycle === 'plugin' && component.plugin.manifest.pluginId !== component.pluginId) {
       throw new Error(
         `Agent Integration component plugin id mismatch: ${component.pluginId} != ${component.plugin.manifest.pluginId}`,
