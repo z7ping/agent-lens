@@ -15,6 +15,7 @@ import {
   type IntegrationAuthorizationCapabilityDto,
   type IntegrationAuthorizationResponseDto,
   type LiveUpdateEventDto,
+  type LocalePackListResponseDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
   type ReviewResponseDto,
@@ -134,6 +135,7 @@ export class AgentLensApi {
   private backupOverviewLoaded = false
 
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
+  locales(): Promise<LocalePackListResponseDto> { return requestJson('/api/v1/locales') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
   agents(): Promise<AgentOverviewResponseDto> {
     if (agentsInFlight) return agentsInFlight
