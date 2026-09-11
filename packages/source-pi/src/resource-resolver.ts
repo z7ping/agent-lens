@@ -178,7 +178,7 @@ function resourceBindingScope(
       ...(projectCwd ? { scopeRoot: resolve(projectCwd) } : {}),
     }
   }
-  return { scope: 'user' }
+  return resource.metadata.scope === 'user' ? { scope: 'user' } : {}
 }
 
 async function resourceVersion(resource: PiResolvedResource): Promise<string | undefined> {
