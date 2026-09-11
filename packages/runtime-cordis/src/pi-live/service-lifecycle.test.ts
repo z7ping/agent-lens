@@ -109,7 +109,7 @@ test('启动资源审计使用 ready 前最后一份 Runtime 快照，而不是 
   const service = new DefaultPiLiveService(
     host,
     undefined,
-    { recordStartupResources: async snapshot => { audits.push(snapshot) } },
+    { recordStartupAudit: async snapshot => { audits.push(snapshot) } },
   )
   const initial = await service.start({ cwd: '/workspace' })
   await new Promise(resolve => setTimeout(resolve, 0))
@@ -153,7 +153,7 @@ test('包更新在 ready 后完成时合并进同一启动审计', async () => {
   const service = new DefaultPiLiveService(
     host,
     undefined,
-    { recordStartupResources: async snapshot => { audits.push(snapshot) } },
+    { recordStartupAudit: async snapshot => { audits.push(snapshot) } },
   )
   const initial = await service.start({ cwd: '/workspace' })
   await new Promise(resolve => setTimeout(resolve, 0))
