@@ -1,5 +1,5 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
-import type { StorageService } from '@agent-lens/core'
+import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import type { DataRuntimeHealthDto } from '@agent-lens/protocol'
 import {
@@ -29,6 +29,10 @@ export interface HttpSurfacePluginConfig {
   dataRuntimeHealth?: () => DataRuntimeHealthDto
   /** Additional O(1) runtime diagnostics merged into storage health details. */
   healthDetails?: () => Readonly<Record<string, unknown>>
+  /** Product-level Integration runtime availability. */
+  integrationStatus?: (
+    productId: string,
+  ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
 }
 
 const manifest = {
@@ -181,6 +185,7 @@ const applyHttpSurface = Object.assign(
       piLive: ctx.get('piLive'),
       rescanAgents: () => sourceRescan.rescan(),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
+      ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
