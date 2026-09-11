@@ -589,7 +589,8 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
     : undefined
   const rescan = snapshot.agentsRescanResult
   const rescanning = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
-  const rescanStatus = rescanning || discoveryScanning
+  const scanBusy = rescanning || discoveryScanning
+  const rescanStatus = scanBusy
     ? <StatusBadge tone="accent" dot>{t('page.rescanning')}</StatusBadge>
     : snapshot.integrationDiscoveryError
       ? <StatusBadge tone="danger" title={snapshot.integrationDiscoveryError}>{t('page.toolScanFailed')}</StatusBadge>
@@ -611,7 +612,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
     <div className="page-content agents-content">
       <CompactPageHeading title={t('page.title')} description={t('page.description')}>
         <Toolbar aria-label={t('page.scanToolbar')} className="agents-rescan-toolbar">
-          <Button size="small" loading={rescanning} disabled={rescanning} onClick={() => void model.rescanAgentEnvironment().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{rescanning ? t('page.scanning') : t('page.rescan')}</Button>
+          <Button size="small" loading={scanBusy} disabled={scanBusy} onClick={() => void model.rescanAgentEnvironment().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{scanBusy ? t('page.scanning') : t('page.rescan')}</Button>
           {rescanStatus}
         </Toolbar>
       </CompactPageHeading>
