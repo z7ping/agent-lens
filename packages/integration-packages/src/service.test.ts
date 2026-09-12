@@ -20,6 +20,8 @@ import {
   type BundledIntegrationCatalogEntry,
 } from './types'
 
+const TEST_BUNDLE_VERSION = '1.2.3'
+
 function sha256(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -42,7 +44,7 @@ async function writeTrustedBundle(bundleDir: string) {
       integrationId: integration.integrationId,
       productId: integration.productId,
       packageName: integration.package.packageName,
-      version: integration.package.bundledVersion,
+      version: TEST_BUNDLE_VERSION,
       apiVersion: integration.package.apiVersion,
       entry: 'index.js',
       entryExport: integration.package.entryExport,
@@ -59,7 +61,7 @@ async function writeTrustedBundle(bundleDir: string) {
       integrationId: integration.integrationId,
       productId: integration.productId,
       packageName: integration.package.packageName,
-      version: integration.package.bundledVersion,
+      version: TEST_BUNDLE_VERSION,
       relativeManifestPath,
       manifestSha256: sha256(manifestText),
     })
@@ -210,7 +212,7 @@ test('failed update keeps the previously committed version current and loadable'
     const versionsRoot = join(f.installRoot, 'pi', 'versions')
     const oldVersion = '0.9.0-test'
     const oldDir = join(versionsRoot, oldVersion)
-    await rename(join(versionsRoot, integration.package.bundledVersion), oldDir)
+    await rename(join(versionsRoot, TEST_BUNDLE_VERSION), oldDir)
 
     const manifestPath = join(oldDir, 'manifest.json')
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
@@ -230,7 +232,7 @@ test('failed update keeps the previously committed version current and loadable'
     })
     await service.initialize()
     assert.equal(service.state('pi').installedVersion, oldVersion)
-    assert.equal(service.state('pi').availableVersion, integration.package.bundledVersion)
+    assert.equal(service.state('pi').availableVersion, TEST_BUNDLE_VERSION)
 
     const bundledEntry = f.bundle.entryFiles.get('pi')
     assert.ok(bundledEntry)
@@ -324,7 +326,7 @@ test('installed manifest cannot self-authorize coordinated manifest and file tam
       f.installRoot,
       'pi',
       'versions',
-      integration.package.bundledVersion,
+      TEST_BUNDLE_VERSION,
     )
     const entryPath = join(packageDir, 'index.js')
     const manifestPath = join(packageDir, 'manifest.json')
@@ -372,7 +374,7 @@ test('installed package with incompatible Plugin API stays installed but is not 
       f.installRoot,
       'pi',
       'versions',
-      integration.package.bundledVersion,
+      TEST_BUNDLE_VERSION,
       'manifest.json',
     )
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
@@ -421,7 +423,7 @@ test('install repairs an already-installed incompatible package before reporting
       f.installRoot,
       'pi',
       'versions',
-      integration.package.bundledVersion,
+      TEST_BUNDLE_VERSION,
       'manifest.json',
     )
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
