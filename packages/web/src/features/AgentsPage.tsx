@@ -95,7 +95,11 @@ const assetTypeLabelKey: Record<string, string> = {
   unknown: 'assetType.unknown',
 }
 
-const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'context', 'theme', 'hook', 'memory', 'rule', 'builtin', 'unknown']
+const assetTypeOrder = ['instruction', 'skill', 'mcp', 'plugin', 'extension', 'prompt', 'theme', 'hook', 'memory', 'builtin', 'unknown']
+function assetPresentationType(type: string): string {
+  return type === 'context' || type === 'rule' ? 'instruction' : type
+}
+
 const assetScopeLabelKey: Record<string, string> = {
   installation: 'assetScope.installation',
   user: 'assetScope.user',
@@ -225,9 +229,10 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   const path = asset.bindings.find(item => item.path)?.path
   const states = summarizedStates(asset)
   const scopes = assetScopeLabels(asset, t)
+  const presentationType = assetPresentationType(asset.type)
   return <div className="asset-item">
     <div className="asset-item-head">
-      <span className="asset-type">{translatedLabel(assetTypeLabelKey, asset.type, t)}</span>
+      <span className="asset-type">{translatedLabel(assetTypeLabelKey, presentationType, t)}</span>
       {scopes.slice(0, 2).map(scope => <span
         key={scope.key}
         className="asset-scope"
@@ -330,9 +335,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const grouped = useMemo(() => {
     const map = new Map<string, AgentAssetInventoryDto[]>()
     for (const asset of agent.assetInventory) {
-      const list = map.get(asset.type) ?? []
+      const presentationType = assetPresentationType(asset.type)
+      const list = map.get(presentationType) ?? []
       list.push(asset)
-      map.set(asset.type, list)
+      map.set(presentationType, list)
     }
     return assetTypeOrder.map(type => [type, map.get(type) ?? []] as const).filter(([, items]) => items.length > 0)
   }, [agent.assetInventory])
