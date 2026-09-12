@@ -213,6 +213,7 @@ export async function readManagedAssetDirectory(
 
   const rootPath = rootPathForInstallation(installation, input.root)
   if (!rootPath) throw httpError(404, `${input.root} root is unavailable`)
+  if (!isAbsolute(rootPath)) throw httpError(400, 'managed root must be absolute')
   const relativePath = normalizeRelativePath(input.relativePath ?? '')
   const { rootRealPath, targetRealPath } = await resolveManagedTarget(rootPath, relativePath)
   const targetMeta = await stat(targetRealPath)
@@ -255,6 +256,7 @@ export async function readManagedAssetFile(
 
   const rootPath = rootPathForInstallation(installation, input.root)
   if (!rootPath) throw httpError(404, `${input.root} root is unavailable`)
+  if (!isAbsolute(rootPath)) throw httpError(400, 'managed root must be absolute')
   const relativePath = normalizeRelativePath(input.relativePath)
   if (!relativePath) throw httpError(400, 'file path is required')
   if (isSensitivePath(relativePath)) throw httpError(403, 'sensitive files are not previewable')
@@ -285,8 +287,14 @@ export async function readManagedAssetFile(
 function routeMatch(pathname: string): { productId: string; kind: 'files' | 'file' } | null {
   const match = pathname.match(/^\/api\/v1\/integrations\/([^/]+)\/assets\/(files|file)$/)
   if (!match) return null
+  let productId: string
+  try {
+    productId = decodeURIComponent(match[1]!)
+  } catch {
+    throw httpError(400, 'integration id is malformed')
+  }
   return {
-    productId: decodeURIComponent(match[1]!),
+    productId,
     kind: match[2] as 'files' | 'file',
   }
 }
