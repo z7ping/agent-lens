@@ -55,7 +55,7 @@ test('management preference parser rejects reopening completed onboarding', () =
   )
 })
 
-test('Integration management route exposes unified state without inventing Installed/package state', async () => {
+test('Integration management route exposes physical package state in unified projection', async () => {
   const preferences = {
     onboarding: { completed: false },
     displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
@@ -69,6 +69,15 @@ test('Integration management route exposes unified state without inventing Insta
         integrationId: 'pi',
         productId: 'pi',
         displayName: 'Pi',
+        packageState: {
+          integrationId: 'pi',
+          installed: true,
+          installedVersion: '1.0.0-alpha.5',
+          availableVersion: '1.0.0-alpha.5',
+          compatibility: 'compatible',
+          integrity: 'verified',
+          restartRequired: false,
+        },
         enabled: {
           configured: true,
           effective: true,
@@ -120,7 +129,15 @@ test('Integration management route exposes unified state without inventing Insta
     assert.equal(response.status, 200)
     const items = response.body.items as Array<Record<string, unknown>>
     assert.equal(items.length, 1)
-    assert.equal('package' in items[0]!, false)
+    assert.deepEqual(items[0]!.packageState, {
+      integrationId: 'pi',
+      installed: true,
+      installedVersion: '1.0.0-alpha.5',
+      availableVersion: '1.0.0-alpha.5',
+      compatibility: 'compatible',
+      integrity: 'verified',
+      restartRequired: false,
+    })
     assert.equal('installed' in items[0]!, false)
   } finally {
     await new Promise<void>((resolve, reject) =>

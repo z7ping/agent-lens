@@ -183,6 +183,9 @@ function currentIntegrationManagement(): IntegrationManagementService {
     discovery: officialToolDiscovery,
     preferences: integrationPreferences,
     capturePolicy: app.context.capturePolicy,
+    ...(integrationPackages
+      ? { packageState: (integrationId: string) => integrationPackages!.state(integrationId) }
+      : {}),
     integrationStatus: productId => app.resolveIntegrationStatus(productId),
   })
   return integrationManagement

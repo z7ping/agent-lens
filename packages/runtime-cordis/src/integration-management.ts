@@ -1,3 +1,4 @@
+import type { IntegrationPackageState } from '@agent-lens/integration-packages'
 import type {
   AgentIntegrationRuntimeStatus,
   CapturePolicyConfigurationSource,
@@ -29,6 +30,7 @@ export interface IntegrationManagementItem {
   productId: string
   displayName: string
   tool?: OfficialToolDiscoveryItem | undefined
+  packageState: IntegrationPackageState | null
   enabled: IntegrationEnabledState
   availability: AgentIntegrationRuntimeStatus['availability']
   capabilities: AgentIntegrationRuntimeStatus['capabilities']
@@ -51,6 +53,7 @@ export interface IntegrationManagementOptions {
   }
   preferences: IntegrationPreferenceService
   capturePolicy: CapturePolicyService
+  packageState?(integrationId: string): IntegrationPackageState | null
   integrationStatus(
     productId: string,
   ): AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
@@ -152,6 +155,7 @@ export class IntegrationManagementService {
         productId: entry.productId,
         displayName: entry.displayName,
         ...(tool ? { tool: cloneTool(tool) } : {}),
+        packageState: this.options.packageState?.(entry.integrationId) ?? null,
         enabled: enabledState(entry.integrationId, configuration),
         availability: runtimeStatusResult.failed
           ? 'error'
