@@ -834,7 +834,9 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private persistPackageUpdatesBestEffort(runtime: OwnedRuntime, generation: number): void {
-    if (!this.startupAudit || !runtime.startupAuditResources) return
+    const startupAudit = this.startupAudit
+    const startupAuditResources = runtime.startupAuditResources
+    if (!startupAudit || !startupAuditResources) return
     const packageStatus = finalPackageUpdateStatus(runtime.packageUpdateCheck)
     if (!packageStatus || runtime.status !== 'ready' || !runtime.handle) return
 
@@ -851,17 +853,17 @@ export class DefaultPiLiveService implements PiLiveService {
       const state = await handle.state()
       if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
       const nativeSessionId = state.nativeSessionId?.trim()
-      if (!nativeSessionId || !runtime.startupAuditResources) return
+      if (!nativeSessionId) return
 
       const capturedAt = runtime.startupResourcesCapturedAt ?? new Date().toISOString()
-      await this.startupAudit.recordStartupAudit({
+      await startupAudit.recordStartupAudit({
         runtimeSessionId: runtime.id,
         attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
         attemptGeneration: runtime.generation,
         capturedAt,
         nativeSessionId,
         workspacePath: runtime.workspacePath,
-        startupResources: copyStartupResources(runtime.startupAuditResources),
+        startupResources: copyStartupResources(startupAuditResources),
         packageUpdateCheck: packageStatus,
         packageUpdates: [...runtime.packageUpdates],
         ...(runtime.packageUpdatesCheckedAt ? { packageUpdatesCheckedAt: runtime.packageUpdatesCheckedAt } : {}),

@@ -494,7 +494,7 @@ function runtimeRecord(
     id: `claude-runtime-${sha256(envelope.id).slice(0, 32)}`,
     sourceId: SOURCE_ID,
     installationId: ctx.installation.id,
-    sourceSessionNativeId: sessionId,
+    ...(sessionId ? { sourceSessionNativeId: sessionId } : {}),
     nativeType: `hook/${hookName}`,
     ...(nativeId ? { nativeId } : {}),
     occurredAt,

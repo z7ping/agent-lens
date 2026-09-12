@@ -1,4 +1,4 @@
-import type { LiveRuntimeEvent } from '@agent-lens/core'
+import type { LiveAvailability, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
@@ -49,10 +49,10 @@ export interface PiLiveStartInput {
   historyAction?: PiLiveHistoryAction | undefined
 }
 
-export interface PiLiveAvailability {
+export interface PiLiveAvailability extends LiveAvailability {
   available: boolean
   executable?: string | undefined
-  reason?: string | undefined
+  reason?: string
 }
 
 export interface PiLiveModelOption {
@@ -67,7 +67,7 @@ export interface PiLiveControls {
   thinkingLevels: string[]
 }
 
-export interface PiLiveRuntimeState {
+export interface PiLiveRuntimeState extends LiveRuntimeState {
   /** Stable Pi Live task identity. A new Worker/PID may be attached after an AgentLens Daemon restart. */
   runtimeSessionId: string
   /** Durable AgentLens Live Task creation time; preserved across Daemon recovery. */
@@ -86,13 +86,13 @@ export interface PiLiveRuntimeState {
   error?: string | undefined
   sdkVersion?: string | undefined
   runtimeMode?: 'session_runtime' | 'compatibility' | undefined
-  nativeSessionId?: string | undefined
+  nativeSessionId?: string
   sessionFile?: string | undefined
   sessionName?: string | undefined
   /** 首条用户任务的简要文本，用于在列表中识别 Pi Live 会话。 */
   taskSummary?: string | undefined
   /** Public working-directory context. Native Pi session-file paths remain private. */
-  workspacePath?: string | undefined
+  workspacePath?: string
   projectName?: string | undefined
   gitBranch?: string | undefined
   model?: unknown
@@ -105,7 +105,7 @@ export interface PiLiveRuntimeState {
   processId?: number | undefined
 }
 
-export interface PiLiveSnapshot {
+export interface PiLiveSnapshot extends LiveSnapshot {
   state: PiLiveRuntimeState
   entries: unknown[]
   leafId: string | null

@@ -545,7 +545,7 @@ export async function normalizeCodexRecord(
     }))
   } else if (topType === 'response_item' && (innerType === 'function_call' || innerType === 'custom_tool_call')) {
     const callId = stringField(payload, 'call_id')
-    const sharedEventKey = callId ? undefined : `codex-call:${record.id}`
+    const sharedEventKey = `codex-call:${record.id}`
     const name = stringField(payload, 'name') ?? innerType
     const rawInput = innerType === 'custom_tool_call' ? payload.input : payload.arguments
     let input: unknown = rawInput ?? null
@@ -578,7 +578,7 @@ export async function normalizeCodexRecord(
     }, callId ? { nativeCallId: callId } : { sharedEventKey: `tool-search:${record.id}` }))
   } else if (topType === 'response_item' && (innerType === 'function_call_output' || innerType === 'custom_tool_call_output' || innerType === 'tool_search_output')) {
     const callId = stringField(payload, 'call_id')
-    const sharedEventKey = callId ? undefined : `codex-call:${record.id}`
+    const sharedEventKey = `codex-call:${record.id}`
     const outputValue = payload.output ?? payload.result ?? payload.content
     const result = parseFunctionOutput(messageText(outputValue))
     push(candidate(record, envelope, 'tool.result', {

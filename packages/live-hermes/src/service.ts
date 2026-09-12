@@ -16,10 +16,10 @@ interface OwnedRuntime {
   nativeSessionId?: string
   status: LiveRuntimeState['status']
   events: LiveEventChannel
-  activeRunId?: string
-  streamRunId?: string
-  streamAbort?: AbortController
-  streamTask?: Promise<void>
+  activeRunId: string | undefined
+  streamRunId: string | undefined
+  streamAbort: AbortController | undefined
+  streamTask: Promise<void> | undefined
 }
 
 const TERMINAL_RUN_STATUSES = new Set([
@@ -84,6 +84,10 @@ export class DefaultHermesLiveService {
       id,
       status: 'initializing',
       events: new LiveEventChannel(id),
+      activeRunId: undefined,
+      streamRunId: undefined,
+      streamAbort: undefined,
+      streamTask: undefined,
     }
     this.runtimes.set(runtime.id, runtime)
 
