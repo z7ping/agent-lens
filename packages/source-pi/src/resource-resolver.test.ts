@@ -178,7 +178,9 @@ test('Pi context resources keep AGENTS loading separate from project trust and g
 
   try {
     const global = await piResourceResolverInternals.globalContextAssets(api, agentDir, '2026-09-11T00:00:00.000Z')
-    assert.ok(global.some(asset => asset.binding?.path === globalAgents))
+    const globalAsset = global.find(asset => asset.binding?.path === globalAgents)
+    assert.equal(globalAsset?.binding?.scope, 'user')
+    assert.equal(globalAsset?.binding?.scopeRoot, undefined)
 
     const projectAssets = await piResourceResolverInternals.projectContextAssets(
       api,
@@ -188,10 +190,14 @@ test('Pi context resources keep AGENTS loading separate from project trust and g
       '2026-09-11T00:00:00.000Z',
     )
     const agents = projectAssets.find(asset => asset.binding?.path === projectAgents)
+    assert.equal(agents?.binding?.scope, 'project')
+    assert.equal(agents?.binding?.scopeRoot, resolve(project))
     assert.equal(agents?.states?.find(state => state.state === 'enabled')?.value, true)
     assert.equal(agents?.states?.find(state => state.state === 'discoverable')?.value, true)
 
     const system = projectAssets.find(asset => asset.binding?.path === projectSystem)
+    assert.equal(system?.binding?.scope, 'project')
+    assert.equal(system?.binding?.scopeRoot, resolve(project))
     assert.equal(system?.states?.find(state => state.state === 'enabled')?.value, 'unknown')
     assert.equal(system?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
   } finally {

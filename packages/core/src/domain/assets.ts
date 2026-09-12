@@ -29,6 +29,8 @@ export interface AssetDefinition {
   upstreamIdentity?: string
 }
 
+export type AssetScope = 'installation' | 'user' | 'project' | 'workspace'
+
 export interface AssetBinding {
   id: AssetBindingId
   assetId: AssetDefinitionId
@@ -37,6 +39,8 @@ export interface AssetBinding {
   path?: string
   source?: string
   version?: string
+  scope?: AssetScope
+  scopeRoot?: string
 }
 
 export type AssetState =
@@ -82,6 +86,8 @@ export interface AssetBindingHint {
   path?: string
   source?: string
   version?: string
+  scope?: AssetScope
+  scopeRoot?: string
 }
 
 export interface AssetStateInput {

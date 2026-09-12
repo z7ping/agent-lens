@@ -39,6 +39,8 @@ export interface AgentAssetBindingDto {
   path?: string
   source?: string
   version?: string
+  scope?: 'installation' | 'user' | 'project' | 'workspace'
+  scopeRoot?: string
   states: AgentAssetStateDto[]
 }
 
