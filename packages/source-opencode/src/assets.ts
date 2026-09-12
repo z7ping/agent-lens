@@ -3,7 +3,9 @@ import { opendir, readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import {
   basename,
+  dirname,
   extname,
+  isAbsolute,
   join,
   relative,
   resolve,
@@ -264,6 +266,15 @@ async function* discoverPluginRoot(
   }
 }
 
+function configuredPluginIdentity(spec: string, configPath: string): string {
+  const local = spec.startsWith('.')
+    || isAbsolute(spec)
+    || spec.startsWith('file:')
+  return local
+    ? `opencode-local-config-plugin:${sha256(`${pathKey(dirname(configPath))}\0${spec}`)}`
+    : `opencode-package-plugin:${spec}`
+}
+
 function pluginSpecs(config: Record<string, unknown>): string[] {
   const value = Array.isArray(config.plugins)
     ? config.plugins
@@ -378,7 +389,7 @@ async function* discoverConfigAssets(
         type: 'plugin',
         canonicalName: spec,
         displayName: spec,
-        upstreamIdentity: `opencode-package-plugin:${spec}`,
+        upstreamIdentity: configuredPluginIdentity(spec, path),
       },
       binding: {
         path,
@@ -565,6 +576,7 @@ export async function* discoverOpenCodeAssets(
 }
 
 export const openCodeAssetInternals = {
+  configuredPluginIdentity,
   namedConfigEntries,
   pluginSpecs,
   readConfig,
