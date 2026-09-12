@@ -7,6 +7,7 @@ import {
   resolveCodexLocation,
   resolveHermesConfigRoots,
   resolveHermesRoots,
+  resolveOpenCodeConfigRoots,
   resolveOpenCodeRoots,
   resolvePiLocation,
   resolveToolDiscoveryRoots,
@@ -82,6 +83,21 @@ test('explicit relative product homes do not fall back to stale default discover
   })
   assert.equal(hermes.some(item => item.role === 'data'), false)
   assert.equal(hermes.some(item => item.role === 'config'), false)
+})
+
+test('OpenCode config roots use XDG config semantics independently from data roots', () => {
+  assert.equal(
+    resolveOpenCodeConfigRoots({}, home, 'linux')[0],
+    join(home, '.config', 'opencode'),
+  )
+  assert.equal(
+    resolveOpenCodeConfigRoots({ XDG_CONFIG_HOME: '/srv/xdg-config' }, home, 'linux')[0],
+    join('/srv/xdg-config', 'opencode'),
+  )
+  assert.equal(
+    resolveOpenCodeRoots({ XDG_DATA_HOME: '/srv/xdg-data' }, home, 'linux')[0],
+    join('/srv/xdg-data', 'opencode'),
+  )
 })
 
 test('Hermes and OpenCode keep their legacy non-expanding explicit home semantics', () => {
