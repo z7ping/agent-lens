@@ -254,24 +254,19 @@ async function projectRuleAssets(
   const projectRoot = await findGitRoot(cwd)
   if (!projectRoot) return []
   const assets: DiscoveredAsset[] = []
-  const seen = new Set<string>()
+  const rulesRoot = join(projectRoot, '.claude', 'rules')
 
-  for (const directory of directoriesFromProjectRoot(projectRoot, cwd)) {
-    const rulesRoot = join(directory, '.claude', 'rules')
-    for await (const path of walkMarkdownFiles(rulesRoot)) {
-      const key = pathKey(path)
-      if (seen.has(key)) continue
-      const asset = await instructionAsset(path, {
-        scope: 'project',
-        scopeRoot: projectRoot,
-        source: 'claude:project-rule',
-        capturedAt,
-        type: 'rule',
-      })
-      if (!asset) continue
-      seen.add(key)
-      assets.push(asset)
-    }
+  // Claude Code recursively discovers files *inside* the project's single
+  // .claude/rules root. It does not treat every ancestor directory as a new rules root.
+  for await (const path of walkMarkdownFiles(rulesRoot)) {
+    const asset = await instructionAsset(path, {
+      scope: 'project',
+      scopeRoot: projectRoot,
+      source: 'claude:project-rule',
+      capturedAt,
+      type: 'rule',
+    })
+    if (asset) assets.push(asset)
   }
   return assets
 }
