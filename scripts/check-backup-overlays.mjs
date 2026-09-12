@@ -12,6 +12,7 @@ const explainability = readFileSync('packages/backup-local/src/explainability.ts
 const localService = readFileSync('packages/backup-local/src/service.ts', 'utf8')
 const swr = readFileSync('packages/backup-local/src/stale-while-revalidate.ts', 'utf8')
 const plugin = readFileSync('packages/backup-local/src/plugin.ts', 'utf8')
+const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')
 
 const backupImport = main.indexOf("import './backup.css'")
 const scrollImport = main.indexOf("import './backup-scroll.css'")
@@ -35,8 +36,9 @@ for (const required of [
 }
 if (/!important\b/.test(scrollCss)) throw new Error('资产备份滚动不得依赖 !important 争夺布局所有权')
 
-if (!page.includes('onClick={() => setDetailSourceId(source.sourceId)}>数据详情</button>')) {
-  throw new Error('资产备份必须保留“数据详情”点击状态入口')
+if (!page.includes("onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button>")
+  || !officialZhCn.includes("details: '数据详情'")) {
+  throw new Error('资产备份必须保留国际化“数据详情”点击状态入口')
 }
 for (const required of [
   'className="backup-data-drawer"',
@@ -50,14 +52,14 @@ for (const forbidden of ['className="scrim show', 'className="drawer show', 'bac
   if (page.includes(forbidden)) throw new Error(`资产备份不得恢复页面自建 Overlay：${forbidden}`)
 }
 
-for (const required of ['aria-modal="true"', 'aria-labelledby={titleId}', "event.key === 'Escape'", 'previous?.focus', 'export function Dialog', 'export function Drawer']) {
+for (const required of ['aria-modal="true"', 'aria-labelledby={titleId}', "event.key === 'Escape'", 'previous?.isConnected', "previous.focus({ preventScroll: true })", 'export function Dialog', 'export function Drawer']) {
   if (!overlay.includes(required)) throw new Error(`统一 Overlay 缺少无障碍 / 生命周期契约：${required}`)
 }
 for (const required of ['position: fixed', 'z-index: 1400', 'overflow: auto', '@media (max-width: 767.98px)']) {
   if (!overlayCss.includes(required)) throw new Error(`统一 Overlay 样式缺少正式交互约束：${required}`)
 }
 
-if (!tree.includes('默认仅展开第 1 层') || !tree.includes('<details className="backup-tree-node">')) {
+if (!tree.includes("t('tree.defaultDepth')") || !officialZhCn.includes("defaultDepth: '默认仅展开第 1 层'") || !tree.includes('<details className="backup-tree-node">')) {
   throw new Error('备份目录树必须默认只展示第一层，并由用户逐级展开')
 }
 for (const required of ['.backup-root-tree', '.backup-tree-node', '.backup-tree-children', '@media (max-width: 575.98px)']) {
