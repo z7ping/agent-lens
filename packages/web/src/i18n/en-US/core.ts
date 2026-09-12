@@ -199,6 +199,8 @@ export const englishCoreMessages: LocaleMessagesDto = {
   settings: {
     openMenu: 'Open settings and maintenance menu',
     menu: 'Settings & Maintenance',
+    management: 'Management',
+    appearance: 'Appearance',
     maintenanceAndAppearance: 'Management & Appearance',
     agentsAndIntegrations: 'Agents & Integrations',
     switchToLight: 'Switch to light theme',

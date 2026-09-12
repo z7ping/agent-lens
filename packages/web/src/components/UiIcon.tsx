@@ -68,6 +68,7 @@ export type UiIconName =
   | 'exclamation'
   | 'expand'
   | 'filter'
+  | 'language'
   | 'menu'
   | 'moon'
   | 'panel-left-close'
@@ -116,6 +117,7 @@ const icons = {
   exclamation: CircleAlert,
   expand: Maximize2,
   filter: Filter,
+  language: Globe,
   menu: Menu,
   moon: Moon,
   'panel-left-close': PanelLeftClose,

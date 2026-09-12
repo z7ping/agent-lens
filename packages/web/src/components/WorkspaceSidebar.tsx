@@ -134,8 +134,8 @@ export function WorkspaceSidebar({
         ><UiIcon name="settings" size={16}/></IconButton>
 
         {settingsOpen && <section className="workspace-settings-popover" aria-label={t('settings:menu')}>
-          <section className="workspace-settings-group" aria-labelledby="workspace-settings-maintenance-title">
-            <div id="workspace-settings-maintenance-title" className="workspace-settings-group-title">{t('settings:maintenanceAndAppearance')}</div>
+          <section className="workspace-settings-group" aria-labelledby="workspace-settings-management-title">
+            <div id="workspace-settings-management-title" className="workspace-settings-group-title">{t('settings:management')}</div>
             <div className="workspace-settings-menu">
               <button
                 type="button"
@@ -162,6 +162,12 @@ export function WorkspaceSidebar({
                 <span>{t('navigation:assetBackup')}</span>
                 <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
               </button>
+            </div>
+          </section>
+
+          <section className="workspace-settings-group" aria-labelledby="workspace-settings-appearance-title">
+            <div id="workspace-settings-appearance-title" className="workspace-settings-group-title">{t('settings:appearance')}</div>
+            <div className="workspace-settings-menu">
               <button
                 type="button"
                 className="workspace-settings-menu-item"
@@ -173,8 +179,8 @@ export function WorkspaceSidebar({
                 <UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={14}/>
                 <span>{theme === 'dark' ? t('settings:switchToLight') : t('settings:switchToDark')}</span>
               </button>
+              <LocaleSelector/>
             </div>
-            <LocaleSelector/>
           </section>
 
           <section className="workspace-settings-group" aria-labelledby="workspace-settings-runtime-title">
