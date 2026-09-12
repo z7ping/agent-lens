@@ -764,7 +764,7 @@ export async function declareHermesCapabilities(_detected: DetectedSource): Prom
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail', 'runtime-hook'] },
     { sourceId: SOURCE_ID, name: 'permission', status: 'partial', captureModes: ['runtime-hook'], reason: 'Available when the optional AgentLens Hermes observer plugin is explicitly enabled' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['runtime-hook'], reason: 'Available when the optional AgentLens Hermes observer plugin is explicitly enabled' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'User-scope files and config are observable; runtime-loaded, bundled, pip and project-plugin discovery requires stronger runtime evidence' },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'User-profile assets and history-known project context files are observable; runtime-loaded assets, external skill dirs, bundled/pip plugins and project plugins require stronger runtime evidence' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'unavailable', captureModes: [], reason: 'No stable source-visible reasoning mapping is implemented' },
     { sourceId: SOURCE_ID, name: 'context', status: 'unavailable', captureModes: [], reason: 'Context lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Usage mapping is not implemented' },
