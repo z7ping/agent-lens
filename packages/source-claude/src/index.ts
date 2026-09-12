@@ -15,6 +15,7 @@ import {
   extname,
   isAbsolute,
   join,
+  relative,
   resolve,
 } from 'node:path'
 import {
@@ -414,8 +415,9 @@ export async function* ingestClaudeHistory(
 
     if (filePath && projectsDir) {
       const relativeFile = relative(projectsDir, filePath)
-      const firstSegment = relativeFile.split(/[\\/]/).find(Boolean)
-      if (firstSegment && firstSegment !== '..') {
+      const segments = relativeFile.split(/[\\/]/).filter(Boolean)
+      const firstSegment = segments[0]
+      if (segments.length >= 2 && firstSegment && firstSegment !== '..') {
         knownDataRoots.set(key, {
           cwd,
           projectDataRoot: join(projectsDir, firstSegment),
