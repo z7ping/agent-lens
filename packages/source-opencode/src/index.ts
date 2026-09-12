@@ -62,7 +62,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -335,7 +334,6 @@ export async function* ingestOpenCodeHistory(
   if (!root || ctx.abortSignal.aborted) return
   const db = openDatabase(root)
   try {
-    // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
     const sessionLimit = ctx.historyWindow?.sessionLimit
@@ -368,12 +366,20 @@ export async function startOpenCodeRuntimeCapture(
   const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
   if (!root) return { dispose() {} }
   const dbPath = join(root, DB_NAME)
-  const db = openDatabase(root)
+  let db = await exists(dbPath) ? openDatabase(root) : null
   const fingerprints = new Map<number, string>()
   let stopped = false
   let scanning = false
   let pending = false
   let watcher: SourceFileWatchHandle | null = null
+
+  const replaceDatabase = async (): Promise<void> => {
+    const previous = db
+    db = null
+    previous?.close()
+    if (stopped || ctx.abortSignal.aborted || !await exists(dbPath)) return
+    db = openDatabase(root)
+  }
 
   const scan = async (emitChanges: boolean): Promise<void> => {
     if (scanning) { pending = true; return }
@@ -381,7 +387,9 @@ export async function startOpenCodeRuntimeCapture(
     try {
       do {
         pending = false
-        const rows = recentRows(db, RUNTIME_RECENT_ROWS)
+        const active = db
+        if (!active) return
+        const rows = recentRows(active, RUNTIME_RECENT_ROWS)
         const live = new Set<number>()
         for (const row of rows) {
           live.add(row.row_id)
@@ -403,13 +411,15 @@ export async function startOpenCodeRuntimeCapture(
     }
   }
 
-  await scan(false)
+  if (db) await scan(false)
   watcher = await watchSourceFiles({
     paths: dirname(dbPath),
     signal: ctx.abortSignal,
     debounceMs: 120,
     accept: filePath => basename(filePath).startsWith(DB_NAME),
-    onFile: async () => {
+    onFile: async (filePath) => {
+      if (basename(filePath) === DB_NAME) await replaceDatabase()
+      else if (!db && await exists(dbPath)) db = openDatabase(root)
       await scan(true)
     },
   })
@@ -422,7 +432,9 @@ export async function startOpenCodeRuntimeCapture(
         await watcher.dispose()
         watcher = null
       }
-      db.close()
+      const active = db
+      db = null
+      active?.close()
     },
   }
 }
@@ -501,11 +513,11 @@ export async function normalizeOpenCodeRecord(
 
   if (type === 'text') {
     const text = stringField(part, 'text', 'content') ?? ''
-    if (role === 'user') observations.push(candidate(record, envelope, 'message.user', { text: text }))
+    if (role === 'user') observations.push(candidate(record, envelope, 'message.user', { text }))
     else if (role === 'assistant') {
       const model = stringField(message, 'modelID', 'model_id', 'model')
       observations.push(candidate(record, envelope, 'message.assistant', {
-        text: text,
+        text,
         ...(model ? { model } : {}),
       }))
     } else observations.push(candidate(record, envelope, 'unknown', { rawType: `text/${role}`, rawPayload: part }))
