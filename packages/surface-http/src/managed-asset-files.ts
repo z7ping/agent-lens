@@ -104,7 +104,7 @@ async function assertAssetsCapability(
   productId: string,
   readStatus?: IntegrationStatusReader,
 ): Promise<void> {
-  if (!readStatus) return
+  if (!readStatus) throw httpError(503, 'integration status is unavailable')
   const status = await readStatus(productId)
   if (!status) throw httpError(404, 'integration not found')
   const assets = status.capabilities.find(item => item.capability === 'assets')
