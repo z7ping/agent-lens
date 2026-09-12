@@ -354,7 +354,7 @@ export class IntegrationPackageService {
         displayName: entry.displayName,
         packageName: entry.package.packageName,
         ...(bundled ? { availableVersion: bundled.manifest.version } : {}),
-        apiVersion: entry.package.apiVersion,
+        apiVersion: bundled?.manifest.apiVersion ?? AGENT_LENS_PLUGIN_API_VERSION,
         source: 'bundled' as const,
       }
     })
@@ -536,8 +536,6 @@ export class IntegrationPackageService {
         || manifest.productId !== official.productId
         || manifest.packageName !== official.package.packageName
         || manifest.version !== item.version
-        || manifest.apiVersion !== official.package.apiVersion
-        || manifest.entryExport !== official.package.entryExport
       ) {
         throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
       }
