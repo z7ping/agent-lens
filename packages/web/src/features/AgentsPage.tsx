@@ -87,6 +87,7 @@ const assetTypeLabelKey: Record<string, string> = {
   extension: 'assetType.extension',
   hook: 'assetType.hook',
   memory: 'assetType.memory',
+  model: 'assetType.model',
   prompt: 'assetType.prompt',
   theme: 'assetType.theme',
   context: 'assetType.context',
@@ -95,7 +96,7 @@ const assetTypeLabelKey: Record<string, string> = {
   unknown: 'assetType.unknown',
 }
 
-const assetTypeOrder = ['instruction', 'skill', 'mcp', 'plugin', 'extension', 'prompt', 'theme', 'hook', 'memory', 'builtin', 'unknown']
+const assetTypeOrder = ['instruction', 'model', 'skill', 'mcp', 'plugin', 'extension', 'prompt', 'theme', 'hook', 'memory', 'builtin', 'unknown']
 function assetPresentationType(type: string): string {
   return type === 'context' || type === 'rule' ? 'instruction' : type
 }
@@ -230,9 +231,11 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   const states = summarizedStates(asset)
   const scopes = assetScopeLabels(asset, t)
   const presentationType = assetPresentationType(asset.type)
+  const defaultModel = asset.type === 'model' && asset.bindings.some(binding => binding.source?.startsWith('pi:model:default:'))
   return <div className="asset-item">
     <div className="asset-item-head">
       <span className="asset-type">{translatedLabel(assetTypeLabelKey, presentationType, t)}</span>
+      {defaultModel && <span className="asset-scope">{t('piGuidance.defaultModel')}</span>}
       {scopes.slice(0, 2).map(scope => <span
         key={scope.key}
         className="asset-scope"
@@ -328,6 +331,8 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
   )
   const skills = agent.assetInventory.filter(asset => asset.type === 'skill')
   const discoverableSkills = skills.filter(asset => stateValue(asset, 'discoverable') === true)
+  const models = agent.assetInventory.filter(asset => asset.type === 'model')
+  const defaultModels = models.filter(asset => asset.bindings.some(binding => binding.source?.startsWith('pi:model:default:')))
   const extensions = agent.assetInventory.filter(asset => asset.type === 'extension')
   const uncertainExtensions = extensions.filter(asset => stateValue(asset, 'discoverable') === 'unknown')
   const packageResources = agent.assetInventory.filter(isPiPackageResource)
@@ -346,6 +351,15 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
         : <div className="pi-guidance-item" data-tone="warning">
             <UiIcon name="alert" size={15}/>
             <span><b>{t('piGuidance.noProjectRulesTitle')}</b><small>{t('piGuidance.noProjectRulesDescription')}</small></span>
+          </div>}
+      {defaultModels.length
+        ? <div className="pi-guidance-item" data-tone="success">
+            <UiIcon name="check" size={15}/>
+            <span><b>{t('piGuidance.defaultModelReadyTitle')}</b><small>{t('piGuidance.defaultModelReadyDescription', { models: defaultModels.map(asset => asset.canonicalName).slice(0, 3).join(' · ') })}</small></span>
+          </div>
+        : <div className="pi-guidance-item" data-tone="neutral">
+            <UiIcon name="exclamation" size={15}/>
+            <span><b>{t('piGuidance.noDefaultModelTitle')}</b><small>{t('piGuidance.noDefaultModelDescription')}</small></span>
           </div>}
       {skills.length
         ? <div className="pi-guidance-item" data-tone={discoverableSkills.length ? 'success' : 'neutral'}>
@@ -373,6 +387,7 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
 
 function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rules: AgentAssetInventoryDto[] }) {
   const { t } = useTranslation('agents')
+  const models = agent.assetInventory.filter(asset => asset.type === 'model')
   const skills = agent.assetInventory.filter(asset => asset.type === 'skill')
   const extensions = agent.assetInventory.filter(asset => asset.type === 'extension')
   const prompts = agent.assetInventory.filter(asset => asset.type === 'prompt')
@@ -380,6 +395,7 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
 
   const metrics = [
     { key: 'rules', label: t('piGuidance.projectRules'), count: rules.length },
+    { key: 'models', label: t('assetType.model'), count: models.length },
     { key: 'skills', label: t('assetType.skill'), count: skills.length },
     { key: 'extensions', label: t('assetType.extension'), count: extensions.length },
     { key: 'prompts', label: t('assetType.prompt'), count: prompts.length },
