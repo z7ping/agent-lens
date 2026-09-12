@@ -8,7 +8,7 @@ import {
   type SourceParserReplayResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
-import type { DetectedSource, Host, SourceDefinition, SourceHistoryWindow } from '@agent-lens/core'
+import type { AgentInstallation, DetectedSource, Host, SourceDefinition, SourceHistoryWindow } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
 export type RegisteredSourceStage = 'detect' | 'history' | 'assets' | 'capture'
@@ -39,7 +39,7 @@ export interface ParserReplayExecutionOptions {
   cooperate?: () => Promise<void>
 }
 
-async function runtimeHost(ctx: AgentLensContext): Promise<Host> {
+export async function resolveRuntimeHost(ctx: AgentLensContext): Promise<Host> {
   return ctx.identity.resolveHost({
     name: hostname(),
     platform: platform(),
@@ -55,12 +55,12 @@ function sourceEnabled(ctx: AgentLensContext, source: SourceDefinition): boolean
   return ctx.capturePolicy.isSourceEnabled(source.manifest.sourceId)
 }
 
-async function registerDetectedSource(
+export function resolveDetectedSourceInstallation(
   ctx: AgentLensContext,
   host: Host,
   detected: DetectedSource,
-): Promise<void> {
-  const installation = await ctx.identity.resolveInstallation({
+): Promise<AgentInstallation> {
+  return ctx.identity.resolveInstallation({
     hostId: host.id,
     productId: detected.productId,
     ...(detected.executable ? { executable: detected.executable } : {}),
@@ -68,6 +68,14 @@ async function registerDetectedSource(
     ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
     ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
   })
+}
+
+async function registerDetectedSource(
+  ctx: AgentLensContext,
+  host: Host,
+  detected: DetectedSource,
+): Promise<void> {
+  const installation = await resolveDetectedSourceInstallation(ctx, host, detected)
   emitDetected(ctx, detected.sourceId, installation.id)
 }
 
@@ -75,7 +83,7 @@ export async function prepareRegisteredSources(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
 ): Promise<RegisteredSourcePreparation> {
-  const host = await runtimeHost(ctx)
+  const host = await resolveRuntimeHost(ctx)
   // Detection is read-only capability discovery and must stay independent from
   // the user's Enabled choice. History/assets/runtime capture remain gated by
   // sourceEnabled() in their execution stages below.

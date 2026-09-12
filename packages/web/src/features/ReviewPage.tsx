@@ -196,6 +196,55 @@ function numberValue(record: Record<string, JsonValue>, ...keys: string[]): numb
   return undefined
 }
 
+function arrayCount(value: JsonValue | undefined): number {
+  return Array.isArray(value) ? value.length : 0
+}
+
+function runtimeStartupSummary(value: JsonValue): string {
+  const payload = payloadRecord(value)
+  const resources = payload.resources
+  if (!resources || typeof resources !== 'object' || Array.isArray(resources)) {
+    return agentLensI18n.t('review:local.event.runtimeStartupNotCaptured')
+  }
+  const record = payloadRecord(resources)
+  const counts = {
+    contexts: arrayCount(record.contexts),
+    skills: arrayCount(record.skills),
+    prompts: arrayCount(record.prompts),
+    extensions: arrayCount(record.extensions),
+    themes: arrayCount(record.themes),
+  }
+  const hasKnownResources = Object.values(counts).some(count => count > 0)
+  const incomplete = arrayCount(record.diagnostics) > 0
+  const parts = [incomplete && !hasKnownResources
+    ? agentLensI18n.t('review:local.event.runtimeResourcesIncomplete')
+    : agentLensI18n.t('review:local.event.runtimeResourceCounts', counts)]
+  if (incomplete && hasKnownResources) parts.push(agentLensI18n.t('review:local.event.runtimeResourcesPartial'))
+  const packageStatus = typeof payload.packageUpdateCheck === 'string' ? payload.packageUpdateCheck : ''
+  if (packageStatus === 'complete') {
+    parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesCount', {
+      count: arrayCount(payload.packageUpdates),
+    }))
+  } else if (packageStatus === 'unavailable') {
+    parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesUnavailable'))
+  } else if (packageStatus === 'failed') {
+    parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesFailed'))
+  }
+  return parts.join(' · ')
+}
+
+function runtimeStartupJson(value: JsonValue): string {
+  const payload = payloadRecord(value)
+  const resources = payload.resources
+  if (resources === undefined) return ''
+  const detail: Record<string, JsonValue> = { resources }
+  for (const key of ['packageUpdateCheck', 'packageUpdates', 'packageUpdatesCheckedAt']) {
+    const item = payload[key]
+    if (item !== undefined) detail[key] = item
+  }
+  return JSON.stringify(detail, null, 2)
+}
+
 const evidenceCaptureKey: Record<TimelineEvidenceDto['captureMethod'], string> = {
   'runtime-hook': 'review:local.evidence.capture.runtimeHook',
   'native-log': 'review:local.evidence.capture.nativeLog',
@@ -260,6 +309,7 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
 }
 
 function sourceEventLabel(node: ReviewEventNodeDto): string {
+  if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupInfo')
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
@@ -292,6 +342,7 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
 function sourceEventSummary(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status')
+  if (node.kind === 'runtime.startup') return runtimeStartupSummary(node.payload)
   if (node.kind === 'model.changed' || node.kind === 'model.call') {
     const model = stringValue(payload, 'model', 'modelName', 'model_name')
     const provider = stringValue(payload, 'provider', 'modelProvider', 'model_provider')
@@ -545,6 +596,9 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     : node.type === 'message'
       ? brief(node.text, 280)
       : ''
+  const runtimeResources = node.type === 'event' && node.kind === 'runtime.startup'
+    ? runtimeStartupJson(node.payload)
+    : ''
 
   return <Drawer
     open
@@ -561,9 +615,11 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     {tab === 'detail' && <>
       {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
         <h3 className="section-label">{t('local.event.summary')}</h3>
-        {node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
-          ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
-          : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
+        {runtimeResources
+          ? <CopyableCodeBlock className="raw-json" copyValue={runtimeResources}>{runtimeResources}</CopyableCodeBlock>
+          : node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
+            ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
+            : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
       </section>}
     </>}
     {tab === 'evidence' && <section className="inspector-section">

@@ -5,8 +5,9 @@ import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
+import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
-import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -26,7 +27,11 @@ interface OwnedRuntime {
   initializationElapsedMs: number
   initializationTimings: PiLiveInitializationTiming[]
   startupResources?: PiLiveStartupResources | undefined
+  startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
+  packageUpdates: PiLivePackageUpdate[]
+  packageUpdateCheck?: PiLivePackageUpdateCheckStatus | undefined
+  packageUpdatesCheckedAt?: string | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined
   workspacePath: string
   projectName: string
@@ -35,6 +40,14 @@ interface OwnedRuntime {
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
   recoveryCheckpointTask?: Promise<void> | undefined
+  startupResourcesCapturedAt?: string | undefined
+  startupAuditCompleted?: string | undefined
+  startupAuditPending?: string | undefined
+  startupAuditTask?: Promise<void> | undefined
+  startupAuditProbeTask?: Promise<void> | undefined
+  startupPackageAuditCompleted?: string | undefined
+  startupPackageAuditPending?: string | undefined
+  startupPackageAuditTask?: Promise<void> | undefined
 }
 
 function taskSummary(message: string): string | undefined {
@@ -106,8 +119,9 @@ function textList(value: unknown, limit = 240): string[] {
 }
 
 function startupResources(value: unknown): PiLiveStartupResources | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const resources = record(value)
-  const result: PiLiveStartupResources = {
+  return {
     contexts: textList(resources.contexts),
     skills: textList(resources.skills),
     prompts: textList(resources.prompts),
@@ -115,7 +129,48 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
     themes: textList(resources.themes),
     diagnostics: textList(resources.diagnostics, 80),
   }
-  return Object.values(result).some(items => items.length) ? result : undefined
+}
+
+function packageUpdates(value: unknown): PiLivePackageUpdate[] {
+  if (!Array.isArray(value)) return []
+  const updates: PiLivePackageUpdate[] = []
+  for (const item of value) {
+    const row = record(item)
+    if (typeof row.displayName !== 'string') continue
+    const displayName = row.displayName.trim()
+    if (!displayName) continue
+    if (row.type !== 'npm' && row.type !== 'git') continue
+    if (row.scope !== 'user' && row.scope !== 'project') continue
+    updates.push({
+      displayName: displayName.slice(0, 240),
+      type: row.type,
+      scope: row.scope,
+    })
+  }
+  return updates.slice(0, 240)
+}
+
+function packageUpdateStatus(value: unknown): PiLivePackageUpdateCheckStatus | undefined {
+  return value === 'checking' || value === 'complete' || value === 'unavailable' || value === 'failed'
+    ? value
+    : undefined
+}
+
+function finalPackageUpdateStatus(
+  value: PiLivePackageUpdateCheckStatus | undefined,
+): Exclude<PiLivePackageUpdateCheckStatus, 'checking'> | undefined {
+  return value === 'complete' || value === 'unavailable' || value === 'failed' ? value : undefined
+}
+
+function copyStartupResources(resources: PiLiveStartupResources): PiLiveStartupResources {
+  return {
+    contexts: [...resources.contexts],
+    skills: [...resources.skills],
+    prompts: [...resources.prompts],
+    extensions: [...resources.extensions],
+    themes: [...resources.themes],
+    diagnostics: [...resources.diagnostics],
+  }
 }
 
 function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefined {
@@ -162,7 +217,11 @@ export class DefaultPiLiveService implements PiLiveService {
   private recoveryLoaded = false
   private disposed = false
 
-  constructor(dependency?: PiSdkLoader | PiRuntimeHost, recoveryStore?: PiLiveRecoveryStore) {
+  constructor(
+    dependency?: PiSdkLoader | PiRuntimeHost,
+    recoveryStore?: PiLiveRecoveryStore,
+    private readonly startupAudit?: PiLiveStartupAuditSink,
+  ) {
     this.host = typeof dependency === 'function' ? new InProcessPiRuntimeHost(dependency) : dependency ?? new WorkerPiRuntimeHost()
     this.recoveryStore = recoveryStore
   }
@@ -230,7 +289,19 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
     runtime.startupResources = undefined
+    runtime.startupAuditResources = undefined
+    runtime.startupResourcesCapturedAt = undefined
+    runtime.startupAuditCompleted = undefined
+    runtime.startupAuditPending = undefined
+    runtime.startupAuditTask = undefined
+    runtime.startupAuditProbeTask = undefined
+    runtime.startupPackageAuditCompleted = undefined
+    runtime.startupPackageAuditPending = undefined
+    runtime.startupPackageAuditTask = undefined
     runtime.startupOutput = []
+    runtime.packageUpdates = []
+    runtime.packageUpdateCheck = undefined
+    runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
@@ -262,6 +333,7 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: 0,
       initializationTimings: [],
       startupOutput: [],
+      packageUpdates: [],
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -373,7 +445,18 @@ export class DefaultPiLiveService implements PiLiveService {
           }
           if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
         } else if (event.type === 'runtime_resources') {
-          runtime.startupResources = startupResources(event.resources) ?? runtime.startupResources
+          const resources = startupResources(event.resources)
+          if (resources) {
+            runtime.startupResources = resources
+            this.updateStartupAuditCandidate(runtime, resources)
+          }
+        } else if (event.type === 'package_updates') {
+          runtime.packageUpdates = packageUpdates(event.updates)
+          runtime.packageUpdateCheck = packageUpdateStatus(event.status) ?? runtime.packageUpdateCheck
+          if (finalPackageUpdateStatus(runtime.packageUpdateCheck)) {
+            runtime.packageUpdatesCheckedAt = new Date().toISOString()
+            this.persistPackageUpdatesBestEffort(runtime, generation)
+          }
         } else if (event.type === 'runtime_output') {
           if (typeof event.message === 'string' && event.message.trim()) {
             runtime.startupOutput = [...runtime.startupOutput, event.message.trim()].slice(-80)
@@ -427,14 +510,24 @@ export class DefaultPiLiveService implements PiLiveService {
 
       if (readyState) {
         this.persistSessionIfChanged(runtime, readyState)
+        this.updateRuntimeResources(runtime, readyState)
+        this.persistStartupAuditBestEffort(runtime, readyState)
+        this.persistPackageUpdatesBestEffort(runtime, generation)
       } else {
-        void handle.state().then(state => {
+        let probe: Promise<void>
+        probe = handle.state().then(state => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.persistSessionIfChanged(runtime, state)
+          this.updateRuntimeResources(runtime, state)
+          this.persistStartupAuditBestEffort(runtime, state)
+          this.persistPackageUpdatesBestEffort(runtime, generation)
         }).catch(error => {
           if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
           this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
+        }).finally(() => {
+          if (runtime.startupAuditProbeTask === probe) runtime.startupAuditProbeTask = undefined
         })
+        runtime.startupAuditProbeTask = probe
       }
     } catch (error) {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
@@ -467,12 +560,29 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }
     const snapshot = await runtime.handle.snapshot(since)
     this.persistSessionIfChanged(runtime, snapshot.state)
+    this.updateRuntimeResources(runtime, snapshot.state)
+    this.persistStartupAuditBestEffort(runtime, snapshot.state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
 
   async controls(id: string): Promise<PiLiveControls> { return (await this.readyRuntime(id)).handle!.controls() }
-  async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> { const runtime = await this.readyRuntime(id); return this.decorateReadyState(runtime, await runtime.handle!.setModel(provider, modelId)) }
-  async setThinkingLevel(id: string, level: string): Promise<PiLiveRuntimeState> { const runtime = await this.readyRuntime(id); return this.decorateReadyState(runtime, await runtime.handle!.setThinkingLevel(level)) }
+  async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
+    const runtime = await this.readyRuntime(id)
+    const state = await runtime.handle!.setModel(provider, modelId)
+    this.updateRuntimeResources(runtime, state)
+    this.persistStartupAuditBestEffort(runtime, state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+    return this.decorateReadyState(runtime, state)
+  }
+  async setThinkingLevel(id: string, level: string): Promise<PiLiveRuntimeState> {
+    const runtime = await this.readyRuntime(id)
+    const state = await runtime.handle!.setThinkingLevel(level)
+    this.updateRuntimeResources(runtime, state)
+    this.persistStartupAuditBestEffort(runtime, state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+    return this.decorateReadyState(runtime, state)
+  }
   async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
     if (!message.trim()) return
     const runtime = await this.readyRuntime(id)
@@ -505,6 +615,18 @@ export class DefaultPiLiveService implements PiLiveService {
     await this.ensureRecoveryLoaded()
     const runtime = this.runtimes.get(id)
     if (runtime) {
+      await runtime.startupAuditProbeTask?.catch(() => undefined)
+      if (runtime.status === 'ready' && runtime.handle) {
+        const state = await runtime.handle.state().catch(() => undefined)
+        if (state) {
+          this.persistSessionIfChanged(runtime, state)
+          this.updateRuntimeResources(runtime, state)
+          this.persistStartupAuditBestEffort(runtime, state)
+          this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+        }
+      }
+      await runtime.startupAuditTask?.catch(() => undefined)
+      await runtime.startupPackageAuditTask?.catch(() => undefined)
       await this.terminateRuntime(runtime, true)
       await runtime.recoveryCheckpointTask?.catch(() => undefined)
     }
@@ -518,11 +640,21 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtimes = [...this.runtimes.values()]
     await Promise.allSettled(runtimes.map(async runtime => {
       await runtime.recoveryCheckpointTask?.catch(() => undefined)
+      await runtime.startupAuditProbeTask?.catch(() => undefined)
+      await runtime.startupAuditTask?.catch(() => undefined)
+      await runtime.startupPackageAuditTask?.catch(() => undefined)
       if (runtime.status === 'ready' && runtime.handle) {
         const state = await runtime.handle.state().catch(() => undefined)
-        if (state?.sessionFile) {
-          this.adoptRuntimeSession(runtime, state.sessionFile)
-          await this.persistRuntime(runtime).catch(error => this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error))
+        if (state) {
+          if (state.sessionFile) {
+            this.adoptRuntimeSession(runtime, state.sessionFile)
+            await this.persistRuntime(runtime).catch(error => this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error))
+          }
+          this.updateRuntimeResources(runtime, state)
+          this.persistStartupAuditBestEffort(runtime, state)
+          this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+          await runtime.startupAuditTask?.catch(() => undefined)
+          await runtime.startupPackageAuditTask?.catch(() => undefined)
         }
       }
       await this.terminateRuntime(runtime, false)
@@ -575,7 +707,9 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
       this.persistSessionIfChanged(runtime, state)
-      if (state.startupResources) runtime.startupResources = state.startupResources
+      this.updateRuntimeResources(runtime, state)
+      this.persistStartupAuditBestEffort(runtime, state)
+      this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
       return this.decorateReadyState(runtime, state)
     }
     return {
@@ -587,6 +721,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
+      ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
+      ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
@@ -603,8 +739,12 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private decorateReadyState(runtime: OwnedRuntime, state: PiLiveRuntimeState): PiLiveRuntimeState {
+    const safeState = { ...state }
+    delete safeState.startupResources
+    delete safeState.packageUpdates
+    delete safeState.packageUpdateCheck
     return {
-      ...state,
+      ...safeState,
       runtimeSessionId: runtime.id,
       startedAt: runtime.createdAt,
       status: 'ready',
@@ -613,6 +753,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
+      ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
+      ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
@@ -621,6 +763,124 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
     }
+  }
+
+  private updateStartupAuditCandidate(runtime: OwnedRuntime, resources: PiLiveStartupResources): void {
+    const attempt = `${runtime.generation}:${runtime.initializationStartedAt}`
+    if (runtime.startupAuditCompleted === attempt || runtime.startupAuditPending === attempt) return
+    runtime.startupAuditResources = copyStartupResources(resources)
+    runtime.startupResourcesCapturedAt = new Date().toISOString()
+  }
+
+  private updateRuntimeResources(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    const status = packageUpdateStatus(state.packageUpdateCheck)
+    if (status) {
+      runtime.packageUpdateCheck = status
+      if (finalPackageUpdateStatus(status) && !runtime.packageUpdatesCheckedAt) {
+        runtime.packageUpdatesCheckedAt = new Date().toISOString()
+      }
+    }
+    if (state.packageUpdates !== undefined) runtime.packageUpdates = packageUpdates(state.packageUpdates)
+    const resources = startupResources(state.startupResources)
+    if (!resources) return
+    runtime.startupResources = resources
+    this.updateStartupAuditCandidate(runtime, resources)
+  }
+
+  private persistStartupAuditBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    if (!this.startupAudit || !runtime.startupAuditResources) return
+    const nativeSessionId = state.nativeSessionId?.trim()
+    if (!nativeSessionId) return
+
+    const attempt = `${runtime.generation}:${runtime.initializationStartedAt}`
+    if (runtime.startupAuditCompleted === attempt || runtime.startupAuditPending === attempt) return
+
+    const capturedAt = runtime.startupResourcesCapturedAt ?? new Date().toISOString()
+    const packageStatus = finalPackageUpdateStatus(runtime.packageUpdateCheck)
+    const snapshot = {
+      runtimeSessionId: runtime.id,
+      attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
+      attemptGeneration: runtime.generation,
+      capturedAt,
+      nativeSessionId,
+      workspacePath: runtime.workspacePath,
+      startupResources: copyStartupResources(runtime.startupAuditResources),
+      ...(packageStatus ? { packageUpdateCheck: packageStatus } : {}),
+      ...(packageStatus ? { packageUpdates: [...runtime.packageUpdates] } : {}),
+      ...(packageStatus && runtime.packageUpdatesCheckedAt
+        ? { packageUpdatesCheckedAt: runtime.packageUpdatesCheckedAt }
+        : {}),
+      ...(runtime.input.executable ? { executable: runtime.input.executable } : {}),
+      ...(state.sdkVersion ?? runtime.capabilities?.sdkVersion
+        ? { sdkVersion: state.sdkVersion ?? runtime.capabilities?.sdkVersion }
+        : {}),
+      ...(state.sessionName ?? runtime.input.name
+        ? { sessionName: state.sessionName ?? runtime.input.name }
+        : {}),
+    }
+
+    runtime.startupAuditPending = attempt
+    let task: Promise<void>
+    task = this.startupAudit.recordStartupAudit(snapshot).then(() => {
+      if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
+      if (packageStatus) runtime.startupPackageAuditCompleted = attempt
+    }).catch(error => {
+      console.warn('[AgentLens] Pi Live startup audit failed', error)
+    }).finally(() => {
+      if (runtime.startupAuditPending === attempt) runtime.startupAuditPending = undefined
+      if (runtime.startupAuditTask === task) runtime.startupAuditTask = undefined
+    })
+    runtime.startupAuditTask = task
+  }
+
+  private persistPackageUpdatesBestEffort(runtime: OwnedRuntime, generation: number): void {
+    if (!this.startupAudit || !runtime.startupAuditResources) return
+    const packageStatus = finalPackageUpdateStatus(runtime.packageUpdateCheck)
+    if (!packageStatus || runtime.status !== 'ready' || !runtime.handle) return
+
+    const attempt = `${runtime.generation}:${runtime.initializationStartedAt}`
+    if (runtime.startupPackageAuditCompleted === attempt || runtime.startupPackageAuditPending === attempt) return
+
+    runtime.startupPackageAuditPending = attempt
+    const handle = runtime.handle
+    let task: Promise<void>
+    task = (async () => {
+      await runtime.startupAuditTask?.catch(() => undefined)
+      if (runtime.startupPackageAuditCompleted === attempt) return
+      if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+      const state = await handle.state()
+      if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+      const nativeSessionId = state.nativeSessionId?.trim()
+      if (!nativeSessionId || !runtime.startupAuditResources) return
+
+      const capturedAt = runtime.startupResourcesCapturedAt ?? new Date().toISOString()
+      await this.startupAudit.recordStartupAudit({
+        runtimeSessionId: runtime.id,
+        attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
+        attemptGeneration: runtime.generation,
+        capturedAt,
+        nativeSessionId,
+        workspacePath: runtime.workspacePath,
+        startupResources: copyStartupResources(runtime.startupAuditResources),
+        packageUpdateCheck: packageStatus,
+        packageUpdates: [...runtime.packageUpdates],
+        ...(runtime.packageUpdatesCheckedAt ? { packageUpdatesCheckedAt: runtime.packageUpdatesCheckedAt } : {}),
+        ...(runtime.input.executable ? { executable: runtime.input.executable } : {}),
+        ...(state.sdkVersion ?? runtime.capabilities?.sdkVersion
+          ? { sdkVersion: state.sdkVersion ?? runtime.capabilities?.sdkVersion }
+          : {}),
+        ...(state.sessionName ?? runtime.input.name
+          ? { sessionName: state.sessionName ?? runtime.input.name }
+          : {}),
+      })
+      if (runtime.startupPackageAuditPending === attempt) runtime.startupPackageAuditCompleted = attempt
+    })().catch(error => {
+      console.warn('[AgentLens] Pi Live package update audit failed', error)
+    }).finally(() => {
+      if (runtime.startupPackageAuditPending === attempt) runtime.startupPackageAuditPending = undefined
+      if (runtime.startupPackageAuditTask === task) runtime.startupPackageAuditTask = undefined
+    })
+    runtime.startupPackageAuditTask = task
   }
 
   private captureTaskSummary(runtime: OwnedRuntime, message: string): void {

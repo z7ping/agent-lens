@@ -98,6 +98,7 @@ export function PiStartupDisclosure({
   const sdkVersion = state.sdkVersion || state.capabilities?.sdkVersion
   const mode = runtimeModeLabel(state)
   const resources = state.startupResources
+  const resourcesKnown = resources !== undefined
   const resourceGroups = [
     { label: t('startup.resource.context'), values: resources?.contexts ?? [] },
     { label: t('startup.resource.skills'), values: resources?.skills ?? [] },
@@ -105,7 +106,23 @@ export function PiStartupDisclosure({
     { label: t('startup.resource.extensions'), values: resources?.extensions ?? [] },
     { label: t('startup.resource.themes'), values: resources?.themes ?? [] },
   ].filter(group => group.values.length)
-  const resourceSummary = resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · ')
+  const resourceDiagnostics = resources?.diagnostics ?? []
+  const resourceReadIncomplete = resourceDiagnostics.length > 0
+  const packageUpdates = state.packageUpdates ?? []
+  const packageUpdateSummary = packageUpdates.length
+    ? t('startup.packageUpdatesAvailable', { count: packageUpdates.length })
+    : ''
+  const resourceSummary = resourceGroups.length
+    ? [
+        resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · '),
+        ...(resourceReadIncomplete ? [t('startup.resource.partialSummary')] : []),
+      ].join(' · ')
+    : resourcesKnown
+      ? resourceReadIncomplete
+        ? t('startup.resource.partialSummary')
+        : t('startup.resource.noneSummary')
+      : ''
+  const readySummary = [resourceSummary, packageUpdateSummary].filter(Boolean).join(' · ')
   const startupOutput = state.startupOutput ?? []
 
   const body = <div className="pi-startup-body">
@@ -129,6 +146,9 @@ export function PiStartupDisclosure({
       {mode && <span>{mode}</span>}
       {state.processId && <span>Worker PID {state.processId}</span>}
     </div>}
+    {resourcesKnown && resourceGroups.length === 0 && <div className="pi-startup-diagnostics">
+      <b>{t('startup.resource.title')}</b><span>{resourceReadIncomplete ? t('startup.resource.incomplete') : t('startup.resource.noneLoaded')}</span>
+    </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
       <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
       <div className="pi-startup-resources" aria-label={t('startup.resourcesAria')}>
@@ -137,6 +157,27 @@ export function PiStartupDisclosure({
         </div>)}
       </div>
     </details>}
+    {packageUpdates.length > 0 && <details className="pi-startup-resource-details">
+      <summary>{packageUpdateSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
+      <div className="pi-startup-resources" aria-label={t('startup.packageUpdates')}>
+        {packageUpdates.map((update, index) => <div className="pi-startup-resource-row" key={`${update.scope}:${update.type}:${update.displayName}:${index}`}>
+          <b>{update.displayName}</b>
+          <span>{update.scope === 'project' ? t('startup.packageScopeProject') : t('startup.packageScopeUser')} · {update.type}</span>
+        </div>)}
+      </div>
+    </details>}
+    {packageUpdates.length === 0 && state.packageUpdateCheck === 'complete' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdatesCurrent')}</span>
+    </div>}
+    {packageUpdates.length === 0 && state.packageUpdateCheck === 'checking' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateChecking')}</span>
+    </div>}
+    {state.packageUpdateCheck === 'unavailable' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateUnavailable')}</span>
+    </div>}
+    {state.packageUpdateCheck === 'failed' && <div className="pi-startup-diagnostics">
+      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateFailed')}</span>
+    </div>}
     {showAllEvents && startupOutput.length > 0 && <div className="pi-startup-output">
       <b>{t('startup.startupOutput')}</b><CopyableCodeBlock copyValue={startupOutput.join('\n')}>{startupOutput.join('\n')}</CopyableCodeBlock>
     </div>}
@@ -160,7 +201,7 @@ export function PiStartupDisclosure({
   >
     <summary>
       <span className="pi-startup-summary-state" aria-hidden="true"/>
-      <span className="pi-startup-summary-copy"><b>{t('startup.ready')}</b>{resourceSummary && <small>{resourceSummary}</small>}</span>
+      <span className="pi-startup-summary-copy"><b>{t('startup.ready')}</b>{readySummary && <small>{readySummary}</small>}</span>
       <span className="pi-startup-summary-time">{formatPiStartupDuration(elapsed)}</span>
       <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
     </summary>

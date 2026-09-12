@@ -75,6 +75,7 @@ function parseInitializationTimings(value: unknown): NonNullable<PiLiveStateDto[
 }
 
 function parseStartupResources(value: unknown): NonNullable<PiLiveStateDto['startupResources']> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const row = record(value)
   const list = (item: unknown, limit = 240) => Array.isArray(item)
     ? [...new Set(item.filter((entry): entry is string => typeof entry === 'string').map(entry => entry.trim()).filter(Boolean))].slice(0, limit)
@@ -87,7 +88,29 @@ function parseStartupResources(value: unknown): NonNullable<PiLiveStateDto['star
     themes: list(row.themes),
     diagnostics: list(row.diagnostics, 80),
   }
-  return Object.values(resources).some(items => items.length) ? resources : undefined
+  return resources
+}
+
+function parsePackageUpdates(value: unknown): NonNullable<PiLiveStateDto['packageUpdates']> {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    const row = record(item)
+    const displayName = stringValue(row.displayName).trim()
+    if (!displayName) return []
+    if (row.type !== 'npm' && row.type !== 'git') return []
+    if (row.scope !== 'user' && row.scope !== 'project') return []
+    return [{
+      displayName,
+      type: row.type,
+      scope: row.scope,
+    }]
+  }).slice(0, 240)
+}
+
+function parsePackageUpdateCheck(value: unknown): PiLiveStateDto['packageUpdateCheck'] {
+  return value === 'checking' || value === 'complete' || value === 'unavailable' || value === 'failed'
+    ? value
+    : undefined
 }
 
 function mergeSnapshot(previous: PiLiveSnapshotDto | null, next: PiLiveSnapshotDto): PiLiveSnapshotDto {
@@ -623,6 +646,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           } else if (type === 'runtime_resources') {
             const startupResources = parseStartupResources(event.resources)
             if (startupResources) statePatch = { ...statePatch, startupResources }
+          } else if (type === 'package_updates') {
+            const packageUpdateCheck = parsePackageUpdateCheck(event.status)
+            statePatch = {
+              ...statePatch,
+              ...(packageUpdateCheck ? { packageUpdateCheck } : {}),
+              packageUpdates: parsePackageUpdates(event.updates),
+            }
           } else if (type === 'runtime_output') {
             const message = stringValue(event.message).trim()
             if (message) {

@@ -10,6 +10,14 @@ export interface PiLiveInitializationTimingDto {
   durationMs: number
 }
 
+export interface PiLivePackageUpdateDto {
+  displayName: string
+  type: 'npm' | 'git'
+  scope: 'user' | 'project'
+}
+
+export type PiLivePackageUpdateCheckStatusDto = 'checking' | 'complete' | 'unavailable' | 'failed'
+
 export interface PiLiveStartupResourcesDto {
   contexts: string[]
   skills: string[]
@@ -79,6 +87,8 @@ export interface PiLiveStateDto {
   initializationElapsedMs?: number | undefined
   initializationTimings?: PiLiveInitializationTimingDto[] | undefined
   startupResources?: PiLiveStartupResourcesDto | undefined
+  packageUpdates?: PiLivePackageUpdateDto[] | undefined
+  packageUpdateCheck?: PiLivePackageUpdateCheckStatusDto | undefined
   startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilitiesDto | undefined
   error?: string | undefined
