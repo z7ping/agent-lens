@@ -220,6 +220,14 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
       executable: { commands: ['opencode', 'opencode2'] },
       roots: [
         {
+          id: 'config',
+          role: 'config',
+          candidates: [
+            { envVar: 'XDG_CONFIG_HOME', append: ['opencode'], expandHome: false },
+            { path: '~/.config/opencode' },
+          ],
+        },
+        {
           id: 'data',
           role: 'data',
           marker: OPENCODE_DB_NAME,
