@@ -514,9 +514,9 @@
 .copy-link:hover,
 .show-more-button:hover { background: var(--al-accent-soft); }
 
-.assembly-list,
+.runtime-config-list,
 .capability-list { padding: 2px 18px 14px; }
-.assembly-list > div,
+.runtime-config-list > div,
 .capability-row {
   display: flex;
   min-height: 32px;
@@ -528,11 +528,11 @@
   background: var(--al-soft-2);
   font-size: 12px;
 }
-.assembly-list span { min-width: 72px; color: var(--al-muted); }
-.assembly-list code { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
-.assembly-row code { flex: 1 1 auto; }
-.assembly-row .copy-link,
-.assembly-row .btn { flex: 0 0 auto; }
+.runtime-config-list span { min-width: 72px; color: var(--al-muted); }
+.runtime-config-list code { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
+.runtime-config-row code { flex: 1 1 auto; }
+.runtime-config-row .copy-link,
+.runtime-config-row .btn { flex: 0 0 auto; }
 .capability-row { justify-content: space-between; align-items: flex-start; }
 
 .agent-managed-files-drawer .ui-overlay-panel { width: min(96vw, 920px); }
