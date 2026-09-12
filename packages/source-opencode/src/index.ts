@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
-import { watch, type FSWatcher } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import Database from 'better-sqlite3'
 import {
   evidenceFromSourceRecord,
@@ -24,19 +23,17 @@ import {
 } from '@agent-lens/core'
 import {
   OPENCODE_DB_NAME as DB_NAME,
-  abortableDelay,
   defineAgentLensPlugin,
   resolveOpenCodeRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { isMissingPathError } from '@agent-lens/source-support'
+import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'opencode'
 const PARSER_VERSION = '3'
 
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
-const RUNTIME_POLL_MS = 2000
 
 interface OpenCodeRow {
   row_id: number
@@ -376,7 +373,7 @@ export async function startOpenCodeRuntimeCapture(
   let stopped = false
   let scanning = false
   let pending = false
-  let watcher: FSWatcher | null = null
+  let watcher: SourceFileWatchHandle | null = null
 
   const scan = async (emitChanges: boolean): Promise<void> => {
     if (scanning) { pending = true; return }
@@ -407,31 +404,24 @@ export async function startOpenCodeRuntimeCapture(
   }
 
   await scan(false)
-  try {
-    watcher = watch(dirname(dbPath), (_event, fileName) => {
-      const name = fileName?.toString() ?? ''
-      if (!name.startsWith(DB_NAME)) return
-      void scan(true).catch(() => undefined)
-    })
-    watcher.on('error', () => { watcher?.close(); watcher = null })
-  } catch {
-    watcher = null
-  }
-
-  const task = (async () => {
-    while (!stopped && !ctx.abortSignal.aborted) {
-      await abortableDelay(RUNTIME_POLL_MS, ctx.abortSignal)
-      if (!stopped && !ctx.abortSignal.aborted) await scan(true).catch(() => undefined)
-    }
-  })()
+  watcher = await watchSourceFiles({
+    paths: dirname(dbPath),
+    signal: ctx.abortSignal,
+    debounceMs: 120,
+    accept: filePath => basename(filePath).startsWith(DB_NAME),
+    onFile: async () => {
+      await scan(true)
+    },
+  })
 
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
-      watcher?.close()
-      watcher = null
-      await task
+      if (watcher) {
+        await watcher.dispose()
+        watcher = null
+      }
       db.close()
     },
   }
