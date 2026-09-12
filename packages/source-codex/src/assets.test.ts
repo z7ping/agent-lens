@@ -18,8 +18,10 @@ async function prepareAssetFixture() {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-assets-'))
   await mkdir(join(root, 'sessions'), { recursive: true })
   await mkdir(join(root, 'skills', 'review-helper'), { recursive: true })
-  await mkdir(join(root, 'plugins', 'cache', 'acme-plugin'), { recursive: true })
-  await mkdir(join(root, 'plugins', 'local-plugin'), { recursive: true })
+  const pluginRoot = join(root, 'plugins', 'cache', 'test', 'acme-plugin', '1.2.3')
+  await mkdir(join(pluginRoot, '.codex-plugin'), { recursive: true })
+  await mkdir(join(pluginRoot, 'skills', 'plugin-skill'), { recursive: true })
+  await mkdir(join(root, 'plugins', 'data', 'acme-plugin-test'), { recursive: true })
 
   await writeFile(
     join(root, 'skills', 'review-helper', 'SKILL.md'),
@@ -27,18 +29,18 @@ async function prepareAssetFixture() {
     'utf8',
   )
   await writeFile(
-    join(root, 'plugins', 'cache', 'acme-plugin', 'plugin.json'),
-    JSON.stringify({ id: 'acme.codex', name: 'acme-plugin', version: '1.2.3' }),
+    join(pluginRoot, '.codex-plugin', 'plugin.json'),
+    JSON.stringify({ name: 'acme-plugin', version: '1.2.3' }),
     'utf8',
   )
   await writeFile(
-    join(root, 'plugins', 'cache', 'acme-plugin', 'SKILL.md'),
+    join(pluginRoot, 'skills', 'plugin-skill', 'SKILL.md'),
     '# Plugin skill\n',
     'utf8',
   )
   await writeFile(
     join(root, 'config.toml'),
-    '[mcp_servers.playwright]\ncommand = "npx"\n\n[mcp_servers."github"]\ncommand = "gh-mcp"\n',
+    '[mcp_servers.playwright]\ncommand = "npx"\n\n[mcp_servers."github"]\ncommand = "gh-mcp"\n\n[plugins."acme-plugin@test"]\nenabled = false\n\n[plugins."configured-only@test"]\nenabled = true\n',
     'utf8',
   )
   await writeFile(
@@ -102,7 +104,9 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     assert.equal(identities.has('skill:review-helper'), true)
     assert.equal(identities.has('mcp:playwright'), true)
     assert.equal(identities.has('mcp:github'), true)
-    assert.equal(identities.has('plugin:acme-plugin'), true)
+    assert.equal(identities.has('plugin:acme-plugin@test'), true)
+    assert.equal(identities.has('plugin:configured-only@test'), true)
+    assert.equal(identities.has('plugin:data'), false)
     assert.equal(identities.has('hook:codex-hook:PreToolUse'), true)
     assert.equal(identities.has('rule:codex-global-instructions'), true)
 
@@ -118,6 +122,26 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     )
     assert.ok(stateRows.some(row => row.state === 'discoverable' && row.value === 'unknown'))
     assert.ok(stateRows.some(row => row.state === 'enabled' && row.value === 'unknown'))
+
+    const pluginStates = storage.db.prepare(`
+      SELECT
+        d.canonical_name AS canonicalName,
+        s.state AS state,
+        s.value AS value
+      FROM asset_state_observations s
+      JOIN asset_bindings b ON b.id = s.asset_binding_id
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE d.type = 'plugin'
+    `).all() as Array<{ canonicalName: string; state: string; value: string }>
+    const stateFor = (canonicalName: string, state: string) =>
+      pluginStates.find(row => row.canonicalName === canonicalName && row.state === state)?.value
+
+    assert.equal(stateFor('acme-plugin@test', 'installed'), 'true')
+    assert.equal(stateFor('acme-plugin@test', 'configured'), 'true')
+    assert.equal(stateFor('acme-plugin@test', 'enabled'), 'false')
+    assert.equal(stateFor('configured-only@test', 'installed'), 'unknown')
+    assert.equal(stateFor('configured-only@test', 'configured'), 'true')
+    assert.equal(stateFor('configured-only@test', 'enabled'), 'unknown')
 
     const staticEvidence = storage.db.prepare(
       "SELECT COUNT(*) AS count FROM evidence WHERE capture_method = 'static-scan'",
