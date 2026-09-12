@@ -36,11 +36,15 @@ test('Claude Source covers history, assets and runtime reconciliation', async ()
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-claude-'))
   const projects = join(root, 'projects', 'demo')
   const transcript = join(projects, 'session.jsonl')
+  const memoryRoot = join(projects, 'memory')
   const cwd = join(root, 'workspace')
   const inbox = join(root, 'inbox')
   await mkdir(dirname(transcript), { recursive: true })
+  await mkdir(memoryRoot, { recursive: true })
   await mkdir(join(cwd, '.git'), { recursive: true })
   await writeFile(join(cwd, 'CLAUDE.md'), '# Workspace instructions\n', 'utf8')
+  await writeFile(join(memoryRoot, 'MEMORY.md'), '# Memory index\n', 'utf8')
+  await writeFile(join(memoryRoot, 'feedback_testing.md'), '# Testing feedback\n', 'utf8')
   await mkdir(join(root, 'skills', 'reviewer'), { recursive: true })
   await writeFile(join(root, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
   await writeFile(join(root, 'settings.json'), JSON.stringify({
@@ -166,6 +170,42 @@ test('Claude Source covers history, assets and runtime reconciliation', async ()
       && item.scope === 'project'
       && item.scopeRoot === cwd
     ))
+
+    const memories = storage.db.prepare(`
+      SELECT
+        d.display_name AS displayName,
+        b.path AS path,
+        b.scope AS scope,
+        b.scope_root AS scopeRoot
+      FROM asset_bindings b
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE d.type = 'memory'
+      ORDER BY b.path
+    `).all() as Array<{
+      displayName: string | null
+      path: string
+      scope: string | null
+      scopeRoot: string | null
+    }>
+    assert.deepEqual(memories.map(item => ({
+      displayName: item.displayName,
+      path: item.path,
+      scope: item.scope,
+      scopeRoot: item.scopeRoot,
+    })), [
+      {
+        displayName: 'MEMORY.md',
+        path: join(memoryRoot, 'MEMORY.md'),
+        scope: 'project',
+        scopeRoot: cwd,
+      },
+      {
+        displayName: 'feedback_testing.md',
+        path: join(memoryRoot, 'feedback_testing.md'),
+        scope: 'project',
+        scopeRoot: cwd,
+      },
+    ])
 
     await mkdir(inbox, { recursive: true })
     await writeFile(join(inbox, 'runtime.json'), JSON.stringify({
