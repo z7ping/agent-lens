@@ -21,6 +21,22 @@
   border-bottom: 0;
 }
 
+.workspace-breadcrumb-actions {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 8px;
+}
+
+.workspace-breadcrumb-actions .ui-status-badge {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-breadcrumb-shell .workspace-mobile-nav-button,
 .workspace-mobile-backdrop,
 .workspace-sidebar-restore-button {
@@ -138,6 +154,13 @@
   }
 
   .workspace-breadcrumb-shell .workspace-breadcrumb { padding-left: 4px; }
+
+  .workspace-breadcrumb-actions {
+    gap: 4px;
+    padding-right: 6px;
+  }
+
+  .workspace-breadcrumb-actions .ui-status-badge { display: none; }
 }
 
 @media (max-width: 575.98px) {

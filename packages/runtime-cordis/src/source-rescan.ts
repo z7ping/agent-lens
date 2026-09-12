@@ -33,7 +33,7 @@ function failureDto(failure: RegisteredSourceFailure): SourceRescanFailure {
 }
 
 export class SourceRescanService {
-  private inFlight: Promise<SourceRescanSummary> | null = null
+  private inFlight: { sourceId?: string; promise: Promise<SourceRescanSummary> } | null = null
   private readonly detectedSources = new Map<string, boolean>()
 
   constructor(
@@ -45,21 +45,25 @@ export class SourceRescanService {
     return this.detectedSources.get(sourceId)
   }
 
-  rescan(): Promise<SourceRescanSummary> {
-    if (this.inFlight) return this.inFlight
-    const pending = this.run().finally(() => {
-      if (this.inFlight === pending) this.inFlight = null
+  rescan(sourceId?: string): Promise<SourceRescanSummary> {
+    if (this.inFlight) {
+      if (this.inFlight.sourceId === sourceId) return this.inFlight.promise
+      return this.inFlight.promise.then(() => this.rescan(sourceId))
+    }
+    const promise = this.run(sourceId).finally(() => {
+      if (this.inFlight?.promise === promise) this.inFlight = null
     })
-    this.inFlight = pending
-    return pending
+    this.inFlight = { ...(sourceId ? { sourceId } : {}), promise }
+    return promise
   }
 
-  private async run(): Promise<SourceRescanSummary> {
+  private async run(sourceId?: string): Promise<SourceRescanSummary> {
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
     const startedAt = new Date().toISOString()
     const sourceIds = this.ctx.sources.list()
       .map(source => source.manifest.sourceId)
-    const prepared = await prepareRegisteredSources(this.ctx, this.runtimeSignal)
+      .filter(id => !sourceId || id === sourceId)
+    const prepared = await prepareRegisteredSources(this.ctx, this.runtimeSignal, sourceId)
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
 
     const failedDetections = new Set(

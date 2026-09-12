@@ -9,7 +9,7 @@ type IntegrationDiscoveryState = Omit<IntegrationToolDiscoveryResponseDto, 'meta
 
 export interface IntegrationDiscoveryController {
   snapshot(): IntegrationDiscoveryState
-  rescan(): Promise<IntegrationDiscoveryState>
+  rescan(integrationId?: string): Promise<IntegrationDiscoveryState>
 }
 
 function responseBody(state: IntegrationDiscoveryState): IntegrationToolDiscoveryResponseDto {
@@ -47,6 +47,7 @@ export async function handleIntegrationDiscoveryRequest(
     writeJson(response, 405, { error: 'method_not_allowed' })
     return true
   }
-  writeJson(response, 200, responseBody(await controller.rescan()))
+  const integrationId = url.searchParams.get('integrationId')?.trim() || undefined
+  writeJson(response, 200, responseBody(await controller.rescan(integrationId)))
   return true
 }

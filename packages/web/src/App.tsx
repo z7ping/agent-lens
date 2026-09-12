@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
@@ -12,7 +12,7 @@ import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { PageLoadingState } from './components/StateViews'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
-import { Breadcrumb, IconButton, StatusBadge, UiIcon } from './components/ui'
+import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
 
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
@@ -24,6 +24,73 @@ export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
   return useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot)
 }
 
+function AgentRescanAction({
+  model,
+  snapshot,
+  selectedAgentId,
+}: {
+  model: AgentLensClientModel
+  snapshot: ClientSnapshot
+  selectedAgentId: string
+}) {
+  const { t } = useTranslation('agents')
+  const directAgent = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
+  const management = snapshot.integrationManagement?.items.find(item =>
+    item.integrationId === selectedAgentId
+    || item.productId === selectedAgentId
+    || (directAgent ? item.productId === directAgent.productId : false)
+  )
+  const agent = directAgent ?? snapshot.agents?.items.find(item =>
+    management ? item.productId === management.productId : false
+  )
+  const discovery = management?.tool ?? snapshot.integrationDiscovery?.items.find(item =>
+    item.integrationId === selectedAgentId
+    || item.productId === selectedAgentId
+    || (management ? item.integrationId === management.integrationId || item.productId === management.productId : false)
+    || (agent ? item.productId === agent.productId : false)
+  )
+  const targetId = selectedAgentId || agent?.sourceId || management?.integrationId || ''
+  const sourceId = agent?.sourceId
+  const integrationId = management?.integrationId ?? discovery?.integrationId
+  const ownsStatus = Boolean(targetId) && snapshot.agentEnvironmentRescanTargetId === targetId
+  const anyScanBusy = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
+  const scanBusy = ownsStatus && anyScanBusy
+  const scanError = [
+    snapshot.agentsRescanError,
+    snapshot.integrationDiscoveryError,
+    discovery?.presence === 'error' ? discovery.reason : '',
+  ].filter(Boolean).join('\n')
+  const result = ownsStatus ? snapshot.agentsRescanResult : null
+
+  const status = !ownsStatus
+    ? null
+    : scanBusy
+      ? <StatusBadge tone="accent" dot>{t('page.scanningCurrent')}</StatusBadge>
+      : scanError || result?.status === 'failed'
+        ? <StatusBadge tone="danger" title={scanError || undefined}>{t('page.scanCurrentFailed')}</StatusBadge>
+        : result?.status === 'partial'
+          ? <StatusBadge tone="warning" title={result.failures.map(item => `${item.sourceId}: ${item.message}`).join('\n') || undefined}>{t('page.scanCurrentPartial')}</StatusBadge>
+          : <StatusBadge tone="success" dot>{t('page.scanCurrentComplete')}</StatusBadge>
+
+  return <>
+    {status}
+    <Button
+      size="small"
+      loading={scanBusy}
+      disabled={anyScanBusy || !targetId || (!sourceId && !integrationId)}
+      title={t('page.rescanCurrent')}
+      onClick={() => void model.rescanAgentEnvironment({
+        targetId,
+        ...(sourceId ? { sourceId } : {}),
+        ...(integrationId ? { integrationId } : {}),
+      }).catch(() => undefined)}
+    >
+      <UiIcon name="refresh" size={14}/>
+      {scanBusy ? t('page.scanning') : t('page.rescan')}
+    </Button>
+  </>
+}
+
 function WorkspaceBreadcrumb({
   pathname,
   snapshot,
@@ -31,6 +98,7 @@ function WorkspaceBreadcrumb({
   onOpenNavigation,
   sidebarCollapsed,
   onExpandSidebar,
+  actions,
 }: {
   pathname: string
   snapshot: ClientSnapshot
@@ -38,6 +106,7 @@ function WorkspaceBreadcrumb({
   onOpenNavigation(): void
   sidebarCollapsed: boolean
   onExpandSidebar(): void
+  actions?: ReactNode
 }) {
   const { t } = useTranslation('navigation')
   let items: Array<{ label: string; to?: string }>
@@ -76,6 +145,7 @@ function WorkspaceBreadcrumb({
         ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
         : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
     />
+    {actions && <div className="workspace-breadcrumb-actions">{actions}</div>}
   </div>
 }
 
@@ -204,6 +274,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           onOpenNavigation={() => setMobileNavigationOpen(true)}
           sidebarCollapsed={sidebarCollapsed}
           onExpandSidebar={() => setDesktopSidebarCollapsed(false)}
+          actions={onAgents
+            ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
+            : undefined}
         />
         {hasSseBanner && <div className="sse-banner" role="status" aria-live="polite">
           <span className="sse-banner-icon" aria-hidden="true"><UiIcon name="exclamation" size={14}/></span>

@@ -6,15 +6,6 @@
  */
 
 .agents-content { overflow: auto; }
-
-.agents-page-actions {
-  display: flex;
-  min-height: 26px;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: 0 0 4px;
-}
 .agents-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));

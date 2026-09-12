@@ -38,6 +38,7 @@ export interface ClientSnapshot {
   agentsRescanning: boolean
   agentsRescanResult: AgentRescanResponseDto | null
   agentsRescanError: string
+  agentEnvironmentRescanTargetId: string
   integrationDiscovery: IntegrationToolDiscoveryResponseDto | null
   integrationManagement: IntegrationManagementResponseDto | null
   integrationManagementLoading: boolean
@@ -142,6 +143,7 @@ export class AgentLensClientModel {
     agentsRescanning: false,
     agentsRescanResult: null,
     agentsRescanError: '',
+    agentEnvironmentRescanTargetId: '',
     integrationDiscovery: null,
     integrationManagement: null,
     integrationManagementLoading: false,
@@ -361,11 +363,11 @@ export class AgentLensClientModel {
     }
   }
 
-  rescanAgents(): Promise<AgentRescanResponseDto> {
+  rescanAgents(sourceId?: string): Promise<AgentRescanResponseDto> {
     if (this.agentsRescanInFlight) return this.agentsRescanInFlight
     const generation = ++this.agentsGeneration
     this.patch({ agentsRescanning: true, agentsRescanError: '' })
-    const pending = this.api.rescanAgents().then(
+    const pending = this.api.rescanAgents(sourceId).then(
       result => {
         if (generation === this.agentsGeneration) {
           this.patch({
@@ -520,10 +522,10 @@ export class AgentLensClientModel {
     return result
   }
 
-  rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
+  rescanIntegrationDiscovery(integrationId?: string): Promise<IntegrationToolDiscoveryResponseDto> {
     if (this.integrationDiscoveryInFlight) return this.integrationDiscoveryInFlight
     this.patch({ integrationDiscoveryRescanning: true, integrationDiscoveryError: '' })
-    const pending = this.api.rescanIntegrationDiscovery().then(
+    const pending = this.api.rescanIntegrationDiscovery(integrationId).then(
       async result => {
         if (this.integrationDiscoveryTimer) {
           clearTimeout(this.integrationDiscoveryTimer)
@@ -553,14 +555,30 @@ export class AgentLensClientModel {
     return pending
   }
 
-  async rescanAgentEnvironment(): Promise<void> {
-    const results = await Promise.allSettled([
-      this.rescanIntegrationDiscovery(),
-      this.rescanAgents(),
-    ])
+  async rescanAgentEnvironment({
+    targetId,
+    sourceId,
+    integrationId,
+  }: {
+    targetId: string
+    sourceId?: string
+    integrationId?: string
+  }): Promise<void> {
+    this.patch({
+      agentEnvironmentRescanTargetId: targetId,
+      agentsRescanResult: null,
+      agentsRescanError: '',
+      integrationDiscoveryError: '',
+    })
+    const tasks: Promise<unknown>[] = []
+    if (integrationId) tasks.push(this.rescanIntegrationDiscovery(integrationId))
+    if (sourceId) tasks.push(this.rescanAgents(sourceId))
+    if (!tasks.length) return
+
+    const results = await Promise.allSettled(tasks)
     if (results.every(result => result.status === 'rejected')) {
       const failure = results[0]
-      throw failure.status === 'rejected' ? failure.reason : new Error('Agent environment rescan failed')
+      throw failure?.status === 'rejected' ? failure.reason : new Error('Agent environment rescan failed')
     }
   }
 

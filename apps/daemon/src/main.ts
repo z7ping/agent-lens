@@ -300,7 +300,7 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
     ? {
         integrationDiscovery: {
           snapshot: () => officialToolDiscovery.snapshot(),
-          rescan: () => officialToolDiscovery.rescan(),
+          rescan: integrationId => officialToolDiscovery.rescan(integrationId),
         },
       }
     : {}),
