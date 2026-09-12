@@ -135,18 +135,22 @@ async function* discoverSkillRoot(
     source: string
     capturedAt: string
     prefix?: string
+    syncedSkillRoot?: boolean
   },
 ): AsyncIterable<DiscoveredAsset> {
   for await (const skillFile of walkNamedFile(root, 'SKILL.md')) {
     const skillDir = dirname(skillFile)
-    if (basename(skillDir).toLowerCase() === 'synced') continue
     const meta = await safeStat(skillFile)
     if (!meta?.isFile()) continue
     const relativeName = relative(root, skillDir).replaceAll('\\', '/')
+    const segments = relativeName.split('/').filter(Boolean)
+    const isSynced = segments[0]?.toLowerCase() === 'synced'
+    if (isSynced && !input.syncedSkillRoot) continue
     const displayName = basename(skillDir)
+    const baseCanonicalName = relativeName || displayName
     const canonicalName = input.prefix
-      ? `${input.prefix}:${relativeName || displayName}`
-      : relativeName || displayName
+      ? `${input.prefix}:${baseCanonicalName}`
+      : baseCanonicalName
     const observedAt = meta.mtime.toISOString()
 
     yield {
@@ -158,7 +162,7 @@ async function* discoverSkillRoot(
       },
       binding: {
         path: skillDir,
-        source: input.source,
+        source: isSynced ? 'claude:synced-skill' : input.source,
         scope: input.scope,
         scopeRoot: input.scopeRoot,
       },
@@ -431,6 +435,7 @@ async function* discoverUserAssets(
     scopeRoot: configRoot,
     source: 'claude:user-skill',
     capturedAt,
+    syncedSkillRoot: true,
   })) yield asset
 
   for await (const asset of discoverCommandRoot(join(configRoot, 'commands'), {
