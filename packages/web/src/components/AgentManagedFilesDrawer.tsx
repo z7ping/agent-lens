@@ -139,6 +139,10 @@ export function AgentManagedFilesDrawer({
         : null
     }
 
+    if (!directory.entries.length) {
+      return <div className="managed-file-loading">{t('managedFiles.emptyDirectory')}</div>
+    }
+
     return directory.entries.map(entry => {
       const isDirectory = entry.kind === 'directory'
       const isExpanded = isDirectory && expanded.has(entry.relativePath)
