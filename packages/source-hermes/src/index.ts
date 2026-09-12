@@ -818,4 +818,5 @@ export const hermesSourceInternals = {
 }
 
 export * from './assets.js'
+export * from './project-context.js'
 export * from './workspace-context.js'
