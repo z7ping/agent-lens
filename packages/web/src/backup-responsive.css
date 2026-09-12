@@ -30,16 +30,6 @@
     gap: 3px;
   }
 
-  .backup-agent-detail-summary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .backup-agent-detail-facts {
-    width: 100%;
-    justify-content: space-between;
-  }
 }
 
 @media (max-width: 991.98px) {
@@ -127,16 +117,6 @@
 
   .backup-agent-kind-list {
     grid-template-columns: 1fr;
-  }
-
-  .backup-agent-detail-facts {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px 18px;
-  }
-
-  .backup-agent-detail-facts span {
-    text-align: left;
   }
 
   .backup-asset-kind-header {
