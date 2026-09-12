@@ -182,8 +182,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onTools = location.pathname.startsWith('/tools')
   const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
-  const onBackup = location.pathname.startsWith('/backup')
-  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
+  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
