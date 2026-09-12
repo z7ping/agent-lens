@@ -31,6 +31,11 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function pathKey(value: string): string {
+  const normalized = resolve(value).replaceAll('\\', '/')
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -228,7 +233,7 @@ async function* discoverRuleRoot(
         type: 'rule',
         canonicalName: basename(path),
         displayName: basename(path),
-        upstreamIdentity: `claude-rule:${path}`,
+        upstreamIdentity: `claude-rule:${sha256(pathKey(path))}`,
       },
       binding: {
         path,
