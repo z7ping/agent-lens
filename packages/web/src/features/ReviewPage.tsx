@@ -592,7 +592,6 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     open
     className="review-inspector-overlay"
     title={title}
-    description={t('local.event.detailDescription')}
     onClose={onClose}
   >
     <div className="agent-scope" role="tablist" aria-label={t('local.event.categoriesAria')}>
@@ -817,7 +816,6 @@ function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspec
       <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
       <span className="raw-event-summary-copy">
         <span className="raw-event-summary-title">{t('local.rawEvents.title')} <span className="raw-event-summary-count">{items.length}</span></span>
-        <small>{t('local.rawEvents.description')}</small>
       </span>
       <time>{formatClock(items[items.length - 1]?.at ?? '')}</time>
     </summary>
