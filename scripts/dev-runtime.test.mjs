@@ -48,17 +48,26 @@ test('开发数据按端口隔离且不复用正式数据目录', () => {
   assert.equal(second.dataRoot, join(repoRoot, '.agent-lens', 'dev', '56790'))
   assert.notEqual(first.dbPath, second.dbPath)
   assert.notEqual(first.vaultPath, second.vaultPath)
+  assert.notEqual(first.integrationsPath, second.integrationsPath)
+  assert.notEqual(first.integrationBundleDir, second.integrationBundleDir)
+  assert.equal(first.integrationsPath.startsWith(first.dataRoot), true)
+  assert.equal(first.integrationBundleDir.startsWith(first.dataRoot), true)
 })
 
-test('buildDevEnvironment 同时配置 Daemon 与 Vite 代理端口', () => {
+test('buildDevEnvironment 隔离开发态 Integration 实体与 bundle', () => {
   const repoRoot = join('workspace', 'agent-lens')
-  const env = buildDevEnvironment({ AGENT_LENS_PORT: '56789' }, repoRoot, 56790)
+  const env = buildDevEnvironment({
+    AGENT_LENS_PORT: '56789',
+    AGENT_LENS_INTEGRATIONS_DIR: join('home', '.agent-lens', '1.0', 'integrations'),
+  }, repoRoot, 56790)
   const paths = devRuntimePaths(repoRoot, 56790)
 
   assert.equal(env.AGENT_LENS_PORT, '56790')
   assert.equal(env.AGENT_LENS_DEV_API_PORT, '56790')
   assert.equal(env.AGENT_LENS_DB_PATH, paths.dbPath)
   assert.equal(env.AGENT_LENS_VAULT_PATH, paths.vaultPath)
+  assert.equal(env.AGENT_LENS_INTEGRATIONS_DIR, paths.integrationsPath)
+  assert.equal(env.AGENT_LENS_INTEGRATION_BUNDLE_DIR, paths.integrationBundleDir)
   assert.equal(env.AGENT_LENS_DAEMON_MODE, 'foreground')
   assert.equal(env.AGENT_LENS_RUNTIME_OWNER, 'cli')
 })
