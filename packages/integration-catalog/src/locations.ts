@@ -80,7 +80,11 @@ export function resolveClaudeLocation(
   return {
     configRoot: firstResolved('claude-code', 'config', env, homeDir),
     dataRoot: firstResolved('claude-code', 'data', env, homeDir),
-    explicit: Boolean(value(env, 'CLAUDE_CODE_HOME') ?? value(env, 'CLAUDE_HOME')),
+    explicit: Boolean(
+      value(env, 'CLAUDE_CONFIG_DIR')
+      ?? value(env, 'CLAUDE_CODE_HOME')
+      ?? value(env, 'CLAUDE_HOME')
+    ),
   }
 }
 
