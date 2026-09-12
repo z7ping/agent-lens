@@ -58,7 +58,7 @@ test('Pi startup status is merged into the background activity round', () => {
   assert.match(round, /beforeContent\?: ReactNode/)
   assert.match(round, /summaryMeta\?: ReactNode/)
   assert.match(round, /\{beforeContent\}/)
-  assert.match(disclosure, /if \(embedded && state\.status === 'ready'\) return <div className="pi-startup-complete"/)
+  assert.doesNotMatch(disclosure, /pi-startup-complete/)
   assert.match(disclosure, /if \(embedded\) return <OperationProgress/)
   assert.match(disclosure, /showAllEvents && startupOutput\.length > 0/)
   assert.match(disclosure, /showAllEvents && \(resources\?\.diagnostics\.length \?\? 0\) > 0/)
