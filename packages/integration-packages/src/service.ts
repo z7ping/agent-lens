@@ -41,6 +41,7 @@ interface InstalledPointer {
   integrationId: string
   version: string
   installedAt: string
+  manifestSha256?: string | undefined
 }
 
 interface TrustedBundle {
@@ -251,11 +252,21 @@ function parseInstalledPointer(text: string, integrationId: string): InstalledPo
   if (typeof value.installedAt !== 'string' || !Number.isFinite(Date.parse(value.installedAt))) {
     throw new Error('Installed Integration pointer installedAt is invalid')
   }
+  const manifestSha256 = value.manifestSha256
+  if (
+    manifestSha256 !== undefined
+    && (typeof manifestSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(manifestSha256))
+  ) {
+    throw new Error('Installed Integration pointer manifestSha256 is invalid')
+  }
   return {
     schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
     integrationId,
     version: value.version,
     installedAt: value.installedAt,
+    ...(typeof manifestSha256 === 'string'
+      ? { manifestSha256: manifestSha256.toLowerCase() }
+      : {}),
   }
 }
 
@@ -302,6 +313,8 @@ export class IntegrationPackageService {
   private readonly operations = new Map<string, IntegrationPackageOperation>()
   private readonly operationOrder: string[] = []
   private readonly queues = new Map<string, Promise<void>>()
+  private bundleErrors = new Map<string, string>()
+  private bundleSourceError: string | null = null
   private initialized = false
 
   constructor(private readonly options: IntegrationPackageServiceOptions) {}
@@ -309,7 +322,15 @@ export class IntegrationPackageService {
   async initialize(): Promise<void> {
     await mkdir(this.options.installRoot, { recursive: true, mode: 0o700 })
     await this.cleanupTransientDirectories()
-    await this.loadTrustedBundles()
+    try {
+      await this.loadTrustedBundles()
+      this.bundleSourceError = null
+    } catch (error) {
+      // Installed packages are self-describing and independently verifiable.
+      // A missing/corrupt bundled catalog must block new installs/updates, not
+      // make already-installed Integrations disappear during offline startup.
+      this.bundleSourceError = errorMessage(error)
+    }
     await this.reconcile()
     this.initialized = true
   }
@@ -324,25 +345,24 @@ export class IntegrationPackageService {
     const ids = [...new Set(integrationIds.map(id => assertOfficialIntegration(id).integrationId))]
     const operations: IntegrationPackageOperation[] = []
     for (const id of ids) {
-      const operation = await this.install(id)
-      operations.push(operation)
-      if (operation.status !== 'completed') {
-        throw new Error(
-          `Legacy Integration physicalization failed for ${id}: ${operation.message ?? operation.errorCode ?? 'unknown error'}`,
-        )
-      }
+      // Migration is reconcile-style and failure-isolated. A broken package
+      // must not prevent another legacy-enabled Integration from becoming
+      // usable, and the missing marker makes the failed item retry next start.
+      operations.push(await this.install(id))
     }
 
-    await writeJsonAtomic(markerPath, {
-      schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
-      completedAt: new Date().toISOString(),
-      integrationIds: ids,
-    })
-    // These installs happened before Runtime registration in the same process,
-    // so they are already eligible for this startup and do not require a
-    // second restart.
+    const completed = operations.every(operation => operation.status === 'completed')
+    if (completed) {
+      await writeJsonAtomic(markerPath, {
+        schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+        completedAt: new Date().toISOString(),
+        integrationIds: ids,
+      })
+    }
+    // Successful installs happened before Runtime registration in this same
+    // process, so reconcile them immediately even when another item failed.
     await this.reconcile()
-    return { migrated: true, operations }
+    return { migrated: completed, operations }
   }
 
   catalog(): IntegrationPackageCatalogItem[] {
@@ -388,7 +408,6 @@ export class IntegrationPackageService {
   }
 
   async reconcile(): Promise<IntegrationPackageState[]> {
-    await this.assertBundleSourceReady()
     for (const entry of OFFICIAL_INTEGRATION_CATALOG) {
       this.states.set(entry.integrationId, await this.readInstalledState(entry.integrationId))
     }
@@ -400,7 +419,11 @@ export class IntegrationPackageService {
   install(integrationId: string): Promise<IntegrationPackageOperation> {
     return this.enqueue(integrationId, 'install', async id => {
       const current = this.states.get(id) ?? await this.readInstalledState(id)
-      if (current.installed && current.integrity === 'verified') {
+      if (
+        current.installed
+        && current.integrity === 'verified'
+        && current.compatibility === 'compatible'
+      ) {
         return 'Integration is already installed'
       }
       await this.installAvailable(id)
@@ -412,7 +435,7 @@ export class IntegrationPackageService {
     return this.enqueue(integrationId, 'update', async id => {
       const current = this.states.get(id) ?? await this.readInstalledState(id)
       if (!current.installed) throw new Error('Integration is not installed')
-      const bundled = this.requireTrustedBundle(id)
+      const bundled = await this.requireAvailableBundle(id)
       if (
         current.installedVersion === bundled.manifest.version
         && current.integrity === 'verified'
@@ -454,7 +477,7 @@ export class IntegrationPackageService {
   }
 
   private async installAvailable(integrationId: string): Promise<void> {
-    const trusted = this.requireTrustedBundle(integrationId)
+    const trusted = await this.requireAvailableBundle(integrationId)
     if (trusted.manifest.apiVersion !== AGENT_LENS_PLUGIN_API_VERSION) {
       throw Object.assign(
         new Error(
@@ -485,8 +508,12 @@ export class IntegrationPackageService {
       await mkdir(versionsRoot, { recursive: true, mode: 0o700 })
       const target = join(versionsRoot, trusted.manifest.version)
       if (existsSync(target)) {
-        const existing = await this.verifyInstalledPackage(target, integrationId, trusted.manifest.version)
-          .catch(() => null)
+        const existing = await this.verifyInstalledPackage(
+          target,
+          integrationId,
+          trusted.manifest.version,
+          sha256(trusted.manifestText),
+        ).catch(() => null)
         if (!existing || existing.integrity !== 'verified') {
           const trashRoot = join(this.options.installRoot, '.trash')
           await mkdir(trashRoot, { recursive: true, mode: 0o700 })
@@ -496,15 +523,22 @@ export class IntegrationPackageService {
       if (!existsSync(target)) await rename(staging, target)
       else await rm(staging, { recursive: true, force: true })
 
+      const manifestSha256 = sha256(trusted.manifestText)
+      const verified = await this.verifyInstalledPackage(
+        target,
+        integrationId,
+        trusted.manifest.version,
+        manifestSha256,
+      )
       const pointer: InstalledPointer = {
         schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
         integrationId,
         version: trusted.manifest.version,
         installedAt: new Date().toISOString(),
+        manifestSha256,
       }
       await writeJsonAtomic(join(this.integrationRoot(integrationId), 'current.json'), pointer)
-      const state = await this.readInstalledState(integrationId)
-      this.states.set(integrationId, { ...state, restartRequired: true })
+      this.states.set(integrationId, { ...verified, restartRequired: true })
     } catch (error) {
       await rm(staging, { recursive: true, force: true }).catch(() => undefined)
       throw error
@@ -517,47 +551,56 @@ export class IntegrationPackageService {
     const catalog = parseBundledCatalog(catalogText)
     const next = new Map<string, TrustedBundle>()
 
+    const errors = new Map<string, string>()
     for (const item of catalog.entries) {
-      const official = assertOfficialIntegration(item.integrationId)
-      if (
-        item.productId !== official.productId
-        || item.packageName !== official.package.packageName
-      ) {
-        throw new Error(`Bundled Integration catalog identity mismatch: ${item.integrationId}`)
-      }
+      try {
+        const official = assertOfficialIntegration(item.integrationId)
+        if (
+          item.productId !== official.productId
+          || item.packageName !== official.package.packageName
+        ) {
+          throw new Error(`Bundled Integration catalog identity mismatch: ${item.integrationId}`)
+        }
 
-      const manifestPath = resolveWithin(this.options.bundleDir, item.relativeManifestPath)
-      const manifestText = await readFile(manifestPath, 'utf8')
-      if (sha256(Buffer.from(manifestText)) !== item.manifestSha256.toLowerCase()) {
-        throw new Error(`Bundled Integration manifest checksum mismatch: ${item.integrationId}`)
+        const manifestPath = resolveWithin(this.options.bundleDir, item.relativeManifestPath)
+        const manifestText = await readFile(manifestPath, 'utf8')
+        if (sha256(Buffer.from(manifestText)) !== item.manifestSha256.toLowerCase()) {
+          throw new Error(`Bundled Integration manifest checksum mismatch: ${item.integrationId}`)
+        }
+        const manifest = parsePackageManifest(manifestText)
+        if (
+          manifest.integrationId !== official.integrationId
+          || manifest.productId !== official.productId
+          || manifest.packageName !== official.package.packageName
+          || manifest.version !== item.version
+        ) {
+          throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
+        }
+        const packageDir = dirname(manifestPath)
+        // The bundled catalog + manifest are the release trust root. Large bundle
+        // files are hashed only when that package is actually installed, keeping
+        // startup O(installed packages) rather than O(all available packages).
+        next.set(item.integrationId, {
+          catalog: item,
+          manifest,
+          manifestText,
+          packageDir,
+        })
+      } catch (error) {
+        errors.set(item.integrationId, errorMessage(error))
       }
-      const manifest = parsePackageManifest(manifestText)
-      if (
-        manifest.integrationId !== official.integrationId
-        || manifest.productId !== official.productId
-        || manifest.packageName !== official.package.packageName
-        || manifest.version !== item.version
-      ) {
-        throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
-      }
-      const packageDir = dirname(manifestPath)
-      // The bundled catalog + manifest are the release trust root. Large bundle
-      // files are hashed only when that package is actually installed, keeping
-      // startup O(installed packages) rather than O(all available packages).
-      next.set(item.integrationId, {
-        catalog: item,
-        manifest,
-        manifestText,
-        packageDir,
-      })
     }
 
     for (const official of OFFICIAL_INTEGRATION_CATALOG) {
-      if (!next.has(official.integrationId)) {
-        throw new Error(`Trusted Integration bundle is missing: ${official.integrationId}`)
+      if (!next.has(official.integrationId) && !errors.has(official.integrationId)) {
+        errors.set(
+          official.integrationId,
+          `Trusted Integration bundle is missing: ${official.integrationId}`,
+        )
       }
     }
     this.bundled = next
+    this.bundleErrors = errors
   }
 
   private async readInstalledState(integrationId: string): Promise<IntegrationPackageState> {
@@ -591,8 +634,28 @@ export class IntegrationPackageService {
     }
 
     const packageDir = join(this.integrationRoot(integrationId), 'versions', pointer.version)
-    const verified = await this.verifyInstalledPackage(packageDir, integrationId, pointer.version)
-      .catch(error => ({
+    const trustedManifestSha256 = pointer.manifestSha256
+      ?? (bundled?.manifest.version === pointer.version
+        ? sha256(bundled.manifestText)
+        : undefined)
+    if (!trustedManifestSha256) {
+      return {
+        integrationId,
+        installed: true,
+        installedVersion: pointer.version,
+        ...(availableVersion ? { availableVersion } : {}),
+        compatibility: 'unknown',
+        integrity: 'invalid',
+        restartRequired: false,
+        reason: 'Installed Integration pointer has no trusted manifest hash',
+      }
+    }
+    const verified = await this.verifyInstalledPackage(
+      packageDir,
+      integrationId,
+      pointer.version,
+      trustedManifestSha256,
+    ).catch(error => ({
         integrationId,
         installed: true,
         installedVersion: pointer.version,
@@ -609,8 +672,12 @@ export class IntegrationPackageService {
     packageDir: string,
     integrationId: string,
     version: string,
+    trustedManifestSha256?: string,
   ): Promise<IntegrationPackageState> {
     const manifestText = await readFile(join(packageDir, 'manifest.json'), 'utf8')
+    if (trustedManifestSha256 && sha256(manifestText) !== trustedManifestSha256) {
+      throw new Error(`Installed Integration manifest checksum mismatch: ${integrationId}`)
+    }
     const manifest = parsePackageManifest(manifestText)
     const official = assertOfficialIntegration(integrationId)
     if (
@@ -650,12 +717,38 @@ export class IntegrationPackageService {
       compatibility: bundled ? compatibilityFor(bundled.manifest.apiVersion) : 'unknown',
       integrity: 'unknown',
       restartRequired,
+      ...(!bundled && (this.bundleErrors.get(integrationId) || this.bundleSourceError)
+        ? {
+            reason: `Bundled Integration source unavailable: ${
+              this.bundleErrors.get(integrationId) ?? this.bundleSourceError
+            }`,
+          }
+        : {}),
     }
   }
 
-  private requireTrustedBundle(integrationId: string): TrustedBundle {
+  private async requireAvailableBundle(integrationId: string): Promise<TrustedBundle> {
+    const current = this.bundled.get(integrationId)
+    if (current) return current
+    try {
+      await this.loadTrustedBundles()
+      this.bundleSourceError = null
+    } catch (error) {
+      this.bundleSourceError = errorMessage(error)
+      throw Object.assign(
+        new Error(`Bundled Integration source unavailable: ${this.bundleSourceError}`),
+        { code: 'bundle-source-unavailable' },
+      )
+    }
     const bundled = this.bundled.get(integrationId)
-    if (!bundled) throw new Error(`No trusted bundled package is available for ${integrationId}`)
+    if (!bundled) {
+      const reason = this.bundleErrors.get(integrationId)
+        ?? `No trusted bundled package is available for ${integrationId}`
+      throw Object.assign(
+        new Error(reason),
+        { code: 'bundle-source-unavailable' },
+      )
+    }
     return bundled
   }
 
@@ -693,6 +786,7 @@ export class IntegrationPackageService {
         operation.message = errorMessage(error)
       } finally {
         operation.completedAt = new Date().toISOString()
+        this.pruneOperations()
       }
     })
     const queued = run.then(() => undefined, () => undefined)
@@ -705,13 +799,13 @@ export class IntegrationPackageService {
 
   private pruneOperations(): void {
     while (this.operationOrder.length > MAX_OPERATIONS) {
-      const id = this.operationOrder.shift()
-      if (!id) break
-      if (this.operations.get(id)?.status === 'running') {
-        this.operationOrder.push(id)
-        break
-      }
-      this.operations.delete(id)
+      const index = this.operationOrder.findIndex(id => {
+        const status = this.operations.get(id)?.status
+        return status === undefined || status === 'failed' || status === 'completed'
+      })
+      if (index < 0) break
+      const [id] = this.operationOrder.splice(index, 1)
+      if (id) this.operations.delete(id)
     }
   }
 
@@ -728,11 +822,6 @@ export class IntegrationPackageService {
         await rm(join(root, entry), { recursive: true, force: true }).catch(() => undefined)
       }
     }
-  }
-
-  private async assertBundleSourceReady(): Promise<void> {
-    if (this.bundled.size) return
-    await this.loadTrustedBundles()
   }
 
   private assertInitialized(): void {

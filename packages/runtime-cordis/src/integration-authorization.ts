@@ -19,6 +19,7 @@ export interface IntegrationAuthorizationConfiguration {
 }
 
 const PRIVILEGED = new Set<AgentIntegrationCapability>(['hook', 'runtime', 'live'])
+const grantQueues = new Map<string, Promise<void>>()
 
 function normalizeProductId(value: string): string {
   return value.trim().toLowerCase()
@@ -97,6 +98,23 @@ export function authorizedIntegrationCapabilities(
   return configuration?.grants[normalizeProductId(productId)] ?? []
 }
 
+export function integrationAuthorizationBootstrap(
+  configuration: IntegrationAuthorizationConfiguration | null,
+  options: {
+    legacyMigrationEligible: boolean
+    selectedIntegrationIds: readonly string[]
+  },
+): Pick<IntegrationAuthorizationConfiguration, 'grants'> | null {
+  if (configuration || !options.legacyMigrationEligible) return null
+  const selected = new Set(options.selectedIntegrationIds.map(normalizeProductId))
+  return {
+    grants: {
+      ...(selected.has('pi') ? { pi: ['runtime', 'live'] as PrivilegedIntegrationCapability[] } : {}),
+      ...(selected.has('hermes') ? { hermes: ['live'] as PrivilegedIntegrationCapability[] } : {}),
+    },
+  }
+}
+
 export async function writeIntegrationAuthorization(
   path: string,
   configuration: Pick<IntegrationAuthorizationConfiguration, 'grants'>,
@@ -130,24 +148,34 @@ export async function writeIntegrationAuthorization(
   return normalized
 }
 
-export async function grantIntegrationCapabilities(
+export function grantIntegrationCapabilities(
   path: string,
   productId: string,
   capabilities: readonly AgentIntegrationCapability[],
 ): Promise<IntegrationAuthorizationConfiguration> {
-  const current = await readIntegrationAuthorization(path) ?? emptyConfiguration()
   const id = normalizeProductId(productId)
-  if (!id) throw new Error('Integration productId is required')
-  const merged = normalizeCapabilities([
-    ...(current.grants[id] ?? []),
-    ...capabilities,
-  ])
-  return writeIntegrationAuthorization(path, {
-    grants: {
-      ...current.grants,
-      [id]: merged,
-    },
+  if (!id) return Promise.reject(new Error('Integration productId is required'))
+
+  const previous = grantQueues.get(path) ?? Promise.resolve()
+  const task = previous.catch(() => undefined).then(async () => {
+    const current = await readIntegrationAuthorization(path) ?? emptyConfiguration()
+    const merged = normalizeCapabilities([
+      ...(current.grants[id] ?? []),
+      ...capabilities,
+    ])
+    return writeIntegrationAuthorization(path, {
+      grants: {
+        ...current.grants,
+        [id]: merged,
+      },
+    })
   })
+  const queued = task.then(() => undefined, () => undefined)
+  grantQueues.set(path, queued)
+  void queued.finally(() => {
+    if (grantQueues.get(path) === queued) grantQueues.delete(path)
+  })
+  return task
 }
 
 export const integrationAuthorizationInternals = {

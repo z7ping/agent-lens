@@ -19,6 +19,7 @@ import {
   authorizedIntegrationCapabilities,
   discoverRegisteredSourceAssets,
   grantIntegrationCapabilities,
+  integrationAuthorizationBootstrap,
   integrationAuthorizationPath,
   integrationPreferencesPath,
   integrationPreferenceBootstrapUpdate,
@@ -146,14 +147,23 @@ if (integrationPreferences && integrationPreferenceBootstrap) {
   await integrationPreferences.update(integrationPreferenceBootstrap)
 }
 let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
-
-if (!integrationAuthorization && legacyInstallation) {
-  integrationAuthorization = await writeIntegrationAuthorization(integrationAuthorizationFile, {
-    grants: {
-      ...(enabledSourceIds.has('pi') ? { pi: ['runtime', 'live'] } : {}),
-      ...(enabledSourceIds.has('hermes') ? { hermes: ['live'] } : {}),
-    },
-  })
+const integrationAuthorizationBootstrapConfiguration = integrationAuthorizationBootstrap(
+  integrationAuthorization,
+  {
+    // Only a pre-#148 installation has no persisted Integration preferences.
+    // A fresh #148 user may have a DB/config by their second restart, but must
+    // never receive Runtime/Live grants unless they explicitly authorize them.
+    legacyMigrationEligible:
+      persistedIntegrationPreferences === null
+      && (legacyInstallation || explicitSourceOverride),
+    selectedIntegrationIds: [...enabledSourceIds],
+  },
+)
+if (integrationAuthorizationBootstrapConfiguration) {
+  integrationAuthorization = await writeIntegrationAuthorization(
+    integrationAuthorizationFile,
+    integrationAuthorizationBootstrapConfiguration,
+  )
 }
 
 function authorizedCapabilities(productId: string) {
@@ -163,7 +173,7 @@ function authorizedCapabilities(productId: string) {
 const app = new AgentLensApplication()
 const integrationPackageLoadFailures: Array<{ integrationId: string; error: string }> = []
 let integrationPackages: IntegrationPackageService | null = null
-if (capabilities.localCapture && existsSync(join(integrationBundleDir, 'catalog.json'))) {
+if (capabilities.localCapture) {
   const candidate = new IntegrationPackageService({
     bundleDir: integrationBundleDir,
     installRoot: integrationInstallRoot,
@@ -181,7 +191,16 @@ if (capabilities.localCapture && existsSync(join(integrationBundleDir, 'catalog.
           .filter(item => enabledSourceIds.has(item.productId))
           .map(item => item.integrationId)
       : []
-    await candidate.ensureLegacyPhysicalization(legacySelected)
+    const legacyPhysicalization = await candidate.ensureLegacyPhysicalization(legacySelected)
+    for (const operation of legacyPhysicalization.operations) {
+      if (operation.status === 'completed') continue
+      integrationPackageLoadFailures.push({
+        integrationId: operation.integrationId,
+        error: operation.message
+          ?? operation.errorCode
+          ?? 'Legacy Integration physicalization failed',
+      })
+    }
     integrationPackages = candidate
   } catch (error) {
     console.warn('[AgentLens] Integration package lifecycle unavailable', error)
