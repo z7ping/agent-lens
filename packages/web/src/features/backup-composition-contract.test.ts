@@ -26,8 +26,8 @@ test('Create Snapshot 只保留一个操作边界，内部改为 divider groups'
   assert.match(backupCss, /\.future-grid > aside\.future-stack > \.future-card:first-child \{[\s\S]*?border-color: var\(--al-line-strong\);[\s\S]*?box-shadow: none;/)
   assert.match(backupCss, /\.backup-page \.builder-block \{[\s\S]*?border: 0;[\s\S]*?border-bottom: 1px solid var\(--al-line\);[\s\S]*?background: transparent;/)
   assert.match(backupCss, /\.backup-page \.builder-check \{[\s\S]*?border: 0;[\s\S]*?background: transparent;/)
-  assert.match(backupPage, /敏感信息保护强制开启/)
-  assert.match(backupPage, /创建并校验快照/)
+  assert.match(backupPage, /t\('create\.safetyTitle'\)/)
+  assert.match(backupPage, /t\('create\.createAndVerify'\)/)
 })
 
 test('Backup Principles 是普通事实列表，成熟事实与恢复能力没有删除', () => {
