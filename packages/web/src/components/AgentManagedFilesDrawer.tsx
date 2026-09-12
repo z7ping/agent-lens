@@ -22,10 +22,6 @@ interface AgentManagedFilesDrawerProps {
 }
 
 
-function pathDepth(path: string): number {
-  return path ? path.split('/').length : 0
-}
-
 export function AgentManagedFilesDrawer({
   open,
   model,
@@ -143,6 +139,7 @@ export function AgentManagedFilesDrawer({
           className="managed-file-row"
           data-selected={isSelected || undefined}
           data-disabled={!entry.accessible || undefined}
+          disabled={!entry.accessible}
           title={entry.relativePath}
           onClick={() => isDirectory ? toggleDirectory(entry) : void selectFile(entry)}
         >
@@ -157,7 +154,7 @@ export function AgentManagedFilesDrawer({
           {entry.kind === 'file' && !entry.sensitive && !entry.previewable && <span className="managed-file-meta">{t('managedFiles.noPreview')}</span>}
           {!entry.accessible && <span className="managed-file-meta is-warning">{t('managedFiles.outsideRoot')}</span>}
         </button>
-        {isDirectory && isExpanded && <div className="managed-file-children" data-depth={pathDepth(entry.relativePath)}>
+        {isDirectory && isExpanded && <div className="managed-file-children">
           {loadingDirectories.has(entry.relativePath) && !directories[entry.relativePath]
             ? <div className="managed-file-loading">{t('managedFiles.loading')}</div>
             : renderDirectory(entry.relativePath)}
