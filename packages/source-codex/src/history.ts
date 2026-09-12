@@ -351,10 +351,9 @@ async function* ingestCodexFileWithThreadNames(
   let sequence = reset ? 0 : previous.sequence
   let pendingCheckpointLines = 0
   let incompleteTail = false
-  let lastPersistedCheckpoint: HistoryCheckpoint | null = null
 
   const persistCheckpoint = async () => {
-    const checkpoint: HistoryCheckpoint = {
+    await ctx.checkpoint.set(key, {
       path: filePath,
       offset,
       sequence,
@@ -362,9 +361,7 @@ async function* ingestCodexFileWithThreadNames(
       mtimeMs: fileStat.mtimeMs,
       fileId: initialFileId,
       parserVersion: CODEX_PARSER_VERSION,
-    }
-    await ctx.checkpoint.set(key, checkpoint)
-    lastPersistedCheckpoint = checkpoint
+    })
     pendingCheckpointLines = 0
   }
 
@@ -394,8 +391,9 @@ async function* ingestCodexFileWithThreadNames(
   if (!ctx.abortSignal.aborted && !incompleteTail) {
     try {
       const finalStat = await stat(filePath)
-      if (sourceFileIdentity(finalStat) === initialFileId) {
-        const finalCheckpoint: HistoryCheckpoint = {
+      if (sourceFileIdentity(finalStat) === initialFileId
+        && (finalStat.size !== fileStat.size || finalStat.mtimeMs !== fileStat.mtimeMs)) {
+        await ctx.checkpoint.set(key, {
           path: filePath,
           offset,
           sequence,
@@ -403,16 +401,7 @@ async function* ingestCodexFileWithThreadNames(
           mtimeMs: finalStat.mtimeMs,
           fileId: initialFileId,
           parserVersion: CODEX_PARSER_VERSION,
-        }
-        if (!lastPersistedCheckpoint
-          || lastPersistedCheckpoint.offset !== finalCheckpoint.offset
-          || lastPersistedCheckpoint.sequence !== finalCheckpoint.sequence
-          || lastPersistedCheckpoint.size !== finalCheckpoint.size
-          || lastPersistedCheckpoint.mtimeMs !== finalCheckpoint.mtimeMs
-          || lastPersistedCheckpoint.fileId !== finalCheckpoint.fileId
-          || lastPersistedCheckpoint.parserVersion !== finalCheckpoint.parserVersion) {
-          await ctx.checkpoint.set(key, finalCheckpoint)
-        }
+        })
       }
     } catch (error) {
       if (!isMissingPathError(error)) throw error
