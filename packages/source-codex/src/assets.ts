@@ -175,16 +175,23 @@ function pluginIdentityFromCachePath(cacheRoot: string, manifestPath: string): {
   configId?: string
   pluginName?: string
   version?: string
+  pluginRoot?: string
 } {
   const relativeManifest = relative(cacheRoot, manifestPath).replaceAll('\\', '/')
   const parts = relativeManifest.split('/').filter(Boolean)
-  if (parts.length < 4) return {}
+  const manifestTail = parts.slice(3)
+  const validManifest = manifestTail.length === 1 && manifestTail[0] === 'plugin.json'
+    || manifestTail.length === 2
+      && manifestTail[0] === '.codex-plugin'
+      && manifestTail[1] === 'plugin.json'
+  if (parts.length < 4 || !validManifest) return {}
   const [marketplace, pluginName, version] = parts
   if (!marketplace || !pluginName || !version) return {}
   return {
     configId: `${pluginName}@${marketplace}`,
     pluginName,
     version,
+    pluginRoot: join(cacheRoot, marketplace, pluginName, version),
   }
 }
 
@@ -210,7 +217,8 @@ async function* discoverPluginManifests(
 
     const cacheIdentity = pluginIdentityFromCachePath(cacheRoot, manifestPath)
     const configId = cacheIdentity.configId
-    const configuredPlugin = configId ? configured.get(configId) : undefined
+    if (!configId || !cacheIdentity.pluginRoot) continue
+    const configuredPlugin = configured.get(configId)
     if (configId) seenConfigIds.add(configId)
 
     const name = typeof manifest.name === 'string' && manifest.name
@@ -222,7 +230,7 @@ async function* discoverPluginManifests(
       ? manifest.version
       : undefined
     const version = manifestVersion ?? cacheIdentity.version
-    const bindingPath = dirname(manifestPath)
+    const bindingPath = cacheIdentity.pluginRoot
     const observedAt = meta.mtime.toISOString()
     const configuredEnabled = configuredPlugin?.enabled
 
