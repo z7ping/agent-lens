@@ -217,7 +217,7 @@ export function AgentManagedFilesDrawer({
           : preview
             ? <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
             : <div className="managed-file-preview-empty">
-                <UiIcon name={selected?.sensitive ? 'alert' : 'tool-read'} size={18}/>
+                <UiIcon name={selected?.sensitive ? 'alert' : 'tool-read'} size={20}/>
                 <span>{selectedMessage}</span>
                 {error && <small>{error}</small>}
               </div>}
