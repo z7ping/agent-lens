@@ -9,6 +9,15 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { Button, Drawer, UiIcon } from './ui'
 
+function managedFileErrorMessage(error: unknown, t: (key: string) => string): string {
+  const status = error && typeof error === 'object' ? Reflect.get(error, 'status') : undefined
+  if (status === 403) return t('managedFiles.errorForbidden')
+  if (status === 404) return t('managedFiles.errorNotFound')
+  if (status === 413) return t('managedFiles.errorTooLarge')
+  if (status === 415) return t('managedFiles.errorUnsupported')
+  return t('managedFiles.errorGeneric')
+}
+
 interface AgentManagedFilesDrawerProps {
   open: boolean
   model: AgentLensClientModel
@@ -52,7 +61,7 @@ export function AgentManagedFilesDrawer({
       setError('')
     } catch (loadError) {
       if (generationRef.current !== generation) return
-      setError(loadError instanceof Error ? loadError.message : String(loadError))
+      setError(managedFileErrorMessage(loadError, t))
     } finally {
       if (generationRef.current === generation) {
         setLoadingDirectories(current => {
@@ -62,7 +71,7 @@ export function AgentManagedFilesDrawer({
         })
       }
     }
-  }, [installationId, model, productId, root])
+  }, [installationId, model, productId, root, t])
 
   useEffect(() => {
     if (!open) return
@@ -115,7 +124,7 @@ export function AgentManagedFilesDrawer({
       setPreview(result)
     } catch (previewError) {
       if (generationRef.current !== generation) return
-      setError(previewError instanceof Error ? previewError.message : String(previewError))
+      setError(managedFileErrorMessage(previewError, t))
     } finally {
       if (generationRef.current === generation) setPreviewLoading(false)
     }
