@@ -11,6 +11,8 @@ const files = {
   pi: p('pi-live.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'), taskTurnRail: p('task-turn-rail.css'),
   uiPrimitives: p('components/ui/ui-primitives.css'), uiOverlay: p('components/ui/overlay.css'),
   selectMenu: p('components/select-menu.css'), piStartup: p('components/pi-startup-disclosure.css'),
+  liveNotice: p('live-notice.css'), onboarding: p('integration-onboarding.css'), hubReview: p('hub-review.css'),
+  workspaceMenu: p('components/workspace-sidebar-menu.css'), codeBlock: p('components/copyable-code-block.css'),
 }
 
 const retired = [
@@ -67,11 +69,12 @@ function assertMinFont(key, includeShorthand = false) {
 for (const key of ['styles', 'theme', 'typography', 'readability', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail']) {
   assertMinFont(key)
 }
-for (const key of ['uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) assertMinFont(key, true)
-for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) {
+for (const key of ['uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup', 'liveNotice', 'onboarding', 'hubReview', 'workspaceMenu', 'codeBlock']) assertMinFont(key, true)
+for (const key of ['tokens', 'theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup', 'liveNotice', 'onboarding', 'hubReview', 'workspaceMenu', 'codeBlock']) {
   if (/!important\b/.test(css[key])) throw new Error(`${files[key]} 不得用 !important 争夺表现所有权`)
 }
 
+if (/\.source-dot\b|\.agent-card\b|!important\b/.test(css.tokens)) throw new Error('tokens.css 只允许定义 Token，不得承载组件选择器或 !important')
 if (!css.styles.includes('AgentLens 1.0 全局基础样式')) throw new Error('styles.css 必须保持为全局基础层')
 if (/\.app-header\b|\.tool-summary-grid\b|\.agent-card\b|\.review-page\b/.test(css.styles)) throw new Error('styles.css 不得承载一级页面专属规则')
 if (!/\.btn\s*\{[\s\S]*?display:\s*inline-flex;[\s\S]*?height:\s*30px;[\s\S]*?font-size:\s*12px;[\s\S]*?white-space:\s*nowrap;/m.test(css.styles)) {
@@ -106,6 +109,7 @@ for (const file of tsxFiles(root)) {
     if (!['12', '14', '16', '20'].includes(match[1])) throw new Error(`${file} 的 UiIcon 尺寸 ${match[1]} 不在统一档位内`)
   }
   if (/<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|pi-live-send)/.test(source)) throw new Error(`${file} 的纯图标操作必须复用 IconButton`)
+  if (/<details\b[^>]*className="[^"]*disclosure-group/.test(source)) throw new Error(`${file} 的通用折叠区必须复用 Disclosure Primitive`)
 }
 const duplicated = ['--al-canvas', '--al-surface', '--al-soft', '--al-line', '--al-ink', '--al-accent']
   .filter(token => new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`).test(css.theme))
@@ -118,11 +122,10 @@ if (!/\.filter\s*\{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/m.test(css.
 if (!/\.scope-chip\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('Agent 筛选 Chip 必须保持 32px / 13px')
 for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (!css.shellResponsive.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少断点 ${breakpoint}`)
 if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(css.shellResponsive)) throw new Error('xs 窄窗口必须保留 Logo')
-for (const legacy of ['1180px', '1100px', '1080px', '900px', '820px', '760px', '640px', '560px']) {
+for (const legacy of ['1180px', '1100px', '1080px', '900px', '860px', '820px', '760px', '640px', '560px']) {
   const re = new RegExp(`@media\\s*\\([^)]*(?:max-width|min-width)\\s*:\\s*${legacy.replace('.', '\\.')}\\b`)
-  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.backup) || re.test(css.pi) || re.test(css.taskCenter) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) {
-    throw new Error(`壳层/核心页面/统一组件不得恢复一次性断点：${legacy}`)
-  }
+  const owners = Object.entries(css).filter(([, source]) => re.test(source)).map(([key]) => files[key])
+  if (owners.length) throw new Error(`正式 UI 不得恢复一次性断点 ${legacy}：${owners.join(', ')}`)
 }
 
 if (!css.tools.includes('工具分析正式样式') || !css.tools.includes('.tool-summary-grid') || !css.tools.includes('.tool-table-card') || !css.tools.includes('.tool-attention-row') || !css.tools.includes('.tool-session-link') || !css.tools.includes('.tool-kind-svg')) throw new Error('工具分析关键能力样式缺失')
