@@ -383,7 +383,7 @@ export function BackupPage() {
         <div className="future-heading">
           <CompactPageHeading title={t('page.title')} description={t('page.description')}><span className="prototype-flag live">{t('page.liveData')}</span></CompactPageHeading>
           <div className="backup-heading-actions">
-            <Button variant="primary" disabled={Boolean(busy)} onClick={() => setCreateOpen(true)}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
+            {snapshots.length > 0 && <Button variant="primary" disabled={Boolean(busy)} onClick={() => setCreateOpen(true)}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>}
             <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>{t('page.refresh')}</Button>
           </div>
         </div>
@@ -465,7 +465,7 @@ export function BackupPage() {
                 <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>
                 <span className="backup-source-copy"><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{source.totalBytes === undefined ? t('create.files', { count: source.fileCount.toLocaleString(locale) }) : t('create.sourceSummary', { count: source.fileCount.toLocaleString(locale), size: formatBytes(source.totalBytes) })}</small></span>
               </label>
-              <button className="link-btn" onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button>
+              <button className="link-btn" onClick={() => { setCreateOpen(false); setDetailSourceId(source.sourceId) }}>{t('protection.details')}</button>
             </div>)}
           </div>
         </div>
