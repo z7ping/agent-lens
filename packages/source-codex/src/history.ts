@@ -182,27 +182,7 @@ async function existingProjectCwds(values: readonly string[]): Promise<string[]>
 
 export async function listCodexProjectCwds(ctx: SourceExecutionContext): Promise<string[]> {
   const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY)
-  if (remembered?.length) return existingProjectCwds(remembered)
-
-  const dataRoot = ctx.installation.dataRoot
-  if (!dataRoot) return []
-
-  const values = new Map<string, string>()
-  for (const filePath of await listJsonlFiles(dataRoot)) {
-    if (ctx.abortSignal.aborted) break
-    const session = await readSessionMetadata(filePath)
-    const rawCwd = session.cwd?.trim()
-    if (!rawCwd || !isAbsolute(rawCwd)) continue
-    const cwd = resolve(rawCwd)
-    const key = cwdPathKey(cwd)
-    if (!values.has(key)) values.set(key, cwd)
-  }
-
-  const existing = await existingProjectCwds([...values.values()])
-  if (!ctx.abortSignal.aborted) {
-    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, existing)
-  }
-  return existing
+  return remembered?.length ? existingProjectCwds(remembered) : []
 }
 
 function parseLine(text: string): Record<string, unknown> {
