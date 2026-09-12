@@ -86,22 +86,35 @@ export async function watchSourceFiles(
   options.signal.addEventListener('abort', abort, { once: true })
 
   await new Promise<void>((resolve, reject) => {
-    if (!watcher || stopped || options.signal.aborted) {
+    const active = watcher
+    if (!active || stopped || options.signal.aborted) {
       resolve()
       return
     }
 
-    let ready = false
+    const cleanup = () => {
+      active.removeListener('ready', handleReady)
+      active.removeListener('error', handleInitialError)
+      options.signal.removeEventListener('abort', handleAbort)
+    }
     const handleReady = () => {
-      ready = true
+      cleanup()
+      active.on('error', reportError)
       resolve()
     }
-    const handleError = (error: unknown) => {
+    const handleInitialError = (error: unknown) => {
+      cleanup()
       reportError(error)
-      if (!ready) reject(error)
+      reject(error)
     }
-    watcher.once('ready', handleReady)
-    watcher.on('error', handleError)
+    const handleAbort = () => {
+      cleanup()
+      resolve()
+    }
+
+    active.once('ready', handleReady)
+    active.once('error', handleInitialError)
+    options.signal.addEventListener('abort', handleAbort, { once: true })
   }).catch(async error => {
     stopped = true
     await closeWatcher()
