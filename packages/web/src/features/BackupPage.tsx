@@ -514,12 +514,7 @@ export function BackupPage({
           </section>
         </> : <section className="backup-history-section">
           <div className="backup-section-head">
-            <div>
-              <h2>{t('assetView.historyTitle')}</h2>
-              <span>{selectedAssetSourceId
-                ? t('assetView.historyFilteredHint', { agent: sourceLabel(selectedAssetSourceId, focusedSource?.displayName) })
-                : t('assetView.historyHint')}</span>
-            </div>
+            <div><h2>{t('assetView.historyTitle')}</h2></div>
             {visibleSnapshots.length > 0 && <Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>}
           </div>
           {visibleSnapshots.length ? <div className="backup-snapshot-list">
@@ -527,7 +522,6 @@ export function BackupPage({
               const checked = verification[snapshot.id]
               return <article key={snapshot.id} className="backup-snapshot-row">
                 <div className="backup-snapshot-main">
-                  <span className="snapshot-icon">{checked ? (checked.valid ? <UiIcon name="check" size={14}/> : <UiIcon name="alert" size={14}/>) : <UiIcon name="dot" size={14}/>}</span>
                   <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</small><small className="backup-snapshot-meta">{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
                 </div>
                 <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</div>
@@ -543,7 +537,6 @@ export function BackupPage({
       open
       className="backup-create-drawer"
       title={t('create.title')}
-      description={t('create.description')}
       onClose={() => { if (!busy) setCreateOpen(false) }}
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
