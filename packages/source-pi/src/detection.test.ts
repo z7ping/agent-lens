@@ -53,3 +53,29 @@ test('Pi Source uses the shared PATH discovery contract', async () => {
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test('Pi Source exposes provider-resolved configRoot and configured session dataRoot', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-roots-'))
+  const configRoot = join(root, 'agent')
+  const sessionsRoot = join(root, 'custom-sessions')
+  try {
+    await mkdir(configRoot, { recursive: true })
+    await mkdir(sessionsRoot, { recursive: true })
+    await writeFile(
+      join(configRoot, 'settings.json'),
+      JSON.stringify({ sessionDir: sessionsRoot }),
+      'utf8',
+    )
+
+    const [detected] = await detectPi(context({
+      PI_CODING_AGENT_DIR: configRoot,
+      PATH: '',
+    }))
+
+    assert.equal(detected?.configRoot, configRoot)
+    assert.equal(detected?.dataRoot, sessionsRoot)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
