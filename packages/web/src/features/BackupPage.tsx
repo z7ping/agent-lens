@@ -407,24 +407,21 @@ export function BackupPage({
 
         {activeView === 'assets' ? <>
           <section className="backup-overview-strip" aria-label={t('assetView.overviewAria')}>
-            <div className="backup-overview-primary">
-              <b>{focusedSource ? sourceLabel(focusedSource.sourceId, focusedSource.displayName) : t('assetView.allAgents')}</b>
-              <span>{focusedSource
-                ? t('assetView.focusedOverview', {
-                    files: protectedFiles.toLocaleString(locale),
-                    size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
-                  })
-                : t('assetView.overview', {
-                    agents: visibleAssetSources.length.toLocaleString(locale),
-                    files: protectedFiles.toLocaleString(locale),
-                    size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
-                  })}</span>
-            </div>
-            <div className="backup-overview-secondary">
-              <span>{indexTime ? t('assetView.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
-              <span>{t('assetView.excluded', { count: assetExcludedFiles.toLocaleString(locale) })}</span>
-              <span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span>
-            </div>
+            <div><span>{t('assetView.scopeLabel')}</span><b>{focusedSource ? sourceLabel(focusedSource.sourceId, focusedSource.displayName) : t('assetView.allAgents')}</b></div>
+            <div><span>{t('assetView.scaleLabel')}</span><b>{focusedSource
+              ? t('assetView.focusedOverview', {
+                  files: protectedFiles.toLocaleString(locale),
+                  size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
+                })
+              : t('assetView.overview', {
+                  agents: visibleAssetSources.length.toLocaleString(locale),
+                  files: protectedFiles.toLocaleString(locale),
+                  size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
+                })}</b></div>
+            <div><span>{t('assetView.indexLabel')}</span><b className={indexRefreshing ? 'is-warning' : ''}>{indexTime ? t('assetView.indexState', {
+              time: formatTime(indexTime, locale),
+              excluded: assetExcludedFiles.toLocaleString(locale),
+            }) : t('protection.indexPreparing')}</b></div>
           </section>
 
           <section className="backup-assets-section">
@@ -434,7 +431,7 @@ export function BackupPage({
               const coreKinds = RECOMMENDED_KINDS.filter(kind => kindFiles(source, kind) > 0)
               const historyKinds = HISTORY_ASSET_KINDS.filter(kind => kindFiles(source, kind) > 0)
               const primaryRoot = source.roots?.[0]
-              return <article key={source.sourceId} className="backup-agent-asset-summary">
+              return <article key={source.sourceId} className="backup-agent-asset-summary" data-source={source.sourceId}>
                 <div className="backup-agent-asset-head">
                   <div className="backup-agent-title">
                     <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
