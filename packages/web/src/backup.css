@@ -343,14 +343,6 @@
   font-weight: 680;
 }
 
-.backup-section-head > div > span {
-  display: block;
-  margin-top: 4px;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
 .backup-asset-kind-list {
   border-top: 1px solid var(--al-line);
 }
@@ -461,10 +453,7 @@
 .backup-snapshot-row:hover { background: var(--al-soft-2); }
 
 .backup-snapshot-main {
-  display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 9px;
 }
 
 .backup-snapshot-main > span:last-child { min-width: 0; }
@@ -486,17 +475,6 @@
   margin-top: 2px;
   color: var(--al-muted);
   font-size: 12px;
-}
-
-.snapshot-icon {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--al-accent-soft);
-  color: var(--al-accent);
 }
 
 .backup-snapshot-meta { color: var(--al-muted-2); }
