@@ -232,6 +232,7 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   const scopes = assetScopeLabels(asset, t)
   const presentationType = assetPresentationType(asset.type)
   const defaultModel = asset.type === 'model' && asset.bindings.some(binding => binding.source?.startsWith('pi:model:default:'))
+  const displayName = asset.displayName ?? asset.canonicalName
   return <div className="asset-item">
     <div className="asset-item-head">
       <span className="asset-type">{translatedLabel(assetTypeLabelKey, presentationType, t)}</span>
@@ -244,7 +245,8 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
       {scopes.length > 2 && <span className="asset-scope">+{scopes.length - 2}</span>}
       {usage > 0 && <span className="asset-usage">{t('realCalls', { count: usage })}</span>}
     </div>
-    <div className="asset-name" title={asset.displayName ?? asset.canonicalName}>{asset.displayName ?? asset.canonicalName}</div>
+    <div className="asset-name" title={displayName}>{displayName}</div>
+    {asset.type === 'model' && <div className="asset-model-id"><code>{asset.canonicalName}</code></div>}
     <div className="asset-states">
       {states.length ? <>{states.slice(0, 3).map(item => <StateBadge key={item.state} state={item.state} value={item.value}/>)}{states.length > 3 && <span className="asset-more-state">+{states.length - 3}</span>}</> : <span className="asset-discovered">{t('discovered')}</span>}
     </div>
