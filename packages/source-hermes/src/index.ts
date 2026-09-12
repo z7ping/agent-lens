@@ -14,7 +14,6 @@ import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
   type DetectedSource,
-  type DiscoveredAsset,
   type Disposable,
   type EvidenceCandidate,
   type NormalizedSourceOutput,
