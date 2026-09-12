@@ -106,7 +106,7 @@ class MemoryRecoveryStore implements PiLiveRecoveryStore {
 }
 
 test('Pi Live Runtime 插件显式声明 storage 注入依赖', () => {
-  assert.equal(piLiveRuntimePlugin.inject.includes('storage'), true)
+  assert.equal(piLiveRuntimePlugin.inject?.includes('storage'), true)
 })
 
 test('新建 Runtime 可交互就绪不等待 Recovery checkpoint', async () => {
