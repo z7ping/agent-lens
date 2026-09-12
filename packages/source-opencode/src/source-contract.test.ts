@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
 import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareOpenCodeCapabilities,
+  discoverOpenCodeAssets,
   normalizeOpenCodeRecord,
   openCodeSourceInternals,
 } from './index'
@@ -92,10 +96,11 @@ test('OpenCode normalizer leaves generic text bounding to central CapturePolicy'
   assert.equal((normalized.observations[0]?.payload as { text?: string }).text?.length, text.length)
 })
 
-test('OpenCode asset discovery remains unavailable until native inventory semantics are proven', async () => {
+test('OpenCode asset discovery is partial and keeps runtime state conservative', async () => {
   const capabilities = await declareOpenCodeCapabilities({} as never)
   const assets = capabilities.find(item => item.name === 'asset-discovery')
-  assert.equal(assets?.status, 'unavailable')
+  assert.equal(assets?.status, 'partial')
+  assert.deepEqual(assets?.captureModes, ['static-scan'])
 })
 
 test('OpenCode parser replay neutralizes legacy row fallback nativeId', async () => {
@@ -140,4 +145,119 @@ test('OpenCode sessionless row stays evidence-only instead of creating an unknow
   const normalized = await normalizeOpenCodeRecord(value, {} as never)
   assert.deepEqual(normalized.observations, [])
   assert.equal(normalized.evidenceCandidates.length, 1)
+})
+
+
+test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-opencode-assets-'))
+  const configRoot = join(root, 'config', 'opencode')
+  const projectRoot = join(root, 'workspace')
+  const cwd = join(projectRoot, 'packages', 'web')
+  const packageDir = dirname(cwd)
+
+  await mkdir(join(projectRoot, '.git'), { recursive: true })
+  await mkdir(cwd, { recursive: true })
+  await mkdir(configRoot, { recursive: true })
+  await mkdir(join(configRoot, 'skills', 'global-review'), { recursive: true })
+  await mkdir(join(projectRoot, '.opencode', 'skills', 'root-review'), { recursive: true })
+  await mkdir(join(packageDir, '.opencode', 'skills', 'package-review'), { recursive: true })
+  await mkdir(join(projectRoot, '.opencode', 'agents'), { recursive: true })
+  await mkdir(join(projectRoot, '.opencode', 'commands'), { recursive: true })
+  await mkdir(join(projectRoot, '.opencode', 'plugins'), { recursive: true })
+
+  await writeFile(join(configRoot, 'AGENTS.md'), '# global instructions\n', 'utf8')
+  await writeFile(join(projectRoot, 'AGENTS.md'), '# project instructions\n', 'utf8')
+  await writeFile(join(packageDir, 'AGENTS.md'), '# package instructions\n', 'utf8')
+  await writeFile(join(configRoot, 'skills', 'global-review', 'SKILL.md'), '# global skill\n', 'utf8')
+  await writeFile(join(projectRoot, '.opencode', 'skills', 'root-review', 'SKILL.md'), '# root skill\n', 'utf8')
+  await writeFile(join(packageDir, '.opencode', 'skills', 'package-review', 'SKILL.md'), '# package skill\n', 'utf8')
+  await writeFile(join(projectRoot, '.opencode', 'agents', 'reviewer.md'), '# reviewer\n', 'utf8')
+  await writeFile(join(projectRoot, '.opencode', 'commands', 'ship.md'), '# ship\n', 'utf8')
+  await writeFile(join(projectRoot, '.opencode', 'plugins', 'notify.ts'), 'export const Notify = () => ({})\n', 'utf8')
+
+  await writeFile(join(configRoot, 'opencode.jsonc'), [
+    '{',
+    '  // global JSONC must parse without hand-written comment stripping',
+    '  "mcp": {',
+    '    "docs": { "type": "local", "command": ["node"] },',
+    '    "off": { "type": "local", "command": ["node"], "disabled": true },',
+    '  },',
+    '  "agents": { "reviewer": {} },',
+    '  "commands": { "doctor": {} },',
+    '  "plugins": ["pkg-one", { "package": "@scope/pkg-two" }],',
+    '}',
+    '',
+  ].join('\n'), 'utf8')
+  await writeFile(join(projectRoot, 'opencode.jsonc'), [
+    '{',
+    '  "mcp": { "project-docs": { "type": "local", "command": ["node"] } },',
+    '  "plugin": ["legacy-compatible-plugin"],',
+    '}',
+    '',
+  ].join('\n'), 'utf8')
+
+  const ctx = {
+    installation: {
+      id: 'installation-opencode',
+      hostId: 'host',
+      productId: 'opencode',
+      configRoot,
+      dataRoot: join(root, 'data'),
+      firstSeenAt: '2026-09-12T00:00:00.000Z',
+      lastSeenAt: '2026-09-12T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+    checkpoint: {
+      async get<T>(key: string): Promise<T | undefined> {
+        return key === 'opencode:known-project-cwds:v1'
+          ? [cwd] as unknown as T
+          : undefined
+      },
+      async set() {},
+    },
+  } as unknown as SourceExecutionContext
+
+  try {
+    const assets = []
+    for await (const asset of discoverOpenCodeAssets(ctx)) assets.push(asset)
+
+    const paths = new Set(assets.flatMap(asset => asset.binding?.path ? [asset.binding.path] : []))
+    assert.equal(paths.has(join(configRoot, 'AGENTS.md')), true)
+    assert.equal(paths.has(join(projectRoot, 'AGENTS.md')), true)
+    assert.equal(paths.has(join(packageDir, 'AGENTS.md')), true)
+    assert.equal(paths.has(join(projectRoot, '.opencode', 'skills', 'root-review')), true)
+    assert.equal(paths.has(join(packageDir, '.opencode', 'skills', 'package-review')), true)
+    assert.equal(paths.has(join(projectRoot, '.opencode', 'agents', 'reviewer.md')), true)
+    assert.equal(paths.has(join(projectRoot, '.opencode', 'commands', 'ship.md')), true)
+    assert.equal(paths.has(join(projectRoot, '.opencode', 'plugins', 'notify.ts')), true)
+
+    const globalInstruction = assets.find(asset => asset.binding?.path === join(configRoot, 'AGENTS.md'))
+    const projectInstruction = assets.find(asset => asset.binding?.path === join(projectRoot, 'AGENTS.md'))
+    assert.equal(globalInstruction?.binding?.scope, 'user')
+    assert.equal(projectInstruction?.binding?.scope, 'project')
+    assert.equal(projectInstruction?.binding?.scopeRoot, projectRoot)
+    assert.equal(projectInstruction?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
+
+    const mcp = (name: string) => assets.find(asset =>
+      asset.definition.type === 'mcp' && asset.definition.canonicalName === name)
+    assert.equal(mcp('docs')?.binding?.scope, 'user')
+    assert.equal(mcp('docs')?.states?.find(state => state.state === 'enabled')?.value, 'unknown')
+    assert.equal(mcp('off')?.states?.find(state => state.state === 'enabled')?.value, false)
+    assert.equal(mcp('off')?.states?.find(state => state.state === 'discoverable')?.value, false)
+    assert.equal(mcp('project-docs')?.binding?.scope, 'project')
+
+    const configuredPlugins = assets.filter(asset =>
+      asset.definition.type === 'plugin'
+      && asset.states?.some(state => state.state === 'configured' && state.value === true))
+    assert.ok(configuredPlugins.some(asset => asset.definition.canonicalName === 'pkg-one'))
+    assert.ok(configuredPlugins.some(asset => asset.definition.canonicalName === '@scope/pkg-two'))
+    assert.ok(configuredPlugins.some(asset => asset.definition.canonicalName === 'legacy-compatible-plugin'))
+    assert.equal(
+      configuredPlugins.find(asset => asset.definition.canonicalName === 'pkg-one')
+        ?.states?.find(state => state.state === 'installed')?.value,
+      'unknown',
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
