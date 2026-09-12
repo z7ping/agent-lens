@@ -8,6 +8,7 @@ import type {
   ManagedAssetRoot,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
+import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { Button, Drawer, UiIcon } from './ui'
 
 function managedFileErrorMessage(error: unknown, t: TFunction): string {
@@ -159,7 +160,7 @@ export function AgentManagedFilesDrawer({
         >
           <span className="managed-file-chevron" aria-hidden="true">
             {isDirectory
-              ? <UiIcon name="chevron-right" size={13} className={isExpanded ? 'is-expanded' : undefined}/>
+              ? <UiIcon name="chevron-right" size={14} className={isExpanded ? 'is-expanded' : undefined}/>
               : <span className="managed-file-leaf-dot">·</span>}
           </span>
           <span className="managed-file-name">{entry.name}</span>
@@ -214,7 +215,7 @@ export function AgentManagedFilesDrawer({
         {previewLoading
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
           : preview
-            ? <pre className="managed-file-preview-content"><code>{preview.content}</code></pre>
+            ? <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
             : <div className="managed-file-preview-empty">
                 <UiIcon name={selected?.sensitive ? 'alert' : 'tool-read'} size={18}/>
                 <span>{selectedMessage}</span>
