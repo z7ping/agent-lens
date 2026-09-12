@@ -4,7 +4,6 @@ export {
   Disclosure,
   IconButton,
   Input,
-  Select,
   StatusBadge,
   Textarea,
   Toolbar,

@@ -4,7 +4,6 @@ import type {
   HTMLAttributes,
   InputHTMLAttributes,
   ReactNode,
-  SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -72,10 +71,6 @@ export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElem
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={classes('ui-field', 'ui-textarea', className)} {...props}/>
-}
-
-export function Select({ className, children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={classes('ui-field', 'ui-select', className)} {...props}>{children}</select>
 }
 
 export type StatusTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger'

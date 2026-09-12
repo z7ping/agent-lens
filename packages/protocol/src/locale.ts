@@ -2,6 +2,12 @@ import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
 export const AGENT_LENS_LOCALE_API_VERSION = 1 as const
 export const OFFICIAL_AGENT_LENS_LOCALE = 'zh-CN' as const
+export const BUILTIN_AGENT_LENS_ENGLISH_LOCALE = 'en-US' as const
+export const BUILTIN_AGENT_LENS_LOCALES = [OFFICIAL_AGENT_LENS_LOCALE, BUILTIN_AGENT_LENS_ENGLISH_LOCALE] as const
+
+export function isBuiltinAgentLensLocale(locale: string): boolean {
+  return (BUILTIN_AGENT_LENS_LOCALES as readonly string[]).includes(locale)
+}
 
 export type LocaleMessageValueDto = string | { [key: string]: LocaleMessageValueDto }
 export type LocaleMessagesDto = Record<string, LocaleMessageValueDto>

@@ -1,6 +1,6 @@
 # AgentLens 社区 Locale Pack
 
-AgentLens 官方只维护简体中文（`zh-CN`）。其他语言通过社区 Locale Pack 扩展。
+AgentLens 内置并维护简体中文（`zh-CN`）和英文（`en-US`）。简体中文仍是产品 fallback 基线；其他语言通过社区 Locale Pack 扩展。
 
 Locale Pack 是**纯 JSON 数据文件**，不会作为 JavaScript、Node.js 或 Cordis 插件执行。
 
@@ -39,7 +39,7 @@ locales/
 
 - `locale` 必须是有效 BCP 47 语言标签；
 - `messages` 只能包含对象与字符串，不能包含数组或可执行内容；
-- 社区包不能覆盖官方 `zh-CN`；
+- 社区包不能覆盖内置 `zh-CN` 或 `en-US`；
 - 同一个 locale 只能安装一个语言包；
 - 单文件最大 1 MiB；
 - 未提供的 key 自动回退到官方简体中文；
@@ -53,6 +53,14 @@ locales/
 - `navigation`
 - `shell`
 - `settings`
+- `agents`
+- `insights`
+- `tools`
+- `task`
+- `piLive`
+- `backup`
+- `review`
+- `release`
 - `errors`
 
-后续页面迁移时会继续增加产品域 namespace。社区语言包不必一次覆盖全部 key。
+社区语言包不必一次覆盖全部 key；缺失 key 继续回退到简体中文基线。

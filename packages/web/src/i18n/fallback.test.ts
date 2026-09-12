@@ -11,12 +11,12 @@ test('partial community Locale Pack falls back to official zh-CN', async () => {
   resetLocaleRegistry()
   registerLocalePack({
     localeApiVersion: 1,
-    locale: 'en-US',
-    name: 'Partial English Test',
+    locale: 'fr-FR',
+    name: 'Partial French Test',
     compatibility: { agentLensMajor: 1 },
     messages: {
       navigation: {
-        task: 'Tasks',
+        task: 'Tâches',
       },
     },
   })
@@ -24,14 +24,14 @@ test('partial community Locale Pack falls back to official zh-CN', async () => {
   const instance = createInstance()
   await instance.init({
     resources: resourceBundles(),
-    lng: 'en-US',
+    lng: 'fr-FR',
     fallbackLng: 'zh-CN',
     defaultNS: 'common',
     ns: ['common', 'navigation'],
     interpolation: { escapeValue: false },
   })
 
-  assert.equal(instance.t('navigation:task'), 'Tasks')
+  assert.equal(instance.t('navigation:task'), 'Tâches')
   assert.equal(instance.t('navigation:agents'), '智能体')
   assert.equal(instance.t('common:loadingWorkspace'), '正在加载工作区')
 })

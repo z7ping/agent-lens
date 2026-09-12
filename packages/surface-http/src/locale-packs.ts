@@ -4,7 +4,7 @@ import { extname, join } from 'node:path'
 import {
   AGENT_LENS_LOCALE_API_VERSION,
   AGENT_LENS_PROTOCOL_VERSION,
-  OFFICIAL_AGENT_LENS_LOCALE,
+  isBuiltinAgentLensLocale,
   parseLocalePackDto,
   type LocalePackListResponseDto,
   type RejectedLocalePackDto,
@@ -44,8 +44,8 @@ export async function discoverLocalePacks(
           throw new Error(`Locale Pack exceeds ${MAX_LOCALE_PACK_BYTES} bytes`)
         }
         const pack = parseLocalePackDto(JSON.parse(await readFile(filePath, 'utf8')))
-        if (pack.locale === OFFICIAL_AGENT_LENS_LOCALE) {
-          throw new Error('community Locale Pack cannot override official zh-CN')
+        if (isBuiltinAgentLensLocale(pack.locale)) {
+          throw new Error(`community Locale Pack cannot override built-in locale: ${pack.locale}`)
         }
         if (items.some(item => item.locale === pack.locale)) {
           throw new Error(`duplicate locale: ${pack.locale}`)

@@ -51,7 +51,7 @@ tokens
 
 - Button / IconButton
 - Input / Textarea
-- Select
+- SelectMenu（禁止原生 `<select>`）
 - Badge / StatusBadge / StatusDot
 - Disclosure
 - Toolbar / ToolbarGroup

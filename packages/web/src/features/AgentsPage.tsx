@@ -16,7 +16,7 @@ import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
-import { Button, Disclosure, IconButton, Select, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 import {
   IntegrationAdvancedActions,
@@ -390,21 +390,29 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
       {management?.packageState && <span><small>{t('installation.integrationVersion')}</small><b>{management.packageState.installedVersion ?? management.packageState.availableVersion ?? t('installation.notAdded')}</b></span>}
       <span className="agent-config"><small>{t('installation.configDirectory')}</small>{agent.installations.length > 1
-        ? <Select
-            aria-label={t('installation.configDirectory')}
+        ? <SelectMenu
+            ariaLabel={t('installation.configDirectory')}
             value={installation?.id ?? ''}
-            onChange={event => {
-              setSelectedInstallationId(event.target.value)
+            options={agent.installations.map(item => {
+              const labelPath = item.configRoot ?? item.dataRoot ?? item.executable ?? item.id
+              const label = item.version
+                ? `${item.version} · ${shortPath(labelPath, 42)}`
+                : shortPath(labelPath, 52)
+              return {
+                value: item.id,
+                label,
+                description: labelPath,
+                tooltip: labelPath,
+              }
+            })}
+            variant="toolbar"
+            menuWidth={420}
+            onChange={value => {
+              setSelectedInstallationId(value)
               setManagedRoot(null)
               setShowAllBindings(false)
             }}
-          >
-            {agent.installations.map(item => {
-              const labelPath = item.configRoot ?? item.dataRoot ?? item.executable ?? item.id
-              const label = item.version ? `${item.version} · ${shortPath(labelPath, 42)}` : shortPath(labelPath, 52)
-              return <option key={item.id} value={item.id}>{label}</option>
-            })}
-          </Select>
+          />
         : <code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code>}
       </span>
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}

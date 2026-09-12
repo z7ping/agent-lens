@@ -83,6 +83,7 @@ if (!/export function Dialog\b/.test(readFileSync(p('components/ui/Overlay.tsx')
   throw new Error('统一 Overlay 必须保留 Dialog / Drawer / Popover')
 }
 if (!/export \{ SelectMenu \} from '\.\.\/SelectMenu'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('高级 SelectMenu 必须经统一 UI 出口导出')
+if (/export function Select\b/.test(readFileSync(p('components/ui/Primitives.tsx'), 'utf8'))) throw new Error('原生 Select Primitive 已退役；统一使用 SelectMenu')
 if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('UiIcon 必须经统一 UI 出口导出')
 const appShell = readFileSync(p('App.tsx'), 'utf8')
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
@@ -113,7 +114,7 @@ for (const file of cssFiles(root)) {
   const tooSmall = [...pixelFonts(source), ...shorthandFonts(source)].filter(value => value > 0 && value < 12)
   if (tooSmall.length) throw new Error(`${normalizedFile} 出现小于 12px 的有效字号：${[...new Set(tooSmall)].join(', ')}px`)
 
-  if (normalizedFile !== files.styles && /!important\b/.test(source)) {
+  if (normalizedFile !== normalizedStylesFile && /!important\b/.test(source)) {
     throw new Error(`${normalizedFile} 不得用 !important 争夺表现所有权`)
   }
 
@@ -125,6 +126,9 @@ for (const file of cssFiles(root)) {
 }
 for (const file of tsxFiles(root)) {
   const source = readFileSync(file, 'utf8')
+  if (/<select\b/i.test(source)) {
+    throw new Error(`${file} 不得使用原生 select；统一复用 SelectMenu`)
+  }
   if (/<details\b[^>]*className=["'][^"']*\bdisclosure-group\b/.test(source)) {
     throw new Error(`${file} 的通用折叠区必须复用 Disclosure，不得手写 disclosure-group details`)
   }
