@@ -21,6 +21,9 @@ import {
   type IntegrationPreferencesResponseDto,
   type IntegrationToolDiscoveryResponseDto,
   type LiveUpdateEventDto,
+  type ManagedAssetDirectoryResponseDto,
+  type ManagedAssetFilePreviewResponseDto,
+  type ManagedAssetRoot,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
   type ReviewResponseDto,
@@ -168,6 +171,25 @@ export class AgentLensApi {
   }
   rescanAgents(): Promise<AgentRescanResponseDto> {
     return requestJson('/api/v1/agents/rescan', { method: 'POST' })
+  }
+  managedAssetDirectory(
+    productId: string,
+    installationId: string,
+    root: ManagedAssetRoot,
+    path = '',
+  ): Promise<ManagedAssetDirectoryResponseDto> {
+    const params = new URLSearchParams({ installationId, root })
+    if (path) params.set('path', path)
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`)
+  }
+  managedAssetFile(
+    productId: string,
+    installationId: string,
+    root: ManagedAssetRoot,
+    path: string,
+  ): Promise<ManagedAssetFilePreviewResponseDto> {
+    const params = new URLSearchParams({ installationId, root, path })
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`)
   }
   integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     return requestJson('/api/v1/integrations/discovery')
