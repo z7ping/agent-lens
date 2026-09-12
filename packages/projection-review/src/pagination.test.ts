@@ -131,6 +131,44 @@ test('ReviewProjection can jump to the latest rounds and page backward by comple
   }
 })
 
+test('ReviewProjection bounds a background-only backward tail and supplies a continuation cursor', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-backward-budget-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    let logicalSessionId = ''
+
+    for (let sequence = 1; sequence <= 300; sequence += 1) {
+      const at = new Date(Date.UTC(2026, 7, 21, 6, 0, 0, sequence)).toISOString()
+      const result = await observations.commit({
+        sourceId: 'codex', host, installation,
+        candidate: {
+          kind: sequence === 1 ? 'message.user' : 'unknown',
+          nativeEventId: `backward-budget-${sequence}`, sourceSequence: sequence, occurredAt: at, capturedAt: at,
+          payload: { text: `事件 ${sequence}` },
+          identityHints: { nativeSessionId: 'review-backward-budget-session' },
+          dedupHints: { nativeEventId: `backward-budget-${sequence}` },
+        },
+        evidenceCandidates: [],
+      })
+      logicalSessionId ||= result.observation.logicalSessionId
+    }
+
+    const projection = new ReviewProjection(storage)
+    const latest = await projection.get(logicalSessionId, { direction: 'backward', limit: 10 })
+    assert.ok(latest)
+    assert.equal(latest.interactions.length, 1)
+    assert.equal(latest.interactions[0]?.nodes.length, 240)
+    assert.equal(latest.page.hasMore, true)
+    assert.ok(latest.page.nextCursor)
+  } finally {
+    storage.close()
+  }
+})
+
 test('ReviewProjection evaluates error and latency filters against the complete session on the server', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

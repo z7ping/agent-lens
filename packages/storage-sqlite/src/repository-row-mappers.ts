@@ -43,6 +43,7 @@ const OBSERVATION_KIND = [
   'context.compaction',
   'context.summary',
   'context.injected',
+  'runtime.startup',
   'artifact.action',
   'usage',
   'unknown',

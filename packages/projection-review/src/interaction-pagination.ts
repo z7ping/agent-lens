@@ -188,8 +188,10 @@ export class ReviewInteractionPager {
     let pendingDescending: TimelineItemDto[] = []
     const groupsLatestFirst: TimelineItemDto[][] = []
     let exhausted = false
+    let reachedObservationBudget = false
+    let scannedObservations = 0
 
-    while (!exhausted && groupsLatestFirst.length < limit) {
+    while (!exhausted && !reachedObservationBudget && groupsLatestFirst.length < limit) {
       const page = await this.timeline.query({
         logicalSessionId,
         ...(timelineCursor ? { cursor: timelineCursor } : {}),
@@ -198,14 +200,26 @@ export class ReviewInteractionPager {
       })
       for (const item of [...page.items].reverse()) {
         pendingDescending.push(item)
+        scannedObservations += 1
         if (item.kind === 'message.user') {
           groupsLatestFirst.push([...pendingDescending].reverse())
           pendingDescending = []
           if (groupsLatestFirst.length >= limit) break
         }
+        // A background-only tail can otherwise make a normal backward page scan
+        // an unbounded session looking for a user boundary. Return this bounded
+        // group with a cursor so the next page can continue from its oldest item.
+        if (scannedObservations >= MAX_PAGE_OBSERVATIONS) {
+          if (pendingDescending.length) {
+            groupsLatestFirst.push([...pendingDescending].reverse())
+            pendingDescending = []
+          }
+          reachedObservationBudget = true
+          break
+        }
       }
 
-      if (groupsLatestFirst.length >= limit) break
+      if (groupsLatestFirst.length >= limit || reachedObservationBudget) break
       if (!page.meta.hasMore) {
         exhausted = true
         if (pendingDescending.length) {
@@ -223,7 +237,7 @@ export class ReviewInteractionPager {
     const chronologicalGroups = [...groupsLatestFirst].reverse()
     const startingOrdinal = endingOrdinal - chronologicalGroups.length + 1
     const interactions = buildInteractionGroups(chronologicalGroups, startingOrdinal)
-    const hasMore = filter === 'latest' ? false : startingOrdinal > 1
+    const hasMore = filter === 'latest' ? false : reachedObservationBudget || startingOrdinal > 1
     const oldestIncluded = chronologicalGroups[0]?.[0]
     const nextCursor = hasMore && oldestIncluded
       ? encodeReviewCursor({
