@@ -425,7 +425,7 @@ export function BackupPage({
                   </article>)}
                 </div>
                 <div className="future-section-label">{t('protection.currentDirectory')}</div>
-                <div className="integrity-strip"><strong>{t('protection.localVault')}</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')} · {t('protection.noCanonicalWrite')}</span></div>
+                <div className="integrity-strip"><strong>{t('protection.localVault')}</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span></div>
               </div>
             </section>
 
@@ -474,11 +474,6 @@ export function BackupPage({
               </div>
             </section>
 
-            <section className="future-card"><div className="future-card-head"><div><h3>{t('principles.title')}</h3></div></div><div className="future-card-body backup-principles">
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.understand')}</span><b>{t('principles.logicalPhysical')}</b></div></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.originalFirst')}</span><b>{t('principles.nativeSessions')}</b></div></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.noCleanup')}</span><b>{t('principles.noDelete')}</b></div></div>
-            </div></section>
           </aside>
         </div>
       </main>
