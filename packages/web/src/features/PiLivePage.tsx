@@ -307,7 +307,6 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
     <section className="pi-live-start-card">
       <div className="pi-live-start-kicker">{t('start.kicker')}</div>
       <h1>{t('start.title')}</h1>
-      <p>{t('start.description')}</p>
       <label>{t('start.cwd')}<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder={t('start.cwdPlaceholder')} autoFocus/></label>
       <Disclosure summary={t('start.modelSettings')} className="pi-live-start-model-settings">
         <div className="pi-live-start-grid">
@@ -323,7 +322,7 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
       </div>
     </section>
     {known.length > 0 && <section className="pi-live-known-card">
-      <div><b>{t('start.backgroundTitle')}</b><span>{t('start.backgroundDescription')}</span></div>
+      <div><b>{t('start.backgroundTitle')}</b></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
         <span>{piLiveSessionTitle(item)}</span>
         <small>{modelLabel(item)} · {item.status === 'initializing' ? t('start.initializing') : item.status === 'failed' ? t('start.failed') : item.isStreaming ? t('start.working') : t('start.waiting')}</small>
