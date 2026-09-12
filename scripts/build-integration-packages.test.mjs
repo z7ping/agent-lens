@@ -27,6 +27,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
   )
   assert.equal(specs.every(item => item.apiVersion === '1.0'), true)
   assert.equal(specs.every(item => item.entryExport === 'default'), true)
+  assert.equal(specs.some(item => 'bundledVersion' in item), false)
 })
 
 test('runtime Integration manifest must match Official Catalog identity and Plugin API', () => {
@@ -88,7 +89,6 @@ test('bundle spec keeps package identity, API version and entry export from Cata
       productId: 'example-product',
       package: {
         packageName: '@agent-lens/integration-example',
-        bundledVersion: '2.3.4',
         apiVersion: '1.0',
         entryExport: 'default',
       },
@@ -97,7 +97,6 @@ test('bundle spec keeps package identity, API version and entry export from Cata
       integrationId: 'example',
       productId: 'example-product',
       packageName: '@agent-lens/integration-example',
-      bundledVersion: '2.3.4',
       apiVersion: '1.0',
       entryExport: 'default',
       entry: join('packages', 'integration-example', 'src', 'index.ts'),
