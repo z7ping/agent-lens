@@ -493,22 +493,6 @@ export function BackupPage({
             })}
 
             {focusedSource && <div className="backup-agent-detail">
-              <section className="backup-agent-detail-summary">
-                <div className="backup-agent-title">
-                  <span className={`src-dot lg ${sourceDotClass(focusedSource.sourceId)}`}/>
-                  <span><b>{sourceLabel(focusedSource.sourceId, focusedSource.displayName)}</b><small>{t('assetView.sourceScale', {
-                    files: focusedSource.fileCount.toLocaleString(locale),
-                    size: formatOptionalBytes(focusedSource.totalBytes, t),
-                  })}</small></span>
-                </div>
-                <div className="backup-agent-detail-facts">
-                  <span><b>{focusedSource.logicalAssetCount === undefined ? '—' : focusedSource.logicalAssetCount.toLocaleString(locale)}</b>{t('detail.logicalAssets')}</span>
-                  <span><b>{focusedSource.fileCount.toLocaleString(locale)}</b>{t('detail.physicalFiles')}</span>
-                  <span><b>{formatOptionalBytes(focusedSource.totalBytes, t)}</b>{t('detail.dataSize')}</span>
-                  <span><b>{focusedSource.excludedCount.toLocaleString(locale)}</b>{t('detail.scanExcluded')}</span>
-                </div>
-              </section>
-
               <section className="backup-agent-detail-section">
                 <div className="backup-section-head"><div><h3>{t('detail.categories')}</h3></div></div>
                 <div className="backup-asset-kind-list">
