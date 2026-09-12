@@ -166,9 +166,7 @@
   line-height: 1.45;
 }
 
-.workspace-locale-selector select {
-  width: 100%;
-}
+.workspace-locale-selector .select-menu-trigger { width: 100%; }
 
 .workspace-settings-separator {
   height: 1px;

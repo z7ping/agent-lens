@@ -213,7 +213,7 @@ export const officialChineseLocalePack: LocalePackDto = {
       switchToLight: '切换为浅色主题',
       switchToDark: '切换为深色主题',
       language: '界面语言',
-      languageDescription: '官方仅维护简体中文；其他语言由社区 Locale Pack 提供。',
+      languageDescription: '内置简体中文与 English；其他语言由社区 Locale Pack 提供。',
       runtime: '运行',
       versionAndUpdates: '版本与更新',
     },

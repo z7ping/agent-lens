@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Select } from '../components/ui'
+import { SelectMenu } from '../components/ui'
 import { listLocalePacks } from './registry'
 import { agentLensI18n, setLocale } from './runtime'
 
@@ -10,23 +10,26 @@ export function LocaleSelector() {
   const packs = listLocalePacks()
   const current = agentLensI18n.resolvedLanguage ?? agentLensI18n.language
 
-  return <label className="workspace-locale-selector">
+  return <div className="workspace-locale-selector">
     <span>
       <b>{t('language')}</b>
       <small>{t('languageDescription')}</small>
     </span>
-    <Select
+    <SelectMenu
       value={packs.some(pack => pack.locale === current) ? current : 'zh-CN'}
+      options={packs.map(pack => ({
+        value: pack.locale,
+        label: pack.name,
+        description: pack.locale,
+      }))}
+      ariaLabel={t('language')}
+      variant="toolbar"
       disabled={saving}
-      onChange={event => {
-        const locale = event.target.value
+      onChange={locale => {
         setSaving(true)
         void setLocale(locale).finally(() => setSaving(false))
       }}
-    >
-      {packs.map(pack => <option key={pack.locale} value={pack.locale}>
-        {pack.name} · {pack.locale}
-      </option>)}
-    </Select>
-  </label>
+      menuWidth={240}
+    />
+  </div>
 }

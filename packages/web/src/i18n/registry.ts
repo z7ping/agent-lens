@@ -1,9 +1,11 @@
 import {
-  OFFICIAL_AGENT_LENS_LOCALE,
+  BUILTIN_AGENT_LENS_LOCALES,
+  isBuiltinAgentLensLocale,
   parseLocalePackDto,
   type LocaleMessagesDto,
   type LocalePackDto,
 } from '@agent-lens/protocol'
+import { officialEnglishLocalePack } from './official-en-US'
 import { officialChineseLocalePack } from './official-zh-CN'
 
 const registry = new Map<string, LocalePackDto>()
@@ -11,8 +13,8 @@ const registry = new Map<string, LocalePackDto>()
 export function registerLocalePack(value: unknown): LocalePackDto {
   const pack = parseLocalePackDto(value)
   const existing = registry.get(pack.locale)
-  if (pack.locale === OFFICIAL_AGENT_LENS_LOCALE) {
-    throw new Error('official zh-CN Locale Pack cannot be replaced')
+  if (isBuiltinAgentLensLocale(pack.locale)) {
+    throw new Error(`built-in Locale Pack cannot be replaced: ${pack.locale}`)
   }
   if (existing) {
     throw new Error(`Locale Pack already registered: ${pack.locale}`)
@@ -24,12 +26,17 @@ export function registerLocalePack(value: unknown): LocalePackDto {
 export function resetLocaleRegistry(): void {
   registry.clear()
   registry.set(officialChineseLocalePack.locale, officialChineseLocalePack)
+  registry.set(officialEnglishLocalePack.locale, officialEnglishLocalePack)
 }
 
 export function listLocalePacks(): LocalePackDto[] {
+  const builtInOrder = new Map<string, number>(BUILTIN_AGENT_LENS_LOCALES.map((locale, index) => [locale, index]))
   return [...registry.values()].sort((a, b) => {
-    if (a.locale === OFFICIAL_AGENT_LENS_LOCALE) return -1
-    if (b.locale === OFFICIAL_AGENT_LENS_LOCALE) return 1
+    const left = builtInOrder.get(a.locale)
+    const right = builtInOrder.get(b.locale)
+    if (left !== undefined || right !== undefined) {
+      return (left ?? Number.MAX_SAFE_INTEGER) - (right ?? Number.MAX_SAFE_INTEGER)
+    }
     return a.name.localeCompare(b.name)
   })
 }
