@@ -158,6 +158,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [theme, setTheme] = useState(readTheme)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
+  const [backupAssetSourceId, setBackupAssetSourceId] = useState('')
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const agents = snapshot.facets?.agents ?? []
@@ -182,7 +183,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onTools = location.pathname.startsWith('/tools')
   const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
-  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents
+  const onBackup = location.pathname.startsWith('/backup')
+  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
@@ -254,6 +256,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
         onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
+        backupAssetSourceId={backupAssetSourceId}
+        onBackupAssetSourceIdChange={setBackupAssetSourceId}
         theme={theme}
         onToggleTheme={toggleTheme}
         onContextHost={setSidebarHost}
@@ -293,7 +297,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
-          <Route path="/backup" element={<BackupPage />} />
+          <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} onSelectedAssetSourceIdChange={setBackupAssetSourceId} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
         </Suspense>
