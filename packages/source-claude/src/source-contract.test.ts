@@ -200,8 +200,9 @@ test('Claude EOF partial JSON is not consumed and is reconstructed after append'
 test('Claude legacy checkpoint gains file identity without replaying unchanged history', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-claude-file-id-'))
   const projects = join(root, 'projects')
-  const path = join(projects, 'session.jsonl')
-  await mkdir(projects, { recursive: true })
+  const projectDataRoot = join(projects, 'demo')
+  const path = join(projectDataRoot, 'session.jsonl')
+  await mkdir(projectDataRoot, { recursive: true })
   const line = JSON.stringify({
     type: 'user',
     sessionId: 'session-claude',
@@ -241,7 +242,7 @@ test('Claude legacy checkpoint gains file identity without replaying unchanged h
       checkpoints.get('claude:known-project-data-roots:v1'),
       [{
         cwd: join(root, 'workspace'),
-        projectDataRoot: projects,
+        projectDataRoot,
       }],
     )
   } finally {
