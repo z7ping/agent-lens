@@ -14,6 +14,7 @@ export type AssetType =
   | 'extension'
   | 'hook'
   | 'memory'
+  | 'model'
   | 'prompt'
   | 'theme'
   | 'context'

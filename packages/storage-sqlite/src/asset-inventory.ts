@@ -10,7 +10,7 @@ import type {
 import { SqliteExecutor } from './executor'
 
 type AssetRow = Record<string, unknown>
-const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'prompt', 'theme', 'context', 'rule', 'builtin', 'unknown'] as const
+const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'model', 'prompt', 'theme', 'context', 'rule', 'builtin', 'unknown'] as const
 const ASSET_SCOPES = ['installation', 'user', 'project', 'workspace'] as const
 const ASSET_STATES = ['installed', 'configured', 'enabled', 'discoverable', 'exposed', 'invoked'] as const
 

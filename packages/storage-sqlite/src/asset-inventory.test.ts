@@ -77,7 +77,7 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
 })
 
 
-test('asset inventory reader accepts prompt theme and context definitions', async () => {
+test('asset inventory reader accepts model prompt theme and context definitions', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
   try {
@@ -99,7 +99,7 @@ test('asset inventory reader accepts prompt theme and context definitions', asyn
       lastSeenAt: seenAt,
     })
 
-    for (const type of ['prompt', 'theme', 'context'] as const) {
+    for (const type of ['model', 'prompt', 'theme', 'context'] as const) {
       await storage.repositories.assets.putDefinition({
         id: `asset:${type}`,
         type,
@@ -113,7 +113,7 @@ test('asset inventory reader accepts prompt theme and context definitions', asyn
     }
 
     const rows = await storage.assetInventory.listByInstallation('installation:pi-assets')
-    assert.deepEqual(rows.map(row => row.definition.type).sort(), ['context', 'prompt', 'theme'])
+    assert.deepEqual(rows.map(row => row.definition.type).sort(), ['context', 'model', 'prompt', 'theme'])
   } finally {
     storage.close()
   }

@@ -370,6 +370,54 @@
   font-weight: 620;
 }
 
+.pi-guidance-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.pi-guidance-item {
+  display: grid;
+  min-height: 48px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 9px;
+  background: var(--al-soft-2);
+}
+
+.pi-guidance-item > svg {
+  margin-top: 1px;
+  color: var(--al-muted);
+}
+
+.pi-guidance-item > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.pi-guidance-item b {
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pi-guidance-item small {
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pi-guidance-item[data-tone='success'] > svg { color: var(--al-success); }
+.pi-guidance-item[data-tone='warning'] {
+  border-color: color-mix(in srgb, var(--al-warning) 22%, var(--al-line));
+  background: color-mix(in srgb, var(--al-warning) 6%, var(--al-soft-2));
+}
+.pi-guidance-item[data-tone='warning'] > svg { color: var(--al-warning); }
+
 /* 资产指标与高频资产 */
 .asset-kpis { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .asset-kpi {
@@ -506,6 +554,8 @@
 }
 .asset-usage { margin-left: auto; color: var(--al-accent); font-weight: 640; }
 .asset-name { overflow: hidden; margin-top: 5px; color: var(--al-ink-2); font-size: 13px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.asset-model-id { min-width: 0; margin-top: 2px; }
+.asset-model-id code { display: block; overflow: hidden; color: var(--al-muted-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .asset-states { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .asset-state,
 .asset-discovered { padding: 1px 6px; border-radius: 5px; background: var(--al-success-soft); color: var(--al-success); font-size: 12px; font-weight: 560; }

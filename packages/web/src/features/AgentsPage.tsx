@@ -87,6 +87,7 @@ const assetTypeLabelKey: Record<string, string> = {
   extension: 'assetType.extension',
   hook: 'assetType.hook',
   memory: 'assetType.memory',
+  model: 'assetType.model',
   prompt: 'assetType.prompt',
   theme: 'assetType.theme',
   context: 'assetType.context',
@@ -95,7 +96,7 @@ const assetTypeLabelKey: Record<string, string> = {
   unknown: 'assetType.unknown',
 }
 
-const assetTypeOrder = ['instruction', 'skill', 'mcp', 'plugin', 'extension', 'prompt', 'theme', 'hook', 'memory', 'builtin', 'unknown']
+const assetTypeOrder = ['instruction', 'model', 'skill', 'mcp', 'plugin', 'extension', 'prompt', 'theme', 'hook', 'memory', 'builtin', 'unknown']
 function assetPresentationType(type: string): string {
   return type === 'context' || type === 'rule' ? 'instruction' : type
 }
@@ -230,9 +231,12 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   const states = summarizedStates(asset)
   const scopes = assetScopeLabels(asset, t)
   const presentationType = assetPresentationType(asset.type)
+  const defaultModel = asset.type === 'model' && asset.bindings.some(binding => binding.source?.startsWith('pi:model:default:'))
+  const displayName = asset.displayName ?? asset.canonicalName
   return <div className="asset-item">
     <div className="asset-item-head">
       <span className="asset-type">{translatedLabel(assetTypeLabelKey, presentationType, t)}</span>
+      {defaultModel && <span className="asset-scope">{t('piGuidance.defaultModel')}</span>}
       {scopes.slice(0, 2).map(scope => <span
         key={scope.key}
         className="asset-scope"
@@ -241,7 +245,8 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
       {scopes.length > 2 && <span className="asset-scope">+{scopes.length - 2}</span>}
       {usage > 0 && <span className="asset-usage">{t('realCalls', { count: usage })}</span>}
     </div>
-    <div className="asset-name" title={asset.displayName ?? asset.canonicalName}>{asset.displayName ?? asset.canonicalName}</div>
+    <div className="asset-name" title={displayName}>{displayName}</div>
+    {asset.type === 'model' && <div className="asset-model-id"><code>{asset.canonicalName}</code></div>}
     <div className="asset-states">
       {states.length ? <>{states.slice(0, 3).map(item => <StateBadge key={item.state} state={item.state} value={item.value}/>)}{states.length > 3 && <span className="asset-more-state">+{states.length - 3}</span>}</> : <span className="asset-discovered">{t('discovered')}</span>}
     </div>
@@ -249,13 +254,13 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   </div>
 }
 
-function AssetGroup({ agent, type, assets }: { agent: AgentOverviewDto; type: string; assets: AgentAssetInventoryDto[] }) {
+function AssetGroup({ agent, type, assets, label }: { agent: AgentOverviewDto; type: string; assets: AgentAssetInventoryDto[]; label?: string }) {
   const { t } = useTranslation('agents')
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? assets : assets.slice(0, USER_ASSET_LIMIT)
   return <Disclosure
     className="disclosure-group"
-    summary={translatedLabel(assetTypeLabelKey, type, t)}
+    summary={label ?? translatedLabel(assetTypeLabelKey, type, t)}
     summaryMeta={<span className="disclosure-count">{assets.length}</span>}
   >
     <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset}/>)}</div>
@@ -311,6 +316,105 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   </section>
 }
 
+function isPiProjectRuleAsset(asset: AgentAssetInventoryDto): boolean {
+  const name = (asset.displayName ?? asset.canonicalName).trim().toLowerCase()
+  return name === 'agents.md' || name === 'claude.md'
+}
+
+function isPiPackageResource(asset: AgentAssetInventoryDto): boolean {
+  return asset.bindings.some(binding => typeof binding.source === 'string' && binding.source.includes(':package:'))
+}
+
+function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
+  const { t } = useTranslation('agents')
+  const projectRules = agent.assetInventory.filter(asset =>
+    isPiProjectRuleAsset(asset)
+    && asset.bindings.some(binding => binding.scope === 'project')
+  )
+  const skills = agent.assetInventory.filter(asset => asset.type === 'skill')
+  const discoverableSkills = skills.filter(asset => stateValue(asset, 'discoverable') === true)
+  const models = agent.assetInventory.filter(asset => asset.type === 'model')
+  const defaultModels = models.filter(asset => asset.bindings.some(binding => binding.source?.startsWith('pi:model:default:')))
+  const extensions = agent.assetInventory.filter(asset => asset.type === 'extension')
+  const uncertainExtensions = extensions.filter(asset => stateValue(asset, 'discoverable') === 'unknown')
+  const packageResources = agent.assetInventory.filter(isPiPackageResource)
+
+  return <section className="agent-primary-section pi-guidance">
+    <div className="section-heading-row"><div>
+      <h3>{t('piGuidance.title')}</h3>
+      <p>{t('piGuidance.description')}</p>
+    </div></div>
+    <div className="pi-guidance-list">
+      {projectRules.length
+        ? <div className="pi-guidance-item" data-tone="success">
+            <UiIcon name="check" size={15}/>
+            <span><b>{t('piGuidance.projectRulesReadyTitle')}</b><small>{t('piGuidance.projectRulesReadyDescription', { count: projectRules.length })}</small></span>
+          </div>
+        : <div className="pi-guidance-item" data-tone="warning">
+            <UiIcon name="alert" size={15}/>
+            <span><b>{t('piGuidance.noProjectRulesTitle')}</b><small>{t('piGuidance.noProjectRulesDescription')}</small></span>
+          </div>}
+      {defaultModels.length
+        ? <div className="pi-guidance-item" data-tone="success">
+            <UiIcon name="check" size={15}/>
+            <span><b>{t('piGuidance.defaultModelReadyTitle')}</b><small>{t('piGuidance.defaultModelReadyDescription', { models: defaultModels.map(asset => asset.canonicalName).slice(0, 3).join(' · ') })}</small></span>
+          </div>
+        : <div className="pi-guidance-item" data-tone="neutral">
+            <UiIcon name="exclamation" size={15}/>
+            <span><b>{t('piGuidance.noDefaultModelTitle')}</b><small>{t('piGuidance.noDefaultModelDescription')}</small></span>
+          </div>}
+      {skills.length
+        ? <div className="pi-guidance-item" data-tone={discoverableSkills.length ? 'success' : 'neutral'}>
+            <UiIcon name={discoverableSkills.length ? 'check' : 'exclamation'} size={15}/>
+            <span><b>{t('piGuidance.skillsReadyTitle', { count: skills.length })}</b><small>{t('piGuidance.skillsReadyDescription', { count: discoverableSkills.length })}</small></span>
+          </div>
+        : <div className="pi-guidance-item" data-tone="neutral">
+            <UiIcon name="exclamation" size={15}/>
+            <span><b>{t('piGuidance.noSkillsTitle')}</b><small>{t('piGuidance.noSkillsDescription')}</small></span>
+          </div>}
+      {uncertainExtensions.length > 0
+        ? <div className="pi-guidance-item" data-tone="neutral">
+            <UiIcon name="exclamation" size={15}/>
+            <span><b>{t('piGuidance.extensionsUnverifiedTitle', { count: uncertainExtensions.length })}</b><small>{t('piGuidance.extensionsUnverifiedDescription')}</small></span>
+          </div>
+        : packageResources.length > 0
+          ? <div className="pi-guidance-item" data-tone="success">
+              <UiIcon name="check" size={15}/>
+              <span><b>{t('piGuidance.packageResourcesTitle', { count: packageResources.length })}</b><small>{t('piGuidance.packageResourcesDescription')}</small></span>
+            </div>
+          : null}
+    </div>
+  </section>
+}
+
+function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rules: AgentAssetInventoryDto[] }) {
+  const { t } = useTranslation('agents')
+  const models = agent.assetInventory.filter(asset => asset.type === 'model')
+  const skills = agent.assetInventory.filter(asset => asset.type === 'skill')
+  const extensions = agent.assetInventory.filter(asset => asset.type === 'extension')
+  const prompts = agent.assetInventory.filter(asset => asset.type === 'prompt')
+  const packageResources = agent.assetInventory.filter(isPiPackageResource)
+
+  const metrics = [
+    { key: 'rules', label: t('piGuidance.projectRules'), count: rules.length },
+    { key: 'models', label: t('assetType.model'), count: models.length },
+    { key: 'skills', label: t('assetType.skill'), count: skills.length },
+    { key: 'extensions', label: t('assetType.extension'), count: extensions.length },
+    { key: 'prompts', label: t('assetType.prompt'), count: prompts.length },
+    { key: 'packages', label: t('piGuidance.packageResources'), count: packageResources.length },
+  ]
+
+  return <section className="agent-primary-section">
+    <div className="section-heading-row"><div>
+      <h3>{t('piGuidance.configurationTitle')}</h3>
+      <p>{t('piGuidance.configurationDescription')}</p>
+    </div></div>
+    <div className="asset-kpis">
+      {metrics.map(metric => <div key={metric.key} className="asset-kpi"><strong>{metric.count}</strong><span>{metric.label}</span></div>)}
+    </div>
+  </section>
+}
+
 function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
@@ -346,6 +450,19 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const userGrouped = grouped.filter(([type]) => type !== 'builtin')
   const builtinAssets = grouped.find(([type]) => type === 'builtin')?.[1] ?? []
   const skillAssets = grouped.find(([type]) => type === 'skill')?.[1] ?? []
+  const isPi = agent.sourceId === 'pi'
+  const piProjectRuleAssets = isPi
+    ? agent.assetInventory.filter(asset =>
+        isPiProjectRuleAsset(asset)
+        && asset.bindings.some(binding => binding.scope === 'project')
+      )
+    : []
+  const piProjectRuleIds = new Set(piProjectRuleAssets.map(asset => asset.id))
+  const displayedUserGrouped = isPi
+    ? userGrouped
+        .map(([type, assets]) => [type, assets.filter(asset => !piProjectRuleIds.has(asset.id))] as const)
+        .filter(([, assets]) => assets.length > 0)
+    : userGrouped
   const priorityAssets = useMemo(() => [...agent.assetInventory]
     .map(asset => ({ asset, usage: assetUsageCount(agent, asset) }))
     .filter(item => item.usage > 0 && (item.asset.type === 'skill' || item.asset.type === 'mcp'))
@@ -422,13 +539,16 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
 
     <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onInstall={onInstall} onAuthorize={onAuthorize}/>
 
-    <section className="agent-primary-section">
+    {isPi ? <>
+      <PiUsageGuidance agent={agent}/>
+      <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
+    </> : <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3><p>{t('sections.myAssetsDescription')}</p></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
         {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{translatedLabel(assetTypeLabelKey, type, t)}</span></div>) : <div className="muted-empty compact">{t('sections.noUserAssets')}</div>}
       </div>
       {userUsageCount > 0 && <div className="reliable-usage">{t('sections.reliableCalls', { count: userUsageCount })}</div>}
-    </section>
+    </section>}
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.recentUsed')}</h3><p>{t('sections.recentUsedDescription')}</p></div></div>
@@ -438,7 +558,8 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     <SkillLifecycle agent={agent} skills={skillAssets}/>
 
     <section className="agent-disclosures">
-      {userGrouped.map(([type, assets]) => <AssetGroup key={type} agent={agent} type={type} assets={assets}/>)}
+      {isPi && piProjectRuleAssets.length > 0 && <AssetGroup agent={agent} type="instruction" label={t('piGuidance.projectRules')} assets={piProjectRuleAssets}/>}
+      {displayedUserGrouped.map(([type, assets]) => <AssetGroup key={type} agent={agent} type={type} assets={assets}/>)}
       {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">{t('sections.inventoryUnavailable')}</div>}
     </section>
 

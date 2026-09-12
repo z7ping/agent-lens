@@ -7,6 +7,7 @@ import type {
 } from '@agent-lens/core'
 import { loadInstalledPiSdk } from '@agent-lens/runtime-cordis'
 import { isMissingPathError } from '@agent-lens/source-support'
+import { resolvePiModelConfigAssets } from './model-config'
 import { resolvePiResourceAssets } from './resource-resolver'
 
 interface SkillMetadata {
@@ -341,6 +342,12 @@ export async function* discoverPiAssets(
   ctx: SourceExecutionContext,
 ): AsyncIterable<DiscoveredAsset> {
   if (ctx.abortSignal.aborted) return
+
+  // Model configuration is safe static data and does not require loading or executing Pi extensions.
+  for (const asset of await resolvePiModelConfigAssets(ctx)) {
+    if (ctx.abortSignal.aborted) return
+    yield asset
+  }
 
   const resolved = await resolvePiResourceAssets(ctx)
   if (resolved) {
