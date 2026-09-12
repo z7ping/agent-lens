@@ -111,8 +111,6 @@ export const englishBackupMessages: LocaleMessagesDto = {
       moreLocations: '{{count}} more locations',
       latest: 'Latest change {{time}}',
       historyTitle: 'Backup history',
-      historyHint: 'Historical snapshots of current assets; verify, preview, and export from here.',
-      historyFilteredHint: 'Only snapshots containing {{agent}} are shown.',
       noHistory: 'No local snapshots yet.',
     },
     protection: {
@@ -181,7 +179,6 @@ export const englishBackupMessages: LocaleMessagesDto = {
     },
     create: {
       title: 'Create snapshot',
-      description: 'Choose by data value instead of selecting tens of thousands of individual files.',
       local: 'Local',
       agents: 'Agents',
       contents: 'Backup contents',
