@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import Database from 'better-sqlite3'
 import {
@@ -24,15 +23,17 @@ import {
   type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  OPENCODE_DB_NAME as DB_NAME,
   abortableDelay,
   defineAgentLensPlugin,
+  resolveOpenCodeRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { isMissingPathError } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'opencode'
 const PARSER_VERSION = '3'
-const DB_NAME = 'opencode.db'
+
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
 const RUNTIME_POLL_MS = 2000
@@ -175,25 +176,9 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function candidateRoots(env: Readonly<Record<string, string | undefined>>): string[] {
-  const result: string[] = []
-  const add = (value: string | undefined) => {
-    const normalized = value?.trim()
-    if (normalized && !result.includes(normalized)) result.push(normalized)
-  }
-  add(env.OPENCODE_HOME)
-  if (process.platform === 'win32') {
-    add(join(env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'opencode'))
-  } else {
-    add(join(env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'opencode'))
-  }
-  add(join(homedir(), '.local', 'share', 'opencode'))
-  return result
-}
-
 export async function detectOpenCode(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
-  for (const root of candidateRoots(env)) {
+  for (const root of resolveOpenCodeRoots(env)) {
     const dbPath = join(root, DB_NAME)
     if (!await exists(dbPath)) continue
     return [{
@@ -629,7 +614,7 @@ const applyOpenCodeSource = Object.assign(
 export const openCodeSourcePlugin = defineAgentLensPlugin(openCodeManifest, applyOpenCodeSource)
 
 export const openCodeSourceInternals = {
-  candidateRoots,
+  candidateRoots: resolveOpenCodeRoots,
   normalizeTimestamp,
   rowFingerprint,
   recordFromRow,

@@ -34,8 +34,11 @@ import {
   type SourceRecordEmitter,
 } from '@agent-lens/core'
 import {
+  HERMES_STATE_DB_NAME as DB_NAME,
   abortableDelay,
   defineAgentLensPlugin,
+  resolveHermesConfigRoots,
+  resolveHermesRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { isMissingPathError } from '@agent-lens/source-support'
@@ -43,7 +46,7 @@ import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
 const PARSER_VERSION = '3'
-const DB_NAME = 'state.db'
+
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
 const DB_POLL_MS = 2000
@@ -166,25 +169,18 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))]
 }
 
-function hermesRoots(env: Readonly<Record<string, string | undefined>>): string[] {
-  const explicit = env.HERMES_HOME?.trim()
-  if (explicit) return [explicit]
-  const result: string[] = []
-  if (process.platform === 'win32') {
-    result.push(join(env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'hermes'))
-  }
-  result.push(join(homedir(), '.hermes'))
-  return unique(result)
-}
-
 export async function detectHermes(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
-  const roots = hermesRoots(env)
+  const roots = resolveHermesRoots(env)
   let dataRoot: string | undefined
   for (const root of roots) {
     if (await exists(join(root, DB_NAME))) { dataRoot = root; break }
   }
-  const configRoot = await exists(join(homedir(), '.hermes')) ? join(homedir(), '.hermes') : dataRoot
+  let configRoot: string | undefined
+  for (const root of resolveHermesConfigRoots()) {
+    if (await exists(root)) { configRoot = root; break }
+  }
+  configRoot ??= dataRoot
   if (!dataRoot && !configRoot) return []
   return [{
     sourceId: SOURCE_ID,
@@ -967,7 +963,7 @@ const applyHermesSource = Object.assign(
 export const hermesSourcePlugin = defineAgentLensPlugin(hermesManifest, applyHermesSource)
 
 export const hermesSourceInternals = {
-  hermesRoots,
+  hermesRoots: resolveHermesRoots,
   hermesInboxDirectory,
   normalizeTimestamp,
   rowFingerprint,

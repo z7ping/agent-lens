@@ -73,7 +73,14 @@
 .agent-source-copy b { overflow: hidden; font-size: 12px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; }
 .agent-source-copy small { color: var(--al-muted); font-size: 12px; }
 .agent-source-state { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
-.agent-source-state.is-detected { color: var(--al-success); }
+.agent-source-state.is-detected,
+.agent-source-state.is-enabled,
+.agent-source-state.is-discovered { color: var(--al-success); }
+.agent-source-state.is-history,
+.agent-source-state.is-scanning { color: var(--al-warning); }
+.agent-source-state.is-error { color: var(--al-danger); }
+.agent-source-state.is-disabled,
+.agent-source-state.is-missing { color: var(--al-muted); }
 
 /* 智能体详情 */
 .agent-detail-pane { min-width: 0; }
@@ -115,7 +122,14 @@
   font-size: 12px;
   font-weight: 640;
 }
-.agent-status.is-detected { background: var(--al-success-soft); color: var(--al-success); }
+.agent-status.is-detected,
+.agent-status.is-enabled,
+.agent-status.is-discovered { background: var(--al-success-soft); color: var(--al-success); }
+.agent-status.is-history,
+.agent-status.is-scanning { background: var(--al-warning-soft); color: var(--al-warning); }
+.agent-status.is-error { background: var(--al-danger-soft); color: var(--al-danger); }
+.agent-status.is-disabled,
+.agent-status.is-missing { background: var(--al-soft); color: var(--al-muted); }
 
 .agent-installation {
   display: flex;
@@ -129,6 +143,18 @@
 .agent-installation small { font-size: 12px; }
 .agent-installation b { color: var(--al-ink-2); font-weight: 620; }
 .agent-installation code { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.agent-tool-presence b[data-presence='present'] { color: var(--al-success); }
+.agent-tool-presence b[data-presence='data-only'],
+.agent-tool-presence b[data-presence='scanning'] { color: var(--al-warning); }
+.agent-tool-presence b[data-presence='error'] { color: var(--al-danger); }
+.agent-tool-presence b[data-presence='absent'] { color: var(--al-muted); }
+.agent-discovery-note {
+  margin: -5px 18px 12px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.agent-discovery-note.is-error { color: var(--al-danger); }
 
 .source-capture-control {
   display: flex;

@@ -6,6 +6,7 @@ import type {
   AgentOverviewDto,
   CapturePolicyResponseDto,
   IntegrationAuthorizationCapabilityDto,
+  IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
@@ -134,16 +135,46 @@ function integrationAvailabilityTone(
 
 function captureState(
   agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
+  discovery: IntegrationToolDiscoveryItemDto | undefined,
+  discoveryScanning: boolean,
   t: TFunction,
 ): { label: string; title: string; className: string } {
   if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
-  if (!agent.detected) return {
-    label: agent.enabled ? t('status.notDetectedEnabled') : t('status.notDetectedDisabled'),
-    title: agent.enabled ? t('status.notDetectedEnabledTitle') : t('status.notDetectedDisabledTitle'),
-    className: agent.enabled ? 'is-enabled' : 'is-disabled',
+  if (agent.detected) {
+    if (!agent.enabled) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
+    return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
   }
-  if (!agent.enabled) return { label: t('status.detectedDisabled'), title: t('status.detectedDisabledTitle'), className: 'is-disabled' }
-  return { label: t('status.detectedEnabled'), title: t('status.detectedEnabledTitle'), className: 'is-enabled is-detected' }
+  if (discovery?.presence === 'error') {
+    return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
+  }
+  if (discovery?.presence === 'present') {
+    return { label: t('status.discovered'), title: t('status.discoveredTitle'), className: 'is-discovered' }
+  }
+  if (discovery?.presence === 'data-only') {
+    return { label: t('status.historyData'), title: t('status.historyDataTitle'), className: 'is-history' }
+  }
+  if (discoveryScanning) {
+    return { label: t('status.scanning'), title: t('status.scanningTitle'), className: 'is-scanning' }
+  }
+  return { label: t('status.notDetected'), title: t('status.notDetectedTitle'), className: 'is-missing' }
+}
+
+function toolPresenceLabel(
+  discovery: IntegrationToolDiscoveryItemDto | undefined,
+  discoveryScanning: boolean,
+  discoveryError: string,
+  t: TFunction,
+): string {
+  if (discoveryError) return t('toolPresence.error')
+  if (discovery?.presence === 'present') return t('toolPresence.present')
+  if (discovery?.presence === 'data-only') return t('toolPresence.dataOnly')
+  if (discovery?.presence === 'error') return t('toolPresence.error')
+  if (discoveryScanning) return t('toolPresence.scanning')
+  return t('toolPresence.absent')
+}
+
+function toolPresencePath(discovery: IntegrationToolDiscoveryItemDto | undefined): string | undefined {
+  return discovery?.executable ?? discovery?.configRoot ?? discovery?.dataRoot
 }
 
 function capabilityDetail(
@@ -436,8 +467,11 @@ function IntegrationControl({
   </section>
 }
 
-function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
+function AgentCard({ agent, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onAuthorize }: {
   agent: AgentOverviewDto
+  discovery: IntegrationToolDiscoveryItemDto | undefined
+  discoveryScanning: boolean
+  discoveryError: string
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
   onAuthorize(
@@ -472,7 +506,9 @@ function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = captureState(agent, t)
+  const status = captureState(agent, discovery, discoveryScanning, t)
+  const presencePath = toolPresencePath(discovery)
+  const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
     <header className="agent-card-head">
@@ -484,9 +520,13 @@ function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
     </header>
 
     <div className="agent-installation">
+      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{toolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
-      <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
+      <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
+      {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
+    {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
+    {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
     <IntegrationControl agent={agent} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
 
@@ -541,26 +581,41 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
   const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
   const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
+  const discovery = snapshot.integrationDiscovery
+  const discoveryScanning = snapshot.integrationDiscoveryLoading
+    || snapshot.integrationDiscoveryRescanning
+    || discovery?.status === 'scanning'
+  const discoveryByProduct = new Map((discovery?.items ?? []).map(item => [item.productId, item]))
+  const discoveryErrors = discovery?.items.filter(item => item.presence === 'error') ?? []
+  const selectedDiscovery = selectedAgent
+    ? discoveryByProduct.get(selectedAgent.productId) ?? discoveryByProduct.get(selectedAgent.sourceId)
+    : undefined
   const rescan = snapshot.agentsRescanResult
-  const rescanStatus = snapshot.agentsRescanning
+  const rescanning = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
+  const scanBusy = rescanning || discoveryScanning
+  const rescanStatus = scanBusy
     ? <StatusBadge tone="accent" dot>{t('page.rescanning')}</StatusBadge>
-    : snapshot.agentsRescanError
-      ? <StatusBadge tone="danger" title={snapshot.agentsRescanError}>{t('page.rescanFailed')}</StatusBadge>
-      : rescan
-        ? <StatusBadge tone={rescan.status === 'completed' ? 'success' : 'danger'} title={rescan.failures.map(item => `${item.sourceId}: ${item.message}`).join('\n') || undefined}>
-            {rescan.status === 'completed'
-              ? `${t('page.scanCompleted', { sources: rescan.sourcesDetected, assets: rescan.assetsDiscovered })}${rescan.assetsRemoved ? t('page.removedSuffix', { count: rescan.assetsRemoved }) : ''}`
-              : rescan.status === 'partial'
-                ? t('page.scanPartial', { count: rescan.failures.length })
-                : t('page.scanFailedSummary', { count: rescan.failures.length })}
-          </StatusBadge>
-        : null
+    : snapshot.integrationDiscoveryError
+      ? <StatusBadge tone="danger" title={snapshot.integrationDiscoveryError}>{t('page.toolScanFailed')}</StatusBadge>
+      : snapshot.agentsRescanError
+        ? <StatusBadge tone="danger" title={snapshot.agentsRescanError}>{t('page.rescanFailed')}</StatusBadge>
+        : discoveryErrors.length
+          ? <StatusBadge tone="warning" title={discoveryErrors.map(item => `${item.displayName}: ${item.reason ?? t('toolPresence.error')}`).join('\n')}>{t('page.toolScanPartial', { count: discoveryErrors.length })}</StatusBadge>
+          : rescan
+            ? <StatusBadge tone={rescan.status === 'completed' ? 'success' : 'danger'} title={rescan.failures.map(item => `${item.sourceId}: ${item.message}`).join('\n') || undefined}>
+                {rescan.status === 'completed'
+                  ? `${t('page.scanCompleted', { sources: rescan.sourcesDetected, assets: rescan.assetsDiscovered })}${rescan.assetsRemoved ? t('page.removedSuffix', { count: rescan.assetsRemoved }) : ''}`
+                  : rescan.status === 'partial'
+                    ? t('page.scanPartial', { count: rescan.failures.length })
+                    : t('page.scanFailedSummary', { count: rescan.failures.length })}
+              </StatusBadge>
+            : null
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
       <CompactPageHeading title={t('page.title')} description={t('page.description')}>
         <Toolbar aria-label={t('page.scanToolbar')} className="agents-rescan-toolbar">
-          <Button size="small" loading={snapshot.agentsRescanning} disabled={snapshot.agentsRescanning} onClick={() => void model.rescanAgents().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{snapshot.agentsRescanning ? t('page.scanning') : t('page.rescan')}</Button>
+          <Button size="small" loading={scanBusy} disabled={scanBusy} onClick={() => void model.rescanAgentEnvironment().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{scanBusy ? t('page.scanning') : t('page.rescan')}</Button>
           {rescanStatus}
         </Toolbar>
       </CompactPageHeading>
@@ -569,7 +624,8 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           <div className="agent-source-nav-head"><b>{t('page.localAgents')}</b><span>{items.length}</span></div>
           {items.map(agent => {
             const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
-            const status = captureState(agent, t)
+            const agentDiscovery = discoveryByProduct.get(agent.productId) ?? discoveryByProduct.get(agent.sourceId)
+            const status = captureState(agent, agentDiscovery, discoveryScanning, t)
             return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
               <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
               <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
@@ -580,6 +636,9 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
         <div className="agent-detail-pane">{selectedAgent && <AgentCard
           key={selectedAgent.sourceId}
           agent={selectedAgent}
+          discovery={selectedDiscovery}
+          discoveryScanning={discoveryScanning}
+          discoveryError={snapshot.integrationDiscoveryError}
           policy={snapshot.capturePolicy}
           onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
           onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
