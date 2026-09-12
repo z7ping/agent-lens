@@ -648,6 +648,7 @@ function textFromContent(content: unknown): string {
 
 function runtimeEnvelope(record: SourceRecord): {
   envelope?: ClaudeStoredEnvelope
+  evidenceEnvelope: ClaudeStoredEnvelope
   event: Record<string, unknown>
 } {
   const payload = asRecord(record.payload)
@@ -658,16 +659,16 @@ function runtimeEnvelope(record: SourceRecord): {
   const nativeSessionId = storedSessionId === 'unknown' || storedSessionId === 'runtime-unknown'
     ? undefined
     : storedSessionId
+  const evidenceEnvelope: ClaudeStoredEnvelope = {
+    entry: event,
+    session: {
+      nativeSessionId: nativeSessionId ?? 'unknown',
+      ...(cwd ? { cwd } : {}),
+    },
+  }
   return {
-    ...(nativeSessionId ? {
-      envelope: {
-        entry: event,
-        session: {
-          nativeSessionId,
-          ...(cwd ? { cwd } : {}),
-        },
-      },
-    } : {}),
+    ...(nativeSessionId ? { envelope: evidenceEnvelope } : {}),
+    evidenceEnvelope,
     event,
   }
 }
@@ -774,7 +775,7 @@ export async function normalizeClaudeRecord(
     const observation = runtime.envelope ? normalizeRuntime(record) : null
     return {
       observations: observation ? [observation] : [],
-      evidenceCandidates: runtime.envelope ? [evidenceFor(record, runtime.envelope)] : [],
+      evidenceCandidates: [evidenceFor(record, runtime.evidenceEnvelope)],
     }
   }
 
