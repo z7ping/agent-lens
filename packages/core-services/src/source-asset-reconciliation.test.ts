@@ -246,8 +246,6 @@ test('资产扫描失败时保留上一次成功快照，不把失败当成空�
   )
 })
 
-
-
 test('资产扫描把 Provider 声明的 scope 与 scopeRoot 原样交给 Canonical AssetBinding', async () => {
   const inventory = { current: true }
   const { runner, bindingInputs } = harness()
