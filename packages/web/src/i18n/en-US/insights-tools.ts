@@ -28,6 +28,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       mcp: 'MCP (Model Context Protocol)',
     },
     filters: {
+      agentScope: 'Agent scope',
       allAgents: 'All agents',
       selectedAgents: '{{count}} selected',
       none: 'None selected',
@@ -114,6 +115,7 @@ export const englishInsightsToolsMessages: LocaleMessagesDto = {
       unknown: 'Confidence unknown',
     },
     filters: {
+      agentScope: 'Agent scope',
       allAgents: 'All agents',
       selectedAgents: '{{count}} selected',
       none: 'None selected',
