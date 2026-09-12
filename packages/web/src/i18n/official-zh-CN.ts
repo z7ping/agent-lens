@@ -271,7 +271,7 @@ export const officialChineseLocalePack: LocalePackDto = {
       assetScope: {
         installation: '安装级',
         user: '用户级',
-        project: '项目',
+        project: '项目级',
         workspace: '工作区',
       },
       assetType: {
