@@ -6,6 +6,7 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { asRecord, isMissingPathError } from '@agent-lens/source-support'
+import { discoverCodexInstructions } from './instructions'
 
 async function safeStat(path: string) {
   try {
@@ -96,6 +97,8 @@ async function* discoverSkills(
         binding: {
           path: skillDir,
           source: candidate.source,
+          scope: 'user',
+          scopeRoot: configRoot,
         },
         states: states(
           skillFile,
@@ -149,6 +152,8 @@ async function* discoverMcpServers(
       binding: {
         path: configPath,
         source: 'codex:config.toml',
+        scope: 'user',
+        scopeRoot: configRoot,
       },
       states: states(
         configPath,
@@ -208,6 +213,8 @@ async function* discoverPluginManifests(
       binding: {
         path: bindingPath,
         source: 'codex:plugin-manifest',
+        scope: 'user',
+        scopeRoot: configRoot,
         ...(version ? { version } : {}),
       },
       states: states(
@@ -237,6 +244,8 @@ async function* discoverPluginManifests(
       binding: {
         path: bindingPath,
         source: 'codex:plugins',
+        scope: 'user',
+        scopeRoot: configRoot,
       },
       states: states(
         bindingPath,
@@ -277,6 +286,8 @@ async function* discoverHooks(
       binding: {
         path: hooksPath,
         source: 'codex:hooks.json',
+        scope: 'user',
+        scopeRoot: configRoot,
       },
       states: states(
         hooksPath,
@@ -288,39 +299,6 @@ async function* discoverHooks(
         ],
       ),
     }
-  }
-}
-
-async function* discoverGlobalRule(
-  configRoot: string,
-  capturedAt: string,
-): AsyncIterable<DiscoveredAsset> {
-  for (const fileName of ['AGENTS.override.md', 'AGENTS.md']) {
-    const filePath = join(configRoot, fileName)
-    const meta = await safeStat(filePath)
-    if (!meta?.isFile() || meta.size === 0) continue
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: {
-        type: 'rule',
-        canonicalName: 'codex-global-instructions',
-        displayName: fileName,
-      },
-      binding: {
-        path: filePath,
-        source: 'codex:global-rule',
-      },
-      states: states(
-        filePath,
-        observedAt,
-        capturedAt,
-        [
-          { state: 'configured', value: true },
-          { state: 'discoverable', value: 'unknown' },
-        ],
-      ),
-    }
-    return
   }
 }
 
@@ -336,7 +314,7 @@ export async function* discoverCodexAssets(
     discoverMcpServers(configRoot, capturedAt),
     discoverPluginManifests(configRoot, capturedAt),
     discoverHooks(configRoot, capturedAt),
-    discoverGlobalRule(configRoot, capturedAt),
+    discoverCodexInstructions(ctx, capturedAt),
   ]
 
   for (const group of groups) {
