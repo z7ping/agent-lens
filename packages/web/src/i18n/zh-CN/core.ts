@@ -199,6 +199,8 @@ export const chineseCoreMessages: LocaleMessagesDto = {
   settings: {
     openMenu: '打开设置与维护菜单',
     menu: '设置与维护',
+    management: '管理',
+    appearance: '外观',
     maintenanceAndAppearance: '管理与外观',
     agentsAndIntegrations: '智能体与集成',
     switchToLight: '切换为浅色主题',
