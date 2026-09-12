@@ -284,6 +284,7 @@ async function* ingestCodexFileWithThreadNames(
   ctx: SourceExecutionContext,
   filePath: string,
   threadNames: Map<string, CodexThreadName>,
+  onSession?: (session: CodexSessionMetadata) => void,
 ): AsyncIterable<SourceRecord> {
   if (ctx.abortSignal.aborted) return
 

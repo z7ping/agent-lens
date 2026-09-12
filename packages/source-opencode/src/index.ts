@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
@@ -192,10 +192,8 @@ export async function detectOpenCode(ctx: SourceDetectionContext): Promise<Detec
   return []
 }
 
-function openDatabase(root: string): Database.Database {
-  const db = new Database(join(root, DB_NAME), { readonly: true, fileMustExist: true })
-  db.pragma('busy_timeout = 1500')
-  return db
+function openDatabase(root: string): DatabaseSync {
+  return new DatabaseSync(join(root, DB_NAME), { readOnly: true, timeout: 1_500 })
 }
 
 function timestampMillisSql(column: string): string {
@@ -209,13 +207,13 @@ function timestampMillisSql(column: string): string {
 }
 
 function selectRows(
-  db: Database.Database,
+  db: DatabaseSync,
   afterRowId: number,
   limit: number,
   activeSinceMs?: number,
   sessionLimit?: number,
 ): OpenCodeRow[] {
-  const params: unknown[] = [afterRowId]
+  const params: number[] = [afterRowId]
   const filters: string[] = []
   if (activeSinceMs !== undefined) {
     filters.push(`${timestampMillisSql('p.time_created')} >= ?`)
@@ -256,7 +254,7 @@ function selectRows(
   `).all(...params).map(openCodeRow)
 }
 
-function knownSessionDirectories(db: Database.Database): string[] {
+function knownSessionDirectories(db: DatabaseSync): string[] {
   const rows = db.prepare(`
     SELECT DISTINCT directory
       FROM session
@@ -278,7 +276,7 @@ function knownSessionDirectories(db: Database.Database): string[] {
   return [...result.values()]
 }
 
-function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
+function recentRows(db: DatabaseSync, limit: number): OpenCodeRow[] {
   const rows = db.prepare(`
     SELECT p.rowid AS row_id,
            p.id AS id,
