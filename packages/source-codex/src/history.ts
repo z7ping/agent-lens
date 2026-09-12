@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
@@ -381,6 +381,35 @@ export async function* ingestCodexFile(
 ): AsyncIterable<SourceRecord> {
   const threadNames = await readThreadNames(ctx.installation.configRoot)
   yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames)
+}
+
+export async function listCodexProjectCwds(dataRoot: string | undefined): Promise<string[]> {
+  if (!dataRoot) return []
+
+  const cwds = new Map<string, string>()
+  for (const filePath of await listJsonlFiles(dataRoot)) {
+    let metadata: CodexSessionMetadata
+    try {
+      metadata = await readSessionMetadata(filePath)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
+
+    const cwd = metadata.cwd?.trim()
+    if (!cwd || !isAbsolute(cwd)) continue
+    const resolved = resolve(cwd)
+    let meta
+    try {
+      meta = await stat(resolved)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
+    if (!meta.isDirectory()) continue
+    if (!cwds.has(resolved)) cwds.set(resolved, resolved)
+  }
+  return [...cwds.values()]
 }
 
 export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
