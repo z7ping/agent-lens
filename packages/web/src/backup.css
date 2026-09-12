@@ -30,6 +30,13 @@
   gap: 8px;
 }
 
+.backup-refresh-button {
+  width: 32px;
+  min-width: 32px;
+  padding-inline: 0;
+  justify-content: center;
+}
+
 .prototype-flag {
   display: inline-flex;
   align-items: center;
@@ -615,7 +622,6 @@
 }
 
 /* 详情抽屉：Overlay 负责遮罩、层级、关闭与焦点；这里只保留业务内容布局。 */
-.backup-data-drawer .ui-overlay-body,
 .backup-preview-drawer .ui-overlay-body { padding: 0; }
 
 .backup-overlay-title {
