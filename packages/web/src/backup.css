@@ -84,11 +84,44 @@
 }
 
 /* 当前资产主布局 */
-.backup-heading-actions {
+.backup-view-tabs {
   display: flex;
-  flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
+  gap: 24px;
+  margin: 4px 0 0;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.backup-view-tabs button {
+  position: relative;
+  min-height: 38px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.backup-view-tabs button:hover {
+  color: var(--al-ink-2);
+}
+
+.backup-view-tabs button.is-active {
+  color: var(--al-accent);
+}
+
+.backup-view-tabs button.is-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--al-accent);
 }
 
 .backup-overview-strip {
@@ -176,9 +209,9 @@
   font-size: 12px;
 }
 
-/* 全部智能体：高密度资产摘要，不使用厚重卡片。 */
+/* 全部智能体：智能体是一级信息，资产分为核心资产 / 历史与状态 / 主要位置。 */
 .backup-agent-asset-summary {
-  padding: 14px 2px 15px;
+  padding: 16px 2px 17px;
   border-top: 1px solid var(--al-line);
 }
 
@@ -209,8 +242,8 @@
   display: block;
   overflow: hidden;
   color: var(--al-ink);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -218,51 +251,124 @@
 .backup-agent-title small {
   display: block;
   margin-top: 3px;
-  color: var(--al-muted);
+  color: var(--al-ink-2);
   font-size: 12px;
+  font-weight: 620;
   line-height: 1.35;
 }
 
-.backup-agent-kind-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  margin: 10px 0 8px 25px;
+.backup-agent-asset-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(180px, .72fr) minmax(220px, .78fr);
+  gap: 0;
+  margin-top: 13px;
+  padding-left: 25px;
 }
 
-.backup-agent-kind-facts > span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
+.backup-agent-asset-group,
+.backup-agent-location {
+  min-width: 0;
+  padding: 0 18px;
+}
+
+.backup-agent-asset-group:first-child {
+  padding-left: 0;
+}
+
+.backup-agent-asset-group + .backup-agent-asset-group,
+.backup-agent-location {
+  border-left: 1px solid var(--al-line);
+}
+
+.backup-agent-asset-group h3,
+.backup-agent-location h3 {
+  margin: 0 0 7px;
   color: var(--al-muted);
-  font-size: 12px;
-}
-
-.backup-agent-kind-facts b {
-  color: var(--al-ink-2);
   font-size: 12px;
   font-weight: 650;
 }
 
-.backup-agent-asset-foot {
+.backup-agent-asset-group.is-secondary h3,
+.backup-agent-location h3 {
+  color: var(--al-muted-2);
+}
+
+.backup-agent-kind-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 22px;
+  row-gap: 0;
+}
+
+.backup-agent-asset-group.is-secondary .backup-agent-kind-list {
+  grid-template-columns: 1fr;
+}
+
+.backup-agent-kind-row {
   display: flex;
   min-width: 0;
-  align-items: center;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 10px;
-  margin-left: 25px;
+  min-height: 28px;
+  padding: 4px 0;
+  color: var(--al-ink-2);
+  font-size: 12px;
+}
+
+.backup-agent-kind-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-agent-kind-row b {
+  flex: 0 0 auto;
+  color: var(--al-ink);
+  font-size: 12px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-agent-asset-group.is-secondary .backup-agent-kind-row {
+  color: var(--al-muted);
+}
+
+.backup-agent-asset-group.is-secondary .backup-agent-kind-row b {
+  color: var(--al-ink-2);
+}
+
+.backup-agent-group-empty {
   color: var(--al-muted-2);
   font-size: 12px;
 }
 
-.backup-agent-asset-foot code {
+.backup-agent-location {
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.backup-agent-location-path {
   min-width: 0;
-  max-width: min(70%, 720px);
+}
+
+.backup-agent-location code {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   color: var(--al-muted);
   font-family: var(--font-mono);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.backup-agent-location > span {
+  display: block;
+  margin-top: 6px;
+  color: var(--al-muted-2);
+  font-size: 12px;
 }
 
 /* 单智能体：把原详情抽屉升级为主内容。 */
@@ -308,6 +414,20 @@
 
 .backup-asset-kind-list {
   border-top: 1px solid var(--al-line);
+}
+
+.backup-asset-kind-header {
+  display: grid;
+  grid-template-columns: minmax(120px, .5fr) minmax(180px, 1fr) auto;
+  gap: 16px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--al-line);
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.backup-asset-kind-header span:last-child {
+  text-align: right;
 }
 
 .backup-asset-kind-row {
@@ -368,11 +488,9 @@
   font-weight: 700;
 }
 
-/* 备份记录降级到当前资产之后。 */
+/* 备份记录是独立次级视图，不与当前资产混排。 */
 .backup-history-section {
-  margin-top: 26px;
-  padding-top: 15px;
-  border-top: 1px solid var(--al-line-strong);
+  margin-top: 18px;
 }
 
 .backup-snapshot-list {
