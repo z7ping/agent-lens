@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { watch, type FSWatcher } from 'node:fs'
 import {
   access,
   mkdir,
@@ -41,7 +40,7 @@ import {
   resolveHermesRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { isMissingPathError } from '@agent-lens/source-support'
+import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
 import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
@@ -49,7 +48,6 @@ const PARSER_VERSION = '3'
 
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
-const DB_POLL_MS = 2000
 const INBOX_POLL_MS = 250
 
 interface HermesDbEnvelope {
@@ -456,7 +454,7 @@ export async function startHermesRuntimeCapture(
   const hasDb = Boolean(dataRoot && await exists(join(dataRoot, DB_NAME)))
   const db = hasDb && dataRoot ? openDatabase(dataRoot) : null
   const fingerprints = new Map<number, string>()
-  let watcher: FSWatcher | null = null
+  let watcher: SourceFileWatchHandle | null = null
   let stopped = false
   let scanning = false
   let pending = false
@@ -486,16 +484,15 @@ export async function startHermesRuntimeCapture(
 
   if (db && dataRoot) {
     await scanDb(false)
-    try {
-      watcher = watch(dataRoot, (_event, fileName) => {
-        const name = fileName?.toString() ?? ''
-        if (!name.startsWith(DB_NAME)) return
-        void scanDb(true).catch(() => undefined)
-      })
-      watcher.on('error', () => { watcher?.close(); watcher = null })
-    } catch {
-      watcher = null
-    }
+    watcher = await watchSourceFiles({
+      paths: dataRoot,
+      signal: ctx.abortSignal,
+      debounceMs: 120,
+      accept: filePath => basename(filePath).startsWith(DB_NAME),
+      onFile: async () => {
+        await scanDb(true)
+      },
+    })
   }
 
   const inboxTask = (async () => {
@@ -522,20 +519,15 @@ export async function startHermesRuntimeCapture(
     }
   })()
 
-  const dbTask = (async () => {
-    while (!stopped && !ctx.abortSignal.aborted) {
-      await abortableDelay(DB_POLL_MS, ctx.abortSignal)
-      if (!stopped && !ctx.abortSignal.aborted) await scanDb(true).catch(() => undefined)
-    }
-  })()
-
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
-      watcher?.close()
-      watcher = null
-      await Promise.all([inboxTask, dbTask])
+      if (watcher) {
+        await watcher.dispose()
+        watcher = null
+      }
+      await inboxTask
       db?.close()
     },
   }
