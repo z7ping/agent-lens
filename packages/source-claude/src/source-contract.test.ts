@@ -211,16 +211,19 @@ test('Claude legacy checkpoint gains file identity without replaying unchanged h
   })
   await writeFile(path, `${line}\n`, 'utf8')
   const meta = await stat(path)
-  const checkpoints = new Map<string, unknown>([[
-    claudeInternals.historyCheckpointKey(path),
-    {
-      path,
-      offset: meta.size,
-      sequence: 1,
-      size: meta.size,
-      mtimeMs: meta.mtimeMs,
-    },
-  ]])
+  const checkpoints = new Map<string, unknown>([
+    [
+      claudeInternals.historyCheckpointKey(path),
+      {
+        path,
+        offset: meta.size,
+        sequence: 1,
+        size: meta.size,
+        mtimeMs: meta.mtimeMs,
+      },
+    ],
+    ['claude:known-project-cwds:v1', [join(root, 'workspace')]],
+  ])
   const ctx = historyContext(projects, checkpoints)
 
   try {
@@ -233,6 +236,13 @@ test('Claude legacy checkpoint gains file identity without replaying unchanged h
     assert.deepEqual(
       checkpoints.get('claude:known-project-cwds:v1'),
       [join(root, 'workspace')],
+    )
+    assert.deepEqual(
+      checkpoints.get('claude:known-project-data-roots:v1'),
+      [{
+        cwd: join(root, 'workspace'),
+        projectDataRoot: projects,
+      }],
     )
   } finally {
     await rm(root, { recursive: true, force: true })
