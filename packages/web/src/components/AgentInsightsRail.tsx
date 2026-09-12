@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
+import { Disclosure } from './ui'
 
 type JsonRecord = Record<string, unknown>
 type CoverageStatus = 'used' | 'discoverable' | 'configured' | 'discovered' | 'unobserved'
@@ -137,10 +138,11 @@ function NativeEventSummary({ groups, total }: { groups: JsonRecord[]; total: nu
     <b>{t('insightsRail.nativeUnknownTitle')}</b>
     <span>{t('insightsRail.nativeUnknownSummary', { types: groups.length.toLocaleString(locale), total: total.toLocaleString(locale) })}</span>
     {rows(top)}
-    {rest.length > 0 && <details className="disclosure-group">
-      <summary><span>{t('insightsRail.showRemaining', { count: rest.length })}</span><span className="disclosure-count">{rest.length}</span></summary>
-      {rows(rest)}
-    </details>}
+    {rest.length > 0 && <Disclosure
+      className="disclosure-group"
+      summary={t('insightsRail.showRemaining', { count: rest.length })}
+      summaryMeta={<span className="disclosure-count">{rest.length}</span>}
+    >{rows(rest)}</Disclosure>}
   </div>
 }
 
