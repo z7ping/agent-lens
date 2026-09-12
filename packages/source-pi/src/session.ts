@@ -272,9 +272,10 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
     nativeParentSessionId = stringField(await readSessionHeader(parentPath) ?? {}, 'id')
   }
   const version = header.version
+  const cwd = stringField(header, 'cwd')
   return {
     nativeSessionId: stringField(header, 'id') ?? fallback,
-    ...(stringField(header, 'cwd') ? { cwd: stringField(header, 'cwd') } : {}),
+    ...(cwd ? { cwd } : {}),
     ...(typeof version === 'string' || typeof version === 'number' ? { version } : {}),
     ...(nativeParentSessionId ? { nativeParentSessionId } : {}),
   }
