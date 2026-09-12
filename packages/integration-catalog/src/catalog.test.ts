@@ -32,6 +32,19 @@ test('catalog location resolvers preserve existing source defaults', () => {
     dataRoot: join(home, '.claude', 'projects'),
     explicit: false,
   })
+  assert.deepEqual(resolveClaudeLocation({ CLAUDE_CONFIG_DIR: '/srv/claude-profile' }, home), {
+    configRoot: '/srv/claude-profile',
+    dataRoot: join('/srv/claude-profile', 'projects'),
+    explicit: true,
+  })
+  assert.deepEqual(resolveClaudeLocation({
+    CLAUDE_CONFIG_DIR: '/srv/current-claude',
+    CLAUDE_CODE_HOME: '/srv/legacy-claude',
+  }, home), {
+    configRoot: '/srv/current-claude',
+    dataRoot: join('/srv/current-claude', 'projects'),
+    explicit: true,
+  })
   assert.deepEqual(resolvePiLocation({}, home), {
     configRoot: join(home, '.pi', 'agent'),
     dataRoot: join(home, '.pi', 'agent', 'sessions'),
