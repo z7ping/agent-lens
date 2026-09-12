@@ -253,7 +253,9 @@ test('Claude legacy checkpoint gains file identity without replaying unchanged h
 test('Claude static assets remain partial and do not claim runtime discoverability', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-claude-assets-contract-'))
   await mkdir(join(root, 'skills', 'reviewer'), { recursive: true })
+  await mkdir(join(root, 'skills', 'synced', 'cloud-skill'), { recursive: true })
   await writeFile(join(root, 'skills', 'reviewer', 'SKILL.md'), '# Reviewer\n', 'utf8')
+  await writeFile(join(root, 'skills', 'synced', 'cloud-skill', 'SKILL.md'), '# Synced\n', 'utf8')
   await writeFile(join(root, 'settings.json'), JSON.stringify({
     mcpServers: { docs: { command: 'node' } },
     hooks: { PreToolUse: [{ hooks: [{ command: 'check' }] }] },
@@ -282,6 +284,11 @@ test('Claude static assets remain partial and do not claim runtime discoverabili
     const hook = assets.find(asset => asset.definition.type === 'hook')
     assert.equal(skill?.binding?.scope, 'user')
     assert.equal(skill?.binding?.scopeRoot, root)
+    const syncedSkill = assets.find(asset =>
+      asset.definition.type === 'skill'
+      && asset.binding?.source === 'claude:synced-skill')
+    assert.equal(syncedSkill?.binding?.path, join(root, 'skills', 'synced', 'cloud-skill'))
+    assert.equal(syncedSkill?.binding?.scope, 'user')
     assert.equal(mcp?.binding?.scope, 'user')
     assert.equal(skill?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
     assert.equal(mcp?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
@@ -329,7 +336,9 @@ test('Claude project assets follow CLAUDE hierarchy, project settings, skills an
   const packageDir = dirname(cwd)
   await mkdir(join(projectRoot, '.git'), { recursive: true })
   await mkdir(join(projectRoot, '.claude', 'rules'), { recursive: true })
+  await mkdir(join(packageDir, '.claude', 'rules'), { recursive: true })
   await mkdir(join(projectRoot, '.claude', 'skills', 'root-skill'), { recursive: true })
+  await mkdir(join(projectRoot, '.claude', 'skills', 'synced', 'ignored-skill'), { recursive: true })
   await mkdir(join(packageDir, '.claude', 'skills', 'package-skill'), { recursive: true })
   await mkdir(join(projectRoot, '.claude'), { recursive: true })
   await mkdir(cwd, { recursive: true })
@@ -339,7 +348,9 @@ test('Claude project assets follow CLAUDE hierarchy, project settings, skills an
   await writeFile(join(packageDir, 'CLAUDE.md'), '# package instructions\n', 'utf8')
   await writeFile(join(projectRoot, '.claude', 'CLAUDE.md'), '# alternate project instructions\n', 'utf8')
   await writeFile(join(projectRoot, '.claude', 'rules', 'testing.md'), '# testing rule\n', 'utf8')
+  await writeFile(join(packageDir, '.claude', 'rules', 'ignored.md'), '# not a project rules root\n', 'utf8')
   await writeFile(join(projectRoot, '.claude', 'skills', 'root-skill', 'SKILL.md'), '# root skill\n', 'utf8')
+  await writeFile(join(projectRoot, '.claude', 'skills', 'synced', 'ignored-skill', 'SKILL.md'), '# reserved project synced dir\n', 'utf8')
   await writeFile(join(packageDir, '.claude', 'skills', 'package-skill', 'SKILL.md'), '# package skill\n', 'utf8')
   await writeFile(join(projectRoot, '.mcp.json'), JSON.stringify({
     mcpServers: { shared: { command: 'node' } },
@@ -386,7 +397,9 @@ test('Claude project assets follow CLAUDE hierarchy, project settings, skills an
     assert.equal(projectPaths.has(join(packageDir, 'CLAUDE.md')), true)
     assert.equal(projectPaths.has(join(projectRoot, '.claude', 'CLAUDE.md')), true)
     assert.equal(projectPaths.has(join(projectRoot, '.claude', 'rules', 'testing.md')), true)
+    assert.equal(projectPaths.has(join(packageDir, '.claude', 'rules', 'ignored.md')), false)
     assert.equal(projectPaths.has(join(projectRoot, '.claude', 'skills', 'root-skill')), true)
+    assert.equal(projectPaths.has(join(projectRoot, '.claude', 'skills', 'synced', 'ignored-skill')), false)
     assert.equal(projectPaths.has(join(packageDir, '.claude', 'skills', 'package-skill')), true)
     assert.equal(projectPaths.has(join(projectRoot, '.mcp.json')), true)
 
