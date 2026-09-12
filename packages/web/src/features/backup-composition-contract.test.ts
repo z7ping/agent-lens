@@ -7,19 +7,30 @@ const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.u
 const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const sidebarFilter = readFileSync(new URL('../components/SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
 
-test('Backup 主页面以当前资产为核心，不再以 KPI 或快照操作占据首屏', () => {
-  assert.match(backupPage, /className="backup-overview-strip"/)
-  assert.match(backupPage, /className="backup-assets-section"/)
-  assert.match(backupPage, /t\('assetView\.currentAssets'\)/)
+test('Backup 默认以当前资产为主视图，并把备份记录拆成独立页签', () => {
+  assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
+  assert.match(backupPage, /className="backup-view-tabs"/)
+  assert.match(backupPage, /t\('assetView\.currentTab'\)/)
+  assert.match(backupPage, /t\('assetView\.historyTab'\)/)
+  assert.match(backupPage, /activeView === 'assets'/)
   assert.doesNotMatch(backupPage, /className="future-kpis"/)
   assert.doesNotMatch(backupPage, /className="backup-restore-section"/)
 })
 
-test('全部智能体按智能体分段展示资产摘要，单智能体升级为主页面详情', () => {
+test('全部智能体按智能体分段，并明确区分核心资产、历史状态和主要位置', () => {
   assert.match(backupPage, /className="backup-agent-asset-summary"/)
-  assert.match(backupPage, /className="backup-agent-kind-facts"/)
+  assert.match(backupPage, /className="backup-agent-asset-grid"/)
+  assert.match(backupPage, /t\('assetView\.coreAssets'\)/)
+  assert.match(backupPage, /t\('assetView\.historyStatus'\)/)
+  assert.match(backupPage, /t\('assetView\.primaryLocation'\)/)
+  assert.doesNotMatch(backupPage, /t\('assetView\.viewDetails'\)/)
+})
+
+test('单智能体由左侧筛选驱动，主区域直接展示完整资产详情', () => {
+  assert.match(backupPage, /const focusedSource = selectedAssetSourceId/)
   assert.match(backupPage, /className="backup-agent-detail"/)
   assert.match(backupPage, /className="backup-asset-kind-list"/)
+  assert.match(backupPage, /className="backup-asset-kind-header"/)
   assert.match(backupPage, /BackupDataRootTree/)
   assert.match(backupPage, /className="backup-age-facts"/)
 })
@@ -35,18 +46,19 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
 
 test('导入与创建只保留为右上角动作，创建流程进入共享 Drawer', () => {
   const headingIndex = backupPage.indexOf('className="backup-heading-actions"')
-  const assetsIndex = backupPage.indexOf('className="backup-assets-section"')
-  assert.ok(headingIndex >= 0 && headingIndex < assetsIndex)
+  const tabsIndex = backupPage.indexOf('className="backup-view-tabs"')
+  assert.ok(headingIndex >= 0 && tabsIndex > headingIndex)
   assert.match(backupPage, /t\('toolbar\.import'\)/)
   assert.match(backupPage, /t\('toolbar\.create'\)/)
   assert.match(backupPage, /className="backup-create-drawer"/)
   assert.doesNotMatch(backupPage, /className="backup-create-panel"/)
 })
 
-test('备份记录位于当前资产之后，并继续保留校验、预演和导出能力', () => {
-  const assetsIndex = backupPage.indexOf('className="backup-assets-section"')
-  const historyIndex = backupPage.indexOf('className="backup-history-section"')
-  assert.ok(assetsIndex >= 0 && historyIndex > assetsIndex)
+test('备份记录跟随左侧智能体范围过滤，并保留校验、预演和导出能力', () => {
+  assert.match(backupPage, /const visibleSnapshots = selectedAssetSourceId/)
+  assert.match(backupPage, /snapshot\.sourceIds\.includes\(selectedAssetSourceId\)/)
+  assert.match(backupPage, /className="backup-history-section"/)
+  assert.match(backupPage, /visibleSnapshots\.map/)
   assert.match(backupPage, /verifySnapshot/)
   assert.match(backupPage, /showRestorePreview/)
   assert.match(backupPage, /exportSnapshot/)
@@ -57,6 +69,6 @@ test('Backup 响应式不通过横向表格或滚动兜底核心资产信息', (
   assert.doesNotMatch(backupPage, /<table className="snapshot-table">/)
   assert.doesNotMatch(backupCss, /protection-table/)
   assert.doesNotMatch(backupCss, /snapshot-table/)
-  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-asset-kind-row \{[\s\S]*?grid-template-columns: 1fr auto;/)
+  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-agent-asset-grid \{[\s\S]*?grid-template-columns: 1fr;/)
   assert.match(backupCss, /\.backup-create-footer \{[\s\S]*?flex-direction: column;/)
 })
