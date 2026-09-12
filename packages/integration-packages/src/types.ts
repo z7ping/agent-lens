@@ -1,4 +1,5 @@
 export const INTEGRATION_PACKAGE_SCHEMA_VERSION = 1 as const
+export const INTEGRATION_PACKAGE_ENTRY_EXPORT = 'default' as const
 
 export type IntegrationPackageCompatibility = 'compatible' | 'incompatible' | 'unknown'
 export type IntegrationPackageIntegrity = 'verified' | 'invalid' | 'unknown'
@@ -19,7 +20,7 @@ export interface IntegrationPackageManifest {
   version: string
   apiVersion: string
   entry: string
-  entryExport: 'default'
+  entryExport: typeof INTEGRATION_PACKAGE_ENTRY_EXPORT
   files: IntegrationPackageFileManifest[]
 }
 
