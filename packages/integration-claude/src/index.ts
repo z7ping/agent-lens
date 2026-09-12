@@ -1,18 +1,11 @@
-import type { AgentIntegrationManifest } from '@agent-lens/core'
 import { defineAgentLensIntegration } from '@agent-lens/runtime-cordis'
 import { claudeSourcePlugin } from '@agent-lens/source-claude'
+import { integrationManifest } from './manifest'
 
-export const claudeIntegrationManifest: AgentIntegrationManifest = {
-  integrationId: 'claude-code',
-  productId: 'claude-code',
-  displayName: 'Claude Code',
-  apiVersion: '1.0',
-  capabilities: ['source', 'hook', 'assets'],
-  componentPluginIds: ['@agent-lens/source-claude'],
-}
+export { integrationManifest as claudeIntegrationManifest } from './manifest'
 
 export const claudeIntegration = defineAgentLensIntegration(
-  claudeIntegrationManifest,
+  integrationManifest,
   [
     {
       pluginId: '@agent-lens/source-claude',
