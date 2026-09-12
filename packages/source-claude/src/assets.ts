@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { opendir, readFile, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import {
@@ -25,6 +26,10 @@ import {
   CLAUDE_KNOWN_PROJECT_DATA_ROOTS_CHECKPOINT_KEY,
   type ClaudeKnownProjectDataRoot,
 } from './workspace-context.js'
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -466,7 +471,7 @@ async function* discoverAutoMemoryAssets(
           type: 'memory',
           canonicalName: `claude-auto-memory:${relativeName}`,
           displayName: basename(path),
-          upstreamIdentity: `claude-auto-memory:${relativeName}`,
+          upstreamIdentity: `claude-auto-memory:${sha256(key)}`,
         },
         binding: {
           path,
