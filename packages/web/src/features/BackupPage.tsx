@@ -401,14 +401,14 @@ export function BackupPage({
         <section className="future-kpis" aria-label={t('kpi.aria')}>
           <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.physicalFiles')}</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span></div><strong>{protectedFiles.toLocaleString()}</strong><small>{hasProtectedBytes ? `${formatBytes(protectedBytes)} · ` : ''}{indexTime ? t('kpi.indexUpdated', { time: formatTime(indexTime, locale) }) : ''}{t('kpi.agents', { count: detectedSourceCount })}</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.snapshots')}</span><span className="delta neutral">{snapshots[0] ? t('kpi.recent', { time: formatTime(snapshots[0].createdAt, locale) }) : t('kpi.noSnapshot')}</span></div><strong>{snapshots.length}</strong><small>{t('kpi.logicalSize', { size: formatBytes(totalSnapshotBytes) })}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.lastVerify')}</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? t('kpi.passed') : t('kpi.attention')) : t('kpi.notRun')}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>{t('kpi.verifyDescription')}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.excluded')}</span><span className="badge warn">{t('kpi.safetyFirst')}</span></div><strong>{excludedFiles.toLocaleString()}</strong><small>{t('kpi.excludedDescription')}</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.lastVerify')}</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? t('kpi.passed') : t('kpi.attention')) : t('kpi.notRun')}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.excluded')}</span><span className="badge warn">{t('kpi.safetyFirst')}</span></div><strong>{excludedFiles.toLocaleString()}</strong></article>
         </section>
 
         <div className="future-grid">
           <div className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('protection.title')}</h2><p>{t('protection.description')}</p></div></div>
+              <div className="future-card-head"><div><h2>{t('protection.title')}</h2></div></div>
               <div className="future-card-body">
                 <div className="protection-grid">
                   {sources.map(source => <article key={source.sourceId} className={`protection-card ${!source.detected ? 'is-muted' : ''}`}>
@@ -430,7 +430,7 @@ export function BackupPage({
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('snapshots.title')}</h2><p>{t('snapshots.description')}</p></div><Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button></div>
+              <div className="future-card-head"><div><h2>{t('snapshots.title')}</h2></div><Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button></div>
               {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>{t('snapshots.snapshot')}</th><th>{t('snapshots.source')}</th><th>{t('snapshots.size')}</th><th>{t('snapshots.integrity')}</th><th>{t('snapshots.excluded')}</th><th>{t('snapshots.hash')}</th><th className="align-right">{t('snapshots.actions')}</th></tr></thead><tbody>
                 {snapshots.map(snapshot => {
                   const checked = verification[snapshot.id]
@@ -448,17 +448,17 @@ export function BackupPage({
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('restore.title')}</h2><p>{t('restore.description')}</p></div><span className="badge info">{t('restore.previewFirst')}</span></div>
+              <div className="future-card-head"><div><h2>{t('restore.title')}</h2></div><span className="badge info">{t('restore.previewFirst')}</span></div>
               <div className="future-card-body"><div className="restore-grid">
-                <article className="restore-card"><h3>{t('restore.importTitle')}</h3><p>{t('restore.importDescription')}</p><div className="restore-flow"><span className="restore-node">{t('restore.selectFile')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.secondConfirm')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.integrityCheck')}</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{t('restore.selectPackage')}</Button></div></article>
-                <article className="restore-card"><h3>{t('restore.restoreTitle')}</h3><p>{t('restore.restoreDescription')}</p><div className="restore-flow"><span className="restore-node">{t('restore.selectSnapshot')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.compareCurrent')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.manualConfirm')}</span></div><div className="restore-action"><span className="badge warn">{t('restore.previewOnly')}</span></div></article>
+                <article className="restore-card"><h3>{t('restore.importTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectFile')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.secondConfirm')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.integrityCheck')}</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{t('restore.selectPackage')}</Button></div></article>
+                <article className="restore-card"><h3>{t('restore.restoreTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectSnapshot')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.compareCurrent')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.manualConfirm')}</span></div><div className="restore-action"><span className="badge warn">{t('restore.previewOnly')}</span></div></article>
               </div></div>
             </section>
           </div>
 
           <aside className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('create.title')}</h2><p>{t('create.description')}</p></div><span className="badge info">{t('create.local')}</span></div>
+              <div className="future-card-head"><div><h2>{t('create.title')}</h2></div><span className="badge info">{t('create.local')}</span></div>
               <div className="future-card-body snapshot-builder">
                 <div className="builder-block"><div className="builder-label"><span>{t('create.agents')}</span><span>{selectedSources.length} / {detectedSourceCount}</span></div><div className="builder-checks">
                   {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{t('create.files', { count: source.fileCount.toLocaleString(locale) })}</small></label>)}
@@ -475,9 +475,9 @@ export function BackupPage({
             </section>
 
             <section className="future-card"><div className="future-card-head"><div><h3>{t('principles.title')}</h3></div></div><div className="future-card-body backup-principles">
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.understand')}</span><b>{t('principles.logicalPhysical')}</b></div><p>{t('principles.logicalPhysicalDescription')}</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.originalFirst')}</span><b>{t('principles.nativeSessions')}</b></div><p>{t('principles.nativeSessionsDescription')}</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.noCleanup')}</span><b>{t('principles.noDelete')}</b></div><p>{t('principles.noDeleteDescription')}</p></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.understand')}</span><b>{t('principles.logicalPhysical')}</b></div></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.originalFirst')}</span><b>{t('principles.nativeSessions')}</b></div></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.noCleanup')}</span><b>{t('principles.noDelete')}</b></div></div>
             </div></section>
           </aside>
         </div>
@@ -488,7 +488,6 @@ export function BackupPage({
       open
       className="backup-data-drawer"
       title={<span className="backup-overlay-title"><span className={`src-dot lg ${sourceDotClass(detailSource.sourceId)}`}/>{sourceLabel(detailSource.sourceId, detailSource.displayName)}</span>}
-      description={t('detail.description')}
       onClose={() => { if (!busy) setDetailSourceId(null) }}
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
@@ -506,7 +505,6 @@ export function BackupPage({
 
         {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>{t('detail.timeDistribution')}</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>{t('detail.oldest', { time: detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt, locale) : '—' })}</span><span className="grow"/><span>{t('detail.latest', { time: detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt, locale) : '—' })}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> {t('detail.recent30')}</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> {t('detail.days31To90')}</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> {t('detail.days91To180')}</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> {t('detail.older180')}</span></div>}</section>}
 
-        <section className="drawer-section"><div className="future-note"><b>{t('detail.purposeTitle')}</b> {t('detail.purposeDescription', { agent: sourceLabel(detailSource.sourceId, detailSource.displayName) })}</div></section>
       </div>
     </Drawer>}
 
@@ -530,7 +528,6 @@ export function BackupPage({
       open
       className="backup-confirm-overlay"
       title={confirmation.type === 'create' ? t('confirm.createTitle') : t('confirm.importTitle')}
-      description={t('confirm.description')}
       onClose={() => { if (!busy) setConfirmation(null) }}
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
