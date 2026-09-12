@@ -21,7 +21,15 @@ const BINARY_EXTENSIONS = new Set([
   '.jpeg', '.jpg', '.jsonl', '.pdf', '.png', '.sqlite', '.sqlite3', '.so', '.tar',
   '.webp', '.zip',
 ])
-const SENSITIVE_SEGMENT = /^(?:\.env(?:\..*)?|.*(?:token|secret|credential|credentials|private[-_]?key|api[-_]?key|auth(?:entication)?).*|.*\.(?:key|pem|p12|pfx))$/i
+const SENSITIVE_EXTENSIONS = new Set(['.key', '.p12', '.pem', '.pfx'])
+const SENSITIVE_TOKENS = new Set([
+  'credential',
+  'credentials',
+  'secret',
+  'secrets',
+  'token',
+  'tokens',
+])
 
 type IntegrationStatusReader = (
   productId: string,
@@ -48,12 +56,26 @@ function relativePathForApi(value: string): string {
   return value.replaceAll('\\', '/')
 }
 
+function isSensitiveSegment(segment: string): boolean {
+  const lower = segment.toLowerCase()
+  if (lower === '.env' || lower.startsWith('.env.')) return true
+  if (SENSITIVE_EXTENSIONS.has(extname(lower))) return true
+  if (lower === 'auth.json' || lower === 'authentication.json' || lower === 'oauth.json') return true
+  if (
+    lower.includes('private-key')
+    || lower.includes('private_key')
+    || lower.includes('api-key')
+    || lower.includes('api_key')
+  ) return true
+  return lower.split(/[-_.]/).some(token => SENSITIVE_TOKENS.has(token))
+}
+
 function isSensitivePath(relativePath: string): boolean {
   return relativePath
     .replaceAll('\\', '/')
     .split('/')
     .filter(Boolean)
-    .some(segment => SENSITIVE_SEGMENT.test(segment))
+    .some(isSensitiveSegment)
 }
 
 function isKnownBinaryPath(relativePath: string): boolean {
