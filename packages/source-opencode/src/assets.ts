@@ -319,7 +319,7 @@ async function* discoverConfigAssets(
 
   for (const [name, raw] of Object.entries(asRecord(config.mcp))) {
     const server = asRecord(raw)
-    const disabled = server.disabled === true
+    const disabled = server.disabled === true || server.enabled === false
     yield {
       definition: {
         type: 'mcp',
