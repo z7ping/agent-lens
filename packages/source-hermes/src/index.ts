@@ -74,7 +74,6 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -451,22 +450,31 @@ export async function startHermesRuntimeCapture(
   const inbox = hermesInboxDirectory()
   await mkdir(inbox, { recursive: true })
   const dataRoot = ctx.installation.dataRoot
-  const hasDb = Boolean(dataRoot && await exists(join(dataRoot, DB_NAME)))
-  const db = hasDb && dataRoot ? openDatabase(dataRoot) : null
+  const dbPath = dataRoot ? join(dataRoot, DB_NAME) : undefined
+  let db = dataRoot && dbPath && await exists(dbPath) ? openDatabase(dataRoot) : null
   const fingerprints = new Map<number, string>()
   let watcher: SourceFileWatchHandle | null = null
   let stopped = false
   let scanning = false
   let pending = false
 
+  const replaceDatabase = async (): Promise<void> => {
+    const previous = db
+    db = null
+    previous?.close()
+    if (!dataRoot || !dbPath || stopped || ctx.abortSignal.aborted || !await exists(dbPath)) return
+    db = openDatabase(dataRoot)
+  }
+
   const scanDb = async (emitChanges: boolean): Promise<void> => {
-    if (!db) return
     if (scanning) { pending = true; return }
     scanning = true
     try {
       do {
         pending = false
-        const rows = recentRows(db, RUNTIME_RECENT_ROWS)
+        const active = db
+        if (!active) return
+        const rows = recentRows(active, RUNTIME_RECENT_ROWS)
         const live = new Set<number>()
         for (const row of rows) {
           live.add(row.row_id)
@@ -482,14 +490,16 @@ export async function startHermesRuntimeCapture(
     }
   }
 
-  if (db && dataRoot) {
-    await scanDb(false)
+  if (db) await scanDb(false)
+  if (dataRoot && dbPath) {
     watcher = await watchSourceFiles({
       paths: dataRoot,
       signal: ctx.abortSignal,
       debounceMs: 120,
       accept: filePath => basename(filePath).startsWith(DB_NAME),
-      onFile: async () => {
+      onFile: async (filePath) => {
+        if (basename(filePath) === DB_NAME) await replaceDatabase()
+        else if (!db && await exists(dbPath)) db = openDatabase(dataRoot)
         await scanDb(true)
       },
     })
@@ -528,7 +538,9 @@ export async function startHermesRuntimeCapture(
         watcher = null
       }
       await inboxTask
-      db?.close()
+      const active = db
+      db = null
+      active?.close()
     },
   }
 }
