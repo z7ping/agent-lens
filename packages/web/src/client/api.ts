@@ -192,6 +192,11 @@ export class AgentLensApi {
       method: 'POST',
     })
   }
+  removeIntegration(integrationId: string): Promise<IntegrationPackageOperationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}`, {
+      method: 'DELETE',
+    })
+  }
   setIntegrationEnabled(
     integrationId: string,
     enabled: boolean,

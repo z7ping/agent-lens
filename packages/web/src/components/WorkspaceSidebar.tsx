@@ -139,6 +139,19 @@ export function WorkspaceSidebar({
             <div className="workspace-settings-menu">
               <button
                 type="button"
+                className={`workspace-settings-menu-item ${onAgents ? 'is-active' : ''}`}
+                onClick={() => {
+                  navigate('/agents')
+                  setSettingsOpen(false)
+                  onMobileClose()
+                }}
+              >
+                <UiIcon name="agent" size={14}/>
+                <span>{t('settings:agentsAndIntegrations')}</span>
+                <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
+              </button>
+              <button
+                type="button"
                 className={`workspace-settings-menu-item ${onBackup ? 'is-active' : ''}`}
                 onClick={() => {
                   navigate('/backup')

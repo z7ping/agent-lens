@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type DragEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -7,14 +7,26 @@ import type {
   CapturePolicyResponseDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
+  IntegrationPackageOperationResponseDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { Button, Dialog, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, IconButton, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
+import {
+  IntegrationAdvancedActions,
+  IntegrationControl,
+  IntegrationOnlyCard,
+} from './integrations/IntegrationManagementControls'
+import {
+  integrationLifecycleState,
+  integrationToolPresenceLabel,
+  integrationToolPresencePath,
+} from './integrations/integration-lifecycle'
 
 const capabilityLabelKey: Record<string, string> = {
   session: 'capability.session',
@@ -85,35 +97,12 @@ const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'contex
 const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
-const integrationCapabilityLabelKey: Record<string, string> = {
-  source: 'integrationCapability.source',
-  hook: 'integrationCapability.hook',
-  runtime: 'integrationCapability.runtime',
-  live: 'integrationCapability.live',
-}
-
-const integrationAvailabilityLabelKey: Record<string, string> = {
-  available: 'availability.available',
-  partial: 'availability.partial',
-  unavailable: 'availability.unavailable',
-  error: 'availability.error',
-}
-
 const agentDescriptionKey: Record<string, string> = {
   codex: 'description.codex',
   'claude-code': 'description.claudeCode',
   pi: 'description.pi',
   hermes: 'description.hermes',
   opencode: 'description.opencode',
-}
-
-const integrationReasonKey: Record<string, string> = {
-  'authorization-required': 'integration.reason.authorizationRequired',
-  'authorization-restart-required': 'integration.reason.authorizationRestartRequired',
-  'component-start-failed': 'integration.reason.componentStartFailed',
-  'dependency-start-failed': 'integration.reason.dependencyStartFailed',
-  'live-adapter-missing': 'integration.reason.liveAdapterMissing',
-  'live-availability-failed': 'integration.reason.liveAvailabilityFailed',
 }
 
 function translatedLabel(
@@ -123,61 +112,6 @@ function translatedLabel(
 ): string {
   const key = map[value]
   return key ? t(key) : value
-}
-
-function integrationAvailabilityTone(
-  availability: string,
-): 'success' | 'warning' | 'danger' | 'neutral' {
-  if (availability === 'available') return 'success'
-  if (availability === 'partial' || availability === 'unavailable') return 'warning'
-  if (availability === 'error') return 'danger'
-  return 'neutral'
-}
-
-function captureState(
-  agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>,
-  management: IntegrationManagementItemDto | undefined,
-  discovery: IntegrationToolDiscoveryItemDto | undefined,
-  discoveryScanning: boolean,
-  t: TFunction,
-): { label: string; title: string; className: string } {
-  if (!agent.supported) return { label: t('status.unsupported'), title: t('status.unsupportedTitle'), className: 'is-unsupported' }
-  if (agent.detected) {
-    const configured = management?.enabled.configured ?? agent.enabled
-    if (!configured) return { label: t('status.disabled'), title: t('status.disabledTitle'), className: 'is-disabled' }
-    return { label: t('status.enabled'), title: t('status.enabledTitle'), className: 'is-enabled is-detected' }
-  }
-  if (discovery?.presence === 'error') {
-    return { label: t('status.scanFailed'), title: discovery.reason || t('status.scanFailedTitle'), className: 'is-error' }
-  }
-  if (discovery?.presence === 'present') {
-    return { label: t('status.discovered'), title: t('status.discoveredTitle'), className: 'is-discovered' }
-  }
-  if (discovery?.presence === 'data-only') {
-    return { label: t('status.historyData'), title: t('status.historyDataTitle'), className: 'is-history' }
-  }
-  if (discoveryScanning) {
-    return { label: t('status.scanning'), title: t('status.scanningTitle'), className: 'is-scanning' }
-  }
-  return { label: t('status.notDetected'), title: t('status.notDetectedTitle'), className: 'is-missing' }
-}
-
-function toolPresenceLabel(
-  discovery: IntegrationToolDiscoveryItemDto | undefined,
-  discoveryScanning: boolean,
-  discoveryError: string,
-  t: TFunction,
-): string {
-  if (discoveryError) return t('toolPresence.error')
-  if (discovery?.presence === 'present') return t('toolPresence.present')
-  if (discovery?.presence === 'data-only') return t('toolPresence.dataOnly')
-  if (discovery?.presence === 'error') return t('toolPresence.error')
-  if (discoveryScanning) return t('toolPresence.scanning')
-  return t('toolPresence.absent')
-}
-
-function toolPresencePath(discovery: IntegrationToolDiscoveryItemDto | undefined): string | undefined {
-  return discovery?.executable ?? discovery?.configRoot ?? discovery?.dataRoot
 }
 
 function capabilityDetail(
@@ -330,156 +264,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   </section>
 }
 
-function IntegrationControl({
-  agent,
-  management,
-  policy,
-  onChange,
-  onAuthorize,
-}: {
-  agent: AgentOverviewDto
-  management: IntegrationManagementItemDto | undefined
-  policy: CapturePolicyResponseDto | null
-  onChange(sourceId: string, enabled: boolean): Promise<void>
-  onAuthorize(
-    productId: string,
-    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
-  ): Promise<unknown>
-}) {
-  const { t } = useTranslation('agents')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [authorizationOpen, setAuthorizationOpen] = useState(false)
-  const [authorizationSaved, setAuthorizationSaved] = useState(false)
-  const settings = policy?.settings
-  const configured = management?.enabled.configured
-    ?? settings?.configuredEnabledSources.includes(agent.sourceId)
-    ?? agent.enabled
-  const effective = management?.enabled.effective
-    ?? settings?.effectiveEnabledSources.includes(agent.sourceId)
-    ?? agent.enabled
-  const pending = configured !== effective
-  const editable = management?.enabled.editable ?? settings?.editable ?? false
-  const managedBy = management?.enabled.managedBy ?? settings?.managedBy
-  const integrationAvailability = management?.availability ?? agent.integration?.availability
-  const integrationCapabilities = management?.capabilities ?? agent.integration?.capabilities ?? []
-  const pendingAuthorization = integrationCapabilities
-    .filter(item => item.authorization === 'required')
-    .map(item => item.capability)
-    .filter((capability): capability is IntegrationAuthorizationCapabilityDto =>
-      capability === 'hook' || capability === 'runtime' || capability === 'live'
-    )
-
-  const persistEnabled = async (enabled: boolean) => {
-    setSaving(true)
-    setError('')
-    try {
-      await onChange(management?.integrationId ?? agent.sourceId, enabled)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const toggle = () => {
-    if (!editable || saving) return
-    if (!configured && pendingAuthorization.length) {
-      setAuthorizationOpen(true)
-      return
-    }
-    void persistEnabled(!configured)
-  }
-
-  const authorize = async () => {
-    if (!pendingAuthorization.length || saving) return
-    setSaving(true)
-    setError('')
-    try {
-      await onAuthorize(agent.productId, pendingAuthorization)
-      if (!configured) await onChange(management?.integrationId ?? agent.sourceId, true)
-      setAuthorizationSaved(true)
-      setAuthorizationOpen(false)
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return <section className="source-capture-control">
-    <div>
-      <h3>{t('integration.title')}</h3>
-      <p>{pending
-        ? configured ? t('integration.pendingEnabled') : t('integration.pendingDisabled')
-        : configured
-          ? t('integration.enabledDescription')
-          : t('integration.disabledDescription')}</p>
-      {integrationAvailability && <div className="integration-availability">
-        <span className="integration-availability-overall">
-          <small>{t('integration.currentAvailability')}</small>
-          <StatusBadge tone={integrationAvailabilityTone(integrationAvailability)} dot>
-            {translatedLabel(integrationAvailabilityLabelKey, integrationAvailability, t)}
-          </StatusBadge>
-        </span>
-        <span className="integration-capability-badges">
-          {integrationCapabilities.map(item => <StatusBadge
-            key={item.capability}
-            tone={integrationAvailabilityTone(item.availability)}
-            title={item.reasonCode ? translatedLabel(integrationReasonKey, item.reasonCode, t) : item.reason}
-          >{translatedLabel(integrationCapabilityLabelKey, item.capability, t)} · {item.reasonCode === 'authorization-restart-required'
-              ? t('integration.pendingRestart')
-              : item.authorization === 'required'
-                ? t('integration.pendingAuthorization')
-                : translatedLabel(integrationAvailabilityLabelKey, item.availability, t)}</StatusBadge>)}
-        </span>
-      </div>}
-      {configured && pendingAuthorization.length > 0 && !authorizationSaved && <div className="integration-authorization-action">
-        <Button size="small" disabled={saving} onClick={() => setAuthorizationOpen(true)}>{t('integration.authorizeControl')}</Button>
-        <span>{t('integration.authorizeHint')}</span>
-      </div>}
-      {authorizationSaved && <p className="source-capture-note">{t('integration.authorizationSaved')}</p>}
-      {!editable && managedBy && <p className="source-capture-note">{t('integration.managedReadonly', {
-        manager: managedBy === 'environment' ? t('integration.environmentManager') : t('integration.runtimeManager'),
-      })}</p>}
-      {error && <p className="source-capture-error">{error}</p>}
-    </div>
-    <button
-      type="button"
-      role="switch"
-      aria-checked={configured}
-      className="source-capture-switch"
-      data-enabled={configured || undefined}
-      disabled={!editable || saving}
-      onClick={toggle}
-    ><span aria-hidden="true"/><b>{saving ? t('integration.saving') : configured ? t('integration.enabled') : t('integration.disabled')}</b></button>
-    <Dialog
-      open={authorizationOpen}
-      title={t('integration.dialogTitle', { agent: agentLabel(agent.sourceId, agent.displayName) })}
-      description={t('integration.dialogDescription')}
-      onClose={() => { if (!saving) setAuthorizationOpen(false) }}
-      closeDisabled={saving}
-      footer={<>
-        <Button disabled={saving} onClick={() => setAuthorizationOpen(false)}>{t('integration.cancel')}</Button>
-        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{configured ? t('integration.confirm') : t('integration.confirmAndEnable')}</Button>
-      </>}
-    >
-      <div className="integration-authorization-list">
-        {pendingAuthorization.map(capability => <div key={capability}>
-          <b>{translatedLabel(integrationCapabilityLabelKey, capability, t)}</b>
-          <span>{capability === 'runtime'
-            ? t('integration.runtimePermission')
-            : capability === 'live'
-              ? t('integration.livePermission')
-              : t('integration.hookPermission')}</span>
-        </div>)}
-      </div>
-      <p className="integration-authorization-note">{t('integration.persistedNote')}</p>
-    </Dialog>
-  </section>
-}
-
-function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onAuthorize }: {
+function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
@@ -487,6 +272,8 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
   discoveryError: string
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
+  onInstall(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
+  onRemove(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
   onAuthorize(
     productId: string,
     capabilities: readonly IntegrationAuthorizationCapabilityDto[],
@@ -519,8 +306,8 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = captureState(agent, management, discovery, discoveryScanning, t)
-  const presencePath = toolPresencePath(discovery)
+  const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t)
+  const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
@@ -533,15 +320,16 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
     </header>
 
     <div className="agent-installation">
-      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{toolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
+      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{integrationToolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
+      {management?.packageState && <span><small>{t('installation.integrationVersion')}</small><b>{management.packageState.installedVersion ?? management.packageState.availableVersion ?? t('installation.notAdded')}</b></span>}
       <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
     {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
     {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
-    <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
+    <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onInstall={onInstall} onAuthorize={onAuthorize}/>
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3><p>{t('sections.myAssetsDescription')}</p></div><span className="section-total">{userAssetCount}</span></div>
@@ -582,6 +370,12 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap, t)}><span>{translatedLabel(capabilityLabelKey, cap.name, t)} · {capabilityDetail(cap, t)}</span><b data-status={cap.status}>{translatedLabel(capabilityStatusLabelKey, cap.status, t)}</b></div>)}
         </div>
       </details>
+      <IntegrationAdvancedActions
+        management={management}
+        label={agentLabel(agent.sourceId, agent.displayName)}
+        onChange={onCaptureChange}
+        onRemove={onRemove}
+      />
     </section>
   </article>
 }
@@ -589,25 +383,67 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
 export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
-  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
-  const items = useOrderedAgents(snapshot.agents?.items ?? [])
-  const fallbackSourceId = items.find(item => item.detected)?.sourceId || items[0]?.sourceId || ''
-  const selectedSourceId = items.some(item => item.sourceId === sourceId) ? sourceId : fallbackSourceId
-  const selectedAgent = items.find(item => item.sourceId === selectedSourceId)
+  const overviewItems = useOrderedAgents(snapshot.agents?.items ?? [])
+  const managementItems = snapshot.integrationManagement?.items ?? []
   const discovery = snapshot.integrationDiscovery
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || discovery?.status === 'scanning'
-  const managementByProduct = new Map((snapshot.integrationManagement?.items ?? []).map(item => [item.productId, item]))
-  const managementById = new Map((snapshot.integrationManagement?.items ?? []).map(item => [item.integrationId, item]))
-  const discoveryByProduct = new Map((discovery?.items ?? []).map(item => [item.productId, item]))
+  const { ordered, canReorder, move, moveBy, reset } = useIntegrationOrder()
+  const [managingOrder, setManagingOrder] = useState(false)
+  const [draggedId, setDraggedId] = useState('')
+
+  const discoveryItems = discovery?.items ?? []
+  const claimedSourceIds = new Set<string>()
+  const managedRows = managementItems.map(management => {
+    const agent = overviewItems.find(item =>
+      item.productId === management.productId || item.sourceId === management.integrationId
+    )
+    if (agent) claimedSourceIds.add(agent.sourceId)
+    const tool = management.tool ?? discoveryItems.find(item =>
+      item.productId === management.productId || item.integrationId === management.integrationId
+    )
+    return {
+      id: management.integrationId,
+      displayName: management.displayName,
+      agent,
+      management,
+      discovery: tool,
+    }
+  })
+  const orderIndex = new Map(ordered.map((id, index) => [id, index]))
+  managedRows.sort((left, right) =>
+    (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
+      - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    || left.management.displayOrder - right.management.displayOrder
+    || left.id.localeCompare(right.id)
+  )
+  const rows = [
+    ...managedRows,
+    ...overviewItems
+      .filter(agent => !claimedSourceIds.has(agent.sourceId))
+      .map(agent => ({
+        id: agent.sourceId,
+        displayName: agent.displayName,
+        agent,
+        management: undefined,
+        discovery: discoveryItems.find(item =>
+          item.productId === agent.productId || item.integrationId === agent.sourceId
+        ),
+      })),
+  ]
+
+  const fallbackRow = rows.find(row =>
+    row.agent?.detected
+    || row.discovery?.presence === 'present'
+    || row.discovery?.presence === 'data-only'
+  ) ?? rows[0]
+  const selectedSourceId = rows.some(row => row.id === sourceId) ? sourceId : fallbackRow?.id ?? ''
+  const selectedRow = rows.find(row => row.id === selectedSourceId)
+  const selectedAgent = selectedRow?.agent
+  const selectedManagement = selectedRow?.management
+  const selectedDiscovery = selectedRow?.discovery
   const discoveryErrors = discovery?.items.filter(item => item.presence === 'error') ?? []
-  const selectedManagement = selectedAgent
-    ? managementByProduct.get(selectedAgent.productId) ?? managementById.get(selectedAgent.sourceId)
-    : undefined
-  const selectedDiscovery = selectedManagement?.tool ?? (selectedAgent
-    ? discoveryByProduct.get(selectedAgent.productId) ?? discoveryByProduct.get(selectedAgent.sourceId)
-    : undefined)
   const rescan = snapshot.agentsRescanResult
   const rescanning = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
   const scanBusy = rescanning || discoveryScanning
@@ -629,6 +465,21 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
               </StatusBadge>
             : null
 
+  const installIntegration = async (integrationId: string) => {
+    const result = await model.installIntegration(integrationId)
+    if (result.operation.status === 'completed' && result.state.installed) {
+      await model.acknowledgeIntegration(integrationId).catch(() => undefined)
+    }
+    return result
+  }
+
+  const selectRow = (integrationId: string, isNew: boolean | undefined) => {
+    onSourceIdChange(integrationId)
+    if (isNew) void model.acknowledgeIntegration(integrationId).catch(() => undefined)
+  }
+
+  const reorderableRows = rows.filter(row => canReorder(row.id))
+
   return <main className="workspace-page">
     <div className="page-content agents-content">
       <CompactPageHeading title={t('page.title')} description={t('page.description')}>
@@ -637,35 +488,112 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
           {rescanStatus}
         </Toolbar>
       </CompactPageHeading>
-      {items.length ? <div className="agents-browser">
+      {rows.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label={t('page.list')}>
-          <div className="agent-source-nav-head"><b>{t('page.localAgents')}</b><span>{items.length}</span></div>
-          {items.map(agent => {
-            const assetCount = agent.assetInventory.filter(asset => asset.type !== 'builtin').length
-            const agentDiscovery = discoveryByProduct.get(agent.productId) ?? discoveryByProduct.get(agent.sourceId)
-            const agentManagement = managementByProduct.get(agent.productId) ?? managementById.get(agent.sourceId)
-            const status = captureState(agent, agentManagement, agentDiscovery, discoveryScanning, t)
-            return <button key={agent.sourceId} className={`agent-source-option ${agent.sourceId === selectedSourceId ? 'is-active' : ''}`} onClick={() => onSourceIdChange(agent.sourceId)} aria-current={agent.sourceId === selectedSourceId ? 'true' : undefined} title={status.title}>
-              <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
-              <span className="agent-source-copy"><b>{agentLabel(agent.sourceId, agent.displayName)}</b><small>{t('page.userAssets', { count: assetCount })}</small></span>
+          <div className="agent-source-nav-head"><b>{managingOrder ? t('page.orderTitle') : t('page.localAgents')}</b><span>{rows.length}</span></div>
+          <div className="agent-source-nav-actions">
+            {managingOrder ? <>
+              <Button size="small" onClick={reset}>{t('scope.reset')}</Button>
+              <Button size="small" variant="primary" onClick={() => { setManagingOrder(false); setDraggedId('') }}>{t('page.orderDone')}</Button>
+            </> : <Button size="small" onClick={() => setManagingOrder(true)}>{t('page.manageOrder')}</Button>}
+          </div>
+
+          {managingOrder ? <div className="agent-order-list">
+            {rows.map(row => {
+              const reorderable = canReorder(row.id)
+              const reorderIndex = reorderableRows.findIndex(item => item.id === row.id)
+              return <div
+                key={row.id}
+                className={`agent-order-option ${draggedId === row.id ? 'is-dragging' : ''} ${reorderable ? '' : 'is-fixed'}`}
+                draggable={reorderable}
+                onDragStart={(event: DragEvent<HTMLDivElement>) => {
+                  if (!reorderable) return
+                  setDraggedId(row.id)
+                  event.dataTransfer.effectAllowed = 'move'
+                }}
+                onDragOver={event => {
+                  if (!reorderable) return
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                }}
+                onDrop={event => {
+                  if (!reorderable) return
+                  event.preventDefault()
+                  if (draggedId) move(draggedId, row.id)
+                  setDraggedId('')
+                }}
+                onDragEnd={() => setDraggedId('')}
+              >
+                <UiIcon name="drag" size={15} className="agent-order-drag"/>
+                <span className={`source-dot ${sourceDot(row.id)}`}/>
+                <b>{row.displayName}</b>
+                <span className="agent-order-buttons">
+                  <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(row.id, -1)} aria-label={t('scope.moveUp', { agent: row.displayName })}><UiIcon name="arrow-big-up" size={13}/></IconButton>
+                  <IconButton size="small" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableRows.length - 1} onClick={() => moveBy(row.id, 1)} aria-label={t('scope.moveDown', { agent: row.displayName })}><UiIcon name="arrow-big-down" size={13}/></IconButton>
+                </span>
+              </div>
+            })}
+          </div> : rows.map(row => {
+            const assetCount = row.agent?.assetInventory.filter(asset => asset.type !== 'builtin').length ?? 0
+            const status = integrationLifecycleState(row.agent, row.management, row.discovery, discoveryScanning, t)
+            const packageState = row.management?.packageState
+            const subtitle = row.management && packageState && !packageState.installed
+              ? t('page.notAddedSubtitle')
+              : !row.agent && packageState?.restartRequired
+                ? t('page.waitingRestart')
+                : row.agent
+                  ? t('page.userAssets', { count: assetCount })
+                  : t('page.detailsUnavailable')
+            return <button
+              key={row.id}
+              className={`agent-source-option ${row.id === selectedSourceId ? 'is-active' : ''}`}
+              onClick={() => selectRow(row.id, row.management?.isNew)}
+              aria-current={row.id === selectedSourceId ? 'true' : undefined}
+              title={status.title}
+            >
+              <span className={`source-dot large ${sourceDot(row.id)}`}/>
+              <span className="agent-source-copy">
+                <span className="agent-source-name-line">
+                  <b>{row.displayName}</b>
+                  {row.management?.isNew && <em>{t('status.new')}</em>}
+                </span>
+                <small>{subtitle}</small>
+              </span>
               <span className={`agent-source-state ${status.className}`}>{status.label}</span>
             </button>
           })}
         </nav>
-        <div className="agent-detail-pane">{selectedAgent && <AgentCard
-          key={selectedAgent.sourceId}
-          agent={selectedAgent}
-          management={selectedManagement}
-          discovery={selectedDiscovery}
-          discoveryScanning={discoveryScanning}
-          discoveryError={snapshot.integrationDiscoveryError}
-          policy={snapshot.capturePolicy}
-          onCaptureChange={(id, enabled) => selectedManagement
-            ? model.setIntegrationEnabled(id, enabled).then(() => undefined)
-            : model.setSourceEnabled(id, enabled)}
-          onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
-        />}</div>
+        <div className="agent-detail-pane">
+          {selectedAgent ? <AgentCard
+            key={selectedAgent.sourceId}
+            agent={selectedAgent}
+            management={selectedManagement}
+            discovery={selectedDiscovery}
+            discoveryScanning={discoveryScanning}
+            discoveryError={snapshot.integrationDiscoveryError}
+            policy={snapshot.capturePolicy}
+            onCaptureChange={(id, enabled) => selectedManagement
+              ? model.setIntegrationEnabled(id, enabled).then(() => undefined)
+              : model.setSourceEnabled(id, enabled)}
+            onInstall={installIntegration}
+            onRemove={id => model.removeIntegration(id)}
+            onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
+          /> : selectedManagement ? <IntegrationOnlyCard
+            key={selectedManagement.integrationId}
+            management={selectedManagement}
+            discovery={selectedDiscovery}
+            description={agentDescriptionKey[selectedManagement.integrationId]
+              ? t(agentDescriptionKey[selectedManagement.integrationId]!)
+              : t('description.fallback')}
+            discoveryScanning={discoveryScanning}
+            discoveryError={snapshot.integrationDiscoveryError}
+            onChange={(id, enabled) => model.setIntegrationEnabled(id, enabled).then(() => undefined)}
+            onInstall={installIntegration}
+            onRemove={id => model.removeIntegration(id)}
+          /> : null}
+        </div>
       </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
     </div>
   </main>
 }
+

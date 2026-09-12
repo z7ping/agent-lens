@@ -286,7 +286,10 @@ export class AgentLensClientModel {
     })
     try {
       const [agents, capturePolicy, management] = await Promise.all([
-        this.api.agents(),
+        this.api.agents().then(
+          value => ({ value, error: '' }),
+          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+        ),
         this.api.capturePolicy().catch(() => null),
         this.api.integrations().then(
           value => ({ value, error: '' }),
@@ -309,9 +312,10 @@ export class AgentLensClientModel {
       }
 
       this.patch({
-        agents,
+        agents: agents.value ?? this.snapshot.agents,
         capturePolicy,
         agentsLoading: false,
+        agentsError: agents.error ? translateProduct('errors:agentsOverviewFailed') : '',
         agentsHasNewData: this.agentsInvalidation !== invalidation,
         integrationManagement: management.value ?? this.snapshot.integrationManagement,
         integrationManagementLoading: false,
@@ -459,6 +463,22 @@ export class AgentLensClientModel {
     const result = await this.api.installIntegration(integrationId)
     await this.refreshIntegrationManagement().catch(() => undefined)
     return result
+  }
+
+  async removeIntegration(
+    integrationId: string,
+  ): Promise<IntegrationPackageOperationResponseDto> {
+    const result = await this.api.removeIntegration(integrationId)
+    await this.refreshIntegrationManagement().catch(() => undefined)
+    return result
+  }
+
+  async acknowledgeIntegration(integrationId: string): Promise<void> {
+    const current = this.snapshot.integrationManagement?.preferences
+    if (!current || current.acknowledgedIntegrationIds.includes(integrationId)) return
+    await this.updateIntegrationPreferences({
+      acknowledgedIntegrationIds: [...current.acknowledgedIntegrationIds, integrationId],
+    })
   }
 
   async setIntegrationEnabled(

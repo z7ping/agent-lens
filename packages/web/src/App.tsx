@@ -6,6 +6,7 @@ import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } fr
 import { useReviewUrlSync } from './client/useReviewUrlSync'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
+import { IntegrationOrderProvider } from './components/IntegrationOrderProvider'
 import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
@@ -56,7 +57,10 @@ function WorkspaceBreadcrumb({
     items = [{ label: t('insights') }, { label: t('usageOverview') }]
   } else if (pathname.startsWith('/agents')) {
     const selected = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
-    items = [{ label: t('agents') }, { label: selected?.displayName || selected?.sourceId || t('overview') }]
+    const managed = snapshot.integrationManagement?.items.find(item =>
+      item.integrationId === selectedAgentId || item.productId === selectedAgentId
+    )
+    items = [{ label: t('agents') }, { label: selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
   } else if (pathname.startsWith('/backup')) {
     items = [{ label: t('settings') }, { label: t('assetBackup') }]
   } else {
@@ -113,9 +117,19 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
-  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId)
+  const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
+  const selectedIntegrationExists = managedIntegrationItems.some(item =>
+    item.integrationId === agentOverviewSourceId || item.productId === agentOverviewSourceId
+  )
+  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId) || selectedIntegrationExists
     ? agentOverviewSourceId
-    : agentOverviewItems.find(item => item.detected)?.sourceId ?? agentOverviewItems[0]?.sourceId ?? agents.find(agent => agent.detected)?.sourceId ?? agents[0]?.sourceId ?? ''
+    : managedIntegrationItems.find(item => item.tool?.presence === 'present' || item.tool?.presence === 'data-only')?.integrationId
+      ?? agentOverviewItems.find(item => item.detected)?.sourceId
+      ?? managedIntegrationItems[0]?.integrationId
+      ?? agentOverviewItems[0]?.sourceId
+      ?? agents.find(agent => agent.detected)?.sourceId
+      ?? agents[0]?.sourceId
+      ?? ''
 
   useEffect(() => {
     void model.ensureIntegrationManagement().catch(() => undefined)
@@ -160,12 +174,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     return <IntegrationOnboarding model={model} snapshot={snapshot}/>
   }
 
-  return <PinnedAgentsProvider
-    agents={agents}
+  return <IntegrationOrderProvider
     management={snapshot.integrationManagement}
     model={model}
   >
-    <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
+    <PinnedAgentsProvider agents={agents}>
+      <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
@@ -220,7 +234,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label={t('navigation:agentOverview')} hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       </div>
     </div>
-  </PinnedAgentsProvider>
+    </PinnedAgentsProvider>
+  </IntegrationOrderProvider>
 }
 
 export function App({ model }: { model: AgentLensClientModel }) {

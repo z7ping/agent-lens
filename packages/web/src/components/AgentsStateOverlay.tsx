@@ -7,6 +7,9 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
   const response = snapshot.agents
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `agents-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
+  const hasManagement = Boolean(snapshot.integrationManagement?.items.length)
+
+  if (!response && hasManagement) return null
 
   if (!response && snapshot.agentsError) {
     return <div className={`${shellClass} is-empty`}>
@@ -22,7 +25,7 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
     </div>
   }
 
-  if (!response.items.some(agent => agent.detected)) {
+  if (!response.items.some(agent => agent.detected) && !snapshot.integrationManagement?.items.length) {
     return <div className={`${shellClass} is-empty`}>
       <div className="agents-state-inner">
         <EmptyStatePanel

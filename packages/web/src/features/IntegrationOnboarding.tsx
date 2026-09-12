@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { IntegrationManagementItemDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { Button, StatusBadge } from '../components/ui'
+import { integrationPackageReady } from './integrations/integration-lifecycle'
 
 type InstallStep = 'idle' | 'installing' | 'enabling' | 'done' | 'failed' | 'skipped'
 
@@ -63,10 +64,13 @@ export function IntegrationOnboarding({
   const runOne = async (item: IntegrationManagementItemDto) => {
     const id = item.integrationId
     try {
-      if (!item.packageState?.installed) {
+      if (!integrationPackageReady(item.packageState)) {
         setProgress(current => ({ ...current, [id]: { step: 'installing' } }))
         const installed = await model.installIntegration(id)
-        if (installed.operation.status !== 'completed' || !installed.state.installed) {
+        if (
+          installed.operation.status !== 'completed'
+          || !integrationPackageReady(installed.state)
+        ) {
           throw new Error(installed.operation.message || installed.state.reason || t('onboarding.failedDetail'))
         }
       }
