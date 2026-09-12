@@ -186,6 +186,8 @@ export const englishCoreMessages: LocaleMessagesDto = {
     insightsView: 'Insights view',
     maintenance: 'Maintenance',
     refreshAgents: 'Refresh agents',
+    agentSelection: 'Select agent',
+    backupScope: 'Backup scope',
     sourceCount: '{{count}} sources',
   },
   shell: {

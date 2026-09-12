@@ -201,7 +201,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
       <span>{agentSelectionSummary}</span>
       <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
-    <SidebarFilterDisclosure className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}>
+    <SidebarFilterDisclosure defaultOpen summary={t('filters.agentScope')} className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}>
       <div className="workspace-insight-filter-fields">
         <label><span>{t('filters.project')}</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
         <label><span>{t('filters.time')}</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel={t('filters.timeAria')} menuWidth={156} options={[

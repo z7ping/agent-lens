@@ -114,12 +114,12 @@ export function WorkspaceSidebar({
           <span>{t('navigation:sourceCount', { count: agents.length })}</span>
           <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        <SidebarFilterDisclosure agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
+        <SidebarFilterDisclosure defaultOpen summary={t('navigation:agentSelection')} agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
       {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label={t('navigation:maintenance')}>
         <NavLink to="/backup" onClick={onMobileClose} className="workspace-context-link is-active">{t('navigation:assetBackup')}</NavLink>
-        <SidebarFilterDisclosure agents={agents} agentSelection={{ mode: 'multiple', value: backupSourceIds, onChange: onBackupSourceIdsChange }}/>
+        <SidebarFilterDisclosure defaultOpen summary={t('navigation:backupScope')} agents={agents} agentSelection={{ mode: 'multiple', value: backupSourceIds, onChange: onBackupSourceIdsChange }}/>
       </nav>}
     </div>
 
