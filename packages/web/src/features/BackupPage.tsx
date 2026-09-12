@@ -38,10 +38,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
 
-function formatOptionalBytes(bytes: number | undefined, t: TFunction): string {
-  return bytes === undefined ? t('sizePending') : formatBytes(bytes)
-}
-
 function formatTime(value: string, locale: string): string {
   const date = new Date(value)
   return Number.isFinite(date.getTime())
