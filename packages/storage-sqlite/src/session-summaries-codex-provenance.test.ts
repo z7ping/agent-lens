@@ -146,7 +146,9 @@ test('Codex tool count deduplicates call/result and includes result-only executi
     }, 0)
     await add('tool.call', 'paired-call', { callId: 'paired-1', nativeToolName: 'shell' }, 1)
     await add('tool.result', 'paired-result', { callId: 'paired-1', nativeToolName: 'shell', success: true }, 2)
-    await add('tool.result', 'result-only', { callId: 'result-only-1', nativeToolName: 'read_file', success: true }, 3)
+    await add('tool.call', 'paired-native', { nativeToolName: 'command_execution' }, 3)
+    await add('tool.result', 'paired-native', { nativeToolName: 'command_execution', success: true }, 4)
+    await add('tool.result', 'result-only', { nativeToolName: 'read_file', success: true }, 5)
 
     for (const materialized of [false, true]) {
       if (materialized) await storage.sessionSummaryProjection.rebuild()
@@ -155,7 +157,7 @@ test('Codex tool count deduplicates call/result and includes result-only executi
       assert.ok(summary)
       assert.equal(summary.userTurnCount, 1)
       assert.equal(summary.interactionCount, 1)
-      assert.equal(summary.toolCount, 2)
+      assert.equal(summary.toolCount, 3)
       assert.equal(summary.sessionActivity, 'user-task')
     }
   } finally {
