@@ -16,6 +16,7 @@ import {
 import type { IntegrationAuthorizationController } from './integration-http'
 import type { IntegrationDiscoveryController } from './integration-discovery-http'
 import type { IntegrationManagementController } from './integration-management-http'
+import type { IntegrationPackageController } from './integration-packages-http'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -41,6 +42,8 @@ export interface HttpSurfacePluginConfig {
   integrationDiscovery?: IntegrationDiscoveryController
   /** Product-level management projection and persisted Integration preferences. */
   integrationManagement?: IntegrationManagementController
+  /** Verified physical package lifecycle for official Agent Integrations. */
+  integrationPackages?: IntegrationPackageController
   /** Directory containing declarative community Locale Pack JSON files. */
   localePackDirectory?: string
 }
@@ -199,6 +202,7 @@ const applyHttpSurface = Object.assign(
       ...(config.integrationAuthorization ? { integrationAuthorization: config.integrationAuthorization } : {}),
       ...(config.integrationDiscovery ? { integrationDiscovery: config.integrationDiscovery } : {}),
       ...(config.integrationManagement ? { integrationManagement: config.integrationManagement } : {}),
+      ...(config.integrationPackages ? { integrationPackages: config.integrationPackages } : {}),
       ...(config.localePackDirectory ? { localePackDirectory: config.localePackDirectory } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
