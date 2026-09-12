@@ -5,28 +5,83 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const AGENT_LENS_PACKAGE_PREFIX = '@agent-lens/'
 
 export const INTEGRATION_PACKAGE_SCHEMA_VERSION = 1
-export const INTEGRATION_BUNDLE_SPECS = [
-  { integrationId: 'pi', productId: 'pi', packageName: '@agent-lens/integration-pi', entry: 'packages/integration-pi/src/index.ts' },
-  { integrationId: 'codex', productId: 'codex', packageName: '@agent-lens/integration-codex', entry: 'packages/integration-codex/src/index.ts' },
-  { integrationId: 'claude-code', productId: 'claude-code', packageName: '@agent-lens/integration-claude', entry: 'packages/integration-claude/src/index.ts' },
-  { integrationId: 'hermes', productId: 'hermes', packageName: '@agent-lens/integration-hermes', entry: 'packages/integration-hermes/src/index.ts' },
-  { integrationId: 'opencode', productId: 'opencode', packageName: '@agent-lens/integration-opencode', entry: 'packages/integration-opencode/src/index.ts' },
-]
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+async function loadOfficialIntegrationCatalog(root) {
+  const result = await build({
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22.12',
+    write: false,
+    sourcemap: false,
+    legalComments: 'none',
+    treeShaking: true,
+    entryPoints: [resolve(root, 'packages/integration-catalog/src/catalog.ts')],
+    external: ['node:*'],
+  })
+  const source = result.outputFiles?.[0]?.text
+  if (!source) throw new Error('Official Integration Catalog build produced no output')
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
+  const module = await import(moduleUrl)
+  if (!Array.isArray(module.OFFICIAL_INTEGRATION_CATALOG)) {
+    throw new Error('Official Integration Catalog export is unavailable')
+  }
+  return module.OFFICIAL_INTEGRATION_CATALOG
+}
+
+function workspacePackageDirectory(packageName) {
+  if (
+    typeof packageName !== 'string'
+    || !packageName.startsWith(AGENT_LENS_PACKAGE_PREFIX)
+    || packageName.slice(AGENT_LENS_PACKAGE_PREFIX.length).includes('/')
+  ) {
+    throw new Error(`Official Integration package name is not a local AgentLens workspace package: ${String(packageName)}`)
+  }
+  return join('packages', packageName.slice(AGENT_LENS_PACKAGE_PREFIX.length))
+}
+
+function bundleSpecFromCatalogEntry(entry) {
+  if (!entry?.package) {
+    throw new Error(`Official Integration package descriptor is missing: ${String(entry?.integrationId ?? 'unknown')}`)
+  }
+  const packageDir = workspacePackageDirectory(entry.package.packageName)
+  return {
+    integrationId: entry.integrationId,
+    productId: entry.productId,
+    packageName: entry.package.packageName,
+    bundledVersion: entry.package.bundledVersion,
+    apiVersion: entry.package.apiVersion,
+    entryExport: entry.package.entryExport,
+    entry: join(packageDir, 'src', 'index.ts'),
+    packageJson: join(packageDir, 'package.json'),
+  }
+}
+
+async function integrationBundleSpecs(root) {
+  const catalog = await loadOfficialIntegrationCatalog(root)
+  return catalog.map(bundleSpecFromCatalogEntry)
+}
+
 async function packageVersion(root, spec) {
-  const packagePath = resolve(root, dirname(spec.entry), '..', 'package.json')
+  const packagePath = resolve(root, spec.packageJson)
   const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
   if (pkg.name !== spec.packageName) {
     throw new Error(`Integration package identity mismatch: ${spec.integrationId}: ${String(pkg.name)} != ${spec.packageName}`)
   }
   if (typeof pkg.version !== 'string' || !pkg.version) {
     throw new Error(`Integration package version missing: ${spec.packageName}`)
+  }
+  if (pkg.version !== spec.bundledVersion) {
+    throw new Error(
+      `Integration package version mismatch: ${spec.integrationId}: ${pkg.version} != Catalog ${spec.bundledVersion}`,
+    )
   }
   return pkg.version
 }
@@ -51,8 +106,9 @@ export async function buildIntegrationPackages({
   if (clean) await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
 
+  const specs = await integrationBundleSpecs(root)
   const catalogEntries = []
-  for (const spec of INTEGRATION_BUNDLE_SPECS) {
+  for (const spec of specs) {
     const version = await packageVersion(root, spec)
     const packageDir = join(outDir, spec.integrationId, version)
     const entryPath = join(packageDir, 'index.mjs')
@@ -85,9 +141,9 @@ export async function buildIntegrationPackages({
       productId: spec.productId,
       packageName: spec.packageName,
       version,
-      apiVersion: '1.0',
+      apiVersion: spec.apiVersion,
       entry: 'index.mjs',
-      entryExport: 'default',
+      entryExport: spec.entryExport,
       files: [{
         path: 'index.mjs',
         size: entry.byteLength,
@@ -131,6 +187,10 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
 export const integrationBundleInternals = {
   sha256,
   assertPortableBundle,
+  loadOfficialIntegrationCatalog,
+  workspacePackageDirectory,
+  bundleSpecFromCatalogEntry,
+  integrationBundleSpecs,
   packageVersion,
   isDirectInvocation,
 }
