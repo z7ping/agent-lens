@@ -558,7 +558,6 @@ export class IntegrationPackageService {
         if (
           item.productId !== official.productId
           || item.packageName !== official.package.packageName
-          || item.version !== official.package.bundledVersion
         ) {
           throw new Error(`Bundled Integration catalog identity mismatch: ${item.integrationId}`)
         }
@@ -574,8 +573,6 @@ export class IntegrationPackageService {
           || manifest.productId !== official.productId
           || manifest.packageName !== official.package.packageName
           || manifest.version !== item.version
-          || manifest.apiVersion !== official.package.apiVersion
-          || manifest.entryExport !== official.package.entryExport
         ) {
           throw new Error(`Bundled Integration manifest identity mismatch: ${item.integrationId}`)
         }
