@@ -195,7 +195,7 @@ async function* discoverMemoryAssets(
       states: stateList(path, observedAt, capturedAt, [
         { state: 'installed', value: true },
         { state: 'configured', value: true },
-        { state: 'discoverable', value: true },
+        { state: 'discoverable', value: 'unknown' },
       ]),
     }
   }
@@ -224,7 +224,7 @@ async function discoverSoulAsset(
     },
     states: stateList(path, observedAt, capturedAt, [
       { state: 'configured', value: true },
-      { state: 'discoverable', value: true },
+      { state: 'discoverable', value: 'unknown' },
     ]),
   }
 }
@@ -599,11 +599,19 @@ async function projectContextAssets(
 }
 
 async function readProfileConfig(profileRoot: string): Promise<Record<string, unknown>> {
+  let content: string
   try {
-    return parseHermesConfig(await readFile(join(profileRoot, 'config.yaml'), 'utf8'))
+    content = await readFile(join(profileRoot, 'config.yaml'), 'utf8')
   } catch (error) {
     if (isMissingPathError(error)) return {}
     throw error
+  }
+  try {
+    return parseHermesConfig(content)
+  } catch {
+    // Hermes owns config validation. Independent filesystem assets remain observable
+    // even when the current profile config is temporarily malformed.
+    return {}
   }
 }
 
