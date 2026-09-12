@@ -5,6 +5,7 @@ import {
   OFFICIAL_INTEGRATION_CATALOG,
   resolveClaudeLocation,
   resolveCodexLocation,
+  resolveHermesConfigRoots,
   resolveHermesRoots,
   resolveOpenCodeRoots,
   resolvePiLocation,
@@ -67,12 +68,16 @@ test('explicit relative product homes do not fall back to stale default discover
     platform: 'linux',
   })
   assert.equal(hermes.some(item => item.role === 'data'), false)
-  assert.equal(hermes.some(item => item.role === 'config' && item.path === '/home/tester/.hermes'), true)
+  assert.equal(hermes.some(item => item.role === 'config'), false)
 })
 
 test('Hermes and OpenCode keep their legacy non-expanding explicit home semantics', () => {
   assert.deepEqual(
     resolveHermesRoots({ HERMES_HOME: '~/custom-hermes' }, home, 'linux'),
+    ['~/custom-hermes'],
+  )
+  assert.deepEqual(
+    resolveHermesConfigRoots({ HERMES_HOME: '~/custom-hermes' }, home, 'linux'),
     ['~/custom-hermes'],
   )
   assert.equal(
@@ -85,6 +90,14 @@ test('Hermes and OpenCode source roots remain centralized in the catalog package
   assert.deepEqual(
     resolveHermesRoots({ HERMES_HOME: '/srv/hermes' }, home, 'linux'),
     ['/srv/hermes'],
+  )
+  assert.deepEqual(
+    resolveHermesConfigRoots({ HERMES_HOME: '/srv/hermes' }, home, 'linux'),
+    ['/srv/hermes'],
+  )
+  assert.equal(
+    resolveHermesConfigRoots({ LOCALAPPDATA: 'C:\\Users\\tester\\AppData\\Local' }, home, 'win32')[0],
+    join('C:\\Users\\tester\\AppData\\Local', 'hermes'),
   )
   assert.deepEqual(
     resolveOpenCodeRoots({ OPENCODE_HOME: '/srv/opencode' }, home, 'linux').slice(0, 2),
