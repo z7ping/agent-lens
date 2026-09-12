@@ -147,6 +147,11 @@ function shortPath(path: string, max = 58): string {
 }
 
 
+function scopeRootName(value: string): string {
+  const normalized = value.replaceAll('\\', '/').replace(/\/+$/, '')
+  return normalized.split('/').at(-1) || value
+}
+
 function assetScopeLabels(
   asset: AgentAssetInventoryDto,
   t: TFunction,
@@ -158,9 +163,12 @@ function assetScopeLabels(
     const key = `${binding.scope}\u0000${root ?? ''}`
     if (values.has(key)) continue
     const scopeLabel = translatedLabel(assetScopeLabelKey, binding.scope, t)
+    const label = root && (binding.scope === 'project' || binding.scope === 'workspace')
+      ? `${scopeLabel} · ${scopeRootName(root)}`
+      : scopeLabel
     values.set(key, {
       key,
-      label: scopeLabel,
+      label,
       ...(root ? { title: root } : {}),
     })
   }
