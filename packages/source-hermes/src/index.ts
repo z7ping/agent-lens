@@ -177,7 +177,7 @@ export async function detectHermes(ctx: SourceDetectionContext): Promise<Detecte
     if (await exists(join(root, DB_NAME))) { dataRoot = root; break }
   }
   let configRoot: string | undefined
-  for (const root of resolveHermesConfigRoots()) {
+  for (const root of resolveHermesConfigRoots(env)) {
     if (await exists(root)) { configRoot = root; break }
   }
   configRoot ??= dataRoot
