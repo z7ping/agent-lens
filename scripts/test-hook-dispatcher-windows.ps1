@@ -1,5 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
+# 本测试验证 Provider 分发，不验证采集策略；显式启用 Claude，禁止依赖用户级历史配置。
+$env:AGENT_LENS_ENABLED_SOURCES = 'claude-code'
+
 $inbox = Join-Path $env:RUNNER_TEMP 'agent-lens-hook-inbox'
 New-Item -ItemType Directory -Force -Path $inbox | Out-Null
 $env:AGENT_LENS_CLAUDE_INBOX = $inbox
