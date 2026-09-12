@@ -10,7 +10,7 @@ test('窄窗长会话导航由共享 TaskSurface 持有并复用动态 Composer 
   assert.match(taskSurface, /style=\{\{ bottom: railPosition\.boundaryBottom \}\}/)
   assert.match(taskSurface, /activeRailIndex \+ 1\} \/ \{railItems\.length/)
   assert.match(taskSurface, /firstErrorItem = railItems\.find\(item => item\.error\)/)
-  assert.match(taskSurface, /跳到错误轮次/)
+  assert.match(taskSurface, /t\('surface\.jumpErrorRound'/)
 })
 
 test('lg 以下隐藏完整 Rail 与 Boundary，但显示 Compact Round Navigation', () => {
@@ -19,7 +19,7 @@ test('lg 以下隐藏完整 Rail 与 Boundary，但显示 Compact Round Navigati
 })
 
 test('Compact Round Navigation 保留最早、错误轮次与最新入口', () => {
-  assert.match(taskSurface, /aria-label="跳到最早"/)
-  assert.match(taskSurface, /aria-label=\{`跳到错误轮次：\$\{firstErrorItem\.label\}`\}/)
-  assert.match(taskSurface, /aria-label="跳到最新"/)
+  assert.match(taskSurface, /aria-label=\{t\('surface\.jumpEarliest'\)\}/)
+  assert.match(taskSurface, /aria-label=\{t\('surface\.jumpErrorRound', \{ label: firstErrorItem\.label \}\)\}/)
+  assert.match(taskSurface, /aria-label=\{t\('surface\.jumpLatest'\)\}/)
 })
