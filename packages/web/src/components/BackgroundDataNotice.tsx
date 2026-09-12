@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button } from './ui'
 
 export function BackgroundDataNotice({
   label,
@@ -25,6 +26,6 @@ export function BackgroundDataNotice({
   return <div className={`background-data-notice ${hasSseBanner ? 'has-sse-banner' : ''}`} role="status">
     <span className="background-data-dot" aria-hidden="true"/>
     <span>{t('newDataFor', { label })}</span>
-    <button disabled={refreshing} onClick={() => void refresh()}>{refreshing ? t('refreshInProgress') : t('refreshToView')}</button>
+    <Button size="small" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? t('refreshInProgress') : t('refreshToView')}</Button>
   </div>
 }
