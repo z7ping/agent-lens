@@ -81,9 +81,11 @@ async function* discoverSkills(
   configRoot: string,
   capturedAt: string,
 ): AsyncIterable<DiscoveredAsset> {
+  // Only user-level skills have stable static semantics here.
+  // Plugin-provided skills depend on Codex's active plugin resolution; keep them
+  // out of static inventory until app-server/runtime evidence is available.
   const roots = [
     { root: join(configRoot, 'skills'), source: 'codex:skills' },
-    { root: join(configRoot, 'plugins', 'cache'), source: 'codex:plugin-cache' },
   ]
 
   for (const candidate of roots) {
@@ -180,10 +182,14 @@ function pluginIdentityFromCachePath(cacheRoot: string, manifestPath: string): {
   const relativeManifest = relative(cacheRoot, manifestPath).replaceAll('\\', '/')
   const parts = relativeManifest.split('/').filter(Boolean)
   const manifestTail = parts.slice(3)
-  const validManifest = manifestTail.length === 1 && manifestTail[0] === 'plugin.json'
-    || manifestTail.length === 2
-      && manifestTail[0] === '.codex-plugin'
-      && manifestTail[1] === 'plugin.json'
+  const validManifest = (
+    manifestTail.length === 1
+    && manifestTail[0] === 'plugin.json'
+  ) || (
+    manifestTail.length === 2
+    && manifestTail[0] === '.codex-plugin'
+    && manifestTail[1] === 'plugin.json'
+  )
   if (parts.length < 4 || !validManifest) return {}
   const [marketplace, pluginName, version] = parts
   if (!marketplace || !pluginName || !version) return {}
