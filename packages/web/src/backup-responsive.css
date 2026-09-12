@@ -55,14 +55,16 @@
     white-space: normal;
   }
 
-  .backup-agent-asset-foot {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
+  .backup-agent-asset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .backup-agent-asset-foot code {
-    max-width: 100%;
+  .backup-agent-location {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    padding: 12px 0 0;
+    border-top: 1px solid var(--al-line);
+    border-left: 0;
   }
 
   .backup-asset-kind-row {
@@ -101,13 +103,30 @@
     gap: 8px;
   }
 
-  .backup-agent-kind-facts,
-  .backup-agent-asset-foot {
-    margin-left: 0;
+  .backup-agent-asset-grid {
+    grid-template-columns: 1fr;
+    padding-left: 0;
   }
 
-  .backup-agent-kind-facts {
-    gap: 5px 12px;
+  .backup-agent-asset-group,
+  .backup-agent-location {
+    padding: 11px 0 0;
+    border-left: 0;
+  }
+
+  .backup-agent-asset-group:first-child {
+    padding-top: 0;
+  }
+
+  .backup-agent-asset-group + .backup-agent-asset-group,
+  .backup-agent-location {
+    margin-top: 8px;
+    border-top: 1px solid var(--al-line);
+    border-left: 0;
+  }
+
+  .backup-agent-kind-list {
+    grid-template-columns: 1fr;
   }
 
   .backup-agent-detail-facts {
@@ -118,6 +137,10 @@
 
   .backup-agent-detail-facts span {
     text-align: left;
+  }
+
+  .backup-asset-kind-header {
+    display: none;
   }
 
   .backup-asset-kind-row {
