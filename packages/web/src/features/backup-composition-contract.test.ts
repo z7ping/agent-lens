@@ -4,40 +4,43 @@ import test from 'node:test'
 
 const backupPage = readFileSync(new URL('./BackupPage.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.url), 'utf8')
+const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 
 test('Backup KPI 使用单一摘要条而不是四张悬浮卡', () => {
-  assert.match(backupCss, /\.backup-page \.future-kpis \{[\s\S]*?gap: 0;[\s\S]*?border: 1px solid var\(--al-line\);/)
-  assert.match(backupCss, /\.backup-page \.future-kpi \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/)
+  assert.match(backupPage, /className="future-kpis"/)
+  assert.match(backupPage, /t\('kpi\.detectedAgents'\)/)
+  assert.match(backupPage, /t\('kpi\.backupData'\)/)
+  assert.match(backupCss, /@media \(max-width: 1199\.98px\)[\s\S]*?\.future-kpis \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/)
 })
 
-test('Backup Protection 与 Snapshot 都使用紧凑事实表', () => {
-  assert.match(backupPage, /<table className="protection-table">/)
-  assert.match(backupPage, /t\('protection\.files'\)/)
-  assert.match(backupPage, /t\('protection\.sessions'\)/)
-  assert.doesNotMatch(backupPage, /className="protection-counts"/)
-  assert.match(backupCss, /\.backup-page \.protection-table-scroll \{[\s\S]*?box-shadow: none;/)
-  assert.match(backupPage, /<table className="snapshot-table">/)
-  assert.match(backupCss, /\.backup-page \.future-table-scroll \{[\s\S]*?border-top: 1px solid var\(--al-line\);[\s\S]*?border-bottom: 1px solid var\(--al-line\);/)
+test('Backup 主区是快照列表加新建快照工作台，不再依赖横向表格', () => {
+  assert.match(backupPage, /className="backup-workbench"/)
+  assert.match(backupPage, /className="backup-snapshot-list"/)
+  assert.match(backupPage, /className="future-card backup-create-panel"/)
+  assert.doesNotMatch(backupPage, /<table className="protection-table">/)
+  assert.doesNotMatch(backupPage, /<table className="snapshot-table">/)
+  assert.match(backupCss, /\.backup-workbench \{ grid-template-columns: 1fr; \}/)
 })
 
-test('Import / Restore 收敛为同一 section 的流程行', () => {
-  assert.match(backupCss, /\.backup-page \.restore-grid \{[\s\S]*?grid-template-columns: 1fr;[\s\S]*?gap: 0;/)
-  assert.match(backupCss, /\.backup-page \.restore-card \{[\s\S]*?display: grid;[\s\S]*?border: 0;[\s\S]*?border-bottom: 1px solid var\(--al-line\);[\s\S]*?background: transparent;/)
+test('智能体范围只在新建快照面板选择，侧栏不再重复一套范围过滤', () => {
+  assert.match(backupPage, /className="backup-source-list"/)
+  assert.match(backupPage, /setDetailSourceId\(source\.sourceId\)/)
+  assert.doesNotMatch(sidebar, /backupSourceIds/)
+  assert.doesNotMatch(sidebar, /navigation:backupScope/)
 })
 
-test('Create Snapshot 只保留一个操作边界，内部改为 divider groups', () => {
-  assert.match(backupCss, /\.future-grid > aside\.future-stack > \.future-card:first-child \{[\s\S]*?border-color: var\(--al-line-strong\);[\s\S]*?box-shadow: none;/)
-  assert.match(backupCss, /\.backup-page \.builder-block \{[\s\S]*?border: 0;[\s\S]*?border-bottom: 1px solid var\(--al-line\);[\s\S]*?background: transparent;/)
-  assert.match(backupCss, /\.backup-page \.builder-check \{[\s\S]*?border: 0;[\s\S]*?background: transparent;/)
-  assert.match(backupPage, /t\('create\.safetyTitle'\)/)
-  assert.match(backupPage, /t\('create\.createAndVerify'\)/)
-})
-
-test('Backup Principles 是普通事实列表，成熟事实与恢复能力没有删除', () => {
-  assert.match(backupCss, /\.backup-page \.backup-principles \{[\s\S]*?gap: 0;[\s\S]*?border-top: 1px solid var\(--al-line\);/)
-  assert.match(backupCss, /\.backup-page \.backup-principles \.insight-item \{[\s\S]*?border: 0;[\s\S]*?background: transparent;/)
-  assert.match(backupPage, /BackupDataRootTree/)
-  assert.match(backupPage, /verifySnapshot/)
+test('Import / Restore 下沉为工作台之后的低频区，但恢复能力没有删除', () => {
+  const workbenchIndex = backupPage.indexOf('className="backup-workbench"')
+  const restoreIndex = backupPage.indexOf('className="backup-restore-section"')
+  assert.ok(workbenchIndex >= 0 && restoreIndex > workbenchIndex)
+  assert.match(backupPage, /restore\.selectPackage/)
   assert.match(backupPage, /showRestorePreview/)
   assert.match(backupPage, /exportSnapshot/)
+  assert.match(backupPage, /BackupDataRootTree/)
+})
+
+test('Backup 响应式核心信息不通过横向滚动兜底', () => {
+  assert.doesNotMatch(backupCss, /protection-table/)
+  assert.doesNotMatch(backupCss, /snapshot-table/)
+  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-snapshot-row \{[\s\S]*?grid-template-columns: 1fr;/)
 })
