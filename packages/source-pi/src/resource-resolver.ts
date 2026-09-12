@@ -168,6 +168,19 @@ function resourceSource(resource: PiResolvedResource, cwd?: string): string {
   return `pi:resource:${scope}${context}:${resource.metadata.origin}:${resource.metadata.source}`
 }
 
+function resourceBindingScope(
+  resource: PiResolvedResource,
+  projectCwd?: string,
+): { scope: 'user' | 'project'; scopeRoot?: string } {
+  if (resource.metadata.scope === 'project') {
+    return {
+      scope: 'project',
+      ...(projectCwd ? { scopeRoot: projectCwd } : {}),
+    }
+  }
+  return { scope: 'user' }
+}
+
 async function resourceVersion(resource: PiResolvedResource): Promise<string | undefined> {
   if (resource.metadata.origin !== 'package' || !resource.metadata.baseDir) return undefined
   const manifest = await readUtf8(resolve(resource.metadata.baseDir, 'package.json'))
@@ -312,6 +325,7 @@ async function resolvedPromptsAsAssets(input: {
         displayName: candidate.name,
       },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
         ...(version ? { version } : {}),
@@ -379,6 +393,7 @@ async function resolvedThemesAsAssets(input: {
         displayName: candidate.name,
       },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
         ...(version ? { version } : {}),
@@ -399,6 +414,8 @@ async function resolvedThemesAsAssets(input: {
 async function contextAsset(
   path: string,
   source: string,
+  scope: 'user' | 'project',
+  scopeRoot: string,
   capturedAt: string,
   enabled: EffectiveResourceState,
   discoverable: EffectiveResourceState,
@@ -407,7 +424,7 @@ async function contextAsset(
   if (!observedAt) return undefined
   return {
     definition: contextDefinition(path),
-    binding: { path, source },
+    binding: { path, source, scope, scopeRoot },
     states: resourceStates({
       path,
       observedAt,
@@ -432,6 +449,8 @@ async function globalContextAssets(
       const asset = await contextAsset(
         row.path,
         contextSource('user', 'agents'),
+        'user',
+        agentDir,
         capturedAt,
         true,
         true,
@@ -447,6 +466,8 @@ async function globalContextAssets(
     const asset = await contextAsset(
       path,
       contextSource('user', name === 'SYSTEM.md' ? 'system' : 'append-system'),
+      'user',
+      agentDir,
       capturedAt,
       true,
       'unknown',
@@ -473,6 +494,8 @@ async function projectContextAssets(
       const asset = await contextAsset(
         row.path,
         contextSource('project', 'agents', cwd),
+        'project',
+        cwd,
         capturedAt,
         true,
         true,
@@ -489,6 +512,8 @@ async function projectContextAssets(
     const asset = await contextAsset(
       path,
       contextSource('project', name === 'SYSTEM.md' ? 'system' : 'append-system', cwd),
+      'project',
+      cwd,
       capturedAt,
       enabled,
       enabled,
@@ -606,6 +631,7 @@ async function resolvedSkillsAsAssets(input: {
     assets.push({
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: dirname(skill.filePath),
         source,
         ...(version ? { version } : {}),
@@ -648,6 +674,7 @@ async function resolvedExtensionsAsAssets(input: {
         upstreamIdentity: `pi-extension:${resource.metadata.scope}:${resource.metadata.source}:${resource.path}`,
       },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source,
         ...(version ? { version } : {}),
