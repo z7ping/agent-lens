@@ -193,6 +193,7 @@ test('Codex 指令资产按当前官方项目根与文件优先级映射作用�
       'project_doc_fallback_filenames = ["TEAM_GUIDE.md"]\n',
       'utf8',
     )
+    await writeFile(join(codexHome, 'AGENTS.override.md'), '   \n', 'utf8')
     await writeFile(join(codexHome, 'AGENTS.md'), '# User instructions\n', 'utf8')
     await writeFile(join(projectRoot, 'TEAM_GUIDE.md'), '# Project fallback\n', 'utf8')
     await writeFile(join(packageDir, 'AGENTS.md'), '# Lower priority\n', 'utf8')
@@ -263,6 +264,7 @@ test('Codex 指令资产按当前官方项目根与文件优先级映射作用�
     const byPath = new Map(rows.map(row => [row.path, row]))
     assert.equal(byPath.get(join(codexHome, 'AGENTS.md'))?.scope, 'user')
     assert.equal(byPath.get(join(codexHome, 'AGENTS.md'))?.scopeRoot, codexHome)
+    assert.equal(byPath.has(join(codexHome, 'AGENTS.override.md')), false)
 
     const fallback = byPath.get(join(projectRoot, 'TEAM_GUIDE.md'))
     assert.equal(fallback?.scope, 'project')
