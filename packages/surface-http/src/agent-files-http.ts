@@ -94,7 +94,7 @@ export async function handleAgentFilesRequest(
   const action = match[2]!
   const installationId = requiredQuery(url, 'installationId')
   const root = parseRoot(url.searchParams.get('root'))
-  const rootPath = await managedRoot({ sourceId, installationId, root, storage, sources })
+  const rootPath = await managedRoot({ sourceId, installationId, root, storage, ...(sources ? { sources } : {}) })
   const relativePath = url.searchParams.get('path') ?? ''
 
   try {
