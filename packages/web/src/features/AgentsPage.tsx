@@ -630,12 +630,12 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
                 }}
                 onDragEnd={() => setDraggedId('')}
               >
-                <UiIcon name="drag" size={15} className="agent-order-drag"/>
+                <UiIcon name="drag" size={16} className="agent-order-drag"/>
                 <span className={`source-dot ${sourceDot(row.id)}`}/>
                 <b>{row.displayName}</b>
                 <span className="agent-order-buttons">
-                  <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(row.id, -1)} aria-label={t('scope.moveUp', { agent: row.displayName })}><UiIcon name="arrow-big-up" size={13}/></IconButton>
-                  <IconButton size="small" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableRows.length - 1} onClick={() => moveBy(row.id, 1)} aria-label={t('scope.moveDown', { agent: row.displayName })}><UiIcon name="arrow-big-down" size={13}/></IconButton>
+                  <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(row.id, -1)} aria-label={t('scope.moveUp', { agent: row.displayName })}><UiIcon name="arrow-big-up" size={14}/></IconButton>
+                  <IconButton size="small" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableRows.length - 1} onClick={() => moveBy(row.id, 1)} aria-label={t('scope.moveDown', { agent: row.displayName })}><UiIcon name="arrow-big-down" size={14}/></IconButton>
                 </span>
               </div>
             })}
