@@ -1,11 +1,9 @@
 /*
- * AgentLens 1.0 资产备份构图与响应式唯一所有者。
- * 负责 P1-08 的摘要、保护范围、恢复流程、快照创建与原则列表构图，
- * 同时持有 xl/xxl/lg/md/sm 的响应式布局；不再通过额外 polish/override 层修补。
+ * AgentLens 1.0 资产备份响应式唯一所有者。
+ * 主页面以当前资产为核心；筛选复用工作区侧栏，备份操作进入顶部动作与 Drawer。
  */
 
-.workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn,
-.backup-page > .future-heading > .btn {
+.backup-heading-actions > .btn {
   display: inline-flex;
   min-width: max-content;
   flex: 0 0 auto;
@@ -15,192 +13,185 @@
   gap: 6px;
   white-space: nowrap;
 }
-.workspace-page > .workspace-toolbar:has(.backup-toolbar-note) .backup-toolbar-note ~ .btn > svg,
-.backup-page > .future-heading > .btn > svg { display: block; flex: 0 0 auto; }
 
-.backup-page .future-grid { grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; }
-.backup-page .future-grid > aside.future-stack { position: sticky; top: 16px; }
-
-/* P1-08：四个 KPI 是一个摘要条，而不是四张悬浮卡。 */
-.backup-page .future-kpis {
-  gap: 0;
-  overflow: hidden;
-  border: 1px solid var(--al-line);
-  border-radius: 11px;
-  background: var(--al-surface);
-}
-.backup-page .future-kpi {
-  padding: 14px 15px;
-  border: 0;
-  border-right: 1px solid var(--al-line);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.backup-page .future-kpi:last-child { border-right: 0; }
-.backup-page .future-kpi strong { font-size: 22px; }
-
-/* 主信息列按 section 展开，避免 outer card 再套内部数据边界。 */
-.backup-page .future-grid > .future-stack:first-child > .future-card {
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.backup-page .future-grid > .future-stack:first-child > .future-card > .future-card-head {
-  min-height: 0;
-  padding: 0 0 8px;
-  border-bottom: 0;
-}
-.backup-page .future-grid > .future-stack:first-child > .future-card > .future-card-body { padding: 0; }
-
-/* Protection 使用紧凑事实表：列标题只出现一次，来源一行完成扫描。 */
-.backup-page .protection-table-scroll { box-shadow: none; }
-.backup-page .protection-table th:first-child,
-.backup-page .protection-table td:first-child { width: 34%; }
-.backup-page .protection-table th:not(:first-child):not(:last-child),
-.backup-page .protection-table td:not(:first-child):not(:last-child) { width: 14%; }
-.backup-page .protection-table th:last-child,
-.backup-page .protection-table td:last-child { width: 1%; }
-
-/* Snapshot 保持数据表，只给表本身边界，不再依赖 outer card。 */
-.backup-page .future-table-scroll {
-  border-top: 1px solid var(--al-line);
-  border-bottom: 1px solid var(--al-line);
-}
-
-/* Import / Restore 是同一 section 内的两条流程，不再各自成为卡片。 */
-.backup-page .restore-grid {
-  grid-template-columns: 1fr;
-  gap: 0;
-  border-top: 1px solid var(--al-line);
-}
-.backup-page .restore-card {
-  display: grid;
-  grid-template-columns: minmax(180px, .55fr) minmax(0, 1fr) auto;
-  grid-template-rows: auto auto;
-  column-gap: 18px;
-  row-gap: 2px;
-  align-items: center;
-  padding: 13px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--al-line);
-  border-radius: 0;
-  background: transparent;
-}
-.backup-page .restore-card h3 { grid-column: 1; grid-row: 1; }
-.backup-page .restore-card p { grid-column: 1; grid-row: 2; margin: 3px 0 0; }
-.backup-page .restore-card .restore-flow { grid-column: 2; grid-row: 1 / 3; }
-.backup-page .restore-card .restore-action { grid-column: 3; grid-row: 1 / 3; margin-top: 0; }
-
-/* Create Snapshot 保留一个明确操作边界，内部使用分组和分隔线。 */
-.backup-page .future-grid > aside.future-stack > .future-card:first-child {
-  border-color: var(--al-line-strong);
-  border-radius: 11px;
-  box-shadow: none;
-}
-.backup-page .future-grid > aside.future-stack > .future-card:first-child > .future-card-head {
-  min-height: 0;
-  padding: 13px 14px 10px;
-}
-.backup-page .snapshot-builder {
-  gap: 0;
-  padding: 0 14px 14px;
-}
-.backup-page .builder-block {
-  padding: 12px 0;
-  border: 0;
-  border-bottom: 1px solid var(--al-line);
-  border-radius: 0;
-  background: transparent;
-}
-.backup-page .builder-checks {
-  grid-template-columns: 1fr;
-  gap: 0;
-}
-.backup-page .builder-check {
-  min-height: 31px;
-  padding: 5px 2px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-.backup-page .builder-check + .builder-check {
-  border-top: 1px solid color-mix(in srgb, var(--al-line) 65%, transparent);
-}
-.backup-page .safety-note {
-  margin-top: 12px;
-  border: 0;
-  border-left: 3px solid var(--al-success);
-  border-radius: 0;
-}
-.backup-page .builder-summary {
-  display: grid;
-  gap: 2px;
-  margin: 11px 0;
-  padding-top: 0;
-}
-
-/* Principles 是普通事实列表，不再叠加第二张 Card + 三张 item Card。 */
-.backup-page .future-grid > aside.future-stack > .future-card:last-child {
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-.backup-page .future-grid > aside.future-stack > .future-card:last-child > .future-card-head {
-  min-height: 0;
-  padding: 0 0 8px;
-  border-bottom: 0;
-}
-.backup-page .future-grid > aside.future-stack > .future-card:last-child > .future-card-body { padding: 0; }
-.backup-page .backup-principles {
-  gap: 0;
-  border-top: 1px solid var(--al-line);
-}
-.backup-page .backup-principles .insight-item {
-  padding: 10px 2px;
-  border: 0;
-  border-bottom: 1px solid var(--al-line);
-  border-radius: 0;
-  background: transparent;
-}
-
-@media (min-width: 1400px) {
-  .backup-page .future-grid { grid-template-columns: minmax(0, 1fr) 390px; gap: 16px; }
-  .backup-page .future-kpi { padding: 16px 17px; }
-  .backup-page .future-kpi strong { font-size: 24px; }
+.backup-heading-actions > .btn > svg {
+  display: block;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 1199.98px) {
-  .backup-page .future-grid { grid-template-columns: 1fr; }
-  .backup-page .future-grid > aside.future-stack { position: static; }
-  .backup-page .future-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .backup-page .future-kpi {
-    border-right: 1px solid var(--al-line);
-    border-bottom: 1px solid var(--al-line);
+  .backup-overview-strip {
+    align-items: flex-start;
   }
-  .backup-page .future-kpi:nth-child(2n) { border-right: 0; }
-  .backup-page .future-kpi:nth-last-child(-n + 2) { border-bottom: 0; }
+
+  .backup-overview-primary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .backup-agent-detail-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .backup-agent-detail-facts {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
+
 @media (max-width: 991.98px) {
   .backup-page { padding-inline: 18px; }
-  .backup-page .protection-table { min-width: 600px; }
-}
-@media (max-width: 767.98px) {
-  .backup-page { padding-inline: 14px; }
-  .backup-page .future-kpis { grid-template-columns: 1fr; }
-  .backup-page .future-kpi:nth-child(n) {
-    border-right: 0;
-    border-bottom: 1px solid var(--al-line);
+
+  .backup-overview-strip {
+    flex-direction: column;
+    gap: 7px;
   }
-  .backup-page .future-kpi:last-child { border-bottom: 0; }
-  .backup-page .protection-table { min-width: 560px; }
-  .backup-page .integrity-strip { flex-wrap: wrap; }
-  .backup-page .integrity-strip code { width: 100%; order: 3; }
-  .backup-page .restore-card { display: block; }
-  .backup-page .restore-card p { margin: 6px 0 13px; }
-  .backup-page .restore-card .restore-action { margin-top: 13px; }
+
+  .backup-overview-secondary {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .backup-agent-asset-foot {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .backup-agent-asset-foot code {
+    max-width: 100%;
+  }
+
+  .backup-asset-kind-row {
+    grid-template-columns: minmax(110px, .45fr) minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .backup-snapshot-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 14px;
+  }
+
+  .backup-snapshot-main { grid-column: 1; grid-row: 1 / 3; }
+  .backup-snapshot-state { grid-column: 2; grid-row: 1; }
+  .backup-snapshot-row > .table-actions { grid-column: 2; grid-row: 2; }
+}
+
+@media (max-width: 767.98px) {
+  .backup-page { padding: 20px 14px 48px; }
+
+  .future-heading {
+    display: block;
+    min-height: 0;
+  }
+
+  .backup-heading-actions {
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .backup-overview-primary span {
+    white-space: normal;
+  }
+
+  .backup-agent-asset-head {
+    gap: 8px;
+  }
+
+  .backup-agent-kind-facts,
+  .backup-agent-asset-foot {
+    margin-left: 0;
+  }
+
+  .backup-agent-kind-facts {
+    gap: 5px 12px;
+  }
+
+  .backup-agent-detail-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 18px;
+  }
+
+  .backup-agent-detail-facts span {
+    text-align: left;
+  }
+
+  .backup-asset-kind-row {
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+  }
+
+  .backup-asset-kind-row > span:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .backup-age-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .backup-time-range {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .backup-snapshot-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 12px 2px;
+  }
+
+  .backup-snapshot-main,
+  .backup-snapshot-state,
+  .backup-snapshot-row > .table-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .backup-snapshot-state {
+    display: flex;
+    align-items: center;
+    justify-items: start;
+    gap: 8px;
+    padding-left: 37px;
+  }
+
+  .backup-snapshot-row > .table-actions {
+    justify-content: flex-start;
+    padding-left: 32px;
+  }
+
+  .builder-check small { max-width: 46%; }
+
+  .backup-create-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .backup-create-footer > .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .preview-summary { grid-template-columns: repeat(2, 1fr); }
+  .backup-confirm-content { grid-template-columns: 1fr; }
+  .backup-confirm-icon { width: 36px; height: 36px; }
+  .backup-confirm-overlay .ui-overlay-footer > .btn { flex: 1; justify-content: center; }
+}
+
+@media (max-width: 575.98px) {
+  .backup-heading-actions > .btn {
+    flex: 1 1 auto;
+  }
+
+  .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::before,
+  .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::after {
+    right: 14px;
+    left: 14px;
+  }
 }

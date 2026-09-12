@@ -158,7 +158,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [theme, setTheme] = useState(readTheme)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
-  const [backupSourceIds, setBackupSourceIds] = useState<string[] | null>(null)
+  const [backupAssetSourceId, setBackupAssetSourceId] = useState('')
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const agents = snapshot.facets?.agents ?? []
@@ -256,8 +256,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
         onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
-        backupSourceIds={backupSourceIds}
-        onBackupSourceIdsChange={setBackupSourceIds}
+        backupAssetSourceId={backupAssetSourceId}
+        onBackupAssetSourceIdChange={setBackupAssetSourceId}
         theme={theme}
         onToggleTheme={toggleTheme}
         onContextHost={setSidebarHost}
@@ -297,7 +297,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
-          <Route path="/backup" element={<BackupPage selectedSourceIds={backupSourceIds} onSelectedSourceIdsChange={setBackupSourceIds} />} />
+          <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} onSelectedAssetSourceIdChange={setBackupAssetSourceId} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
         </Suspense>

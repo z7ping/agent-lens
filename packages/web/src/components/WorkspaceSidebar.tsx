@@ -18,8 +18,8 @@ interface WorkspaceSidebarProps {
   selectedAgentId: string
   onSelectAgent(id: string): void
   onRefreshAgents(): void
-  backupSourceIds: string[] | null
-  onBackupSourceIdsChange(sourceIds: string[] | null): void
+  backupAssetSourceId: string
+  onBackupAssetSourceIdChange(id: string): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onContextHost(node: HTMLDivElement | null): void
@@ -34,8 +34,8 @@ export function WorkspaceSidebar({
   selectedAgentId,
   onSelectAgent,
   onRefreshAgents,
-  backupSourceIds,
-  onBackupSourceIdsChange,
+  backupAssetSourceId,
+  onBackupAssetSourceIdChange,
   theme,
   onToggleTheme,
   onContextHost,
@@ -117,10 +117,20 @@ export function WorkspaceSidebar({
         <SidebarFilterDisclosure defaultOpen summary={t('navigation:agentSelection')} agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
-      {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label={t('navigation:maintenance')}>
-        <NavLink to="/backup" onClick={onMobileClose} className="workspace-context-link is-active">{t('navigation:assetBackup')}</NavLink>
-        <SidebarFilterDisclosure defaultOpen summary={t('navigation:backupScope')} agents={agents} agentSelection={{ mode: 'multiple', value: backupSourceIds, onChange: onBackupSourceIdsChange }}/>
-      </nav>}
+      {onBackup && <div className="workspace-context-menu workspace-agent-context">
+        <div className="workspace-context-utility">
+          <span>{t('navigation:sourceCount', { count: agents.length })}</span>
+          <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
+        </div>
+        <SidebarFilterDisclosure
+          defaultOpen
+          showAllOption
+          summary={t('navigation:backupScope')}
+          agents={agents}
+          agentSelection={{ mode: 'single', value: backupAssetSourceId, onChange: sourceId => { onBackupAssetSourceIdChange(sourceId); onMobileClose() } }}
+        />
+      </div>}
+
     </div>
 
     <div className="workspace-sidebar-footer">
