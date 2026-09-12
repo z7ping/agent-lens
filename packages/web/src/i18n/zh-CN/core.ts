@@ -186,6 +186,8 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     insightsView: '洞察视图',
     maintenance: '维护',
     refreshAgents: '刷新智能体',
+    agentSelection: '选择智能体',
+    backupScope: '备份范围',
     sourceCount: '{{count}} 个来源',
   },
   shell: {
