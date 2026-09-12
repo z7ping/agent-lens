@@ -1,5 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs'
-import { join } from 'node:path'
+import { watchSourceFiles, type SourceFileWatchHandle } from './watch-source-files'
 
 export interface HistoryFileWatchOptions {
   root: string
@@ -27,7 +26,7 @@ export async function startHistoryFileWatch(
 
   const debounceMs = options.debounceMs ?? 180
   let stopped = false
-  let watcher: FSWatcher | null = null
+  let watcher: SourceFileWatchHandle | null = null
   let fallbackTimer: NodeJS.Timeout | null = null
   let reconcileTimer: NodeJS.Timeout | null = null
   const debounce = new Map<string, NodeJS.Timeout>()
@@ -78,20 +77,28 @@ export async function startHistoryFileWatch(
   }
 
   try {
-    watcher = watch(options.root, { recursive: true }, (_event, fileName) => {
-      if (!fileName) {
-        void reconcile(options.reconcileLimit)
-        return
-      }
-      schedule(join(options.root, fileName.toString()))
-    })
-    watcher.on('error', error => {
-      reportError(error)
-      watcher?.close()
-      watcher = null
-      if (reconcileTimer) clearInterval(reconcileTimer)
-      reconcileTimer = null
-      startFallbackPolling()
+    watcher = await watchSourceFiles({
+      paths: options.root,
+      signal: options.signal,
+      debounceMs,
+      accept: filePath => options.accept ? options.accept(filePath) : true,
+      onFile: async (filePath, event) => {
+        if (event === 'unlink') {
+          await reconcile(options.reconcileLimit)
+          return
+        }
+        processFile(filePath)
+      },
+      onError: error => {
+        reportError(error)
+        if (watcher) {
+          void watcher.dispose()
+          watcher = null
+        }
+        if (reconcileTimer) clearInterval(reconcileTimer)
+        reconcileTimer = null
+        startFallbackPolling()
+      },
     })
   } catch (error) {
     reportError(error)
@@ -115,7 +122,7 @@ export async function startHistoryFileWatch(
 
   const abort = () => {
     stopped = true
-    watcher?.close()
+    if (watcher) void watcher.dispose()
     watcher = null
     if (fallbackTimer) clearInterval(fallbackTimer)
     if (reconcileTimer) clearInterval(reconcileTimer)
@@ -130,6 +137,10 @@ export async function startHistoryFileWatch(
     async dispose(): Promise<void> {
       if (!stopped) abort()
       options.signal.removeEventListener('abort', abort)
+      if (watcher) {
+        await watcher.dispose()
+        watcher = null
+      }
       await processing
     },
   }
