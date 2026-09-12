@@ -3,7 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
+import type { SourceExecutionContext } from '@agent-lens/core'
 import { piResourceResolverInternals } from './resource-resolver'
+import { piSessionInternals } from './session'
 
 function fakeResourceApi(input: {
   requiresTrust?: boolean
@@ -45,9 +47,28 @@ test('Pi project cwd discovery follows native header semantics and deduplicates 
   await writeFile(join(sessions, 'missing.jsonl'), `${JSON.stringify({ type: 'session', id: 'missing', cwd: join(root, 'missing') })}\n`, 'utf8')
 
   try {
-    const cwd = await piResourceResolverInternals.readSessionCwd(join(sessions, 'one.jsonl'))
-    assert.equal(cwd, resolve(project))
-    assert.deepEqual(await piResourceResolverInternals.listPiProjectCwds(sessions), [resolve(project)])
+    const checkpoint = new Map<string, unknown>()
+    const ctx = {
+      installation: { dataRoot: sessions },
+      abortSignal: new AbortController().signal,
+      checkpoint: {
+        async get<T>(key: string) {
+          return (checkpoint.get(key) as T | undefined) ?? null
+        },
+        async set<T>(key: string, value: T) {
+          checkpoint.set(key, structuredClone(value))
+        },
+        async clear(key: string) {
+          checkpoint.delete(key)
+        },
+      },
+    } as unknown as SourceExecutionContext
+
+    assert.deepEqual(await piSessionInternals.listPiProjectCwds(ctx), [resolve(project)])
+    assert.deepEqual(
+      await ctx.checkpoint.get<string[]>(piSessionInternals.KNOWN_PROJECT_CWDS_CHECKPOINT_KEY),
+      [resolve(project)],
+    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }

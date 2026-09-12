@@ -236,6 +236,8 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
       { field: 'assetId', class: 'metadata' },
       { field: 'installationId', class: 'metadata' },
       { field: 'runtimeProfileId', class: 'metadata' },
+      { field: 'scope', class: 'metadata' },
+      { field: 'scopeRoot', class: 'path' },
       { field: 'path', class: 'path' },
       { field: 'source', class: 'content' },
       { field: 'version', class: 'metadata' },
