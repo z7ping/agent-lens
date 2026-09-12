@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { createPortal } from 'react-dom'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -9,11 +10,11 @@ import type {
   BackupVerifyResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
-import { agentLabel, useOrderedAgents } from '../components/AgentScope'
+import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer } from '../components/ui'
+import { Button, Dialog, Drawer, IconButton } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -46,15 +47,6 @@ function formatTime(value: string, locale: string): string {
 
 function shortHash(value: string): string {
   return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value
-}
-
-function sourceDotClass(sourceId: string): string {
-  if (sourceId === 'codex') return 'dot-codex'
-  if (sourceId === 'claude-code') return 'dot-claude'
-  if (sourceId === 'pi') return 'dot-pi'
-  if (sourceId === 'hermes') return 'dot-hermes'
-  if (sourceId === 'opencode') return 'dot-opencode'
-  return 'dot-none'
 }
 
 function sourceLabel(sourceId: string, displayName?: string): string {
@@ -112,8 +104,10 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
 
 export function BackupPage({
   selectedAssetSourceId,
+  actionsHost,
 }: {
   selectedAssetSourceId: string
+  actionsHost?: HTMLDivElement | null
 }) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -378,19 +372,18 @@ export function BackupPage({
     </label>
   }
 
-  return <>
-    <div className="page-scroll">
-      <main className="future-content backup-page">
-        <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
+  const headerActions = <div className="backup-breadcrumb-actions">
+    <Button size="small" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
+    <Button size="small" variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
+    <IconButton size="small" disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
+  </div>
 
-        <div className="future-heading">
-          <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
-          <div className="backup-heading-actions">
-            <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
-            <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
-            <Button size="small" className="backup-refresh-button" loading={refreshing} disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></Button>
-          </div>
-        </div>
+  return <>
+    {actionsHost ? createPortal(headerActions, actionsHost) : null}
+    <main className="workspace-page backup-page">
+      <div className="page-content backup-content">
+        <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
+        <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
 
         {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
         {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
@@ -444,7 +437,7 @@ export function BackupPage({
               return <article key={source.sourceId} className="backup-agent-asset-summary">
                 <div className="backup-agent-asset-head">
                   <div className="backup-agent-title">
-                    <span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/>
+                    <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
                     <span><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{t('assetView.sourceScale', {
                       files: source.fileCount.toLocaleString(locale),
                       size: source.totalBytes === undefined ? t('sizePending') : formatBytes(source.totalBytes),
@@ -546,8 +539,8 @@ export function BackupPage({
             })}
           </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
         </section>}
-      </main>
-    </div>
+      </div>
+    </main>
 
     {createOpen && <Drawer
       open
@@ -569,7 +562,7 @@ export function BackupPage({
             {sources.filter(source => source.detected).map(source => <div key={source.sourceId} className="backup-source-choice">
               <label className="backup-source-toggle">
                 <input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/>
-                <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>
+                <span className={`source-dot ${sourceDot(source.sourceId)}`}/>
                 <span className="backup-source-copy"><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{source.totalBytes === undefined ? t('create.files', { count: source.fileCount.toLocaleString(locale) }) : t('create.sourceSummary', { count: source.fileCount.toLocaleString(locale), size: formatBytes(source.totalBytes) })}</small></span>
               </label>
             </div>)}
