@@ -68,7 +68,7 @@ test('Codex 历史游标按批次写入并在文件末尾完整落盘', async ()
     const file = await stat(input.path)
     assert.equal(records, 205)
     const cursorWrites = writes.filter((value): value is { offset: number; sequence: number } =>
-      Boolean(value) && typeof value === 'object' && 'offset' in value && 'sequence' in value)
+      value !== null && typeof value === 'object' && 'offset' in value && 'sequence' in value)
     assert.equal(cursorWrites.length, 3)
     assert.equal(cursorWrites.at(-1)?.offset, file.size)
     assert.equal(cursorWrites.at(-1)?.sequence, 205)
@@ -80,7 +80,7 @@ test('Codex 历史游标按批次写入并在文件末尾完整落盘', async ()
     }
     assert.equal(replayed, 0)
     const replayCursorWrites = replayWrites.filter(value =>
-      Boolean(value) && typeof value === 'object' && 'offset' in value && 'sequence' in value)
+      value !== null && typeof value === 'object' && 'offset' in value && 'sequence' in value)
     assert.equal(replayCursorWrites.length, 0)
   } finally {
     await rm(input.root, { recursive: true, force: true })
