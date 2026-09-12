@@ -204,7 +204,6 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     management: '管理',
     appearance: '外观',
     maintenanceAndAppearance: '管理与外观',
-    agentsAndIntegrations: '智能体与接入',
     switchToLight: '切换为浅色主题',
     switchToDark: '切换为深色主题',
     language: '界面语言',

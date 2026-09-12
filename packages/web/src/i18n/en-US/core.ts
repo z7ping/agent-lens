@@ -204,7 +204,6 @@ export const englishCoreMessages: LocaleMessagesDto = {
     management: 'Management',
     appearance: 'Appearance',
     maintenanceAndAppearance: 'Management & Appearance',
-    agentsAndIntegrations: 'Agents & Integrations',
     switchToLight: 'Switch to light theme',
     switchToDark: 'Switch to dark theme',
     language: 'Interface language',
