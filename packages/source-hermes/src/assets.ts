@@ -17,9 +17,6 @@ import {
   hermesProjectContextInternals,
 } from './project-context.js'
 
-const PROJECT_HERMES_FILES = ['.hermes.md', 'HERMES.md'] as const
-const PROJECT_AGENTS_FILES = ['AGENTS.override.md', 'AGENTS.md', 'agents.md'] as const
-const PROJECT_CLAUDE_FILES = ['CLAUDE.md', 'claude.md'] as const
 const MEMORY_FILES = ['MEMORY.md', 'USER.md'] as const
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -56,16 +53,6 @@ async function safeStat(path: string) {
     return await stat(path)
   } catch (error) {
     if (isMissingPathError(error)) return null
-    throw error
-  }
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path)
-    return true
-  } catch (error) {
-    if (isMissingPathError(error)) return false
     throw error
   }
 }
