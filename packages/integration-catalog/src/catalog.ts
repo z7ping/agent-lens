@@ -188,6 +188,9 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
           id: 'config',
           role: 'config',
           candidates: [
+            { envVar: 'HERMES_HOME', expandHome: false, exclusiveWhenSet: true },
+            { envVar: 'LOCALAPPDATA', append: ['hermes'], platforms: ['win32'], expandHome: false },
+            { path: '~/AppData/Local/hermes', platforms: ['win32'] },
             { path: '~/.hermes' },
           ],
         },
