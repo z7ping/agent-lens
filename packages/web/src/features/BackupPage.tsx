@@ -20,8 +20,7 @@ const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plug
 const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
 const OTHER_KINDS: BackupAssetKindDto[] = ['other']
 const ALL_KINDS: BackupAssetKindDto[] = [...RECOMMENDED_KINDS, ...OPTIONAL_KINDS, ...OTHER_KINDS]
-const CORE_ASSET_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
-const HISTORY_ASSET_KINDS: BackupAssetKindDto[] = ['session', 'memory', 'other']
+const HISTORY_ASSET_KINDS: BackupAssetKindDto[] = [...OPTIONAL_KINDS, ...OTHER_KINDS]
 
 type PendingConfirmation =
   | { type: 'create' }
@@ -439,7 +438,7 @@ export function BackupPage({
             {!visibleAssetSources.length && <div className="backup-assets-empty">{t('assetView.noAssets')}</div>}
 
             {!focusedSource && visibleAssetSources.map(source => {
-              const coreKinds = CORE_ASSET_KINDS.filter(kind => kindFiles(source, kind) > 0)
+              const coreKinds = RECOMMENDED_KINDS.filter(kind => kindFiles(source, kind) > 0)
               const historyKinds = HISTORY_ASSET_KINDS.filter(kind => kindFiles(source, kind) > 0)
               const primaryRoot = source.roots?.[0]
               return <article key={source.sourceId} className="backup-agent-asset-summary">
