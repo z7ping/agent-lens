@@ -128,7 +128,8 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       preview: '恢复预演',
       export: '导出',
       emptyTitle: '还没有本地快照',
-      emptyDescription: '右侧选择需要保护的智能体与资产类型，然后创建第一个快照。',
+      emptyDescription: '创建第一个快照，或导入已有备份包。',
+      createFirst: '创建第一个快照',
     },
     restore: {
       title: '导入与恢复',
