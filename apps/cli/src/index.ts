@@ -27,6 +27,7 @@ import {
   resolvePiLocation,
 } from '@agent-lens/runtime-cordis'
 import { resolveHookExecutionProfile } from './hook-execution'
+import { runPluginCommand } from './plugin-command'
 import {
   getLifecycleStatus,
   serviceRestart,
@@ -88,6 +89,11 @@ function usage(): string {
     '  agent-lens hook status [codex|claude|all] [--json]',
     '  agent-lens hook install [codex|claude|all]',
     '  agent-lens hook uninstall [codex|claude|all]',
+    '  agent-lens plugin list [--json]',
+    '  agent-lens plugin status <id> [--json]',
+    '  agent-lens plugin install <id> [--json]',
+    '  agent-lens plugin update <id> [--json]',
+    '  agent-lens plugin remove <id> [--json]',
     '  agent-lens --version',
   ].join('\n')
 }
@@ -824,6 +830,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === 'autostart') return runAutostart(args[1] ?? 'status', json)
   if (command === 'capture' && args[1] === 'sources') return runCaptureSources(args[2] ?? 'status', args.slice(3), json)
   if (command === 'hook') return runHook(args[1] ?? 'status', args[2], json)
+  if (command === 'plugin') {
+    return runPluginCommand(args[1] ?? 'list', args.slice(2), json, { apiUrl: daemonUrl })
+  }
   throw new Error(`Unknown command: ${command}\n\n${usage()}`)
 }
 
