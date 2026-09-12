@@ -22,7 +22,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
-import { ToolKindIcon } from '../components/ToolKindIcon'
+import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
@@ -417,24 +417,12 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   return action || brief(payload, 100)
 }
 
-type ToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
-
-function detectToolKind(name: string): ToolKind {
-  const value = name.toLowerCase()
-  if (value.includes('mcp')) return 'mcp'
-  if (/(web|browser|http|url)/.test(value)) return 'web'
-  if (/(bash|shell|exec|command|terminal|powershell|cmd)/.test(value)) return 'shell'
-  if (/(read|cat|open[_-]?file|get[_-]?file|view[_-]?file)/.test(value)) return 'read'
-  if (/(write|edit|patch|replace|create[_-]?file|apply[_-]?patch)/.test(value)) return 'edit'
-  if (/(grep|search|find|glob|ripgrep|rg)/.test(value)) return 'search'
-  return 'tool'
-}
-
-function toolKindLabel(kind: ToolKind): string {
+function toolKindLabel(kind: ToolVisualKind): string {
   if (kind === 'shell') return agentLensI18n.t('review:local.tool.command')
   if (kind === 'read') return agentLensI18n.t('review:local.tool.read')
   if (kind === 'edit') return agentLensI18n.t('review:local.tool.edit')
   if (kind === 'search') return agentLensI18n.t('review:local.tool.search')
+  if (kind === 'test') return agentLensI18n.t('task:tool.kind.test')
   if (kind === 'mcp') return agentLensI18n.t('review:local.tool.mcp')
   if (kind === 'web') return agentLensI18n.t('review:local.tool.web')
   return agentLensI18n.t('review:local.tool.generic')
@@ -444,9 +432,9 @@ function toolInputRecord(node: ReviewToolNodeDto): Record<string, JsonValue> {
   return payloadRecord(node.input)
 }
 
-function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; label: string; primary: string; secondary: string } {
+function toolPresentation(node: ReviewToolNodeDto): { kind: ToolVisualKind; label: string; primary: string; secondary: string } {
   const input = toolInputRecord(node)
-  const kind = detectToolKind(node.name)
+  const kind = toolVisualKind(node.name)
   const output = brief(node.output, 110)
   if (kind === 'shell') {
     const command = stringValue(input, 'command', 'cmd', 'script', 'raw') || brief(node.input, 140)
@@ -745,7 +733,7 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
     const tools = items.map(reviewToolModel)
     const errorCount = tools.filter(tool => tool.status === 'error').length
     const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
-    const counts = new Map<ToolKind, number>()
+    const counts = new Map<ToolVisualKind, number>()
     for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
     return {
       id: `tools:${items.map(item => item.id).join(':')}`,
