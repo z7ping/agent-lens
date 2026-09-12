@@ -110,8 +110,6 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       moreLocations: '另有 {{count}} 个位置',
       latest: '最近修改 {{time}}',
       historyTitle: '备份记录',
-      historyHint: '当前资产的历史快照；校验、预演和导出都从这里进入。',
-      historyFilteredHint: '仅显示包含 {{agent}} 的快照。',
       noHistory: '暂无本地快照。',
     },
     protection: {
@@ -180,7 +178,6 @@ export const chineseBackupMessages: LocaleMessagesDto = {
     },
     create: {
       title: '创建快照',
-      description: '按数据价值选择，不需要面对十几万文件逐个勾选。',
       local: '本地',
       agents: '智能体',
       contents: '备份内容',
