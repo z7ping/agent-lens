@@ -108,7 +108,7 @@ test('one broken bundled Integration does not block package lifecycle for other 
 
     const piState = service.state('pi')
     assert.equal(piState.installed, false)
-    assert.match(piState.reason ?? '', /bundle source unavailable/i)
+    assert.match(piState.reason ?? '', /Bundled Integration source unavailable/i)
 
     const codexInstall = await service.install('codex')
     assert.equal(codexInstall.status, 'completed')
