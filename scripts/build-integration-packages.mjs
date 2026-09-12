@@ -103,8 +103,7 @@ async function packageVersion(root, spec) {
   return pkg.version
 }
 
-function assertIntegrationRuntimeManifest(candidate, spec, expectedApiVersion) {
-  const manifest = candidate?.manifest
+function assertIntegrationRuntimeManifest(manifest, spec, expectedApiVersion) {
   if (!manifest || typeof manifest !== 'object') {
     throw new Error(`Integration bundle ${spec.integrationId} has no runtime manifest`)
   }

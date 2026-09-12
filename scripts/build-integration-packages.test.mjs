@@ -65,7 +65,7 @@ test('build contract loads pure Integration manifest modules without loading run
       productId: 'pi',
       displayName: 'Pi',
       apiVersion: '1.0',
-      capabilities: ['source', 'runtime', 'live'],
+      capabilities: ['source', 'runtime', 'live', 'assets'],
       componentPluginIds: [
         '@agent-lens/source-pi',
         '@agent-lens/runtime-cordis/pi-live',
@@ -81,30 +81,24 @@ test('runtime Integration manifest must match Official Catalog identity and Plug
   }
 
   assert.doesNotThrow(() => integrationBundleInternals.assertIntegrationRuntimeManifest({
-    manifest: {
-      integrationId: 'pi',
-      productId: 'pi',
-      apiVersion: '1.0',
-    },
+    integrationId: 'pi',
+    productId: 'pi',
+    apiVersion: '1.0',
   }, spec, '1.0'))
 
   assert.throws(
     () => integrationBundleInternals.assertIntegrationRuntimeManifest({
-      manifest: {
-        integrationId: 'pi',
-        productId: 'codex',
-        apiVersion: '1.0',
-      },
+      integrationId: 'pi',
+      productId: 'codex',
+      apiVersion: '1.0',
     }, spec, '1.0'),
     /productId=codex != expected pi/,
   )
   assert.throws(
     () => integrationBundleInternals.assertIntegrationRuntimeManifest({
-      manifest: {
-        integrationId: 'pi',
-        productId: 'pi',
-        apiVersion: '2.0',
-      },
+      integrationId: 'pi',
+      productId: 'pi',
+      apiVersion: '2.0',
     }, spec, '1.0'),
     /apiVersion=2\.0 != expected 1\.0/,
   )
