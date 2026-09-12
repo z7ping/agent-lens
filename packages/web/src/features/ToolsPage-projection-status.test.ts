@@ -9,7 +9,7 @@ test('Tools page must visibly label partial Tool Fact projection instead of pres
   const source = await readFile(pagePath, 'utf8')
   assert.match(source, /data\?\.meta\.projection/)
   assert.match(source, /projection\?\.state === 'partial'/)
-  assert.match(source, /历史工具索引正在回填，当前结果不完整/)
+  assert.match(source, /t\('page\.projectionTitle'\)/)
   assert.match(source, /projection\.projectedCount/)
   assert.match(source, /projection\.sourceObservationCount/)
 })
