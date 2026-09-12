@@ -155,7 +155,7 @@ test('VACUUM INTO 生成独立紧凑库，不替换在线数据库', async () =>
     const copy = new Database(compacted, { readonly: true })
     try {
       const version = copy.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as { version: number }
-      assert.equal(version.version, 21)
+      assert.equal(version.version, 22)
     } finally {
       copy.close()
     }
