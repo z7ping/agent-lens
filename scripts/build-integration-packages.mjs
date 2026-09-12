@@ -56,7 +56,6 @@ function bundleSpecFromCatalogEntry(entry) {
     integrationId: entry.integrationId,
     productId: entry.productId,
     packageName: entry.package.packageName,
-    bundledVersion: entry.package.bundledVersion,
     apiVersion: entry.package.apiVersion,
     entryExport: entry.package.entryExport,
     entry: join(packageDir, 'src', 'index.ts'),
@@ -77,11 +76,6 @@ async function packageVersion(root, spec) {
   }
   if (typeof pkg.version !== 'string' || !pkg.version) {
     throw new Error(`Integration package version missing: ${spec.packageName}`)
-  }
-  if (pkg.version !== spec.bundledVersion) {
-    throw new Error(
-      `Integration package version mismatch: ${spec.integrationId}: ${pkg.version} != Catalog ${spec.bundledVersion}`,
-    )
   }
   return pkg.version
 }
