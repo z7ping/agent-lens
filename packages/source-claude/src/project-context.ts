@@ -5,9 +5,9 @@ import {
   dirname,
   isAbsolute,
   join,
-  parse,
   relative,
   resolve,
+  sep,
 } from 'node:path'
 import type {
   AssetScope,
@@ -31,7 +31,7 @@ function pathKey(value: string): string {
 
 function isPathInside(root: string, candidate: string): boolean {
   const rel = relative(resolve(root), resolve(candidate))
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
 }
 
 async function safeStat(path: string) {
