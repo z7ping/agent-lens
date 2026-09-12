@@ -6,6 +6,11 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { asRecord, isMissingPathError } from '@agent-lens/source-support'
+import {
+  codexTable,
+  readCodexConfig,
+  type CodexTomlConfig,
+} from './config'
 import { discoverCodexInstructions } from './instructions'
 
 async function safeStat(path: string) {
@@ -114,35 +119,22 @@ async function* discoverSkills(
   }
 }
 
-function mcpNamesFromToml(content: string): string[] {
-  const names = new Set<string>()
-  const regex = /^\s*\[mcp_servers\.(?:"([^"]+)"|'([^']+)'|([^\]]+))\]\s*$/gmi
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(content))) {
-    const name = (match[1] ?? match[2] ?? match[3] ?? '').trim()
-    if (name) names.add(name)
-  }
-  return [...names]
+function mcpNamesFromConfig(config: CodexTomlConfig | null): string[] {
+  const servers = codexTable(config?.mcp_servers)
+  return servers ? Object.keys(servers) : []
 }
-
 async function* discoverMcpServers(
   configRoot: string,
   capturedAt: string,
+  config: CodexTomlConfig | null,
 ): AsyncIterable<DiscoveredAsset> {
   const configPath = join(configRoot, 'config.toml')
   const meta = await safeStat(configPath)
   if (!meta?.isFile()) return
 
-  let content = ''
-  try {
-    content = await readFile(configPath, 'utf8')
-  } catch (error) {
-    if (isMissingPathError(error)) return
-    throw error
-  }
   const observedAt = meta.mtime.toISOString()
 
-  for (const name of mcpNamesFromToml(content)) {
+  for (const name of mcpNamesFromConfig(config)) {
     yield {
       definition: {
         type: 'mcp',
@@ -308,13 +300,14 @@ export async function* discoverCodexAssets(
   const configRoot = ctx.installation.configRoot
   if (!configRoot || ctx.abortSignal.aborted) return
   const capturedAt = new Date().toISOString()
+  const config = await readCodexConfig(configRoot)
 
   const groups = [
     discoverSkills(configRoot, capturedAt),
-    discoverMcpServers(configRoot, capturedAt),
+    discoverMcpServers(configRoot, capturedAt, config),
     discoverPluginManifests(configRoot, capturedAt),
     discoverHooks(configRoot, capturedAt),
-    discoverCodexInstructions(ctx, capturedAt),
+    discoverCodexInstructions(ctx, capturedAt, config),
   ]
 
   for (const group of groups) {
@@ -326,5 +319,5 @@ export async function* discoverCodexAssets(
 }
 
 export const codexAssetInternals = {
-  mcpNamesFromToml,
+  mcpNamesFromConfig,
 }
