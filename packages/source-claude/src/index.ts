@@ -52,7 +52,11 @@ import {
   startHistoryFileWatch,
 } from '@agent-lens/source-support'
 import { discoverClaudeAssets } from './assets.js'
-import { CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
+import {
+  CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
+  CLAUDE_KNOWN_PROJECT_DATA_ROOTS_CHECKPOINT_KEY,
+  type ClaudeKnownProjectDataRoot,
+} from './workspace-context.js'
 
 const SOURCE_ID = 'claude-code'
 const PARSER_VERSION = '4'
@@ -369,7 +373,26 @@ export async function* ingestClaudeHistory(
   if (!projectsDir) return
 
   const remembered = await ctx.checkpoint.get<string[]>(CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
+  const rememberedDataRoots = await ctx.checkpoint.get<ClaudeKnownProjectDataRoot[]>(
+    CLAUDE_KNOWN_PROJECT_DATA_ROOTS_CHECKPOINT_KEY,
+  ) ?? []
   const knownCwds = new Map<string, string>()
+  const knownDataRoots = new Map<string, ClaudeKnownProjectDataRoot>()
+  for (const item of rememberedDataRoots) {
+    const rawCwd = item.cwd?.trim()
+    const rawRoot = item.projectDataRoot?.trim()
+    if (!rawCwd || !rawRoot || !isAbsolute(rawCwd) || !isAbsolute(rawRoot)) continue
+    const cwd = resolve(rawCwd)
+    const key = process.platform === 'win32'
+      ? cwd.replaceAll('\\', '/').toLowerCase()
+      : cwd.replaceAll('\\', '/')
+    if (!knownDataRoots.has(key)) {
+      knownDataRoots.set(key, {
+        cwd,
+        projectDataRoot: resolve(rawRoot),
+      })
+    }
+  }
   for (const value of remembered) {
     const raw = value.trim()
     if (!raw || !isAbsolute(raw)) continue
@@ -380,7 +403,7 @@ export async function* ingestClaudeHistory(
     if (!knownCwds.has(key)) knownCwds.set(key, cwd)
   }
 
-  const rememberWorkspace = (value: string) => {
+  const rememberWorkspace = (value: string, filePath?: string) => {
     const raw = value.trim()
     if (!raw || !isAbsolute(raw)) return
     const cwd = resolve(raw)
@@ -388,6 +411,17 @@ export async function* ingestClaudeHistory(
       ? cwd.replaceAll('\\', '/').toLowerCase()
       : cwd.replaceAll('\\', '/')
     if (!knownCwds.has(key)) knownCwds.set(key, cwd)
+
+    if (filePath && projectsDir) {
+      const relativeFile = relative(projectsDir, filePath)
+      const firstSegment = relativeFile.split(/[\\/]/).find(Boolean)
+      if (firstSegment && firstSegment !== '..') {
+        knownDataRoots.set(key, {
+          cwd,
+          projectDataRoot: join(projectsDir, firstSegment),
+        })
+      }
+    }
   }
 
   const files = await listJsonlFiles(projectsDir, ctx.historyWindow)
@@ -396,15 +430,19 @@ export async function* ingestClaudeHistory(
     if (ctx.abortSignal.aborted) return
     if (needsWorkspaceBackfill) {
       const cwd = await readClaudeSessionCwd(filePath)
-      if (cwd) rememberWorkspace(cwd)
+      if (cwd) rememberWorkspace(cwd, filePath)
     }
-    yield* ingestClaudeFile(ctx, filePath, rememberWorkspace)
+    yield* ingestClaudeFile(ctx, filePath, cwd => rememberWorkspace(cwd, filePath))
   }
 
   if (!ctx.abortSignal.aborted) {
     await ctx.checkpoint.set(
       CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
       [...knownCwds.values()],
+    )
+    await ctx.checkpoint.set(
+      CLAUDE_KNOWN_PROJECT_DATA_ROOTS_CHECKPOINT_KEY,
+      [...knownDataRoots.values()],
     )
   }
 }
