@@ -510,7 +510,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             disabled={resolvedBoundaryNavigation.startDisabled}
             onClick={() => void resolvedBoundaryNavigation.onStart()}
           >
-            <UiIcon name="arrow-big-up" size={19} strokeWidth={2}/>
+            <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
           <span aria-live="polite">{activeRailIndex + 1} / {railItems.length}</span>
           {firstErrorItem && <IconButton
@@ -529,7 +529,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
             disabled={resolvedBoundaryNavigation.endDisabled}
             onClick={() => void resolvedBoundaryNavigation.onEnd()}
           >
-            <UiIcon name="arrow-big-down" size={19} strokeWidth={2}/>
+            <UiIcon name="arrow-big-down" size={20} strokeWidth={2}/>
           </IconButton>
         </nav>,
         document.body,
