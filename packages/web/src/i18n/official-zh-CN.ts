@@ -268,6 +268,12 @@ export const officialChineseLocalePack: LocalePackDto = {
         invoked: '未观察到使用',
         observed: '未观察到',
       },
+      assetScope: {
+        installation: '安装级',
+        user: '用户级',
+        project: '项目',
+        workspace: '工作区',
+      },
       assetType: {
         skill: '技能',
         mcp: 'MCP（模型上下文协议）',
