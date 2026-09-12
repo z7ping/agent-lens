@@ -10,7 +10,7 @@ import type {
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
 import { agentLabel, sourceDot } from '../../components/AgentScope'
-import { Button, Dialog, StatusBadge, UiIcon } from '../../components/ui'
+import { Button, Dialog, Disclosure, StatusBadge } from '../../components/ui'
 import {
   integrationCanInstall,
   integrationLifecycleState,
@@ -66,10 +66,6 @@ function shortPath(path: string, max = 58): string {
   const left = Math.max(16, Math.floor(max * 0.38))
   const right = Math.max(24, max - left - 1)
   return `${path.slice(0, left)}…${path.slice(-right)}`
-}
-
-function DisclosureChevron() {
-  return <UiIcon className="disclosure-chevron" name="chevron-right" size={14}/>
 }
 
 export function IntegrationControl({
@@ -311,8 +307,7 @@ export function IntegrationAdvancedActions({
     }
   }
 
-  return <details className="disclosure-group integration-advanced">
-    <summary><DisclosureChevron/><span>{t('integration.advancedTitle')}</span></summary>
+  return <Disclosure className="disclosure-group integration-advanced" summary={t('integration.advancedTitle')}>
     <div className="integration-advanced-body">
       <div>
         <b>{t('integration.uninstallTitle')}</b>
@@ -340,7 +335,7 @@ export function IntegrationAdvancedActions({
       {error && <p className="source-capture-error">{error}</p>}
       <p className="integration-authorization-note">{t('integration.uninstallKeepsHistory')}</p>
     </Dialog>
-  </details>
+  </Disclosure>
 }
 
 export function IntegrationOnlyCard({
