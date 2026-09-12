@@ -334,7 +334,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
     },
     overlay: {
       noAgentsTitle: '未检测到受支持的智能体',
-      noAgentsDescription: '本机暂未检测到 Codex、Claude Code、Pi、Hermes、OpenCode 或 DSH。AgentLens 不会把“未观察到”直接判断成“未安装”，可先运行诊断命令确认各来源的检测路径与采集状态。',
+      noAgentsDescription: '暂未检测到支持的智能体。可重新扫描或运行诊断确认本机状态。',
     },
     insightsRail: {
       unavailable: '暂无',
