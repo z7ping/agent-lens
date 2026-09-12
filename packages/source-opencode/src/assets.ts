@@ -4,7 +4,6 @@ import { homedir } from 'node:os'
 import {
   basename,
   extname,
-  isAbsolute,
   join,
   relative,
   resolve,
