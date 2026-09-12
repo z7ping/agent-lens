@@ -17,7 +17,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
-import { Button, IconButton, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, IconButton, Select, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 import {
   IntegrationAdvancedActions,
@@ -145,7 +145,6 @@ function shortPath(path: string, max = 58): string {
   const right = Math.max(24, max - left - 1)
   return `${path.slice(0, left)}…${path.slice(-right)}`
 }
-
 
 function scopeRootName(value: string): string {
   const normalized = value.replaceAll('\\', '/').replace(/\/+$/, '')
@@ -333,7 +332,8 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const { t } = useTranslation('agents')
   const [showAllBindings, setShowAllBindings] = useState(false)
   const [managedRoot, setManagedRoot] = useState<ManagedAssetRoot | null>(null)
-  const installation = agent.installations[0]
+  const [selectedInstallationId, setSelectedInstallationId] = useState(agent.installations[0]?.id ?? '')
+  const installation = agent.installations.find(item => item.id === selectedInstallationId) ?? agent.installations[0]
   const grouped = useMemo(() => {
     const map = new Map<string, AgentAssetInventoryDto[]>()
     for (const asset of agent.assetInventory) {
@@ -355,7 +355,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     .slice(0, 6)
     .map(item => item.asset), [agent])
 
-  const bindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
+  const allBindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
+  const bindings = installation
+    ? allBindings.filter(item => item.binding.installationId === installation.id)
+    : allBindings
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, RUNTIME_CONFIG_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
@@ -388,7 +391,24 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{integrationToolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
       {management?.packageState && <span><small>{t('installation.integrationVersion')}</small><b>{management.packageState.installedVersion ?? management.packageState.availableVersion ?? t('installation.notAdded')}</b></span>}
-      <span className="agent-config"><small>{t('installation.configDirectory')}</small><code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code></span>
+      <span className="agent-config"><small>{t('installation.configDirectory')}</small>{agent.installations.length > 1
+        ? <Select
+            aria-label={t('installation.configDirectory')}
+            value={installation?.id ?? ''}
+            onChange={event => {
+              setSelectedInstallationId(event.target.value)
+              setManagedRoot(null)
+              setShowAllBindings(false)
+            }}
+          >
+            {agent.installations.map(item => {
+              const labelPath = item.configRoot ?? item.dataRoot ?? item.executable ?? item.id
+              const label = item.version ? `${item.version} · ${shortPath(labelPath, 42)}` : shortPath(labelPath, 52)
+              return <option key={item.id} value={item.id}>{label}</option>
+            })}
+          </Select>
+        : <code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code>}
+      </span>
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
     {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
@@ -683,4 +703,3 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
     </div>
   </main>
 }
-
