@@ -29,6 +29,43 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
   assert.equal(specs.every(item => item.entryExport === 'default'), true)
 })
 
+test('runtime Integration manifest must match Official Catalog identity and Plugin API', () => {
+  const spec = {
+    integrationId: 'pi',
+    productId: 'pi',
+    apiVersion: '1.0',
+  }
+
+  assert.doesNotThrow(() => integrationBundleInternals.assertIntegrationRuntimeManifest({
+    manifest: {
+      integrationId: 'pi',
+      productId: 'pi',
+      apiVersion: '1.0',
+    },
+  }, spec))
+
+  assert.throws(
+    () => integrationBundleInternals.assertIntegrationRuntimeManifest({
+      manifest: {
+        integrationId: 'pi',
+        productId: 'codex',
+        apiVersion: '1.0',
+      },
+    }, spec),
+    /productId=codex != Catalog pi/,
+  )
+  assert.throws(
+    () => integrationBundleInternals.assertIntegrationRuntimeManifest({
+      manifest: {
+        integrationId: 'pi',
+        productId: 'pi',
+        apiVersion: '2.0',
+      },
+    }, spec),
+    /apiVersion=2\.0 != Catalog 1\.0/,
+  )
+})
+
 test('workspace package path derivation rejects non-AgentLens and nested package names', () => {
   assert.equal(
     integrationBundleInternals.workspacePackageDirectory('@agent-lens/integration-pi'),
