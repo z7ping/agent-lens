@@ -390,7 +390,7 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
     <div className="section-heading-row"><div>
       <h3>{t('piGuidance.configurationTitle')}</h3>
       <p>{t('piGuidance.configurationDescription')}</p>
-    </div><span className="section-total">{metrics.reduce((sum, item) => sum + item.count, 0)}</span></div>
+    </div></div>
     <div className="asset-kpis">
       {metrics.map(metric => <div key={metric.key} className="asset-kpi"><strong>{metric.count}</strong><span>{metric.label}</span></div>)}
     </div>
@@ -433,7 +433,12 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const builtinAssets = grouped.find(([type]) => type === 'builtin')?.[1] ?? []
   const skillAssets = grouped.find(([type]) => type === 'skill')?.[1] ?? []
   const isPi = agent.sourceId === 'pi'
-  const piProjectRuleAssets = isPi ? agent.assetInventory.filter(isPiProjectRuleAsset) : []
+  const piProjectRuleAssets = isPi
+    ? agent.assetInventory.filter(asset =>
+        isPiProjectRuleAsset(asset)
+        && asset.bindings.some(binding => binding.scope === 'project')
+      )
+    : []
   const piProjectRuleIds = new Set(piProjectRuleAssets.map(asset => asset.id))
   const displayedUserGrouped = isPi
     ? userGrouped
