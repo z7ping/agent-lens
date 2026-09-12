@@ -37,15 +37,6 @@ function pathContains(parent: string, child: string): boolean {
     || (value !== '..' && !value.startsWith(`..${sep}`) && !isAbsolute(value))
 }
 
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory()
-  } catch (error) {
-    if (isMissingPathError(error)) return false
-    throw error
-  }
-}
-
 async function fileMtime(path: string): Promise<string | undefined> {
   try {
     return (await stat(path)).mtime.toISOString()
