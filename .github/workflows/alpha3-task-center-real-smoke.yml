@@ -1,4 +1,4 @@
-name: Alpha.3 Task Center Real Smoke
+name: Task Center Real Smoke
 
 on:
   workflow_dispatch:
@@ -201,7 +201,7 @@ jobs:
           }
       - name: Upload viewport evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: alpha3-task-center-viewport-evidence
           path: ${{ runner.temp }}/agentlens-alpha3-smoke/acceptance

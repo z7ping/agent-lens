@@ -68,7 +68,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:session-summary -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/session-summary-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-performance-session-summary-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
@@ -105,7 +105,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:review-detail -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/review-detail-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-performance-review-detail-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
@@ -142,7 +142,7 @@ jobs:
           mkdir -p performance-artifacts
           node --import tsx scripts/performance/tool-overview-benchmark.ts ${{ steps.profile.outputs.args }} | tee performance-artifacts/tool-overview-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-performance-tool-overview-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
@@ -179,7 +179,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:pi-history-idle -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/pi-history-idle-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-performance-pi-history-idle-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
@@ -216,7 +216,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:dsh-history-idle -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/dsh-history-idle-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-performance-dsh-history-idle-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
@@ -253,7 +253,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:daemon-startup -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/daemon-startup-${{ steps.profile.outputs.profile }}.txt
       - name: Upload performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-performance-daemon-startup-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/

@@ -166,7 +166,7 @@ jobs:
           shasum -a 256 "${files[@]}" > SHA256SUMS-macos-x64.txt
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-macos-x64-${{ github.run_id }}
           path: |
@@ -250,7 +250,7 @@ jobs:
           sha256sum "${files[@]}" > SHA256SUMS-linux-x64.txt
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-linux-x64-${{ github.run_id }}
           path: |
