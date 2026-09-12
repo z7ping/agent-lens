@@ -23,6 +23,7 @@ import {
   officialIntegrationCatalogEntry,
 } from '@agent-lens/integration-catalog'
 import {
+  INTEGRATION_PACKAGE_ENTRY_EXPORT,
   INTEGRATION_PACKAGE_SCHEMA_VERSION,
   type BundledIntegrationCatalog,
   type BundledIntegrationCatalogEntry,
@@ -194,7 +195,7 @@ function parsePackageManifest(text: string): IntegrationPackageManifest {
       throw new Error(`Integration package manifest has invalid ${key}`)
     }
   }
-  if (value.entryExport !== 'default') {
+  if (value.entryExport !== INTEGRATION_PACKAGE_ENTRY_EXPORT) {
     throw new Error(`Unsupported Integration package entry export: ${String(value.entryExport)}`)
   }
   if (!Array.isArray(value.files) || !value.files.length) {
@@ -232,7 +233,7 @@ function parsePackageManifest(text: string): IntegrationPackageManifest {
     version: value.version as string,
     apiVersion: value.apiVersion as string,
     entry,
-    entryExport: 'default',
+    entryExport: INTEGRATION_PACKAGE_ENTRY_EXPORT,
     files,
   }
 }
@@ -374,7 +375,7 @@ export class IntegrationPackageService {
         displayName: entry.displayName,
         packageName: entry.package.packageName,
         ...(bundled ? { availableVersion: bundled.manifest.version } : {}),
-        apiVersion: entry.package.apiVersion,
+        apiVersion: bundled?.manifest.apiVersion ?? AGENT_LENS_PLUGIN_API_VERSION,
         source: 'bundled' as const,
       }
     })
