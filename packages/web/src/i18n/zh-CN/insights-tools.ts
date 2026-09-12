@@ -28,6 +28,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       mcp: 'MCP（模型上下文协议）',
     },
     filters: {
+      agentScope: '智能体范围',
       allAgents: '全部智能体',
       selectedAgents: '已选 {{count}} 个',
       none: '未选择',
@@ -114,6 +115,7 @@ export const chineseInsightsToolsMessages: LocaleMessagesDto = {
       unknown: '可信度未知',
     },
     filters: {
+      agentScope: '智能体范围',
       allAgents: '全部智能体',
       selectedAgents: '已选 {{count}} 个',
       none: '未选择',
