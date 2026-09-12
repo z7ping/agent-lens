@@ -2,8 +2,13 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
-import { capturePolicyPlugin } from '@agent-lens/capture-policy'
-import { hermesLivePlugin } from '@agent-lens/live-hermes'
+import { capturePolicyPlugin, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
+import { readCapturePolicyConfigurationSync } from '@agent-lens/capture-policy/configuration'
+import { claudeIntegration } from '@agent-lens/integration-claude'
+import { codexIntegration } from '@agent-lens/integration-codex'
+import { hermesIntegration } from '@agent-lens/integration-hermes'
+import { openCodeIntegration } from '@agent-lens/integration-opencode'
+import { piIntegration } from '@agent-lens/integration-pi'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -12,21 +17,20 @@ import {
   abortableDelay,
   AgentLensApplication,
   coreServicesPlugin,
+  authorizedIntegrationCapabilities,
   discoverRegisteredSourceAssets,
+  grantIntegrationCapabilities,
+  integrationAuthorizationPath,
   nodeRuntimePlugin,
-  piLiveRuntimePlugin,
   prepareRegisteredSources,
+  readIntegrationAuthorizationSync,
   replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
+  writeIntegrationAuthorization,
   type RegisteredSourceFailure,
 } from '@agent-lens/runtime-cordis'
-import { claudeSourcePlugin } from '@agent-lens/source-claude'
-import { codexSourcePlugin } from '@agent-lens/source-codex'
-import { hermesSourcePlugin } from '@agent-lens/source-hermes'
-import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
-import { piSourcePlugin } from '@agent-lens/source-pi'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
@@ -85,6 +89,25 @@ const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 const DATA_RUNTIME_RECOVERY_POLL_MS = 500
 let foregroundGate: ForegroundActivityGate | null = null
 const projectDirectoryPicker = createProjectDirectoryPicker()
+const capturePolicyStartup = resolveCapturePolicyPluginState()
+const enabledSourceIds = new Set(capturePolicyStartup.settings.enabledSources)
+const integrationAuthorizationFile = integrationAuthorizationPath()
+let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
+const persistedCapturePolicy = readCapturePolicyConfigurationSync(capturePolicyStartup.configurationPath)
+const legacyInstallation = existsSync(dbPath) || persistedCapturePolicy !== null
+
+if (!integrationAuthorization && legacyInstallation) {
+  integrationAuthorization = await writeIntegrationAuthorization(integrationAuthorizationFile, {
+    grants: {
+      ...(enabledSourceIds.has('pi') ? { pi: ['runtime', 'live'] } : {}),
+      ...(enabledSourceIds.has('hermes') ? { hermes: ['live'] } : {}),
+    },
+  })
+}
+
+function authorizedCapabilities(productId: string) {
+  return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+}
 
 const app = new AgentLensApplication()
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
@@ -92,14 +115,18 @@ app.use(dataRuntimeStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
-app.useRuntime(piLiveRuntimePlugin)
-app.use(hermesLivePlugin)
 if (capabilities.localCapture) {
-  app.use(codexSourcePlugin)
-  app.use(claudeSourcePlugin)
-  app.use(piSourcePlugin)
-  app.use(hermesSourcePlugin)
-  app.use(openCodeSourcePlugin)
+  app.useIntegration(piIntegration, {
+    enabled: enabledSourceIds.has(piIntegration.manifest.productId),
+    authorizedCapabilities: authorizedCapabilities(piIntegration.manifest.productId),
+  })
+  app.useIntegration(hermesIntegration, {
+    enabled: enabledSourceIds.has(hermesIntegration.manifest.productId),
+    authorizedCapabilities: authorizedCapabilities(hermesIntegration.manifest.productId),
+  })
+  app.useIntegration(codexIntegration, { enabled: enabledSourceIds.has(codexIntegration.manifest.productId) })
+  app.useIntegration(claudeIntegration, { enabled: enabledSourceIds.has(claudeIntegration.manifest.productId) })
+  app.useIntegration(openCodeIntegration, { enabled: enabledSourceIds.has(openCodeIntegration.manifest.productId) })
   app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
@@ -107,7 +134,28 @@ app.use(httpSurfacePlugin, {
   port: configuredPort,
   selectProjectDirectory: () => projectDirectoryPicker.select(),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
-  healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
+  healthDetails: () => ({
+    ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
+    integrationFailures: app.integrationFailures.map(failure => ({
+      integrationId: failure.integrationId,
+      componentPluginId: failure.componentPluginId,
+      error: failure.error instanceof Error ? failure.error.message : String(failure.error),
+    })),
+  }),
+  integrationStatus: productId => app.resolveIntegrationStatus(productId),
+  integrationAuthorization: {
+    available: productId => app.authorizableCapabilities(productId)
+      .filter((capability): capability is 'hook' | 'runtime' | 'live' => capability !== 'source'),
+    grant: async (productId, capabilities) => {
+      integrationAuthorization = await grantIntegrationCapabilities(
+        integrationAuthorizationFile,
+        productId,
+        capabilities,
+      )
+      app.recordIntegrationAuthorization(productId, capabilities)
+      return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+    },
+  },
 })
 app.use(webPlugin, { staticDir: webRoot })
 

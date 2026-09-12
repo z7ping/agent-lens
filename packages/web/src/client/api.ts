@@ -12,6 +12,8 @@ import {
   type FacetResponseDto,
   type HealthResponseDto,
   type InsightsResponseDto,
+  type IntegrationAuthorizationCapabilityDto,
+  type IntegrationAuthorizationResponseDto,
   type LiveUpdateEventDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -160,6 +162,17 @@ export class AgentLensApi {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabledSources }),
+    })
+  }
+
+  authorizeIntegration(
+    productId: string,
+    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
+  ): Promise<IntegrationAuthorizationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/authorization`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ capabilities }),
     })
   }
 

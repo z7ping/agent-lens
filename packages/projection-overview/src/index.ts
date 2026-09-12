@@ -1,4 +1,5 @@
 import type {
+  AgentIntegrationRuntimeStatus,
   AssetInventoryEntry,
   CapabilityService,
   CapturePolicyService,
@@ -30,6 +31,9 @@ const CURRENT_ASSET_PRESENCE_STATES = new Set(['installed', 'configured', 'enabl
 
 type FastFacetScope = SessionSummaryFacetScope
 export type SourceDetectionResolver = (sourceId: string) => boolean | undefined
+export type IntegrationStatusResolver = (
+  productId: string,
+) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
 
 function logSlowOverviewPhase(phase: string, startedAt: number, details: Record<string, number | string> = {}): void {
   const elapsedMs = performance.now() - startedAt
@@ -237,6 +241,7 @@ export class AgentOverviewProjection {
     private readonly capabilities?: CapabilityService,
     private readonly capturePolicy?: CapturePolicyService,
     private readonly sourceDetection?: SourceDetectionResolver,
+    private readonly integrationStatus?: IntegrationStatusResolver,
   ) {
     this.usage = new ToolAssetUsageProjection(storage)
   }
@@ -280,6 +285,9 @@ export class AgentOverviewProjection {
     const items = await Promise.all(definitions.map(async definition => {
       const sourceStartedAt = performance.now()
       const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
+      const integration = this.integrationStatus
+        ? await this.integrationStatus(definition.manifest.productId)
+        : null
       const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
       const inventory = new Map<string, AgentAssetInventoryDto>()
 
@@ -345,6 +353,17 @@ export class AgentOverviewProjection {
         supported: true,
         enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
         detected: sourceDetected(this.sourceDetection, definition.manifest.sourceId, installations.length > 0),
+        ...(integration ? {
+          integration: {
+            availability: integration.availability,
+            capabilities: integration.capabilities.map(item => ({
+              capability: item.capability,
+              availability: item.availability,
+              ...(item.authorization ? { authorization: item.authorization } : {}),
+              ...(item.reason ? { reason: item.reason } : {}),
+            })),
+          },
+        } : {}),
         installations: installations.map(item => ({
           id: item.id,
           ...(item.version ? { version: item.version } : {}),

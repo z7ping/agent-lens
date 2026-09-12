@@ -4,6 +4,8 @@ import type {
   CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
+  IntegrationAuthorizationCapabilityDto,
+  IntegrationAuthorizationResponseDto,
   LiveUpdateArea,
   LiveUpdateEventDto,
   ReviewDetailFilter,
@@ -269,6 +271,15 @@ export class AgentLensClientModel {
     else next.delete(sourceId)
     const capturePolicy = await this.api.updateCaptureSources([...next])
     this.patch({ capturePolicy })
+  }
+
+  async authorizeIntegration(
+    productId: string,
+    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
+  ): Promise<IntegrationAuthorizationResponseDto> {
+    const result = await this.api.authorizeIntegration(productId, capabilities)
+    await this.refreshAgents()
+    return result
   }
 
   async refreshFacetsAndAgents(): Promise<void> {

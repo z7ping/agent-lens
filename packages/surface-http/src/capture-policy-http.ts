@@ -34,7 +34,6 @@ function capturePolicyUpdatePayload(value: unknown): CapturePolicySourceUpdateRe
     throw badRequest('enabledSources must be an array of strings')
   }
   const normalized = enabledSources.map(value => value.trim()).filter(Boolean)
-  if (!normalized.length) throw badRequest('enabledSources must contain at least one source')
   return { enabledSources: normalized }
 }
 

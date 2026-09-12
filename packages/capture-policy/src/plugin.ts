@@ -16,14 +16,21 @@ export interface CapturePolicyPluginConfig {
   enabledSources?: readonly string[]
 }
 
-const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
-  ctx: AgentLensContext,
+export interface ResolvedCapturePolicyPluginState {
+  settings: CapturePolicySettings
+  configurationPath: string
+  configurationSource: 'runtime' | 'environment' | 'file' | 'default'
+  editable: boolean
+}
+
+export function resolveCapturePolicyPluginState(
   config: CapturePolicyPluginConfig = {},
-) => {
-  const defaults = capturePolicySettingsFromEnv(process.env)
-  const configurationPath = capturePolicyConfigurationPath(process.env)
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): ResolvedCapturePolicyPluginState {
+  const defaults = capturePolicySettingsFromEnv(env)
+  const configurationPath = capturePolicyConfigurationPath(env)
   const persisted = readCapturePolicyConfigurationSync(configurationPath)
-  const environmentOverridesSources = process.env.AGENT_LENS_ENABLED_SOURCES !== undefined
+  const environmentOverridesSources = env.AGENT_LENS_ENABLED_SOURCES !== undefined
   const enabledSources = config.enabledSources
     ?? (environmentOverridesSources
       ? defaults.enabledSources
@@ -42,11 +49,25 @@ const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
       : persisted
         ? 'file' as const
         : 'default' as const
+  return {
+    settings,
+    configurationPath,
+    configurationSource,
+    editable: !config.enabledSources && !environmentOverridesSources,
+  }
+}
+
+const applyCapturePolicy: Plugin.Function<CapturePolicyPluginConfig> = (
+  ctx: AgentLensContext,
+  config: CapturePolicyPluginConfig = {},
+) => {
+  const resolved = resolveCapturePolicyPluginState(config)
+  const { settings, configurationPath, configurationSource } = resolved
   ctx.provide('capturePolicy', new DefaultCapturePolicyService(settings, {
     source: configurationSource,
-    editable: !config.enabledSources && !environmentOverridesSources,
+    editable: resolved.editable,
     configurationPath,
-    configuredEnabledSources: enabledSources,
+    configuredEnabledSources: settings.enabledSources,
     writeEnabledSources: async next => {
       await writeCapturePolicyConfiguration(configurationPath, next)
     },

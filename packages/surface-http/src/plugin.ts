@@ -1,5 +1,5 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
-import type { StorageService } from '@agent-lens/core'
+import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
 import type { DataRuntimeHealthDto } from '@agent-lens/protocol'
 import {
@@ -13,6 +13,7 @@ import {
   startHttpSurface,
   type RunningHttpSurface,
 } from './server'
+import type { IntegrationAuthorizationController } from './integration-http'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -29,6 +30,11 @@ export interface HttpSurfacePluginConfig {
   dataRuntimeHealth?: () => DataRuntimeHealthDto
   /** Additional O(1) runtime diagnostics merged into storage health details. */
   healthDetails?: () => Readonly<Record<string, unknown>>
+  /** Product-level Integration runtime availability. */
+  integrationStatus?: (
+    productId: string,
+  ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
+  integrationAuthorization?: IntegrationAuthorizationController
 }
 
 const manifest = {
@@ -178,9 +184,11 @@ const applyHttpSurface = Object.assign(
       capabilities: ctx.capabilities,
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
-      piLive: ctx.piLive,
+      piLive: ctx.get('piLive'),
       rescanAgents: () => sourceRescan.rescan(),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
+      ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
+      ...(config.integrationAuthorization ? { integrationAuthorization: config.integrationAuthorization } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       hubReview,
     })
@@ -194,7 +202,7 @@ const applyHttpSurface = Object.assign(
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'unifiedRead', 'sources', 'identity', 'capabilities', 'assets', 'evidence', 'capturePolicy', 'backup', 'piLive'] },
+  { inject: ['storage', 'unifiedRead', 'sources', 'identity', 'capabilities', 'assets', 'evidence', 'capturePolicy', 'backup'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)

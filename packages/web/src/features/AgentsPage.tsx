@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
-import type { AgentAssetInventoryDto, AgentOverviewDto, CapturePolicyResponseDto } from '@agent-lens/protocol'
+import type {
+  AgentAssetInventoryDto,
+  AgentOverviewDto,
+  CapturePolicyResponseDto,
+  IntegrationAuthorizationCapabilityDto,
+} from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { CompactPageHeading } from '../components/CompactPageHeading'
-import { Button, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, Dialog, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 
 const capabilityLabel: Record<string, string> = {
@@ -76,6 +81,29 @@ const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'contex
 const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
+const integrationCapabilityLabel: Record<string, string> = {
+  source: 'Source',
+  hook: 'Hook',
+  runtime: 'Runtime',
+  live: 'Live',
+}
+
+const integrationAvailabilityLabel: Record<string, string> = {
+  available: '可用',
+  partial: '部分可用',
+  unavailable: '不可用',
+  error: '异常',
+}
+
+function integrationAvailabilityTone(
+  availability: string,
+): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (availability === 'available') return 'success'
+  if (availability === 'partial' || availability === 'unavailable') return 'warning'
+  if (availability === 'error') return 'danger'
+  return 'neutral'
+}
+
 const agentDescription: Record<string, string> = {
   codex: 'OpenAI Codex · 本机历史、运行时钩子与能力资产',
   'claude-code': 'Anthropic Claude Code · 会话、钩子与能力资产',
@@ -86,9 +114,9 @@ const agentDescription: Record<string, string> = {
 
 function captureState(agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'>): { label: string; title: string; className: string } {
   if (!agent.supported) return { label: '未支持', title: '当前版本未声明支持该智能体', className: 'is-unsupported' }
-  if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用采集' : '未检测 · 未启用采集', title: agent.enabled ? '已允许采集，但本机尚未检测到该智能体' : '本机尚未检测到该智能体，当前也未启用采集', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
-  if (!agent.enabled) return { label: '已检测 · 未启用采集', title: '本机已检测到该智能体，但当前采集策略未启用此来源', className: 'is-disabled' }
-  return { label: '已检测 · 采集中', title: '本机已检测到该智能体，且当前采集策略已启用此来源', className: 'is-enabled is-detected' }
+  if (!agent.detected) return { label: agent.enabled ? '未检测 · 已启用' : '未检测 · 未启用', title: agent.enabled ? '该智能体集成已启用，但本机尚未检测到对应产品或数据' : '本机尚未检测到该智能体，集成当前也未启用', className: agent.enabled ? 'is-enabled' : 'is-disabled' }
+  if (!agent.enabled) return { label: '已检测 · 未启用', title: '本机已检测到该智能体，但当前没有启用此智能体集成', className: 'is-disabled' }
+  return { label: '已检测 · 已启用', title: '本机已检测到该智能体，且对应 AgentLens 集成已启用', className: 'is-enabled is-detected' }
 }
 
 function capabilityDetail(cap: AgentOverviewDto['capabilities'][number]): string {
@@ -224,29 +252,66 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   </section>
 }
 
-function SourceCaptureControl({
+function IntegrationControl({
   agent,
   policy,
   onChange,
+  onAuthorize,
 }: {
   agent: AgentOverviewDto
   policy: CapturePolicyResponseDto | null
   onChange(sourceId: string, enabled: boolean): Promise<void>
+  onAuthorize(
+    productId: string,
+    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
+  ): Promise<unknown>
 }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [authorizationOpen, setAuthorizationOpen] = useState(false)
+  const [authorizationSaved, setAuthorizationSaved] = useState(false)
   const settings = policy?.settings
   const configured = settings?.configuredEnabledSources.includes(agent.sourceId) ?? agent.enabled
   const effective = settings?.effectiveEnabledSources.includes(agent.sourceId) ?? agent.enabled
   const pending = configured !== effective
   const editable = settings?.editable ?? false
+  const pendingAuthorization = (agent.integration?.capabilities ?? [])
+    .filter(item => item.authorization === 'required')
+    .map(item => item.capability)
+    .filter((capability): capability is IntegrationAuthorizationCapabilityDto =>
+      capability === 'hook' || capability === 'runtime' || capability === 'live'
+    )
 
-  const toggle = async () => {
-    if (!editable || saving) return
+  const persistEnabled = async (enabled: boolean) => {
     setSaving(true)
     setError('')
     try {
-      await onChange(agent.sourceId, !configured)
+      await onChange(agent.sourceId, enabled)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggle = () => {
+    if (!editable || saving) return
+    if (!configured && pendingAuthorization.length) {
+      setAuthorizationOpen(true)
+      return
+    }
+    void persistEnabled(!configured)
+  }
+
+  const authorize = async () => {
+    if (!pendingAuthorization.length || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      await onAuthorize(agent.productId, pendingAuthorization)
+      if (!configured) await onChange(agent.sourceId, true)
+      setAuthorizationSaved(true)
+      setAuthorizationOpen(false)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -256,12 +321,36 @@ function SourceCaptureControl({
 
   return <section className="source-capture-control">
     <div>
-      <h3>用户级采集</h3>
+      <h3>智能体集成</h3>
       <p>{pending
-        ? `已保存为${configured ? '开启' : '关闭'}；重启 AgentLens 运行时后完全生效。Hook 会从下一次调用起读取新设置。`
+        ? `已保存为${configured ? '开启' : '关闭'}；Hook 会从下一次调用起读取新设置，Live / Runtime 在重启 AgentLens 后完全生效。`
         : configured
-          ? '允许 AgentLens 采集此来源的新任务、工具事件与资产；正文仍受独立隐私档位保护。'
-          : 'AgentLens 不会启动此来源的历史、运行时或资产采集。已有数据不会自动删除。'}</p>
+          ? '启用此智能体在 AgentLens 中声明的 Source / Hook / Runtime / Live 能力；具体可用能力取决于该智能体集成。'
+          : '不会启动此智能体的新采集、Hook 处理或 Live / Runtime 控制能力；已有历史数据不会删除。'}</p>
+      {agent.integration && <div className="integration-availability">
+        <span className="integration-availability-overall">
+          <small>当前可用性</small>
+          <StatusBadge tone={integrationAvailabilityTone(agent.integration.availability)} dot>
+            {integrationAvailabilityLabel[agent.integration.availability] ?? agent.integration.availability}
+          </StatusBadge>
+        </span>
+        <span className="integration-capability-badges">
+          {agent.integration.capabilities.map(item => <StatusBadge
+            key={item.capability}
+            tone={integrationAvailabilityTone(item.availability)}
+            title={item.reason}
+          >{integrationCapabilityLabel[item.capability] ?? item.capability} · {item.reason === '授权已保存，等待重启加载'
+              ? '待重启'
+              : item.authorization === 'required'
+                ? '待授权'
+                : integrationAvailabilityLabel[item.availability] ?? item.availability}</StatusBadge>)}
+        </span>
+      </div>}
+      {configured && pendingAuthorization.length > 0 && !authorizationSaved && <div className="integration-authorization-action">
+        <Button size="small" disabled={saving} onClick={() => setAuthorizationOpen(true)}>授权控制能力</Button>
+        <span>Runtime / Live 等主动控制能力尚未授权，不会启动。</span>
+      </div>}
+      {authorizationSaved && <p className="source-capture-note">授权已保存；重启 AgentLens 后控制能力生效。</p>}
       {!editable && settings && <p className="source-capture-note">当前由{settings.managedBy === 'environment' ? '兼容环境变量' : '运行时配置'}管理，界面只读。</p>}
       {error && <p className="source-capture-error">{error}</p>}
     </div>
@@ -272,15 +361,42 @@ function SourceCaptureControl({
       className="source-capture-switch"
       data-enabled={configured || undefined}
       disabled={!editable || saving}
-      onClick={() => void toggle()}
+      onClick={toggle}
     ><span aria-hidden="true"/><b>{saving ? '保存中' : configured ? '已开启' : '已关闭'}</b></button>
+    <Dialog
+      open={authorizationOpen}
+      title={`授权 ${agentLabel(agent.sourceId, agent.displayName)} 控制能力`}
+      description="Source 只读检测与历史采集不需要这项授权；以下能力可能启动智能体运行时或建立实时控制连接。"
+      onClose={() => { if (!saving) setAuthorizationOpen(false) }}
+      closeDisabled={saving}
+      footer={<>
+        <Button disabled={saving} onClick={() => setAuthorizationOpen(false)}>取消</Button>
+        <Button variant="primary" loading={saving} onClick={() => void authorize()}>{configured ? '确认授权' : '确认授权并启用'}</Button>
+      </>}
+    >
+      <div className="integration-authorization-list">
+        {pendingAuthorization.map(capability => <div key={capability}>
+          <b>{integrationCapabilityLabel[capability] ?? capability}</b>
+          <span>{capability === 'runtime'
+            ? '允许 AgentLens 启动并管理该智能体的运行会话。'
+            : capability === 'live'
+              ? '允许 AgentLens 建立实时消息、流式事件与中断控制。'
+              : '允许 AgentLens 写入或启用该智能体的观察 Hook。'}</span>
+        </div>)}
+      </div>
+      <p className="integration-authorization-note">授权会持久化保存；以后关闭再开启不会重复询问。禁用集成不会删除历史数据。</p>
+    </Dialog>
   </section>
 }
 
-function AgentCard({ agent, policy, onCaptureChange }: {
+function AgentCard({ agent, policy, onCaptureChange, onAuthorize }: {
   agent: AgentOverviewDto
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
+  onAuthorize(
+    productId: string,
+    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
+  ): Promise<unknown>
 }) {
   const [showAllBindings, setShowAllBindings] = useState(false)
   const installation = agent.installations[0]
@@ -324,7 +440,7 @@ function AgentCard({ agent, policy, onCaptureChange }: {
       <span className="agent-config"><small>配置目录</small><code title={installation?.configRoot}>{installation?.configRoot ? shortPath(installation.configRoot, 52) : agent.detected ? '路径未取得' : '未检测'}</code></span>
     </div>
 
-    <SourceCaptureControl agent={agent} policy={policy} onChange={onCaptureChange}/>
+    <IntegrationControl agent={agent} policy={policy} onChange={onCaptureChange} onAuthorize={onAuthorize}/>
 
     <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>我的资产</h3><p>用户安装、配置或维护的能力；内建工具单独放在后面。</p></div><span className="section-total">{userAssetCount}</span></div>
@@ -391,7 +507,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用采集。">
+      <CompactPageHeading title="智能体概览" description="集中查看本机智能体、集成状态、用户资产、真实使用情况和技能生命周期。已检测只表示发现了智能体，不等于已经启用对应集成。">
         <Toolbar aria-label="智能体扫描" className="agents-rescan-toolbar">
           <Button size="small" loading={snapshot.agentsRescanning} disabled={snapshot.agentsRescanning} onClick={() => void model.rescanAgents().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{snapshot.agentsRescanning ? '正在扫描…' : '重新扫描'}</Button>
           {rescanStatus}
@@ -410,7 +526,13 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
             </button>
           })}
         </nav>
-        <div className="agent-detail-pane">{selectedAgent && <AgentCard key={selectedAgent.sourceId} agent={selectedAgent} policy={snapshot.capturePolicy} onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}/>}</div>
+        <div className="agent-detail-pane">{selectedAgent && <AgentCard
+          key={selectedAgent.sourceId}
+          agent={selectedAgent}
+          policy={snapshot.capturePolicy}
+          onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
+          onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
+        />}</div>
       </div> : <div className="empty-state roomy">没有可显示的智能体</div>}
     </div>
   </main>
