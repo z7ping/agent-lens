@@ -108,7 +108,7 @@ const assetScopeLabelKey: Record<string, string> = {
   workspace: 'assetScope.workspace',
 }
 const USER_ASSET_LIMIT = 24
-const ASSEMBLY_PATH_LIMIT = 18
+const RUNTIME_CONFIG_PATH_LIMIT = 18
 
 const agentDescriptionKey: Record<string, string> = {
   codex: 'description.codex',
@@ -348,7 +348,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     .map(item => item.asset), [agent])
 
   const bindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
-  const visibleBindings = showAllBindings ? bindings : bindings.slice(0, ASSEMBLY_PATH_LIMIT)
+  const visibleBindings = showAllBindings ? bindings : bindings.slice(0, RUNTIME_CONFIG_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
   const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t)
@@ -412,24 +412,24 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       {builtinAssets.length > 0 && <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>} 
       <details className="disclosure-group">
         <summary><DisclosureChevron/><span>{t('sections.runtimeConfig')}</span><span className="disclosure-count">{runtimeConfigCount}</span></summary>
-        <div className="assembly-list">
-          {installation?.executable && <div className="assembly-row"><span>{t('sections.executable')}</span><code>{installation.executable}</code><CopyPath path={installation.executable}/></div>}
-          {installation?.configRoot && <div className="assembly-row">
+        <div className="runtime-config-list">
+          {installation?.executable && <div className="runtime-config-row"><span>{t('sections.executable')}</span><code>{installation.executable}</code><CopyPath path={installation.executable}/></div>}
+          {installation?.configRoot && <div className="runtime-config-row">
             <span>{t('sections.config')}</span>
             <code>{installation.configRoot}</code>
             <CopyPath path={installation.configRoot}/>
             {assetsAvailable && <Button size="small" onClick={() => setManagedRoot('config')}>{t('sections.browse')}</Button>}
           </div>}
-          {installation?.dataRoot && <div className="assembly-row">
+          {installation?.dataRoot && <div className="runtime-config-row">
             <span>{t('sections.data')}</span>
             <code>{installation.dataRoot}</code>
             <CopyPath path={installation.dataRoot}/>
             {assetsAvailable && <Button size="small" onClick={() => setManagedRoot('data')}>{t('sections.browse')}</Button>}
           </div>}
-          {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="assembly-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
+          {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="runtime-config-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
           {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noRuntimeConfig')}</div>}
         </div>
-        {bindings.length > ASSEMBLY_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - ASSEMBLY_PATH_LIMIT })}</button>}
+        {bindings.length > RUNTIME_CONFIG_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - RUNTIME_CONFIG_PATH_LIMIT })}</button>}
       </details>
       <details className="disclosure-group">
         <summary title={t('sections.captureSupportTitle')}><DisclosureChevron/><span>{t('sections.captureSupport')}</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
