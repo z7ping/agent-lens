@@ -18,8 +18,6 @@ interface WorkspaceSidebarProps {
   selectedAgentId: string
   onSelectAgent(id: string): void
   onRefreshAgents(): void
-  backupSourceIds: string[] | null
-  onBackupSourceIdsChange(sourceIds: string[] | null): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onContextHost(node: HTMLDivElement | null): void
@@ -34,8 +32,6 @@ export function WorkspaceSidebar({
   selectedAgentId,
   onSelectAgent,
   onRefreshAgents,
-  backupSourceIds,
-  onBackupSourceIdsChange,
   theme,
   onToggleTheme,
   onContextHost,
@@ -117,10 +113,6 @@ export function WorkspaceSidebar({
         <SidebarFilterDisclosure defaultOpen summary={t('navigation:agentSelection')} agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
-      {onBackup && <nav className="workspace-context-menu workspace-maintenance-context" aria-label={t('navigation:maintenance')}>
-        <NavLink to="/backup" onClick={onMobileClose} className="workspace-context-link is-active">{t('navigation:assetBackup')}</NavLink>
-        <SidebarFilterDisclosure defaultOpen summary={t('navigation:backupScope')} agents={agents} agentSelection={{ mode: 'multiple', value: backupSourceIds, onChange: onBackupSourceIdsChange }}/>
-      </nav>}
     </div>
 
     <div className="workspace-sidebar-footer">
