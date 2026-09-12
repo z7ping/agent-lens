@@ -171,7 +171,7 @@
 
 .backup-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 16px;
   align-items: start;
 }
@@ -214,7 +214,7 @@
 
 .backup-snapshot-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.35fr) minmax(130px, .9fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
   padding: 11px 2px;
@@ -261,15 +261,7 @@
   color: var(--al-accent);
 }
 
-.backup-snapshot-sources {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.45;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.backup-snapshot-meta { color: var(--al-muted-2); }
 
 .backup-snapshot-state {
   display: grid;
