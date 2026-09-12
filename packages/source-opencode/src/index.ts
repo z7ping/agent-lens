@@ -62,6 +62,7 @@ function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -334,6 +335,7 @@ export async function* ingestOpenCodeHistory(
   if (!root || ctx.abortSignal.aborted) return
   const db = openDatabase(root)
   try {
+    // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
     const sessionLimit = ctx.historyWindow?.sessionLimit
@@ -513,11 +515,11 @@ export async function normalizeOpenCodeRecord(
 
   if (type === 'text') {
     const text = stringField(part, 'text', 'content') ?? ''
-    if (role === 'user') observations.push(candidate(record, envelope, 'message.user', { text }))
+    if (role === 'user') observations.push(candidate(record, envelope, 'message.user', { text: text }))
     else if (role === 'assistant') {
       const model = stringField(message, 'modelID', 'model_id', 'model')
       observations.push(candidate(record, envelope, 'message.assistant', {
-        text,
+        text: text,
         ...(model ? { model } : {}),
       }))
     } else observations.push(candidate(record, envelope, 'unknown', { rawType: `text/${role}`, rawPayload: part }))
