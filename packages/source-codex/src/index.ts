@@ -81,6 +81,7 @@ const applyCodexSource = Object.assign(
 export const codexSourcePlugin = defineAgentLensPlugin(codexManifest, applyCodexSource)
 
 export * from './assets'
+export * from './config'
 export * from './current-protocol'
 export * from './detect'
 export * from './format'
