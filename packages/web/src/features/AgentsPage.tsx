@@ -81,6 +81,7 @@ const negativeStateLabelKey: Record<string, string> = {
 }
 
 const assetTypeLabelKey: Record<string, string> = {
+  instruction: 'assetType.instruction',
   skill: 'assetType.skill',
   mcp: 'assetType.mcp',
   plugin: 'assetType.plugin',
@@ -145,10 +146,6 @@ function shortPath(path: string, max = 58): string {
   return `${path.slice(0, left)}…${path.slice(-right)}`
 }
 
-function scopeRootName(value: string): string {
-  const normalized = value.replaceAll('\\', '/').replace(/\/+$/, '')
-  return normalized.split('/').at(-1) || value
-}
 
 function assetScopeLabels(
   asset: AgentAssetInventoryDto,
@@ -161,12 +158,9 @@ function assetScopeLabels(
     const key = `${binding.scope}\u0000${root ?? ''}`
     if (values.has(key)) continue
     const scopeLabel = translatedLabel(assetScopeLabelKey, binding.scope, t)
-    const label = root && (binding.scope === 'project' || binding.scope === 'workspace')
-      ? `${scopeLabel} · ${scopeRootName(root)}`
-      : scopeLabel
     values.set(key, {
       key,
-      label,
+      label: scopeLabel,
       ...(root ? { title: root } : {}),
     })
   }
