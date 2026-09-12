@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
@@ -15,6 +15,7 @@ interface SidebarFilterDisclosureProps {
   agents?: AgentFacetDto[]
   agentSelection?: AgentSelection
   children?: ReactNode
+  defaultOpen?: boolean
 }
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
@@ -25,8 +26,10 @@ export function SidebarFilterDisclosure({
   agents = [],
   agentSelection,
   children,
+  defaultOpen = false,
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
+  const [open, setOpen] = useState(defaultOpen)
   const resolvedSummary = summary ?? t('sidebarFilter.summary')
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
@@ -60,9 +63,15 @@ export function SidebarFilterDisclosure({
     agentSelection.onChange(next)
   }
 
-  return <Disclosure className={`workspace-sidebar-filter-disclosure ${className}`.trim()} summary={resolvedSummary} summaryMeta={summaryMeta ?? computedSummary}>
-    {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={t('sidebarFilter.groupAria')}>
-      <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>
+  return <Disclosure
+    className={`workspace-sidebar-filter-disclosure ${className}`.trim()}
+    summary={resolvedSummary}
+    summaryMeta={summaryMeta ?? computedSummary}
+    open={open}
+    onToggle={event => setOpen(event.currentTarget.open)}
+  >
+    {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={resolvedSummary}>
+      {agentSelection.mode === 'multiple' && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>}
       {orderedAgents.map(agent => {
         const selected = selectedIds.includes(agent.sourceId)
         return <button
