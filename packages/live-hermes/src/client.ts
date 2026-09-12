@@ -159,7 +159,7 @@ export class HermesApiError extends Error {
 
 export class HermesApiClient {
   private readonly apiUrl: string
-  private readonly apiKey?: string
+  private readonly apiKey: string | undefined
 
   constructor(config: ResolvedHermesApiClientConfig) {
     this.apiUrl = config.apiUrl.replace(/\/+$/, '')
@@ -217,11 +217,12 @@ export class HermesApiClient {
     const id = textField(response, 'run_id') ?? runId
     const status = textField(response, 'status')
     if (!status) throw new HermesApiError('Hermes run status response has no status')
+    const sessionId = textField(response, 'session_id')
     return {
       ...response,
       run_id: id,
       status,
-      ...(textField(response, 'session_id') ? { session_id: textField(response, 'session_id') } : {}),
+      ...(sessionId ? { session_id: sessionId } : {}),
     }
   }
 

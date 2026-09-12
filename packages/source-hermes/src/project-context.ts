@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
 import {
   basename,
@@ -230,7 +231,7 @@ async function projectContextAssets(
   if (cursorRule) cursorAssets.push(cursorRule)
 
   const cursorDir = join(cwd, '.cursor', 'rules')
-  let cursorEntries
+  let cursorEntries: Dirent[]
   try {
     cursorEntries = await readdir(cursorDir, { withFileTypes: true })
   } catch (error) {

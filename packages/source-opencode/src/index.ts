@@ -557,7 +557,7 @@ export async function normalizeOpenCodeRecord(
   } else if (type === 'tool') {
     const state = asRecord(part.state)
     const callId = stringField(part, 'callID', 'callId', 'call_id')
-    const sharedEventKey = callId ? undefined : `opencode-tool:${record.id}`
+    const sharedEventKey = `opencode-tool:${record.id}`
     const toolName = stringField(part, 'tool', 'name') ?? 'unknown'
     observations.push(candidate(record, envelope, 'tool.call', {
       ...(callId ? { callId } : {}),
