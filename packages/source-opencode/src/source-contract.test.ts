@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
+import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareOpenCodeCapabilities,
   discoverOpenCodeAssets,
@@ -219,7 +219,7 @@ test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () 
   } as unknown as SourceExecutionContext
 
   try {
-    const assets = []
+    const assets: DiscoveredAsset[] = []
     for await (const asset of discoverOpenCodeAssets(ctx)) assets.push(asset)
 
     const paths = new Set(assets.flatMap(asset => asset.binding?.path ? [asset.binding.path] : []))
