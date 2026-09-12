@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import {
   access,
   mkdir,
+  open,
   opendir,
   readFile,
   readdir,
@@ -218,6 +219,28 @@ function historyCheckpointKey(filePath: string): string {
   return `claude:history:v2-session-title:${sha256(filePath)}`
 }
 
+async function readClaudeSessionCwd(filePath: string): Promise<string | undefined> {
+  const handle = await open(filePath, 'r')
+  try {
+    const buffer = Buffer.alloc(256 * 1024)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    const preview = buffer.subarray(0, bytesRead).toString('utf8')
+    for (const line of preview.split(/\r?\n/).slice(0, 64)) {
+      if (!line.trim()) continue
+      try {
+        const entry = asRecord(JSON.parse(line))
+        const cwd = stringField(entry, 'cwd')
+        if (cwd) return cwd
+      } catch {
+        // History ingest owns malformed-record preservation; migration lookup only needs cwd.
+      }
+    }
+    return undefined
+  } finally {
+    await handle.close()
+  }
+}
+
 export async function* ingestClaudeFile(
   ctx: SourceExecutionContext,
   filePath: string,
@@ -367,8 +390,14 @@ export async function* ingestClaudeHistory(
     if (!knownCwds.has(key)) knownCwds.set(key, cwd)
   }
 
-  for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
+  const files = await listJsonlFiles(projectsDir, ctx.historyWindow)
+  const needsWorkspaceBackfill = remembered.length === 0
+  for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
+    if (needsWorkspaceBackfill) {
+      const cwd = await readClaudeSessionCwd(filePath)
+      if (cwd) rememberWorkspace(cwd)
+    }
     yield* ingestClaudeFile(ctx, filePath, rememberWorkspace)
   }
 
@@ -855,6 +884,7 @@ export const claudeInternals = {
   runtimeRecord,
   textFromContent,
   claudeStoredEnvelope,
+  readClaudeSessionCwd,
 }
 
 export * from './assets.js'
