@@ -12,12 +12,6 @@
   background: transparent;
 }
 
-.backup-toolbar-note {
-  color: var(--al-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .backup-file-input { display: none; }
 
 .future-heading {
