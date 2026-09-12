@@ -410,19 +410,27 @@ export function BackupPage({
             <section className="future-card">
               <div className="future-card-head"><div><h2>{t('protection.title')}</h2></div></div>
               <div className="future-card-body">
-                <div className="protection-grid">
-                  {sources.map(source => <article key={source.sourceId} className={`protection-card ${!source.detected ? 'is-muted' : ''}`}>
-                    <div className="protection-card-head"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b><span className={`badge ${source.detected ? 'ok' : ''}`}>{source.detected ? t('protection.detected') : t('protection.notDetected')}</span></div>
-                    <div className="protection-counts">
-                      <div className="protection-count"><strong>{source.logicalAssetCount === undefined ? '—' : source.logicalAssetCount.toLocaleString()}</strong><span>{t('protection.logicalAssets')}</span></div>
-                      <div className="protection-count"><strong>{source.fileCount.toLocaleString()}</strong><span>{t('protection.physicalFiles')}</span></div>
-                      <div className="protection-count"><strong>{source.totalBytes === undefined ? '—' : formatBytes(source.totalBytes)}</strong><span>{t('protection.dataSize')}</span></div>
-                    </div>
-                    <div className="protection-meta"><span>{t('protection.mcpSession', {
-                        mcp: kindDetailText(source, 'mcp', t, locale),
-                        sessions: kindFiles(source, 'session').toLocaleString(locale),
-                      })}</span><button className="link-btn" disabled={!source.detected} onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button></div>
-                  </article>)}
+                <div className="protection-table-scroll">
+                  <table className="protection-table">
+                    <thead><tr>
+                      <th>{t('protection.source')}</th>
+                      <th>{t('protection.files')}</th>
+                      <th>{t('protection.size')}</th>
+                      <th>{t('protection.sessions')}</th>
+                      <th>{t('protection.mcp')}</th>
+                      <th className="align-right">{t('protection.actions')}</th>
+                    </tr></thead>
+                    <tbody>
+                      {sources.map(source => <tr key={source.sourceId} className={!source.detected ? 'is-muted' : ''}>
+                        <td><div className="protection-source"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b>{!source.detected && <span className="badge">{t('protection.notDetected')}</span>}</div></td>
+                        <td>{source.detected ? source.fileCount.toLocaleString(locale) : '—'}</td>
+                        <td>{source.detected && source.totalBytes !== undefined ? formatBytes(source.totalBytes) : '—'}</td>
+                        <td>{source.detected ? kindFiles(source, 'session').toLocaleString(locale) : '—'}</td>
+                        <td>{source.detected ? kindFiles(source, 'mcp').toLocaleString(locale) : '—'}</td>
+                        <td className="align-right"><button className="link-btn" disabled={!source.detected} onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button></td>
+                      </tr>)}
+                    </tbody>
+                  </table>
                 </div>
                 <div className="future-section-label">{t('protection.currentDirectory')}</div>
                 <div className="integrity-strip"><strong>{t('protection.localVault')}</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span></div>
