@@ -48,7 +48,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
   if (!snapshot) return []
   const facts = snapshot.entries.flatMap((entry, index) => normalizePiSessionEntry(entry, { fallbackId: `snapshot:${index}` }))
   const results = new Map<string, Extract<PiNativeFact, { kind: 'tool-result' }>>()
-  for (const fact of facts) if (fact.kind === 'tool-result') results.set(fact.callId, fact)
+  for (const fact of facts) if (fact.kind === 'tool-result' && fact.callId) results.set(fact.callId, fact)
   const consumedResults = new Set<string>()
   const items: PiLiveHistoryItem[] = []
 
@@ -80,12 +80,13 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       continue
     }
     if (fact.kind === 'tool-call') {
-      const paired = results.get(fact.callId)
-      if (paired) consumedResults.add(fact.callId)
+      const callId = fact.callId ?? fact.id
+      const paired = fact.callId ? results.get(fact.callId) : undefined
+      if (paired && fact.callId) consumedResults.add(fact.callId)
       items.push({
         id: fact.id,
         kind: 'tool',
-        callId: fact.callId,
+        callId,
         name: fact.name || paired?.name || 'tool',
         summary: compact(fact.input),
         output: paired ? resultOutput(paired) : '',
@@ -97,11 +98,11 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       continue
     }
     if (fact.kind === 'tool-result') {
-      if (consumedResults.has(fact.callId)) continue
+      if (fact.callId && consumedResults.has(fact.callId)) continue
       items.push({
         id: fact.id,
         kind: 'tool',
-        callId: fact.callId,
+        callId: fact.callId ?? fact.id,
         name: fact.name,
         summary: translateProduct('piLive:history.unpairedToolResult'),
         output: resultOutput(fact),
