@@ -23,6 +23,7 @@ export async function watchSourceFiles(
   const debounceMs = options.debounceMs ?? 120
   let stopped = false
   let watcher: FSWatcher | null = null
+  let closing: Promise<void> | null = null
   let processing = Promise.resolve()
   const pending = new Map<string, { timer: NodeJS.Timeout; event: SourceFileWatchEvent }>()
 
@@ -66,14 +67,22 @@ export async function watchSourceFiles(
   watcher.on('unlink', path => schedule(path, 'unlink'))
   watcher.on('error', reportError)
 
+  const closeWatcher = (): Promise<void> => {
+    if (closing) return closing
+    const active = watcher
+    watcher = null
+    closing = active
+      ? active.close().catch(reportError)
+      : Promise.resolve()
+    return closing
+  }
+
   const abort = () => {
     if (stopped) return
     stopped = true
     for (const { timer } of pending.values()) clearTimeout(timer)
     pending.clear()
-    const active = watcher
-    watcher = null
-    if (active) void active.close().catch(reportError)
+    void closeWatcher()
   }
   options.signal.addEventListener('abort', abort, { once: true })
 
@@ -83,13 +92,9 @@ export async function watchSourceFiles(
         stopped = true
         for (const { timer } of pending.values()) clearTimeout(timer)
         pending.clear()
-        options.signal.removeEventListener('abort', abort)
-        const active = watcher
-        watcher = null
-        if (active) await active.close().catch(reportError)
-      } else {
-        options.signal.removeEventListener('abort', abort)
       }
+      options.signal.removeEventListener('abort', abort)
+      await closeWatcher()
       await processing
     },
   }
