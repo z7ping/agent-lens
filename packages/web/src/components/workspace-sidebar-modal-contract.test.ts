@@ -11,7 +11,9 @@ test('移动工作栏复用共享 Modal Focus Scope，而不是页面级键盘�
   assert.match(overlaySource, /export function useModalFocusScope/)
   assert.match(overlaySource, /event\.key === 'Escape'/)
   assert.match(overlaySource, /event\.key !== 'Tab'/)
-  assert.match(overlaySource, /requestAnimationFrame\(\(\) => previous\?\.focus/)
+  assert.match(overlaySource, /window\.setTimeout\(\(\) =>/)
+  assert.match(overlaySource, /previous\?\.isConnected/)
+  assert.match(overlaySource, /previous\.focus\(\{ preventScroll: true \}\)/)
   assert.match(sidebarSource, /useModalFocusScope\(\{ open: mobileOpen, onClose: onMobileClose, panelRef: sidebarRef \}\)/)
 })
 
