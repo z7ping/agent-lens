@@ -1,26 +1,97 @@
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-
-export const INTEGRATION_PACKAGE_SCHEMA_VERSION = 1
-export const INTEGRATION_BUNDLE_SPECS = [
-  { integrationId: 'pi', productId: 'pi', packageName: '@agent-lens/integration-pi', entry: 'packages/integration-pi/src/index.ts' },
-  { integrationId: 'codex', productId: 'codex', packageName: '@agent-lens/integration-codex', entry: 'packages/integration-codex/src/index.ts' },
-  { integrationId: 'claude-code', productId: 'claude-code', packageName: '@agent-lens/integration-claude', entry: 'packages/integration-claude/src/index.ts' },
-  { integrationId: 'hermes', productId: 'hermes', packageName: '@agent-lens/integration-hermes', entry: 'packages/integration-hermes/src/index.ts' },
-  { integrationId: 'opencode', productId: 'opencode', packageName: '@agent-lens/integration-opencode', entry: 'packages/integration-opencode/src/index.ts' },
-]
+const AGENT_LENS_PACKAGE_PREFIX = '@agent-lens/'
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+async function loadSourceModule(root, relativePath) {
+  const result = await build({
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22.12',
+    write: false,
+    sourcemap: false,
+    legalComments: 'none',
+    treeShaking: true,
+    entryPoints: [resolve(root, relativePath)],
+    external: ['node:*'],
+  })
+  const source = result.outputFiles?.[0]?.text
+  if (!source) throw new Error(`Source module build produced no output: ${relativePath}`)
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
+  return import(moduleUrl)
+}
+
+async function loadOfficialIntegrationCatalog(root) {
+  const module = await loadSourceModule(root, 'packages/integration-catalog/src/catalog.ts')
+  if (!Array.isArray(module.OFFICIAL_INTEGRATION_CATALOG)) {
+    throw new Error('Official Integration Catalog export is unavailable')
+  }
+  return module.OFFICIAL_INTEGRATION_CATALOG
+}
+
+async function loadIntegrationPackageContract(root) {
+  const module = await loadSourceModule(root, 'packages/integration-packages/src/types.ts')
+  const schemaVersion = module.INTEGRATION_PACKAGE_SCHEMA_VERSION
+  const entryExport = module.INTEGRATION_PACKAGE_ENTRY_EXPORT
+  if (!Number.isInteger(schemaVersion) || schemaVersion < 1) {
+    throw new Error(`Integration Package schema version is invalid: ${String(schemaVersion)}`)
+  }
+  if (typeof entryExport !== 'string' || !entryExport) {
+    throw new Error(`Integration Package entry export is invalid: ${String(entryExport)}`)
+  }
+  return { schemaVersion, entryExport }
+}
+
+async function loadPluginApiVersion(root) {
+  const module = await loadSourceModule(root, 'packages/core/src/contracts/plugin.ts')
+  const version = module.AGENT_LENS_PLUGIN_API_VERSION
+  if (typeof version !== 'string' || !version) {
+    throw new Error(`AgentLens Plugin API version is invalid: ${String(version)}`)
+  }
+  return version
+}
+
+function workspacePackageDirectory(packageName) {
+  if (
+    typeof packageName !== 'string'
+    || !packageName.startsWith(AGENT_LENS_PACKAGE_PREFIX)
+    || packageName.slice(AGENT_LENS_PACKAGE_PREFIX.length).includes('/')
+  ) {
+    throw new Error(`Official Integration package name is not a local AgentLens workspace package: ${String(packageName)}`)
+  }
+  return join('packages', packageName.slice(AGENT_LENS_PACKAGE_PREFIX.length))
+}
+
+function bundleSpecFromCatalogEntry(entry) {
+  if (!entry?.package) {
+    throw new Error(`Official Integration package descriptor is missing: ${String(entry?.integrationId ?? 'unknown')}`)
+  }
+  const packageDir = workspacePackageDirectory(entry.package.packageName)
+  return {
+    integrationId: entry.integrationId,
+    productId: entry.productId,
+    packageName: entry.package.packageName,
+    entry: join(packageDir, 'src', 'index.ts'),
+    packageJson: join(packageDir, 'package.json'),
+  }
+}
+
+async function integrationBundleSpecs(root) {
+  const catalog = await loadOfficialIntegrationCatalog(root)
+  return catalog.map(bundleSpecFromCatalogEntry)
+}
+
 async function packageVersion(root, spec) {
-  const packagePath = resolve(root, dirname(spec.entry), '..', 'package.json')
+  const packagePath = resolve(root, spec.packageJson)
   const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
   if (pkg.name !== spec.packageName) {
     throw new Error(`Integration package identity mismatch: ${spec.integrationId}: ${String(pkg.name)} != ${spec.packageName}`)
@@ -29,6 +100,37 @@ async function packageVersion(root, spec) {
     throw new Error(`Integration package version missing: ${spec.packageName}`)
   }
   return pkg.version
+}
+
+function assertIntegrationRuntimeManifest(candidate, spec, expectedApiVersion) {
+  const manifest = candidate?.manifest
+  if (!manifest || typeof manifest !== 'object') {
+    throw new Error(`Integration bundle ${spec.integrationId} has no runtime manifest`)
+  }
+  for (const [field, expected] of [
+    ['integrationId', spec.integrationId],
+    ['productId', spec.productId],
+    ['apiVersion', expectedApiVersion],
+  ]) {
+    if (manifest[field] !== expected) {
+      throw new Error(
+        `Integration runtime manifest mismatch: ${spec.integrationId}: ${field}=${String(manifest[field])} != expected ${expected}`,
+      )
+    }
+  }
+  return manifest
+}
+
+async function validateBuiltIntegrationContract(
+  entryPath,
+  entryHash,
+  spec,
+  { entryExport, apiVersion },
+) {
+  const moduleUrl = `${pathToFileURL(entryPath).href}?agentlens-build=${entryHash}`
+  const module = await import(moduleUrl)
+  const candidate = module[entryExport]
+  return assertIntegrationRuntimeManifest(candidate, spec, apiVersion)
 }
 
 function assertPortableBundle(source, integrationId) {
@@ -51,8 +153,13 @@ export async function buildIntegrationPackages({
   if (clean) await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
 
+  const [specs, packageContract, pluginApiVersion] = await Promise.all([
+    integrationBundleSpecs(root),
+    loadIntegrationPackageContract(root),
+    loadPluginApiVersion(root),
+  ])
   const catalogEntries = []
-  for (const spec of INTEGRATION_BUNDLE_SPECS) {
+  for (const spec of specs) {
     const version = await packageVersion(root, spec)
     const packageDir = join(outDir, spec.integrationId, version)
     const entryPath = join(packageDir, 'index.mjs')
@@ -78,16 +185,25 @@ export async function buildIntegrationPackages({
     const source = entry.toString('utf8')
     assertPortableBundle(source, spec.integrationId)
     const entryHash = sha256(entry)
+    const runtimeManifest = await validateBuiltIntegrationContract(
+      entryPath,
+      entryHash,
+      spec,
+      {
+        entryExport: packageContract.entryExport,
+        apiVersion: pluginApiVersion,
+      },
+    )
 
     const manifest = {
-      schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+      schemaVersion: packageContract.schemaVersion,
       integrationId: spec.integrationId,
       productId: spec.productId,
       packageName: spec.packageName,
       version,
-      apiVersion: '1.0',
+      apiVersion: runtimeManifest.apiVersion,
       entry: 'index.mjs',
-      entryExport: 'default',
+      entryExport: packageContract.entryExport,
       files: [{
         path: 'index.mjs',
         size: entry.byteLength,
@@ -108,7 +224,7 @@ export async function buildIntegrationPackages({
   }
 
   const catalog = {
-    schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+    schemaVersion: packageContract.schemaVersion,
     entries: catalogEntries,
   }
   await writeFile(join(outDir, 'catalog.json'), `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
@@ -131,6 +247,15 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
 export const integrationBundleInternals = {
   sha256,
   assertPortableBundle,
+  assertIntegrationRuntimeManifest,
+  validateBuiltIntegrationContract,
+  loadSourceModule,
+  loadOfficialIntegrationCatalog,
+  loadIntegrationPackageContract,
+  loadPluginApiVersion,
+  workspacePackageDirectory,
+  bundleSpecFromCatalogEntry,
+  integrationBundleSpecs,
   packageVersion,
   isDirectInvocation,
 }
