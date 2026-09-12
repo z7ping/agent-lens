@@ -32,6 +32,7 @@ interface CodexThreadName {
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
+const KNOWN_PROJECT_CWDS_CHECKPOINT_KEY = 'codex:known-project-cwds:v1'
 export const CODEX_PARSER_VERSION = '12'
 
 function sha256(value: string | Buffer): string {
@@ -159,16 +160,12 @@ function cwdPathKey(value: string): string {
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
-export async function listCodexProjectCwds(dataRoot: string | undefined): Promise<string[]> {
-  if (!dataRoot) return []
-
-  const values = new Map<string, string>()
-  for (const filePath of await listJsonlFiles(dataRoot)) {
-    const session = await readSessionMetadata(filePath)
-    const rawCwd = session.cwd?.trim()
-    if (!rawCwd || !isAbsolute(rawCwd)) continue
-
-    const cwd = resolve(rawCwd)
+async function existingProjectCwds(values: readonly string[]): Promise<string[]> {
+  const valid = new Map<string, string>()
+  for (const value of values) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
     let meta
     try {
       meta = await stat(cwd)
@@ -177,12 +174,35 @@ export async function listCodexProjectCwds(dataRoot: string | undefined): Promis
       throw error
     }
     if (!meta.isDirectory()) continue
+    const key = cwdPathKey(cwd)
+    if (!valid.has(key)) valid.set(key, cwd)
+  }
+  return [...valid.values()]
+}
 
+export async function listCodexProjectCwds(ctx: SourceExecutionContext): Promise<string[]> {
+  const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY)
+  if (remembered?.length) return existingProjectCwds(remembered)
+
+  const dataRoot = ctx.installation.dataRoot
+  if (!dataRoot) return []
+
+  const values = new Map<string, string>()
+  for (const filePath of await listJsonlFiles(dataRoot)) {
+    if (ctx.abortSignal.aborted) break
+    const session = await readSessionMetadata(filePath)
+    const rawCwd = session.cwd?.trim()
+    if (!rawCwd || !isAbsolute(rawCwd)) continue
+    const cwd = resolve(rawCwd)
     const key = cwdPathKey(cwd)
     if (!values.has(key)) values.set(key, cwd)
   }
 
-  return [...values.values()]
+  const existing = await existingProjectCwds([...values.values()])
+  if (!ctx.abortSignal.aborted) {
+    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, existing)
+  }
+  return existing
 }
 
 function parseLine(text: string): Record<string, unknown> {
@@ -301,6 +321,7 @@ async function* ingestCodexFileWithThreadNames(
   const previousMetadata = await ctx.checkpoint.get<MetadataCheckpoint>(metadataKey) ?? {}
   const fallbackId = sessionIdFromFilename(filePath)
   const session = await readSessionMetadata(filePath, threadNames.get(fallbackId))
+  onSession?.(session)
   const indexedTitle = threadNames.get(session.nativeSessionId) ?? threadNames.get(fallbackId)
   if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
 
@@ -419,16 +440,38 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
   if (!sessionsDir) return
 
+  const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
+  const knownCwds = new Map<string, string>()
+  for (const value of remembered) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    knownCwds.set(cwdPathKey(cwd), cwd)
+  }
+
+  const rememberSession = (session: CodexSessionMetadata) => {
+    const raw = session.cwd?.trim()
+    if (!raw || !isAbsolute(raw)) return
+    const cwd = resolve(raw)
+    const key = cwdPathKey(cwd)
+    if (!knownCwds.has(key)) knownCwds.set(key, cwd)
+  }
+
   const threadNames = await readThreadNames(ctx.installation.configRoot)
   const files = await listJsonlFiles(sessionsDir, ctx.historyWindow)
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
-    yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames)
+    yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames, rememberSession)
+  }
+
+  if (!ctx.abortSignal.aborted) {
+    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, [...knownCwds.values()])
   }
 }
 
 export const codexHistoryInternals = {
   CHECKPOINT_BATCH_SIZE,
+  KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
   checkpointKey,
   listJsonlFiles,
   readThreadNames,
