@@ -27,6 +27,7 @@ export async function startHistoryFileWatch(
   const debounceMs = options.debounceMs ?? 180
   let stopped = false
   let watcher: SourceFileWatchHandle | null = null
+  let watcherClose: Promise<void> | null = null
   let fallbackTimer: NodeJS.Timeout | null = null
   let reconcileTimer: NodeJS.Timeout | null = null
   const debounce = new Map<string, NodeJS.Timeout>()
@@ -38,6 +39,14 @@ export async function startHistoryFileWatch(
     } catch {
       // Error reporting must never break the watcher lifecycle.
     }
+  }
+
+  const closeWatcher = (): Promise<void> => {
+    if (watcherClose) return watcherClose
+    const active = watcher
+    watcher = null
+    watcherClose = active ? active.dispose() : Promise.resolve()
+    return watcherClose
   }
 
   const processFile = (filePath: string) => {
@@ -91,10 +100,7 @@ export async function startHistoryFileWatch(
       },
       onError: error => {
         reportError(error)
-        if (watcher) {
-          void watcher.dispose()
-          watcher = null
-        }
+        void closeWatcher()
         if (reconcileTimer) clearInterval(reconcileTimer)
         reconcileTimer = null
         startFallbackPolling()
@@ -122,8 +128,7 @@ export async function startHistoryFileWatch(
 
   const abort = () => {
     stopped = true
-    if (watcher) void watcher.dispose()
-    watcher = null
+    void closeWatcher()
     if (fallbackTimer) clearInterval(fallbackTimer)
     if (reconcileTimer) clearInterval(reconcileTimer)
     fallbackTimer = null
@@ -137,10 +142,7 @@ export async function startHistoryFileWatch(
     async dispose(): Promise<void> {
       if (!stopped) abort()
       options.signal.removeEventListener('abort', abort)
-      if (watcher) {
-        await watcher.dispose()
-        watcher = null
-      }
+      await closeWatcher()
       await processing
     },
   }
