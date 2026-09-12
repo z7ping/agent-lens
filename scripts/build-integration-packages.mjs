@@ -7,13 +7,11 @@ import { build } from 'esbuild'
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const AGENT_LENS_PACKAGE_PREFIX = '@agent-lens/'
 
-export const INTEGRATION_PACKAGE_SCHEMA_VERSION = 1
-
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
-async function loadOfficialIntegrationCatalog(root) {
+async function loadSourceModule(root, relativePath) {
   const result = await build({
     bundle: true,
     platform: 'node',
@@ -23,17 +21,30 @@ async function loadOfficialIntegrationCatalog(root) {
     sourcemap: false,
     legalComments: 'none',
     treeShaking: true,
-    entryPoints: [resolve(root, 'packages/integration-catalog/src/catalog.ts')],
+    entryPoints: [resolve(root, relativePath)],
     external: ['node:*'],
   })
   const source = result.outputFiles?.[0]?.text
-  if (!source) throw new Error('Official Integration Catalog build produced no output')
+  if (!source) throw new Error(`Source module build produced no output: ${relativePath}`)
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`
-  const module = await import(moduleUrl)
+  return import(moduleUrl)
+}
+
+async function loadOfficialIntegrationCatalog(root) {
+  const module = await loadSourceModule(root, 'packages/integration-catalog/src/catalog.ts')
   if (!Array.isArray(module.OFFICIAL_INTEGRATION_CATALOG)) {
     throw new Error('Official Integration Catalog export is unavailable')
   }
   return module.OFFICIAL_INTEGRATION_CATALOG
+}
+
+async function loadIntegrationPackageSchemaVersion(root) {
+  const module = await loadSourceModule(root, 'packages/integration-packages/src/types.ts')
+  const version = module.INTEGRATION_PACKAGE_SCHEMA_VERSION
+  if (!Number.isInteger(version) || version < 1) {
+    throw new Error(`Integration Package schema version is invalid: ${String(version)}`)
+  }
+  return version
 }
 
 function workspacePackageDirectory(packageName) {
@@ -126,7 +137,10 @@ export async function buildIntegrationPackages({
   if (clean) await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
 
-  const specs = await integrationBundleSpecs(root)
+  const [specs, schemaVersion] = await Promise.all([
+    integrationBundleSpecs(root),
+    loadIntegrationPackageSchemaVersion(root),
+  ])
   const catalogEntries = []
   for (const spec of specs) {
     const version = await packageVersion(root, spec)
@@ -157,7 +171,7 @@ export async function buildIntegrationPackages({
     await validateBuiltIntegrationContract(entryPath, entryHash, spec)
 
     const manifest = {
-      schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+      schemaVersion,
       integrationId: spec.integrationId,
       productId: spec.productId,
       packageName: spec.packageName,
@@ -185,7 +199,7 @@ export async function buildIntegrationPackages({
   }
 
   const catalog = {
-    schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+    schemaVersion,
     entries: catalogEntries,
   }
   await writeFile(join(outDir, 'catalog.json'), `${JSON.stringify(catalog, null, 2)}\n`, 'utf8')
@@ -210,7 +224,9 @@ export const integrationBundleInternals = {
   assertPortableBundle,
   assertIntegrationRuntimeManifest,
   validateBuiltIntegrationContract,
+  loadSourceModule,
   loadOfficialIntegrationCatalog,
+  loadIntegrationPackageSchemaVersion,
   workspacePackageDirectory,
   bundleSpecFromCatalogEntry,
   integrationBundleSpecs,
