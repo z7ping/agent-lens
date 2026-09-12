@@ -4,88 +4,76 @@
  * 本文件只负责资产备份页面与首次扫描反馈；正常可见文字不得小于 12px。
  */
 
-/* 页面与标题 */
+/* 页面组合遵循 Workspace / Insights / Agents 的统一壳层。 */
 .backup-page {
-  max-width: 1480px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.backup-content {
+  max-width: 1320px;
   margin: 0 auto;
   padding: 16px 28px 64px;
-  background: transparent;
 }
 
 .backup-file-input { display: none; }
 
-.future-heading {
+.backup-breadcrumb-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 36px;
-  margin-bottom: 10px;
+  gap: 6px;
 }
-
-.backup-heading-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.backup-refresh-button {
-  width: 32px;
-  min-width: 32px;
-  padding-inline: 0;
-  justify-content: center;
-}
-
-.background-data-notice,
-.background-data-notice button { font-size: 12px; }
 
 .backup-error {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: -6px 0 16px;
-  padding: 10px 13px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
   border: 1px solid color-mix(in srgb, var(--al-danger) 24%, var(--al-line));
-  border-radius: 10px;
+  border-radius: 9px;
   background: var(--al-danger-soft);
   color: var(--al-danger);
   font-size: 12px;
 }
 
 .backup-error span {
+  min-width: 0;
   flex: 1;
   color: color-mix(in srgb, var(--al-danger) 72%, var(--al-ink));
 }
 
-/* 当前资产主布局 */
+/* 二级视图沿用工作区低噪音下划线导航，不做胶囊页签。 */
 .backup-view-tabs {
   display: flex;
-  align-items: center;
+  min-height: 40px;
+  align-items: stretch;
   gap: 24px;
-  margin: 4px 0 0;
+  margin: 0 0 12px;
   border-bottom: 1px solid var(--al-line);
 }
 
 .backup-view-tabs button {
   position: relative;
-  min-height: 38px;
+  min-width: 0;
   padding: 0 2px;
   border: 0;
   background: transparent;
   color: var(--al-muted);
   font: inherit;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 560;
   cursor: pointer;
 }
 
 .backup-view-tabs button:hover {
-  color: var(--al-ink-2);
+  color: var(--al-ink);
 }
 
 .backup-view-tabs button.is-active {
-  color: var(--al-accent);
+  color: var(--al-ink);
+  font-weight: 680;
 }
 
 .backup-view-tabs button.is-active::after {
@@ -99,100 +87,87 @@
   background: var(--al-accent);
 }
 
+/* 当前范围使用与洞察页统计范围相同的扁平分隔条。 */
 .backup-overview-strip {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 11px 0 12px;
+  display: grid;
+  grid-template-columns: .72fr 1.18fr 1fr;
+  margin: 0 0 14px;
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
 }
 
-.backup-overview-primary {
-  display: flex;
+.backup-overview-strip > div {
   min-width: 0;
-  align-items: baseline;
-  gap: 10px;
+  padding: 9px 14px;
+  border-right: 1px solid var(--al-line);
 }
 
-.backup-overview-primary b {
-  flex: 0 0 auto;
-  color: var(--al-ink);
-  font-size: 13px;
-}
+.backup-overview-strip > div:first-child { padding-left: 2px; }
+.backup-overview-strip > div:last-child { border-right: 0; }
 
-.backup-overview-primary span {
-  overflow: hidden;
-  color: var(--al-muted);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.backup-overview-secondary {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 12px;
-  color: var(--al-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.backup-assets-section {
-  margin-top: 18px;
-}
-
-.backup-section-head {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 0 9px;
-}
-
-.backup-section-head > div { min-width: 0; }
-
-.backup-section-head h2,
-.backup-section-head h3 {
-  margin: 0;
-  color: var(--al-ink);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -.01em;
-}
-
-.backup-section-head > div > span {
+.backup-overview-strip span,
+.backup-overview-strip b {
   display: block;
-  margin-top: 3px;
-  overflow: hidden;
+}
+
+.backup-overview-strip span {
   color: var(--al-muted);
   font-size: 12px;
-  line-height: 1.45;
+}
+
+.backup-overview-strip b {
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.backup-overview-strip b.is-warning { color: var(--al-warning); }
+
+.backup-assets-section { min-width: 0; }
 
 .backup-assets-empty,
 .backup-history-empty {
-  padding: 18px 2px;
-  border-top: 1px solid var(--al-line);
+  padding: 28px 4px;
   color: var(--al-muted);
   font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
 }
 
-/* 全部智能体：智能体是一级信息，资产分为核心资产 / 历史与状态 / 主要位置。 */
+/* 全部智能体：外壳与智能体概览卡保持同一 Surface / Border / Radius 语义。 */
 .backup-agent-asset-summary {
-  padding: 16px 2px 17px;
-  border-top: 1px solid var(--al-line);
+  --backup-agent-accent: var(--al-muted-2);
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  margin-top: 12px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface);
+  box-shadow: none;
 }
 
-.backup-agent-asset-summary:last-child {
-  border-bottom: 1px solid var(--al-line);
+.backup-agent-asset-summary:first-child { margin-top: 0; }
+
+.backup-agent-asset-summary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: var(--backup-agent-accent);
 }
+
+.backup-agent-asset-summary[data-source='codex'] { --backup-agent-accent: var(--src-codex); }
+.backup-agent-asset-summary[data-source='claude-code'] { --backup-agent-accent: var(--src-claude); }
+.backup-agent-asset-summary[data-source='pi'] { --backup-agent-accent: var(--src-pi); }
+.backup-agent-asset-summary[data-source='hermes'] { --backup-agent-accent: var(--src-hermes); }
+.backup-agent-asset-summary[data-source='opencode'] { --backup-agent-accent: var(--src-opencode); }
 
 .backup-agent-asset-head {
   display: flex;
@@ -200,25 +175,24 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  padding: 15px 16px 12px;
 }
 
 .backup-agent-title {
   display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 9px;
+  align-items: flex-start;
+  gap: 10px;
 }
 
-.backup-agent-title > span:last-child {
-  min-width: 0;
-}
+.backup-agent-title > span:last-child { min-width: 0; }
 
 .backup-agent-title b {
   display: block;
   overflow: hidden;
   color: var(--al-ink);
   font-size: 14px;
-  font-weight: 720;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -226,28 +200,21 @@
 .backup-agent-title small {
   display: block;
   margin-top: 3px;
-  color: var(--al-ink-2);
+  color: var(--al-muted);
   font-size: 12px;
-  font-weight: 620;
-  line-height: 1.35;
+  line-height: 1.45;
 }
 
 .backup-agent-asset-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(180px, .72fr) minmax(220px, .78fr);
-  gap: 0;
-  margin-top: 13px;
-  padding-left: 25px;
+  border-top: 1px solid var(--al-line);
 }
 
 .backup-agent-asset-group,
 .backup-agent-location {
   min-width: 0;
-  padding: 0 18px;
-}
-
-.backup-agent-asset-group:first-child {
-  padding-left: 0;
+  padding: 12px 16px 14px;
 }
 
 .backup-agent-asset-group + .backup-agent-asset-group,
@@ -263,16 +230,14 @@
   font-weight: 650;
 }
 
-.backup-agent-asset-group.is-secondary h3,
-.backup-agent-location h3 {
-  color: var(--al-muted-2);
+.backup-agent-asset-group.is-primary h3 {
+  color: var(--al-ink-2);
 }
 
 .backup-agent-kind-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 22px;
-  row-gap: 0;
+  column-gap: 18px;
 }
 
 .backup-agent-asset-group.is-secondary .backup-agent-kind-list {
@@ -282,10 +247,10 @@
 .backup-agent-kind-row {
   display: flex;
   min-width: 0;
+  min-height: 28px;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  min-height: 28px;
   padding: 4px 0;
   color: var(--al-ink-2);
   font-size: 12px;
@@ -302,7 +267,7 @@
   flex: 0 0 auto;
   color: var(--al-ink);
   font-size: 12px;
-  font-weight: 680;
+  font-weight: 660;
   font-variant-numeric: tabular-nums;
 }
 
@@ -324,10 +289,6 @@
   font-size: 12px;
 }
 
-.backup-agent-location-path {
-  min-width: 0;
-}
-
 .backup-agent-location code {
   display: block;
   min-width: 0;
@@ -346,43 +307,83 @@
   font-size: 12px;
 }
 
-/* 单智能体：把原详情抽屉升级为主内容。 */
+/* 单智能体详情沿用 Agent Card 的 Section 分隔语义。 */
 .backup-agent-detail {
-  border-top: 1px solid var(--al-line);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface);
 }
 
 .backup-agent-detail-section {
-  padding: 16px 2px 4px;
-  border-bottom: 1px solid var(--al-line);
+  padding: 13px 16px 15px;
+}
+
+.backup-agent-detail-section + .backup-agent-detail-section {
+  border-top: 1px solid var(--al-line);
+}
+
+.backup-section-head {
+  display: flex;
+  min-height: 28px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 0 8px;
+}
+
+.backup-section-head > div { min-width: 0; }
+
+.backup-section-head h2,
+.backup-section-head h3 {
+  margin: 0;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.backup-section-head > div > span {
+  display: block;
+  margin-top: 4px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .backup-asset-kind-list {
   border-top: 1px solid var(--al-line);
 }
 
-.backup-asset-kind-header {
+.backup-asset-kind-header,
+.backup-asset-kind-row {
   display: grid;
-  grid-template-columns: minmax(120px, .5fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(140px, .5fr) minmax(180px, 1fr) auto;
   gap: 16px;
-  padding: 7px 2px;
-  border-bottom: 1px solid var(--al-line);
-  color: var(--al-muted-2);
-  font-size: 12px;
+  align-items: center;
 }
 
-.backup-asset-kind-header span:last-child {
+.backup-asset-kind-header {
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--al-line);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backup-asset-kind-header span:last-child,
+.backup-asset-kind-row > span:last-child {
   text-align: right;
 }
 
 .backup-asset-kind-row {
-  display: grid;
-  grid-template-columns: minmax(120px, .5fr) minmax(180px, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 10px 2px;
+  min-height: 38px;
+  padding: 8px 2px;
   border-bottom: 1px solid var(--al-line);
   font-size: 12px;
 }
+
+.backup-asset-kind-row:last-child { border-bottom: 0; }
 
 .backup-asset-kind-row b {
   color: var(--al-ink-2);
@@ -393,8 +394,7 @@
   color: var(--al-muted);
 }
 
-.backup-asset-kind-row span:last-child {
-  text-align: right;
+.backup-asset-kind-row > span:last-child {
   font-variant-numeric: tabular-nums;
 }
 
@@ -407,7 +407,7 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding: 9px 0 10px;
+  padding: 3px 0 10px;
   color: var(--al-muted);
   font-size: 12px;
 }
@@ -415,11 +415,14 @@
 .backup-age-facts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--al-line);
+  gap: 8px;
 }
 
 .backup-age-facts span {
-  padding: 10px 10px 10px 0;
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--al-soft-2);
   color: var(--al-muted);
   font-size: 12px;
 }
@@ -428,18 +431,21 @@
   display: block;
   margin-bottom: 3px;
   color: var(--al-ink-2);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
 }
 
-/* 备份记录是独立次级视图，不与当前资产混排。 */
+/* 备份记录使用与洞察列表一致的轻卡片容器。 */
 .backup-history-section {
-  margin-top: 18px;
+  margin-top: 2px;
 }
 
 .backup-snapshot-list {
-  border-top: 1px solid var(--al-line);
-  border-bottom: 1px solid var(--al-line);
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface);
 }
 
 .backup-snapshot-row {
@@ -447,7 +453,7 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
-  padding: 10px 2px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--al-line);
 }
 
