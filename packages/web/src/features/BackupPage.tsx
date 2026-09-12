@@ -117,10 +117,8 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
 
 export function BackupPage({
   selectedAssetSourceId,
-  onSelectedAssetSourceIdChange,
 }: {
   selectedAssetSourceId: string
-  onSelectedAssetSourceIdChange(sourceId: string): void
 }) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -391,7 +389,7 @@ export function BackupPage({
         <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
 
         <div className="future-heading">
-          <CompactPageHeading title={t('page.title')} description={t('page.description')}><span className="prototype-flag live">{t('page.liveData')}</span></CompactPageHeading>
+          <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
           <div className="backup-heading-actions">
             <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
             <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
@@ -595,7 +593,6 @@ export function BackupPage({
                 <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>
                 <span className="backup-source-copy"><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{source.totalBytes === undefined ? t('create.files', { count: source.fileCount.toLocaleString(locale) }) : t('create.sourceSummary', { count: source.fileCount.toLocaleString(locale), size: formatBytes(source.totalBytes) })}</small></span>
               </label>
-              <button className="link-btn" onClick={() => { setCreateOpen(false); onSelectedAssetSourceIdChange(source.sourceId) }}>{t('assetView.viewAssets')}</button>
             </div>)}
           </div>
         </div>
