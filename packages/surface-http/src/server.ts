@@ -397,7 +397,7 @@ export async function startHttpSurface(
           installationId: record.installationId,
           ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
           nativeType: record.nativeType,
-          ...(record.nativeId ? { nativeId } : {}),
+          ...(record.nativeId ? { nativeId: record.nativeId } : {}),
           ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
           ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
           capturedAt: record.capturedAt,

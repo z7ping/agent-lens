@@ -88,7 +88,7 @@ export async function initializeI18n(): Promise<i18n> {
       react: { useSuspense: false },
     })
 
-  document.documentElement.lang = available
+  if (typeof document !== 'undefined') document.documentElement.lang = available
   return agentLensI18n
 }
 
@@ -97,5 +97,5 @@ export async function setLocale(locale: string): Promise<void> {
   if (!pack) throw new Error(`Locale Pack is not installed: ${locale}`)
   await agentLensI18n.changeLanguage(pack.locale)
   writeLocalePreference(pack.locale)
-  document.documentElement.lang = pack.locale
+  if (typeof document !== 'undefined') document.documentElement.lang = pack.locale
 }

@@ -106,7 +106,7 @@ requireText(toolRow, /className="task-tool-payload"/, 'Tool Payload 必须位于
 requireText(toolRow, /startedAtMs/, 'Running Tool 必须支持持续耗时')
 requireText(toolModel, /durationMs\?: number/, '共享 Tool Model 必须支持真实耗时')
 requireText(toolModel, /startedAtMs\?: number/, '共享 Tool Model 必须支持 Running 起始时间')
-requireText(toolIcon, /kind === 'test'/, '测试类 Tool 必须有稳定语义图标')
+requireText(toolIcon, /return 'test'/, '测试类 Tool 必须有稳定语义图标')
 requireText(toolIcon, /return 'tool'/, '未知 Tool 必须有中性降级')
 
 requireText(piHistory, /durationMs\?: number/, 'Pi History Tool 必须保留可推导耗时')

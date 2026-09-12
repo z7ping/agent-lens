@@ -60,7 +60,7 @@ test('Pi asset scan does not let SourceAssetRunner infer discoverable=true from 
     const inventory = await storage.assetInventory.listByInstallation(result.installationId)
     assert.equal(inventory.length, 1)
     assert.equal(inventory[0]!.binding.scope, 'user')
-    assert.equal(inventory[0]!.binding.scopeRoot, undefined)
+    assert.equal(inventory[0]!.binding.scopeRoot, agentDir)
     const states = inventory[0]!.states
     assert.equal(states.find(state => state.state === 'installed')?.value, true)
     assert.equal(states.find(state => state.state === 'discoverable')?.value, 'unknown')
