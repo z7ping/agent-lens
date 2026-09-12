@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -81,6 +81,7 @@ function bundleSpecFromCatalogEntry(entry) {
     productId: entry.productId,
     packageName: entry.package.packageName,
     entry: join(packageDir, 'src', 'index.ts'),
+    manifestEntry: join(packageDir, 'src', 'manifest.ts'),
     packageJson: join(packageDir, 'package.json'),
   }
 }
@@ -121,16 +122,13 @@ function assertIntegrationRuntimeManifest(candidate, spec, expectedApiVersion) {
   return manifest
 }
 
-async function validateBuiltIntegrationContract(
-  entryPath,
-  entryHash,
-  spec,
-  { entryExport, apiVersion },
-) {
-  const moduleUrl = `${pathToFileURL(entryPath).href}?agentlens-build=${entryHash}`
-  const module = await import(moduleUrl)
-  const candidate = module[entryExport]
-  return assertIntegrationRuntimeManifest(candidate, spec, apiVersion)
+async function loadIntegrationRuntimeManifest(root, spec, expectedApiVersion) {
+  const module = await loadSourceModule(root, spec.manifestEntry)
+  return assertIntegrationRuntimeManifest(
+    module.integrationManifest,
+    spec,
+    expectedApiVersion,
+  )
 }
 
 function assertPortableBundle(source, integrationId) {
@@ -161,6 +159,11 @@ export async function buildIntegrationPackages({
   const catalogEntries = []
   for (const spec of specs) {
     const version = await packageVersion(root, spec)
+    const runtimeManifest = await loadIntegrationRuntimeManifest(
+      root,
+      spec,
+      pluginApiVersion,
+    )
     const packageDir = join(outDir, spec.integrationId, version)
     const entryPath = join(packageDir, 'index.mjs')
     await mkdir(packageDir, { recursive: true })
@@ -185,15 +188,6 @@ export async function buildIntegrationPackages({
     const source = entry.toString('utf8')
     assertPortableBundle(source, spec.integrationId)
     const entryHash = sha256(entry)
-    const runtimeManifest = await validateBuiltIntegrationContract(
-      entryPath,
-      entryHash,
-      spec,
-      {
-        entryExport: packageContract.entryExport,
-        apiVersion: pluginApiVersion,
-      },
-    )
 
     const manifest = {
       schemaVersion: packageContract.schemaVersion,
@@ -248,7 +242,7 @@ export const integrationBundleInternals = {
   sha256,
   assertPortableBundle,
   assertIntegrationRuntimeManifest,
-  validateBuiltIntegrationContract,
+  loadIntegrationRuntimeManifest,
   loadSourceModule,
   loadOfficialIntegrationCatalog,
   loadIntegrationPackageContract,
