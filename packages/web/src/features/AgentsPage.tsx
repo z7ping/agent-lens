@@ -9,7 +9,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationPackageOperationResponseDto,
   IntegrationToolDiscoveryItemDto,
-  type ManagedAssetRoot,
+  ManagedAssetRoot,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
@@ -448,6 +448,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       open
       model={model}
       productId={agent.productId}
+      agentName={agentLabel(agent.sourceId, agent.displayName)}
       installationId={installation.id}
       root={managedRoot}
       rootLabel={managedRoot === 'config' ? t('sections.configDirectory') : t('sections.dataDirectory')}
