@@ -92,7 +92,7 @@ for (const marker of [
   'function sessionBoundaryPosition(',
   'const resolvedBoundaryNavigation: TaskBoundaryNavigation | undefined',
   'className="task-boundary-nav"',
-  'aria-label="会话边界导航"',
+  "aria-label={t('surface.boundaryNavigation')}",
   'onClick={() => void resolvedBoundaryNavigation.onStart()}',
   'onClick={() => void resolvedBoundaryNavigation.onEnd()}',
 ]) {
