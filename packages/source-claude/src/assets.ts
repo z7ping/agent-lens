@@ -4,8 +4,10 @@ import {
   basename,
   dirname,
   extname,
+  isAbsolute,
   join,
   relative,
+  resolve,
 } from 'node:path'
 import type {
   AssetScope,
@@ -19,6 +21,10 @@ import {
   discoverClaudeProjectInstructionAssets,
   listClaudeKnownProjectCwds,
 } from './project-context.js'
+import {
+  CLAUDE_KNOWN_PROJECT_DATA_ROOTS_CHECKPOINT_KEY,
+  type ClaudeKnownProjectDataRoot,
+} from './workspace-context.js'
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -427,6 +433,60 @@ async function* discoverUserAssets(
   })) yield asset
 }
 
+async function* discoverAutoMemoryAssets(
+  ctx: SourceExecutionContext,
+  capturedAt: string,
+): AsyncIterable<DiscoveredAsset> {
+  const known = await ctx.checkpoint.get<ClaudeKnownProjectDataRoot[]>(
+    CLAUDE_KNOWN_PROJECT_DATA_ROOTS_CHECKPOINT_KEY,
+  ) ?? []
+  const seen = new Set<string>()
+
+  for (const item of known) {
+    if (ctx.abortSignal.aborted) return
+    const cwd = item.cwd?.trim()
+    const projectDataRoot = item.projectDataRoot?.trim()
+    if (!cwd || !projectDataRoot || !isAbsolute(cwd) || !isAbsolute(projectDataRoot)) continue
+
+    const projectRoot = await claudeProjectContextInternals.findGitRoot(cwd) ?? resolve(cwd)
+    const memoryRoot = join(projectDataRoot, 'memory')
+    for await (const path of walkMarkdownFiles(memoryRoot)) {
+      const meta = await safeStat(path)
+      if (!meta?.isFile()) continue
+      const key = process.platform === 'win32'
+        ? resolve(path).replaceAll('\\', '/').toLowerCase()
+        : resolve(path).replaceAll('\\', '/')
+      if (seen.has(key)) continue
+      seen.add(key)
+
+      const relativeName = relative(memoryRoot, path).replaceAll('\\', '/')
+      const observedAt = meta.mtime.toISOString()
+      yield {
+        definition: {
+          type: 'memory',
+          canonicalName: `claude-auto-memory:${relativeName}`,
+          displayName: basename(path),
+          upstreamIdentity: `claude-auto-memory:${relativeName}`,
+        },
+        binding: {
+          path,
+          source: basename(path) === 'MEMORY.md'
+            ? 'claude:auto-memory:index'
+            : 'claude:auto-memory:topic',
+          scope: 'project',
+          scopeRoot: projectRoot,
+        },
+        states: assetStates(path, observedAt, capturedAt, [
+          { state: 'installed', value: true },
+          { state: 'configured', value: true },
+          // Effective autoMemoryEnabled / autoMemoryDirectory can come from merged settings.
+          { state: 'discoverable', value: 'unknown' },
+        ]),
+      }
+    }
+  }
+}
+
 async function* discoverProjectAssets(
   ctx: SourceExecutionContext,
   capturedAt: string,
@@ -515,9 +575,15 @@ export async function* discoverClaudeAssets(
     if (ctx.abortSignal.aborted) return
     yield asset
   }
+
+  for await (const asset of discoverAutoMemoryAssets(ctx, capturedAt)) {
+    if (ctx.abortSignal.aborted) return
+    yield asset
+  }
 }
 
 export const claudeAssetInternals = {
+  discoverAutoMemoryAssets,
   enabledPluginEntries,
   readJson,
   settingsAssets,
