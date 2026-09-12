@@ -39,9 +39,39 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
       join('packages', 'integration-opencode', 'src', 'index.ts'),
     ],
   )
+  assert.deepEqual(
+    specs.map(item => item.manifestEntry),
+    [
+      join('packages', 'integration-pi', 'src', 'manifest.ts'),
+      join('packages', 'integration-codex', 'src', 'manifest.ts'),
+      join('packages', 'integration-claude', 'src', 'manifest.ts'),
+      join('packages', 'integration-hermes', 'src', 'manifest.ts'),
+      join('packages', 'integration-opencode', 'src', 'manifest.ts'),
+    ],
+  )
   assert.equal(specs.some(item => 'apiVersion' in item), false)
   assert.equal(specs.some(item => 'entryExport' in item), false)
   assert.equal(specs.some(item => 'bundledVersion' in item), false)
+})
+
+test('build contract loads pure Integration manifest modules without loading runtime components', async () => {
+  const specs = await integrationBundleInternals.integrationBundleSpecs(root)
+  const pi = specs.find(item => item.integrationId === 'pi')
+  assert.ok(pi)
+  assert.deepEqual(
+    await integrationBundleInternals.loadIntegrationRuntimeManifest(root, pi, '1.0'),
+    {
+      integrationId: 'pi',
+      productId: 'pi',
+      displayName: 'Pi',
+      apiVersion: '1.0',
+      capabilities: ['source', 'runtime', 'live'],
+      componentPluginIds: [
+        '@agent-lens/source-pi',
+        '@agent-lens/runtime-cordis/pi-live',
+      ],
+    },
+  )
 })
 
 test('runtime Integration manifest must match Official Catalog identity and Plugin API', () => {
@@ -109,6 +139,7 @@ test('bundle spec keeps only package identity and workspace location from Catalo
       productId: 'example-product',
       packageName: '@agent-lens/integration-example',
       entry: join('packages', 'integration-example', 'src', 'index.ts'),
+      manifestEntry: join('packages', 'integration-example', 'src', 'manifest.ts'),
       packageJson: join('packages', 'integration-example', 'package.json'),
     },
   )

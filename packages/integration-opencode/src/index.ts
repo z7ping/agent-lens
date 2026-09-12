@@ -1,18 +1,11 @@
-import type { AgentIntegrationManifest } from '@agent-lens/core'
 import { defineAgentLensIntegration } from '@agent-lens/runtime-cordis'
 import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
+import { integrationManifest } from './manifest'
 
-export const openCodeIntegrationManifest: AgentIntegrationManifest = {
-  integrationId: 'opencode',
-  productId: 'opencode',
-  displayName: 'OpenCode',
-  apiVersion: '1.0',
-  capabilities: ['source'],
-  componentPluginIds: ['@agent-lens/source-opencode'],
-}
+export { integrationManifest as openCodeIntegrationManifest } from './manifest'
 
 export const openCodeIntegration = defineAgentLensIntegration(
-  openCodeIntegrationManifest,
+  integrationManifest,
   [
     {
       pluginId: '@agent-lens/source-opencode',
