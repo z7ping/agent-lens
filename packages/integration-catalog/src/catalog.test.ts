@@ -95,6 +95,10 @@ test('OpenCode config roots use XDG config semantics independently from data roo
     join('/srv/xdg-config', 'opencode'),
   )
   assert.equal(
+    resolveOpenCodeConfigRoots({ XDG_CONFIG_HOME: 'relative-config' }, home, 'linux')[0],
+    join(home, '.config', 'opencode'),
+  )
+  assert.equal(
     resolveOpenCodeRoots({ XDG_DATA_HOME: '/srv/xdg-data' }, home, 'linux')[0],
     join('/srv/xdg-data', 'opencode'),
   )
