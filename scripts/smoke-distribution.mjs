@@ -10,6 +10,7 @@ const daemon = resolve(root, 'dist', 'daemon.mjs')
 const cliEntry = resolve(root, 'dist', 'cli.mjs')
 const webRoot = resolve(root, 'dist', 'web')
 const temp = await mkdtemp(join(tmpdir(), 'agent-lens-smoke-'))
+const smokeHome = join(temp, 'home')
 
 async function freePort() {
   const server = createServer()
@@ -48,7 +49,11 @@ const child = spawn(process.execPath, [daemon], {
   cwd: root,
   env: {
     ...process.env,
+    HOME: smokeHome,
+    USERPROFILE: smokeHome,
     AGENT_LENS_DB_PATH: join(temp, 'agent-lens.db'),
+    AGENT_LENS_VAULT_PATH: join(temp, 'vault'),
+    AGENT_LENS_ENABLED_SOURCES: 'none',
     AGENT_LENS_PORT: String(port),
     AGENT_LENS_WEB_ROOT: webRoot,
   },
@@ -62,20 +67,30 @@ child.stderr.on('data', chunk => { stderr += chunk.toString() })
 
 async function health() {
   let lastError
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  let lastResponse = ''
+  const deadline = Date.now() + 30_000
+  while (Date.now() < deadline) {
     if (child.exitCode !== null) {
-      throw new Error(`Daemon exited before health check (code ${child.exitCode})\n${stdout}\n${stderr}`)
+      throw new Error(`Daemon exited before health check (code ${child.exitCode})\nstdout:\n${stdout}\nstderr:\n${stderr}`)
     }
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/v1/health`)
-      if (response.ok) return response.json()
-      lastError = new Error(`Health returned ${response.status}`)
+      const response = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+        signal: AbortSignal.timeout(1000),
+      })
+      const text = await response.text()
+      if (response.ok) return JSON.parse(text)
+      lastResponse = text
+      lastError = new Error(`Health returned ${response.status}: ${text}`)
     } catch (error) {
       lastError = error
     }
-    await new Promise(resolvePromise => setTimeout(resolvePromise, 100))
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 150))
   }
-  throw lastError ?? new Error('Daemon health check did not become ready')
+  throw new Error(
+    `Daemon health check did not become ready within 30 seconds\n`
+      + `last error: ${lastError instanceof Error ? lastError.message : String(lastError)}\n`
+      + `last response: ${lastResponse}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  )
 }
 
 try {
