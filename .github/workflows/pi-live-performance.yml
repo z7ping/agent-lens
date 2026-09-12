@@ -1,4 +1,4 @@
-name: Alpha.3 Interaction Performance
+name: AgentLens Interaction Performance
 
 on:
   workflow_dispatch:
@@ -13,6 +13,7 @@ on:
           - s
           - m
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths:
       - 'packages/web/src/client/pi-live.ts'
       - 'packages/web/src/components/VirtualRoundMount.tsx'
@@ -59,7 +60,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:pi-live-scheduler -- ${{ steps.profile.outputs.args }} | tee performance-artifacts/pi-live-scheduler-${{ steps.profile.outputs.profile }}.txt
       - name: Upload benchmark report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-pi-live-scheduler-${{ steps.profile.outputs.profile }}
           path: performance-artifacts/
@@ -84,7 +85,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:pi-live-history -- --facts=4000 --viewport-height=800 --minimum-fact-height=38 --budget-mounted-facts=160 | tee performance-artifacts/pi-live-history-virtualization-4000.txt
       - name: Upload benchmark report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-pi-live-history-virtualization-4000
           path: performance-artifacts/
@@ -109,7 +110,7 @@ jobs:
           mkdir -p performance-artifacts
           npm run perf:review-virtualization -- --rounds=1000 --viewport-height=800 --budget-mounted=40 | tee performance-artifacts/review-virtualization-1000.txt
       - name: Upload benchmark report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-review-virtualization-1000
           path: performance-artifacts/

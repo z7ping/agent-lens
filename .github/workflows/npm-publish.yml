@@ -126,7 +126,7 @@ jobs:
           node scripts/smoke-npm-package.mjs "./${tarballs[0]}"
 
       - name: Upload verification artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-${{ github.ref_name }}
           path: release/

@@ -53,7 +53,7 @@ jobs:
           npm run perf:daemon-idle-cpu -- --samples=8 --window-ms=1000 --settle-ms=3000 --budget-p95-percent=5 | tee performance-artifacts/daemon-idle-cpu.txt
 
       - name: Upload runtime performance report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-runtime-observability-${{ github.run_id }}
           path: performance-artifacts/

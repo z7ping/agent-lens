@@ -95,7 +95,7 @@ jobs:
           $lines | Set-Content release/windows/SHA256SUMS-windows.txt
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agent-lens-windows-${{ github.run_id }}
           path: |
