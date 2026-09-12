@@ -20,7 +20,7 @@
 }
 
 @media (min-width: 1400px) {
-  .backup-workbench { grid-template-columns: minmax(0, 1fr) 390px; }
+  .backup-workbench { grid-template-columns: minmax(0, 1fr) 360px; }
   .future-kpi { padding: 15px 17px; }
   .future-kpi strong { font-size: 24px; }
 }
@@ -46,9 +46,8 @@
     gap: 8px 14px;
   }
 
-  .backup-snapshot-main { grid-column: 1; grid-row: 1; }
+  .backup-snapshot-main { grid-column: 1; grid-row: 1 / 3; }
   .backup-snapshot-state { grid-column: 2; grid-row: 1; }
-  .backup-snapshot-sources { grid-column: 1; grid-row: 2; padding-left: 37px; }
   .backup-snapshot-row > .table-actions { grid-column: 2; grid-row: 2; }
 
   .restore-card {
@@ -93,13 +92,11 @@
 
   .backup-snapshot-main,
   .backup-snapshot-state,
-  .backup-snapshot-sources,
   .backup-snapshot-row > .table-actions {
     grid-column: 1;
     grid-row: auto;
   }
 
-  .backup-snapshot-sources { padding-left: 37px; white-space: normal; }
   .backup-snapshot-state {
     display: flex;
     align-items: center;
