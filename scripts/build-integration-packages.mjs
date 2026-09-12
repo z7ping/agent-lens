@@ -1,11 +1,14 @@
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const AGENT_LENS_PACKAGE_PREFIX = '@agent-lens/'
+const INTEGRATION_ESM_BANNER = `import { createRequire as __agentLensCreateRequire } from 'node:module'
+const require = __agentLensCreateRequire(import.meta.url)`
+const RUNTIME_RESOURCE_PATTERN = /new\s+URL\(\s*(['"])(\.\/[^'"]+)\1\s*,\s*import\.meta\.url\s*\)/g
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
@@ -130,6 +133,68 @@ async function loadIntegrationRuntimeManifest(root, spec, expectedApiVersion) {
   )
 }
 
+function runtimeResourceReferences(source) {
+  const references = []
+  for (const match of source.matchAll(RUNTIME_RESOURCE_PATTERN)) {
+    const reference = match[2]
+    if (reference) references.push(reference)
+  }
+  return [...new Set(references)]
+}
+
+function runtimeResourceTarget(reference) {
+  if (!reference.startsWith('./')) {
+    throw new Error(`Integration runtime resource must be package-relative: ${reference}`)
+  }
+  const target = reference.slice(2).replaceAll('\\', '/')
+  const parts = target.split('/')
+  if (
+    !target
+    || target.includes('?')
+    || target.includes('#')
+    || parts.some(part => !part || part === '.' || part === '..')
+    || target === 'index.mjs'
+    || target === 'manifest.json'
+  ) {
+    throw new Error(`Unsafe Integration runtime resource path: ${reference}`)
+  }
+  return target
+}
+
+async function collectRuntimeResources(root, metafile) {
+  const absoluteRoot = resolve(root)
+  const workspacePrefix = `${absoluteRoot}${sep}`
+  const nodeModulesSegment = `${sep}node_modules${sep}`
+  const resources = new Map()
+
+  for (const inputPath of Object.keys(metafile?.inputs ?? {})) {
+    const absoluteInput = resolve(root, inputPath)
+    if (
+      absoluteInput !== absoluteRoot
+      && !absoluteInput.startsWith(workspacePrefix)
+    ) continue
+    if (absoluteInput.includes(nodeModulesSegment)) continue
+
+    const input = await readFile(absoluteInput, 'utf8')
+    for (const reference of runtimeResourceReferences(input)) {
+      const target = runtimeResourceTarget(reference)
+      const sourcePath = resolve(dirname(absoluteInput), reference)
+      const previous = resources.get(target)
+      if (previous && previous !== sourcePath) {
+        throw new Error(
+          `Integration runtime resource target collision: ${target}: ${previous} != ${sourcePath}`,
+        )
+      }
+      await readFile(sourcePath)
+      resources.set(target, sourcePath)
+    }
+  }
+
+  return [...resources.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([path, sourcePath]) => ({ path, sourcePath }))
+}
+
 function assertPortableBundle(source, integrationId) {
   const forbidden = [
     /(?:from\s*|import\s*\()\s*['"]@agent-lens\//,
@@ -167,7 +232,7 @@ export async function buildIntegrationPackages({
     const entryPath = join(packageDir, 'index.mjs')
     await mkdir(packageDir, { recursive: true })
 
-    await build({
+    const buildResult = await build({
       bundle: true,
       platform: 'node',
       format: 'esm',
@@ -175,8 +240,11 @@ export async function buildIntegrationPackages({
       sourcemap: false,
       legalComments: 'none',
       treeShaking: true,
+      absWorkingDir: root,
       entryPoints: [resolve(root, spec.entry)],
       outfile: entryPath,
+      metafile: true,
+      banner: { js: INTEGRATION_ESM_BANNER },
       // Integration bundles are installed outside the AgentLens npm tree.
       // Bundle the full official Integration dependency closure so runtime
       // loading never relies on node_modules lookup from the user data dir.
@@ -186,7 +254,22 @@ export async function buildIntegrationPackages({
     const entry = await readFile(entryPath)
     const source = entry.toString('utf8')
     assertPortableBundle(source, spec.integrationId)
-    const entryHash = sha256(entry)
+    const files = [{
+      path: 'index.mjs',
+      size: entry.byteLength,
+      sha256: sha256(entry),
+    }]
+    for (const resource of await collectRuntimeResources(root, buildResult.metafile)) {
+      const content = await readFile(resource.sourcePath)
+      const targetPath = join(packageDir, resource.path)
+      await mkdir(dirname(targetPath), { recursive: true })
+      await writeFile(targetPath, content)
+      files.push({
+        path: resource.path,
+        size: content.byteLength,
+        sha256: sha256(content),
+      })
+    }
 
     const manifest = {
       schemaVersion: packageContract.schemaVersion,
@@ -197,11 +280,7 @@ export async function buildIntegrationPackages({
       apiVersion: runtimeManifest.apiVersion,
       entry: 'index.mjs',
       entryExport: packageContract.entryExport,
-      files: [{
-        path: 'index.mjs',
-        size: entry.byteLength,
-        sha256: entryHash,
-      }],
+      files,
     }
     const manifestText = `${JSON.stringify(manifest, null, 2)}\n`
     await writeFile(join(packageDir, 'manifest.json'), manifestText, 'utf8')
@@ -240,6 +319,9 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
 export const integrationBundleInternals = {
   sha256,
   assertPortableBundle,
+  runtimeResourceReferences,
+  runtimeResourceTarget,
+  collectRuntimeResources,
   assertIntegrationRuntimeManifest,
   loadIntegrationRuntimeManifest,
   loadSourceModule,

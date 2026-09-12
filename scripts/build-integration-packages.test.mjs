@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
 import {
+  buildIntegrationPackages,
   integrationBundleInternals,
 } from './build-integration-packages.mjs'
 
@@ -72,6 +75,32 @@ test('build contract loads pure Integration manifest modules without loading run
       ],
     },
   )
+})
+
+test('official Integration bundles are importable and preserve runtime sidecars', async () => {
+  const outDir = await mkdtemp(join(tmpdir(), 'agent-lens-integration-bundle-smoke-'))
+  try {
+    const catalog = await buildIntegrationPackages({ root, outDir })
+    for (const entry of catalog.entries) {
+      const manifestPath = join(outDir, entry.relativeManifestPath)
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+      const entryPath = join(dirname(manifestPath), manifest.entry)
+      const module = await import(pathToFileURL(entryPath).href)
+      assert.equal(module.default?.manifest?.integrationId, entry.integrationId)
+    }
+
+    const pi = catalog.entries.find(entry => entry.integrationId === 'pi')
+    assert.ok(pi)
+    const piManifestPath = join(outDir, pi.relativeManifestPath)
+    const piManifest = JSON.parse(await readFile(piManifestPath, 'utf8'))
+    assert.equal(
+      piManifest.files.some(file => file.path === 'worker-entry.mjs'),
+      true,
+    )
+    await access(join(dirname(piManifestPath), 'worker-entry.mjs'))
+  } finally {
+    await rm(outDir, { recursive: true, force: true })
+  }
 })
 
 test('runtime Integration manifest must match Official Catalog identity and Plugin API', () => {

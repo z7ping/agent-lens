@@ -8,7 +8,7 @@ import {
 } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
@@ -185,13 +185,11 @@ export async function detectHermes(ctx: SourceDetectionContext): Promise<Detecte
   }]
 }
 
-function openDatabase(root: string): Database.Database {
-  const db = new Database(join(root, DB_NAME), { readonly: true, fileMustExist: true })
-  db.pragma('busy_timeout = 1500')
-  return db
+function openDatabase(root: string): DatabaseSync {
+  return new DatabaseSync(join(root, DB_NAME), { readOnly: true, timeout: 1_500 })
 }
 
-function tableColumns(db: Database.Database, table: string): Set<string> {
+function tableColumns(db: DatabaseSync, table: string): Set<string> {
   const names = db.prepare(`PRAGMA table_info(${table})`).all()
     .map(tableColumnName)
     .filter((name): name is string => name !== undefined)
@@ -213,11 +211,11 @@ function timestampMillisSql(column: string): string {
 }
 
 function messageQuery(
-  db: Database.Database,
+  db: DatabaseSync,
   tail: boolean,
   activeSinceMs?: number,
   sessionLimit?: number,
-): Database.Statement {
+): ReturnType<DatabaseSync['prepare']> {
   const messageColumns = tableColumns(db, 'messages')
   if (!messageColumns.has('session_id')) throw new Error('Hermes state.db messages table has no session_id column')
   const sessionColumns = tableColumns(db, 'sessions')
@@ -266,14 +264,14 @@ function messageQuery(
 }
 
 function selectRows(
-  db: Database.Database,
+  db: DatabaseSync,
   afterRowId: number,
   limit: number,
   activeSinceMs?: number,
   sessionLimit?: number,
 ): HermesRow[] {
   const statement = messageQuery(db, false, activeSinceMs, sessionLimit)
-  const params: unknown[] = [afterRowId]
+  const params: number[] = [afterRowId]
   if (activeSinceMs !== undefined) params.push(activeSinceMs)
   if (sessionLimit !== undefined) {
     if (activeSinceMs !== undefined) params.push(activeSinceMs)
@@ -283,7 +281,7 @@ function selectRows(
   return statement.all(...params).map(hermesRow)
 }
 
-function recentRows(db: Database.Database, limit: number): HermesRow[] {
+function recentRows(db: DatabaseSync, limit: number): HermesRow[] {
   const statement = messageQuery(db, true)
   return statement.all(limit).map(hermesRow).reverse()
 }
