@@ -500,6 +500,11 @@ export const officialChineseLocalePack: LocalePackDto = {
         previewUnavailable: '该文件类型或大小不支持直接预览。',
         selectFile: '选择左侧文本文件查看内容。',
         bytes: '{{count}} 字节',
+        errorForbidden: '该路径不允许访问或已超出受管目录。',
+        errorNotFound: '该目录或文件当前不可用。',
+        errorTooLarge: '文件过大，无法直接预览。',
+        errorUnsupported: '该文件类型不支持直接预览。',
+        errorGeneric: '读取受管目录失败。',
       },
       scope: {
         all: '全部智能体',
