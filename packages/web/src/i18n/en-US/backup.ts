@@ -128,7 +128,8 @@ export const englishBackupMessages: LocaleMessagesDto = {
       preview: 'Restore preview',
       export: 'Export',
       emptyTitle: 'No local snapshots yet',
-      emptyDescription: 'Choose the agents and asset types you want to protect on the right, then create the first snapshot.',
+      emptyDescription: 'Create the first snapshot or import an existing backup package.',
+      createFirst: 'Create first snapshot',
     },
     restore: {
       title: 'Import & Restore',
