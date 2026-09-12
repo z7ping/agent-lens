@@ -29,11 +29,13 @@ test('POST /agents/rescan invalidates cached overview and returns current detect
   await identity.resolveInstallation({ hostId: host.id, productId: 'codex', version: '1.0.0' })
 
   let detected = true
+  let requestedSourceId: string | undefined
   const surface = await startHttpSurface(storage, {
     port: 0,
     sources,
     sourceDetection: () => detected,
-    rescanAgents: async () => {
+    rescanAgents: async sourceId => {
+      requestedSourceId = sourceId
       detected = false
       return {
         status: 'completed',
@@ -56,8 +58,9 @@ test('POST /agents/rescan invalidates cached overview and returns current detect
     assert.equal(before.status, 200)
     assert.equal((await before.json() as AgentOverviewResponseDto).items[0]?.detected, true)
 
-    const rescanned = await fetch(`${base}/api/v1/agents/rescan`, { method: 'POST' })
+    const rescanned = await fetch(`${base}/api/v1/agents/rescan?sourceId=codex`, { method: 'POST' })
     assert.equal(rescanned.status, 200)
+    assert.equal(requestedSourceId, 'codex')
     const body = await rescanned.json() as AgentRescanResponseDto
     assert.equal(body.status, 'completed')
     assert.equal(body.agents.items[0]?.detected, false)

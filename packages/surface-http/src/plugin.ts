@@ -197,7 +197,7 @@ const applyHttpSurface = Object.assign(
       ...(ctx.capturePolicy ? { capturePolicy: ctx.capturePolicy } : {}),
       ...(ctx.backup ? { backup: ctx.backup } : {}),
       ...(piLive ? { piLive } : {}),
-      rescanAgents: () => sourceRescan.rescan(),
+      rescanAgents: sourceId => sourceRescan.rescan(sourceId),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
       ...(config.integrationAuthorization ? { integrationAuthorization: config.integrationAuthorization } : {}),

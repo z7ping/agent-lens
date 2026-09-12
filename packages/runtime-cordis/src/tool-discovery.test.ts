@@ -144,3 +144,27 @@ test('discovery service exposes scanning state and coalesces concurrent rescans'
   assert.equal(completed.items.length, 5)
   assert.equal(typeof completed.completedAt, 'string')
 })
+
+
+test('discovery service can rescan one integration without replacing other discovery results', async () => {
+  let piExecutable = '/opt/bin/pi'
+  const service = new OfficialToolDiscoveryService({
+    env: { PATH: '' },
+    homeDir: join(tmpdir(), 'agent-lens-scoped-discovery-home'),
+    platform: process.platform,
+    timeoutMs: 1_000,
+    shellPathResolver: async () => undefined,
+    executableResolver: async name => name === 'pi' ? piExecutable : undefined,
+  })
+
+  const baseline = await service.rescan()
+  assert.equal(baseline.items.length, 5)
+  const codexBefore = baseline.items.find(item => item.integrationId === 'codex')
+
+  piExecutable = '/custom/bin/pi'
+  const scoped = await service.rescan('pi')
+
+  assert.equal(scoped.items.length, 5)
+  assert.equal(scoped.items.find(item => item.integrationId === 'pi')?.executable, '/custom/bin/pi')
+  assert.deepEqual(scoped.items.find(item => item.integrationId === 'codex'), codexBefore)
+})

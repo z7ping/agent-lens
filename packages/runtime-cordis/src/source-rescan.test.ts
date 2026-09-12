@@ -98,3 +98,39 @@ test('重新扫描维护当前检测状态，检测失败不会把已检测来�
   assert.equal(failed.status, 'failed')
   assert.equal(service.isSourceDetected('test-source'), true)
 })
+
+
+test('指定 sourceId 时只重新扫描当前来源', async () => {
+  let primaryDetections = 0
+  let secondaryDetections = 0
+  const primary = source(async () => {
+    primaryDetections += 1
+    return []
+  })
+  const secondary: SourceDefinition = {
+    ...source(async () => {
+      secondaryDetections += 1
+      return []
+    }),
+    manifest: {
+      ...source(async () => []).manifest,
+      pluginId: 'secondary-source-plugin',
+      displayName: 'Secondary Source',
+      sourceId: 'secondary-source',
+      productId: 'secondary-product',
+    },
+  }
+  const ctx = {
+    ...context(primary),
+    sources: { list: () => [primary, secondary] },
+  } as unknown as AgentLensContext
+  const service = new SourceRescanService(ctx, new AbortController().signal)
+
+  const result = await service.rescan('test-source')
+
+  assert.equal(result.status, 'completed')
+  assert.equal(primaryDetections, 1)
+  assert.equal(secondaryDetections, 0)
+  assert.equal(service.isSourceDetected('test-source'), false)
+  assert.equal(service.isSourceDetected('secondary-source'), undefined)
+})

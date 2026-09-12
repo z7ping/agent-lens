@@ -553,28 +553,6 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const selectedAgent = selectedRow?.agent
   const selectedManagement = selectedRow?.management
   const selectedDiscovery = selectedRow?.discovery
-  const discoveryErrors = discovery?.items.filter(item => item.presence === 'error') ?? []
-  const rescan = snapshot.agentsRescanResult
-  const rescanning = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
-  const scanBusy = rescanning || discoveryScanning
-  const rescanStatus = scanBusy
-    ? <StatusBadge tone="accent" dot>{t('page.rescanning')}</StatusBadge>
-    : snapshot.integrationDiscoveryError
-      ? <StatusBadge tone="danger" title={snapshot.integrationDiscoveryError}>{t('page.toolScanFailed')}</StatusBadge>
-      : snapshot.agentsRescanError
-        ? <StatusBadge tone="danger" title={snapshot.agentsRescanError}>{t('page.rescanFailed')}</StatusBadge>
-        : discoveryErrors.length
-          ? <StatusBadge tone="warning" title={discoveryErrors.map(item => `${item.displayName}: ${item.reason ?? t('toolPresence.error')}`).join('\n')}>{t('page.toolScanPartial', { count: discoveryErrors.length })}</StatusBadge>
-          : rescan
-            ? <StatusBadge tone={rescan.status === 'completed' ? 'success' : 'danger'} title={rescan.failures.map(item => `${item.sourceId}: ${item.message}`).join('\n') || undefined}>
-                {rescan.status === 'completed'
-                  ? `${t('page.scanCompleted', { sources: rescan.sourcesDetected, assets: rescan.assetsDiscovered })}${rescan.assetsRemoved ? t('page.removedSuffix', { count: rescan.assetsRemoved }) : ''}`
-                  : rescan.status === 'partial'
-                    ? t('page.scanPartial', { count: rescan.failures.length })
-                    : t('page.scanFailedSummary', { count: rescan.failures.length })}
-              </StatusBadge>
-            : null
-
   const installIntegration = async (integrationId: string) => {
     const result = await model.installIntegration(integrationId)
     if (result.operation.status === 'completed' && result.state.installed) {
@@ -592,10 +570,6 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      <div className="agents-page-actions" role="group" aria-label={t('page.scanToolbar')}>
-        {rescanStatus}
-        <Button size="small" loading={scanBusy} disabled={scanBusy} onClick={() => void model.rescanAgentEnvironment().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{scanBusy ? t('page.scanning') : t('page.rescan')}</Button>
-      </div>
       {rows.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label={t('page.list')}>
           <div className="agent-source-nav-head"><b>{managingOrder ? t('page.orderTitle') : t('page.localAgents')}</b><span>{rows.length}</span></div>

@@ -81,7 +81,7 @@ export interface HttpSurfaceOptions {
   capturePolicy?: CapturePolicyService
   backup?: BackupService
   piLive?: PiLiveService
-  rescanAgents?: () => Promise<AgentRescanSummaryDto>
+  rescanAgents?: (sourceId?: string) => Promise<AgentRescanSummaryDto>
   sourceDetection?: (sourceId: string) => boolean | undefined
   integrationStatus?: (
     productId: string,
@@ -273,7 +273,8 @@ export async function startHttpSurface(
           writeJson(response, 503, { error: 'agents_rescan_unavailable' })
           return
         }
-        const summary = await options.rescanAgents()
+        const sourceId = url.searchParams.get('sourceId')?.trim() || undefined
+        const summary = await options.rescanAgents(sourceId)
         agents.invalidate()
         facets.invalidate()
         const [freshAgents, freshFacets] = await Promise.all([

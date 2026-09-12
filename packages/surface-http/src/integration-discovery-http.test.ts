@@ -24,6 +24,7 @@ function call(port: number, method: string, path: string): Promise<{ status: num
 
 test('integration discovery HTTP exposes snapshot and explicit rescan', async () => {
   let rescans = 0
+  let requestedIntegrationId: string | undefined
   const state = {
     status: 'complete' as const,
     items: [{
@@ -38,8 +39,9 @@ test('integration discovery HTTP exposes snapshot and explicit rescan', async ()
   }
   const controller: IntegrationDiscoveryController = {
     snapshot: () => state,
-    rescan: async () => {
+    rescan: async integrationId => {
       rescans += 1
+      requestedIntegrationId = integrationId
       return state
     },
   }
@@ -59,9 +61,10 @@ test('integration discovery HTTP exposes snapshot and explicit rescan', async ()
     assert.equal(snapshot.status, 200)
     assert.equal(snapshot.body.status, 'complete')
 
-    const rescan = await call(address.port, 'POST', '/api/v1/integrations/discovery/rescan')
+    const rescan = await call(address.port, 'POST', '/api/v1/integrations/discovery/rescan?integrationId=pi')
     assert.equal(rescan.status, 200)
     assert.equal(rescans, 1)
+    assert.equal(requestedIntegrationId, 'pi')
   } finally {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
   }

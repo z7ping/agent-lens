@@ -191,6 +191,7 @@ async function discoverEntry(
 
 export async function discoverOfficialTools(
   options: OfficialToolDiscoveryOptions = {},
+  integrationId?: string,
 ): Promise<OfficialToolDiscoveryItem[]> {
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
@@ -204,7 +205,11 @@ export async function discoverOfficialTools(
     return shellPathPromise
   }
 
-  return Promise.all(OFFICIAL_INTEGRATION_CATALOG.map(entry =>
+  const entries = integrationId
+    ? OFFICIAL_INTEGRATION_CATALOG.filter(entry => entry.integrationId === integrationId)
+    : OFFICIAL_INTEGRATION_CATALOG
+
+  return Promise.all(entries.map(entry =>
     timeout(
       discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver, executableResolver }),
       timeoutMs,
@@ -232,7 +237,7 @@ export class OfficialToolDiscoveryService {
     items: [],
     generatedAt: new Date().toISOString(),
   }
-  private inFlight: Promise<OfficialToolDiscoverySnapshot> | null = null
+  private inFlight: { requestedIntegrationId?: string; promise: Promise<OfficialToolDiscoverySnapshot> } | null = null
 
   constructor(private readonly options: OfficialToolDiscoveryOptions = {}) {}
 
@@ -240,9 +245,16 @@ export class OfficialToolDiscoveryService {
     return cloneSnapshot(this.current)
   }
 
-  rescan(): Promise<OfficialToolDiscoverySnapshot> {
-    if (this.inFlight) return this.inFlight
+  rescan(integrationId?: string): Promise<OfficialToolDiscoverySnapshot> {
+    if (this.inFlight) {
+      if (this.inFlight.requestedIntegrationId === integrationId) return this.inFlight.promise
+      return this.inFlight.promise.then(() => this.rescan(integrationId))
+    }
 
+    const scopedIntegrationId = integrationId && this.current.status === 'complete'
+      ? integrationId
+      : undefined
+    const previousItems = this.current.items
     const startedAt = new Date().toISOString()
     this.current = {
       ...this.current,
@@ -251,12 +263,19 @@ export class OfficialToolDiscoveryService {
       generatedAt: startedAt,
     }
 
-    const task = discoverOfficialTools(this.options)
+    const promise = discoverOfficialTools(this.options, scopedIntegrationId)
       .then(items => {
         const completedAt = new Date().toISOString()
+        const refreshed = new Map(items.map(item => [item.integrationId, item]))
+        const mergedItems = scopedIntegrationId
+          ? [
+              ...previousItems.map(item => refreshed.get(item.integrationId) ?? item),
+              ...items.filter(item => !previousItems.some(previous => previous.integrationId === item.integrationId)),
+            ]
+          : items
         this.current = {
           status: 'complete',
-          items,
+          items: mergedItems,
           startedAt,
           completedAt,
           generatedAt: completedAt,
@@ -264,11 +283,11 @@ export class OfficialToolDiscoveryService {
         return this.snapshot()
       })
       .finally(() => {
-        if (this.inFlight === task) this.inFlight = null
+        if (this.inFlight?.promise === promise) this.inFlight = null
       })
 
-    this.inFlight = task
-    return task
+    this.inFlight = { ...(integrationId ? { requestedIntegrationId: integrationId } : {}), promise }
+    return promise
   }
 }
 

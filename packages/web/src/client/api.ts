@@ -169,8 +169,9 @@ export class AgentLensApi {
     agentsInFlight = shared
     return shared
   }
-  rescanAgents(): Promise<AgentRescanResponseDto> {
-    return requestJson('/api/v1/agents/rescan', { method: 'POST' })
+  rescanAgents(sourceId?: string): Promise<AgentRescanResponseDto> {
+    const query = sourceId ? `?sourceId=${encodeURIComponent(sourceId)}` : ''
+    return requestJson(`/api/v1/agents/rescan${query}`, { method: 'POST' })
   }
   managedAssetDirectory(
     productId: string,
@@ -194,8 +195,9 @@ export class AgentLensApi {
   integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     return requestJson('/api/v1/integrations/discovery')
   }
-  rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
-    return requestJson('/api/v1/integrations/discovery/rescan', { method: 'POST' })
+  rescanIntegrationDiscovery(integrationId?: string): Promise<IntegrationToolDiscoveryResponseDto> {
+    const query = integrationId ? `?integrationId=${encodeURIComponent(integrationId)}` : ''
+    return requestJson(`/api/v1/integrations/discovery/rescan${query}`, { method: 'POST' })
   }
   integrations(): Promise<IntegrationManagementResponseDto> {
     return requestJson('/api/v1/integrations')

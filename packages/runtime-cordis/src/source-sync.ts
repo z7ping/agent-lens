@@ -82,12 +82,14 @@ async function registerDetectedSource(
 export async function prepareRegisteredSources(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
+  sourceId?: string,
 ): Promise<RegisteredSourcePreparation> {
   const host = await resolveRuntimeHost(ctx)
   // Detection is read-only capability discovery and must stay independent from
   // the user's Enabled choice. History/assets/runtime capture remain gated by
   // sourceEnabled() in their execution stages below.
   const registeredSources = ctx.sources.list()
+    .filter(source => !sourceId || source.manifest.sourceId === sourceId)
   const batches = await Promise.all(registeredSources.map(async source => {
     if (abortSignal.aborted) {
       return { targets: [], failures: [] } satisfies RegisteredSourcePreparation
