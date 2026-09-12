@@ -334,7 +334,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
     },
     overlay: {
       noAgentsTitle: 'No supported agents detected',
-      noAgentsDescription: 'Codex, Claude Code, Pi, Hermes, OpenCode, or DSH has not been detected on this machine yet. AgentLens does not treat “not observed” as “not installed”; run diagnostics first to verify each source’s detection path and capture state.',
+      noAgentsDescription: 'No supported agent is detected yet. Rescan or run diagnostics to verify local state.',
     },
     insightsRail: {
       unavailable: 'N/A',
