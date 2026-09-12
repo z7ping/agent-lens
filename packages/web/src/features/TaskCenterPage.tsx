@@ -249,7 +249,6 @@ function NewTaskPanel({
         <div>
           <div className="task-center-new-kicker">{t('center.newTask.kicker')}</div>
           <h1>{t('center.newTask.title')}</h1>
-          <p>{t('center.newTask.description')}</p>
         </div>
         <span className="task-center-new-readiness" data-state={availabilityState}><i/>{agentStateLabel}</span>
       </header>
