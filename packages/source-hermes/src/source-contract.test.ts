@@ -161,6 +161,15 @@ test('Hermes user assets follow profile semantics and explicit scope', async () 
     assert.equal(definitionNames.has('memory:hermes:junk.md'), false)
     assert.equal(definitionNames.has('context:hermes-soul'), true)
 
+    await writeFile(join(root, 'config.yaml'), 'plugins: [\n', 'utf8')
+    const assetsWithMalformedConfig = []
+    for await (const asset of discoverHermesAssets(ctx)) assetsWithMalformedConfig.push(asset)
+    const malformedNames = new Set(assetsWithMalformedConfig.map(asset =>
+      `${asset.definition.type}:${asset.definition.canonicalName}`))
+    assert.equal(malformedNames.has('skill:reviewer'), true)
+    assert.equal(malformedNames.has('memory:hermes:memory.md'), true)
+    assert.equal(malformedNames.has('context:hermes-soul'), true)
+
     const userBindings = assets
       .flatMap(asset => asset.binding ? [asset.binding] : [])
       .filter(binding => binding.scope !== 'project')
@@ -184,6 +193,7 @@ test('Hermes project context follows current first-type-wins and AGENTS chain se
   await mkdir(join(projectRoot, '.git'), { recursive: true })
   await mkdir(cwd, { recursive: true })
   await writeFile(join(projectRoot, 'AGENTS.md'), '# root instructions\n', 'utf8')
+  await writeFile(join(packageDir, '.hermes.md'), '   \n', 'utf8')
   await writeFile(join(packageDir, 'AGENTS.override.md'), '# package override\n', 'utf8')
   await writeFile(join(cwd, 'AGENTS.override.md'), '   \n', 'utf8')
   await writeFile(join(cwd, 'AGENTS.md'), '# cwd instructions\n', 'utf8')
