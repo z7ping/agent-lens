@@ -233,7 +233,7 @@ test('资产扫描失败时保留上一次成功快照，不把失败当成空�
     runner.scan({ source, host, detected, abortSignal: signal }),
     /simulated asset scan failure/,
   )
-  assert.deepEqual(writes, [])
+  assert.equal(writes.length, 0)
 
   inventory.fail = false
   inventory.current = false
