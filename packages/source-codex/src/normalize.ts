@@ -94,7 +94,7 @@ function sourceNativeEventId(
     const event = envelope?.entry ?? asRecord(asRecord(record.payload).runtimeEvent)
     return stringField(event, 'source_event_id', 'hook_invocation_id')
   }
-  return envelope ? nativeIdForEntry(envelope.entry) : undefined
+  return record.nativeId ?? (envelope ? nativeIdForEntry(envelope.entry) : undefined)
 }
 
 function actorRole(value: unknown): NonNullable<ObservationIdentityHints['actorRole']> {
@@ -214,7 +214,7 @@ function candidate(
 ): ObservationCandidate {
   const nativeCallId = typeof dedup.nativeCallId === 'string' ? dedup.nativeCallId : undefined
   const sharedEventKey = typeof dedup.sharedEventKey === 'string' ? dedup.sharedEventKey : undefined
-  const nativeEventId = !nativeCallId && !sharedEventKey
+  const nativeEventId = !nativeCallId
     ? sourceNativeEventId(record, envelope)
     : undefined
   return observationFromSourceRecord(record, {
