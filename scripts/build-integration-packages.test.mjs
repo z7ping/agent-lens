@@ -8,6 +8,13 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
+test('Integration package schema version is loaded from the package contract source', async () => {
+  assert.equal(
+    await integrationBundleInternals.loadIntegrationPackageSchemaVersion(root),
+    1,
+  )
+})
+
 test('Integration bundle specs are derived from the Official Catalog instead of a handwritten build list', async () => {
   const specs = await integrationBundleInternals.integrationBundleSpecs(root)
 
