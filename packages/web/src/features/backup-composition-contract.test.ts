@@ -3,9 +3,18 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const backupPage = readFileSync(new URL('./BackupPage.tsx', import.meta.url), 'utf8')
+const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const sidebarFilter = readFileSync(new URL('../components/SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
+
+test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定义 future 页面壳', () => {
+  assert.match(backupPage, /className="workspace-page backup-page"/)
+  assert.match(backupPage, /className="page-content backup-content"/)
+  assert.doesNotMatch(backupPage, /future-content/)
+  assert.doesNotMatch(backupPage, /page-scroll/)
+  assert.match(backupPage, /sourceDot\(source\.sourceId\)/)
+})
 
 test('Backup 默认以当前资产为主视图，并把备份记录拆成独立页签', () => {
   assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
@@ -44,14 +53,16 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
   assert.match(sidebarFilter, /agentSelection\.mode === 'multiple' \|\| showAllOption/)
 })
 
-test('导入与创建只保留为右上角动作，创建流程进入共享 Drawer', () => {
-  const headingIndex = backupPage.indexOf('className="backup-heading-actions"')
-  const tabsIndex = backupPage.indexOf('className="backup-view-tabs"')
-  assert.ok(headingIndex >= 0 && tabsIndex > headingIndex)
+test('导入与创建进入统一面包屑操作区，创建流程继续复用共享 Drawer', () => {
+  assert.match(app, /setBackupBreadcrumbActionsHost/)
+  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} actionsHost=\{backupBreadcrumbActionsHost\}/)
+  assert.match(backupPage, /createPortal\(headerActions, actionsHost\)/)
+  assert.match(backupPage, /className="backup-breadcrumb-actions"/)
   assert.match(backupPage, /t\('toolbar\.import'\)/)
   assert.match(backupPage, /t\('toolbar\.create'\)/)
   assert.match(backupPage, /className="backup-create-drawer"/)
   assert.doesNotMatch(backupPage, /className="backup-create-panel"/)
+  assert.doesNotMatch(backupPage, /className="future-heading"/)
 })
 
 test('备份记录跟随左侧智能体范围过滤，并保留校验、预演和导出能力', () => {
