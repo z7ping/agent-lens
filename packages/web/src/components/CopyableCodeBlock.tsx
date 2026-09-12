@@ -1,7 +1,7 @@
 import { isValidElement, useEffect, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { copyText } from '../client/clipboard'
-import { UiIcon } from './UiIcon'
+import { Button, UiIcon } from './ui'
 
 type CopyState = 'idle' | 'copied' | 'error'
 
@@ -38,9 +38,9 @@ export function CopyableCodeBlock({ children, copyValue, containerClassName = ''
   const label = state === 'copied' ? t('codeBlock.copied') : state === 'error' ? t('codeBlock.failed') : t('codeBlock.copy')
   return <div className={`copyable-code-block ${containerClassName}`.trim()} data-copy-state={state}>
     <pre {...preProps}>{children}</pre>
-    <button type="button" className="code-block-copy" onClick={() => void copy()} aria-label={t('codeBlock.aria', { label })} title={label}>
+    <Button size="small" className="code-block-copy" onClick={() => void copy()} aria-label={t('codeBlock.aria', { label })} title={label}>
       <UiIcon name={state === 'copied' ? 'check' : 'copy'} size={16}/>
       <span>{label}</span>
-    </button>
+    </Button>
   </div>
 }
