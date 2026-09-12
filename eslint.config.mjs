@@ -1,4 +1,5 @@
 import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
 import tseslint from 'typescript-eslint'
 
 const ignored = [
@@ -48,5 +49,10 @@ export default tseslint.config(
       'no-var': 'error',
       'prefer-const': 'error',
     },
+  },
+  {
+    files: ['packages/web/src/**/*.{ts,tsx}'],
+    plugins: reactHooks.configs.flat.recommended.plugins,
+    rules: reactHooks.configs.flat.recommended.rules,
   },
 )

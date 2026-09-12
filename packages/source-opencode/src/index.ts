@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
-import { watch, type FSWatcher } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import Database from 'better-sqlite3'
 import {
   evidenceFromSourceRecord,
@@ -24,19 +23,17 @@ import {
 } from '@agent-lens/core'
 import {
   OPENCODE_DB_NAME as DB_NAME,
-  abortableDelay,
   defineAgentLensPlugin,
   resolveOpenCodeRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { isMissingPathError } from '@agent-lens/source-support'
+import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
 
 const SOURCE_ID = 'opencode'
 const PARSER_VERSION = '3'
 
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
-const RUNTIME_POLL_MS = 2000
 
 interface OpenCodeRow {
   row_id: number
@@ -371,12 +368,20 @@ export async function startOpenCodeRuntimeCapture(
   const root = ctx.installation.dataRoot ?? ctx.installation.configRoot
   if (!root) return { dispose() {} }
   const dbPath = join(root, DB_NAME)
-  const db = openDatabase(root)
+  let db = await exists(dbPath) ? openDatabase(root) : null
   const fingerprints = new Map<number, string>()
   let stopped = false
   let scanning = false
   let pending = false
-  let watcher: FSWatcher | null = null
+  let watcher: SourceFileWatchHandle | null = null
+
+  const replaceDatabase = async (): Promise<void> => {
+    const previous = db
+    db = null
+    previous?.close()
+    if (stopped || ctx.abortSignal.aborted || !await exists(dbPath)) return
+    db = openDatabase(root)
+  }
 
   const scan = async (emitChanges: boolean): Promise<void> => {
     if (scanning) { pending = true; return }
@@ -384,7 +389,9 @@ export async function startOpenCodeRuntimeCapture(
     try {
       do {
         pending = false
-        const rows = recentRows(db, RUNTIME_RECENT_ROWS)
+        const active = db
+        if (!active) return
+        const rows = recentRows(active, RUNTIME_RECENT_ROWS)
         const live = new Set<number>()
         for (const row of rows) {
           live.add(row.row_id)
@@ -406,33 +413,30 @@ export async function startOpenCodeRuntimeCapture(
     }
   }
 
-  await scan(false)
-  try {
-    watcher = watch(dirname(dbPath), (_event, fileName) => {
-      const name = fileName?.toString() ?? ''
-      if (!name.startsWith(DB_NAME)) return
-      void scan(true).catch(() => undefined)
-    })
-    watcher.on('error', () => { watcher?.close(); watcher = null })
-  } catch {
-    watcher = null
-  }
-
-  const task = (async () => {
-    while (!stopped && !ctx.abortSignal.aborted) {
-      await abortableDelay(RUNTIME_POLL_MS, ctx.abortSignal)
-      if (!stopped && !ctx.abortSignal.aborted) await scan(true).catch(() => undefined)
-    }
-  })()
+  if (db) await scan(false)
+  watcher = await watchSourceFiles({
+    paths: dirname(dbPath),
+    signal: ctx.abortSignal,
+    debounceMs: 120,
+    accept: filePath => basename(filePath).startsWith(DB_NAME),
+    onFile: async (filePath) => {
+      if (basename(filePath) === DB_NAME) await replaceDatabase()
+      else if (!db && await exists(dbPath)) db = openDatabase(root)
+      await scan(true)
+    },
+  })
 
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
-      watcher?.close()
-      watcher = null
-      await task
-      db.close()
+      if (watcher) {
+        await watcher.dispose()
+        watcher = null
+      }
+      const active = db
+      db = null
+      active?.close()
     },
   }
 }
