@@ -139,6 +139,7 @@ function instructionStates(
   path: string,
   observedAt: string,
   capturedAt: string,
+  discoverable: boolean | 'unknown',
 ): NonNullable<DiscoveredAsset['states']> {
   const evidence = observedEvidence(path, observedAt, capturedAt)
   return [
@@ -150,9 +151,9 @@ function instructionStates(
     },
     {
       state: 'discoverable',
-      value: true,
-      observedAt,
-      evidenceCandidates: [evidence],
+      value: discoverable,
+      observedAt: capturedAt,
+      ...(discoverable === 'unknown' ? {} : { evidenceCandidates: [evidence] }),
     },
   ]
 }
@@ -188,7 +189,7 @@ async function globalInstructionAsset(
         scope: 'user',
         scopeRoot: configRoot,
       },
-      states: instructionStates(filePath, observedAt, capturedAt),
+      states: instructionStates(filePath, observedAt, capturedAt, true),
     }
   }
   return undefined
@@ -217,6 +218,13 @@ async function projectInstructionAssets(
       if (!meta?.isFile()) continue
       const observedAt = meta.mtime.toISOString()
       const name = basename(filePath)
+      let hasContent = false
+      try {
+        hasContent = (await readFile(filePath, 'utf8')).trim().length > 0
+      } catch (error) {
+        if (isMissingPathError(error)) continue
+        throw error
+      }
 
       assets.set(key, {
         definition: {
@@ -231,7 +239,12 @@ async function projectInstructionAssets(
           scope: 'project',
           scopeRoot: projectRoot,
         },
-        states: instructionStates(filePath, observedAt, capturedAt),
+        states: instructionStates(
+          filePath,
+          observedAt,
+          capturedAt,
+          hasContent ? 'unknown' : false,
+        ),
       })
     }
   }
