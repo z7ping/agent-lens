@@ -129,6 +129,14 @@ export function resolveOpenCodeRoots(
   return resolveCandidates('opencode', 'data', env, homeDir, platform)
 }
 
+export function resolveOpenCodeConfigRoots(
+  env: SourceEnvironment = process.env,
+  homeDir = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  return resolveCandidates('opencode', 'config', env, homeDir, platform)
+}
+
 export const sourceLocationInternals = {
   value,
   roleCandidates,
