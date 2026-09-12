@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { isAbsolute, join } from 'node:path'
 import {
   officialIntegrationCatalogEntry,
   resolveToolDiscoveryCandidatePath,
@@ -134,7 +135,11 @@ export function resolveOpenCodeConfigRoots(
   homeDir = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): string[] {
-  return resolveCandidates('opencode', 'config', env, homeDir, platform)
+  const roots = resolveCandidates('opencode', 'config', env, homeDir, platform)
+  const xdgConfig = value(env, 'XDG_CONFIG_HOME')
+  if (!xdgConfig || isAbsolute(xdgConfig)) return roots
+  const unsafe = join(xdgConfig, 'opencode')
+  return roots.filter(root => root !== unsafe)
 }
 
 export const sourceLocationInternals = {
