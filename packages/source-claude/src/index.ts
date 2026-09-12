@@ -11,15 +11,15 @@ import {
 import { homedir } from 'node:os'
 import {
   basename,
-  dirname,
   extname,
+  isAbsolute,
   join,
+  resolve,
 } from 'node:path'
 import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
   type DetectedSource,
-  type DiscoveredAsset,
   type Disposable,
   type EvidenceCandidate,
   type NormalizedSourceOutput,
@@ -50,6 +50,8 @@ import {
   sourceFileIdentity,
   startHistoryFileWatch,
 } from '@agent-lens/source-support'
+import { discoverClaudeAssets } from './assets.js'
+import { CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 
 const SOURCE_ID = 'claude-code'
 const PARSER_VERSION = '4'
@@ -219,6 +221,7 @@ function historyCheckpointKey(filePath: string): string {
 export async function* ingestClaudeFile(
   ctx: SourceExecutionContext,
   filePath: string,
+  onWorkspace?: (cwd: string) => void,
 ): AsyncIterable<SourceRecord> {
   if (ctx.abortSignal.aborted) return
 
@@ -287,7 +290,10 @@ export async function* ingestClaudeFile(
 
     const entry = parseHistoryLine(line.text)
     const cwd = stringField(entry, 'cwd') ?? lastCwd
-    if (cwd) lastCwd = cwd
+    if (cwd) {
+      lastCwd = cwd
+      onWorkspace?.(cwd)
+    }
     const sessionId = nativeSessionId(entry, filePath)
     const nativeId = nativeEntryId(entry)
     const fingerprint = sha256(line.text)
@@ -339,9 +345,38 @@ export async function* ingestClaudeHistory(
     ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'projects') : undefined)
   if (!projectsDir) return
 
+  const remembered = await ctx.checkpoint.get<string[]>(CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
+  const knownCwds = new Map<string, string>()
+  for (const value of remembered) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    const key = process.platform === 'win32'
+      ? cwd.replaceAll('\\', '/').toLowerCase()
+      : cwd.replaceAll('\\', '/')
+    if (!knownCwds.has(key)) knownCwds.set(key, cwd)
+  }
+
+  const rememberWorkspace = (value: string) => {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) return
+    const cwd = resolve(raw)
+    const key = process.platform === 'win32'
+      ? cwd.replaceAll('\\', '/').toLowerCase()
+      : cwd.replaceAll('\\', '/')
+    if (!knownCwds.has(key)) knownCwds.set(key, cwd)
+  }
+
   for (const filePath of await listJsonlFiles(projectsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
-    yield* ingestClaudeFile(ctx, filePath)
+    yield* ingestClaudeFile(ctx, filePath, rememberWorkspace)
+  }
+
+  if (!ctx.abortSignal.aborted) {
+    await ctx.checkpoint.set(
+      CLAUDE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
+      [...knownCwds.values()],
+    )
   }
 }
 
@@ -475,227 +510,6 @@ export async function startClaudeRuntimeCapture(
       await historyWatch?.dispose()
       await task
     },
-  }
-}
-
-async function safeStat(path: string) {
-  try {
-    return await stat(path)
-  } catch (error) {
-    if (isMissingPathError(error)) return null
-    throw error
-  }
-}
-
-async function safeEntries(path: string) {
-  try {
-    return await readdir(path, { withFileTypes: true })
-  } catch (error) {
-    if (isMissingPathError(error)) return []
-    throw error
-  }
-}
-
-async function* walkNamedFile(
-  root: string,
-  fileName: string,
-  depth = 0,
-  maxDepth = 8,
-): AsyncIterable<string> {
-  if (depth > maxDepth) return
-  for (const entry of await safeEntries(root)) {
-    const path = join(root, entry.name)
-    if (entry.isDirectory()) yield* walkNamedFile(path, fileName, depth + 1, maxDepth)
-    else if (entry.isFile() && entry.name.toLowerCase() === fileName.toLowerCase()) yield path
-  }
-}
-
-function staticEvidence(
-  path: string,
-  observedAt: string,
-  capturedAt: string,
-): EvidenceCandidate {
-  return {
-    captureMethod: 'static-scan',
-    derivation: 'observed',
-    sourceLocator: { kind: 'file', path },
-    eventTime: observedAt,
-    capturedAt,
-    confidenceHint: 'exact',
-  }
-}
-
-function assetStates(
-  path: string,
-  observedAt: string,
-  capturedAt: string,
-  values: Array<{
-    state: 'installed' | 'configured' | 'enabled' | 'discoverable'
-    value: boolean | 'unknown'
-  }>,
-): NonNullable<DiscoveredAsset['states']> {
-  const evidence = staticEvidence(path, observedAt, capturedAt)
-  return values.map(value => ({
-    ...value,
-    observedAt,
-    ...(value.value === 'unknown' ? {} : { evidenceCandidates: [evidence] }),
-  }))
-}
-
-async function* discoverSkillAssets(
-  configRoot: string,
-  capturedAt: string,
-): AsyncIterable<DiscoveredAsset> {
-  for await (const skillFile of walkNamedFile(join(configRoot, 'skills'), 'SKILL.md')) {
-    const meta = await safeStat(skillFile)
-    if (!meta?.isFile()) continue
-    const skillDir = dirname(skillFile)
-    const name = basename(skillDir)
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: { type: 'skill', canonicalName: name, displayName: name },
-      binding: { path: skillDir, source: 'claude:skills' },
-      states: assetStates(
-        skillFile,
-        observedAt,
-        capturedAt,
-        [
-          { state: 'installed', value: true },
-          { state: 'discoverable', value: 'unknown' },
-        ],
-      ),
-    }
-  }
-}
-
-async function* discoverCommandAssets(
-  configRoot: string,
-  capturedAt: string,
-): AsyncIterable<DiscoveredAsset> {
-  const commandsRoot = join(configRoot, 'commands')
-  for (const entry of await safeEntries(commandsRoot)) {
-    if (!entry.isFile() || extname(entry.name).toLowerCase() !== '.md') continue
-    const filePath = join(commandsRoot, entry.name)
-    const meta = await safeStat(filePath)
-    if (!meta?.isFile()) continue
-    const name = basename(entry.name, extname(entry.name))
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: { type: 'builtin', canonicalName: `command:${name}`, displayName: name },
-      binding: { path: filePath, source: 'claude:commands' },
-      states: assetStates(
-        filePath,
-        observedAt,
-        capturedAt,
-        [
-          { state: 'installed', value: true },
-          { state: 'discoverable', value: 'unknown' },
-        ],
-      ),
-    }
-  }
-}
-
-async function* discoverPluginAssets(
-  configRoot: string,
-  capturedAt: string,
-): AsyncIterable<DiscoveredAsset> {
-  const root = join(configRoot, 'plugins')
-  for (const entry of await safeEntries(root)) {
-    if (!entry.isDirectory()) continue
-    const path = join(root, entry.name)
-    const meta = await safeStat(path)
-    if (!meta) continue
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: { type: 'plugin', canonicalName: entry.name, displayName: entry.name },
-      binding: { path, source: 'claude:plugins' },
-      states: assetStates(
-        path,
-        observedAt,
-        capturedAt,
-        [{ state: 'installed', value: true }],
-      ),
-    }
-  }
-}
-
-async function* discoverSettingsAssets(
-  configRoot: string,
-  capturedAt: string,
-): AsyncIterable<DiscoveredAsset> {
-  const settingsFiles = [join(configRoot, 'settings.json')]
-  if (configRoot === join(homedir(), '.claude')) settingsFiles.push(join(homedir(), '.claude.json'))
-
-  for (const settingsPath of settingsFiles) {
-    const meta = await safeStat(settingsPath)
-    if (!meta?.isFile()) continue
-    let settings: Record<string, unknown>
-    try {
-      settings = asRecord(JSON.parse(await readFile(settingsPath, 'utf8')))
-    } catch (error) {
-      if (isMissingPathError(error) || error instanceof SyntaxError) continue
-      throw error
-    }
-    const observedAt = meta.mtime.toISOString()
-    const mcp = asRecord(settings.mcpServers ?? settings.mcp_servers)
-    for (const name of Object.keys(mcp)) {
-      yield {
-        definition: { type: 'mcp', canonicalName: name, displayName: name },
-        binding: { path: settingsPath, source: 'claude:settings' },
-        states: assetStates(
-          settingsPath,
-          observedAt,
-          capturedAt,
-          [
-            { state: 'configured', value: true },
-            { state: 'discoverable', value: 'unknown' },
-          ],
-        ),
-      }
-    }
-
-    const hooks = asRecord(settings.hooks)
-    for (const [eventName, groups] of Object.entries(hooks)) {
-      if (!Array.isArray(groups) || groups.length === 0) continue
-      yield {
-        definition: {
-          type: 'hook',
-          canonicalName: `claude-hook:${eventName}`,
-          displayName: `${eventName} Hook`,
-        },
-        binding: { path: settingsPath, source: 'claude:settings' },
-        states: assetStates(
-          settingsPath,
-          observedAt,
-          capturedAt,
-          [
-            { state: 'configured', value: true },
-            { state: 'enabled', value: 'unknown' },
-          ],
-        ),
-      }
-    }
-  }
-}
-
-export async function* discoverClaudeAssets(
-  ctx: SourceExecutionContext,
-): AsyncIterable<DiscoveredAsset> {
-  const configRoot = ctx.installation.configRoot
-  if (!configRoot || ctx.abortSignal.aborted) return
-  const capturedAt = new Date().toISOString()
-  const groups = [
-    discoverSkillAssets(configRoot, capturedAt),
-    discoverCommandAssets(configRoot, capturedAt),
-    discoverPluginAssets(configRoot, capturedAt),
-    discoverSettingsAssets(configRoot, capturedAt),
-  ]
-  for (const group of groups) {
-    for await (const asset of group) {
-      if (ctx.abortSignal.aborted) return
-      yield asset
-    }
   }
 }
 
@@ -995,7 +809,7 @@ export async function declareClaudeCapabilities(
     { sourceId: SOURCE_ID, name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'runtime-hook'], reason: 'Summary and compaction lifecycle are visible; full context is not' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible thinking blocks are captured' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static user configuration is observable; merged scope, trust, plugin activation and runtime discoverability require stronger Claude Code runtime evidence' },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'User-profile assets and history-known project assets are observable; managed settings, dynamic nested context, plugin installation state and runtime discoverability require stronger Claude Code runtime evidence' },
     { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Invocation attribution is handled by later usage projections' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Stable usage mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not implemented' },
@@ -1042,3 +856,7 @@ export const claudeInternals = {
   textFromContent,
   claudeStoredEnvelope,
 }
+
+export * from './assets.js'
+export * from './project-context.js'
+export * from './workspace-context.js'
