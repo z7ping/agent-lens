@@ -21,6 +21,12 @@ export type AssetType =
   | 'builtin'
   | 'unknown'
 
+export type AssetScope =
+  | 'installation'
+  | 'user'
+  | 'project'
+  | 'workspace'
+
 export interface AssetDefinition {
   id: AssetDefinitionId
   type: AssetType
@@ -34,6 +40,8 @@ export interface AssetBinding {
   assetId: AssetDefinitionId
   installationId: AgentInstallationId
   runtimeProfileId?: RuntimeProfileId
+  scope?: AssetScope
+  scopeRoot?: string
   path?: string
   source?: string
   version?: string
@@ -79,6 +87,8 @@ export interface AssetBindingHint {
   assetId: AssetDefinitionId
   installationId: AgentInstallationId
   runtimeProfileId?: RuntimeProfileId
+  scope?: AssetScope
+  scopeRoot?: string
   path?: string
   source?: string
   version?: string

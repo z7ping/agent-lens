@@ -47,6 +47,7 @@ import {
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
+import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { readLaunchableProjects } from './launchable-projects'
 import { discoverLocalePacks } from './locale-packs'
 import { handlePiLiveRequest } from './pi-live'
@@ -252,6 +253,13 @@ export async function startHttpSurface(
         response,
         url,
         options.integrationPackages,
+      )) return
+      if (await handleManagedAssetFilesRequest(
+        request,
+        response,
+        url,
+        storage,
+        options.integrationStatus,
       )) return
 
       if (url.pathname === '/api/v1/agents/rescan') {

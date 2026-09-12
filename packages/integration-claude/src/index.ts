@@ -9,7 +9,7 @@ export const claudeIntegration = defineAgentLensIntegration(
   [
     {
       pluginId: '@agent-lens/source-claude',
-      capabilities: ['source'],
+      capabilities: ['source', 'assets'],
       activation: 'catalog',
       lifecycle: 'plugin',
       plugin: claudeSourcePlugin,

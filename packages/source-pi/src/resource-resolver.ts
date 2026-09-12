@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { isMissingPathError, readJsonlLines } from '@agent-lens/source-support'
+import { isMissingPathError } from '@agent-lens/source-support'
 import type {
   DiscoveredAsset,
   DiscoveredAssetStateHint,
@@ -13,7 +13,7 @@ import {
   resolvePiSdkResourceApi,
   type PiSdkResourceApi,
 } from '@agent-lens/runtime-cordis'
-import { listJsonlFiles } from './session'
+import { listPiProjectCwds } from './session'
 
 type PiResolvedPaths = Awaited<ReturnType<InstanceType<PiSdkResourceApi['DefaultPackageManager']>['resolve']>>
 type PiResolvedResource = PiResolvedPaths['skills'][number]
@@ -21,7 +21,6 @@ type PiSkill = ReturnType<PiSdkResourceApi['loadSkills']>['skills'][number]
 type ProjectTrustState = true | false | 'unknown'
 type EffectiveResourceState = boolean | 'unknown'
 
-const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
@@ -36,15 +35,6 @@ function pathContains(parent: string, child: string): boolean {
   const value = relative(resolve(parent), resolve(child))
   return value === ''
     || (value !== '..' && !value.startsWith(`..${sep}`) && !isAbsolute(value))
-}
-
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory()
-  } catch (error) {
-    if (isMissingPathError(error)) return false
-    throw error
-  }
 }
 
 async function fileMtime(path: string): Promise<string | undefined> {
@@ -166,6 +156,19 @@ function resourceSource(resource: PiResolvedResource, cwd?: string): string {
   const scope = resource.metadata.scope
   const context = cwd && scope === 'project' ? `:${sha256(pathKey(cwd)).slice(0, 12)}` : ''
   return `pi:resource:${scope}${context}:${resource.metadata.origin}:${resource.metadata.source}`
+}
+
+function resourceBindingScope(
+  resource: PiResolvedResource,
+  projectCwd?: string,
+): { scope: 'user' | 'project'; scopeRoot?: string } {
+  if (resource.metadata.scope === 'project') {
+    return {
+      scope: 'project',
+      ...(projectCwd ? { scopeRoot: projectCwd } : {}),
+    }
+  }
+  return { scope: 'user' }
 }
 
 async function resourceVersion(resource: PiResolvedResource): Promise<string | undefined> {
@@ -312,6 +315,7 @@ async function resolvedPromptsAsAssets(input: {
         displayName: candidate.name,
       },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
         ...(version ? { version } : {}),
@@ -379,6 +383,7 @@ async function resolvedThemesAsAssets(input: {
         displayName: candidate.name,
       },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
         ...(version ? { version } : {}),
@@ -399,6 +404,8 @@ async function resolvedThemesAsAssets(input: {
 async function contextAsset(
   path: string,
   source: string,
+  scope: 'user' | 'project',
+  scopeRoot: string,
   capturedAt: string,
   enabled: EffectiveResourceState,
   discoverable: EffectiveResourceState,
@@ -407,7 +414,7 @@ async function contextAsset(
   if (!observedAt) return undefined
   return {
     definition: contextDefinition(path),
-    binding: { path, source },
+    binding: { path, source, scope, scopeRoot },
     states: resourceStates({
       path,
       observedAt,
@@ -432,6 +439,8 @@ async function globalContextAssets(
       const asset = await contextAsset(
         row.path,
         contextSource('user', 'agents'),
+        'user',
+        agentDir,
         capturedAt,
         true,
         true,
@@ -447,6 +456,8 @@ async function globalContextAssets(
     const asset = await contextAsset(
       path,
       contextSource('user', name === 'SYSTEM.md' ? 'system' : 'append-system'),
+      'user',
+      agentDir,
       capturedAt,
       true,
       'unknown',
@@ -473,6 +484,8 @@ async function projectContextAssets(
       const asset = await contextAsset(
         row.path,
         contextSource('project', 'agents', cwd),
+        'project',
+        cwd,
         capturedAt,
         true,
         true,
@@ -489,6 +502,8 @@ async function projectContextAssets(
     const asset = await contextAsset(
       path,
       contextSource('project', name === 'SYSTEM.md' ? 'system' : 'append-system', cwd),
+      'project',
+      cwd,
       capturedAt,
       enabled,
       enabled,
@@ -496,42 +511,6 @@ async function projectContextAssets(
     if (asset) assets.push(asset)
   }
   return assets
-}
-
-async function readSessionCwd(filePath: string): Promise<string | undefined> {
-  try {
-    for await (const line of readJsonlLines(filePath, 0)) {
-      if (line.endOffset > MAX_SESSION_HEADER_SCAN_BYTES) return undefined
-      if (!line.text.trim()) continue
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(line.text.replace(/^\uFEFF/, ''))
-      } catch {
-        if (!line.terminated) return undefined
-        continue
-      }
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
-      const entry = parsed as Record<string, unknown>
-      if (entry.type !== 'session') return undefined
-      const cwd = typeof entry.cwd === 'string' ? entry.cwd.trim() : ''
-      return cwd && isAbsolute(cwd) ? resolve(cwd) : undefined
-    }
-  } catch (error) {
-    if (isMissingPathError(error)) return undefined
-    throw error
-  }
-  return undefined
-}
-
-export async function listPiProjectCwds(dataRoot: string | undefined): Promise<string[]> {
-  if (!dataRoot) return []
-  const cwds = new Map<string, string>()
-  for (const filePath of await listJsonlFiles(dataRoot)) {
-    const cwd = await readSessionCwd(filePath)
-    if (!cwd || !await isDirectory(cwd)) continue
-    if (!cwds.has(pathKey(cwd))) cwds.set(pathKey(cwd), cwd)
-  }
-  return [...cwds.values()]
 }
 
 async function resolvePaths(
@@ -606,6 +585,7 @@ async function resolvedSkillsAsAssets(input: {
     assets.push({
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: dirname(skill.filePath),
         source,
         ...(version ? { version } : {}),
@@ -648,6 +628,7 @@ async function resolvedExtensionsAsAssets(input: {
         upstreamIdentity: `pi-extension:${resource.metadata.scope}:${resource.metadata.source}:${resource.path}`,
       },
       binding: {
+        ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source,
         ...(version ? { version } : {}),
@@ -726,7 +707,7 @@ export async function resolvePiResourceAssets(
   }))
 
   const globalExtensionsMayOverrideTrust = userExtensions.some(resource => resource.enabled)
-  const projectCwds = await listPiProjectCwds(ctx.installation.dataRoot)
+  const projectCwds = await listPiProjectCwds(ctx)
   for (const cwd of projectCwds) {
     if (ctx.abortSignal.aborted) break
 
@@ -790,8 +771,6 @@ export async function resolvePiResourceAssets(
 }
 
 export const piResourceResolverInternals = {
-  readSessionCwd,
-  listPiProjectCwds,
   builtInProjectTrust,
   configuredResource,
   effectiveEnabled,

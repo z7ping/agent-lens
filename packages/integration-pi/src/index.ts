@@ -10,7 +10,7 @@ export { integrationManifest as piIntegrationManifest } from './manifest'
 export const piIntegration = defineAgentLensIntegration(
   integrationManifest,
   [
-    { pluginId: '@agent-lens/source-pi', capabilities: ['source'], activation: 'catalog', lifecycle: 'plugin', plugin: piSourcePlugin },
+    { pluginId: '@agent-lens/source-pi', capabilities: ['source', 'assets'], activation: 'catalog', lifecycle: 'plugin', plugin: piSourcePlugin },
     { pluginId: '@agent-lens/runtime-cordis/pi-live', capabilities: ['runtime', 'live'], authorization: 'explicit', activation: 'enabled', lifecycle: 'runtime', plugin: piLiveRuntimePlugin },
   ],
 )

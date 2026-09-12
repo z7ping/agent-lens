@@ -10,8 +10,8 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 21)
-    assert.equal(migrations.at(-1)?.name, 'maintenance-jobs')
+    assert.equal(migrations.at(-1)?.version, 22)
+    assert.equal(migrations.at(-1)?.name, 'asset-binding-scope')
 
     const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const namesBefore = new Set(indexesBefore.map(item => item.name))
@@ -53,6 +53,14 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const checkpointColumns = storage.db.prepare("PRAGMA table_info('source_checkpoints')")
       .all() as Array<{ name: string }>
     assert.ok(checkpointColumns.some(column => column.name === 'revision'))
+
+    const assetBindingColumns = storage.db.prepare("PRAGMA table_info('asset_bindings')")
+      .all() as Array<{ name: string }>
+    assert.ok(assetBindingColumns.some(column => column.name === 'scope'))
+    assert.ok(assetBindingColumns.some(column => column.name === 'scope_root'))
+    const assetBindingIndexes = storage.db.prepare("PRAGMA index_list('asset_bindings')")
+      .all() as Array<{ name: string }>
+    assert.ok(assetBindingIndexes.some(index => index.name === 'idx_asset_bindings_scope'))
 
     const checkpointTriggers = storage.db.prepare(`
       SELECT name FROM sqlite_master

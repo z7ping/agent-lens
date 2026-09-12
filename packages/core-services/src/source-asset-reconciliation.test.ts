@@ -3,6 +3,7 @@ import test from 'node:test'
 import type {
   AgentInstallation,
   AssetBinding,
+  AssetBindingHint,
   AssetDefinition,
   AssetService,
   AssetStateInput,
@@ -77,6 +78,8 @@ function sourceWithInventory(inventory: { current: boolean; discoverable?: boole
           displayName: 'Skill One',
         },
         binding: {
+          scope: 'project',
+          scopeRoot: '/tmp/project',
           path: '/tmp/skills/skill-one',
           source: 'test:skills',
         },
@@ -90,20 +93,13 @@ function sourceWithInventory(inventory: { current: boolean; discoverable?: boole
 function harness() {
   const checkpoints = new Map<string, unknown>()
   const writes: AssetStateInput[] = []
+  const bindingInputs: AssetBindingHint[] = []
   const definition: AssetDefinition = {
     id: 'asset-skill-one',
     type: 'skill',
     canonicalName: 'skill-one',
     displayName: 'Skill One',
   }
-  const binding: AssetBinding = {
-    id: 'binding-skill-one',
-    assetId: definition.id,
-    installationId: installation.id,
-    path: '/tmp/skills/skill-one',
-    source: 'test:skills',
-  }
-
   const storage = {
     checkpoints: {
       async get<T>(scope: string, key: string) {
@@ -119,7 +115,13 @@ function harness() {
   } as unknown as StorageService
   const assets = {
     async resolveDefinition() { return definition },
-    async resolveBinding() { return binding },
+    async resolveBinding(input: AssetBindingHint) {
+      bindingInputs.push(structuredClone(input))
+      return {
+        id: 'binding-skill-one',
+        ...input,
+      } as AssetBinding
+    },
     async recordState(input: AssetStateInput) {
       writes.push(structuredClone(input))
       return {
@@ -140,7 +142,7 @@ function harness() {
     } as unknown as CapturePolicyService,
   )
 
-  return { runner, writes }
+  return { runner, writes, bindingInputs }
 }
 
 test('资产扫描不再把未声明 discoverable 自动提升为 true', async () => {
@@ -244,3 +246,19 @@ test('资产扫描失败时保留上一次成功快照，不把失败当成空�
   )
 })
 
+
+
+test('资产扫描把 Provider 声明的 scope 与 scopeRoot 原样交给 Canonical AssetBinding', async () => {
+  const inventory = { current: true }
+  const { runner, bindingInputs } = harness()
+  await runner.scan({
+    source: sourceWithInventory(inventory),
+    host,
+    detected,
+    abortSignal: new AbortController().signal,
+  })
+
+  assert.equal(bindingInputs.length, 1)
+  assert.equal(bindingInputs[0]?.scope, 'project')
+  assert.equal(bindingInputs[0]?.scopeRoot, '/tmp/project')
+})

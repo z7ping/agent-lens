@@ -1,11 +1,17 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import type {
   DiscoveredAsset,
   EvidenceCandidate,
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { asRecord, isMissingPathError } from '@agent-lens/source-support'
+import {
+  codexTable,
+  readCodexConfig,
+  type CodexTomlConfig,
+} from './config'
+import { discoverCodexInstructions } from './instructions'
 
 async function safeStat(path: string) {
   try {
@@ -96,6 +102,8 @@ async function* discoverSkills(
         binding: {
           path: skillDir,
           source: candidate.source,
+          scope: 'user',
+          scopeRoot: configRoot,
         },
         states: states(
           skillFile,
@@ -111,35 +119,22 @@ async function* discoverSkills(
   }
 }
 
-function mcpNamesFromToml(content: string): string[] {
-  const names = new Set<string>()
-  const regex = /^\s*\[mcp_servers\.(?:"([^"]+)"|'([^']+)'|([^\]]+))\]\s*$/gmi
-  let match: RegExpExecArray | null
-  while ((match = regex.exec(content))) {
-    const name = (match[1] ?? match[2] ?? match[3] ?? '').trim()
-    if (name) names.add(name)
-  }
-  return [...names]
+function mcpNamesFromConfig(config: CodexTomlConfig | null): string[] {
+  const servers = codexTable(config?.mcp_servers)
+  return servers ? Object.keys(servers) : []
 }
-
 async function* discoverMcpServers(
   configRoot: string,
   capturedAt: string,
+  config: CodexTomlConfig | null,
 ): AsyncIterable<DiscoveredAsset> {
   const configPath = join(configRoot, 'config.toml')
   const meta = await safeStat(configPath)
   if (!meta?.isFile()) return
 
-  let content = ''
-  try {
-    content = await readFile(configPath, 'utf8')
-  } catch (error) {
-    if (isMissingPathError(error)) return
-    throw error
-  }
   const observedAt = meta.mtime.toISOString()
 
-  for (const name of mcpNamesFromToml(content)) {
+  for (const name of mcpNamesFromConfig(config)) {
     yield {
       definition: {
         type: 'mcp',
@@ -149,6 +144,8 @@ async function* discoverMcpServers(
       binding: {
         path: configPath,
         source: 'codex:config.toml',
+        scope: 'user',
+        scopeRoot: configRoot,
       },
       states: states(
         configPath,
@@ -163,14 +160,44 @@ async function* discoverMcpServers(
   }
 }
 
+function pluginConfigEntries(config: CodexTomlConfig | null): Map<string, Record<string, unknown>> {
+  const table = codexTable(config?.plugins)
+  const entries = new Map<string, Record<string, unknown>>()
+  if (!table) return entries
+  for (const [id, value] of Object.entries(table)) {
+    const plugin = codexTable(value)
+    if (plugin) entries.set(id, plugin)
+  }
+  return entries
+}
+
+function pluginIdentityFromCachePath(cacheRoot: string, manifestPath: string): {
+  configId?: string
+  pluginName?: string
+  version?: string
+} {
+  const relativeManifest = relative(cacheRoot, manifestPath).replaceAll('\\', '/')
+  const parts = relativeManifest.split('/').filter(Boolean)
+  if (parts.length < 4) return {}
+  const [marketplace, pluginName, version] = parts
+  if (!marketplace || !pluginName || !version) return {}
+  return {
+    configId: `${pluginName}@${marketplace}`,
+    pluginName,
+    version,
+  }
+}
+
 async function* discoverPluginManifests(
   configRoot: string,
   capturedAt: string,
+  config: CodexTomlConfig | null,
 ): AsyncIterable<DiscoveredAsset> {
-  const pluginsRoot = join(configRoot, 'plugins')
-  const seen = new Set<string>()
+  const cacheRoot = join(configRoot, 'plugins', 'cache')
+  const configured = pluginConfigEntries(config)
+  const seenConfigIds = new Set<string>()
 
-  for await (const manifestPath of walkNamedFile(join(pluginsRoot, 'cache'), 'plugin.json')) {
+  for await (const manifestPath of walkNamedFile(cacheRoot, 'plugin.json')) {
     const meta = await safeStat(manifestPath)
     if (!meta?.isFile()) continue
     let manifest: Record<string, unknown> = {}
@@ -178,76 +205,91 @@ async function* discoverPluginManifests(
       manifest = asRecord(JSON.parse(await readFile(manifestPath, 'utf8')))
     } catch (error) {
       if (!isMissingPathError(error) && !(error instanceof SyntaxError)) throw error
-      // Missing/malformed metadata does not erase the independently observed plugin directory.
+      // Cache layout still proves an installed plugin even when optional manifest metadata is unreadable.
     }
+
+    const cacheIdentity = pluginIdentityFromCachePath(cacheRoot, manifestPath)
+    const configId = cacheIdentity.configId
+    const configuredPlugin = configId ? configured.get(configId) : undefined
+    if (configId) seenConfigIds.add(configId)
 
     const name = typeof manifest.name === 'string' && manifest.name
       ? manifest.name
       : typeof manifest.id === 'string' && manifest.id
         ? manifest.id
-        : basename(dirname(manifestPath))
-    const version = typeof manifest.version === 'string' && manifest.version
+        : cacheIdentity.pluginName ?? basename(dirname(manifestPath))
+    const manifestVersion = typeof manifest.version === 'string' && manifest.version
       ? manifest.version
       : undefined
-    const upstreamIdentity = typeof manifest.id === 'string' && manifest.id
-      ? manifest.id
-      : undefined
+    const version = manifestVersion ?? cacheIdentity.version
     const bindingPath = dirname(manifestPath)
-    const key = `${name}:${bindingPath}`
-    if (seen.has(key)) continue
-    seen.add(key)
     const observedAt = meta.mtime.toISOString()
+    const configuredEnabled = configuredPlugin?.enabled
 
     yield {
       definition: {
         type: 'plugin',
-        canonicalName: name,
+        canonicalName: configId ?? name,
         displayName: name,
-        ...(upstreamIdentity ? { upstreamIdentity } : {}),
+        ...(configId ? { upstreamIdentity: configId } : {}),
       },
       binding: {
         path: bindingPath,
-        source: 'codex:plugin-manifest',
+        source: 'codex:plugin-cache',
+        scope: 'user',
+        scopeRoot: configRoot,
         ...(version ? { version } : {}),
       },
       states: states(
         manifestPath,
         observedAt,
         capturedAt,
-        [{ state: 'installed', value: true }],
+        [
+          { state: 'installed', value: true },
+          ...(configuredPlugin ? [{ state: 'configured' as const, value: true as const }] : []),
+          ...(configuredPlugin && configuredEnabled === false
+            ? [{ state: 'enabled' as const, value: false as const }]
+            : configuredPlugin
+              ? [{ state: 'enabled' as const, value: 'unknown' as const }]
+              : []),
+        ],
       ),
     }
   }
 
-  for (const entry of await safeEntries(pluginsRoot)) {
-    if (!entry.isDirectory() || entry.name === 'cache') continue
-    const bindingPath = join(pluginsRoot, entry.name)
-    const key = `${entry.name}:${bindingPath}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const meta = await safeStat(bindingPath)
-    if (!meta) continue
-    const observedAt = meta.mtime.toISOString()
+  const configPath = join(configRoot, 'config.toml')
+  const configMeta = await safeStat(configPath)
+  if (!configMeta?.isFile()) return
+  const observedAt = configMeta.mtime.toISOString()
+  for (const [configId, plugin] of configured) {
+    if (seenConfigIds.has(configId)) continue
+    const enabled = plugin.enabled
     yield {
       definition: {
         type: 'plugin',
-        canonicalName: entry.name,
-        displayName: entry.name,
+        canonicalName: configId,
+        displayName: configId,
+        upstreamIdentity: configId,
       },
       binding: {
-        path: bindingPath,
-        source: 'codex:plugins',
+        path: configPath,
+        source: 'codex:config.toml:plugin',
+        scope: 'user',
+        scopeRoot: configRoot,
       },
       states: states(
-        bindingPath,
+        configPath,
         observedAt,
         capturedAt,
-        [{ state: 'installed', value: true }],
+        [
+          { state: 'configured', value: true },
+          { state: 'installed', value: 'unknown' },
+          { state: 'enabled', value: enabled === false ? false : 'unknown' },
+        ],
       ),
     }
   }
 }
-
 async function* discoverHooks(
   configRoot: string,
   capturedAt: string,
@@ -277,6 +319,8 @@ async function* discoverHooks(
       binding: {
         path: hooksPath,
         source: 'codex:hooks.json',
+        scope: 'user',
+        scopeRoot: configRoot,
       },
       states: states(
         hooksPath,
@@ -291,52 +335,20 @@ async function* discoverHooks(
   }
 }
 
-async function* discoverGlobalRule(
-  configRoot: string,
-  capturedAt: string,
-): AsyncIterable<DiscoveredAsset> {
-  for (const fileName of ['AGENTS.override.md', 'AGENTS.md']) {
-    const filePath = join(configRoot, fileName)
-    const meta = await safeStat(filePath)
-    if (!meta?.isFile() || meta.size === 0) continue
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: {
-        type: 'rule',
-        canonicalName: 'codex-global-instructions',
-        displayName: fileName,
-      },
-      binding: {
-        path: filePath,
-        source: 'codex:global-rule',
-      },
-      states: states(
-        filePath,
-        observedAt,
-        capturedAt,
-        [
-          { state: 'configured', value: true },
-          { state: 'discoverable', value: 'unknown' },
-        ],
-      ),
-    }
-    return
-  }
-}
-
 export async function* discoverCodexAssets(
   ctx: SourceExecutionContext,
 ): AsyncIterable<DiscoveredAsset> {
   const configRoot = ctx.installation.configRoot
   if (!configRoot || ctx.abortSignal.aborted) return
   const capturedAt = new Date().toISOString()
+  const config = await readCodexConfig(configRoot)
 
   const groups = [
     discoverSkills(configRoot, capturedAt),
-    discoverMcpServers(configRoot, capturedAt),
-    discoverPluginManifests(configRoot, capturedAt),
+    discoverMcpServers(configRoot, capturedAt, config),
+    discoverPluginManifests(configRoot, capturedAt, config),
     discoverHooks(configRoot, capturedAt),
-    discoverGlobalRule(configRoot, capturedAt),
+    discoverCodexInstructions(ctx, capturedAt, config),
   ]
 
   for (const group of groups) {
@@ -348,5 +360,6 @@ export async function* discoverCodexAssets(
 }
 
 export const codexAssetInternals = {
-  mcpNamesFromToml,
+  mcpNamesFromConfig,
+  pluginIdentityFromCachePath,
 }

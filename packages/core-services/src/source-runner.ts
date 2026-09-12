@@ -901,6 +901,8 @@ export class SourceAssetRunner {
           ...(safeDiscovered.binding?.runtimeProfileId ?? runtimeProfile?.id
             ? { runtimeProfileId: safeDiscovered.binding?.runtimeProfileId ?? runtimeProfile!.id }
             : {}),
+          ...(safeDiscovered.binding?.scope ? { scope: safeDiscovered.binding.scope } : {}),
+          ...(safeDiscovered.binding?.scopeRoot ? { scopeRoot: safeDiscovered.binding.scopeRoot } : {}),
           ...(safeDiscovered.binding?.path ? { path: safeDiscovered.binding.path } : {}),
           ...(safeDiscovered.binding?.source ? { source: safeDiscovered.binding.source } : {}),
           ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
