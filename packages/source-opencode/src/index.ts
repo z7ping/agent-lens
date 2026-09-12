@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
 import { access } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
 import {
   evidenceFromSourceRecord,
@@ -31,6 +31,8 @@ import {
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { isMissingPathError } from '@agent-lens/source-support'
+import { discoverOpenCodeAssets } from './assets.js'
+import { OPENCODE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 
 const SOURCE_ID = 'opencode'
 const PARSER_VERSION = '3'
@@ -258,6 +260,28 @@ function selectRows(
   `).all(...params).map(openCodeRow)
 }
 
+function knownSessionDirectories(db: Database.Database): string[] {
+  const rows = db.prepare(`
+    SELECT DISTINCT directory
+      FROM session
+     WHERE directory IS NOT NULL
+       AND trim(directory) <> ''
+     ORDER BY directory
+  `).all() as Array<{ directory: string | null }>
+
+  const result = new Map<string, string>()
+  for (const row of rows) {
+    const raw = row.directory?.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const directory = resolve(raw)
+    const key = process.platform === 'win32'
+      ? directory.replaceAll('\\', '/').toLowerCase()
+      : directory.replaceAll('\\', '/')
+    if (!result.has(key)) result.set(key, directory)
+  }
+  return [...result.values()]
+}
+
 function recentRows(db: Database.Database, limit: number): OpenCodeRow[] {
   const rows = db.prepare(`
     SELECT p.rowid AS row_id,
@@ -340,6 +364,13 @@ export async function* ingestOpenCodeHistory(
   if (!root || ctx.abortSignal.aborted) return
   const db = openDatabase(root)
   try {
+    // Workspace inventory comes directly from the native session table, so an
+    // already-synced database can gain Assets support without replaying history.
+    await ctx.checkpoint.set(
+      OPENCODE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
+      knownSessionDirectories(db),
+    )
+
     // v2 会一次性重放旧记录，让已经导入的会话也获得原生标题。
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
     const activeSinceMs = Number.isFinite(parsedActiveSince) ? parsedActiveSince : undefined
@@ -575,7 +606,7 @@ export async function declareOpenCodeCapabilities(
     { sourceId: SOURCE_ID, name: 'tool-call', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'Only source-visible reasoning parts are retained' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'unavailable', captureModes: [], reason: 'No stable OpenCode asset inventory mapping has been proven for 1.0 yet' },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'V2 global/project AGENTS, Skills, Agents, Commands, local Plugins and config-declared MCP/plugins are observable; merged config, remote/managed sources, V1 compatibility and runtime-loaded state require stronger OpenCode evidence' },
     { sourceId: SOURCE_ID, name: 'permission', status: 'unavailable', captureModes: [], reason: 'Permission lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'unavailable', captureModes: [], reason: 'Subagent lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Usage mapping is not implemented' },
@@ -600,6 +631,7 @@ export const openCodeSourceDefinition: SourceDefinition = {
   manifest: openCodeManifest,
   detect: detectOpenCode,
   declareCapabilities: declareOpenCodeCapabilities,
+  discoverAssets: discoverOpenCodeAssets,
   ingestHistory: ingestOpenCodeHistory,
   startCapture: startOpenCodeRuntimeCapture,
   normalize: normalizeOpenCodeRecord,
@@ -622,4 +654,9 @@ export const openCodeSourceInternals = {
   recordFromRow,
   selectRows,
   openCodeEnvelope,
+  knownSessionDirectories,
 }
+
+export * from './assets.js'
+export * from './project-context.js'
+export * from './workspace-context.js'
