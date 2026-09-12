@@ -762,10 +762,13 @@ export async function resolvePiResourceAssets(
 
   const dedup = new Map<string, DiscoveredAsset>()
   for (const asset of assets) {
-    const path = asset.binding?.path ?? ''
-    const source = asset.binding?.source ?? ''
-    const key = `${asset.definition.type}\u0000${asset.definition.upstreamIdentity ?? asset.definition.canonicalName}\u0000${path}\u0000${source}`
-    dedup.set(key, asset)
+    const scopedAsset = asset.binding?.scope === 'user' && !asset.binding.scopeRoot
+      ? { ...asset, binding: { ...asset.binding, scopeRoot: agentDir } }
+      : asset
+    const path = scopedAsset.binding?.path ?? ''
+    const source = scopedAsset.binding?.source ?? ''
+    const key = `${scopedAsset.definition.type}\u0000${scopedAsset.definition.upstreamIdentity ?? scopedAsset.definition.canonicalName}\u0000${path}\u0000${source}`
+    dedup.set(key, scopedAsset)
   }
   return [...dedup.values()]
 }
