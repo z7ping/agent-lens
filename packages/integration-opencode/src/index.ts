@@ -9,7 +9,7 @@ export const openCodeIntegration = defineAgentLensIntegration(
   [
     {
       pluginId: '@agent-lens/source-opencode',
-      capabilities: ['source'],
+      capabilities: ['source', 'assets'],
       activation: 'catalog',
       lifecycle: 'plugin',
       plugin: openCodeSourcePlugin,
