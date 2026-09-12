@@ -38,7 +38,7 @@ export const chineseReleaseErrorsMessages: LocaleMessagesDto = {
     launchableProjectsFailed: '可启动项目读取失败，请检查 AgentLens 运行状态。',
     piLiveRequestFailed: 'Pi 实时对话 请求失败（{{status}}）',
     piLiveEnded: 'Pi 实时对话 任务已结束，或当前版本没有可用于恢复该任务的持久状态。',
-    piRuntimeRestoreFailed: 'Pi 运行实例 无法恢复',
+    piRuntimeRestoreFailed: 'Pi 运行实例无法恢复',
     invalidSemver: '无法比较无效的语义化版本',
     agentsOverviewFailed: '智能体概览查询失败。请重试；若持续失败，请运行诊断命令。',
     capturePolicyNotLoaded: '采集策略状态尚未加载',
