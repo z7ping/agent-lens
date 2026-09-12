@@ -188,6 +188,7 @@ const applyHttpSurface = Object.assign(
       () => eventLoopSnapshot(eventLoop),
       config.healthDetails,
     )
+    const piLive = ctx.get('piLive')
     const surface = await startHttpSurface(healthStorage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       eventHub,
@@ -195,7 +196,7 @@ const applyHttpSurface = Object.assign(
       capabilities: ctx.capabilities,
       capturePolicy: ctx.capturePolicy,
       backup: ctx.backup,
-      piLive: ctx.get('piLive'),
+      ...(piLive ? { piLive } : {}),
       rescanAgents: () => sourceRescan.rescan(),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
