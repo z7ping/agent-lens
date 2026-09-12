@@ -10,9 +10,12 @@ test('Backup KPI 使用单一摘要条而不是四张悬浮卡', () => {
   assert.match(backupCss, /\.backup-page \.future-kpi \{[\s\S]*?border: 0;[\s\S]*?box-shadow: none;/)
 })
 
-test('Backup 保留连续 Protection 列表与 Snapshot 数据表', () => {
-  assert.match(backupCss, /\.backup-page \.protection-grid \{[\s\S]*?gap: 0;[\s\S]*?border: 1px solid var\(--al-line\);/)
-  assert.match(backupCss, /\.backup-page \.protection-card \{[\s\S]*?border: 0;[\s\S]*?border-bottom: 1px solid var\(--al-line\);/)
+test('Backup Protection 与 Snapshot 都使用紧凑事实表', () => {
+  assert.match(backupPage, /<table className="protection-table">/)
+  assert.match(backupPage, /t\('protection\.files'\)/)
+  assert.match(backupPage, /t\('protection\.sessions'\)/)
+  assert.doesNotMatch(backupPage, /className="protection-counts"/)
+  assert.match(backupCss, /\.backup-page \.protection-table-scroll \{[\s\S]*?box-shadow: none;/)
   assert.match(backupPage, /<table className="snapshot-table">/)
   assert.match(backupCss, /\.backup-page \.future-table-scroll \{[\s\S]*?border-top: 1px solid var\(--al-line\);[\s\S]*?border-bottom: 1px solid var\(--al-line\);/)
 })
