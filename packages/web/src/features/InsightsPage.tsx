@@ -11,7 +11,7 @@ import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
 
 function duration(ms: number, t: TFunction): string {
   if (ms < 1000) return t('duration.milliseconds', { value: ms })
@@ -138,15 +138,15 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
           </section>
 
           <section className="insight-kpi-grid">
-            <div className="insight-kpi"><span>{t('page.sessions')}</span><strong>{data.summary.sessionCount}</strong><small>{comparison ? t('page.comparedPrevious', { delta: deltaLabel(delta?.sessionCountPercent ?? null, t) }) : t('page.currentRange')}</small></div>
-            <div className="insight-kpi"><span>{t('page.interactions')}</span><strong>{data.summary.interactionCount}</strong><small>{comparison ? t('page.comparedPrevious', { delta: deltaLabel(delta?.interactionCountPercent ?? null, t) }) : t('page.normalizedInteractions')}</small></div>
-            <div className="insight-kpi"><span>{t('page.toolCalls')}</span><strong>{data.summary.toolCallCount}</strong><small>{comparison ? t('page.comparedPrevious', { delta: deltaLabel(delta?.toolCallCountPercent ?? null, t) }) : t('page.observedCallsOnly')}</small></div>
-            <div className="insight-kpi"><span>{t('page.explicitFailures')}</span><strong>{data.summary.errorCount}</strong><small>{t('page.failureDuration', { duration: duration(data.summary.totalDurationMs, t) })}</small></div>
+            <div className="insight-kpi"><span>{t('page.sessions')}</span><strong>{data.summary.sessionCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.sessionCountPercent ?? null, t) })}</small>}</div>
+            <div className="insight-kpi"><span>{t('page.interactions')}</span><strong>{data.summary.interactionCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.interactionCountPercent ?? null, t) })}</small>}</div>
+            <div className="insight-kpi"><span>{t('page.toolCalls')}</span><strong>{data.summary.toolCallCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.toolCallCountPercent ?? null, t) })}</small>}</div>
+            <div className="insight-kpi"><span>{t('page.explicitFailures')}</span><strong>{data.summary.errorCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.errorCountPercent ?? null, t) })}</small>}</div>
           </section>
 
           <section className="insight-grid insight-grid-main">
             <article className="insight-card">
-              <div className="insight-card-head"><div><h2>{t('page.trendTitle')}</h2><p>{boundedRange ? t('page.trendBounded') : t('page.trendAll')}</p></div></div>
+              <div className="insight-card-head"><div><h2>{t('page.trendTitle')}</h2></div></div>
               <div className="insight-trend" role="img" aria-label={t('page.trendAria')}>
                 {data.trend.map(point => <div key={point.date} className="insight-trend-column" title={t('page.trendPoint', { date: point.date, sessions: point.sessionCount, calls: point.toolCallCount })}>
                   <div className="insight-trend-bar-wrap"><span className="insight-trend-bar" style={{ height: `${Math.max(point.sessionCount ? 8 : 1, point.sessionCount / maxTrendSessions * 100)}%` }}/></div>
@@ -157,7 +157,7 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
             </article>
 
             <article className="insight-card">
-              <div className="insight-card-head"><div><h2>{t('page.comparisonTitle')}</h2><p>{comparison ? t('page.comparisonDescription') : data.meta.sampled && boundedRange ? t('page.comparisonSampled') : t('page.comparisonHint')}</p></div></div>
+              <div className="insight-card-head"><div><h2>{t('page.comparisonTitle')}</h2></div></div>
               {comparison ? <div className="insight-comparison-grid">
                 <MetricDelta label={t('page.sessions')} value={delta?.sessionCountPercent ?? null}/>
                 <MetricDelta label={t('page.interactions')} value={delta?.interactionCountPercent ?? null}/>
@@ -170,7 +170,7 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
           </section>
 
           <section className="insight-card">
-            <div className="insight-card-head"><div><h2>{t('page.agentStructureTitle')}</h2><p>{t('page.agentStructureDescription')}</p></div></div>
+            <div className="insight-card-head"><div><h2>{t('page.agentStructureTitle')}</h2></div></div>
             <div className="insight-agent-table-wrap"><table className="insight-agent-table">
               <thead><tr><th>{t('page.agent')}</th><th>{t('page.sessions')}</th><th>{t('page.interactions')}</th><th>{t('page.toolCalls')}</th><th>{t('page.explicitFailures')}</th><th>{t('page.observedAssetCalls')}</th><th>{t('page.sessionDurationTotal')}</th></tr></thead>
               <tbody>{insightAgents.map(agent => <tr key={agent.sourceId}><td><b>{agentLabel(agent.sourceId)}</b></td><td>{agent.sessionCount}</td><td>{agent.interactionCount}</td><td>{agent.toolCallCount}</td><td>{agent.errorCount}</td><td>{agent.observedAssetCallCount}</td><td>{duration(agent.totalDurationMs, t)}</td></tr>)}</tbody>
@@ -179,14 +179,14 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
 
           <section className="insight-grid">
             <article className="insight-card">
-              <div className="insight-card-head"><div><h2>{t('page.assetAdoptionTitle')}</h2><p>{t('page.assetAdoptionDescription')}</p></div></div>
+              <div className="insight-card-head"><div><h2>{t('page.assetAdoptionTitle')}</h2></div></div>
               {data.assets.length ? <div className="insight-asset-list">{data.assets.slice(0, 12).map(asset => <div className="insight-asset-row" key={`${asset.type}:${asset.canonicalName}`}>
                 <div><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type, t)} · {asset.sourceIds.map(sourceId => agentLabel(sourceId)).join(' / ')}</span></div><strong>{asset.callCount}<small> {t('page.times')}</small></strong>
               </div>)}</div> : <div className="insight-inline-empty">{t('page.assetAdoptionEmpty')}</div>}
             </article>
 
             <article className="insight-card">
-              <div className="insight-card-head"><div><h2>{t('page.workflowTitle')}</h2><p>{t('page.workflowDescription', { count: data.meta.workflowPatternMinimumSessions })}</p></div></div>
+              <div className="insight-card-head"><div><h2>{t('page.workflowTitle')}</h2></div><span>≥ {t('page.workflowSessions', { count: data.meta.workflowPatternMinimumSessions })}</span></div>
               {data.workflowPatterns.length ? <div className="insight-pattern-list">{data.workflowPatterns.map(pattern => <div className="insight-pattern" key={pattern.key}>
                 <div className="insight-pattern-steps">{pattern.steps.map((step, index) => <span key={`${pattern.key}:${index}`}><b>{step}</b>{index < pattern.steps.length - 1 && <i><UiIcon name="arrow-right" size={14}/></i>}</span>)}</div>
                 <div className="insight-pattern-meta"><strong>{t('page.workflowSessions', { count: pattern.sessionCount })}</strong><span>{t('page.workflowOccurrences', { count: pattern.occurrenceCount })}</span><span>{t('page.workflowSamples', { count: pattern.observationIds.length })}</span></div>
@@ -194,11 +194,12 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
             </article>
           </section>
 
-          <section className="insight-method-note">
-            <b>{t('page.methodology')}</b>
-            {data.meta.notes.map(note => <span key={note}>{note}</span>)}
-            {data.meta.sampled && <span className="is-warning">{t('page.sampledWarning', { count: data.meta.sessionSampleLimit })}</span>}
-          </section>
+          {data.meta.sampled && <section className="insight-method-note is-warning">
+            <span>{t('page.sampledWarning', { count: data.meta.sessionSampleLimit })}</span>
+          </section>}
+          {data.meta.notes.length > 0 && <Disclosure className="disclosure-group insight-method-disclosure" summary={t('page.methodology')}>
+            <div className="insight-method-note">{data.meta.notes.map(note => <span key={note}>{note}</span>)}</div>
+          </Disclosure>}
         </> : <div className="insight-empty-wrap"><EmptyStatePanel
           icon={<UiIcon name="trend" size={20}/>}
           title={t('page.emptyTitle')}
