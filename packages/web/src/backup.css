@@ -351,37 +351,6 @@
   border-top: 1px solid var(--al-line);
 }
 
-.backup-agent-detail-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 15px 2px;
-  border-bottom: 1px solid var(--al-line);
-}
-
-.backup-agent-detail-facts {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 18px;
-}
-
-.backup-agent-detail-facts span {
-  color: var(--al-muted);
-  font-size: 12px;
-  text-align: right;
-}
-
-.backup-agent-detail-facts b {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--al-ink-2);
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .backup-agent-detail-section {
   padding: 16px 2px 4px;
   border-bottom: 1px solid var(--al-line);
