@@ -39,7 +39,8 @@ test('Claude Source covers history, assets and runtime reconciliation', async ()
   const cwd = join(root, 'workspace')
   const inbox = join(root, 'inbox')
   await mkdir(dirname(transcript), { recursive: true })
-  await mkdir(cwd, { recursive: true })
+  await mkdir(join(cwd, '.git'), { recursive: true })
+  await writeFile(join(cwd, 'CLAUDE.md'), '# Workspace instructions\n', 'utf8')
   await mkdir(join(root, 'skills', 'reviewer'), { recursive: true })
   await writeFile(join(root, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
   await writeFile(join(root, 'settings.json'), JSON.stringify({
@@ -109,9 +110,11 @@ test('Claude Source covers history, assets and runtime reconciliation', async ()
     const host = await identity.resolveHost({ name: 'claude-test-host' })
     const [detected] = await detectClaudeCode({
       host,
-      env: { CLAUDE_CODE_HOME: root, PATH: '' },
+      env: { CLAUDE_CONFIG_DIR: root, PATH: '' },
     })
     assert.ok(detected)
+    assert.equal(detected.configRoot, root)
+    assert.equal(detected.dataRoot, join(root, 'projects'))
 
     const historyResult = await history.sync({
       source: claudeSourceDefinition,
@@ -137,6 +140,32 @@ test('Claude Source covers history, assets and runtime reconciliation', async ()
       abortSignal: new AbortController().signal,
     })
     assert.ok(assetResult.assetsDiscovered >= 3)
+
+    const projectInstructions = storage.db.prepare(`
+      SELECT
+        d.type AS type,
+        d.display_name AS displayName,
+        b.path AS path,
+        b.scope AS scope,
+        b.scope_root AS scopeRoot
+      FROM asset_bindings b
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE b.scope = 'project'
+        AND d.type IN ('context', 'rule')
+      ORDER BY b.path
+    `).all() as Array<{
+      type: string
+      displayName: string | null
+      path: string
+      scope: string
+      scopeRoot: string
+    }>
+
+    assert.ok(projectInstructions.some(item =>
+      item.path === join(cwd, 'CLAUDE.md')
+      && item.scope === 'project'
+      && item.scopeRoot === cwd
+    ))
 
     await mkdir(inbox, { recursive: true })
     await writeFile(join(inbox, 'runtime.json'), JSON.stringify({
