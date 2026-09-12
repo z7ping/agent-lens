@@ -331,6 +331,8 @@ export class AgentOverviewProjection {
           asset.bindings.push({
             id: entry.binding.id,
             installationId: entry.binding.installationId,
+            ...(entry.binding.scope ? { scope: entry.binding.scope } : {}),
+            ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
             ...(entry.binding.path ? { path: entry.binding.path } : {}),
             ...(entry.binding.source ? { source: entry.binding.source } : {}),
             ...(entry.binding.version ? { version: entry.binding.version } : {}),
