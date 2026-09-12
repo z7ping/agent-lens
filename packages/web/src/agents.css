@@ -487,7 +487,19 @@
   padding: 2px 18px 14px;
 }
 .asset-item { min-width: 0; padding: 9px 11px; border: 1px solid var(--al-line); border-radius: 9px; background: var(--al-soft-2); }
-.asset-item-head { display: flex; align-items: center; gap: 6px; color: var(--al-muted); font-size: 12px; }
+.asset-item-head { display: flex; min-width: 0; align-items: center; gap: 6px; color: var(--al-muted); font-size: 12px; }
+.asset-scope {
+  max-width: 150px;
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--al-soft);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .asset-usage { margin-left: auto; color: var(--al-accent); font-weight: 640; }
 .asset-name { overflow: hidden; margin-top: 5px; color: var(--al-ink-2); font-size: 13px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .asset-states { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
