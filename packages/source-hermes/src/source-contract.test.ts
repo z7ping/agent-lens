@@ -226,7 +226,7 @@ test('Hermes project context follows current first-type-wins and AGENTS chain se
     )
     assert.equal(first.every(asset => asset.binding?.scopeRoot === projectRoot), true)
     assert.equal(first.every(asset =>
-      asset.states?.some(state => state.state === 'discoverable' && state.value === true)), true)
+      asset.states?.some(state => state.state === 'discoverable' && state.value === 'unknown')), true)
     assert.equal(first.some(asset => asset.binding?.path === join(cwd, 'CLAUDE.md')), false)
 
     await writeFile(join(packageDir, '.hermes.md'), '# Hermes-specific instructions\n', 'utf8')
