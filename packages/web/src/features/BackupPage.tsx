@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import type {
   BackupAssetKindDto,
   BackupOverviewResponseDto,
@@ -23,23 +25,14 @@ type PendingConfirmation =
   | { type: 'create' }
   | { type: 'import'; file: File }
 
-function kindLabel(kind: BackupAssetKindDto): string {
-  if (kind === 'skill') return '技能'
-  if (kind === 'mcp') return 'MCP（模型上下文协议）'
-  if (kind === 'plugin') return '插件'
-  if (kind === 'extension') return '扩展'
-  if (kind === 'hook') return '钩子'
-  if (kind === 'memory') return '记忆'
-  if (kind === 'rule') return '规则'
-  if (kind === 'session') return '会话 / 历史'
-  if (kind === 'config') return '关键配置'
-  return '其他 / 未分类'
+function kindLabel(kind: BackupAssetKindDto, t: TFunction): string {
+  return t(`kind.${kind === 'other' ? 'other' : kind}`)
 }
 
-function kindRecommendation(kind: BackupAssetKindDto): '建议备份' | '按需备份' | '默认排除' {
-  if (RECOMMENDED_KINDS.includes(kind)) return '建议备份'
-  if (OPTIONAL_KINDS.includes(kind)) return '按需备份'
-  return '默认排除'
+function kindRecommendation(kind: BackupAssetKindDto, t: TFunction): string {
+  if (RECOMMENDED_KINDS.includes(kind)) return t('recommendation.recommended')
+  if (OPTIONAL_KINDS.includes(kind)) return t('recommendation.optional')
+  return t('recommendation.excluded')
 }
 
 function recommendationTone(kind: BackupAssetKindDto): string {
@@ -55,14 +48,14 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
 }
 
-function formatOptionalBytes(bytes: number | undefined): string {
-  return bytes === undefined ? '大小待扫描' : formatBytes(bytes)
+function formatOptionalBytes(bytes: number | undefined, t: TFunction): string {
+  return bytes === undefined ? t('sizePending') : formatBytes(bytes)
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: string): string {
   const date = new Date(value)
   return Number.isFinite(date.getTime())
-    ? date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    ? date.toLocaleString(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : value
 }
 
@@ -84,11 +77,11 @@ function sourceLabel(sourceId: string, displayName?: string): string {
   return cleaned || agentLabel(sourceId)
 }
 
-function previewStatusLabel(status: string): string {
-  if (status === 'unchanged') return '一致'
-  if (status === 'missing') return '当前缺失'
-  if (status === 'modified') return '当前已修改'
-  return '阻止恢复'
+function previewStatusLabel(status: string, t: TFunction): string {
+  if (status === 'unchanged') return t('previewStatus.unchanged')
+  if (status === 'missing') return t('previewStatus.missing')
+  if (status === 'modified') return t('previewStatus.modified')
+  return t('previewStatus.blocked')
 }
 
 function kindFiles(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): number {
@@ -103,10 +96,17 @@ function kindBytes(source: BackupProtectionSourceDto, kind: BackupAssetKindDto):
   return source.kindDetails?.[kind]?.totalBytes
 }
 
-function kindDetailText(source: BackupProtectionSourceDto, kind: BackupAssetKindDto): string {
+function kindDetailText(
+  source: BackupProtectionSourceDto,
+  kind: BackupAssetKindDto,
+  t: TFunction,
+  locale: string,
+): string {
   const files = kindFiles(source, kind)
   const logical = kindLogicalAssets(source, kind)
-  return logical === undefined ? `${files.toLocaleString()} 个文件` : `${logical.toLocaleString()} 项 · ${files.toLocaleString()} 个文件`
+  return logical === undefined
+    ? t('files', { count: files.toLocaleString(locale) })
+    : t('logicalFiles', { logical: logical.toLocaleString(locale), files: files.toLocaleString(locale) })
 }
 
 function sumKindFiles(sources: BackupProtectionSourceDto[], sourceIds: string[], kind: BackupAssetKindDto): number {
@@ -132,6 +132,8 @@ export function BackupPage({
   selectedSourceIds: string[] | null
   onSelectedSourceIdsChange(sourceIds: string[] | null): void
 }) {
+  const { t, i18n } = useTranslation('backup')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
   const [overview, setOverview] = useState<BackupOverviewResponseDto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -234,7 +236,11 @@ export function BackupPage({
       const result = await api.createBackup({ sourceIds: selectedSources, kinds: selectedKinds })
       const bytes = result.snapshot.files.reduce((sum, file) => sum + file.size, 0)
       const excluded = result.snapshot.excluded.length
-      setSuccess(`快照已创建：${result.snapshot.files.length.toLocaleString()} 个文件 · ${formatBytes(bytes)}${excluded ? ` · ${excluded.toLocaleString()} 项按安全规则排除` : ''}`)
+      setSuccess(t('snapshotCreated', {
+        files: result.snapshot.files.length.toLocaleString(locale),
+        size: formatBytes(bytes),
+        excluded: excluded ? t('snapshotExcluded', { count: excluded.toLocaleString(locale) }) : '',
+      }))
       await refresh()
     } catch (reason) {
       setSuccess('')
@@ -340,16 +346,16 @@ export function BackupPage({
     try {
       await navigator.clipboard.writeText(path)
     } catch {
-      setError('复制路径失败，请手动选择路径文本。')
+      setError(t('copyPathFailed'))
     }
   }
 
   if (!overview || overview.index?.ready === false) return <PageLoadingState
-    eyebrow="资产备份"
-    statusLabel="首次建立索引"
-    title="正在准备资产备份范围"
-    description="后台正在按已配置智能体顺序建立首份本地备份索引。首个智能体完成后会立即展示，后续结果继续渐进补齐。"
-    facts={['按智能体顺序加载', '不会修改原始文件', '完成一个立即展示一个']}
+    eyebrow={t('loading.eyebrow')}
+    statusLabel={t('loading.status')}
+    title={t('loading.title')}
+    description={t('loading.description')}
+    facts={[t('loading.factOrdered'), t('loading.factReadonly'), t('loading.factProgressive')]}
   />
 
   const indexTime = overview.index?.generatedAt
@@ -365,17 +371,19 @@ export function BackupPage({
     const logical = sumKindLogicalAssets(sources, selectedSources, kind)
     return <label key={kind} className="builder-check">
       <input type="checkbox" checked={selectedKinds.includes(kind)} onChange={() => toggleKind(kind)}/>
-      {kindLabel(kind)}
-      <small>{logical === undefined ? `${files.toLocaleString()} 文件` : `${logical.toLocaleString()} 项 · ${files.toLocaleString()} 文件`}</small>
+      {kindLabel(kind, t)}
+      <small>{logical === undefined
+        ? t('builder.files', { count: files.toLocaleString(locale) })
+        : t('builder.logicalFiles', { logical: logical.toLocaleString(locale), files: files.toLocaleString(locale) })}</small>
     </label>
   }
 
   return <>
-    <Toolbar className="workspace-toolbar" aria-label="资产备份工具栏">
-      <ToolbarGroup><span className="backup-toolbar-note">默认排除凭据、令牌与私钥</span></ToolbarGroup>
+    <Toolbar className="workspace-toolbar" aria-label={t('toolbar.aria')}>
+      <ToolbarGroup><span className="backup-toolbar-note">{t('toolbar.safety')}</span></ToolbarGroup>
       <ToolbarGroup align="end">
-        <Button loading={busy === 'import'} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>导入备份包</Button>
-        <Button variant="primary" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}><UiIcon name="plus" size={14}/>创建快照</Button>
+        <Button loading={busy === 'import'} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
+        <Button variant="primary" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
       </ToolbarGroup>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
     </Toolbar>
@@ -383,90 +391,93 @@ export function BackupPage({
     <div className="page-scroll">
       <main className="future-content backup-page">
         <div className="future-heading">
-          <CompactPageHeading title="资产备份" description="看清智能体真正有哪些数据、在哪里、占多少，再决定哪些值得进入本地不可变快照。恢复仍必须先经过差异预演。"><span className="prototype-flag live">本地真实数据</span></CompactPageHeading>
-          <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>刷新扫描</Button>
+          <CompactPageHeading title={t('page.title')} description={t('page.description')}><span className="prototype-flag live">{t('page.liveData')}</span></CompactPageHeading>
+          <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>{t('page.refresh')}</Button>
         </div>
 
-        {error && <div className="backup-error" role="alert"><b>操作失败</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>关闭</button></div>}
-        {success && <div className="future-note" role="status"><b>操作完成</b> · {success}</div>}
+        {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
+        {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
 
-        <section className="future-kpis" aria-label="备份概览">
-          <article className="future-kpi"><div className="future-kpi-head"><span>可备份物理文件</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? '后台更新中' : '索引就绪'}</span></div><strong>{protectedFiles.toLocaleString()}</strong><small>{hasProtectedBytes ? `${formatBytes(protectedBytes)} · ` : ''}{indexTime ? `索引更新于 ${formatTime(indexTime)} · ` : ''}{detectedSourceCount} 个智能体</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>本地快照</span><span className="delta neutral">{snapshots[0] ? `最近 ${formatTime(snapshots[0].createdAt)}` : '尚无快照'}</span></div><strong>{snapshots.length}</strong><small>逻辑内容共 {formatBytes(totalSnapshotBytes)}；相同文件由内容库复用</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>最近校验</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? '通过' : '需关注') : '未执行'}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>校验清单和每个快照文件的 SHA-256</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>扫描阶段排除</span><span className="badge warn">安全优先</span></div><strong>{excludedFiles.toLocaleString()}</strong><small>符号链接、越界路径等在扫描阶段排除；秘密内容在创建快照时继续检查</small></article>
+        <section className="future-kpis" aria-label={t('kpi.aria')}>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.physicalFiles')}</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span></div><strong>{protectedFiles.toLocaleString()}</strong><small>{hasProtectedBytes ? `${formatBytes(protectedBytes)} · ` : ''}{indexTime ? t('kpi.indexUpdated', { time: formatTime(indexTime, locale) }) : ''}{t('kpi.agents', { count: detectedSourceCount })}</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.snapshots')}</span><span className="delta neutral">{snapshots[0] ? t('kpi.recent', { time: formatTime(snapshots[0].createdAt, locale) }) : t('kpi.noSnapshot')}</span></div><strong>{snapshots.length}</strong><small>{t('kpi.logicalSize', { size: formatBytes(totalSnapshotBytes) })}</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.lastVerify')}</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? t('kpi.passed') : t('kpi.attention')) : t('kpi.notRun')}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong><small>{t('kpi.verifyDescription')}</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.excluded')}</span><span className="badge warn">{t('kpi.safetyFirst')}</span></div><strong>{excludedFiles.toLocaleString()}</strong><small>{t('kpi.excludedDescription')}</small></article>
         </section>
 
         <div className="future-grid">
           <div className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>保护范围</h2><p>逻辑资产和物理文件分开显示。旧索引只知道文件数量时，会明确写成“文件”，不会把 4,000 个文件误称为 4,000 个 MCP。</p></div></div>
+              <div className="future-card-head"><div><h2>{t('protection.title')}</h2><p>{t('protection.description')}</p></div></div>
               <div className="future-card-body">
                 <div className="protection-grid">
                   {sources.map(source => <article key={source.sourceId} className={`protection-card ${!source.detected ? 'is-muted' : ''}`}>
-                    <div className="protection-card-head"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b><span className={`badge ${source.detected ? 'ok' : ''}`}>{source.detected ? '已检测' : '未检测'}</span></div>
+                    <div className="protection-card-head"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b><span className={`badge ${source.detected ? 'ok' : ''}`}>{source.detected ? t('protection.detected') : t('protection.notDetected')}</span></div>
                     <div className="protection-counts">
-                      <div className="protection-count"><strong>{source.logicalAssetCount === undefined ? '—' : source.logicalAssetCount.toLocaleString()}</strong><span>逻辑资产</span></div>
-                      <div className="protection-count"><strong>{source.fileCount.toLocaleString()}</strong><span>物理文件</span></div>
-                      <div className="protection-count"><strong>{source.totalBytes === undefined ? '—' : formatBytes(source.totalBytes)}</strong><span>数据大小</span></div>
+                      <div className="protection-count"><strong>{source.logicalAssetCount === undefined ? '—' : source.logicalAssetCount.toLocaleString()}</strong><span>{t('protection.logicalAssets')}</span></div>
+                      <div className="protection-count"><strong>{source.fileCount.toLocaleString()}</strong><span>{t('protection.physicalFiles')}</span></div>
+                      <div className="protection-count"><strong>{source.totalBytes === undefined ? '—' : formatBytes(source.totalBytes)}</strong><span>{t('protection.dataSize')}</span></div>
                     </div>
-                    <div className="protection-meta"><span>MCP {kindDetailText(source, 'mcp')} · 会话 {kindFiles(source, 'session').toLocaleString()} 文件</span><button className="link-btn" disabled={!source.detected} onClick={() => setDetailSourceId(source.sourceId)}>数据详情</button></div>
+                    <div className="protection-meta"><span>{t('protection.mcpSession', {
+                        mcp: kindDetailText(source, 'mcp', t, locale),
+                        sessions: kindFiles(source, 'session').toLocaleString(locale),
+                      })}</span><button className="link-btn" disabled={!source.detected} onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button></div>
                   </article>)}
                 </div>
-                <div className="future-section-label">当前备份目录</div>
-                <div className="integrity-strip"><strong>本地备份仓</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? `索引 ${formatTime(indexTime)}` : '索引准备中'} · 不写入规范事实表</span></div>
+                <div className="future-section-label">{t('protection.currentDirectory')}</div>
+                <div className="integrity-strip"><strong>{t('protection.localVault')}</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')} · {t('protection.noCanonicalWrite')}</span></div>
               </div>
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>最近快照</h2><p>快照创建后清单不可变；相同内容只在本地内容库保存一份。</p></div><Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>验证全部</Button></div>
-              {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>快照</th><th>来源</th><th>大小</th><th>完整性</th><th>排除</th><th>哈希</th><th className="align-right">操作</th></tr></thead><tbody>
+              <div className="future-card-head"><div><h2>{t('snapshots.title')}</h2><p>{t('snapshots.description')}</p></div><Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button></div>
+              {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>{t('snapshots.snapshot')}</th><th>{t('snapshots.source')}</th><th>{t('snapshots.size')}</th><th>{t('snapshots.integrity')}</th><th>{t('snapshots.excluded')}</th><th>{t('snapshots.hash')}</th><th className="align-right">{t('snapshots.actions')}</th></tr></thead><tbody>
                 {snapshots.map(snapshot => {
                   const checked = verification[snapshot.id]
                   return <tr key={snapshot.id}>
-                    <td><div className="snapshot-name"><span className="snapshot-icon">{checked ? (checked.valid ? <UiIcon name="check" size={14}/> : <UiIcon name="alert" size={14}/>) : <UiIcon name="dot" size={14}/>}</span><span><b>{formatTime(snapshot.createdAt)}</b><small>{snapshot.fileCount} 个文件</small></span></div></td>
+                    <td><div className="snapshot-name"><span className="snapshot-icon">{checked ? (checked.valid ? <UiIcon name="check" size={14}/> : <UiIcon name="alert" size={14}/>) : <UiIcon name="dot" size={14}/>}</span><span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{t('snapshots.files', { count: snapshot.fileCount })}</small></span></div></td>
                     <td>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</td>
                     <td>{formatBytes(snapshot.totalBytes)}</td>
-                    <td>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? '校验通过' : '校验失败'}</span> : <span className="badge">未校验</span>}</td>
+                    <td>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</td>
                     <td>{snapshot.excludedCount}</td>
                     <td><span className="hash">{shortHash(snapshot.manifestSha256)}</span></td>
-                    <td><div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>校验</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>恢复预演</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>导出</button></div></td>
+                    <td><div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div></td>
                   </tr>
                 })}
-              </tbody></table></div> : <div className="backup-empty"><b>还没有本地快照</b><span>右侧选择需要保护的智能体与资产类型，然后创建第一个快照。</span></div>}
+              </tbody></table></div> : <div className="backup-empty"><b>{t('snapshots.emptyTitle')}</b><span>{t('snapshots.emptyDescription')}</span></div>}
             </section>
 
             <section className="future-card">
-              <div className="future-card-head"><div><h2>导入与恢复</h2><p>导入只进入本地备份仓；正式写回前必须先计算当前机器上的差异。</p></div><span className="badge info">恢复预演优先</span></div>
+              <div className="future-card-head"><div><h2>{t('restore.title')}</h2><p>{t('restore.description')}</p></div><span className="badge info">{t('restore.previewFirst')}</span></div>
               <div className="future-card-body"><div className="restore-grid">
-                <article className="restore-card"><h3>导入备份包</h3><p>先验证清单与文件哈希；同名快照只有内容完全一致才允许复用。选择后还会再次确认。</p><div className="restore-flow"><span className="restore-node">选择文件</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">二次确认</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">完整性校验</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>选择备份包</Button></div></article>
-                <article className="restore-card"><h3>恢复到原智能体</h3><p>目标路径由当前机器重新检测的配置/数据根目录和快照相对路径计算，不信任导入包里的绝对路径。</p><div className="restore-flow"><span className="restore-node">选择快照</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">对比当前</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">人工确认</span></div><div className="restore-action"><span className="badge warn">当前版本只开放预演，不直接写回</span></div></article>
+                <article className="restore-card"><h3>{t('restore.importTitle')}</h3><p>{t('restore.importDescription')}</p><div className="restore-flow"><span className="restore-node">{t('restore.selectFile')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.secondConfirm')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.integrityCheck')}</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{t('restore.selectPackage')}</Button></div></article>
+                <article className="restore-card"><h3>{t('restore.restoreTitle')}</h3><p>{t('restore.restoreDescription')}</p><div className="restore-flow"><span className="restore-node">{t('restore.selectSnapshot')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.compareCurrent')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.manualConfirm')}</span></div><div className="restore-action"><span className="badge warn">{t('restore.previewOnly')}</span></div></article>
               </div></div>
             </section>
           </div>
 
           <aside className="future-stack">
             <section className="future-card">
-              <div className="future-card-head"><div><h2>创建快照</h2><p>按数据价值选择，不需要面对十几万文件逐个勾选。</p></div><span className="badge info">本地</span></div>
+              <div className="future-card-head"><div><h2>{t('create.title')}</h2><p>{t('create.description')}</p></div><span className="badge info">{t('create.local')}</span></div>
               <div className="future-card-body snapshot-builder">
-                <div className="builder-block"><div className="builder-label"><span>智能体</span><span>{selectedSources.length} / {detectedSourceCount}</span></div><div className="builder-checks">
-                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{source.fileCount.toLocaleString()} 文件</small></label>)}
+                <div className="builder-block"><div className="builder-label"><span>{t('create.agents')}</span><span>{selectedSources.length} / {detectedSourceCount}</span></div><div className="builder-checks">
+                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{t('create.files', { count: source.fileCount.toLocaleString(locale) })}</small></label>)}
                 </div></div>
 
-                {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>建议备份</span><span className="badge ok">恢复价值高</span></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
-                {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>按需备份</span><span className="badge info">可能占用较大</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
-                {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>默认排除</span><span className="badge">价值不明确</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
+                {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.recommended')}</span><span className="badge ok">{t('create.highValue')}</span></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
+                {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.optional')}</span><span className="badge info">{t('create.large')}</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
+                {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.excluded')}</span><span className="badge">{t('create.unclearValue')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
 
-                <div className="safety-note"><span><UiIcon name="check" size={16}/></span><div><b>敏感信息保护强制开启</b><span>没有关闭入口。发现凭据文件名、私钥、常见令牌或配置中的秘密赋值时，整文件排除并只记录原因。</span></div></div>
-                <div className="builder-summary"><span>预计涉及约 <b>{estimatedSelected.toLocaleString()}</b> 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : '大小将在新版扫描索引补齐后显示'} · 重叠路径创建时自动去重</span></div>
-                <Button variant="primary" className="snapshot-create-button" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>创建并校验快照</Button>
+                <div className="safety-note"><span><UiIcon name="check" size={16}/></span><div><b>{t('create.safetyTitle')}</b><span>{t('create.safetyDescription')}</span></div></div>
+                <div className="builder-summary"><span>{t('create.estimate', { count: estimatedSelected.toLocaleString(locale) })}</span><span>{hasSelectedBytes ? t('create.estimateSize', { size: formatBytes(estimatedSelectedBytes) }) : t('create.sizePending')} · {t('create.dedupe')}</span></div>
+                <Button variant="primary" className="snapshot-create-button" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{t('create.createAndVerify')}</Button>
               </div>
             </section>
 
-            <section className="future-card"><div className="future-card-head"><div><h3>备份原则</h3></div></div><div className="future-card-body backup-principles">
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">先看懂</span><b>逻辑资产和物理文件分开</b></div><p>文件很多不等于装了很多 MCP 或技能；不确定时只展示可验证的物理文件数量。</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">原始优先</span><b>会话保存原生文件</b></div><p>规范观测用于查看和分析，不替代原工具的会话 / 历史文件。</p></div>
-              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">不清理</span><b>AgentLens 不删除原始数据</b></div><p>这里只决定哪些数据进入快照，不承担第三方智能体的数据清理职责。</p></div>
+            <section className="future-card"><div className="future-card-head"><div><h3>{t('principles.title')}</h3></div></div><div className="future-card-body backup-principles">
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.understand')}</span><b>{t('principles.logicalPhysical')}</b></div><p>{t('principles.logicalPhysicalDescription')}</p></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.originalFirst')}</span><b>{t('principles.nativeSessions')}</b></div><p>{t('principles.nativeSessionsDescription')}</p></div>
+              <div className="insight-item"><div className="insight-item-head"><span className="insight-kind fact">{t('principles.noCleanup')}</span><b>{t('principles.noDelete')}</b></div><p>{t('principles.noDeleteDescription')}</p></div>
             </div></section>
           </aside>
         </div>
@@ -477,67 +488,67 @@ export function BackupPage({
       open
       className="backup-data-drawer"
       title={<span className="backup-overlay-title"><span className={`src-dot lg ${sourceDotClass(detailSource.sourceId)}`}/>{sourceLabel(detailSource.sourceId, detailSource.displayName)}</span>}
-      description="帮助判断这些数据是什么、在哪里，以及是否值得进入快照。"
+      description={t('detail.description')}
       onClose={() => { if (!busy) setDetailSourceId(null) }}
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
     >
       <div className="future-drawer-body">
-        <section className="drawer-section"><h3>数据规模</h3><div className="preview-summary"><span><b>{detailSource.logicalAssetCount === undefined ? '—' : detailSource.logicalAssetCount.toLocaleString()}</b> 逻辑资产</span><span><b>{detailSource.fileCount.toLocaleString()}</b> 物理文件</span><span><b>{formatOptionalBytes(detailSource.totalBytes)}</b> 数据大小</span><span><b>{detailSource.excludedCount.toLocaleString()}</b> 扫描排除</span></div>{detailSource.logicalAssetCount === undefined && <div className="future-note">当前索引还不能可靠计算全部逻辑资产数量，因此不会把文件数冒充为 MCP、技能或会话数量。</div>}</section>
+        <section className="drawer-section"><h3>{t('detail.scale')}</h3><div className="preview-summary"><span><b>{detailSource.logicalAssetCount === undefined ? '—' : detailSource.logicalAssetCount.toLocaleString()}</b> {t('detail.logicalAssets')}</span><span><b>{detailSource.fileCount.toLocaleString()}</b> {t('detail.physicalFiles')}</span><span><b>{formatOptionalBytes(detailSource.totalBytes, t)}</b> {t('detail.dataSize')}</span><span><b>{detailSource.excludedCount.toLocaleString()}</b> {t('detail.scanExcluded')}</span></div>{detailSource.logicalAssetCount === undefined && <div className="future-note">{t('detail.logicalUnknown')}</div>}</section>
 
-        <section className="drawer-section"><h3>资产分类</h3><div className="drawer-file-list">
-          {ALL_KINDS.filter(kind => kindFiles(detailSource, kind) > 0).map(kind => <div key={kind} className="drawer-file preview-file"><span className={`badge ${recommendationTone(kind)}`}>{kindRecommendation(kind)}</span><b>{kindLabel(kind)}</b><code>{kindDetailText(detailSource, kind)}{kindBytes(detailSource, kind) === undefined ? '' : ` · ${formatBytes(kindBytes(detailSource, kind)!)}`}</code></div>)}
+        <section className="drawer-section"><h3>{t('detail.categories')}</h3><div className="drawer-file-list">
+          {ALL_KINDS.filter(kind => kindFiles(detailSource, kind) > 0).map(kind => <div key={kind} className="drawer-file preview-file"><span className={`badge ${recommendationTone(kind)}`}>{kindRecommendation(kind, t)}</span><b>{kindLabel(kind, t)}</b><code>{kindDetailText(detailSource, kind, t, locale)}{kindBytes(detailSource, kind) === undefined ? '' : ` · ${formatBytes(kindBytes(detailSource, kind)!)}`}</code></div>)}
         </div></section>
 
-        <section className="drawer-section"><h3>数据位置</h3>{detailSource.roots?.length
+        <section className="drawer-section"><h3>{t('detail.locations')}</h3>{detailSource.roots?.length
           ? <div>{detailSource.roots.map(root => <BackupDataRootTree key={`${root.scope}:${root.path}`} root={root} onCopy={path => void copyPath(path)}/>)}</div>
-          : <div className="future-note">当前索引版本只提供分类文件统计；刷新到包含目录统计的新版索引后，这里会显示真实配置目录和数据目录。</div>}</section>
+          : <div className="future-note">{t('detail.locationsPending')}</div>}</section>
 
-        {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>时间分布</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>最早 {detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt) : '—'}</span><span className="grow"/><span>最近 {detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt) : '—'}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> 最近 30 天</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> 31–90 天</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> 91–180 天</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> 180 天以前</span></div>}</section>}
+        {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>{t('detail.timeDistribution')}</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>{t('detail.oldest', { time: detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt, locale) : '—' })}</span><span className="grow"/><span>{t('detail.latest', { time: detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt, locale) : '—' })}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> {t('detail.recent30')}</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> {t('detail.days31To90')}</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> {t('detail.days91To180')}</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> {t('detail.older180')}</span></div>}</section>}
 
-        <section className="drawer-section"><div className="future-note"><b>这里只帮助你决定备什么。</b> AgentLens 1.0 不删除、不移动、不清理 {sourceLabel(detailSource.sourceId, detailSource.displayName)} 的原始数据。</div></section>
+        <section className="drawer-section"><div className="future-note"><b>{t('detail.purposeTitle')}</b> {t('detail.purposeDescription', { agent: sourceLabel(detailSource.sourceId, detailSource.displayName) })}</div></section>
       </div>
     </Drawer>}
 
     {preview && <Drawer
       open
       className="backup-preview-drawer"
-      title={<span className="backup-overlay-title">快照差异 <span className={`badge ${preview.blocked ? 'warn' : 'ok'}`}>{preview.blocked ? `${preview.blocked} 项阻止` : '路径检查通过'}</span></span>}
+      title={<span className="backup-overlay-title">{t('preview.title')} <span className={`badge ${preview.blocked ? 'warn' : 'ok'}`}>{preview.blocked ? t('preview.blocked', { count: preview.blocked }) : t('preview.passed')}</span></span>}
       description={preview.snapshotId}
       onClose={() => { if (!busy) setPreview(null) }}
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
     >
       <div className="future-drawer-body">
-        <section className="drawer-section"><h3>差异摘要</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> 一致</span><span><b>{preview.missing}</b> 缺失</span><span><b>{preview.modified}</b> 已修改</span><span><b>{preview.blocked}</b> 阻止</span></div></section>
-        <section className="drawer-section"><h3>文件</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><span className={`badge ${item.status === 'blocked' ? 'err' : item.status === 'modified' ? 'warn' : item.status === 'unchanged' ? 'ok' : 'info'}`}>{previewStatusLabel(item.status)}</span><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
-        <section className="drawer-section"><div className="future-note"><b>这里只做预演。</b> 当前版本没有直接写回接口，因此查看差异不会修改任何已检测智能体的文件。</div></section>
+        <section className="drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
+        <section className="drawer-section"><h3>{t('preview.files')}</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><span className={`badge ${item.status === 'blocked' ? 'err' : item.status === 'modified' ? 'warn' : item.status === 'unchanged' ? 'ok' : 'info'}`}>{previewStatusLabel(item.status, t)}</span><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
+        <section className="drawer-section"><div className="future-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
       </div>
     </Drawer>}
 
     {confirmation && <Dialog
       open
       className="backup-confirm-overlay"
-      title={confirmation.type === 'create' ? '确认创建本地快照？' : '确认导入这个备份包？'}
-      description="关键操作确认"
+      title={confirmation.type === 'create' ? t('confirm.createTitle') : t('confirm.importTitle')}
+      description={t('confirm.description')}
       onClose={() => { if (!busy) setConfirmation(null) }}
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
       footer={<>
-        <Button disabled={Boolean(busy)} onClick={() => setConfirmation(null)}>取消</Button>
-        <Button variant="primary" disabled={Boolean(busy)} onClick={() => void confirmCriticalOperation()}>{confirmation.type === 'create' ? '确认创建' : '确认导入'}</Button>
+        <Button disabled={Boolean(busy)} onClick={() => setConfirmation(null)}>{t('confirm.cancel')}</Button>
+        <Button variant="primary" disabled={Boolean(busy)} onClick={() => void confirmCriticalOperation()}>{confirmation.type === 'create' ? t('confirm.create') : t('confirm.import')}</Button>
       </>}
     >
       <div className="backup-confirm-content">
         <div className="backup-confirm-icon"><UiIcon name="alert" size={20}/></div>
         <div className="backup-confirm-copy">
           {confirmation.type === 'create'
-            ? <p>将把当前选中的 {selectedSources.length} 个智能体、{selectedKinds.length} 类资产写入本地备份仓。敏感信息保护保持强制开启；已有相同内容会直接复用。</p>
-            : <p>文件 <b>{confirmation.file.name}</b>（{formatBytes(confirmation.file.size)}）将经过完整性校验后写入本地备份仓，不会覆盖当前智能体文件。</p>}
+            ? <p>{t('confirm.createBody', { agents: selectedSources.length, kinds: selectedKinds.length })}</p>
+            : <p>{t('confirm.importBody', { file: confirmation.file.name, size: formatBytes(confirmation.file.size) })}</p>}
           <div className="backup-confirm-facts">
             {confirmation.type === 'create'
-              ? <><span>约 {estimatedSelected.toLocaleString()} 条分类文件引用</span><span>{hasSelectedBytes ? `分类大小约 ${formatBytes(estimatedSelectedBytes)}` : `索引 ${indexTime ? formatTime(indexTime) : '准备中'}`}</span></>
-              : <><span>只导入到本地备份仓</span><span>恢复仍需单独预演</span></>}
+              ? <><span>{t('confirm.estimate', { count: estimatedSelected.toLocaleString(locale) })}</span><span>{hasSelectedBytes ? t('create.estimateSize', { size: formatBytes(estimatedSelectedBytes) }) : t('protection.index', { time: indexTime ? formatTime(indexTime, locale) : t('confirm.indexPreparing') })}</span></>
+              : <><span>{t('confirm.importVaultOnly')}</span><span>{t('confirm.restoreNeedsPreview')}</span></>}
           </div>
         </div>
       </div>

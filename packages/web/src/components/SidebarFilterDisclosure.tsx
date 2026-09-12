@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 import { Disclosure } from './ui'
@@ -18,13 +19,15 @@ interface SidebarFilterDisclosureProps {
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
 export function SidebarFilterDisclosure({
-  summary = '筛选',
+  summary,
   summaryMeta,
   className = '',
   agents = [],
   agentSelection,
   children,
 }: SidebarFilterDisclosureProps) {
+  const { t } = useTranslation('common')
+  const resolvedSummary = summary ?? t('sidebarFilter.summary')
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
   const selectedIds = agentSelection?.mode === 'multiple'
@@ -35,8 +38,8 @@ export function SidebarFilterDisclosure({
     : !agentSelection?.value
   const selectedCount = selectedIds.filter(id => detectedIds.includes(id)).length
   const computedSummary = agentSelection?.mode === 'multiple'
-    ? allSelected ? '全部' : selectedCount ? `已选 ${selectedCount} 个` : '未选择'
-    : agentSelection?.value ? agentLabel(agentSelection.value, orderedAgents.find(agent => agent.sourceId === agentSelection.value)?.displayName) : '全部'
+    ? allSelected ? t('sidebarFilter.all') : selectedCount ? t('sidebarFilter.selected', { count: selectedCount }) : t('sidebarFilter.none')
+    : agentSelection?.value ? agentLabel(agentSelection.value, orderedAgents.find(agent => agent.sourceId === agentSelection.value)?.displayName) : t('sidebarFilter.all')
 
   const selectAll = () => {
     if (!agentSelection) return
@@ -57,9 +60,9 @@ export function SidebarFilterDisclosure({
     agentSelection.onChange(next)
   }
 
-  return <Disclosure className={`workspace-sidebar-filter-disclosure ${className}`.trim()} summary={summary} summaryMeta={summaryMeta ?? computedSummary}>
-    {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label="按智能体筛选">
-      <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>全部智能体</button>
+  return <Disclosure className={`workspace-sidebar-filter-disclosure ${className}`.trim()} summary={resolvedSummary} summaryMeta={summaryMeta ?? computedSummary}>
+    {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={t('sidebarFilter.groupAria')}>
+      <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>
       {orderedAgents.map(agent => {
         const selected = selectedIds.includes(agent.sourceId)
         return <button
@@ -72,10 +75,10 @@ export function SidebarFilterDisclosure({
         >
           <span className={`source-dot ${sourceDot(agent.sourceId)}`} aria-hidden="true"/>
           <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
-          {!agent.detected && <span className="workspace-agent-filter-state">未检测</span>}
+          {!agent.detected && <span className="workspace-agent-filter-state">{t('sidebarFilter.notDetected')}</span>}
         </button>
       })}
-      {!orderedAgents.length && <div className="workspace-context-empty">暂未发现智能体</div>}
+      {!orderedAgents.length && <div className="workspace-context-empty">{t('sidebarFilter.empty')}</div>}
     </div>}
     {children}
   </Disclosure>

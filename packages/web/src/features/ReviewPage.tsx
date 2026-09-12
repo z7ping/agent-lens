@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
@@ -33,71 +34,80 @@ import { TaskRound } from './TaskRound'
 import { TaskSurface } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
+import { agentLensI18n } from '../i18n/runtime'
 import { workspaceDisplayName, type TaskDetailModel, type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
 
+function currentLocale(): string {
+  return agentLensI18n.resolvedLanguage ?? agentLensI18n.language ?? 'zh-CN'
+}
+
 function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+  return new Intl.DateTimeFormat(currentLocale(), { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
 function formatClock(value: string): string {
   if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value))
+  return new Intl.DateTimeFormat(currentLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(value))
 }
 
 function formatHourMinute(value: string): string {
   if (!value) return ''
-  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
+  return new Intl.DateTimeFormat(currentLocale(), { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
 }
 
 function formatDateTime(value: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(currentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
 }
 
 function localDayStart(value: Date): number {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
 }
 
-function sessionDayLabel(value: string, now = new Date()): '今天' | '昨天' | '更早' {
+type ReviewDayGroup = 'today' | 'yesterday' | 'earlier'
+
+function sessionDayLabel(value: string, now = new Date()): ReviewDayGroup {
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '更早'
+  if (!Number.isFinite(date.getTime())) return 'earlier'
   const day = localDayStart(date)
   const today = localDayStart(now)
-  if (day === today) return '今天'
-  if (day === today - 86_400_000) return '昨天'
-  return '更早'
+  if (day === today) return 'today'
+  if (day === today - 86_400_000) return 'yesterday'
+  return 'earlier'
 }
 
 function sessionRelativeTime(value: string, now = new Date()): string {
+  const t = agentLensI18n.t.bind(agentLensI18n)
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
   const group = sessionDayLabel(value, now)
-  if (group === '今天') {
+  if (group === 'today') {
     const diff = Math.max(0, now.getTime() - date.getTime())
     const minutes = Math.floor(diff / 60_000)
-    if (minutes < 1) return '刚刚'
-    if (minutes < 60) return `${minutes} 分钟前`
+    if (minutes < 1) return t('review:local.time.justNow')
+    if (minutes < 60) return t('review:local.time.minutesAgo', { count: minutes })
     const hours = Math.floor(diff / 3_600_000)
-    if (hours <= 1) return '约 1 小时前'
-    return `${hours} 小时前`
+    if (hours <= 1) return t('review:local.time.aboutHourAgo')
+    return t('review:local.time.hoursAgo', { count: hours })
   }
-  if (group === '昨天') return `昨天 ${formatHourMinute(value)}`
-  if (date.getFullYear() === now.getFullYear()) return `${date.getMonth() + 1}月${date.getDate()}日 ${formatHourMinute(value)}`
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  if (group === 'yesterday') return t('review:local.time.yesterdayAt', { time: formatHourMinute(value) })
+  if (date.getFullYear() === now.getFullYear()) return t('review:local.time.monthDayAt', { month: date.getMonth() + 1, day: date.getDate(), time: formatHourMinute(value) })
+  return new Intl.DateTimeFormat(currentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
 function duration(ms: number): string {
+  const t = agentLensI18n.t.bind(agentLensI18n)
   const value = Math.max(0, ms)
-  if (value < 1000) return `${value} 毫秒`
-  if (value < 60_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)} 秒`
-  if (value < 3_600_000) return `${Math.round(value / 60_000)} 分钟`
+  if (value < 1000) return t('review:local.duration.milliseconds', { value })
+  if (value < 60_000) return t('review:local.duration.seconds', { value: (value / 1000).toFixed(value < 10_000 ? 1 : 0) })
+  if (value < 3_600_000) return t('review:local.duration.minutes', { value: Math.round(value / 60_000) })
   if (value < 86_400_000) {
     const hours = value / 3_600_000
-    return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} 小时`
+    return t('review:local.duration.hours', { value: hours < 10 ? hours.toFixed(1) : Math.round(hours) })
   }
   const days = value / 86_400_000
-  return `${days < 10 ? days.toFixed(1) : Math.round(days)} 天`
+  return t('review:local.duration.days', { value: days < 10 ? days.toFixed(1) : Math.round(days) })
 }
 
 function elapsed(start: string, end: string): number {
@@ -109,7 +119,7 @@ function cleanSessionTitle(value: string | undefined): string {
   return value?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
-function compactTitle(value: string | undefined, max = 92, fallback = '未命名会话'): string {
+function compactTitle(value: string | undefined, max = 92, fallback = agentLensI18n.t('review:local.session.unnamed')): string {
   const text = cleanSessionTitle(value)
   if (!text) return fallback
   return text.length > max ? `${text.slice(0, max)}…` : text
@@ -127,10 +137,12 @@ function hubSessionTime(item: HubReviewSessionSummaryDto): string {
 
 function hubSessionTitle(item: HubReviewSessionSummaryDto): string {
   const value = hubAvailabilityString(item.title)
-  if (value) return compactTitle(value, 74, '远程会话')
-  if (item.title.state === 'redacted') return '标题已脱敏'
-  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? '标题未同步' : '远程会话'
-  return '远程会话'
+  if (value) return compactTitle(value, 74, agentLensI18n.t('review:local.session.remote'))
+  if (item.title.state === 'redacted') return agentLensI18n.t('review:local.session.titleRedacted')
+  if (item.title.state === 'omitted') return item.title.reason === 'policy'
+    ? agentLensI18n.t('review:local.session.titleNotSynced')
+    : agentLensI18n.t('review:local.session.remote')
+  return agentLensI18n.t('review:local.session.remote')
 }
 
 function hubSessionVisibility(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
@@ -184,31 +196,38 @@ function numberValue(record: Record<string, JsonValue>, ...keys: string[]): numb
   return undefined
 }
 
-const evidenceCaptureLabel: Record<TimelineEvidenceDto['captureMethod'], string> = {
-  'runtime-hook': '运行时捕获',
-  'native-log': '原生日志',
-  'native-db': '原生数据库',
-  'static-scan': '静态发现',
-  'external-import': '外部导入',
+const evidenceCaptureKey: Record<TimelineEvidenceDto['captureMethod'], string> = {
+  'runtime-hook': 'review:local.evidence.capture.runtimeHook',
+  'native-log': 'review:local.evidence.capture.nativeLog',
+  'native-db': 'review:local.evidence.capture.nativeDb',
+  'static-scan': 'review:local.evidence.capture.staticScan',
+  'external-import': 'review:local.evidence.capture.externalImport',
 }
 
-const evidenceDerivationLabel: Record<string, string> = {
-  observed: '已观测',
-  reported: '来源报告',
-  derived: '推导',
-  estimated: '估算',
-  inferred: '推断',
+const evidenceDerivationKey: Record<string, string> = {
+  observed: 'review:local.evidence.derivation.observed',
+  reported: 'review:local.evidence.derivation.reported',
+  derived: 'review:local.evidence.derivation.derived',
+  estimated: 'review:local.evidence.derivation.estimated',
+  inferred: 'review:local.evidence.derivation.inferred',
 }
 
-const evidenceConfidenceLabel: Record<string, string> = {
-  exact: '精确',
-  high: '高',
-  medium: '中',
-  low: '低',
-  unknown: '未知',
+const evidenceConfidenceKey: Record<string, string> = {
+  exact: 'review:local.evidence.confidence.exact',
+  high: 'review:local.evidence.confidence.high',
+  medium: 'review:local.evidence.confidence.medium',
+  low: 'review:local.evidence.confidence.low',
+  unknown: 'review:local.evidence.confidence.unknown',
+}
+
+function evidenceLabel(map: Record<string, string>, value: string): string {
+  const key = map[value]
+  return key ? agentLensI18n.t(key) : value
 }
 
 function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvidenceDto[]; compact?: boolean }) {
+  const { i18n } = useTranslation('review')
+  const localeRevision = i18n.resolvedLanguage ?? i18n.language
   const visible = useMemo(() => {
     const seen = new Set<string>()
     const items: Array<{ key: string; label: string; confidence: string; title: string }> = []
@@ -216,22 +235,22 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
       const key = `${item.captureMethod}:${item.derivation}:${item.confidence}`
       if (seen.has(key)) continue
       seen.add(key)
-      const derivation = item.derivation === 'inferred' ? '推断' : item.derivation === 'estimated' ? '估算' : ''
-      const label = derivation || evidenceCaptureLabel[item.captureMethod]
+      const derivation = item.derivation === 'inferred' || item.derivation === 'estimated' ? evidenceLabel(evidenceDerivationKey, item.derivation) : ''
+      const label = derivation || evidenceLabel(evidenceCaptureKey, item.captureMethod)
       items.push({
         key,
         label,
         confidence: item.confidence,
         title: [
-          evidenceCaptureLabel[item.captureMethod],
-          `来源：${evidenceDerivationLabel[item.derivation] ?? item.derivation}`,
-          `可信度：${evidenceConfidenceLabel[item.confidence] ?? item.confidence}`,
-          item.missingReason ? '证据信息不完整' : '',
+          evidenceLabel(evidenceCaptureKey, item.captureMethod),
+          agentLensI18n.t('review:local.evidence.source', { value: evidenceLabel(evidenceDerivationKey, item.derivation) }),
+          agentLensI18n.t('review:local.evidence.confidenceLabel', { value: evidenceLabel(evidenceConfidenceKey, item.confidence) }),
+          item.missingReason ? agentLensI18n.t('review:local.evidence.incomplete') : '',
         ].filter(Boolean).join(' · '),
       })
     }
     return items.slice(0, compact ? 1 : 2)
-  }, [evidence, compact])
+  }, [evidence, compact, localeRevision])
 
   if (!visible.length) return null
   return <span className="evidence-inline-list">
@@ -244,28 +263,28 @@ function sourceEventLabel(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
   if (node.sourceId === 'codex') {
-    if (node.kind === 'session.lifecycle' && action === 'turn.context') return 'Codex 轮次上下文'
-    if (node.kind === 'session.lifecycle' && action === 'turn.started') return 'Codex 轮次开始'
-    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return 'Codex 轮次完成'
-    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return 'Codex 轮次中止'
-    if (node.kind === 'session.lifecycle' && action === 'turn.error') return 'Codex 轮次错误'
-    if (node.kind === 'context.compaction') return '上下文压缩'
-    if (node.kind === 'context.injected') return '系统注入上下文'
-    if (node.kind === 'subagent.spawn') return '启动子智能体'
-    if (node.kind === 'subagent.end') return '子智能体完成'
-    if (node.kind === 'permission.request') return '权限请求'
-    if (node.kind === 'session.lifecycle' && action.includes('stop')) return '轮次停止'
+    if (node.kind === 'session.lifecycle' && action === 'turn.context') return agentLensI18n.t('review:local.event.codexTurnContext')
+    if (node.kind === 'session.lifecycle' && action === 'turn.started') return agentLensI18n.t('review:local.event.codexTurnStarted')
+    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return agentLensI18n.t('review:local.event.codexTurnCompleted')
+    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return agentLensI18n.t('review:local.event.codexTurnAborted')
+    if (node.kind === 'session.lifecycle' && action === 'turn.error') return agentLensI18n.t('review:local.event.codexTurnError')
+    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
+    if (node.kind === 'context.injected') return agentLensI18n.t('review:local.event.injectedContext')
+    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
+    if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
+    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
+    if (node.kind === 'session.lifecycle' && action.includes('stop')) return agentLensI18n.t('review:local.event.turnStop')
   }
   if (node.sourceId === 'claude-code') {
-    if (node.kind === 'permission.request') return '权限请求'
-    if (node.kind === 'subagent.spawn') return '启动子智能体'
-    if (node.kind === 'context.summary') return '上下文摘要'
-    if (node.kind === 'context.compaction') return '上下文压缩'
+    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
+    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
+    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
+    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
   }
   if (node.sourceId === 'pi') {
-    if (node.kind === 'model.changed') return '模型切换'
-    if (node.kind === 'context.compaction') return '上下文压缩'
-    if (node.kind === 'context.summary') return '分支摘要'
+    if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
+    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
+    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.branchSummary')
   }
   return node.label
 }
@@ -286,12 +305,12 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
   if (node.kind === 'subagent.spawn' || node.kind === 'subagent.end') {
     const type = stringValue(payload, 'agentType', 'agent_type', 'subagentType', 'subagent_type', 'name')
     const agentId = stringValue(payload, 'agentId', 'agent_id', 'subagentId', 'subagent_id')
-    return [type, agentId ? `子智能体 ${agentId}` : ''].filter(Boolean).join(' · ') || brief(payload, 140)
+    return [type, agentId ? agentLensI18n.t('review:local.event.subagent', { id: agentId }) : ''].filter(Boolean).join(' · ') || brief(payload, 140)
   }
   if (node.kind === 'context.compaction') {
     const trigger = stringValue(payload, 'trigger', 'compactTrigger', 'compact_trigger', 'reason', 'compactReason', 'compact_reason')
     const before = numberValue(payload, 'tokensBefore', 'tokens_before')
-    return [trigger ? `触发：${trigger}` : '', before !== undefined ? `压缩前 ${before.toLocaleString()} 个词元` : ''].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [trigger ? agentLensI18n.t('review:local.event.trigger', { value: trigger }) : '', before !== undefined ? agentLensI18n.t('review:local.event.beforeCompaction', { count: before.toLocaleString(currentLocale()) }) : ''].filter(Boolean).join(' · ') || brief(payload, 100)
   }
   if (node.kind === 'context.summary') {
     return brief(payload.summary ?? payload.text ?? payload.content ?? payload, 120)
@@ -300,7 +319,7 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
     const role = stringValue(payload, 'role')
     const text = stringValue(payload, 'text')
     if (text) return [role, brief(text, 180)].filter(Boolean).join(' · ')
-    return role ? `${role} · 当前记录未包含正文` : '当前记录未包含正文'
+    return role ? agentLensI18n.t('review:local.event.roleMissingBody', { role }) : agentLensI18n.t('review:local.event.missingBody')
   }
   if (node.kind === 'session.lifecycle') {
     if (action === 'turn.context') {
@@ -310,19 +329,19 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
       const approval = brief(payload.approval_policy ?? payload.approvalPolicy, 80)
       const reasoning = brief(payload.reasoning_effort ?? payload.reasoningEffort, 80)
       const collaboration = brief(payload.collaboration_mode ?? payload.collaborationMode, 80)
-      return [model, cwd, sandbox ? `沙箱 ${sandbox}` : '', approval ? `审批 ${approval}` : '', reasoning ? `推理 ${reasoning}` : '', collaboration ? `协作 ${collaboration}` : ''].filter(Boolean).join(' · ') || brief(payload, 140)
+      return [model, cwd, sandbox ? agentLensI18n.t('review:local.event.sandbox', { value: sandbox }) : '', approval ? agentLensI18n.t('review:local.event.approval', { value: approval }) : '', reasoning ? agentLensI18n.t('review:local.event.reasoning', { value: reasoning }) : '', collaboration ? agentLensI18n.t('review:local.event.collaboration', { value: collaboration }) : ''].filter(Boolean).join(' · ') || brief(payload, 140)
     }
     if (action === 'session.discovered') {
       const parent = stringValue(payload, 'forked_from_id', 'parent_thread_id')
       const agent = stringValue(payload, 'agent_nickname', 'agent_path')
       const role = stringValue(payload, 'agent_role')
       const source = stringValue(payload, 'thread_source', 'source')
-      return [parent ? `父线程 ${parent}` : '', agent ? `Agent ${agent}` : '', role, source].filter(Boolean).join(' · ') || brief(payload, 140)
+      return [parent ? agentLensI18n.t('review:local.event.parentThread', { value: parent }) : '', agent ? `Agent ${agent}` : '', role, source].filter(Boolean).join(' · ') || brief(payload, 140)
     }
     const startSource = stringValue(payload, 'startSource', 'start_source', 'source')
     const reason = stringValue(payload, 'reason', 'lifecycleReason', 'lifecycle_reason', 'stopReason', 'stop_reason')
     const model = stringValue(payload, 'model')
-    return [action, startSource ? `来源 ${startSource}` : '', reason ? `原因 ${reason}` : '', model].filter(Boolean).join(' · ') || brief(payload, 100)
+    return [action, startSource ? agentLensI18n.t('review:local.event.sourceValue', { value: startSource }) : '', reason ? agentLensI18n.t('review:local.event.reason', { value: reason }) : '', model].filter(Boolean).join(' · ') || brief(payload, 100)
   }
   if (node.kind === 'usage') {
     const input = numberValue(payload, 'inputTokens', 'input_tokens')
@@ -330,7 +349,14 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
     const cacheRead = numberValue(payload, 'cacheReadTokens', 'cached_input_tokens', 'cache_read_tokens')
     const total = numberValue(payload, 'totalTokens', 'total_tokens')
     if (input !== undefined || output !== undefined || cacheRead !== undefined || total !== undefined) {
-      return [`输入 ${input ?? 0}`, `输出 ${output ?? 0}`, cacheRead ? `缓存读 ${cacheRead}` : '', total !== undefined ? `共 ${total}` : ''].filter(Boolean).join(' · ') + ' 个词元'
+      return agentLensI18n.t('review:local.event.tokens', {
+        value: [
+          agentLensI18n.t('review:local.event.usageInput', { count: input ?? 0 }),
+          agentLensI18n.t('review:local.event.usageOutput', { count: output ?? 0 }),
+          cacheRead ? agentLensI18n.t('review:local.event.usageCacheRead', { count: cacheRead }) : '',
+          total !== undefined ? agentLensI18n.t('review:local.event.usageTotal', { count: total }) : '',
+        ].filter(Boolean).join(' · '),
+      })
     }
   }
   if (node.kind === 'artifact.action') {
@@ -354,13 +380,13 @@ function detectToolKind(name: string): ToolKind {
 }
 
 function toolKindLabel(kind: ToolKind): string {
-  if (kind === 'shell') return '命令'
-  if (kind === 'read') return '读取'
-  if (kind === 'edit') return '修改'
-  if (kind === 'search') return '搜索'
-  if (kind === 'mcp') return 'MCP（模型上下文协议）'
-  if (kind === 'web') return '网络'
-  return '工具'
+  if (kind === 'shell') return agentLensI18n.t('review:local.tool.command')
+  if (kind === 'read') return agentLensI18n.t('review:local.tool.read')
+  if (kind === 'edit') return agentLensI18n.t('review:local.tool.edit')
+  if (kind === 'search') return agentLensI18n.t('review:local.tool.search')
+  if (kind === 'mcp') return agentLensI18n.t('review:local.tool.mcp')
+  if (kind === 'web') return agentLensI18n.t('review:local.tool.web')
+  return agentLensI18n.t('review:local.tool.generic')
 }
 
 function toolInputRecord(node: ReviewToolNodeDto): Record<string, JsonValue> {
@@ -373,35 +399,35 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolKind; label: str
   const output = brief(node.output, 110)
   if (kind === 'shell') {
     const command = stringValue(input, 'command', 'cmd', 'script', 'raw') || brief(node.input, 140)
-    return { kind, label: '命令', primary: command, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: command, secondary: output }
   }
   if (kind === 'read') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename') || brief(node.input, 120)
-    return { kind, label: '读取', primary: path, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: path, secondary: output }
   }
   if (kind === 'edit') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path') || brief(node.input, 120)
     const patch = stringValue(input, 'patch', 'diff', 'content')
-    return { kind, label: '修改', primary: path, secondary: patch ? brief(patch, 110) : output }
+    return { kind, label: toolKindLabel(kind), primary: path, secondary: patch ? brief(patch, 110) : output }
   }
   if (kind === 'search') {
     const query = stringValue(input, 'query', 'pattern', 'search', 'glob') || brief(node.input, 120)
     const path = stringValue(input, 'path', 'cwd', 'directory')
-    return { kind, label: '搜索', primary: query, secondary: path || output }
+    return { kind, label: toolKindLabel(kind), primary: query, secondary: path || output }
   }
   if (kind === 'mcp') {
     const target = stringValue(input, 'tool', 'server', 'mcp_server', 'name', 'method') || brief(node.input, 120)
-    return { kind, label: 'MCP（模型上下文协议）', primary: target, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: target, secondary: output }
   }
   if (kind === 'web') {
     const target = stringValue(input, 'url', 'query', 'href', 'path') || brief(node.input, 120)
-    return { kind, label: '网络', primary: target, secondary: output }
+    return { kind, label: toolKindLabel(kind), primary: target, secondary: output }
   }
-  return { kind, label: '工具', primary: brief(node.input, 130), secondary: output }
+  return { kind, label: toolKindLabel(kind), primary: brief(node.input, 130), secondary: output }
 }
 
 function PrettyJson({ value }: { value: unknown }) {
-  if (value === undefined) return <div className="muted-empty compact">无数据</div>
+  if (value === undefined) return <div className="muted-empty compact">{agentLensI18n.t('review:local.tool.noData')}</div>
   if (typeof value === 'string') return <CopyableCodeBlock className="tool-detail-code" copyValue={value}>{value}</CopyableCodeBlock>
   const text = JSON.stringify(value, null, 2)
   return <CopyableCodeBlock className="tool-detail-code" copyValue={text}>{text}</CopyableCodeBlock>
@@ -410,24 +436,40 @@ function PrettyJson({ value }: { value: unknown }) {
 function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
   const info = toolPresentation(node)
   const input = toolInputRecord(node)
-  const primaryLabel = info.kind === 'shell' ? '命令' : info.kind === 'read' || info.kind === 'edit' ? '路径' : info.kind === 'search' ? '查询' : info.kind === 'mcp' ? '目标' : info.kind === 'web' ? '地址 / 查询' : '输入摘要'
-  const status = node.status === 'error' ? '失败' : node.status === 'success' ? '完成' : node.status === 'running' ? '执行中' : '未知'
+  const primaryLabel = info.kind === 'shell'
+    ? agentLensI18n.t('review:local.tool.command')
+    : info.kind === 'read' || info.kind === 'edit'
+      ? agentLensI18n.t('review:local.tool.path')
+      : info.kind === 'search'
+        ? agentLensI18n.t('review:local.tool.query')
+        : info.kind === 'mcp'
+          ? agentLensI18n.t('review:local.tool.target')
+          : info.kind === 'web'
+            ? agentLensI18n.t('review:local.tool.addressQuery')
+            : agentLensI18n.t('review:local.tool.inputSummary')
+  const status = node.status === 'error'
+    ? agentLensI18n.t('review:local.tool.statusError')
+    : node.status === 'success'
+      ? agentLensI18n.t('review:local.tool.statusSuccess')
+      : node.status === 'running'
+        ? agentLensI18n.t('review:local.tool.statusRunning')
+        : agentLensI18n.t('review:local.tool.statusUnknown')
   return <section className="tool-detail">
     <div className="tool-detail-summary">
       <span className={`tool-detail-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
       <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
     {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><CopyableCodeBlock className="tool-detail-code" copyValue={info.primary}>{info.primary}</CopyableCodeBlock></div>}
-    {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>结构化输入</h4><PrettyJson value={node.input}/></div>}
-    {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? '错误 / 输出' : '输出'}</h4><PrettyJson value={node.output}/></div>}
+    {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>{agentLensI18n.t('review:local.tool.structuredInput')}</h4><PrettyJson value={node.input}/></div>}
+    {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? agentLensI18n.t('review:local.tool.errorOutput') : agentLensI18n.t('review:local.tool.output')}</h4><PrettyJson value={node.output}/></div>}
   </section>
 }
 
 function roleLabel(role: ReviewMessageNodeDto['role']): string {
-  if (role === 'user') return '用户'
-  if (role === 'assistant') return '智能体'
-  if (role === 'commentary') return '执行过程'
-  return '思考'
+  if (role === 'user') return agentLensI18n.t('review:local.role.user')
+  if (role === 'assistant') return agentLensI18n.t('review:local.role.assistant')
+  if (role === 'commentary') return agentLensI18n.t('review:local.role.commentary')
+  return agentLensI18n.t('review:local.role.thinking')
 }
 
 type InspectorTab = 'detail' | 'evidence' | 'raw'
@@ -444,38 +486,39 @@ function RawInspectorContent({
   error: string
 }) {
   return <section className="inspector-section">
-    <h3 className="section-label">Raw Inspector</h3>
+    <h3 className="section-label">{agentLensI18n.t('review:local.event.rawInspector')}</h3>
     <div className="evidence-card">
-      <div className="evidence-meta"><b>Source</b><span>{node.sourceId}</span><span>{node.type}</span></div>
-      <div className="evidence-path">Observation {node.id}</div>
-      {node.nativeEventId && <div className="evidence-path">Native ID：{node.nativeEventId}</div>}
-      {node.nativeParentEventId && <div className="evidence-path">Native Parent Event ID：{node.nativeParentEventId}</div>}
-      {node.parentObservationId && <div className="evidence-path">Parent Observation：{node.parentObservationId}</div>}
+      <div className="evidence-meta"><b>{agentLensI18n.t('review:local.event.source')}</b><span>{node.sourceId}</span><span>{node.type}</span></div>
+      <div className="evidence-path">{agentLensI18n.t('review:local.event.observation')} {node.id}</div>
+      {node.nativeEventId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeId')}：{node.nativeEventId}</div>}
+      {node.nativeParentEventId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeParentEventId')}：{node.nativeParentEventId}</div>}
+      {node.parentObservationId && <div className="evidence-path">{agentLensI18n.t('review:local.event.parentObservation')}：{node.parentObservationId}</div>}
       {node.occurredAt && <div className="evidence-path">occurredAt：{node.occurredAt}</div>}
       <div className="evidence-path">capturedAt：{node.capturedAt}</div>
     </div>
-    {loading && <div className="muted-empty compact">正在读取来源原始记录…</div>}
+    {loading && <div className="muted-empty compact">{agentLensI18n.t('review:local.event.rawLoading')}</div>}
     {error && <div className="evidence-missing">{error}</div>}
     {!loading && !error && records.map(record => {
       const evidence = node.evidence.find(item => item.sourceRecordId === record.id)
       return <div key={record.id} className="evidence-card raw-source-record">
-        <div className="evidence-meta"><b>{record.nativeType}</b><span>Parser {record.parserVersion}</span>{evidence && <span>{evidence.captureMethod} · {evidence.confidence}</span>}</div>
-        <div className="evidence-path">SourceRecord {record.id}</div>
-        {record.nativeId && <div className="evidence-path">Native ID：{record.nativeId}</div>}
+        <div className="evidence-meta"><b>{record.nativeType}</b><span>{agentLensI18n.t('review:local.event.parser')} {record.parserVersion}</span>{evidence && <span>{evidence.captureMethod} · {evidence.confidence}</span>}</div>
+        <div className="evidence-path">{agentLensI18n.t('review:local.event.sourceRecord')} {record.id}</div>
+        {record.nativeId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeId')}：{record.nativeId}</div>}
         {record.occurredAt && <div className="evidence-path">occurredAt：{record.occurredAt}</div>}
         <div className="evidence-path">capturedAt：{record.capturedAt}</div>
-        <div className="evidence-path">Locator：{JSON.stringify(record.locator)}</div>
+        <div className="evidence-path">{agentLensI18n.t('review:local.event.locator')}：{JSON.stringify(record.locator)}</div>
         <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(record.payload, null, 2)}>{JSON.stringify(record.payload, null, 2)}</CopyableCodeBlock>
       </div>
     })}
     {!loading && !error && records.length === 0 && <>
-      <div className="evidence-empty-detail">当前 Observation 没有关联可读取的 SourceRecord；以下为标准化 Payload。</div>
+      <div className="evidence-empty-detail">{agentLensI18n.t('review:local.event.rawMissing')}</div>
       <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(node.payload, null, 2)}>{JSON.stringify(node.payload, null, 2)}</CopyableCodeBlock>
     </>}
   </section>
 }
 
 function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; onClose(): void; loadSourceRecord(id: string): Promise<SourceRecordResponseDto> }) {
+  const { t } = useTranslation('review')
   const [tab, setTab] = useState<InspectorTab>('detail')
   const sourceRecordIds = useMemo(() => [...new Set(node.evidence.map(item => item.sourceRecordId).filter((id): id is string => Boolean(id)))], [node.evidence])
   const [rawRecords, setRawRecords] = useState<SourceRecordResponseDto[]>([])
@@ -507,35 +550,36 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     open
     className="review-inspector-overlay"
     title={title}
-    description="事件详情"
+    description={t('local.event.detailDescription')}
     onClose={onClose}
   >
-    <div className="agent-scope" role="tablist" aria-label="事件详情分类">
-      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>详情</button>
-      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>证据 · {node.evidence.length}</button>
-      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>原始数据</button>
+    <div className="agent-scope" role="tablist" aria-label={t('local.event.categoriesAria')}>
+      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>{t('local.event.detail')}</button>
+      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>{t('local.event.evidence', { count: node.evidence.length })}</button>
+      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>{t('local.event.raw')}</button>
     </div>
     {tab === 'detail' && <>
       {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
-        <h3 className="section-label">摘要</h3>
+        <h3 className="section-label">{t('local.event.summary')}</h3>
         {node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
           ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
-          : <div className="evidence-empty-detail">{detailSummary || '当前事件没有额外的结构化详情；可继续查看证据或来源原始记录。'}</div>}
+          : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
       </section>}
     </>}
     {tab === 'evidence' && <section className="inspector-section">
-      <h3 className="section-label">证据</h3>
+      <h3 className="section-label">{t('local.event.evidence', { count: node.evidence.length })}</h3>
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
-        <div className="evidence-meta"><b>{evidenceCaptureLabel[item.captureMethod]}</b><span>{evidenceDerivationLabel[item.derivation] ?? item.derivation}</span><span>可信度：{evidenceConfidenceLabel[item.confidence] ?? item.confidence}</span></div>
+        <div className="evidence-meta"><b>{evidenceLabel(evidenceCaptureKey, item.captureMethod)}</b><span>{evidenceLabel(evidenceDerivationKey, item.derivation)}</span><span>{t('local.evidence.confidenceLabel', { value: evidenceLabel(evidenceConfidenceKey, item.confidence) })}</span></div>
         <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
-        {item.missingReason && <div className="evidence-missing">证据信息不完整</div>}
-      </div>) : <div className="muted-empty">无证据</div>}
+        {item.missingReason && <div className="evidence-missing">{t('local.evidence.incomplete')}</div>}
+      </div>) : <div className="muted-empty">{t('local.evidence.noEvidence')}</div>}
     </section>}
     {tab === 'raw' && <RawInspectorContent node={node} records={rawRecords} loading={rawLoading} error={rawError}/>} 
   </Drawer>
 }
 
 function MarkdownSurface({ text }: { text: string }) {
+  const { t } = useTranslation('review')
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const [expanded, setExpanded] = useState(false)
   const [collapsible, setCollapsible] = useState(false)
@@ -576,8 +620,8 @@ function MarkdownSurface({ text }: { text: string }) {
       {collapsible && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
     </div>
     <div className="markdown-message-actions">
-      {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-      <button title={view === 'rendered' ? '查看 Markdown 源码' : '返回渲染结果'} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? '源码' : '渲染'}</button>
+      {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? t('local.markdown.collapseFiveLines') : t('local.markdown.expand')}</button>}
+      <button title={view === 'rendered' ? t('local.markdown.viewSource') : t('local.markdown.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? t('local.markdown.source') : t('local.markdown.rendered')}</button>
     </div>
   </div>
 }
@@ -591,8 +635,9 @@ function MessageBubble({
   inspect(node: ReviewNodeDto): void
   nestedTools?: ReviewToolNodeDto[]
 }) {
+  const { t } = useTranslation('review')
   if (node.role === 'reasoning' || node.role === 'commentary') {
-    const label = node.role === 'commentary' ? '执行过程' : '思考'
+    const label = node.role === 'commentary' ? t('local.process.execution') : t('local.process.thinking')
     const thinking: TaskThinkingModel = {
       id: node.id,
       label,
@@ -605,7 +650,7 @@ function MessageBubble({
       model={thinking}
       defaultExpanded={false}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
-      actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>查看全部证据 · {node.evidence.length}</button> : undefined}
+      actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>{t('local.evidence.allEvidence', { count: node.evidence.length })}</button> : undefined}
     >
       <MarkdownSurface text={node.text}/>
       {nestedTools.length > 0 && <ReviewToolGroupAdapter items={nestedTools} inspect={inspect}/>} 
@@ -615,10 +660,10 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
-    author={node.role === 'user' ? '你' : '智能体'}
+    author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
-    actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>证据详情 · {node.evidence.length}</button> : undefined}
+    actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button> : undefined}
   />
 }
 
@@ -638,6 +683,8 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
 }
 
 function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+  const { i18n } = useTranslation('review')
+  const localeRevision = i18n.resolvedLanguage ?? i18n.language
   const model = useMemo<TaskToolGroupModel>(() => {
     const tools = items.map(reviewToolModel)
     const errorCount = tools.filter(tool => tool.status === 'error').length
@@ -646,14 +693,14 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
     for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
     return {
       id: `tools:${items.map(item => item.id).join(':')}`,
-      label: '工具执行',
+      label: agentLensI18n.t('review:local.tool.execution'),
       itemCount: tools.length,
       errorCount,
       totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
       kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
       tools,
     }
-  }, [items])
+  }, [items, localeRevision])
   const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
   return <TaskToolGroup
     model={model}
@@ -682,9 +729,9 @@ function ReviewProcessGroup({
   const toolCount = items.reduce((count, item) => count + (item.type === 'tool-group' ? item.items.length : 0), 0)
   const model: TaskThinkingModel = {
     id,
-    label: '思考过程',
+    label: agentLensI18n.t('review:local.process.thinkingProcess'),
     text: first?.text ?? '',
-    preview: brief(first?.text ?? `${toolCount} 次工具调用`, 78),
+    preview: brief(first?.text ?? agentLensI18n.t('review:local.tool.calls', { count: toolCount }), 78),
     time: first ? formatClock(first.at) : undefined,
     state: 'settled',
   }
@@ -693,7 +740,7 @@ function ReviewProcessGroup({
       {items.map((item, index) => item.type === 'tool-group'
         ? <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
         : <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-            {item.node.role === 'reasoning' && <div className="task-process-message-kind">思考</div>}
+            {item.node.role === 'reasoning' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.thinking')}</div>}
             <MarkdownSurface text={item.node.text}/>
             <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
           </div>)}
@@ -719,13 +766,14 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
 }
 
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+  const { t } = useTranslation('review')
   const [expanded, setExpanded] = useState(false)
   return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
     <summary>
       <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
       <span className="raw-event-summary-copy">
-        <span className="raw-event-summary-title">其他运行记录 <span className="raw-event-summary-count">{items.length}</span></span>
-        <small>Agent 原始日志中的状态、用量等辅助记录，不属于对话正文</small>
+        <span className="raw-event-summary-title">{t('local.rawEvents.title')} <span className="raw-event-summary-count">{items.length}</span></span>
+        <small>{t('local.rawEvents.description')}</small>
       </span>
       <time>{formatClock(items[items.length - 1]?.at ?? '')}</time>
     </summary>
@@ -852,6 +900,7 @@ export function ReviewPage({
   resumingPiSession?: boolean
   piResumeError?: string
 }) {
+  const { t } = useTranslation('review')
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
   const navigate = useNavigate()
@@ -877,9 +926,9 @@ export function ReviewPage({
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
-  const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters])
+  const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters, t])
   const sessionGroups = useMemo(() => {
-    const groups = new Map<'今天' | '昨天' | '更早', UnifiedReviewSessionListEntry[]>()
+    const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
     const now = new Date()
     const combined: UnifiedReviewSessionListEntry[] = [
       ...(review.response?.items ?? []).map(item => ({ origin: 'local' as const, id: item.id, activityAt: item.endedAt || item.startedAt, local: item })),
@@ -898,8 +947,12 @@ export function ReviewPage({
       items.push(item)
       groups.set(label, items)
     }
-    return [...groups.entries()].map(([label, items]) => ({ label, items }))
-  }, [review.response?.items, visibleHubSessions])
+    return [...groups.entries()].map(([key, items]) => ({
+      key,
+      label: t(`local.day.${key}`),
+      items,
+    }))
+  }, [review.response?.items, visibleHubSessions, t])
 
   useEffect(() => {
     if (embedded) {
@@ -1163,7 +1216,9 @@ export function ReviewPage({
       return {
         id: interaction.id,
         ordinal: interaction.ordinal,
-        label: interaction.trigger === 'background' ? '后台活动' : `第 ${interaction.ordinal} 轮`,
+        label: interaction.trigger === 'background'
+          ? t('local.interaction.background')
+          : t('local.interaction.round', { count: interaction.ordinal }),
         state: 'settled',
         preview: stats.preview || undefined,
         toolCount: stats.toolCount,
@@ -1174,26 +1229,28 @@ export function ReviewPage({
     })
     const title = historyTaskPresentation(
       detail,
-      detail.projectName ? `${detail.projectName} 会话` : `${agentLabel(detail.sourceIds[0] ?? '')} 会话`,
+      detail.projectName
+        ? t('local.interaction.projectSession', { project: detail.projectName })
+        : t('local.interaction.agentSession', { agent: agentLabel(detail.sourceIds[0] ?? '') }),
     ).title
     return {
       id: detail.id,
       title,
       agentLabel: detail.sourceIds.map(id => agentLabel(id)).join(' / '),
       projectLabel: detail.projectName,
-      statusLabel: detail.errorCount > 0 ? '有错误' : undefined,
+      statusLabel: detail.errorCount > 0 ? t('local.interaction.errors') : undefined,
       startedAt: detail.startedAt,
       endedAt: detail.endedAt,
       workspacePath: detail.workspacePath,
       metrics: [
-        { value: detail.interactionCount, label: '轮次' },
-        { value: detail.toolCount, label: '调用' },
-        ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: '错误', tone: 'danger' as const }] : []),
-        { value: duration(detail.durationMs), label: '跨度' },
+        { value: detail.interactionCount, label: t('local.interaction.metricRounds') },
+        { value: detail.toolCount, label: t('local.interaction.metricCalls') },
+        ...(detail.errorCount > 0 ? [{ value: detail.errorCount, label: t('local.interaction.metricErrors'), tone: 'danger' as const }] : []),
+        { value: duration(detail.durationMs), label: t('local.interaction.metricSpan') },
       ],
       rounds,
     }
-  }, [detail, threshold])
+  }, [detail, threshold, t])
   const annotatedInteractions = useMemo(() => {
     if (!detail || !taskDetailModel) return []
     const byId = new Map(detail.interactions.map(interaction => [interaction.id, interaction] as const))
@@ -1222,10 +1279,10 @@ export function ReviewPage({
   }
 
   const emptyLabel = roundFilter === 'errors'
-    ? '完整会话没有错误轮次。'
+    ? t('local.interaction.noErrors')
     : roundFilter === 'latency'
-      ? '完整会话没有相对耗时较高的轮次。'
-      : '当前筛选条件没有匹配的轮次。'
+      ? t('local.interaction.noLatency')
+      : t('local.interaction.noMatches')
 
   const toggleRoundExpansion = () => {
     const pane = readerPaneRef.current
@@ -1266,52 +1323,54 @@ export function ReviewPage({
   }
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
-    {!embedded && <Toolbar className="workspace-toolbar" aria-label="任务复盘筛选">
+    {!embedded && <Toolbar className="workspace-toolbar" aria-label={t('local.filters.toolbarAria')}>
       <AgentScope agents={agents} value={review.filters.sourceIds?.[0] ?? ''} onChange={sourceId => model.setReviewFilters({ sourceIds: sourceId ? [sourceId] : [] })}/>
       <span className="toolbar-divider" />
-      <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={[
-        { value: '', label: '全部项目' },
+      <SelectMenu className="filter" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel={t('local.filters.projectAria')} placeholder={t('local.filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('local.filters.searchProject')} options={[
+        { value: '', label: t('local.filters.allProjects') },
         ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
       ]}/>
-      <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-        { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      <SelectMenu className="filter" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('local.filters.timeAria')} menuWidth={156} options={[
+        { value: 'today', label: t('local.filters.today') }, { value: '7d', label: t('local.filters.sevenDays') }, { value: '30d', label: t('local.filters.thirtyDays') }, { value: 'all', label: t('local.filters.allTime') },
       ]}/>
-      <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-        { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+      <SelectMenu className="filter" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('local.filters.statusAria')} menuWidth={150} options={[
+        { value: 'all', label: t('local.filters.allStatus') }, { value: 'clean', label: t('local.filters.clean') }, { value: 'with-errors', label: t('local.filters.withErrors') },
       ]}/>
-      <Input className="filter search-filter" placeholder="搜索会话…" value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
-      <IconButton onClick={() => void model.refreshReview()} title="刷新" aria-label="刷新"><UiIcon name="refresh" size={16}/></IconButton>
+      <Input className="filter search-filter" placeholder={t('local.filters.searchPlaceholder')} value={review.filters.search} onChange={e => model.setReviewFilters({ search: e.target.value })}/>
+      <IconButton onClick={() => void model.refreshReview()} title={t('local.filters.refresh')} aria-label={t('local.filters.refresh')}><UiIcon name="refresh" size={16}/></IconButton>
     </Toolbar>}
 
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>会话</b><span>本机 + 远程 · 按最近活动倒序</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
+        <div className="session-panel-head"><div><b>{t('local.list.sessions')}</b><span>{t('local.list.ordering')}</span></div><span className="count-badge">{(review.response?.items.length ?? 0) + visibleHubSessions.length}{review.response?.meta.hasMore ? '+' : ''}</span></div>
         <div className="session-scroll">
-          {review.loading && !review.response && <div className="empty-state">加载会话…</div>}
-          {sessionGroups.map(group => <section className="session-group-block" key={group.label}>
+          {review.loading && !review.response && <div className="empty-state">{t('local.list.loading')}</div>}
+          {sessionGroups.map(group => <section className="session-group-block" key={group.key}>
             <div className="session-group">{group.label}</div>
             {group.items.map(entry => entry.origin === 'local' ? (() => {
               const item = entry.local
               const presentation = historyTaskPresentation(
                 item,
-                item.projectName ? `${item.projectName} 会话` : `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`,
+                item.projectName
+                  ? t('local.session.projectSession', { project: item.projectName })
+                  : t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }),
               )
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, `${agentLabel(item.sourceIds[0] ?? '', item.productId)} 会话`, item.sourceIds)}</div>{item.sourceIds.includes('pi') ? <StatusBadge tone="success">可继续</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
-                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? '无项目'}</span><time title={`最近活动：${formatTime(entry.activityAt)}`}>{sessionRelativeTime(entry.activityAt)}</time></div>
+                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }), item.sourceIds)}</div>{item.sourceIds.includes('pi') ? <StatusBadge tone="success">{t('local.session.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+                <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? t('local.session.noProject')}</span><time title={t('local.list.recentActivity', { time: formatTime(entry.activityAt) })}>{sessionRelativeTime(entry.activityAt)}</time></div>
               </button>
             })() : (() => {
               const item = entry.remote
               const time = hubSessionTime(item)
               return <button key={`remote:${item.id}`} className="session-item" onClick={() => navigate(`/review/hub/${encodeURIComponent(item.id)}`)}>
-                <div className="session-item-title-row"><div className="session-item-title" title={hubSessionTitle(item)}>{sessionListTitle(hubSessionTitle(item), '远程会话')}</div></div>
-                <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time title={time || '时间未同步'}>{time ? sessionRelativeTime(time) : '时间未同步'}</time></div>
+                <div className="session-item-title-row"><div className="session-item-title" title={hubSessionTitle(item)}>{sessionListTitle(hubSessionTitle(item), t('local.session.remote'))}</div></div>
+                <div className="session-item-meta"><span className="hub-session-source remote">{t('local.session.remoteSource', { node: item.origin.nodeId })}</span><time title={time || t('local.session.timeNotSynced')}>{time ? sessionRelativeTime(time) : t('local.session.timeNotSynced')}</time></div>
               </button>
             })())}
           </section>)}
-          {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? '正在加载更多会话…' : review.error ? '加载失败 · 点击重试' : '继续向下滚动，自动加载更多会话'}</button>}
-          {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">已加载全部会话</div>}
-          {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">当前筛选范围没有会话</div>}
+          {review.response?.meta.hasMore && <button ref={sessionLoadSentinelRef} className="session-load-more" disabled={review.loadingMore} onClick={() => void model.loadMoreReview()}>{review.loadingMore ? t('local.list.loadMoreLoading') : review.error ? t('local.list.loadMoreFailed') : t('local.list.loadMoreAuto')}</button>}
+          {review.response && !review.response.meta.hasMore && review.response.items.length > 0 && <div className="session-load-more" aria-live="polite">{t('local.list.allLoaded')}</div>}
+          {!review.loading && !review.response?.items.length && !visibleHubSessions.length && <div className="empty-state">{t('local.list.empty')}</div>}
         </div>
       </aside>}
 
@@ -1328,26 +1387,26 @@ export function ReviewPage({
         {detail && <TaskHeader
           marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
           agent={taskDetailModel?.agentLabel ?? ''}
-          context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? '未关联项目'}
+          context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? t('local.session.unlinkedProject')}
           showStatus={false}
           title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title, 15)}</span>}
           metrics={[]}
           infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
-            { label: '项目', value: taskDetailModel.projectLabel ?? '未关联项目' },
-            { label: '开始时间', value: formatDateTime(taskDetailModel.startedAt) },
-            { label: '结束时间', value: formatDateTime(taskDetailModel.endedAt) },
-            { label: '持续时间', value: duration(detail.durationMs) },
-            ...(taskDetailModel.workspacePath ? [{ label: '工作区', value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
-            ...taskDetailModel.metrics.filter(metric => metric.label !== '跨度').map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
+            { label: t('local.header.project'), value: taskDetailModel.projectLabel ?? t('local.session.unlinkedProject') },
+            { label: t('local.header.startTime'), value: formatDateTime(taskDetailModel.startedAt) },
+            { label: t('local.header.endTime'), value: formatDateTime(taskDetailModel.endedAt) },
+            { label: t('local.header.duration'), value: duration(detail.durationMs) },
+            ...(taskDetailModel.workspacePath ? [{ label: t('local.header.workspace'), value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
+            ...taskDetailModel.metrics.filter(metric => metric.label !== t('local.interaction.metricSpan')).map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
           ] : []}
           actions={<>
             {onResumePiSession && detail.sourceIds.includes('pi') ? <>
-              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>{resumingPiSession ? '正在打开 Pi…' : '继续会话'}</Button>
-              <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>分叉继续</Button>
-              {resumingPiSession && <StatusBadge tone="accent" dot role="status">正在准备历史会话</StatusBadge>}
-              {piResumeError && <StatusBadge tone="danger" title={piResumeError}>继续失败：{piResumeError}</StatusBadge>}
+              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>{resumingPiSession ? t('local.header.openingPi') : t('local.header.continueSession')}</Button>
+              <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>
+              {resumingPiSession && <StatusBadge tone="accent" dot role="status">{t('local.header.preparingHistory')}</StatusBadge>}
+              {piResumeError && <StatusBadge tone="danger" title={piResumeError}>{t('local.header.continueFailed', { error: piResumeError })}</StatusBadge>}
             </> : null}
-            <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</button>
+            <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? t('local.header.viewAll') : t('local.header.viewCore')}</button>
           </>}
         />}
 
@@ -1361,31 +1420,31 @@ export function ReviewPage({
           onKeyDownCapture={noteReaderUserIntent}
         >
           {review.error && <div className="page-error">{review.error}</div>}
-          {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? '加载会话详情…' : '选择一个会话开始复盘'}</div> : <div className="review-reader">
+          {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
 
             {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>Pi 会话树 · {review.relationships.items.length} 条关系</span></summary>
+              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.piTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
             </details> : null}
 
-            <div className="round-nav" aria-label="轮次快速导航">
-              <div className="round-nav-filters" aria-label="轮次筛选">
-                <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>全部 {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>有错误 {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>耗时较高 {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+            <div className="round-nav" aria-label={t('local.roundNav.aria')}>
+              <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
+                <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')} {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')} {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')} {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
               </div>
-              <div className="round-nav-actions" aria-label="轮次操作">
-                <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? '收起当前页' : '展开当前页'}</button>
-                {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>有新记录 <UiIcon name="arrow-down" size={14}/></button>}
+              <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
+                <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</button>
+                {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')} <UiIcon name="arrow-down" size={14}/></button>}
               </div>
-              {roundFilterLoading && <span className="round-nav-status">正在查询完整会话…</span>}
-              <small>“耗时较高”由服务器基于完整会话的轮次耗时分布计算。</small>
+              {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
+              <small>{t('local.roundNav.latencyNote')}</small>
             </div>
 
             <div className="review-flow">
               {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
-                {review.detailLoadingMore ? '正在加载更早轮次…' : review.error ? <button onClick={() => void loadOlder()}>加载失败 · 重试</button> : <button onClick={() => void loadOlder()}>加载更早轮次</button>}
+                {review.detailLoadingMore ? t('local.roundNav.loadingOlder') : review.error ? <button onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</button> : <button onClick={() => void loadOlder()}>{t('local.roundNav.loadOlder')}</button>}
               </div>}
               {annotatedInteractions.map((item, index) => <VirtualRoundMount
                 key={item.round.id}
@@ -1407,14 +1466,14 @@ export function ReviewPage({
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
               {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
                 {review.detailLoadingMore
-                  ? `正在加载${isFiltered ? '后续匹配' : '后续'}轮次…`
+                  ? t('local.roundNav.loadingFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
                   : detail.page.hasMore
                     ? review.error
-                      ? <button onClick={() => void loadFollowing()}>加载失败 · 重试</button>
-                      : `继续向下滚动，${isFiltered ? '后续匹配' : '后续'}轮次会自动加载`
+                      ? <button onClick={() => void loadFollowing()}>{t('local.roundNav.loadFailedRetry')}</button>
+                      : t('local.roundNav.autoLoadFollowing', { scope: isFiltered ? t('local.roundNav.followingMatches') : t('local.roundNav.following') })
                     : isFiltered
-                      ? `已加载全部 ${detail.interactions.length} 个匹配轮次`
-                      : `已完整加载 ${detail.interactions.length} 轮`}
+                      ? t('local.roundNav.allMatchesLoaded', { count: detail.interactions.length })
+                      : t('local.roundNav.allLoaded', { count: detail.interactions.length })}
               </div>}
             </div>
           </div>}

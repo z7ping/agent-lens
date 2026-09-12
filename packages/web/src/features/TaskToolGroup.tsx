@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
 import { TaskToolRow } from './TaskToolRow'
 
@@ -22,11 +23,12 @@ export function TaskToolGroup({
   onToolClick,
   className = '',
 }: TaskToolGroupProps) {
+  const { t } = useTranslation('task')
   return <div
     className={`task-tool-group ${model.errorCount ? 'task-tool-group-error' : ''} ${className}`.trim()}
     data-error-count={model.errorCount}
     data-task-tool-group="true"
-    aria-label={`${model.itemCount} 次工具调用`}
+    aria-label={t('tool.calls', { count: model.itemCount })}
   >
     <div className="task-tool-list">{model.tools.map((tool, index) => <TaskToolRow
       key={tool.id}

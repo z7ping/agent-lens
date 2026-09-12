@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { UiIcon } from './ui'
 
 export type WorkspacePrimarySection = 'review' | 'insights' | 'agents'
@@ -13,14 +14,14 @@ interface WorkspacePrimaryNavigationProps {
 const PRIMARY_SECTIONS: Array<{
   id: WorkspacePrimarySection
   to: string
-  label: string
-  ariaLabel?: string
+  labelKey: 'task' | 'insights' | 'agents'
+  ariaLabelKey?: 'taskCenter'
   icon: 'task' | 'trend' | 'agent'
   update: 'insights' | 'agents' | null
 }> = [
-  { id: 'review', to: '/review', label: '任务', ariaLabel: '任务中心', icon: 'task', update: null },
-  { id: 'insights', to: '/insights', label: '洞察', icon: 'trend', update: 'insights' },
-  { id: 'agents', to: '/agents', label: '智能体', icon: 'agent', update: 'agents' },
+  { id: 'review', to: '/review', labelKey: 'task', ariaLabelKey: 'taskCenter', icon: 'task', update: null },
+  { id: 'insights', to: '/insights', labelKey: 'insights', icon: 'trend', update: 'insights' },
+  { id: 'agents', to: '/agents', labelKey: 'agents', icon: 'agent', update: 'agents' },
 ]
 
 /** 工作区一级导航的唯一渲染入口，页面只提供当前状态与数据提示。 */
@@ -30,7 +31,8 @@ export function WorkspacePrimaryNavigation({
   hasAgentsUpdate,
   onNavigate,
 }: WorkspacePrimaryNavigationProps) {
-  return <nav className="workspace-primary-nav" aria-label="主导航">
+  const { t } = useTranslation('navigation')
+  return <nav className="workspace-primary-nav" aria-label={t('primary')}>
     {PRIMARY_SECTIONS.map(section => {
       const hasUpdate = section.update === 'insights'
         ? hasInsightsUpdate
@@ -42,8 +44,8 @@ export function WorkspacePrimaryNavigation({
         className={`workspace-primary-link ${activeSection === section.id ? 'is-active' : ''}`}
       >
         <UiIcon name={section.icon} size={16}/>
-        <span aria-label={section.ariaLabel}>{section.label}</span>
-        {hasUpdate && <i className="workspace-nav-dot" aria-label="有新数据"/>}
+        <span aria-label={section.ariaLabelKey ? t(section.ariaLabelKey) : undefined}>{t(section.labelKey)}</span>
+        {hasUpdate && <i className="workspace-nav-dot" aria-label={t('common:newData')}/>}
       </NavLink>
     })}
   </nav>

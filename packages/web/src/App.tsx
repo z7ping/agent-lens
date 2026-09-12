@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } from './client/preferences'
 import { useReviewUrlSync } from './client/useReviewUrlSync'
@@ -36,33 +37,34 @@ function WorkspaceBreadcrumb({
   sidebarCollapsed: boolean
   onExpandSidebar(): void
 }) {
+  const { t } = useTranslation('navigation')
   let items: Array<{ label: string; to?: string }>
   if (pathname === '/review/new') {
-    items = [{ label: '任务中心', to: '/review' }, { label: '新建任务' }]
+    items = [{ label: t('taskCenter'), to: '/review' }, { label: t('newTask') }]
   } else if (pathname.startsWith('/review/live/')) {
-    items = [{ label: '任务中心', to: '/review' }, { label: 'Pi 实时任务' }]
+    items = [{ label: t('taskCenter'), to: '/review' }, { label: t('piLiveTask') }]
   } else if (pathname.startsWith('/review/hub/')) {
-    items = [{ label: '任务中心', to: '/review' }, { label: '远程任务' }]
+    items = [{ label: t('taskCenter'), to: '/review' }, { label: t('remoteTask') }]
   } else if (pathname.startsWith('/review/')) {
-    items = [{ label: '任务中心', to: '/review' }, { label: '会话详情' }]
+    items = [{ label: t('taskCenter'), to: '/review' }, { label: t('sessionDetail') }]
   } else if (pathname === '/review') {
-    items = [{ label: '任务中心' }]
+    items = [{ label: t('taskCenter') }]
   } else if (pathname.startsWith('/tools')) {
-    items = [{ label: '洞察', to: '/insights' }, { label: '工具分析' }]
+    items = [{ label: t('insights'), to: '/insights' }, { label: t('tools') }]
   } else if (pathname.startsWith('/insights')) {
-    items = [{ label: '洞察' }, { label: '使用概览' }]
+    items = [{ label: t('insights') }, { label: t('usageOverview') }]
   } else if (pathname.startsWith('/agents')) {
     const selected = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
-    items = [{ label: '智能体' }, { label: selected?.displayName || selected?.sourceId || '概览' }]
+    items = [{ label: t('agents') }, { label: selected?.displayName || selected?.sourceId || t('overview') }]
   } else if (pathname.startsWith('/backup')) {
-    items = [{ label: '设置' }, { label: '资产备份' }]
+    items = [{ label: t('settings') }, { label: t('assetBackup') }]
   } else {
     items = [{ label: 'AgentLens' }]
   }
 
   return <div className="workspace-breadcrumb-shell">
-    <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title="打开工作区导航" aria-label="打开工作区导航"><UiIcon name="menu" size={16}/></IconButton>
-    {sidebarCollapsed && <IconButton className="workspace-sidebar-restore-button" onClick={onExpandSidebar} title="展开侧栏" aria-label="展开侧栏"><UiIcon name="panel-left-open" size={16}/></IconButton>}
+    <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title={t('openWorkspaceNavigation')} aria-label={t('openWorkspaceNavigation')}><UiIcon name="menu" size={16}/></IconButton>
+    {sidebarCollapsed && <IconButton className="workspace-sidebar-restore-button" onClick={onExpandSidebar} title={t('expandSidebar')} aria-label={t('expandSidebar')}><UiIcon name="panel-left-open" size={16}/></IconButton>}
     <Breadcrumb
       className="workspace-breadcrumb"
       items={items.map((item, index) => item.to && index < items.length - 1
@@ -73,6 +75,7 @@ function WorkspaceBreadcrumb({
 }
 
 function Shell({ model }: { model: AgentLensClientModel }) {
+  const { t } = useTranslation(['shell', 'common', 'navigation'])
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
@@ -159,7 +162,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
-      {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label="关闭工作区导航" onClick={() => setMobileNavigationOpen(false)}/>} 
+      {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label={t('navigation:closeWorkspaceNavigation')} onClick={() => setMobileNavigationOpen(false)}/>} 
       <div ref={mainRef} className="app-main">
         <WorkspaceBreadcrumb
           pathname={location.pathname}
@@ -172,12 +175,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         {hasSseBanner && <div className="sse-banner" role="status" aria-live="polite">
           <span className="sse-banner-icon" aria-hidden="true"><UiIcon name="exclamation" size={14}/></span>
           <div className="sse-banner-copy">
-            <b>实时更新暂时中断</b>
-            <span>当前内容保持可读，连接恢复后会自动同步。</span>
+            <b>{t('shell:realTimeDisconnected')}</b>
+            <span>{t('shell:contentReadableWhileReconnecting')}</span>
           </div>
-          <StatusBadge className="sse-banner-status" tone="warning" dot>正在重连</StatusBadge>
+          <StatusBadge className="sse-banner-status" tone="warning" dot>{t('shell:reconnecting')}</StatusBadge>
         </div>}
-        <Suspense fallback={<PageLoadingState title="正在加载工作区" description="正在准备当前页面所需的数据与界面。"/>}>
+        <Suspense fallback={<PageLoadingState title={t('common:loadingWorkspace')} description={t('common:loadingWorkspaceDescription')}/>}>
         <Routes>
           <Route path="/review" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
@@ -194,8 +197,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         </Suspense>
         {onLocalReview && <ReviewStateOverlay model={model} snapshot={snapshot}/>} 
         {onAgents && <AgentsStateOverlay model={model} snapshot={snapshot}/>} 
-        {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label="工具分析" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
-        {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label="智能体概览" hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
+        {onTools && snapshot.usage.hasNewData && <BackgroundDataNotice label={t('navigation:tools')} hasSseBanner={hasSseBanner} onRefresh={() => model.refreshUsage()}/>} 
+        {onAgents && snapshot.agentsHasNewData && <BackgroundDataNotice label={t('navigation:agentOverview')} hasSseBanner={hasSseBanner} onRefresh={() => model.refreshFacetsAndAgents()}/>} 
       </div>
     </div>
   </PinnedAgentsProvider>

@@ -360,6 +360,7 @@ export class AgentOverviewProjection {
               capability: item.capability,
               availability: item.availability,
               ...(item.authorization ? { authorization: item.authorization } : {}),
+              ...(item.reasonCode ? { reasonCode: item.reasonCode } : {}),
               ...(item.reason ? { reason: item.reason } : {}),
             })),
           },

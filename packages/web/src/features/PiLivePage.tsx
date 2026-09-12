@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -17,6 +18,7 @@ import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound,
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 import { workspaceDisplayName } from './task-detail-model'
+import { agentLensI18n } from '../i18n/runtime'
 
 type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
@@ -32,18 +34,20 @@ interface ExtensionRequest {
 }
 
 const PI_LIVE_EAGER_CHUNKS = 2
-const PI_LIVE_STARTUP_BACKGROUND = {
-  model: {
-    id: 'background:startup',
-    label: '后台活动',
-    state: 'settled' as const,
-    toolCount: 0,
-    errorCount: 0,
-    durationMs: 0,
-    highLatency: false,
-  },
-  items: [] as PiLiveHistoryItem[],
-  continuation: false,
+function piLiveStartupBackground() {
+  return {
+    model: {
+      id: 'background:startup',
+      label: agentLensI18n.t('piLive:common.backgroundActivity'),
+      state: 'settled' as const,
+      toolCount: 0,
+      errorCount: 0,
+      durationMs: 0,
+      highLatency: false,
+    },
+    items: [] as PiLiveHistoryItem[],
+    continuation: false,
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -110,18 +114,25 @@ function modelLabel(state: PiLiveStateDto | null): string {
 }
 
 function modelCompactLabel(state: PiLiveStateDto | null): string {
-  if (!state?.model) return '模型'
+  if (!state?.model) return agentLensI18n.t('piLive:common.model')
   const model = record(state.model)
-  return stringValue(model.name || model.id || model.modelId) || '模型'
+  return stringValue(model.name || model.id || model.modelId) || agentLensI18n.t('piLive:common.model')
+}
+
+function thinkingLevelSemanticKey(level: string): string {
+  const normalized = level.trim().toLowerCase()
+  if (normalized === 'minimal' || normalized === 'none' || normalized === 'off') return 'minimal'
+  if (normalized === 'xhigh' || normalized === 'max' || normalized === 'maximum') return 'xhigh'
+  return normalized
 }
 
 function thinkingLevelLabel(level: string): string {
-  const normalized = level.trim().toLowerCase()
-  if (normalized === 'minimal' || normalized === 'none' || normalized === 'off') return '极简'
-  if (normalized === 'low') return '低'
-  if (normalized === 'medium') return '中'
-  if (normalized === 'high') return '高'
-  if (normalized === 'xhigh' || normalized === 'max' || normalized === 'maximum') return '极高'
+  const normalized = thinkingLevelSemanticKey(level)
+  if (normalized === 'minimal') return agentLensI18n.t('piLive:common.thinkingMinimal')
+  if (normalized === 'low') return agentLensI18n.t('piLive:common.thinkingLow')
+  if (normalized === 'medium') return agentLensI18n.t('piLive:common.thinkingMedium')
+  if (normalized === 'high') return agentLensI18n.t('piLive:common.thinkingHigh')
+  if (normalized === 'xhigh') return agentLensI18n.t('piLive:common.thinkingXHigh')
   return level
 }
 
@@ -133,18 +144,28 @@ function modelSelection(state: PiLiveStateDto | null): string {
   return provider && id ? JSON.stringify([provider, id]) : ''
 }
 
+function currentLocale(): string {
+  return agentLensI18n.resolvedLanguage ?? agentLensI18n.language ?? 'zh-CN'
+}
+
 function formatTaskDateTime(value: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(currentLocale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)
 }
 
 function formatTaskDuration(ms: number): string {
   const value = Math.max(0, ms)
-  if (value < 60_000) return `${Math.floor(value / 1000)} 秒`
-  if (value < 3_600_000) return `${Math.floor(value / 60_000)} 分钟`
-  if (value < 86_400_000) return `${Math.floor(value / 3_600_000)} 小时 ${Math.floor(value % 3_600_000 / 60_000)} 分钟`
-  return `${Math.floor(value / 86_400_000)} 天 ${Math.floor(value % 86_400_000 / 3_600_000)} 小时`
+  if (value < 60_000) return agentLensI18n.t('piLive:common.seconds', { count: Math.floor(value / 1000) })
+  if (value < 3_600_000) return agentLensI18n.t('piLive:common.minutes', { count: Math.floor(value / 60_000) })
+  if (value < 86_400_000) return agentLensI18n.t('piLive:common.hoursMinutes', {
+    hours: Math.floor(value / 3_600_000),
+    minutes: Math.floor(value % 3_600_000 / 60_000),
+  })
+  return agentLensI18n.t('piLive:common.daysHours', {
+    days: Math.floor(value / 86_400_000),
+    hours: Math.floor(value % 86_400_000 / 3_600_000),
+  })
 }
 
 function PiLiveElapsed({ startedAt }: { startedAt: string }) {
@@ -206,7 +227,7 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
   return {
     id,
     method,
-    title: stringValue(event.title) || 'Pi 需要你的确认',
+    title: stringValue(event.title) || agentLensI18n.t('piLive:common.confirmationTitle'),
     message: stringValue(event.message),
     options: Array.isArray(event.options) ? event.options.filter((item): item is string => typeof item === 'string') : [],
     placeholder: stringValue(event.placeholder),
@@ -215,13 +236,14 @@ function extensionRequest(event: Record<string, unknown>): ExtensionRequest | nu
 }
 
 function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
+  const { t } = useTranslation('piLive')
   const navigate = useNavigate()
   const [cwd, setCwd] = useState(() => {
     try { return localStorage.getItem('agent-lens:pi-live-last-cwd') ?? '' } catch { return '' }
   })
   const [model, setModel] = useState('')
   const [provider, setProvider] = useState('')
-  const [availability, setAvailability] = useState<string>('正在检测 Pi…')
+  const [availability, setAvailability] = useState<string>(() => t('start.checking'))
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState('')
 
@@ -229,12 +251,12 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
     let cancelled = false
     void piLiveApi.availability().then(value => {
       if (cancelled) return
-      setAvailability(value.available ? `Pi 已就绪 · ${value.executable ?? 'PATH'}` : `Pi 不可用 · ${value.reason ?? '未找到可执行文件'}`)
+      setAvailability(value.available ? t('start.ready', { executable: value.executable ?? 'PATH' }) : t('start.unavailable', { reason: value.reason ?? t('start.executableMissing') }))
     }, reason => {
       if (!cancelled) setAvailability(reason instanceof Error ? reason.message : String(reason))
     })
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   const start = async () => {
     if (!cwd.trim() || starting) return
@@ -258,47 +280,48 @@ function PiLiveStart({ known }: { known: PiLiveStateDto[] }) {
 
   return <main className="pi-live-start-page">
     <section className="pi-live-start-card">
-      <div className="pi-live-start-kicker">任务复盘 · Pi 实时任务</div>
-      <h1>开始一个 Pi 任务</h1>
-      <p>Pi 由 AgentLens 后台服务持有。关闭页面、刷新浏览器或切去任务复盘，不会自动结束正在执行的任务。</p>
-      <label>工作目录<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder="例如 F:\\workspace\\agent-lens 或 /workspace/agent-lens" autoFocus/></label>
-      <Disclosure summary="模型设置（可选）" className="pi-live-start-model-settings">
+      <div className="pi-live-start-kicker">{t('start.kicker')}</div>
+      <h1>{t('start.title')}</h1>
+      <p>{t('start.description')}</p>
+      <label>{t('start.cwd')}<Input value={cwd} onChange={event => setCwd(event.target.value)} placeholder={t('start.cwdPlaceholder')} autoFocus/></label>
+      <Disclosure summary={t('start.modelSettings')} className="pi-live-start-model-settings">
         <div className="pi-live-start-grid">
-          <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
-          <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder="留空使用 Pi 默认"/></label>
+          <label>Provider<Input value={provider} onChange={event => setProvider(event.target.value)} placeholder={t('start.providerPlaceholder')}/></label>
+          <label>Model<Input value={model} onChange={event => setModel(event.target.value)} placeholder={t('start.modelPlaceholder')}/></label>
         </div>
       </Disclosure>
       <div className="pi-live-start-status">{availability}</div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       <div className="pi-live-start-actions">
-        <Button onClick={() => navigate('/review')}>返回任务复盘</Button>
-        <Button variant="primary" loading={starting} disabled={!cwd.trim()} onClick={() => void start()}>启动 Pi</Button>
+        <Button onClick={() => navigate('/review')}>{t('start.back')}</Button>
+        <Button variant="primary" loading={starting} disabled={!cwd.trim()} onClick={() => void start()}>{t('start.launch')}</Button>
       </div>
     </section>
     {known.length > 0 && <section className="pi-live-known-card">
-      <div><b>仍在后台的 Pi 任务</b><span>来自本浏览器最近启动的运行时</span></div>
+      <div><b>{t('start.backgroundTitle')}</b><span>{t('start.backgroundDescription')}</span></div>
       {known.map(item => <button key={item.runtimeSessionId} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
         <span>{piLiveSessionTitle(item)}</span>
-        <small>{modelLabel(item)} · {item.status === 'initializing' ? '正在初始化' : item.status === 'failed' ? '启动失败' : item.isStreaming ? '正在工作' : '等待输入'}</small>
+        <small>{modelLabel(item)} · {item.status === 'initializing' ? t('start.initializing') : item.status === 'failed' ? t('start.failed') : item.isStreaming ? t('start.working') : t('start.waiting')}</small>
       </button>)}
     </section>}
   </main>
 }
 
 function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onAnswer(value: JsonValue): void }) {
+  const { t } = useTranslation('piLive')
   const [value, setValue] = useState(request.prefill)
   useEffect(() => setValue(request.prefill), [request.id, request.prefill])
 
   if (request.method === 'confirm') {
     return <div className="pi-live-blocking" role="dialog" aria-label={request.title}>
       <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ confirmed: false })}>拒绝</Button><Button size="small" variant="primary" onClick={() => onAnswer({ confirmed: true })}>允许</Button></div>
+      <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ confirmed: false })}>{t('blocking.reject')}</Button><Button size="small" variant="primary" onClick={() => onAnswer({ confirmed: true })}>{t('blocking.allow')}</Button></div>
     </div>
   }
   if (request.method === 'select') {
     return <div className="pi-live-blocking" role="dialog" aria-label={request.title}>
       <div><b>{request.title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-options">{request.options.map(option => <Button size="small" key={option} onClick={() => onAnswer({ value: option })}>{option}</Button>)}<Button size="small" onClick={() => onAnswer({ cancelled: true })}>取消</Button></div>
+      <div className="pi-live-blocking-options">{request.options.map(option => <Button size="small" key={option} onClick={() => onAnswer({ value: option })}>{option}</Button>)}<Button size="small" onClick={() => onAnswer({ cancelled: true })}>{t('blocking.cancel')}</Button></div>
     </div>
   }
   return <div className="pi-live-blocking pi-live-blocking-input" role="dialog" aria-label={request.title}>
@@ -306,11 +329,13 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
     {request.method === 'editor'
       ? <Textarea className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>
       : <Input className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>}
-    <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ cancelled: true })}>取消</Button><Button size="small" variant="primary" onClick={() => onAnswer({ value })}>提交</Button></div>
+    <div className="pi-live-blocking-actions"><Button size="small" onClick={() => onAnswer({ cancelled: true })}>{t('blocking.cancel')}</Button><Button size="small" variant="primary" onClick={() => onAnswer({ value })}>{t('blocking.submit')}</Button></div>
   </div>
 }
 
 export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
+  const { t, i18n } = useTranslation('piLive')
+  const localeRevision = i18n.resolvedLanguage ?? i18n.language
   const navigate = useNavigate()
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
@@ -345,7 +370,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [interruptNotice, setInterruptNotice] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
-  const [syncWarning, setSyncWarning] = useState('')
+  const [syncWarningCode, setSyncWarningCode] = useState<'' | 'controls-refresh-failed' | 'history-reconcile-failed' | 'snapshot-sync-failed'>('')
   const [busy, setBusy] = useState(false)
   const [sendPending, setSendPending] = useState(false)
   const [abortPending, setAbortPending] = useState(false)
@@ -381,7 +406,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setRestored([])
     setExtension(null)
     setError('')
-    setSyncWarning('')
+    setSyncWarningCode('')
     setInterruptNotice(false)
     setShowAllEvents(true)
     setStartupQueued('')
@@ -404,12 +429,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         if (!active) return
         controlsLoaded = true
         setControls(value)
-        setSyncWarning(current => current.startsWith('模型控制状态刷新失败') ? '' : current)
+        setSyncWarningCode(current => current === 'controls-refresh-failed' ? '' : current)
       }).catch(reason => {
         if (!active) return
         const detail = reason instanceof Error ? reason.message : String(reason)
         console.warn('[AgentLens] Pi Live controls refresh failed:', detail)
-        setSyncWarning('模型控制状态刷新失败；当前对话不受影响。')
+        setSyncWarningCode('controls-refresh-failed')
       }).finally(() => {
         if (controlsRefreshTask === task) controlsRefreshTask = null
       })
@@ -462,13 +487,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           setOptimisticPrompt(resolvedPrompt)
         }
         activePromptRef.current = ''
-        setSyncWarning(current => current.startsWith('历史对账失败') ? '' : current)
+        setSyncWarningCode(current => current === 'history-reconcile-failed' ? '' : current)
       } catch (reason) {
         if (!active) return
         const detail = reason instanceof Error ? reason.message : String(reason)
         console.warn('[AgentLens] Pi Live settled snapshot reconciliation failed:', detail)
         setCurrentItems(current => settlePiLiveItems(current))
-        setSyncWarning('历史对账失败；本轮已完成的回复已保留，可以继续对话。')
+        setSyncWarningCode('history-reconcile-failed')
       }
     }
 
@@ -498,7 +523,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       onError: reason => {
         if (!active) return
         if (reason instanceof PiLiveRequestError && reason.status === 502) {
-          setSyncWarning('历史快照同步失败；当前已显示内容不会被清空。')
+          setSyncWarningCode('snapshot-sync-failed')
           return
         }
         setError(reason.message)
@@ -631,16 +656,16 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, reason => {
                 const detail = reason instanceof Error ? reason.message : String(reason)
                 console.warn('[AgentLens] Pi Live ready snapshot refresh failed:', detail)
-                if (active) setSyncWarning('历史快照同步失败；当前已显示内容不会被清空。')
+                if (active) setSyncWarningCode('snapshot-sync-failed')
               })
               void refreshControls()
             }
           } else {
             const request = extensionRequest(event)
             if (request) setExtension(request)
-            if (type === 'extension_error') setError(stringValue(event.error) || 'Pi Extension 执行失败')
+            if (type === 'extension_error') setError(stringValue(event.error) || agentLensI18n.t('piLive:warning.extensionFailed'))
             if (type === 'runtime_exit') {
-              setError(stringValue(event.errorMessage) || 'Pi Runtime 已退出')
+              setError(stringValue(event.errorMessage) || agentLensI18n.t('piLive:warning.runtimeExited'))
               statePatch = { ...statePatch, isStreaming: false, isCompacting: false }
             }
           }
@@ -668,8 +693,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [runtimeId])
 
-  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot])
-  const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history])
+  const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot, localeRevision])
+  const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history, localeRevision])
   const visibleHistoryRounds = useMemo(() => currentOrdinal === null
     ? historyRounds
     : historyRounds.filter(round => round.model.ordinal !== currentOrdinal), [currentOrdinal, historyRounds])
@@ -682,13 +707,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
     if (!optimisticPrompt && !state?.isStreaming && currentItems.length === 0) return undefined
     return projectPiLiveRunningRound({ items: currentItems, isStreaming: optimisticStreaming })
-  }, [currentItems, currentOrdinal, historyRounds, optimisticPrompt, optimisticStreaming, state?.isStreaming])
+  }, [currentItems, currentOrdinal, historyRounds, localeRevision, optimisticPrompt, optimisticStreaming, state?.isStreaming])
   const taskDetailModel = useMemo(() => projectPiLiveTaskDetail({
     state: state ? { ...state, pendingMessageCount: visiblePendingCount } : state,
     connected,
     historyRounds,
     runningRound,
-  }), [connected, historyRounds, runningRound, state, visiblePendingCount])
+  }), [connected, historyRounds, localeRevision, runningRound, state, visiblePendingCount])
   const headerTitle = taskDetailModel.title
 
   const beginOptimisticPrompt = useCallback((text: string) => {
@@ -961,21 +986,42 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const runtimeTerminating = state?.status === 'terminating'
   const canStageStartup = runtimeInitializing && !startupQueued
   const canSend = Boolean(input.trim()) && !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const syncWarning = syncWarningCode === 'controls-refresh-failed'
+    ? t('warning.modelRefreshFailed')
+    : syncWarningCode === 'history-reconcile-failed'
+      ? t('warning.historyReconcileFailed')
+      : syncWarningCode === 'snapshot-sync-failed'
+        ? t('warning.snapshotFailed')
+        : ''
+  const thinkingOptions = (() => {
+    const values = new Map<string, string>()
+    for (const level of controls.thinkingLevels) {
+      const key = thinkingLevelSemanticKey(level)
+      if (!values.has(key) || level === state?.thinkingLevel) values.set(key, level)
+    }
+    return [...values.values()].map(level => ({ value: level, label: thinkingLevelLabel(level) }))
+  })()
   const composerStatus = startupQueued
-    ? { label: '待发送', color: 'var(--al-accent)', title: '等待 Pi 就绪后自动发送' }
+    ? { label: t('connection.queued'), color: 'var(--al-accent)', title: t('connection.queuedTitle') }
     : runtimeInitializing
-      ? { label: '初始化', color: 'var(--al-accent)', title: state?.initializationMessage || 'Pi Runtime 正在初始化' }
+      ? { label: t('connection.initializing'), color: 'var(--al-accent)', title: state?.initializationMessage || t('connection.initializingTitle') }
       : state?.status === 'failed'
-        ? { label: '失败', color: 'var(--al-danger)', title: state.error || error || 'Pi Runtime 初始化失败' }
+        ? { label: t('connection.failed'), color: 'var(--al-danger)', title: state.error || error || t('connection.failedTitle') }
         : connected
-          ? { label: '已连接', color: 'var(--al-success)', title: 'Pi 实时通道已连接' }
-          : { label: '重连', color: 'var(--al-warning)', title: 'Pi 实时通道正在重新连接' }
+          ? { label: t('connection.connected'), color: 'var(--al-success)', title: t('connection.connectedTitle') }
+          : { label: t('connection.reconnecting'), color: 'var(--al-warning)', title: t('connection.reconnectingTitle') }
   const diagnosticsTitle = diagnostics
-    ? `事件 ${diagnostics.ingressEvents} · 合并 ${diagnostics.coalescedEvents} · 峰值队列 ${diagnostics.maxQueueDepth} · 最近提交 ${diagnostics.lastFlushLatencyMs.toFixed(1)}ms${diagnostics.hidden ? ' · 后台降频' : ''}`
+    ? t('connection.diagnostics', {
+        events: diagnostics.ingressEvents,
+        coalesced: diagnostics.coalescedEvents,
+        queue: diagnostics.maxQueueDepth,
+        latency: diagnostics.lastFlushLatencyMs.toFixed(1),
+        background: diagnostics.hidden ? t('connection.backgroundThrottled') : '',
+      })
     : ''
   const inputPlaceholder = runtimeInitializing
-    ? 'Pi 正在初始化，可以先输入任务…'
-    : state?.isStreaming ? '继续指导 Pi…' : '输入任务…'
+    ? t('connection.composerInitializing')
+    : state?.isStreaming ? t('connection.composerSteer') : t('connection.composerIdle')
   const startupState = state && ['initializing', 'ready', 'failed'].includes(state.status) ? state : null
   const startupMeta = startupState ? piStartupSummary(startupState) : null
   const hasBackgroundRound = visibleHistoryRounds.some(projection => projection.model.id === 'background:0')
@@ -992,15 +1038,15 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     {!embedded && <aside className="pi-live-sessions">
-      <div className="pi-live-sessions-head"><div><b>Pi 实时任务</b><small>关闭视图不结束任务</small></div><Button size="small" onClick={() => navigate('/review/live')}>新建</Button></div>
+      <div className="pi-live-sessions-head"><div><b>{t('sidebar.title')}</b><small>{t('sidebar.closeKeepsRunning')}</small></div><Button size="small" onClick={() => navigate('/review/live')}>{t('sidebar.newTask')}</Button></div>
       <div className="pi-live-session-scroll">
         {known.map(item => <button key={item.runtimeSessionId} className={`pi-live-session ${item.runtimeSessionId === runtimeId ? 'active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="pi-live-session-top"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span>{item.status === 'initializing' ? '启动中' : item.status === 'failed' ? '失败' : item.isStreaming ? '实时' : '空闲'}</span></div>
+          <div className="pi-live-session-top"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span>{item.status === 'initializing' ? t('sidebar.starting') : item.status === 'failed' ? t('sidebar.failed') : item.isStreaming ? t('sidebar.live') : t('sidebar.idle')}</span></div>
           <div className="pi-live-session-title">{piLiveSessionTitle(item)}</div>
           <div className="pi-live-session-foot"><span>{modelLabel(item)}</span><span>PID {item.processId ?? '—'}</span></div>
         </button>)}
-        {!known.length && <div className="pi-live-side-empty">当前浏览器没有记录到其他后台 Pi 任务。</div>}
-        <button className="pi-live-review-link" onClick={() => navigate('/review?source=pi')}>查看 Pi 历史复盘 <UiIcon name="arrow-right" size={14}/></button>
+        {!known.length && <div className="pi-live-side-empty">{t('sidebar.empty')}</div>}
+        <button className="pi-live-review-link" onClick={() => navigate('/review?source=pi')}>{t('sidebar.history')} <UiIcon name="arrow-right" size={14}/></button>
       </div>
     </aside>}
 
@@ -1008,25 +1054,25 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <TaskHeader
         marker={<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
         agent={taskDetailModel.agentLabel}
-        context={state?.projectName || workspaceDisplayName(state?.workspacePath) || '未关联项目'}
+        context={state?.projectName || workspaceDisplayName(state?.workspacePath) || t('header.noProject')}
         showStatus={false}
         title={<span title={headerTitle}>{brief(headerTitle, 15)}</span>}
-        submeta={state?.gitBranch ? <span className="pi-live-header-branch" title={`Git 分支：${state.gitBranch}`}>分支 {state.gitBranch}</span> : undefined}
+        submeta={state?.gitBranch ? <span className="pi-live-header-branch" title={t('header.branchTitle', { branch: state.gitBranch })}>{t('header.branch', { branch: state.gitBranch })}</span> : undefined}
         metrics={[]}
         infoItems={state ? [
-          { label: '模型', value: taskDetailModel.contextLabel ?? 'Pi 默认模型' },
-          { label: '项目', value: state.projectName ?? '未关联项目' },
-          ...(state.workspacePath ? [{ label: '工作区', value: <code title={state.workspacePath}>{state.workspacePath}</code> }] : []),
-          ...(state.gitBranch ? [{ label: '分支', value: state.gitBranch }] : []),
+          { label: t('header.model'), value: taskDetailModel.contextLabel ?? t('header.defaultModel') },
+          { label: t('header.project'), value: state.projectName ?? t('header.noProject') },
+          ...(state.workspacePath ? [{ label: t('header.workspace'), value: <code title={state.workspacePath}>{state.workspacePath}</code> }] : []),
+          ...(state.gitBranch ? [{ label: t('header.branchLabel'), value: state.gitBranch }] : []),
           ...(state.startedAt ? [
-            { label: '开始时间', value: formatTaskDateTime(state.startedAt) },
-            { label: '已运行时长', value: <PiLiveElapsed startedAt={state.startedAt}/> },
+            { label: t('header.startTime'), value: formatTaskDateTime(state.startedAt) },
+            { label: t('header.elapsed'), value: <PiLiveElapsed startedAt={state.startedAt}/> },
           ] : []),
           ...taskDetailModel.metrics.map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
         ] : []}
         actions={<>
-          <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? '视图：全部事件' : '视图：核心事件'}</Button>
-          {optimisticStreaming && <Button size="small" variant="danger" className="pi-live-stop" disabled={abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? '正在中断…' : '中断本轮'}</Button>}
+          <Button size="small" className="review-audit-toggle" aria-pressed={showAllEvents} onClick={() => setShowAllEvents(value => !value)}>{showAllEvents ? t('header.viewAll') : t('header.viewCore')}</Button>
+          {optimisticStreaming && <Button size="small" variant="danger" className="pi-live-stop" disabled={abortPending || queueMutationPending} onClick={() => void stop()}>{abortPending ? t('header.interrupting') : t('header.interrupt')}</Button>}
           <PiRuntimeMenu busy={busy} onTerminate={() => { void terminate() }}/>
         </>}
       />
@@ -1034,13 +1080,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
         <div className="pi-live-document">
           {!state && <div className="pi-live-startup-spotlight"><OperationProgress
-            statusLabel="正在连接"
-            title="正在连接 Pi Runtime"
-            description="正在读取 Runtime 状态并建立实时事件通道。"
+            statusLabel={t('loading.status')}
+            title={t('loading.title')}
+            description={t('loading.description')}
           /></div>}
           {startupState && startupState.status !== 'ready' && <div className="pi-live-startup-spotlight">{startupContent}</div>}
           {startupState?.status === 'ready' && !hasBackgroundRound && <PiLiveHistoryTaskRound
-            projection={PI_LIVE_STARTUP_BACKGROUND}
+            projection={piLiveStartupBackground()}
             showAllEvents={showAllEvents}
             beforeContent={startupContent}
             summaryMeta={startupSummaryMeta}
@@ -1070,7 +1116,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             showAllEvents={showAllEvents}
             pendingMessageCount={visiblePendingCount}
           />}
-          {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">这个 Pi Runtime 还没有消息。可以直接在下方输入开始任务。</div>}
+          {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">{t('empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
       </div>
@@ -1078,28 +1124,28 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-compose-wrap">
         <div className="pi-live-float-stack">
           {syncWarning && <div className="pi-live-sync-warning" role="status" aria-live="polite">{syncWarning}</div>}
-          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>有新记录 <UiIcon name="arrow-down" size={14}/></Button>}
-          {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>已停止当前生成</b><span>可以继续输入。</span></div>}
+          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
+          {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>{t('interruptedTitle')}</b><span>{t('interruptedDescription')}</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
-            <span>等待 Pi 就绪</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>撤回</Button></div>
+            <span>{t('queue.waitingReady')}</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('queue.edit')}</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>{t('queue.withdraw')}</Button></div>
           </div>}
           {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
-            <span>{item.mode === 'steer' ? '待介入' : '完成后继续'}</span><b>{item.text}</b>
+            <span>{item.mode === 'steer' ? t('queue.steer') : t('queue.followUp')}</span><b>{item.text}</b>
             {item.active
               ? ('pending' in item && item.pending
-                  ? <small>正在加入 Pi 队列</small>
-                  : <div><small>已在 Pi 队列</small>{'queueIndex' in item && typeof item.queueIndex === 'number' && <Button size="small" className="pi-live-queue-action" disabled={queueMutationPending} onClick={() => void removeQueued(item.mode, Number(item.queueIndex), item.text)}>撤回</Button>}</div>)
-              : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>编辑</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>撤回</Button></div>}
+                  ? <small>{t('queue.joining')}</small>
+                  : <div><small>{t('queue.queued')}</small>{'queueIndex' in item && typeof item.queueIndex === 'number' && <Button size="small" className="pi-live-queue-action" disabled={queueMutationPending} onClick={() => void removeQueued(item.mode, Number(item.queueIndex), item.text)}>{t('queue.withdraw')}</Button>}</div>)
+              : <div><Button size="small" className="pi-live-queue-action" onClick={() => editRestored(item)}>{t('queue.edit')}</Button><Button size="small" className="pi-live-queue-action" onClick={() => removeRestored(item.id)}>{t('queue.withdraw')}</Button></div>}
           </div>)}</div>}
           {extension && <ExtensionPrompt request={extension} onAnswer={value => { if (!extensionPending) void answerExtension(value) }}/>} 
         </div>
         <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
           <div className="pi-live-editor">
-            <div className="pi-live-editor-toolbar" aria-label="输入区工具">
+            <div className="pi-live-editor-toolbar" aria-label={t('composer.toolbarAria')}>
               <IconButton
                 className="pi-live-editor-action"
-                title={composerExpanded ? '缩小输入区' : '放大输入区'}
-                aria-label={composerExpanded ? '缩小输入区' : '放大输入区'}
+                title={composerExpanded ? t('composer.shrink') : t('composer.expand')}
+                aria-label={composerExpanded ? t('composer.shrink') : t('composer.expand')}
                 onClick={() => setComposerExpanded(value => !value)}
               ><UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/></IconButton>
             </div>
@@ -1111,8 +1157,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               onSubmit={submitMode => void send(submitMode === 'followUp' ? 'followUp' : undefined)}
               onEscape={optimisticStreaming ? () => void stop() : undefined}
               placeholder={inputPlaceholder}
-              title="输入 Markdown 会自动格式化 · Enter 发送 · Alt+Enter 完成后继续 · Shift+Enter 换行 · 生成中 Esc 中断"
-              ariaLabel="Pi Markdown 富文本输入"
+              title={t('composer.markdownHint')}
+              ariaLabel={t('composer.inputAria')}
               disabled={runtimeTerminating}
             />
           </div>
@@ -1123,8 +1169,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             </span>
             <div className="pi-live-compose-settings">
               <ComposerPillSelect
-                ariaLabel="Pi 模型"
-                title={state?.model ? `Pi 模型 · ${modelLabel(state)}` : 'Pi 模型'}
+                ariaLabel={t('composer.modelAria')}
+                title={state?.model ? t('composer.modelTitle', { model: modelLabel(state) }) : t('composer.modelGenericTitle')}
                 value={selectedModel}
                 placeholder={modelCompactLabel(state)}
                 className="pi-live-model-picker"
@@ -1138,22 +1184,22 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 onChange={selection => void changeModel(selection)}
               />
               <ComposerPillSelect
-                ariaLabel="Pi 推理强度"
-                title={`Pi 推理强度 · ${state?.thinkingLevel || '未设置'}`}
+                ariaLabel={t('composer.thinkingAria')}
+                title={t('composer.thinkingTitle', { level: state?.thinkingLevel ? thinkingLevelLabel(state.thinkingLevel) : t('composer.thinkingUnset') })}
                 value={state?.thinkingLevel ?? ''}
-                placeholder={state?.thinkingLevel ? thinkingLevelLabel(state.thinkingLevel) : '推理'}
+                placeholder={state?.thinkingLevel ? thinkingLevelLabel(state.thinkingLevel) : t('composer.thinkingPlaceholder')}
                 className="pi-live-thinking-picker"
                 menuWidth={168}
                 disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
-                options={controls.thinkingLevels.map(level => ({ value: level, label: thinkingLevelLabel(level) }))}
+                options={thinkingOptions}
                 onChange={level => void changeThinkingLevel(level)}
               />
             </div>
-            <div className="pi-live-compose-mode" aria-label="发送方式">
-              <Button size="small" className={`pi-live-mode-action ${mode === 'steer' ? 'active' : ''}`} title="立即介入当前生成（Enter）" aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>介入</Button>
-              <Button size="small" className={`pi-live-mode-action ${mode === 'followUp' ? 'active' : ''}`} title="当前轮次完成后继续（Alt+Enter）" aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>继续</Button>
+            <div className="pi-live-compose-mode" aria-label={t('composer.modeAria')}>
+              <Button size="small" className={`pi-live-mode-action ${mode === 'steer' ? 'active' : ''}`} title={t('composer.steerTitle')} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>{t('composer.steer')}</Button>
+              <Button size="small" className={`pi-live-mode-action ${mode === 'followUp' ? 'active' : ''}`} title={t('composer.followUpTitle')} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>{t('composer.followUp')}</Button>
             </div>
-            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? '发送' : 'Pi 就绪后发送'}><UiIcon name="send" size={20}/></IconButton>
+            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? t('composer.send') : t('composer.sendWhenReady')}><UiIcon name="send" size={20}/></IconButton>
           </div>
         </div>
       </div>

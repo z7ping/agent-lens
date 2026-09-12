@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { PiLiveInitializationStageDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { OperationProgress } from './StateViews'
 import { Button, UiIcon } from './ui'
+import { translateProduct } from '../i18n/runtime'
 
-const STAGES: Array<{ stage: PiLiveInitializationStageDto; label: string; detail: string }> = [
-  { stage: 'starting_worker', label: '启动 Runtime Worker', detail: '创建独立 Pi 运行进程' },
-  { stage: 'loading_sdk', label: '加载 Pi SDK', detail: '定位并加载当前安装的官方 SDK' },
-  { stage: 'loading_resources', label: '加载资源', detail: '读取配置、扩展与上下文' },
-  { stage: 'creating_session', label: '创建 Pi Session', detail: '建立 Agent Session 与运行时服务' },
-  { stage: 'binding_extensions', label: '绑定扩展界面', detail: '连接 Extension UI 与交互通道' },
+const STAGES: Array<{ stage: PiLiveInitializationStageDto; labelKey: string; detailKey: string }> = [
+  { stage: 'starting_worker', labelKey: 'startup.stage.startingWorker', detailKey: 'startup.stage.startingWorkerDetail' },
+  { stage: 'loading_sdk', labelKey: 'startup.stage.loadingSdk', detailKey: 'startup.stage.loadingSdkDetail' },
+  { stage: 'loading_resources', labelKey: 'startup.stage.loadingResources', detailKey: 'startup.stage.loadingResourcesDetail' },
+  { stage: 'creating_session', labelKey: 'startup.stage.creatingSession', detailKey: 'startup.stage.creatingSessionDetail' },
+  { stage: 'binding_extensions', labelKey: 'startup.stage.bindingExtensions', detailKey: 'startup.stage.bindingExtensionsDetail' },
 ]
 
 export function formatPiStartupDuration(value: number | undefined): string {
@@ -24,14 +26,18 @@ export function piStartupSummary(state: PiLiveStateDto): { label: string; durati
   const completedDuration = (state.initializationTimings ?? []).reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
   const elapsed = state.initializationElapsedMs ?? completedDuration
   return {
-    label: state.status === 'failed' ? 'Pi 启动失败' : state.status === 'ready' ? 'Pi 已就绪' : '正在准备 Pi',
+    label: state.status === 'failed'
+      ? translateProduct('piLive:startup.failed')
+      : state.status === 'ready'
+        ? translateProduct('piLive:startup.ready')
+        : translateProduct('piLive:startup.preparing'),
     duration: formatPiStartupDuration(elapsed),
   }
 }
 
 function runtimeModeLabel(state: PiLiveStateDto): string {
   if (state.runtimeMode === 'session_runtime') return 'Session Runtime'
-  if (state.runtimeMode === 'compatibility') return '兼容模式'
+  if (state.runtimeMode === 'compatibility') return translateProduct('piLive:startup.compatibility')
   return ''
 }
 
@@ -52,6 +58,7 @@ export function PiStartupDisclosure({
   embedded?: boolean
   showAllEvents?: boolean
 }) {
+  const { t } = useTranslation('piLive')
   const [expanded, setExpanded] = useState(state.status !== 'ready')
   const [clock, setClock] = useState(() => Date.now())
   const baseline = useRef({
@@ -86,23 +93,23 @@ export function PiStartupDisclosure({
     ? Math.max(state.initializationElapsedMs ?? 0, baseline.current.elapsed + Math.max(0, clock - baseline.current.at))
     : state.initializationElapsedMs ?? completedDuration
   const currentDuration = Math.max(0, elapsed - completedDuration)
-  const title = state.status === 'failed' ? 'Pi 启动失败' : state.status === 'ready' ? 'Pi 已就绪' : '正在准备 Pi'
+  const title = state.status === 'failed' ? t('startup.failed') : state.status === 'ready' ? t('startup.ready') : t('startup.preparing')
   const currentStage = state.initializationStage
   const sdkVersion = state.sdkVersion || state.capabilities?.sdkVersion
   const mode = runtimeModeLabel(state)
   const resources = state.startupResources
   const resourceGroups = [
-    { label: 'Context', values: resources?.contexts ?? [] },
-    { label: 'Skills', values: resources?.skills ?? [] },
-    { label: 'Prompts', values: resources?.prompts ?? [] },
-    { label: 'Extensions', values: resources?.extensions ?? [] },
-    { label: 'Themes', values: resources?.themes ?? [] },
+    { label: t('startup.resource.context'), values: resources?.contexts ?? [] },
+    { label: t('startup.resource.skills'), values: resources?.skills ?? [] },
+    { label: t('startup.resource.prompts'), values: resources?.prompts ?? [] },
+    { label: t('startup.resource.extensions'), values: resources?.extensions ?? [] },
+    { label: t('startup.resource.themes'), values: resources?.themes ?? [] },
   ].filter(group => group.values.length)
-  const resourceSummary = resourceGroups.map(group => `${group.values.length} ${group.label}`).join(' · ')
+  const resourceSummary = resourceGroups.map(group => t('startup.resource.summary', { count: group.values.length, label: group.label })).join(' · ')
   const startupOutput = state.startupOutput ?? []
 
   const body = <div className="pi-startup-body">
-    <div className="pi-startup-steps" aria-label="Pi Runtime 启动步骤">
+    <div className="pi-startup-steps" aria-label={t('startup.stepsAria')}>
       {STAGES.map(item => {
         const recorded = timings.get(item.stage)
         const failed = state.status === 'failed' && currentStage === item.stage
@@ -112,8 +119,8 @@ export function PiStartupDisclosure({
         const duration = recorded ?? ((active || failed) ? currentDuration : undefined)
         return <div key={item.stage} className={`pi-startup-step is-${status}`}>
           <span className="pi-startup-step-dot" aria-hidden="true">{done ? <UiIcon name="check" size={12}/> : failed ? <UiIcon name="exclamation" size={12}/> : null}</span>
-          <span className="pi-startup-step-copy"><b>{item.label}</b><small>{item.detail}</small></span>
-          <span className="pi-startup-step-time">{status === 'pending' ? '等待' : active ? `${formatPiStartupDuration(duration)}+` : formatPiStartupDuration(duration)}</span>
+          <span className="pi-startup-step-copy"><b>{t(item.labelKey)}</b><small>{t(item.detailKey)}</small></span>
+          <span className="pi-startup-step-time">{status === 'pending' ? t('startup.waiting') : active ? `${formatPiStartupDuration(duration)}+` : formatPiStartupDuration(duration)}</span>
         </div>
       })}
     </div>
@@ -124,25 +131,25 @@ export function PiStartupDisclosure({
     </div>}
     {resourceGroups.length > 0 && <details className="pi-startup-resource-details">
       <summary>{resourceSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
-      <div className="pi-startup-resources" aria-label="Pi 已加载资源">
+      <div className="pi-startup-resources" aria-label={t('startup.resourcesAria')}>
         {resourceGroups.map(group => <div className="pi-startup-resource-row" key={group.label}>
           <b>[{group.label}]</b><span>{group.values.join(', ')}</span>
         </div>)}
       </div>
     </details>}
     {showAllEvents && startupOutput.length > 0 && <div className="pi-startup-output">
-      <b>[启动输出]</b><CopyableCodeBlock copyValue={startupOutput.join('\n')}>{startupOutput.join('\n')}</CopyableCodeBlock>
+      <b>{t('startup.startupOutput')}</b><CopyableCodeBlock copyValue={startupOutput.join('\n')}>{startupOutput.join('\n')}</CopyableCodeBlock>
     </div>}
     {showAllEvents && (resources?.diagnostics.length ?? 0) > 0 && <div className="pi-startup-diagnostics">
-      <b>[资源诊断]</b>{resources!.diagnostics.map((message, index) => <span key={`${index}-${message}`}>{message}</span>)}
+      <b>{t('startup.resourceDiagnostics')}</b>{resources!.diagnostics.map((message, index) => <span key={`${index}-${message}`}>{message}</span>)}
     </div>}
     {state.status === 'failed' && <div className="pi-startup-failure" role="alert">
-      <b>卡在：{STAGES.find(item => item.stage === currentStage)?.label || state.initializationMessage || '初始化'}</b>
-      <span>{state.error || fallbackError || 'Pi Runtime 未能完成初始化。'}</span>
+      <b>{t('startup.stuckAt', { stage: STAGES.find(item => item.stage === currentStage)?.labelKey ? t(STAGES.find(item => item.stage === currentStage)!.labelKey) : state.initializationMessage || t('startup.initializing') })}</b>
+      <span>{state.error || fallbackError || t('startup.initializationFailed')}</span>
     </div>}
     <div className="pi-startup-actions">
-      {state.status === 'initializing' && <Button size="small" onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>取消启动</Button>}
-      {state.status === 'failed' && <><Button size="small" variant="primary" onClick={event => { event.preventDefault(); onRetry() }} disabled={busy}>重试</Button><Button size="small" variant="danger" onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>结束 Runtime</Button></>}
+      {state.status === 'initializing' && <Button size="small" onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>{t('startup.cancelStartup')}</Button>}
+      {state.status === 'failed' && <><Button size="small" variant="primary" onClick={event => { event.preventDefault(); onRetry() }} disabled={busy}>{t('startup.retry')}</Button><Button size="small" variant="danger" onClick={event => { event.preventDefault(); onTerminate() }} disabled={busy}>{t('startup.terminate')}</Button></>}
     </div>
   </div>
 
@@ -153,7 +160,7 @@ export function PiStartupDisclosure({
   >
     <summary>
       <span className="pi-startup-summary-state" aria-hidden="true"/>
-      <span className="pi-startup-summary-copy"><b>Pi 已就绪</b>{resourceSummary && <small>{resourceSummary}</small>}</span>
+      <span className="pi-startup-summary-copy"><b>{t('startup.ready')}</b>{resourceSummary && <small>{resourceSummary}</small>}</span>
       <span className="pi-startup-summary-time">{formatPiStartupDuration(elapsed)}</span>
       <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
     </summary>
@@ -162,8 +169,8 @@ export function PiStartupDisclosure({
 
   if (embedded) return <OperationProgress
     title={title}
-    description={state.status === 'failed' ? state.error || fallbackError || 'Pi Runtime 未能完成初始化。' : state.initializationMessage || '正在加载配置、扩展、上下文与 Session。可以先在下方输入任务。'}
-    statusLabel={state.status === 'failed' ? '启动失败' : 'Runtime 初始化'}
+    description={state.status === 'failed' ? state.error || fallbackError || t('startup.initializationFailed') : state.initializationMessage || t('startup.loadingDescription')}
+    statusLabel={state.status === 'failed' ? t('startup.failedStatus') : t('startup.initializingStatus')}
     elapsedMs={elapsed}
     tone={state.status === 'failed' ? 'danger' : 'accent'}
     active={state.status === 'initializing'}
@@ -176,7 +183,7 @@ export function PiStartupDisclosure({
   >
     <summary>
       <span className="pi-startup-summary-state" aria-hidden="true"/>
-      <span className="pi-startup-summary-copy"><b>{title}</b>{state.status !== 'ready' && <small>{state.initializationMessage || '准备 Pi Runtime'}</small>}</span>
+      <span className="pi-startup-summary-copy"><b>{title}</b>{state.status !== 'ready' && <small>{state.initializationMessage || t('startup.prepareRuntime')}</small>}</span>
       <span className="pi-startup-summary-time">{formatPiStartupDuration(elapsed)}</span>
       <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
     </summary>

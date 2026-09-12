@@ -18,10 +18,19 @@ export type AgentIntegrationAvailability =
   | 'unavailable'
   | 'error'
 
+export type AgentIntegrationCapabilityReasonCode =
+  | 'authorization-required'
+  | 'authorization-restart-required'
+  | 'component-start-failed'
+  | 'dependency-start-failed'
+  | 'live-adapter-missing'
+  | 'live-availability-failed'
+
 export interface AgentIntegrationCapabilityStatus {
   capability: AgentIntegrationCapability
   availability: AgentIntegrationCapabilityAvailability
   authorization?: 'required' | 'granted'
+  reasonCode?: AgentIntegrationCapabilityReasonCode
   reason?: string
 }
 

@@ -141,6 +141,43 @@
   margin-left: auto;
 }
 
+.workspace-locale-selector {
+  display: grid;
+  gap: 5px;
+  margin: 7px 4px 2px;
+  padding: 8px 6px 2px;
+  border-top: 1px solid var(--al-line);
+}
+
+.workspace-locale-selector > span {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-locale-selector b {
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.workspace-locale-selector small {
+  color: var(--al-muted-2);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.workspace-locale-selector select {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--al-line);
+  border-radius: 7px;
+  background: var(--al-surface);
+  color: var(--al-ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 0 7px;
+}
+
 .workspace-settings-separator {
   height: 1px;
   margin: 6px 4px;

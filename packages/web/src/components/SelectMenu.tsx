@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UiIcon } from './UiIcon'
 
 export interface SelectMenuOption {
@@ -59,18 +60,18 @@ export function SelectMenu({
   options,
   onChange,
   ariaLabel,
-  placeholder = '请选择',
+  placeholder,
   variant = 'toolbar',
   className = '',
   disabled = false,
   searchable = false,
-  searchPlaceholder = '搜索…',
+  searchPlaceholder,
   onSearchChange,
   loading = false,
   hasMore = false,
   onLoadMore,
   loadingMore = false,
-  loadMoreLabel = '继续加载',
+  loadMoreLabel,
   menuWidth = 220,
   title,
 }: {
@@ -93,6 +94,10 @@ export function SelectMenu({
   menuWidth?: number
   title?: string | undefined
 }) {
+  const { t } = useTranslation('common')
+  const resolvedPlaceholder = placeholder ?? t('selectMenu.placeholder')
+  const resolvedSearchPlaceholder = searchPlaceholder ?? t('selectMenu.search')
+  const resolvedLoadMoreLabel = loadMoreLabel ?? t('selectMenu.loadMore')
   const listboxId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -103,7 +108,7 @@ export function SelectMenu({
   const [activeValue, setActiveValue] = useState('')
   const [position, setPosition] = useState<MenuPosition | null>(null)
   const selected = options.find(option => option.value === value)
-  const selectedLabel = selected ? selectMenuDisplayLabel(selected) : placeholder
+  const selectedLabel = selected ? selectMenuDisplayLabel(selected) : resolvedPlaceholder
   const selectedTooltip = title ?? selectMenuTooltip(selected)
   const filteredOptions = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
@@ -240,8 +245,8 @@ export function SelectMenu({
               setQuery(next)
               onSearchChange?.(next)
             }}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
+            placeholder={resolvedSearchPlaceholder}
+            aria-label={resolvedSearchPlaceholder}
             aria-controls={listboxId}
             aria-activedescendant={activeValue ? `${listboxId}-${activeValue}` : undefined}
           />
@@ -268,10 +273,10 @@ export function SelectMenu({
               <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
-          {!filteredOptions.length && <div className="select-menu-empty">{loading ? '正在加载…' : '没有匹配项'}</div>}
+          {!filteredOptions.length && <div className="select-menu-empty">{loading ? t('selectMenu.loading') : t('selectMenu.noMatch')}</div>}
         </div>
         {onLoadMore && (hasMore || loadingMore) && <div className="select-menu-footer">
-          <button type="button" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? '正在加载…' : loadMoreLabel}</button>
+          <button type="button" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? t('selectMenu.loading') : resolvedLoadMoreLabel}</button>
         </div>}
       </div>,
       document.body,

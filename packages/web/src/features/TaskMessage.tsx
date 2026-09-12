@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 
@@ -20,7 +21,7 @@ export interface TaskMessageProps {
 export function TaskMessage({
   role,
   text,
-  author = role === 'user' ? '你' : '智能体',
+  author,
   time,
   meta,
   actions,
@@ -28,7 +29,9 @@ export function TaskMessage({
   streaming = false,
   className = '',
 }: TaskMessageProps) {
+  const { t } = useTranslation('task')
   const user = role === 'user'
+  const resolvedAuthor = author ?? (user ? t('message.you') : t('message.agent'))
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const [expanded, setExpanded] = useState(() => !user)
   const [canCollapse, setCanCollapse] = useState(false)
@@ -73,7 +76,7 @@ export function TaskMessage({
     aria-busy={streaming || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
-      <div className="task-message-meta"><b>{author}</b>{meta}{time && <time>{time}</time>}</div>
+      <div className="task-message-meta"><b>{resolvedAuthor}</b>{meta}{time && <time>{time}</time>}</div>
       <div className="markdown-message task-message-content" data-view={view}>
         <div
           ref={surfaceRef}
@@ -84,9 +87,9 @@ export function TaskMessage({
           {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
         </div>
         {(canCollapse || !user) && <div className="markdown-message-actions">
-          {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? '收起到 5 行' : '展开全文'}</button>}
-          {!user && <button type="button" title={view === 'rendered' ? '查看 Markdown 源码' : '返回渲染结果'} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
-            {view === 'rendered' ? <span>源码</span> : <span>渲染</span>}
+          {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
+          {!user && <button type="button" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+            {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
           </button>}
         </div>}
       </div>
