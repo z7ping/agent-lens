@@ -148,6 +148,9 @@ test('VACUUM INTO 生成独立紧凑库，不替换在线数据库', async () =>
   try {
     await storage.migrate()
     await seedIdentity(storage)
+    const sourceVersion = storage.db.prepare(
+      'SELECT MAX(version) AS version FROM schema_migrations',
+    ).get() as { version: number }
     const result = await storage.maintenance.vacuumInto(compacted)
     assert.equal(result.path, compacted)
     assert.ok(result.bytes > 0)
@@ -155,7 +158,7 @@ test('VACUUM INTO 生成独立紧凑库，不替换在线数据库', async () =>
     const copy = new Database(compacted, { readonly: true })
     try {
       const version = copy.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as { version: number }
-      assert.equal(version.version, 22)
+      assert.equal(version.version, sourceVersion.version)
     } finally {
       copy.close()
     }
