@@ -1,3 +1,4 @@
+import * as semver from 'semver'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -39,52 +40,39 @@ interface ProcessResult {
 
 export function parseSemver(value: unknown): ParsedSemver | null {
   if (typeof value !== 'string') return null
-  const match = value.trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/)
-  if (!match) return null
+  const normalized = semver.clean(value.trim())
+  if (!normalized || !semver.valid(normalized)) return null
+  const parsed = semver.parse(normalized)
+  if (!parsed) return null
   return {
     raw: value,
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    prerelease: match[4] ? match[4].split('.') : [],
+    major: parsed.major,
+    minor: parsed.minor,
+    patch: parsed.patch,
+    prerelease: parsed.prerelease.map(String),
   }
 }
 
-function comparePrereleaseIdentifier(left: string, right: string): number {
-  const leftNumeric = /^\d+$/.test(left)
-  const rightNumeric = /^\d+$/.test(right)
-  if (leftNumeric && rightNumeric) return Number(left) - Number(right)
-  if (leftNumeric) return -1
-  if (rightNumeric) return 1
-  return left.localeCompare(right, 'en')
+function comparableSemver(value: string | ParsedSemver): string | null {
+  if (typeof value === 'string') {
+    const normalized = semver.clean(value.trim())
+    return normalized && semver.valid(normalized) ? normalized : null
+  }
+  const prerelease = value.prerelease.length ? `-${value.prerelease.join('.')}` : ''
+  const normalized = `${value.major}.${value.minor}.${value.patch}${prerelease}`
+  return semver.valid(normalized)
 }
 
 export function compareSemver(leftValue: string | ParsedSemver, rightValue: string | ParsedSemver): number {
-  const left = typeof leftValue === 'string' ? parseSemver(leftValue) : leftValue
-  const right = typeof rightValue === 'string' ? parseSemver(rightValue) : rightValue
+  const left = comparableSemver(leftValue)
+  const right = comparableSemver(rightValue)
   if (!left || !right) throw new Error('无法比较无效的语义化版本')
-
-  for (const key of ['major', 'minor', 'patch'] as const) {
-    if (left[key] !== right[key]) return left[key] - right[key]
-  }
-  if (!left.prerelease.length && !right.prerelease.length) return 0
-  if (!left.prerelease.length) return 1
-  if (!right.prerelease.length) return -1
-
-  const length = Math.max(left.prerelease.length, right.prerelease.length)
-  for (let index = 0; index < length; index += 1) {
-    const leftPart = left.prerelease[index]
-    const rightPart = right.prerelease[index]
-    if (leftPart === undefined) return -1
-    if (rightPart === undefined) return 1
-    const compared = comparePrereleaseIdentifier(leftPart, rightPart)
-    if (compared !== 0) return compared
-  }
-  return 0
+  return semver.compare(left, right)
 }
 
 function normalizedVersion(version: ParsedSemver): string {
-  return `${version.major}.${version.minor}.${version.patch}${version.prerelease.length ? `-${version.prerelease.join('.')}` : ''}`
+  const prerelease = version.prerelease.length ? `-${version.prerelease.join('.')}` : ''
+  return `${version.major}.${version.minor}.${version.patch}${prerelease}`
 }
 
 export function selectUpdateVersion(metadata: RegistryMetadata, currentVersion: string): string | null {
