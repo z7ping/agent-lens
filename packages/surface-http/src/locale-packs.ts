@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
@@ -24,7 +25,7 @@ export async function discoverLocalePacks(
   const rejected: RejectedLocalePackDto[] = []
 
   if (directory) {
-    let entries
+    let entries: Dirent[]
     try {
       entries = await readdir(directory, { withFileTypes: true })
     } catch (error) {
