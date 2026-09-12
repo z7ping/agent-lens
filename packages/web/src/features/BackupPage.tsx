@@ -13,7 +13,7 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer, Toolbar, ToolbarGroup } from '../components/ui'
+import { Button, Dialog, Drawer } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -125,13 +125,7 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
   return kindGroup.filter(kind => sumKindFiles(sources, sourceIds, kind) > 0)
 }
 
-export function BackupPage({
-  selectedSourceIds,
-  onSelectedSourceIdsChange,
-}: {
-  selectedSourceIds: string[] | null
-  onSelectedSourceIdsChange(sourceIds: string[] | null): void
-}) {
+export function BackupPage() {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
@@ -140,6 +134,7 @@ export function BackupPage({
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[] | null>(null)
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
@@ -210,7 +205,7 @@ export function BackupPage({
 
   const toggleSource = (sourceId: string) => {
     const current = selectedSourceIds ?? detectedSourceIds
-    onSelectedSourceIdsChange(current.includes(sourceId)
+    setSelectedSourceIds(current.includes(sourceId)
       ? current.filter(item => item !== sourceId)
       : [...current, sourceId])
   }
@@ -379,17 +374,10 @@ export function BackupPage({
   }
 
   return <>
-    <Toolbar className="workspace-toolbar" aria-label={t('toolbar.aria')}>
-      <ToolbarGroup><span className="backup-toolbar-note">{t('toolbar.safety')}</span></ToolbarGroup>
-      <ToolbarGroup align="end">
-        <Button loading={busy === 'import'} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
-        <Button variant="primary" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
-      </ToolbarGroup>
-      <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-    </Toolbar>
-
     <div className="page-scroll">
       <main className="future-content backup-page">
+        <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
+
         <div className="future-heading">
           <CompactPageHeading title={t('page.title')} description={t('page.description')}><span className="prototype-flag live">{t('page.liveData')}</span></CompactPageHeading>
           <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>{t('page.refresh')}</Button>
@@ -399,91 +387,76 @@ export function BackupPage({
         {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
 
         <section className="future-kpis" aria-label={t('kpi.aria')}>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.physicalFiles')}</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span></div><strong>{protectedFiles.toLocaleString()}</strong><small>{hasProtectedBytes ? `${formatBytes(protectedBytes)} · ` : ''}{indexTime ? t('kpi.indexUpdated', { time: formatTime(indexTime, locale) }) : ''}{t('kpi.agents', { count: detectedSourceCount })}</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.detectedAgents')}</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span></div><strong>{detectedSourceCount}</strong><small>{t('kpi.detectedAgentsDetail', { total: sources.length })}</small></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.backupData')}</span></div><strong>{protectedFiles.toLocaleString(locale)}</strong><small>{hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending')}</small></article>
           <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.snapshots')}</span><span className="delta neutral">{snapshots[0] ? t('kpi.recent', { time: formatTime(snapshots[0].createdAt, locale) }) : t('kpi.noSnapshot')}</span></div><strong>{snapshots.length}</strong><small>{t('kpi.logicalSize', { size: formatBytes(totalSnapshotBytes) })}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.lastVerify')}</span><span className={`badge ${Object.values(verification).some(result => !result.valid) ? 'err' : Object.keys(verification).length ? 'ok' : ''}`}>{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? t('kpi.passed') : t('kpi.attention')) : t('kpi.notRun')}</span></div><strong>{Object.values(verification).filter(result => result.valid).length}/{Object.keys(verification).length || '—'}</strong></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.excluded')}</span><span className="badge warn">{t('kpi.safetyFirst')}</span></div><strong>{excludedFiles.toLocaleString()}</strong></article>
+          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.lastVerify')}</span></div><strong className="future-kpi-status">{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? t('kpi.passed') : t('kpi.attention')) : t('kpi.notRun')}</strong><small>{Object.keys(verification).length ? t('kpi.verifyCount', { passed: Object.values(verification).filter(result => result.valid).length, total: Object.keys(verification).length }) : t('kpi.verifyHint')}</small></article>
         </section>
 
-        <div className="future-grid">
-          <div className="future-stack">
-            <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('protection.title')}</h2></div></div>
-              <div className="future-card-body">
-                <div className="protection-table-scroll">
-                  <table className="protection-table">
-                    <thead><tr>
-                      <th>{t('protection.source')}</th>
-                      <th>{t('protection.files')}</th>
-                      <th>{t('protection.size')}</th>
-                      <th>{t('protection.sessions')}</th>
-                      <th>{t('protection.mcp')}</th>
-                      <th className="align-right">{t('protection.actions')}</th>
-                    </tr></thead>
-                    <tbody>
-                      {sources.map(source => <tr key={source.sourceId} className={!source.detected ? 'is-muted' : ''}>
-                        <td><div className="protection-source"><span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/><b>{sourceLabel(source.sourceId, source.displayName)}</b>{!source.detected && <span className="badge">{t('protection.notDetected')}</span>}</div></td>
-                        <td>{source.detected ? source.fileCount.toLocaleString(locale) : '—'}</td>
-                        <td>{source.detected && source.totalBytes !== undefined ? formatBytes(source.totalBytes) : '—'}</td>
-                        <td>{source.detected ? kindFiles(source, 'session').toLocaleString(locale) : '—'}</td>
-                        <td>{source.detected ? kindFiles(source, 'mcp').toLocaleString(locale) : '—'}</td>
-                        <td className="align-right"><button className="link-btn" disabled={!source.detected} onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button></td>
-                      </tr>)}
-                    </tbody>
-                  </table>
+        <div className="backup-meta-strip">
+          <span><b>{t('protection.localVault')}</b><code>{overview?.vaultPath ?? '—'}</code></span>
+          <span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
+          <span>{t('kpi.excludedCompact', { count: excludedFiles.toLocaleString(locale) })}</span>
+        </div>
+
+        <div className="backup-workbench">
+          <section className="backup-snapshots-section">
+            <div className="backup-section-head">
+              <div><h2>{t('snapshots.title')}</h2><span>{t('snapshots.workbenchHint')}</span></div>
+              <Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>
+            </div>
+
+            {snapshots.length ? <div className="backup-snapshot-list">
+              {snapshots.map(snapshot => {
+                const checked = verification[snapshot.id]
+                return <article key={snapshot.id} className="backup-snapshot-row">
+                  <div className="backup-snapshot-main">
+                    <span className="snapshot-icon">{checked ? (checked.valid ? <UiIcon name="check" size={14}/> : <UiIcon name="alert" size={14}/>) : <UiIcon name="dot" size={14}/>}</span>
+                    <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
+                  </div>
+                  <div className="backup-snapshot-sources">{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</div>
+                  <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</div>
+                  <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
+                </article>
+              })}
+            </div> : <div className="backup-empty backup-empty-workbench"><b>{t('snapshots.emptyTitle')}</b><span>{t('snapshots.emptyDescription')}</span></div>}
+          </section>
+
+          <aside className="future-card backup-create-panel">
+            <div className="future-card-head"><div><h2>{t('create.title')}</h2></div><span className="badge info">{t('create.local')}</span></div>
+            <div className="future-card-body snapshot-builder">
+              <div className="builder-block backup-agent-block">
+                <div className="builder-label"><span>{t('create.agents')}</span><span>{selectedSources.length} / {detectedSourceCount}</span></div>
+                <div className="backup-source-list">
+                  {sources.filter(source => source.detected).map(source => <div key={source.sourceId} className="backup-source-choice">
+                    <label className="backup-source-toggle">
+                      <input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/>
+                      <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>
+                      <span className="backup-source-copy"><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{source.totalBytes === undefined ? t('create.files', { count: source.fileCount.toLocaleString(locale) }) : t('create.sourceSummary', { count: source.fileCount.toLocaleString(locale), size: formatBytes(source.totalBytes) })}</small></span>
+                    </label>
+                    <button className="link-btn" onClick={() => setDetailSourceId(source.sourceId)}>{t('protection.details')}</button>
+                  </div>)}
                 </div>
-                <div className="future-section-label">{t('protection.currentDirectory')}</div>
-                <div className="integrity-strip"><strong>{t('protection.localVault')}</strong><code>{overview?.vaultPath ?? '—'}</code><span className="grow"/><span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span></div>
               </div>
-            </section>
 
-            <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('snapshots.title')}</h2></div><Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button></div>
-              {snapshots.length ? <div className="future-table-scroll"><table className="snapshot-table"><thead><tr><th>{t('snapshots.snapshot')}</th><th>{t('snapshots.source')}</th><th>{t('snapshots.size')}</th><th>{t('snapshots.integrity')}</th><th>{t('snapshots.excluded')}</th><th>{t('snapshots.hash')}</th><th className="align-right">{t('snapshots.actions')}</th></tr></thead><tbody>
-                {snapshots.map(snapshot => {
-                  const checked = verification[snapshot.id]
-                  return <tr key={snapshot.id}>
-                    <td><div className="snapshot-name"><span className="snapshot-icon">{checked ? (checked.valid ? <UiIcon name="check" size={14}/> : <UiIcon name="alert" size={14}/>) : <UiIcon name="dot" size={14}/>}</span><span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{t('snapshots.files', { count: snapshot.fileCount })}</small></span></div></td>
-                    <td>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</td>
-                    <td>{formatBytes(snapshot.totalBytes)}</td>
-                    <td>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</td>
-                    <td>{snapshot.excludedCount}</td>
-                    <td><span className="hash">{shortHash(snapshot.manifestSha256)}</span></td>
-                    <td><div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div></td>
-                  </tr>
-                })}
-              </tbody></table></div> : <div className="backup-empty"><b>{t('snapshots.emptyTitle')}</b><span>{t('snapshots.emptyDescription')}</span></div>}
-            </section>
+              {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.contents')}</span><span className="badge ok">{t('create.recommended')}</span></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
+              {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.optional')}</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
+              {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.more')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
 
-            <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('restore.title')}</h2></div><span className="badge info">{t('restore.previewFirst')}</span></div>
-              <div className="future-card-body"><div className="restore-grid">
-                <article className="restore-card"><h3>{t('restore.importTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectFile')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.secondConfirm')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.integrityCheck')}</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}>{t('restore.selectPackage')}</Button></div></article>
-                <article className="restore-card"><h3>{t('restore.restoreTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectSnapshot')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.compareCurrent')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.manualConfirm')}</span></div><div className="restore-action"><span className="badge warn">{t('restore.previewOnly')}</span></div></article>
-              </div></div>
-            </section>
-          </div>
-
-          <aside className="future-stack">
-            <section className="future-card">
-              <div className="future-card-head"><div><h2>{t('create.title')}</h2></div><span className="badge info">{t('create.local')}</span></div>
-              <div className="future-card-body snapshot-builder">
-                <div className="builder-block"><div className="builder-label"><span>{t('create.agents')}</span><span>{selectedSources.length} / {detectedSourceCount}</span></div><div className="builder-checks">
-                  {sources.filter(source => source.detected).map(source => <label key={source.sourceId} className="builder-check"><input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/><span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>{sourceLabel(source.sourceId, source.displayName)}<small>{t('create.files', { count: source.fileCount.toLocaleString(locale) })}</small></label>)}
-                </div></div>
-
-                {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.recommended')}</span><span className="badge ok">{t('create.highValue')}</span></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
-                {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.optional')}</span><span className="badge info">{t('create.large')}</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
-                {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.excluded')}</span><span className="badge">{t('create.unclearValue')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
-
-                <div className="safety-note"><span><UiIcon name="check" size={16}/></span><div><b>{t('create.safetyTitle')}</b><span>{t('create.safetyDescription')}</span></div></div>
-                <div className="builder-summary"><span>{t('create.estimate', { count: estimatedSelected.toLocaleString(locale) })}</span><span>{hasSelectedBytes ? t('create.estimateSize', { size: formatBytes(estimatedSelectedBytes) }) : t('create.sizePending')} · {t('create.dedupe')}</span></div>
-                <Button variant="primary" className="snapshot-create-button" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{t('create.createAndVerify')}</Button>
-              </div>
-            </section>
-
+              <div className="backup-safety-line"><UiIcon name="check" size={14}/><span>{t('create.safetyCompact', { count: excludedFiles.toLocaleString(locale) })}</span></div>
+              <div className="builder-summary"><span>{t('create.estimate', { count: estimatedSelected.toLocaleString(locale) })}</span><span>{hasSelectedBytes ? t('create.estimateSize', { size: formatBytes(estimatedSelectedBytes) }) : t('create.sizePending')}</span></div>
+              <Button variant="primary" className="snapshot-create-button" loading={busy === 'create'} disabled={Boolean(busy) || !selectedSources.length || !selectedKinds.length} onClick={requestCreateSnapshot}>{t('create.createAndVerify')}</Button>
+            </div>
           </aside>
         </div>
+
+        <section className="backup-restore-section">
+          <div className="backup-section-head"><div><h2>{t('restore.title')}</h2><span>{t('restore.workbenchHint')}</span></div><span className="badge info">{t('restore.previewFirst')}</span></div>
+          <div className="restore-grid">
+            <article className="restore-card"><h3>{t('restore.importTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectFile')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.integrityCheck')}</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('restore.selectPackage')}</Button></div></article>
+            <article className="restore-card"><h3>{t('restore.restoreTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectSnapshot')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.compareCurrent')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.manualConfirm')}</span></div><div className="restore-action"><span className="badge warn">{t('restore.previewOnly')}</span></div></article>
+          </div>
+        </section>
       </main>
     </div>
 
