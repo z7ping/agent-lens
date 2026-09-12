@@ -181,6 +181,7 @@ test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () 
     '  "mcp": {',
     '    "docs": { "type": "local", "command": ["node"] },',
     '    "off": { "type": "local", "command": ["node"], "disabled": true },',
+    '    "legacy-off": { "type": "local", "command": ["node"], "enabled": false },',
     '  },',
     '  "agents": { "reviewer": {} },',
     '  "commands": { "doctor": {} },',
@@ -244,6 +245,7 @@ test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () 
     assert.equal(mcp('docs')?.states?.find(state => state.state === 'enabled')?.value, 'unknown')
     assert.equal(mcp('off')?.states?.find(state => state.state === 'enabled')?.value, false)
     assert.equal(mcp('off')?.states?.find(state => state.state === 'discoverable')?.value, false)
+    assert.equal(mcp('legacy-off')?.states?.find(state => state.state === 'enabled')?.value, false)
     assert.equal(mcp('project-docs')?.binding?.scope, 'project')
 
     const configuredPlugins = assets.filter(asset =>
