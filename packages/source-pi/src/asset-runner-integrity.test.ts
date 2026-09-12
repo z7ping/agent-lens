@@ -48,11 +48,12 @@ test('Pi asset scan does not let SourceAssetRunner infer discoverable=true from 
       env: { PI_CODING_AGENT_DIR: agentDir, PATH: '' },
     })
     assert.ok(detected)
+    const { executable: _executable, version: _version, ...detectedWithoutExecutable } = detected
 
     const result = await runner.scan({
       source: piSourceDefinition,
       host,
-      detected,
+      detected: detectedWithoutExecutable,
       abortSignal: new AbortController().signal,
     })
     assert.equal(result.assetsDiscovered, 1)
