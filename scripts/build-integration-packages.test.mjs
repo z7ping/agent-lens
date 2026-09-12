@@ -8,10 +8,17 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-test('Integration package schema version is loaded from the package contract source', async () => {
+test('Integration package protocol is loaded from the package contract source', async () => {
+  assert.deepEqual(
+    await integrationBundleInternals.loadIntegrationPackageContract(root),
+    {
+      schemaVersion: 1,
+      entryExport: 'default',
+    },
+  )
   assert.equal(
-    await integrationBundleInternals.loadIntegrationPackageSchemaVersion(root),
-    1,
+    await integrationBundleInternals.loadPluginApiVersion(root),
+    '1.0',
   )
 })
 
@@ -32,8 +39,8 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
       join('packages', 'integration-opencode', 'src', 'index.ts'),
     ],
   )
-  assert.equal(specs.every(item => item.apiVersion === '1.0'), true)
-  assert.equal(specs.every(item => item.entryExport === 'default'), true)
+  assert.equal(specs.some(item => 'apiVersion' in item), false)
+  assert.equal(specs.some(item => 'entryExport' in item), false)
   assert.equal(specs.some(item => 'bundledVersion' in item), false)
 })
 
@@ -41,7 +48,6 @@ test('runtime Integration manifest must match Official Catalog identity and Plug
   const spec = {
     integrationId: 'pi',
     productId: 'pi',
-    apiVersion: '1.0',
   }
 
   assert.doesNotThrow(() => integrationBundleInternals.assertIntegrationRuntimeManifest({
@@ -50,7 +56,7 @@ test('runtime Integration manifest must match Official Catalog identity and Plug
       productId: 'pi',
       apiVersion: '1.0',
     },
-  }, spec))
+  }, spec, '1.0'))
 
   assert.throws(
     () => integrationBundleInternals.assertIntegrationRuntimeManifest({
@@ -59,8 +65,8 @@ test('runtime Integration manifest must match Official Catalog identity and Plug
         productId: 'codex',
         apiVersion: '1.0',
       },
-    }, spec),
-    /productId=codex != Catalog pi/,
+    }, spec, '1.0'),
+    /productId=codex != expected pi/,
   )
   assert.throws(
     () => integrationBundleInternals.assertIntegrationRuntimeManifest({
@@ -69,8 +75,8 @@ test('runtime Integration manifest must match Official Catalog identity and Plug
         productId: 'pi',
         apiVersion: '2.0',
       },
-    }, spec),
-    /apiVersion=2\.0 != Catalog 1\.0/,
+    }, spec, '1.0'),
+    /apiVersion=2\.0 != expected 1\.0/,
   )
 })
 
@@ -89,23 +95,19 @@ test('workspace package path derivation rejects non-AgentLens and nested package
   )
 })
 
-test('bundle spec keeps package identity, API version and entry export from Catalog metadata', () => {
+test('bundle spec keeps only package identity and workspace location from Catalog metadata', () => {
   assert.deepEqual(
     integrationBundleInternals.bundleSpecFromCatalogEntry({
       integrationId: 'example',
       productId: 'example-product',
       package: {
         packageName: '@agent-lens/integration-example',
-        apiVersion: '1.0',
-        entryExport: 'default',
       },
     }),
     {
       integrationId: 'example',
       productId: 'example-product',
       packageName: '@agent-lens/integration-example',
-      apiVersion: '1.0',
-      entryExport: 'default',
       entry: join('packages', 'integration-example', 'src', 'index.ts'),
       packageJson: join('packages', 'integration-example', 'package.json'),
     },
