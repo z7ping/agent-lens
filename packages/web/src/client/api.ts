@@ -16,6 +16,7 @@ import {
   type IntegrationAuthorizationResponseDto,
   type IntegrationEnabledUpdateResponseDto,
   type IntegrationManagementResponseDto,
+  type IntegrationPackageOperationResponseDto,
   type IntegrationPreferenceUpdateRequestDto,
   type IntegrationPreferencesResponseDto,
   type IntegrationToolDiscoveryResponseDto,
@@ -184,6 +185,11 @@ export class AgentLensApi {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
+    })
+  }
+  installIntegration(integrationId: string): Promise<IntegrationPackageOperationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}/install`, {
+      method: 'POST',
     })
   }
   setIntegrationEnabled(

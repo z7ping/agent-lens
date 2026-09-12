@@ -65,6 +65,21 @@ export function defaultIntegrationPreferences(): IntegrationPreferences {
   }
 }
 
+export function integrationPreferenceBootstrapUpdate(
+  persisted: IntegrationPreferences | null,
+  options: {
+    existingInstallation: boolean
+    selectedIntegrationIds: readonly string[]
+  },
+): IntegrationPreferenceUpdate | null {
+  if (persisted) return null
+  if (!options.existingInstallation) return {}
+  return {
+    onboardingCompleted: true,
+    acknowledgedIntegrationIds: normalizedOfficialIds(options.selectedIntegrationIds),
+  }
+}
+
 function parseTimestamp(value: unknown): string | undefined {
   return typeof value === 'string' && Number.isFinite(Date.parse(value))
     ? value

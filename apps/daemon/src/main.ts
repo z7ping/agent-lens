@@ -21,6 +21,7 @@ import {
   grantIntegrationCapabilities,
   integrationAuthorizationPath,
   integrationPreferencesPath,
+  integrationPreferenceBootstrapUpdate,
   IntegrationManagementService,
   IntegrationPreferenceService,
   loadInstalledAgentIntegration,
@@ -28,6 +29,7 @@ import {
   OfficialToolDiscoveryService,
   prepareRegisteredSources,
   readIntegrationAuthorizationSync,
+  readIntegrationPreferencesSync,
   replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
@@ -127,9 +129,22 @@ if (
 const enabledSourceIds = new Set(capturePolicyStartup.settings.enabledSources)
 const integrationAuthorizationFile = integrationAuthorizationPath()
 const integrationPreferencesFile = integrationPreferencesPath()
-const integrationPreferences = capabilities.localCapture
-  ? new IntegrationPreferenceService(integrationPreferencesFile)
+const persistedIntegrationPreferences = capabilities.localCapture
+  ? readIntegrationPreferencesSync(integrationPreferencesFile)
   : null
+const integrationPreferences = capabilities.localCapture
+  ? new IntegrationPreferenceService(integrationPreferencesFile, persistedIntegrationPreferences)
+  : null
+const integrationPreferenceBootstrap = integrationPreferenceBootstrapUpdate(
+  persistedIntegrationPreferences,
+  {
+    existingInstallation: legacyInstallation || explicitSourceOverride,
+    selectedIntegrationIds: [...enabledSourceIds],
+  },
+)
+if (integrationPreferences && integrationPreferenceBootstrap) {
+  await integrationPreferences.update(integrationPreferenceBootstrap)
+}
 let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
 
 if (!integrationAuthorization && legacyInstallation) {

@@ -6,6 +6,8 @@ import test from 'node:test'
 import {
   IntegrationPreferenceService,
   defaultIntegrationDisplayOrder,
+  defaultIntegrationPreferences,
+  integrationPreferenceBootstrapUpdate,
 } from './integration-preferences'
 
 test('Integration preferences keep official default order unconfigured until user migration/reorder', () => {
@@ -69,4 +71,31 @@ test('onboarding completion is monotonic and preserves its first completion time
   } finally {
     await rm(path, { force: true })
   }
+})
+
+test('fresh install persists incomplete onboarding while legacy bootstrap completes exactly once', () => {
+  assert.deepEqual(
+    integrationPreferenceBootstrapUpdate(null, {
+      existingInstallation: false,
+      selectedIntegrationIds: [],
+    }),
+    {},
+  )
+  assert.deepEqual(
+    integrationPreferenceBootstrapUpdate(null, {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi', 'dsh', 'codex'],
+    }),
+    {
+      onboardingCompleted: true,
+      acknowledgedIntegrationIds: ['pi', 'codex'],
+    },
+  )
+  assert.equal(
+    integrationPreferenceBootstrapUpdate(defaultIntegrationPreferences(), {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi'],
+    }),
+    null,
+  )
 })
