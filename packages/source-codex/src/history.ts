@@ -351,9 +351,10 @@ async function* ingestCodexFileWithThreadNames(
   let sequence = reset ? 0 : previous.sequence
   let pendingCheckpointLines = 0
   let incompleteTail = false
+  let lastPersistedCheckpoint: HistoryCheckpoint | null = null
 
   const persistCheckpoint = async () => {
-    await ctx.checkpoint.set(key, {
+    const checkpoint: HistoryCheckpoint = {
       path: filePath,
       offset,
       sequence,
@@ -361,7 +362,9 @@ async function* ingestCodexFileWithThreadNames(
       mtimeMs: fileStat.mtimeMs,
       fileId: initialFileId,
       parserVersion: CODEX_PARSER_VERSION,
-    })
+    }
+    await ctx.checkpoint.set(key, checkpoint)
+    lastPersistedCheckpoint = checkpoint
     pendingCheckpointLines = 0
   }
 
@@ -392,7 +395,7 @@ async function* ingestCodexFileWithThreadNames(
     try {
       const finalStat = await stat(filePath)
       if (sourceFileIdentity(finalStat) === initialFileId) {
-        await ctx.checkpoint.set(key, {
+        const finalCheckpoint: HistoryCheckpoint = {
           path: filePath,
           offset,
           sequence,
@@ -400,7 +403,16 @@ async function* ingestCodexFileWithThreadNames(
           mtimeMs: finalStat.mtimeMs,
           fileId: initialFileId,
           parserVersion: CODEX_PARSER_VERSION,
-        })
+        }
+        if (!lastPersistedCheckpoint
+          || lastPersistedCheckpoint.offset !== finalCheckpoint.offset
+          || lastPersistedCheckpoint.sequence !== finalCheckpoint.sequence
+          || lastPersistedCheckpoint.size !== finalCheckpoint.size
+          || lastPersistedCheckpoint.mtimeMs !== finalCheckpoint.mtimeMs
+          || lastPersistedCheckpoint.fileId !== finalCheckpoint.fileId
+          || lastPersistedCheckpoint.parserVersion !== finalCheckpoint.parserVersion) {
+          await ctx.checkpoint.set(key, finalCheckpoint)
+        }
       }
     } catch (error) {
       if (!isMissingPathError(error)) throw error
