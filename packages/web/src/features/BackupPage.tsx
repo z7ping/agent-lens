@@ -29,18 +29,6 @@ function kindLabel(kind: BackupAssetKindDto, t: TFunction): string {
   return t(`kind.${kind === 'other' ? 'other' : kind}`)
 }
 
-function kindRecommendation(kind: BackupAssetKindDto, t: TFunction): string {
-  if (RECOMMENDED_KINDS.includes(kind)) return t('recommendation.recommended')
-  if (OPTIONAL_KINDS.includes(kind)) return t('recommendation.optional')
-  return t('recommendation.excluded')
-}
-
-function recommendationTone(kind: BackupAssetKindDto): string {
-  if (RECOMMENDED_KINDS.includes(kind)) return 'ok'
-  if (OPTIONAL_KINDS.includes(kind)) return 'info'
-  return ''
-}
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -125,7 +113,13 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
   return kindGroup.filter(kind => sumKindFiles(sources, sourceIds, kind) > 0)
 }
 
-export function BackupPage() {
+export function BackupPage({
+  selectedAssetSourceId,
+  onSelectedAssetSourceIdChange,
+}: {
+  selectedAssetSourceId: string
+  onSelectedAssetSourceIdChange(sourceId: string): void
+}) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
@@ -139,7 +133,6 @@ export function BackupPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
-  const [detailSourceId, setDetailSourceId] = useState<string | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
 
@@ -185,14 +178,18 @@ export function BackupPage() {
   }, [success])
 
   const sources = useOrderedAgents(overview?.sources ?? [])
-  const detectedSourceIds = sources.filter(source => source.detected).map(source => source.sourceId)
+  const detectedSources = sources.filter(source => source.detected)
+  const detectedSourceIds = detectedSources.map(source => source.sourceId)
   const selectedSources = selectedSourceIds ?? detectedSourceIds
+  const visibleAssetSources = selectedAssetSourceId
+    ? detectedSources.filter(source => source.sourceId === selectedAssetSourceId)
+    : detectedSources
+  const focusedSource = selectedAssetSourceId ? visibleAssetSources[0] ?? null : null
   const snapshots = overview?.snapshots ?? []
-  const protectedFiles = sources.reduce((sum, source) => sum + source.fileCount, 0)
-  const protectedBytes = sources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)
-  const hasProtectedBytes = sources.some(source => source.totalBytes !== undefined)
-  const excludedFiles = sources.reduce((sum, source) => sum + source.excludedCount, 0)
-  const totalSnapshotBytes = snapshots.reduce((sum, snapshot) => sum + snapshot.totalBytes, 0)
+  const protectedFiles = visibleAssetSources.reduce((sum, source) => sum + source.fileCount, 0)
+  const protectedBytes = visibleAssetSources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)
+  const hasProtectedBytes = visibleAssetSources.some(source => source.totalBytes !== undefined)
+  const excludedFiles = visibleAssetSources.reduce((sum, source) => sum + source.excludedCount, 0)
   const estimatedSelected = sources
     .filter(source => selectedSources.includes(source.sourceId))
     .reduce((sum, source) => sum + selectedKinds.reduce((kindSum, kind) => kindSum + kindFiles(source, kind), 0), 0)
@@ -202,7 +199,6 @@ export function BackupPage() {
   const hasSelectedBytes = sources
     .filter(source => selectedSources.includes(source.sourceId))
     .some(source => selectedKinds.some(kind => kindBytes(source, kind) !== undefined))
-  const detailSource = sources.find(source => source.sourceId === detailSourceId) ?? null
 
   const toggleSource = (sourceId: string) => {
     const current = selectedSourceIds ?? detectedSourceIds
@@ -215,6 +211,11 @@ export function BackupPage() {
     setSelectedKinds(current => current.includes(kind)
       ? current.filter(item => item !== kind)
       : [...current, kind])
+  }
+
+  const openCreateSnapshot = () => {
+    setSelectedSourceIds(selectedAssetSourceId ? [selectedAssetSourceId] : null)
+    setCreateOpen(true)
   }
 
   const requestCreateSnapshot = () => {
@@ -383,7 +384,8 @@ export function BackupPage() {
         <div className="future-heading">
           <CompactPageHeading title={t('page.title')} description={t('page.description')}><span className="prototype-flag live">{t('page.liveData')}</span></CompactPageHeading>
           <div className="backup-heading-actions">
-            {snapshots.length > 0 && <Button variant="primary" disabled={Boolean(busy)} onClick={() => setCreateOpen(true)}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>}
+            <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
+            <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
             <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>{t('page.refresh')}</Button>
           </div>
         </div>
@@ -391,25 +393,117 @@ export function BackupPage() {
         {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
         {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
 
-        <section className="future-kpis" aria-label={t('kpi.aria')}>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.detectedAgents')}</span><span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span></div><strong>{detectedSourceCount}</strong><small>{t('kpi.detectedAgentsDetail', { total: sources.length })}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.backupData')}</span></div><strong>{protectedFiles.toLocaleString(locale)}</strong><small>{hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending')}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.snapshots')}</span><span className="delta neutral">{snapshots[0] ? t('kpi.recent', { time: formatTime(snapshots[0].createdAt, locale) }) : t('kpi.noSnapshot')}</span></div><strong>{snapshots.length}</strong><small>{t('kpi.logicalSize', { size: formatBytes(totalSnapshotBytes) })}</small></article>
-          <article className="future-kpi"><div className="future-kpi-head"><span>{t('kpi.lastVerify')}</span></div><strong className="future-kpi-status">{Object.keys(verification).length ? (Object.values(verification).every(result => result.valid) ? t('kpi.passed') : t('kpi.attention')) : t('kpi.notRun')}</strong><small>{Object.keys(verification).length ? t('kpi.verifyCount', { passed: Object.values(verification).filter(result => result.valid).length, total: Object.keys(verification).length }) : t('kpi.verifyHint')}</small></article>
+        <section className="backup-overview-strip" aria-label={t('assetView.overviewAria')}>
+          <div className="backup-overview-primary">
+            <b>{focusedSource ? sourceLabel(focusedSource.sourceId, focusedSource.displayName) : t('assetView.allAgents')}</b>
+            <span>{t('assetView.overview', {
+              agents: visibleAssetSources.length.toLocaleString(locale),
+              files: protectedFiles.toLocaleString(locale),
+              size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
+            })}</span>
+          </div>
+          <div className="backup-overview-secondary">
+            <span>{indexTime ? t('assetView.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
+            <span>{t('assetView.excluded', { count: excludedFiles.toLocaleString(locale) })}</span>
+            <span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span>
+          </div>
         </section>
 
-        <div className="backup-meta-strip">
-          <span><b>{t('protection.localVault')}</b><code>{overview?.vaultPath ?? '—'}</code></span>
-          <span>{indexTime ? t('protection.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
-          <span>{t('kpi.excludedCompact', { count: excludedFiles.toLocaleString(locale) })}</span>
-        </div>
-
-        <section className="backup-snapshots-section">
+        <section className="backup-assets-section">
           <div className="backup-section-head">
-            <div><h2>{t('snapshots.title')}</h2><span>{t('snapshots.workbenchHint')}</span></div>
-            <Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy) || !snapshots.length} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>
+            <div>
+              <h2>{focusedSource ? t('assetView.agentAssets') : t('assetView.currentAssets')}</h2>
+              <span>{focusedSource ? t('assetView.singleHint') : t('assetView.allHint')}</span>
+            </div>
           </div>
 
+          {!visibleAssetSources.length && <div className="backup-assets-empty">{t('assetView.noAssets')}</div>}
+
+          {!focusedSource && visibleAssetSources.map(source => {
+            const kinds = ALL_KINDS.filter(kind => kindFiles(source, kind) > 0)
+            const primaryRoot = source.roots?.[0]
+            return <article key={source.sourceId} className="backup-agent-asset-summary">
+              <div className="backup-agent-asset-head">
+                <div className="backup-agent-title">
+                  <span className={`src-dot lg ${sourceDotClass(source.sourceId)}`}/>
+                  <span><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{t('assetView.sourceScale', {
+                    files: source.fileCount.toLocaleString(locale),
+                    size: source.totalBytes === undefined ? t('sizePending') : formatBytes(source.totalBytes),
+                  })}</small></span>
+                </div>
+                <button className="link-btn" onClick={() => onSelectedAssetSourceIdChange(source.sourceId)}>{t('assetView.viewDetails')}</button>
+              </div>
+              <div className="backup-agent-kind-facts">
+                {kinds.map(kind => {
+                  const logical = kindLogicalAssets(source, kind)
+                  const files = kindFiles(source, kind)
+                  return <span key={kind}><b>{kindLabel(kind, t)}</b><span>{logical === undefined ? t('assetView.filesShort', { count: files.toLocaleString(locale) }) : t('assetView.itemsShort', { count: logical.toLocaleString(locale) })}</span></span>
+                })}
+              </div>
+              <div className="backup-agent-asset-foot">
+                <code title={primaryRoot?.path}>{primaryRoot?.path ?? t('assetView.locationPending')}</code>
+                {source.roots && source.roots.length > 1 && <span>{t('assetView.moreLocations', { count: source.roots.length - 1 })}</span>}
+                {source.latestModifiedAt && <span>{t('assetView.latest', { time: formatTime(source.latestModifiedAt, locale) })}</span>}
+              </div>
+            </article>
+          })}
+
+          {focusedSource && <div className="backup-agent-detail">
+            <section className="backup-agent-detail-summary">
+              <div className="backup-agent-title">
+                <span className={`src-dot lg ${sourceDotClass(focusedSource.sourceId)}`}/>
+                <span><b>{sourceLabel(focusedSource.sourceId, focusedSource.displayName)}</b><small>{t('assetView.sourceScale', {
+                  files: focusedSource.fileCount.toLocaleString(locale),
+                  size: formatOptionalBytes(focusedSource.totalBytes, t),
+                })}</small></span>
+              </div>
+              <div className="backup-agent-detail-facts">
+                <span><b>{focusedSource.logicalAssetCount === undefined ? '—' : focusedSource.logicalAssetCount.toLocaleString(locale)}</b>{t('detail.logicalAssets')}</span>
+                <span><b>{focusedSource.fileCount.toLocaleString(locale)}</b>{t('detail.physicalFiles')}</span>
+                <span><b>{formatOptionalBytes(focusedSource.totalBytes, t)}</b>{t('detail.dataSize')}</span>
+                <span><b>{focusedSource.excludedCount.toLocaleString(locale)}</b>{t('detail.scanExcluded')}</span>
+              </div>
+            </section>
+
+            <section className="backup-agent-detail-section">
+              <div className="backup-section-head"><div><h3>{t('detail.categories')}</h3></div></div>
+              <div className="backup-asset-kind-list">
+                {ALL_KINDS.filter(kind => kindFiles(focusedSource, kind) > 0).map(kind => <div key={kind} className="backup-asset-kind-row">
+                  <b>{kindLabel(kind, t)}</b>
+                  <span>{kindDetailText(focusedSource, kind, t, locale)}</span>
+                  <span>{kindBytes(focusedSource, kind) === undefined ? '—' : formatBytes(kindBytes(focusedSource, kind)!)}</span>
+                </div>)}
+              </div>
+            </section>
+
+            <section className="backup-agent-detail-section">
+              <div className="backup-section-head"><div><h3>{t('detail.locations')}</h3></div></div>
+              {focusedSource.roots?.length
+                ? <div className="backup-location-list">{focusedSource.roots.map(root => <BackupDataRootTree key={`${root.scope}:${root.path}`} root={root} onCopy={path => void copyPath(path)}/>)}</div>
+                : <div className="backup-assets-empty">{t('detail.locationsPending')}</div>}
+            </section>
+
+            {(focusedSource.oldestModifiedAt || focusedSource.latestModifiedAt || focusedSource.ageBuckets) && <section className="backup-agent-detail-section">
+              <div className="backup-section-head"><div><h3>{t('detail.timeDistribution')}</h3></div></div>
+              {(focusedSource.oldestModifiedAt || focusedSource.latestModifiedAt) && <div className="backup-time-range">
+                <span>{t('detail.oldest', { time: focusedSource.oldestModifiedAt ? formatTime(focusedSource.oldestModifiedAt, locale) : '—' })}</span>
+                <span>{t('detail.latest', { time: focusedSource.latestModifiedAt ? formatTime(focusedSource.latestModifiedAt, locale) : '—' })}</span>
+              </div>}
+              {focusedSource.ageBuckets && <div className="backup-age-facts">
+                <span><b>{focusedSource.ageBuckets.recent30Days.fileCount.toLocaleString(locale)}</b>{t('detail.recent30')}</span>
+                <span><b>{focusedSource.ageBuckets.days31To90.fileCount.toLocaleString(locale)}</b>{t('detail.days31To90')}</span>
+                <span><b>{focusedSource.ageBuckets.days91To180.fileCount.toLocaleString(locale)}</b>{t('detail.days91To180')}</span>
+                <span><b>{focusedSource.ageBuckets.olderThan180Days.fileCount.toLocaleString(locale)}</b>{t('detail.older180')}</span>
+              </div>}
+            </section>}
+          </div>}
+        </section>
+
+        <section className="backup-history-section">
+          <div className="backup-section-head">
+            <div><h2>{t('assetView.historyTitle')}</h2><span>{t('assetView.historyHint')}</span></div>
+            {snapshots.length > 0 && <Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>}
+          </div>
           {snapshots.length ? <div className="backup-snapshot-list">
             {snapshots.map(snapshot => {
               const checked = verification[snapshot.id]
@@ -422,22 +516,7 @@ export function BackupPage() {
                 <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
               </article>
             })}
-          </div> : <div className="backup-empty backup-empty-workbench">
-            <b>{t('snapshots.emptyTitle')}</b>
-            <span>{t('snapshots.emptyDescription')}</span>
-            <div className="backup-empty-actions">
-              <Button variant="primary" disabled={Boolean(busy)} onClick={() => setCreateOpen(true)}><UiIcon name="plus" size={14}/>{t('snapshots.createFirst')}</Button>
-              <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('restore.selectPackage')}</Button>
-            </div>
-          </div>}
-        </section>
-
-        <section className="backup-restore-section">
-          <div className="backup-section-head"><div><h2>{t('restore.title')}</h2><span>{t('restore.workbenchHint')}</span></div><span className="badge info">{t('restore.previewFirst')}</span></div>
-          <div className="restore-grid">
-            <article className="restore-card"><h3>{t('restore.importTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectFile')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.integrityCheck')}</span></div><div className="restore-action"><Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('restore.selectPackage')}</Button></div></article>
-            <article className="restore-card"><h3>{t('restore.restoreTitle')}</h3><div className="restore-flow"><span className="restore-node">{t('restore.selectSnapshot')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.compareCurrent')}</span><span className="restore-arrow"><UiIcon name="arrow-right" size={12}/></span><span className="restore-node">{t('restore.manualConfirm')}</span></div><div className="restore-action"><span className="badge warn">{t('restore.previewOnly')}</span></div></article>
-          </div>
+          </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
         </section>
       </main>
     </div>
@@ -465,7 +544,7 @@ export function BackupPage() {
                 <span className={`src-dot ${sourceDotClass(source.sourceId)}`}/>
                 <span className="backup-source-copy"><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{source.totalBytes === undefined ? t('create.files', { count: source.fileCount.toLocaleString(locale) }) : t('create.sourceSummary', { count: source.fileCount.toLocaleString(locale), size: formatBytes(source.totalBytes) })}</small></span>
               </label>
-              <button className="link-btn" onClick={() => { setCreateOpen(false); setDetailSourceId(source.sourceId) }}>{t('protection.details')}</button>
+              <button className="link-btn" onClick={() => { setCreateOpen(false); onSelectedAssetSourceIdChange(source.sourceId) }}>{t('assetView.viewAssets')}</button>
             </div>)}
           </div>
         </div>
@@ -475,30 +554,6 @@ export function BackupPage() {
         {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.more')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
 
         <div className="backup-safety-line"><UiIcon name="check" size={14}/><span>{t('create.safetyCompact', { count: excludedFiles.toLocaleString(locale) })}</span></div>
-      </div>
-    </Drawer>}
-
-    {detailSource && <Drawer
-      open
-      className="backup-data-drawer"
-      title={<span className="backup-overlay-title"><span className={`src-dot lg ${sourceDotClass(detailSource.sourceId)}`}/>{sourceLabel(detailSource.sourceId, detailSource.displayName)}</span>}
-      onClose={() => { if (!busy) setDetailSourceId(null) }}
-      closeDisabled={Boolean(busy)}
-      closeOnBackdrop={!busy}
-    >
-      <div className="future-drawer-body">
-        <section className="drawer-section"><h3>{t('detail.scale')}</h3><div className="preview-summary"><span><b>{detailSource.logicalAssetCount === undefined ? '—' : detailSource.logicalAssetCount.toLocaleString()}</b> {t('detail.logicalAssets')}</span><span><b>{detailSource.fileCount.toLocaleString()}</b> {t('detail.physicalFiles')}</span><span><b>{formatOptionalBytes(detailSource.totalBytes, t)}</b> {t('detail.dataSize')}</span><span><b>{detailSource.excludedCount.toLocaleString()}</b> {t('detail.scanExcluded')}</span></div>{detailSource.logicalAssetCount === undefined && <div className="future-note">{t('detail.logicalUnknown')}</div>}</section>
-
-        <section className="drawer-section"><h3>{t('detail.categories')}</h3><div className="drawer-file-list">
-          {ALL_KINDS.filter(kind => kindFiles(detailSource, kind) > 0).map(kind => <div key={kind} className="drawer-file preview-file"><span className={`badge ${recommendationTone(kind)}`}>{kindRecommendation(kind, t)}</span><b>{kindLabel(kind, t)}</b><code>{kindDetailText(detailSource, kind, t, locale)}{kindBytes(detailSource, kind) === undefined ? '' : ` · ${formatBytes(kindBytes(detailSource, kind)!)}`}</code></div>)}
-        </div></section>
-
-        <section className="drawer-section"><h3>{t('detail.locations')}</h3>{detailSource.roots?.length
-          ? <div>{detailSource.roots.map(root => <BackupDataRootTree key={`${root.scope}:${root.path}`} root={root} onCopy={path => void copyPath(path)}/>)}</div>
-          : <div className="future-note">{t('detail.locationsPending')}</div>}</section>
-
-        {(detailSource.oldestModifiedAt || detailSource.latestModifiedAt || detailSource.ageBuckets) && <section className="drawer-section"><h3>{t('detail.timeDistribution')}</h3>{detailSource.oldestModifiedAt || detailSource.latestModifiedAt ? <div className="integrity-strip"><span>{t('detail.oldest', { time: detailSource.oldestModifiedAt ? formatTime(detailSource.oldestModifiedAt, locale) : '—' })}</span><span className="grow"/><span>{t('detail.latest', { time: detailSource.latestModifiedAt ? formatTime(detailSource.latestModifiedAt, locale) : '—' })}</span></div> : null}{detailSource.ageBuckets && <div className="preview-summary"><span><b>{detailSource.ageBuckets.recent30Days.fileCount.toLocaleString()}</b> {t('detail.recent30')}</span><span><b>{detailSource.ageBuckets.days31To90.fileCount.toLocaleString()}</b> {t('detail.days31To90')}</span><span><b>{detailSource.ageBuckets.days91To180.fileCount.toLocaleString()}</b> {t('detail.days91To180')}</span><span><b>{detailSource.ageBuckets.olderThan180Days.fileCount.toLocaleString()}</b> {t('detail.older180')}</span></div>}</section>}
-
       </div>
     </Drawer>}
 
