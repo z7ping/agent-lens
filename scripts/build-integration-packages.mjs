@@ -249,6 +249,10 @@ export async function buildIntegrationPackages({
       // Bundle the full official Integration dependency closure so runtime
       // loading never relies on node_modules lookup from the user data dir.
       packages: 'bundle',
+      // Prefer package ESM entry points when both module/main are published.
+      // This keeps packages such as jsonc-parser fully statically bundleable
+      // instead of embedding their UMD runtime-relative require() graph.
+      mainFields: ['module', 'main'],
     })
 
     const entry = await readFile(entryPath)
