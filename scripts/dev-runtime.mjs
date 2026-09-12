@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,6 +34,8 @@ export function devRuntimePaths(repoRoot, port) {
     dataRoot,
     dbPath: join(dataRoot, 'agent-lens.db'),
     vaultPath: join(dataRoot, 'vault'),
+    integrationsPath: join(dataRoot, 'integrations'),
+    integrationBundleDir: join(dataRoot, 'integration-packages'),
   }
 }
 
@@ -117,14 +119,14 @@ export async function waitForRuntimeReady(
 
 export function buildDevEnvironment(baseEnv, repoRoot, port) {
   const paths = devRuntimePaths(repoRoot, port)
-  const integrationBundleDir = join(repoRoot, '.agent-lens', 'dev', 'integration-packages')
   return {
     ...baseEnv,
     AGENT_LENS_PORT: String(port),
     AGENT_LENS_DEV_API_PORT: String(port),
     AGENT_LENS_DB_PATH: paths.dbPath,
     AGENT_LENS_VAULT_PATH: paths.vaultPath,
-    AGENT_LENS_INTEGRATION_BUNDLE_DIR: integrationBundleDir,
+    AGENT_LENS_INTEGRATIONS_DIR: paths.integrationsPath,
+    AGENT_LENS_INTEGRATION_BUNDLE_DIR: paths.integrationBundleDir,
     AGENT_LENS_DAEMON_MODE: 'foreground',
     AGENT_LENS_RUNTIME_OWNER: 'cli',
   }
@@ -204,11 +206,14 @@ export async function runDevRuntime() {
   const devEnv = buildDevEnvironment(process.env, repoRoot, port)
 
   await mkdir(paths.dataRoot, { recursive: true })
-  const integrationBundleDir = join(repoRoot, '.agent-lens', 'dev', 'integration-packages')
+  // Source builds keep the package version stable while Integration code can
+  // change between runs. Recreate only the development physical install so
+  // the daemon can never load a stale same-version bundle from a prior run.
+  await rm(paths.integrationsPath, { recursive: true, force: true })
   devLog('正在准备官方 Integration bundle cache')
   await buildIntegrationPackages({
     root: repoRoot,
-    outDir: integrationBundleDir,
+    outDir: paths.integrationBundleDir,
     clean: true,
   })
   devLog('官方 Integration bundle cache 已就绪')
