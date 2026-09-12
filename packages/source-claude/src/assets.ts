@@ -323,7 +323,7 @@ async function* settingsAssets(
       states: assetStates(path, observedAt, input.capturedAt, [
         { state: 'configured', value: true },
         { state: 'installed', value: 'unknown' },
-        { state: 'enabled', value: enabled },
+        { state: 'enabled', value: enabled ? 'unknown' : false },
       ]),
     }
   }
@@ -462,16 +462,15 @@ async function* discoverProjectAssets(
     }
 
     for (const directory of claudeProjectContextInternals.directoriesFromProjectRoot(projectRoot, cwd)) {
-      const directoryKey = process.platform === 'win32'
-        ? directory.replaceAll('\\', '/').toLowerCase()
-        : directory.replaceAll('\\', '/')
+      const relativeDirectory = relative(projectRoot, directory).replaceAll('\\', '/') || '.'
+      const assetPrefix = `project:${relativeDirectory}`
 
       for await (const asset of discoverSkillRoot(join(directory, '.claude', 'skills'), {
         scope: 'project',
         scopeRoot: projectRoot,
         source: 'claude:project-skill',
         capturedAt,
-        prefix: directoryKey,
+        prefix: assetPrefix,
       })) {
         const path = asset.binding?.path ?? ''
         if (seenAssetPaths.has(path)) continue
@@ -484,7 +483,7 @@ async function* discoverProjectAssets(
         scopeRoot: projectRoot,
         source: 'claude:project-command',
         capturedAt,
-        prefix: directoryKey,
+        prefix: assetPrefix,
       })) {
         const path = asset.binding?.path ?? ''
         if (seenAssetPaths.has(path)) continue
