@@ -108,6 +108,7 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     const identities = new Set(definitions.map(item => `${item.type}:${item.canonicalName}`))
 
     assert.equal(identities.has('skill:review-helper'), true)
+    assert.equal(identities.has('skill:plugin-skill'), false)
     assert.equal(identities.has('mcp:playwright'), true)
     assert.equal(identities.has('mcp:github'), true)
     assert.equal(identities.has('plugin:acme-plugin@test'), true)
