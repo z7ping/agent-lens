@@ -74,10 +74,24 @@ test('Hermes hook request metadata may correlate internally without fabricating 
   assert.equal(call?.dedupHints?.sharedEventKey, 'hermes-hook:request-1:2:terminal')
 })
 
-test('Hermes config uses real YAML semantics and evidence-driven plugin/MCP states', async () => {
+test('Hermes user assets follow profile semantics and explicit scope', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-hermes-contract-'))
   await mkdir(join(root, 'plugins', 'alpha'), { recursive: true })
-  await mkdir(join(root, 'plugins', 'beta'), { recursive: true })
+  await mkdir(join(root, 'plugins', 'junk'), { recursive: true })
+  await mkdir(join(root, 'skills', 'reviewer'), { recursive: true })
+  await mkdir(join(root, 'memories'), { recursive: true })
+  await writeFile(join(root, 'plugins', 'alpha', 'plugin.yaml'), [
+    'name: alpha',
+    'version: 1.2.3',
+    '',
+  ].join('\n'), 'utf8')
+  await writeFile(join(root, 'plugins', 'alpha', '__init__.py'), '# plugin\n', 'utf8')
+  await writeFile(join(root, 'plugins', 'junk', 'README.md'), '# not a plugin\n', 'utf8')
+  await writeFile(join(root, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
+  await writeFile(join(root, 'memories', 'MEMORY.md'), 'Remember this\n', 'utf8')
+  await writeFile(join(root, 'memories', 'USER.md'), 'User profile\n', 'utf8')
+  await writeFile(join(root, 'memories', 'junk.md'), 'not a Hermes built-in memory slot\n', 'utf8')
+  await writeFile(join(root, 'SOUL.md'), '# Persona\n', 'utf8')
   await writeFile(join(root, 'config.yaml'), [
     'mcp_servers:',
     '  docs:',
@@ -110,32 +124,120 @@ test('Hermes config uses real YAML semantics and evidence-driven plugin/MCP stat
         lastSeenAt: '2026-09-11T00:00:00.000Z',
       },
       abortSignal: new AbortController().signal,
-    } as SourceExecutionContext
+      checkpoint: {
+        async get() { return undefined },
+        async set() {},
+      },
+    } as unknown as SourceExecutionContext
 
     for await (const asset of discoverHermesAssets(ctx)) assets.push(asset)
 
     const configMcp = (name: string) => assets.find(asset =>
       asset.definition.type === 'mcp'
       && asset.definition.canonicalName === name
-      && asset.binding?.source === 'hermes:config')
-    const pluginConfig = (name: string) => assets.find(asset =>
+      && asset.binding?.source === 'hermes:config:mcp')
+    const plugin = (name: string) => assets.find(asset =>
       asset.definition.type === 'plugin'
-      && asset.definition.canonicalName === name
-      && asset.binding?.source === 'hermes:config')
+      && asset.definition.canonicalName === name)
+    const definitionNames = new Set(assets.map(asset =>
+      `${asset.definition.type}:${asset.definition.canonicalName}`))
 
     assert.equal(configMcp('docs')?.states?.find(state => state.state === 'enabled')?.value, true)
     assert.equal(configMcp('docs')?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
     assert.equal(configMcp('disabled')?.states?.find(state => state.state === 'enabled')?.value, false)
     assert.equal(configMcp('disabled')?.states?.find(state => state.state === 'discoverable')?.value, false)
 
-    assert.equal(pluginConfig('alpha')?.states?.find(state => state.state === 'enabled')?.value, true)
-    assert.equal(pluginConfig('beta')?.states?.find(state => state.state === 'enabled')?.value, false)
-    assert.equal(pluginConfig('both')?.states?.find(state => state.state === 'enabled')?.value, false)
+    assert.equal(plugin('alpha')?.binding?.source, 'hermes:user-plugin')
+    assert.equal(plugin('alpha')?.states?.find(state => state.state === 'installed')?.value, true)
+    assert.equal(plugin('alpha')?.states?.find(state => state.state === 'enabled')?.value, true)
+    assert.equal(plugin('beta')?.states?.find(state => state.state === 'installed')?.value, 'unknown')
+    assert.equal(plugin('beta')?.states?.find(state => state.state === 'enabled')?.value, false)
+    assert.equal(plugin('both')?.states?.find(state => state.state === 'enabled')?.value, false)
+    assert.equal(definitionNames.has('plugin:junk'), false)
+
+    assert.equal(definitionNames.has('skill:reviewer'), true)
+    assert.equal(definitionNames.has('memory:hermes:memory.md'), true)
+    assert.equal(definitionNames.has('memory:hermes:user.md'), true)
+    assert.equal(definitionNames.has('memory:hermes:junk.md'), false)
+    assert.equal(definitionNames.has('context:hermes-soul'), true)
+
+    const userBindings = assets
+      .flatMap(asset => asset.binding ? [asset.binding] : [])
+      .filter(binding => binding.scope !== 'project')
+    assert.ok(userBindings.length > 0)
+    assert.equal(userBindings.every(binding => binding.scope === 'user'), true)
+    assert.equal(userBindings.every(binding => binding.scopeRoot === root), true)
 
     const capabilities = await declareHermesCapabilities({} as never)
     assert.equal(capabilities.find(item => item.name === 'asset-discovery')?.status, 'partial')
   } finally {
     await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Hermes project context follows current first-type-wins and AGENTS chain semantics', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-hermes-profile-'))
+  const projectRoot = await mkdtemp(join(tmpdir(), 'agent-lens-hermes-project-'))
+  const packageDir = join(projectRoot, 'packages')
+  const cwd = join(packageDir, 'web')
+
+  await mkdir(join(projectRoot, '.git'), { recursive: true })
+  await mkdir(cwd, { recursive: true })
+  await writeFile(join(projectRoot, 'AGENTS.md'), '# root instructions\n', 'utf8')
+  await writeFile(join(packageDir, 'AGENTS.override.md'), '# package override\n', 'utf8')
+  await writeFile(join(cwd, 'AGENTS.override.md'), '   \n', 'utf8')
+  await writeFile(join(cwd, 'AGENTS.md'), '# cwd instructions\n', 'utf8')
+  await writeFile(join(cwd, 'CLAUDE.md'), '# should lose to AGENTS\n', 'utf8')
+
+  const checkpoint = {
+    async get<T>(key: string): Promise<T | undefined> {
+      return key === 'hermes:known-project-cwds:v1' ? [cwd] as T : undefined
+    },
+    async set() {},
+  }
+
+  const ctx = {
+    installation: {
+      id: 'installation-hermes',
+      hostId: 'host',
+      productId: 'hermes',
+      configRoot: root,
+      dataRoot: root,
+      firstSeenAt: '2026-09-11T00:00:00.000Z',
+      lastSeenAt: '2026-09-11T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+    checkpoint,
+  } as unknown as SourceExecutionContext
+
+  try {
+    const first = []
+    for await (const asset of discoverHermesAssets(ctx)) {
+      if (asset.binding?.scope === 'project') first.push(asset)
+    }
+
+    assert.deepEqual(
+      first.map(asset => asset.binding?.path),
+      [
+        join(projectRoot, 'AGENTS.md'),
+        join(packageDir, 'AGENTS.override.md'),
+        join(cwd, 'AGENTS.md'),
+      ],
+    )
+    assert.equal(first.every(asset => asset.binding?.scopeRoot === projectRoot), true)
+    assert.equal(first.every(asset =>
+      asset.states?.some(state => state.state === 'discoverable' && state.value === true)), true)
+    assert.equal(first.some(asset => asset.binding?.path === join(cwd, 'CLAUDE.md')), false)
+
+    await writeFile(join(packageDir, '.hermes.md'), '# Hermes-specific instructions\n', 'utf8')
+    const second = []
+    for await (const asset of discoverHermesAssets(ctx)) {
+      if (asset.binding?.scope === 'project') second.push(asset)
+    }
+    assert.deepEqual(second.map(asset => asset.binding?.path), [join(packageDir, '.hermes.md')])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await rm(projectRoot, { recursive: true, force: true })
   }
 })
 
