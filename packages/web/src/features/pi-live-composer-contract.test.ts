@@ -13,10 +13,10 @@ const selectCss = readFileSync(new URL('../components/select-menu.css', import.m
 const composer = readFileSync(new URL('../components/PiMarkdownComposer.tsx', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
-  assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel="Pi 模型"/)
-  assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel="Pi 推理强度"/)
-  assert.match(page, /title=\{state\?\.model \? `Pi 模型 · \$\{modelLabel\(state\)\}` : 'Pi 模型'\}/)
-  assert.match(page, /title=\{`Pi 推理强度 · \$\{state\?\.thinkingLevel \|\| '未设置'\}`\}/)
+  assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel=\{t\('composer\.modelAria'\)\}/)
+  assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel=\{t\('composer\.thinkingAria'\)\}/)
+  assert.match(page, /title=\{state\?\.model \? t\('composer\.modelTitle'/)
+  assert.match(page, /title=\{t\('composer\.thinkingTitle'/)
   assert.match(pill, /<SelectMenu[\s\S]*?variant="pill"/)
   assert.match(selectMenu, /createPortal\(/)
   assert.match(selectCss, /\.select-menu-popover\s*\{[\s\S]*?position:\s*fixed;/)
@@ -24,7 +24,7 @@ test('Pi Live model and thinking controls use custom pill menus instead of nativ
 
 test('Pi Live composer uses Lexical Markdown shortcuts and keeps Markdown as the runtime value', () => {
   assert.match(page, /<PiMarkdownComposer/)
-  assert.match(page, /ariaLabel="Pi Markdown 富文本输入"/)
+  assert.match(page, /ariaLabel=\{t\('composer\.inputAria'\)\}/)
   assert.doesNotMatch(page, /composerView|ReactMarkdown|<textarea[^>]*className="pi-live-input"/)
   assert.match(composer, /MarkdownShortcutPlugin transformers=\{TRANSFORMERS\}/)
   assert.match(composer, /\$convertToMarkdownString\(TRANSFORMERS/)
@@ -113,14 +113,14 @@ test('Pi Live reconnect hydrates the streaming round from Snapshot into the same
   assert.match(page, /if \(value\.state\.isStreaming\) \{[\s\S]*?projectPiLiveTaskRounds\(projectPiLiveHistory\(value\)\)/)
   assert.match(page, /setCurrentOrdinal\(ordinal\)/)
   assert.match(page, /markPiLiveItemsRunning\(current\.length \? reconcilePiLiveItems\(current, persisted\) : persisted\)/)
-  assert.match(page, /piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot, \(\) => undefined\)/)
+  assert.match(page, /void piLiveApi\.snapshot\(runtimeId, leafIdRef\.current\)\.then\(acceptSnapshot, reason =>/)
 })
 
 test('Pi Live 生成中使用专用介入和继续通道并即时展示队列', () => {
   assert.match(page, /if \(selectedMode === 'steer'\) await piLiveApi\.steer\(runtimeId, text\)/)
   assert.match(page, /else await piLiveApi\.followUp\(runtimeId, text\)/)
   assert.match(page, /setPendingQueue\(current => \[\.\.\.current, pending\]\)/)
-  assert.match(page, /正在加入 Pi 队列/)
+  assert.match(page, /t\('queue\.joining'\)/)
   assert.match(page, /pendingMessageCount=\{visiblePendingCount\}/)
 })
 
@@ -130,14 +130,14 @@ test('Pi Live 已入队消息可单项撤回并恢复其余队列', () => {
   assert.match(page, /if \(resolvedIndex >= 0\) target\.splice\(resolvedIndex, 1\)/)
   assert.match(page, /for \(const message of steering\) await piLiveApi\.steer\(runtimeId, message\)/)
   assert.match(page, /for \(const message of followUp\) await piLiveApi\.followUp\(runtimeId, message\)/)
-  assert.match(page, /onClick=\{\(\) => void removeQueued\(item\.mode, Number\(item\.queueIndex\), item\.text\)\}>撤回<\/Button>/)
+  assert.match(page, /onClick=\{\(\) => void removeQueued\(item\.mode, Number\(item\.queueIndex\), item\.text\)\}>\{t\('queue\.withdraw'\)\}<\/Button>/)
 })
 
 test('Pi Live Escape 和中断本轮仅在执行中可用，且不受发送请求锁影响', () => {
   assert.match(page, /window\.addEventListener\('keydown', onKeyDown\)/)
   assert.match(page, /event\.key !== 'Escape'/)
   assert.match(page, /\{optimisticStreaming && <Button[\s\S]*?className="pi-live-stop"[\s\S]*?disabled=\{abortPending \|\| queueMutationPending\}/)
-  assert.match(page, /正在中断…' : '中断本轮/)
+  assert.match(page, /abortPending \? t\('header\.interrupting'\) : t\('header\.interrupt'\)/)
   assert.match(page, /onEscape=\{optimisticStreaming \? \(\) => void stop\(\) : undefined\}/)
 })
 
