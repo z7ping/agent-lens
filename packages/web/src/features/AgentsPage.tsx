@@ -94,6 +94,12 @@ const assetTypeLabelKey: Record<string, string> = {
 }
 
 const assetTypeOrder = ['skill', 'mcp', 'plugin', 'extension', 'prompt', 'context', 'theme', 'hook', 'memory', 'rule', 'builtin', 'unknown']
+const assetScopeLabelKey: Record<string, string> = {
+  installation: 'assetScope.installation',
+  user: 'assetScope.user',
+  project: 'assetScope.project',
+  workspace: 'assetScope.workspace',
+}
 const USER_ASSET_LIMIT = 24
 const ASSEMBLY_PATH_LIMIT = 18
 
@@ -131,6 +137,34 @@ function shortPath(path: string, max = 58): string {
   const left = Math.max(16, Math.floor(max * 0.38))
   const right = Math.max(24, max - left - 1)
   return `${path.slice(0, left)}…${path.slice(-right)}`
+}
+
+function scopeRootName(value: string): string {
+  const normalized = value.replaceAll('\\', '/').replace(/\/+$/, '')
+  return normalized.split('/').at(-1) || value
+}
+
+function assetScopeLabels(
+  asset: AgentAssetInventoryDto,
+  t: TFunction,
+): Array<{ key: string; label: string; title?: string }> {
+  const values = new Map<string, { key: string; label: string; title?: string }>()
+  for (const binding of asset.bindings) {
+    if (!binding.scope) continue
+    const root = binding.scopeRoot
+    const key = `${binding.scope}\u0000${root ?? ''}`
+    if (values.has(key)) continue
+    const scopeLabel = translatedLabel(assetScopeLabelKey, binding.scope, t)
+    const label = root && (binding.scope === 'project' || binding.scope === 'workspace')
+      ? `${scopeLabel} · ${scopeRootName(root)}`
+      : scopeLabel
+    values.set(key, {
+      key,
+      label,
+      ...(root ? { title: root } : {}),
+    })
+  }
+  return [...values.values()]
 }
 
 function assetUsageCount(agent: AgentOverviewDto, asset: AgentAssetInventoryDto): number {
@@ -188,9 +222,16 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   const usage = assetUsageCount(agent, asset)
   const path = asset.bindings.find(item => item.path)?.path
   const states = summarizedStates(asset)
+  const scopes = assetScopeLabels(asset, t)
   return <div className="asset-item">
     <div className="asset-item-head">
       <span className="asset-type">{translatedLabel(assetTypeLabelKey, asset.type, t)}</span>
+      {scopes.slice(0, 2).map(scope => <span
+        key={scope.key}
+        className="asset-scope"
+        title={scope.title}
+      >{scope.label}</span>)}
+      {scopes.length > 2 && <span className="asset-scope">+{scopes.length - 2}</span>}
       {usage > 0 && <span className="asset-usage">{t('realCalls', { count: usage })}</span>}
     </div>
     <div className="asset-name" title={asset.displayName ?? asset.canonicalName}>{asset.displayName ?? asset.canonicalName}</div>
