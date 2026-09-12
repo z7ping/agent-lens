@@ -154,6 +154,7 @@ async function* discoverSkillRoot(
         type: 'skill',
         canonicalName,
         displayName,
+        upstreamIdentity: `claude-skill:${sha256(pathKey(skillDir))}`,
       },
       binding: {
         path: skillDir,
@@ -200,6 +201,7 @@ async function* discoverCommandRoot(
         type: 'builtin',
         canonicalName: input.prefix ? `${input.prefix}:command:${name}` : `command:${name}`,
         displayName: name,
+        upstreamIdentity: `claude-command:${sha256(pathKey(path))}`,
       },
       binding: {
         path,
@@ -285,7 +287,12 @@ async function* settingsAssets(
     const mcp = asRecord(settings.mcpServers ?? settings.mcp_servers)
     for (const name of Object.keys(mcp)) {
       yield {
-        definition: { type: 'mcp', canonicalName: name, displayName: name },
+        definition: {
+          type: 'mcp',
+          canonicalName: name,
+          displayName: name,
+          upstreamIdentity: `claude-mcp:${sha256(`${pathKey(path)}\0${name}`)}`,
+        },
         binding: {
           path,
           source: `${input.source}:mcp`,
@@ -308,6 +315,7 @@ async function* settingsAssets(
         type: 'hook',
         canonicalName: `claude-hook:${eventName}`,
         displayName: `${eventName} Hook`,
+        upstreamIdentity: `claude-hook:${sha256(`${pathKey(path)}\0${eventName}`)}`,
       },
       binding: {
         path,
@@ -359,7 +367,12 @@ async function* projectMcpAssets(
 
   for (const name of Object.keys(servers)) {
     yield {
-      definition: { type: 'mcp', canonicalName: name, displayName: name },
+      definition: {
+        type: 'mcp',
+        canonicalName: name,
+        displayName: name,
+        upstreamIdentity: `claude-mcp:${sha256(`${pathKey(path)}\0${name}`)}`,
+      },
       binding: {
         path,
         source: 'claude:project-mcp',
@@ -390,6 +403,7 @@ async function* discoverUserAssets(
           type: 'context',
           canonicalName: 'claude-user-instructions',
           displayName: 'CLAUDE.md',
+          upstreamIdentity: `claude-user-instructions:${sha256(pathKey(userInstruction))}`,
         },
         binding: {
           path: userInstruction,
