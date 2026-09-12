@@ -14,6 +14,10 @@ import {
   type InsightsResponseDto,
   type IntegrationAuthorizationCapabilityDto,
   type IntegrationAuthorizationResponseDto,
+  type IntegrationEnabledUpdateResponseDto,
+  type IntegrationManagementResponseDto,
+  type IntegrationPreferenceUpdateRequestDto,
+  type IntegrationPreferencesResponseDto,
   type IntegrationToolDiscoveryResponseDto,
   type LiveUpdateEventDto,
   type ReviewDetailDirection,
@@ -169,6 +173,28 @@ export class AgentLensApi {
   }
   rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     return requestJson('/api/v1/integrations/discovery/rescan', { method: 'POST' })
+  }
+  integrations(): Promise<IntegrationManagementResponseDto> {
+    return requestJson('/api/v1/integrations')
+  }
+  updateIntegrationPreferences(
+    input: IntegrationPreferenceUpdateRequestDto,
+  ): Promise<IntegrationPreferencesResponseDto> {
+    return requestJson('/api/v1/integrations/preferences', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  }
+  setIntegrationEnabled(
+    integrationId: string,
+    enabled: boolean,
+  ): Promise<IntegrationEnabledUpdateResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}/enabled`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    })
   }
   capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
 

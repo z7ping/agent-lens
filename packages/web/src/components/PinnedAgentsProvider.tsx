@@ -1,10 +1,24 @@
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react'
-import type { AgentFacetDto } from '@agent-lens/protocol'
-import { readAgentFilterPreference, writeAgentFilterPreference } from '../client/preferences'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PropsWithChildren,
+} from 'react'
+import type { AgentFacetDto, IntegrationManagementResponseDto } from '@agent-lens/protocol'
+import type { AgentLensClientModel } from '../client/model'
+import {
+  readAgentVisibilityPreference,
+  readLegacyAgentOrderPreference,
+  writeAgentVisibilityPreference,
+} from '../client/preferences'
 
 export interface PinnedContextValue {
   ordered: string[]
   pinned: string[]
+  canReorder(id: string): boolean
   toggle(id: string): void
   move(id: string, targetId: string): void
   moveBy(id: string, offset: -1 | 1): void
@@ -14,6 +28,7 @@ export interface PinnedContextValue {
 const PinnedContext = createContext<PinnedContextValue>({
   ordered: [],
   pinned: [],
+  canReorder: () => false,
   toggle: () => undefined,
   move: () => undefined,
   moveBy: () => undefined,
@@ -24,80 +39,118 @@ export function usePinnedAgents(): PinnedContextValue {
   return useContext(PinnedContext)
 }
 
+interface VisibilityState {
+  configured: boolean
+  ids: string[]
+}
+
 export function PinnedAgentsProvider({
   agents,
+  management,
+  model,
   children,
-}: PropsWithChildren<{ agents: AgentFacetDto[] }>) {
-  const [preference, setPreference] = useState(
-    () => readAgentFilterPreference() ?? { orderedAgentIds: [], visibleAgentIds: [] },
+}: PropsWithChildren<{
+  agents: AgentFacetDto[]
+  management: IntegrationManagementResponseDto | null
+  model: AgentLensClientModel
+}>) {
+  const legacyOrder = useRef(readLegacyAgentOrderPreference())
+  const migrationAttempted = useRef(false)
+  const initialVisibility = useMemo(() => readAgentVisibilityPreference(), [])
+  const [visibility, setVisibility] = useState<VisibilityState>(() => ({
+    configured: initialVisibility !== null,
+    ids: initialVisibility?.visibleAgentIds ?? [],
+  }))
+  const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null)
+
+  const managedIds = useMemo(
+    () => new Set(management?.items.map(item => item.integrationId) ?? []),
+    [management],
   )
+  const serverOrder = management?.preferences.displayOrder ?? []
+  const pendingLegacyMigration = Boolean(
+    management
+    && !management.preferences.displayOrderConfigured
+    && legacyOrder.current.length,
+  )
+  const ordered = optimisticOrder
+    ?? (pendingLegacyMigration
+      ? legacyOrder.current
+      : serverOrder.length
+        ? serverOrder
+        : legacyOrder.current)
 
   useEffect(() => {
     if (!agents.length) return
-    setPreference(current => {
-      const available = agents.map(agent => agent.sourceId)
-      const known = current.orderedAgentIds.filter(id => available.includes(id))
-      const orderedAgentIds = [...known, ...available.filter(id => !known.includes(id))]
-      const visibleAgentIds = current.orderedAgentIds.length
-        ? current.visibleAgentIds.filter(id => available.includes(id))
+    setVisibility(current => {
+      const available = new Set(agents.map(agent => agent.sourceId))
+      const ids = current.configured
+        ? current.ids.filter(id => available.has(id))
         : agents.filter(agent => agent.detected).map(agent => agent.sourceId)
-      const next = { orderedAgentIds, visibleAgentIds }
-      if (orderedAgentIds.join('\u0000') === current.orderedAgentIds.join('\u0000')
-        && visibleAgentIds.join('\u0000') === current.visibleAgentIds.join('\u0000')) {
-        return current
-      }
-      writeAgentFilterPreference(next)
-      return next
+      if (
+        current.configured
+        && ids.join('\u0000') === current.ids.join('\u0000')
+      ) return current
+      writeAgentVisibilityPreference({ visibleAgentIds: ids })
+      return { configured: true, ids }
     })
   }, [agents])
 
+  useEffect(() => {
+    if (!management || management.preferences.displayOrderConfigured || migrationAttempted.current) return
+    const migrationOrder = legacyOrder.current
+    if (!migrationOrder.length) return
+    migrationAttempted.current = true
+    void model.updateIntegrationPreferences({ displayOrder: migrationOrder }).catch(() => {
+      migrationAttempted.current = false
+    })
+  }, [management, model])
+
+  const persistOrder = (next: string[]) => {
+    setOptimisticOrder(next)
+    void model.updateIntegrationPreferences({ displayOrder: next }).then(
+      () => setOptimisticOrder(null),
+      () => setOptimisticOrder(null),
+    )
+  }
+
   const value = useMemo<PinnedContextValue>(() => ({
-    ordered: preference.orderedAgentIds,
-    pinned: preference.visibleAgentIds,
+    ordered,
+    pinned: visibility.ids,
+    canReorder: id => managedIds.has(id),
     toggle(id) {
-      setPreference(current => {
-        const visibleAgentIds = current.visibleAgentIds.includes(id)
-          ? current.visibleAgentIds.filter(item => item !== id)
-          : [...current.visibleAgentIds, id]
-        const next = { ...current, visibleAgentIds }
-        writeAgentFilterPreference(next)
-        return next
+      setVisibility(current => {
+        const ids = current.ids.includes(id)
+          ? current.ids.filter(item => item !== id)
+          : [...current.ids, id]
+        writeAgentVisibilityPreference({ visibleAgentIds: ids })
+        return { configured: true, ids }
       })
     },
     move(id, targetId) {
-      setPreference(current => {
-        const from = current.orderedAgentIds.indexOf(id)
-        const to = current.orderedAgentIds.indexOf(targetId)
-        if (from < 0 || to < 0 || from === to) return current
-        const orderedAgentIds = [...current.orderedAgentIds]
-        orderedAgentIds.splice(from, 1)
-        orderedAgentIds.splice(to, 0, id)
-        const next = { ...current, orderedAgentIds }
-        writeAgentFilterPreference(next)
-        return next
-      })
+      if (!managedIds.has(id) || !managedIds.has(targetId)) return
+      const from = ordered.indexOf(id)
+      const to = ordered.indexOf(targetId)
+      if (from < 0 || to < 0 || from === to) return
+      const next = [...ordered]
+      next.splice(from, 1)
+      next.splice(to, 0, id)
+      persistOrder(next)
     },
     moveBy(id, offset) {
-      setPreference(current => {
-        const from = current.orderedAgentIds.indexOf(id)
-        const to = from + offset
-        if (from < 0 || to < 0 || to >= current.orderedAgentIds.length) return current
-        const orderedAgentIds = [...current.orderedAgentIds]
-        ;[orderedAgentIds[from], orderedAgentIds[to]] = [orderedAgentIds[to]!, orderedAgentIds[from]!]
-        const next = { ...current, orderedAgentIds }
-        writeAgentFilterPreference(next)
-        return next
-      })
+      if (!managedIds.has(id)) return
+      const managedOrder = ordered.filter(item => managedIds.has(item))
+      const from = managedOrder.indexOf(id)
+      const to = from + offset
+      if (from < 0 || to < 0 || to >= managedOrder.length) return
+      ;[managedOrder[from], managedOrder[to]] = [managedOrder[to]!, managedOrder[from]!]
+      persistOrder(managedOrder)
     },
     reset() {
-      const next = {
-        orderedAgentIds: agents.map(agent => agent.sourceId),
-        visibleAgentIds: agents.filter(agent => agent.detected).map(agent => agent.sourceId),
-      }
-      writeAgentFilterPreference(next)
-      setPreference(next)
+      setOptimisticOrder(null)
+      void model.updateIntegrationPreferences({ displayOrder: [] }).catch(() => undefined)
     },
-  }), [agents, preference])
+  }), [managedIds, model, ordered, visibility.ids])
 
   return <PinnedContext.Provider value={value}>{children}</PinnedContext.Provider>
 }

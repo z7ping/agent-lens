@@ -36,6 +36,10 @@ import {
   handleIntegrationDiscoveryRequest,
   type IntegrationDiscoveryController,
 } from './integration-discovery-http'
+import {
+  handleIntegrationManagementRequest,
+  type IntegrationManagementController,
+} from './integration-management-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
@@ -78,6 +82,7 @@ export interface HttpSurfaceOptions {
   ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
   integrationAuthorization?: IntegrationAuthorizationController
   integrationDiscovery?: IntegrationDiscoveryController
+  integrationManagement?: IntegrationManagementController
   localePackDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
@@ -230,6 +235,12 @@ export async function startHttpSurface(
         response,
         url,
         options.integrationDiscovery,
+      )) return
+      if (await handleIntegrationManagementRequest(
+        request,
+        response,
+        url,
+        options.integrationManagement,
       )) return
 
       if (url.pathname === '/api/v1/agents/rescan') {
