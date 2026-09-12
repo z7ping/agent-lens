@@ -13,9 +13,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { AGENT_LENS_PLUGIN_API_VERSION } from '@agent-lens/core'
 import { OFFICIAL_INTEGRATION_CATALOG } from '@agent-lens/integration-catalog'
 import { IntegrationPackageService } from './service'
 import {
+  INTEGRATION_PACKAGE_ENTRY_EXPORT,
   INTEGRATION_PACKAGE_SCHEMA_VERSION,
   type BundledIntegrationCatalogEntry,
 } from './types'
@@ -45,9 +47,9 @@ async function writeTrustedBundle(bundleDir: string) {
       productId: integration.productId,
       packageName: integration.package.packageName,
       version: TEST_BUNDLE_VERSION,
-      apiVersion: integration.package.apiVersion,
+      apiVersion: AGENT_LENS_PLUGIN_API_VERSION,
       entry: 'index.js',
-      entryExport: integration.package.entryExport,
+      entryExport: INTEGRATION_PACKAGE_ENTRY_EXPORT,
       files: [{
         path: 'index.js',
         size: Buffer.byteLength(entryContent),
