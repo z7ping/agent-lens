@@ -606,7 +606,7 @@ export async function declareOpenCodeCapabilities(
     { sourceId: SOURCE_ID, name: 'tool-call', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'Only source-visible reasoning parts are retained' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'V2 global/project AGENTS, Skills, Agents, Commands, local Plugins and config-declared MCP/plugins are observable; merged config, remote/managed sources, V1 compatibility and runtime-loaded state require stronger OpenCode evidence' },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'V2 global/project AGENTS, standard Skills, Agents, Commands, local Plugins and config-declared MCP/plugins are observable; OPENCODE_CONFIG/OPENCODE_CONFIG_DIR, remote/managed config, extra skill/instruction sources, final merge and runtime-loaded state require stronger OpenCode evidence' },
     { sourceId: SOURCE_ID, name: 'permission', status: 'unavailable', captureModes: [], reason: 'Permission lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'unavailable', captureModes: [], reason: 'Subagent lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Usage mapping is not implemented' },
