@@ -65,6 +65,13 @@ test('导入与创建进入统一面包屑操作区，创建流程继续复用�
   assert.doesNotMatch(backupPage, /className="future-heading"/)
 })
 
+test('备份记录不使用含义重复的状态图标，也不显示解释性副文案', () => {
+  assert.doesNotMatch(backupPage, /className="snapshot-icon"/)
+  assert.doesNotMatch(backupPage, /assetView\.historyHint/)
+  assert.doesNotMatch(backupPage, /assetView\.historyFilteredHint/)
+  assert.doesNotMatch(backupPage, /description=\{t\('create\.description'\)\}/)
+})
+
 test('备份记录跟随左侧智能体范围过滤，并保留校验、预演和导出能力', () => {
   assert.match(backupPage, /const visibleSnapshots = selectedAssetSourceId/)
   assert.match(backupPage, /snapshot\.sourceIds\.includes\(selectedAssetSourceId\)/)
