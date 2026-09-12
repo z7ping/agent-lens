@@ -4,6 +4,7 @@ import type {
   AssetInventoryEntry,
   AssetInventoryReader,
   AssetState,
+  AssetScope,
   AssetStateObservation,
   AssetType,
 } from '@agent-lens/core'
@@ -11,6 +12,7 @@ import { SqliteExecutor } from './executor'
 
 type AssetRow = Record<string, unknown>
 const ASSET_TYPES = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'prompt', 'theme', 'context', 'rule', 'builtin', 'unknown'] as const
+const ASSET_SCOPES = ['installation', 'user', 'project', 'workspace'] as const
 const ASSET_STATES = ['installed', 'configured', 'enabled', 'discoverable', 'exposed', 'invoked'] as const
 
 function rowRecord(value: unknown): AssetRow {
@@ -70,6 +72,14 @@ function mapDefinition(value: unknown): AssetDefinition {
 
 function mapBinding(value: unknown): AssetBinding {
   const row = rowRecord(value)
+  const runtimeProfileId = optionalString(row, 'runtime_profile_id')
+  const rawScope = optionalString(row, 'scope')
+  const scope = rawScope === undefined
+    ? undefined
+    : (ASSET_SCOPES as readonly string[]).includes(rawScope)
+      ? rawScope as AssetScope
+      : (() => { throw new TypeError(`SQLite asset inventory field scope has unsupported value: ${rawScope}`) })()
+  const scopeRoot = optionalString(row, 'scope_root')
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
   const version = optionalString(row, 'version')
@@ -77,6 +87,9 @@ function mapBinding(value: unknown): AssetBinding {
     id: requiredString(row, 'binding_id'),
     assetId: requiredString(row, 'asset_id'),
     installationId: requiredString(row, 'installation_id'),
+    ...(runtimeProfileId === undefined ? {} : { runtimeProfileId }),
+    ...(scope === undefined ? {} : { scope }),
+    ...(scopeRoot === undefined ? {} : { scopeRoot }),
     ...(path === undefined ? {} : { path }),
     ...(source === undefined ? {} : { source }),
     ...(version === undefined ? {} : { version }),
@@ -108,6 +121,9 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
           b.id AS binding_id,
           b.asset_id AS asset_id,
           b.installation_id AS installation_id,
+          b.runtime_profile_id AS runtime_profile_id,
+          b.scope AS scope,
+          b.scope_root AS scope_root,
           b.path AS path,
           b.source AS source,
           b.version AS version,
