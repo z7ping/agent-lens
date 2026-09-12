@@ -234,7 +234,13 @@ export function SelectMenu({
     </button>
 
     {open && position && createPortal(
-      <div ref={menuRef} className={`select-menu-popover select-menu-popover-${variant}`} style={menuStyle} onKeyDown={handleMenuKeyDown}>
+      <div
+        ref={menuRef}
+        className={`select-menu-popover select-menu-popover-${variant}`}
+        style={menuStyle}
+        onPointerDown={event => event.stopPropagation()}
+        onKeyDown={handleMenuKeyDown}
+      >
         {searchable && <div className="select-menu-search-wrap">
           <UiIcon name="search" size={16}/>
           <input
