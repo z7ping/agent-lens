@@ -12,7 +12,10 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { isMissingPathError } from '@agent-lens/source-support'
-import { parse } from 'smol-toml'
+import {
+  codexStringArray,
+  type CodexTomlConfig,
+} from './config'
 import { listCodexProjectCwds } from './history'
 
 const DEFAULT_PROJECT_ROOT_MARKERS = ['.git'] as const
@@ -41,11 +44,6 @@ async function safeStat(path: string) {
   }
 }
 
-function stringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) return undefined
-  return value.map(item => item.trim())
-}
-
 function uniqueNonEmpty(values: readonly string[]): string[] {
   const output: string[] = []
   for (const value of values) {
@@ -55,35 +53,13 @@ function uniqueNonEmpty(values: readonly string[]): string[] {
   return output
 }
 
-async function readInstructionConfig(configRoot: string): Promise<CodexInstructionConfig | null> {
-  const configPath = join(configRoot, 'config.toml')
-  let content: string
-  try {
-    content = await readFile(configPath, 'utf8')
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return {
-        projectRootMarkers: [...DEFAULT_PROJECT_ROOT_MARKERS],
-        fallbackFilenames: [],
-      }
-    }
-    throw error
-  }
+function instructionConfigFromToml(
+  parsed: CodexTomlConfig | null,
+): CodexInstructionConfig | null {
+  if (!parsed) return null
 
-  let parsed: Record<string, unknown>
-  try {
-    const value = parse(content)
-    parsed = value && typeof value === 'object' && !Array.isArray(value)
-      ? value as Record<string, unknown>
-      : {}
-  } catch {
-    // Codex itself owns config validation. A malformed config must not make AgentLens
-    // invent project instruction semantics from partial regex parsing.
-    return null
-  }
-
-  const configuredMarkers = stringArray(parsed.project_root_markers)
-  const configuredFallbacks = stringArray(parsed.project_doc_fallback_filenames)
+  const configuredMarkers = codexStringArray(parsed.project_root_markers)
+  const configuredFallbacks = codexStringArray(parsed.project_doc_fallback_filenames)
 
   return {
     projectRootMarkers: configuredMarkers === undefined
@@ -93,7 +69,6 @@ async function readInstructionConfig(configRoot: string): Promise<CodexInstructi
       .filter(name => !DEFAULT_INSTRUCTION_FILENAMES.includes(name as typeof DEFAULT_INSTRUCTION_FILENAMES[number])),
   }
 }
-
 function candidateFilenames(config: CodexInstructionConfig): string[] {
   return uniqueNonEmpty([
     ...DEFAULT_INSTRUCTION_FILENAMES,
@@ -267,6 +242,7 @@ async function projectInstructionAssets(
 export async function* discoverCodexInstructions(
   ctx: SourceExecutionContext,
   capturedAt: string,
+  parsedConfig: CodexTomlConfig | null,
 ): AsyncIterable<DiscoveredAsset> {
   const configRoot = ctx.installation.configRoot
   if (!configRoot || ctx.abortSignal.aborted) return
@@ -274,7 +250,7 @@ export async function* discoverCodexInstructions(
   const global = await globalInstructionAsset(configRoot, capturedAt)
   if (global) yield global
 
-  const config = await readInstructionConfig(configRoot)
+  const config = instructionConfigFromToml(parsedConfig)
   if (!config || ctx.abortSignal.aborted) return
 
   for (const asset of await projectInstructionAssets(ctx, config, capturedAt)) {
@@ -287,5 +263,5 @@ export const codexInstructionInternals = {
   candidateFilenames,
   directoriesFromRootToCwd,
   findProjectRoot,
-  readInstructionConfig,
+  instructionConfigFromToml,
 }
