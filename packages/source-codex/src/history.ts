@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { open, opendir, readFile, stat } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
@@ -152,6 +152,37 @@ async function readSessionMetadata(
   } finally {
     await handle.close()
   }
+}
+
+function cwdPathKey(value: string): string {
+  const normalized = resolve(value).replaceAll('\\', '/')
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+export async function listCodexProjectCwds(dataRoot: string | undefined): Promise<string[]> {
+  if (!dataRoot) return []
+
+  const values = new Map<string, string>()
+  for (const filePath of await listJsonlFiles(dataRoot)) {
+    const session = await readSessionMetadata(filePath)
+    const rawCwd = session.cwd?.trim()
+    if (!rawCwd || !isAbsolute(rawCwd)) continue
+
+    const cwd = resolve(rawCwd)
+    let meta
+    try {
+      meta = await stat(cwd)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
+    if (!meta.isDirectory()) continue
+
+    const key = cwdPathKey(cwd)
+    if (!values.has(key)) values.set(key, cwd)
+  }
+
+  return [...values.values()]
 }
 
 function parseLine(text: string): Record<string, unknown> {
