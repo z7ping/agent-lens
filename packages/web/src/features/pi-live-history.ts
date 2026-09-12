@@ -65,7 +65,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
           ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
         })
       } else {
-        items.push({ id: fact.id, kind: 'lifecycle', event: 'pi.message.other', label: translateProduct('piLive:history.specialMessage'), detail: compact(fact.raw), at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
+        items.push({ id: fact.id, kind: 'lifecycle', event: 'pi.message.other', label: translateProduct('piLive:history.specialMessage'), detail: compact(fact.raw), at: fact.at, nativeType: fact.nativeType, ...(fact.parentId ? { parentId: fact.parentId } : {}), raw: fact.raw })
       }
       continue
     }
@@ -83,6 +83,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       const callId = fact.callId ?? fact.id
       const paired = fact.callId ? results.get(fact.callId) : undefined
       if (paired && fact.callId) consumedResults.add(fact.callId)
+      const durationMs = paired ? elapsedMs(fact.at, paired.at) : undefined
       items.push({
         id: fact.id,
         kind: 'tool',
@@ -92,7 +93,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
         output: paired ? resultOutput(paired) : '',
         status: paired ? (paired.success ? 'success' : 'error') : 'unknown',
         at: fact.at,
-        durationMs: paired ? elapsedMs(fact.at, paired.at) : undefined,
+        ...(durationMs === undefined ? {} : { durationMs }),
         ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
       })
       continue
@@ -112,14 +113,14 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       continue
     }
     if (fact.kind === 'usage') {
-      items.push({ id: fact.id, kind: 'usage', usage: fact.usage, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
+      items.push({ id: fact.id, kind: 'usage', usage: fact.usage, at: fact.at, nativeType: fact.nativeType, ...(fact.parentId ? { parentId: fact.parentId } : {}), raw: fact.raw })
       continue
     }
     if (fact.kind === 'event') {
-      items.push({ id: fact.id, kind: 'lifecycle', event: fact.event, label: fact.label, detail: fact.detail, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
+      items.push({ id: fact.id, kind: 'lifecycle', event: fact.event, label: fact.label, detail: fact.detail, at: fact.at, nativeType: fact.nativeType, ...(fact.parentId ? { parentId: fact.parentId } : {}), raw: fact.raw })
       continue
     }
-    items.push({ id: fact.id, kind: 'lifecycle', event: 'native.unknown', label: translateProduct('piLive:history.nativeEvent'), detail: fact.nativeType, at: fact.at, nativeType: fact.nativeType, parentId: fact.parentId, raw: fact.raw })
+    items.push({ id: fact.id, kind: 'lifecycle', event: 'native.unknown', label: translateProduct('piLive:history.nativeEvent'), detail: fact.nativeType, at: fact.at, nativeType: fact.nativeType, ...(fact.parentId ? { parentId: fact.parentId } : {}), raw: fact.raw })
   }
   return items
 }
