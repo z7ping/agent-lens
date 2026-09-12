@@ -275,6 +275,7 @@ export const officialChineseLocalePack: LocalePackDto = {
         workspace: '工作区',
       },
       assetType: {
+        instruction: '指令',
         skill: '技能',
         mcp: 'MCP（模型上下文协议）',
         plugin: '插件',
