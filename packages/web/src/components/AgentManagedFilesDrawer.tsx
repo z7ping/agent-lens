@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   ManagedAssetDirectoryResponseDto,
@@ -20,10 +20,6 @@ interface AgentManagedFilesDrawerProps {
   onClose(): void
 }
 
-function parentPath(path: string): string {
-  const index = path.lastIndexOf('/')
-  return index < 0 ? '' : path.slice(0, index)
-}
 
 function pathDepth(path: string): number {
   return path ? path.split('/').length : 0
@@ -49,7 +45,7 @@ export function AgentManagedFilesDrawer({
   const [error, setError] = useState('')
   const generationRef = useRef(0)
 
-  const loadDirectory = async (path: string, generation = generationRef.current) => {
+  const loadDirectory = useCallback(async (path: string, generation = generationRef.current) => {
     setLoadingDirectories(current => new Set(current).add(path))
     try {
       const response = await model.managedAssetDirectory(productId, installationId, root, path)
@@ -68,7 +64,7 @@ export function AgentManagedFilesDrawer({
         })
       }
     }
-  }
+  }, [installationId, model, productId, root])
 
   useEffect(() => {
     if (!open) return
@@ -85,7 +81,7 @@ export function AgentManagedFilesDrawer({
     return () => {
       generationRef.current += 1
     }
-  }, [open, productId, installationId, root])
+  }, [open, productId, installationId, root, loadDirectory])
 
   const toggleDirectory = (entry: ManagedAssetFileEntryDto) => {
     if (!entry.accessible || entry.kind !== 'directory') return
@@ -127,7 +123,7 @@ export function AgentManagedFilesDrawer({
     }
   }
 
-  const renderDirectory = (path: string): React.ReactNode => {
+  const renderDirectory = (path: string): ReactNode => {
     const directory = directories[path]
     if (!directory) {
       return loadingDirectories.has(path)
