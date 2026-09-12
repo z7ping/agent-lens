@@ -168,7 +168,6 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     const beforeReplay = {
       definitions: definitions.length,
       bindings: (storage.db.prepare('SELECT COUNT(*) AS count FROM asset_bindings').get() as { count: number }).count,
-      states: stateRows.length,
       evidence: staticEvidence.count,
     }
 
@@ -182,9 +181,28 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     assert.deepEqual({
       definitions: (storage.db.prepare('SELECT COUNT(*) AS count FROM asset_definitions').get() as { count: number }).count,
       bindings: (storage.db.prepare('SELECT COUNT(*) AS count FROM asset_bindings').get() as { count: number }).count,
-      states: (storage.db.prepare('SELECT COUNT(*) AS count FROM asset_state_observations').get() as { count: number }).count,
       evidence: (storage.db.prepare("SELECT COUNT(*) AS count FROM evidence WHERE capture_method = 'static-scan'").get() as { count: number }).count,
     }, beforeReplay)
+
+    const replayPluginStates = storage.db.prepare(`
+      SELECT
+        d.canonical_name AS canonicalName,
+        s.state AS state,
+        s.value AS value
+      FROM asset_state_observations s
+      JOIN asset_bindings b ON b.id = s.asset_binding_id
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE d.type = 'plugin'
+    `).all() as Array<{ canonicalName: string; state: string; value: string }>
+    for (const expected of [
+      ['acme-plugin@test', 'installed', 'true'],
+      ['acme-plugin@test', 'configured', 'true'],
+      ['acme-plugin@test', 'enabled', 'false'],
+      ['configured-only@test', 'configured', 'true'],
+    ] as const) {
+      assert.ok(replayPluginStates.some(row =>
+        row.canonicalName === expected[0] && row.state === expected[1] && row.value === expected[2]))
+    }
   } finally {
     storage.close()
     await rm(root, { recursive: true, force: true })
