@@ -213,7 +213,7 @@ export function FirstRunGuide({
       : t('firstRun.captureServiceUnavailable', { count: enabledCount })
     : t('firstRun.captureDisabled')
   return <section className="first-run-guide" aria-label={t('firstRun.aria')}>
-    <div className="first-run-heading"><span className="eyebrow">{t('firstRun.eyebrow')}</span><h2>{t('firstRun.title')}</h2><p>{t('firstRun.description')}</p></div>
+    <div className="first-run-heading"><span className="eyebrow">{t('firstRun.eyebrow')}</span><h2>{t('firstRun.title')}</h2></div>
     <div className="first-run-steps">
       <div className={`first-run-step ${detectedCount > 0 ? 'is-done' : 'is-pending'}`}>
         <span className="first-run-no">{detectedCount > 0 ? <UiIcon name="check" size={14}/> : '1'}</span>
