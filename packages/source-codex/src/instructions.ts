@@ -201,7 +201,7 @@ async function projectInstructionAssets(
   capturedAt: string,
 ): Promise<DiscoveredAsset[]> {
   const filenames = candidateFilenames(config)
-  const projectCwds = await listCodexProjectCwds(ctx.installation.dataRoot)
+  const projectCwds = await listCodexProjectCwds(ctx)
   const assets = new Map<string, DiscoveredAsset>()
 
   for (const cwd of projectCwds) {
