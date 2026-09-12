@@ -1183,7 +1183,7 @@ export class LocalBackupService implements BackupService {
 
 export const backupLocalInternals = {
   assetKind,
-  isInside,
+  isPathInside,
   safePortableRelative,
   sensitiveReason,
   manifestPayload,
