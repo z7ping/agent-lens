@@ -195,6 +195,7 @@ const TOOL_EXECUTION_COUNT_SQL = `
       NULLIF(json_extract(observations.payload_json, '$.call_id'), ''),
       NULLIF(json_extract(observations.payload_json, '$.toolUseId'), ''),
       NULLIF(json_extract(observations.payload_json, '$.tool_use_id'), ''),
+      NULLIF(observations.native_event_id, ''),
       observations.kind || ':' || observations.id
     )
   END)

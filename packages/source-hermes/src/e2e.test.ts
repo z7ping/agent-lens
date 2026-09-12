@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import {
   DefaultAssetService,
   DefaultCapabilityService,
@@ -42,7 +42,7 @@ test('Hermes Source combines native session title, state.db history, assets and 
   await writeFile(join(hermesRoot, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
   await writeFile(join(hermesRoot, 'config.yaml'), 'mcp_servers:\n  docs:\n    command: node\ntoolsets:\n  - hermes-cli\n', 'utf8')
 
-  const nativeDb = new Database(join(hermesRoot, 'state.db'))
+  const nativeDb = new DatabaseSync(join(hermesRoot, 'state.db'))
   nativeDb.exec(`
     CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT, title TEXT);
     CREATE TABLE messages (

@@ -39,26 +39,45 @@ const workspaceSidebar = await readFile(new URL('../packages/web/src/components/
 const workspacePrimaryNavigation = await readFile(new URL('../packages/web/src/components/WorkspacePrimaryNavigation.tsx', import.meta.url), 'utf8')
 const resumeResolver = await readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8')
 const piLiveProtocol = await readFile(new URL('../packages/protocol/src/pi-live.ts', import.meta.url), 'utf8')
+const officialZhCn = await readFile(new URL('../packages/web/src/i18n/official-zh-CN.ts', import.meta.url), 'utf8')
 
 const failures = []
 const requireText = (source, pattern, label) => { if (!pattern.test(source)) failures.push(label) }
 
+for (const required of [
+  "task: '任务'",
+  "insights: '洞察'",
+  "agents: '智能体'",
+  "tools: '工具分析'",
+  "railAria: '任务列表：进行中 + 历史'",
+  "filterAria: '筛选历史任务'",
+  "newTask: '新建任务'",
+  "noProject: '未关联项目'",
+  "interrupt: '中断本轮'",
+  "model: '模型'",
+  "continueSession: '继续会话'",
+  "source: '源码'",
+  "rendered: '渲染'",
+]) {
+  if (!officialZhCn.includes(required)) failures.push(`简体中文契约缺少：${required}`)
+}
+
 const primaryNavigationBlock = workspacePrimaryNavigation.match(/const PRIMARY_SECTIONS[\s\S]*?\n\]/)?.[0] ?? ''
 const topLevelLinks = [...primaryNavigationBlock.matchAll(/\bid: '/g)].length
 if (topLevelLinks !== 3) failures.push(`一级导航必须保持任务中心 / 洞察 / 智能体 3 个，当前 ${topLevelLinks}`)
-requireText(primaryNavigationBlock, /id: 'review',[\s\S]*?to: '\/review',[\s\S]*?label: '任务'/, '一级任务入口必须命名为“任务”')
-requireText(primaryNavigationBlock, /id: 'insights',[\s\S]*?to: '\/insights',[\s\S]*?label: '洞察'/, '一级分析入口必须命名为“洞察”')
-requireText(primaryNavigationBlock, /id: 'agents',[\s\S]*?to: '\/agents',[\s\S]*?label: '智能体'/, '一级 Agent 入口必须命名为“智能体”')
+requireText(primaryNavigationBlock, /id: 'review',[\s\S]*?to: '\/review',[\s\S]*?labelKey: 'task'/, '一级任务入口必须使用 task 国际化标签')
+requireText(primaryNavigationBlock, /id: 'insights',[\s\S]*?to: '\/insights',[\s\S]*?labelKey: 'insights'/, '一级分析入口必须使用 insights 国际化标签')
+requireText(primaryNavigationBlock, /id: 'agents',[\s\S]*?to: '\/agents',[\s\S]*?labelKey: 'agents'/, '一级 Agent 入口必须使用 agents 国际化标签')
 if (/to: '\/(?:tools|backup|review\/live)'/.test(primaryNavigationBlock)) failures.push('工具分析、资产备份、Pi Live 不得占用一级导航')
-requireText(workspaceSidebar, /to="\/tools"[\s\S]*?>工具分析/, '工具分析必须作为洞察上下文入口保留')
+requireText(workspaceSidebar, /to="\/tools"[\s\S]*?t\('navigation:tools'\)/, '工具分析必须作为国际化洞察上下文入口保留')
 requireText(app, /path="\/review\/new"/, '缺少新建任务路由')
 requireText(app, /path="\/review\/live"[^>]*element=\{<Navigate\s+to="\/review\/new"\s+replace\s*\/?>\}/, '旧 /review/live 必须重定向到新建任务')
 requireText(app, /path="\/review\/live\/:runtimeSessionId"/, '缺少 Pi Live runtime 路由')
 requireText(app, /onPiLive[\s\S]*!onPiLive/, 'Pi Live 必须从普通 Review overlay/turn rail 语义分离')
 if (/to="\/review\/live"[^>]*>Pi 实时<\/NavLink>/.test(workspaceSidebar)) failures.push('一级导航不得保留独立 Pi 实时入口')
 
-requireText(taskCenter, /<UiIcon name="plus"[^>]*\/>\s*新建任务/, '任务中心左侧必须通过统一图标提供新建任务入口')
-requireText(taskCenter, /进行中 \+ 历史/, '任务中心必须统一进行中与历史任务')
+requireText(taskCenter, /<UiIcon name="plus"[^>]*\/>\s*\{t\('center\.history\.newTask'\)\}/, '任务中心左侧必须通过统一图标和国际化标签提供新建任务入口')
+requireText(taskCenter, /aria-label=\{t\('center\.history\.railAria'\)\}/, '任务中心必须通过国际化 aria 标签统一进行中与历史任务')
 requireText(taskCenter, /piLiveApi\.knownRuntimes\(\)/, '任务中心必须发现 Runtime 持有的 Pi Runtime')
 if (/import\s+\{\s*TaskSurface\s*\}|<TaskSurface\b/.test(taskCenter)) failures.push('Task Center 只承载详情页面，不得再包第二层 TaskSurface')
 requireText(reviewPage, /<TaskSurface\s+mode="review"/, 'Review 详情必须拥有唯一 review TaskSurface')
@@ -72,10 +91,10 @@ requireText(reviewPage, /ReviewPage\(\{[\s\S]{0,180}embedded = false/, 'ReviewPa
 requireText(page, /PiLivePage\(\{ embedded = false \}/, 'PiLivePage 必须支持 embedded')
 requireText(hubPage, /HubReviewPage\(\{ embedded = false \}/, 'HubReviewPage 必须支持 embedded')
 requireText(taskCenter, /className="task-center-toolbar"/, '历史筛选栏必须由 TaskCenterPage 持有')
-requireText(taskCenter, /筛选历史任务/, '统一筛选栏必须明确筛选历史任务')
+requireText(taskCenter, /aria-label=\{t\('center\.history\.filterAria'\)\}/, '统一筛选栏必须使用国际化历史任务筛选标签')
 requireText(reviewPage, /!embedded && <Toolbar className="workspace-toolbar"/, '嵌入 Review 不得生成重复筛选栏')
 requireText(taskCenterCss, /\.task-center-toolbar\s*\{[\s\S]{0,260}grid-column:\s*1\s*\/\s*-1/, '任务中心筛选栏必须横跨列表和详情')
-requireText(taskCenter, /deriveTaskProjectOptions/, '新建任务必须从已观测项目推导 cwd')
+requireText(taskCenter, /launchableTaskProjectOptions\(launchableProjects\)/, '新建任务必须从可启动项目列表推导 cwd')
 requireText(taskCenter, /const start = async \(project: \{ cwd: string; label: string \}\)/, '新建任务必须通过统一项目上下文启动 Pi Runtime')
 requireText(taskCenter, /cwd:\s*project\.cwd/, 'Pi Runtime cwd 必须来自真实项目上下文')
 requireText(taskCenter, /onClick=\{\(\) => selected && void start\(selected\)\}/, '已有项目必须直接使用选中的真实项目上下文')
@@ -89,7 +108,7 @@ requireText(taskHeader, /task-header-metrics/, 'TaskHeader 缺少指标区域')
 requireText(taskHeader, /task-header-actions/, 'TaskHeader 缺少操作区域')
 requireText(reviewPage, /import \{ TaskHeader \} from '\.\/TaskHeader'/, 'Review 必须接入 TaskHeader')
 requireText(page, /import \{ TaskHeader \} from '\.\/TaskHeader'/, 'Pi Live 必须接入 TaskHeader')
-requireText(page, /<TaskHeader[\s\S]{0,1800}\{optimisticStreaming && <Button[\s\S]{0,500}中断本轮/, 'Pi Live 标题和执行态中断控制必须由 TaskHeader 渲染')
+requireText(page, /<TaskHeader[\s\S]{0,1800}\{optimisticStreaming && <Button[\s\S]{0,500}t\('header\.interrupt'\)/, 'Pi Live 标题和执行态中断控制必须由 TaskHeader 渲染')
 if (/review-session-head/.test(reviewPage)) failures.push('Review 不得恢复旧详情头')
 if (/pi-live-taskbar/.test(page)) failures.push('Pi Live 不得恢复旧 taskbar')
 
@@ -118,8 +137,8 @@ requireText(reviewPage, /function ReviewToolGroupAdapter[\s\S]{0,1800}<TaskToolG
 
 requireText(taskMessage, /export function TaskMessage/, 'TaskMessage 缺失')
 requireText(taskMessage, /\{!user && <button/, '源码切换必须只属于 Agent Markdown')
-requireText(taskMessage, /<span>源码<\/span>/, 'TaskMessage 必须保留源码操作')
-requireText(taskMessage, /<span>渲染<\/span>/, 'TaskMessage 必须保留渲染操作')
+requireText(taskMessage, /<span>\{t\('message\.source'\)\}<\/span>/, 'TaskMessage 必须保留国际化源码操作')
+requireText(taskMessage, /<span>\{t\('message\.rendered'\)\}<\/span>/, 'TaskMessage 必须保留国际化渲染操作')
 requireText(taskMessage, /streaming\?: boolean/, 'TaskMessage 必须支持稳定的 Streaming 状态')
 requireText(taskMessage, /data-streaming=\{streaming \? 'true' : undefined\}/, 'TaskMessage 必须原位暴露 Streaming 状态')
 requireText(reviewPage, /function MessageBubble[\s\S]{0,1200}<TaskMessage/, 'Review 消息必须通过 TaskMessage')
@@ -127,11 +146,11 @@ requireText(page, /import \{ PiLiveCurrentTaskRound, PiLiveHistoryTaskRound \} f
 requireText(page, /projectPiLiveTaskRounds\(history\)/, 'Pi Live 历史必须先投影为 TaskRoundModel')
 requireText(page, /projectPiLiveTaskDetail\(\{[\s\S]{0,360}historyRounds,[\s\S]{0,220}runningRound/, 'Pi Live Runtime 必须收敛为 TaskDetailModel')
 requireText(page, /agent=\{taskDetailModel\.agentLabel\}/, 'Pi Live Header Agent 必须来自 TaskDetailModel')
-requireText(page, /context=\{state\?\.projectName \|\| workspaceDisplayName\(state\?\.workspacePath\) \|\| '未关联项目'\}/, 'Pi Live Header 必须展示真实项目/工作区上下文')
+requireText(page, /context=\{state\?\.projectName \|\| workspaceDisplayName\(state\?\.workspacePath\) \|\| t\('header\.noProject'\)\}/, 'Pi Live Header 必须展示真实项目/工作区上下文')
 requireText(page, /const headerTitle = taskDetailModel\.title/, 'Pi Live Header 标题必须来自 TaskDetailModel')
 requireText(page, /title=\{<span title=\{headerTitle\}>/, 'Pi Live Header 必须使用 TaskDetailModel 标题并保持紧凑展示')
 requireText(page, /metrics=\{\[\]\}/, 'Pi Live Header 指标必须保持紧凑，不得重新占用独立一行')
-requireText(page, /\{ label: '模型', value: taskDetailModel\.contextLabel/, 'Pi Live 模型上下文必须来自 TaskDetailModel')
+requireText(page, /\{ label: t\('header\.model'\), value: taskDetailModel\.contextLabel/, 'Pi Live 模型上下文必须来自 TaskDetailModel 并使用国际化标签')
 requireText(page, /\.\.\.taskDetailModel\.metrics\.map\(metric => \(\{ label: metric\.label, value: metric\.value, tone: metric\.tone \}\)\)/, 'Pi Live 指标必须来自 TaskDetailModel 并进入任务信息')
 requireText(page, /runningRound && <PiLiveCurrentTaskRound[\s\S]{0,320}model=\{runningRound\}/, 'Current UI 与 TaskDetailModel 必须共用 TaskRoundModel')
 requireText(piTaskProjection, /export function projectPiLiveRunningRound/, '缺少 Running -> TaskRoundModel 投影')
@@ -181,7 +200,7 @@ if (/terminate\([^)]*\)[\s\S]{0,120}source\.close/.test(client)) failures.push('
 
 requireText(piLiveProtocol, /interface PiLiveResumeRequestDto[\s\S]{0,100}logicalSessionId:\s*string/, '协议缺少 Pi 历史会话恢复请求')
 requireText(taskCenter, /piLiveApi\.resume\(logicalSessionId\)/, '任务中心必须通过受控 API 恢复 Pi 历史会话')
-requireText(reviewPage, /detail\.sourceIds\.includes\('pi'\)[\s\S]{0,320}继续会话/, 'Pi 历史详情必须提供继续会话操作')
+requireText(reviewPage, /detail\.sourceIds\.includes\('pi'\)[\s\S]{0,420}t\('local\.header\.continueSession'\)/, 'Pi 历史详情必须提供国际化继续会话操作')
 requireText(client, /'\/api\/v1\/pi-live\/resume'[\s\S]{0,180}logicalSessionId/, 'Web Client 缺少 Pi 历史会话恢复端点')
 
 requireText(http, /url\.pathname === '\/api\/v1\/pi-live'[\s\S]*request\.method === 'GET'[\s\S]*service\.list\(\)/, 'HTTP Surface 必须支持列举活跃 Runtime')
@@ -202,7 +221,7 @@ requireText(workerHost, /return fork\(this\.workerEntry\(\), \[\], forkOptions\)
 requireText(workerHost, /MAX_PENDING_REQUESTS/, 'Worker IPC 待处理请求必须有界')
 requireText(workerEntry, /const queue = value\.restoreQueue === false[\s\S]{0,180}session\.clearQueue\(\)/, 'Abort 必须支持队列取回')
 requireText(workerEntry, /session\.bindExtensions\(/, 'Worker 必须通过官方 AgentSession 绑定 Extension Runtime')
-requireText(workerEntry, /SessionManager\.open\(input\.sessionPath, input\.sessionDir, input\.cwd\)/, 'Worker 必须通过官方 SessionManager.open 恢复历史会话')
+requireText(workerEntry, /sdk\.SessionManager\.open\(input\.sessionPath, sessionDir, input\.cwd\)/, 'Worker 必须通过官方 SDK SessionManager.open 恢复历史会话')
 requireText(inProcessHost, /assertPiSdkSession\(created\.session, installed\.sdkEntry, installed\.version\)/, 'SDK 契约夹具必须校验 AgentSession capability')
 requireText(workerEntry, /extensionUi\.respond\(value\.requestId, value\.response\)/, 'Extension UI 必须关联 Worker request id')
 

@@ -41,6 +41,7 @@ import {
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
+  type HttpSurfacePluginConfig,
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
 import { dataRuntimeStoragePlugin } from './data-runtime/storage-plugin.js'
@@ -269,7 +270,7 @@ if (capabilities.localCapture) {
   app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
-app.use(httpSurfacePlugin, {
+const httpSurfaceConfig: HttpSurfacePluginConfig = {
   port: configuredPort,
   localePackDirectory,
   selectProjectDirectory: () => projectDirectoryPicker.select(),
@@ -347,7 +348,8 @@ app.use(httpSurfacePlugin, {
       return authorizedIntegrationCapabilities(integrationAuthorization, productId)
     },
   },
-})
+}
+app.use(httpSurfacePlugin, httpSurfaceConfig)
 app.use(webPlugin, { staticDir: webRoot })
 
 const runtimeController = new AbortController()

@@ -391,7 +391,8 @@ async function* ingestCodexFileWithThreadNames(
   if (!ctx.abortSignal.aborted && !incompleteTail) {
     try {
       const finalStat = await stat(filePath)
-      if (sourceFileIdentity(finalStat) === initialFileId) {
+      if (sourceFileIdentity(finalStat) === initialFileId
+        && (finalStat.size !== fileStat.size || finalStat.mtimeMs !== fileStat.mtimeMs)) {
         await ctx.checkpoint.set(key, {
           path: filePath,
           offset,

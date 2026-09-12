@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import {
   DefaultAssetService,
   DefaultCapabilityService,
@@ -45,7 +45,7 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
   await writeFile(join(workspace, '.opencode', 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
   await writeFile(join(configRoot, 'AGENTS.md'), '# Global instructions\n', 'utf8')
 
-  const nativeDb = new Database(dbPath)
+  const nativeDb = new DatabaseSync(dbPath)
   nativeDb.exec(`
     CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT);
     CREATE TABLE message (id TEXT PRIMARY KEY, data TEXT);

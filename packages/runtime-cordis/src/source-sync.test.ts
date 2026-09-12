@@ -93,7 +93,7 @@ test('prepareRegisteredSources detects each enabled source once and isolates det
   assert.equal(emitted.length, 1)
 })
 
-test('disabled sources are filtered before detect', async () => {
+test('disabled sources still participate in read-only detection', async () => {
   let detections = 0
   const disabled = sourceDefinition('disabled', async () => {
     detections += 1
@@ -111,8 +111,9 @@ test('disabled sources are filtered before detect', async () => {
 
   const prepared = await prepareRegisteredSources(ctx, new AbortController().signal)
 
-  assert.equal(detections, 0)
-  assert.deepEqual(prepared.targets, [])
+  assert.equal(detections, 1)
+  assert.equal(prepared.targets.length, 1)
+  assert.equal(prepared.targets[0]?.source.manifest.sourceId, 'disabled')
   assert.deepEqual(prepared.failures, [])
 })
 

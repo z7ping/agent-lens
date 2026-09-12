@@ -8,8 +8,8 @@ const overlayStyles = readFileSync(new URL('./ui/overlay.css', import.meta.url),
 
 test('更新日志和新版本提示统一复用标准 Dialog，不维护第二套 backdrop', () => {
   assert.match(source, /import \{ Button, Dialog \} from '\.\/ui'/)
-  assert.match(source, /<Dialog[\s\S]*?title="更新日志"/)
-  assert.match(source, /<Dialog[\s\S]*?title="发现新版本"/)
+  assert.match(source, /<Dialog[\s\S]*?title=\{t\('changelog'\)\}/)
+  assert.match(source, /<Dialog[\s\S]*?title=\{t\('updateTitle'\)\}/)
   assert.doesNotMatch(source, /release-dialog-backdrop/)
   assert.doesNotMatch(source, /release-dialog-close/)
   assert.doesNotMatch(styles, /\.release-dialog-backdrop/)

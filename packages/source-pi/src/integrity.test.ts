@@ -226,7 +226,7 @@ test('Pi detection does not claim a relative agent root without invocation cwd e
       PATH: '',
     },
   })
-  assert.deepEqual(detected, [])
+  assert.equal(detected.every(item => item.configRoot === undefined && item.dataRoot === undefined), true)
 })
 
 test('Pi asset discovery does not promote extension-private settings or arbitrary files into native assets', async () => {

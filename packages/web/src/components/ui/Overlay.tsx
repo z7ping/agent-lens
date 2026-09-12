@@ -62,7 +62,9 @@ export function useModalFocusScope({
     document.addEventListener('keydown', onKeyDown, true)
     return () => {
       document.removeEventListener('keydown', onKeyDown, true)
-      requestAnimationFrame(() => previous?.focus({ preventScroll: true }))
+      window.setTimeout(() => {
+        if (previous?.isConnected) previous.focus({ preventScroll: true })
+      }, 0)
     }
   }, [open, panelRef])
 }

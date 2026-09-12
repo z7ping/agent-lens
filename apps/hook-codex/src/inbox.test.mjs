@@ -14,10 +14,10 @@ const unconfiguredEnv = {
   AGENT_LENS_CAPTURE_POLICY_PATH: join(tmpdir(), `agent-lens-hook-policy-unconfigured-${process.pid}.json`),
 }
 
-test('source collection defaults to Claude Code only', () => {
-  assert.deepEqual(enabledSources(unconfiguredEnv), ['claude-code'])
-  assert.equal(sourceCaptureEnabled('claude-code', unconfiguredEnv), true)
-  assert.equal(sourceCaptureEnabled('codex', unconfiguredEnv), false)
+test('Codex hook source collection defaults to Codex only', () => {
+  assert.deepEqual(enabledSources(unconfiguredEnv), ['codex'])
+  assert.equal(sourceCaptureEnabled('codex', unconfiguredEnv), true)
+  assert.equal(sourceCaptureEnabled('claude-code', unconfiguredEnv), false)
   assert.equal(sourceCaptureEnabled('codex', { AGENT_LENS_ENABLED_SOURCES: 'claude-code,codex' }), true)
   assert.equal(sourceCaptureEnabled('claude-code', { AGENT_LENS_ENABLED_SOURCES: 'none' }), false)
 })

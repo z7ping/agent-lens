@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { inspectPiSdkCompatibility } from './pi-sdk-adapter'
 import { resolvePiLiveRuntimeSessionDir } from './in-process-host'
@@ -42,6 +43,7 @@ async function waitUntilReady(service: DefaultPiLiveService, runtimeSessionId: s
 }
 
 test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extension UI Contract', async () => {
+  const workspace = resolve('/workspace')
   const manager = new FakeSessionManager()
   const models: PiSdkModel[] = [{ provider: 'openai', id: 'gpt-test', name: 'GPT Test', reasoning: true }]
   let agentListener: PiSdkEventListener | undefined
@@ -75,7 +77,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
       getSkills: () => ({ skills: runtimeSkills }),
       getPrompts: () => ({ prompts: runtimePrompts }),
       getThemes: () => ({ themes: runtimeThemes }),
-      getAgentsFiles: () => ({ agentsFiles: [{ path: '/workspace/AGENTS.md' }] }),
+      getAgentsFiles: () => ({ agentsFiles: [{ path: join(workspace, 'AGENTS.md') }] }),
     },
     bindExtensions: async value => {
       bindings = value
@@ -128,7 +130,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     undefined,
     { recordStartupAudit: async snapshot => { startupAudits.push(snapshot) } },
   )
-  const initializing = await service.start({ cwd: '/workspace', provider: 'openai', model: 'gpt-test', name: 'AgentLens task' })
+  const initializing = await service.start({ cwd: workspace, provider: 'openai', model: 'gpt-test', name: 'AgentLens task' })
   assert.equal(initializing.status, 'initializing')
   const state = await waitUntilReady(service, initializing.runtimeSessionId)
   assert.equal(state.nativeSessionId, 'native-session-1')
@@ -138,14 +140,14 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(state.startupResources?.skills, ['static-skill', 'extension-skill'])
   assert.deepEqual(state.startupResources?.prompts, ['static-prompt', 'extension-prompt'])
   assert.deepEqual(state.startupResources?.themes, ['static-theme', 'extension-theme'])
-  assert.deepEqual(state.startupResources?.contexts, ['/workspace/AGENTS.md'])
+  assert.deepEqual(state.startupResources?.contexts, [join(workspace, 'AGENTS.md')])
 
   for (let index = 0; index < 20 && startupAudits.length === 0; index += 1) {
     await new Promise(resolve => setTimeout(resolve, 0))
   }
   assert.equal(startupAudits.length, 1)
   assert.equal(startupAudits[0]?.nativeSessionId, 'native-session-1')
-  assert.equal(startupAudits[0]?.workspacePath, '/workspace')
+  assert.equal(startupAudits[0]?.workspacePath, workspace)
   assert.deepEqual(startupAudits[0]?.startupResources.skills, ['static-skill', 'extension-skill'])
 
   runtimeSkills.push({ name: 'late-runtime-skill' })

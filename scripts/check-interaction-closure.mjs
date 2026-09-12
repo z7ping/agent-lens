@@ -6,16 +6,20 @@ const virtualRound = readFileSync('packages/web/src/components/VirtualRoundMount
 const diagnostics = readFileSync('packages/web/src/components/AgentInsightsRail.tsx', 'utf8')
 const responsive = readFileSync('packages/web/src/agent-insights-responsive.css', 'utf8')
 const main = readFileSync('packages/web/src/main.tsx', 'utf8')
+const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')
 
 for (const required of [
   "const [success, setSuccess] = useState('')",
   'const result = await api.createBackup',
-  'result.snapshot.files.length.toLocaleString()',
+  'result.snapshot.files.length.toLocaleString(locale)',
   'result.snapshot.excluded.length',
   'role="status"',
-  '快照已创建',
+  "setSuccess(t('snapshotCreated'",
 ]) {
   if (!backup.includes(required)) throw new Error(`资产备份缺少创建结果反馈约束：${required}`)
+}
+if (!officialZhCn.includes("snapshotCreated: '快照已创建：{{files}} 个文件 · {{size}}{{excluded}}'")) {
+  throw new Error('简体中文资产备份缺少快照创建结果文案')
 }
 
 for (const required of [
@@ -39,13 +43,20 @@ for (const required of [
 }
 
 for (const required of [
-  'aria-label="智能体洞察"',
-  '<h2>采集诊断</h2>',
-  '<h2>高频资产覆盖</h2>',
-  'const hasIssue = failedStages > 0 || unknownCount > 0',
+  "aria-label={t('insightsRail.aria')}",
+  "<h2>{t('insightsRail.diagnosticsTitle')}</h2>",
+  "<h2>{t('insightsRail.coverageTitle')}</h2>",
+  "const hasIssue = failedStages > 0 || unknownCount > 0 || capacityState === 'approaching' || capacityState === 'exceeded'",
   'data-state={hasIssue ?',
 ]) {
   if (!diagnostics.includes(required)) throw new Error(`智能体洞察缺少正式诊断/覆盖约束：${required}`)
+}
+for (const required of [
+  "aria: '智能体洞察'",
+  "diagnosticsTitle: '采集诊断'",
+  "coverageTitle: '高频资产覆盖'",
+]) {
+  if (!officialZhCn.includes(required)) throw new Error(`简体中文智能体洞察缺少文案：${required}`)
 }
 
 for (const required of [

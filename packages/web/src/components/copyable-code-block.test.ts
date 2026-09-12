@@ -24,7 +24,7 @@ test('所有代码块都通过统一复制组件渲染', () => {
 })
 
 test('复制按钮包含成功、失败反馈和可访问名称', () => {
-  assert.match(componentSource, /state === 'copied' \? '已复制' : state === 'error' \? '复制失败' : '复制'/)
-  assert.match(componentSource, /aria-label=\{`\$\{label\}代码块`\}/)
+  assert.match(componentSource, /state === 'copied' \? t\('codeBlock\.copied'\) : state === 'error' \? t\('codeBlock\.failed'\) : t\('codeBlock\.copy'\)/)
+  assert.match(componentSource, /aria-label=\{t\('codeBlock\.aria', \{ label \}\)\}/)
   assert.match(componentSource, /window\.setTimeout\(\(\) => setState\('idle'\), 1800\)/)
 })

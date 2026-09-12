@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Select } from '../components/ui'
 import { listLocalePacks } from './registry'
 import { agentLensI18n, setLocale } from './runtime'
 
@@ -14,7 +15,7 @@ export function LocaleSelector() {
       <b>{t('language')}</b>
       <small>{t('languageDescription')}</small>
     </span>
-    <select
+    <Select
       value={packs.some(pack => pack.locale === current) ? current : 'zh-CN'}
       disabled={saving}
       onChange={event => {
@@ -26,6 +27,6 @@ export function LocaleSelector() {
       {packs.map(pack => <option key={pack.locale} value={pack.locale}>
         {pack.name} · {pack.locale}
       </option>)}
-    </select>
+    </Select>
   </label>
 }

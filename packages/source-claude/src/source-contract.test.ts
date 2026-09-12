@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 import type {
+  DiscoveredAsset,
   SourceExecutionContext,
   SourceHistoryExecutionContext,
   SourceRecord,
@@ -262,7 +263,7 @@ test('Claude static assets remain partial and do not claim runtime discoverabili
   }), 'utf8')
 
   try {
-    const assets = []
+    const assets: DiscoveredAsset[] = []
     for await (const asset of discoverClaudeAssets({
       installation: {
         id: 'installation-claude',
@@ -385,7 +386,7 @@ test('Claude project assets follow CLAUDE hierarchy, project settings, skills an
   } as unknown as SourceExecutionContext
 
   try {
-    const assets = []
+    const assets: DiscoveredAsset[] = []
     for await (const asset of discoverClaudeAssets(ctx)) assets.push(asset)
 
     const projectPaths = new Set(assets

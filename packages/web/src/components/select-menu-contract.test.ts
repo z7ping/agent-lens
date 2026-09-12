@@ -48,9 +48,9 @@ test('路径型项目选项第一行收敛为项目名，第二行保留路径�
 
 test('新建 Pi 任务使用聚焦启动卡片并提供已有项目与目录启动入口', () => {
   assert.match(taskCenterSource, /className="task-center-new-card"/)
-  assert.match(taskCenterSource, /新建 Pi 任务/)
-  assert.match(taskCenterSource, /选择目录新建并打开 <UiIcon name="arrow-right" size=\{14\}/)
-  assert.match(taskCenterSource, /打开已有项目 <UiIcon name="arrow-right" size=\{14\}/)
+  assert.match(taskCenterSource, /t\('center\.newTask\.title'\)/)
+  assert.match(taskCenterSource, /t\('center\.newTask\.selectDirectory'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
+  assert.match(taskCenterSource, /t\('center\.newTask\.openExisting'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
   assert.match(taskCenterSource, /mode === 'new' \? 'is-new-task' : ''/)
   assert.doesNotMatch(taskCenterSource, /task-center-agent-fixed/)
 })
@@ -62,5 +62,5 @@ test('已有项目下拉支持服务端搜索和继续加载，同时 SelectMenu
   assert.match(selectSource, /className="select-menu-footer"/)
   assert.match(taskCenterSource, /onSearchChange=\{onProjectSearch\}/)
   assert.match(taskCenterSource, /onLoadMore=\{onProjectLoadMore\}/)
-  assert.match(taskCenterSource, /loadMoreLabel="加载更多项目"/)
+  assert.match(taskCenterSource, /loadMoreLabel=\{t\('center\.newTask\.loadMoreProjects'\)\}/)
 })

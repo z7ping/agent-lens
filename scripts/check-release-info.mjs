@@ -8,6 +8,7 @@ const releaseCssPath = 'packages/web/src/release-info.css'
 const webUpdatePath = 'packages/web/src/client/update.ts'
 const packagePath = 'packages/web/package.json'
 const changelogPath = 'CHANGELOG.md'
+const officialZhCnPath = 'packages/web/src/i18n/official-zh-CN.ts'
 
 const app = readFileSync(appPath, 'utf8')
 const sidebar = readFileSync(sidebarPath, 'utf8')
@@ -17,6 +18,7 @@ const css = readFileSync(releaseCssPath, 'utf8')
 const webUpdate = readFileSync(webUpdatePath, 'utf8')
 const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
 const changelog = readFileSync(changelogPath, 'utf8')
+const officialZhCn = readFileSync(officialZhCnPath, 'utf8')
 
 if (!app.includes("import { WorkspaceSidebar } from './components/WorkspaceSidebar'")) {
   throw new Error('正式 Web Shell 必须接入统一左侧工作栏')
@@ -43,13 +45,36 @@ if (!releaseInfo.includes("from '../../package.json'")) {
 if (!releaseInfo.includes("from '../../../../CHANGELOG.md?raw'")) {
   throw new Error('更新日志摘要必须直接来自仓库 CHANGELOG.md，禁止维护第二份日志')
 }
-for (const required of ['GitHub', '更新日志', '发布记录', '完整更新日志', 'https://github.com/z7ping/agent-lens']) {
+for (const required of [
+  'GitHub',
+  "t('changelog')",
+  "t('releases')",
+  "t('fullChangelog')",
+  'https://github.com/z7ping/agent-lens',
+]) {
   if (!releaseInfo.includes(required)) throw new Error(`发行信息组件缺少：${required}`)
 }
-for (const label of ['新增', '调整', '修复', '安全', '已知限制']) {
-  if (!releaseInfo.includes(`'${label}'`)) throw new Error(`发行信息组件缺少中文日志分类：${label}`)
+for (const required of [
+  "Added: 'section.Added'",
+  "Changed: 'section.Changed'",
+  "Fixed: 'section.Fixed'",
+  "Security: 'section.Security'",
+  "'Known limitations': 'section.knownLimitations'",
+]) {
+  if (!releaseInfo.includes(required)) throw new Error(`发行信息组件缺少日志分类映射：${required}`)
 }
-if (!releaseInfo.includes('checkWebUpdate') || !releaseInfo.includes('新版本 v')) {
+for (const [key, label] of [
+  ['Added', '新增'],
+  ['Changed', '调整'],
+  ['Fixed', '修复'],
+  ['Security', '安全'],
+  ['knownLimitations', '已知限制'],
+]) {
+  if (!officialZhCn.includes(`${key}: '${label}'`)) throw new Error(`简体中文发行信息缺少日志分类：${label}`)
+}
+if (!releaseInfo.includes('checkWebUpdate')
+  || !releaseInfo.includes("t('newVersionTitle'")
+  || !releaseInfo.includes("t('newVersion'")) {
   throw new Error('正式 Web 设置必须保留低打扰的新版本提示')
 }
 if (!releaseInfo.includes('checkWebUpdate(packageMetadata.version, { runtimeOwner })')

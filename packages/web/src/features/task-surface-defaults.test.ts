@@ -18,20 +18,20 @@ test('Task Review defaults to full observable events without a DOM adapter', () 
 
 test('Task Review 的独立 Thinking 仍可折叠，聚合思考过程默认展开以露出工具明细', () => {
   assert.match(reviewPage, /<TaskThinking[\s\S]*?defaultExpanded=\{false\}/)
-  assert.match(taskThinking, /return defaultExpanded \|\| model\.label === '思考过程'/)
+  assert.match(taskThinking, /model\.label === t\('thinking\.thinkingProcess'\)/)
   assert.match(taskThinking, /useState\(defaultExpanded\)/)
 })
 
 test('Task Review 将 commentary、reasoning 与工具统一放入思考过程', () => {
-  assert.match(reviewPage, /label: '思考过程'/)
+  assert.match(reviewPage, /label: agentLensI18n\.t\('review:local\.process\.thinkingProcess'\)/)
   assert.match(reviewPage, /entry\.type === 'process'/)
   assert.match(reviewPage, /<TaskThinking model=\{model\} defaultExpanded=\{false\} className="task-review-process">/)
 })
 
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
   assert.match(reviewPage, /function RawEventGroup[\s\S]*?const \[expanded, setExpanded\] = useState\(false\)[\s\S]*?className="raw-event-group"/)
-  assert.match(reviewPage, /其他运行记录/)
-  assert.match(reviewPage, /Agent 原始日志中的状态、用量等辅助记录，不属于对话正文/)
+  assert.match(reviewPage, /t\('local\.rawEvents\.title'\)/)
+  assert.match(reviewPage, /t\('local\.rawEvents\.description'\)/)
   assert.match(reviewPage, /\{expanded && <div>\{items\.map\(item => <EventRow/)
 })
 
@@ -44,7 +44,7 @@ test('Task Review 展示注入上下文正文，不再使用隐藏占位文案',
 test('Task Review 滚到顶部不会自动加载更早轮次并抢走滚动位置', () => {
   assert.match(reviewPage, /detail\.page\.direction !== 'forward'/)
   assert.doesNotMatch(reviewPage, /detail\.page\.direction === 'backward'\) void loadOlder/)
-  assert.match(reviewPage, /加载更早轮次/)
+  assert.match(reviewPage, /t\('local\.roundNav\.loadOlder'\)/)
 })
 
 test('Task Review 大范围跳转后等待用户滚动再继续自动补载', () => {
@@ -82,11 +82,11 @@ test('Pi Live Header 保持安全边距并使用统一 Pi Agent 图标', () => {
 })
 
 test('Task 信息明确展示历史会话与 Pi Live 的开始时间', () => {
-  assert.match(reviewPage, /label: '开始时间'/)
-  assert.match(reviewPage, /label: '结束时间'/)
-  assert.match(reviewPage, /label: '持续时间'/)
+  assert.match(reviewPage, /label: t\('local\.header\.startTime'\)/)
+  assert.match(reviewPage, /label: t\('local\.header\.endTime'\)/)
+  assert.match(reviewPage, /label: t\('local\.header\.duration'\)/)
   assert.match(piLivePage, /state\.startedAt/)
-  assert.match(piLivePage, /label: '已运行时长'/)
+  assert.match(piLivePage, /label: t\('header\.elapsed'\)/)
 })
 
 test('legacy Task Surface MutationObserver compatibility layer is removed', () => {

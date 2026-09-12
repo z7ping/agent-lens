@@ -33,7 +33,7 @@ function capturePolicy(): CapturePolicyService {
         restartRequired: false,
       }
     },
-    async setEnabledSources(enabledSources) {
+    async setEnabledSources(enabledSources: readonly string[]) {
       return {
         effectiveEnabledSources: ['pi'],
         configuredEnabledSources: [...enabledSources],

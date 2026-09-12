@@ -37,6 +37,7 @@ const PARSER_VERSION = '3'
 
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
+const RUNTIME_DATA_VERSION_POLL_MS = 250
 
 interface OpenCodeRow {
   row_id: number
@@ -194,6 +195,15 @@ export async function detectOpenCode(ctx: SourceDetectionContext): Promise<Detec
 
 function openDatabase(root: string): DatabaseSync {
   return new DatabaseSync(join(root, DB_NAME), { readOnly: true, timeout: 1_500 })
+}
+
+function databaseDataVersion(db: DatabaseSync): number {
+  const row = db.prepare('PRAGMA data_version').get() as Record<string, unknown>
+  const value = row.data_version
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    throw new TypeError('OpenCode SQLite PRAGMA data_version must be a safe integer')
+  }
+  return value
 }
 
 function timestampMillisSql(column: string): string {
@@ -396,18 +406,23 @@ export async function startOpenCodeRuntimeCapture(
   if (!root) return { dispose() {} }
   const dbPath = join(root, DB_NAME)
   let db = await exists(dbPath) ? openDatabase(root) : null
+  let dataVersion = db ? databaseDataVersion(db) : null
   const fingerprints = new Map<number, string>()
   let stopped = false
   let scanning = false
   let pending = false
   let watcher: SourceFileWatchHandle | null = null
+  let pollTimer: NodeJS.Timeout | null = null
+  let polling = Promise.resolve()
 
   const replaceDatabase = async (): Promise<void> => {
     const previous = db
     db = null
+    dataVersion = null
     previous?.close()
     if (stopped || ctx.abortSignal.aborted || !await exists(dbPath)) return
     db = openDatabase(root)
+    dataVersion = databaseDataVersion(db)
   }
 
   const scan = async (emitChanges: boolean): Promise<void> => {
@@ -441,6 +456,21 @@ export async function startOpenCodeRuntimeCapture(
   }
 
   if (db) await scan(false)
+
+  const pollDatabase = async (): Promise<void> => {
+    if (stopped || ctx.abortSignal.aborted) return
+    const active = db
+    if (!active) return
+    const nextDataVersion = databaseDataVersion(active)
+    if (dataVersion === null) {
+      dataVersion = nextDataVersion
+      return
+    }
+    if (nextDataVersion === dataVersion) return
+    await scan(true)
+    dataVersion = nextDataVersion
+  }
+
   watcher = await watchSourceFiles({
     paths: dirname(dbPath),
     signal: ctx.abortSignal,
@@ -453,14 +483,26 @@ export async function startOpenCodeRuntimeCapture(
     },
   })
 
+  pollTimer = setInterval(() => {
+    polling = polling
+      .then(pollDatabase)
+      .catch(() => undefined)
+  }, RUNTIME_DATA_VERSION_POLL_MS)
+  pollTimer.unref()
+
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
       if (watcher) {
         await watcher.dispose()
         watcher = null
       }
+      await polling
       const active = db
       db = null
       active?.close()

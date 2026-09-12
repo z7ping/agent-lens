@@ -162,7 +162,11 @@ test('Paginated Codex history remains one real user task while native non-conver
     assert.equal(facts.filter(item => item.kind === 'message.reasoning').length, 1)
     assert.equal(facts.filter(item => item.kind === 'context.injected').length, 1)
     assert.equal(facts.filter(item => item.kind === 'tool.call').length, 1)
-    assert.equal(facts.filter(item => item.kind === 'tool.result').length, 2)
+    const toolResults = facts.filter(item => item.kind === 'tool.result')
+    assert.deepEqual(
+      toolResults.map(item => asRecord(item.payload).nativeToolName).sort(),
+      ['command_execution', 'read_file'],
+    )
     assert.equal(facts.filter(item => item.kind === 'subagent.spawn').length, 1)
     assert.equal(facts.filter(item => item.kind === 'subagent.end').length, 1)
     assert.equal(facts.filter(item => item.kind === 'artifact.action').length, 1)

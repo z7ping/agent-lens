@@ -12,10 +12,19 @@ const taskDetailCss = readFileSync('packages/web/src/task-detail.css', 'utf8')
 const taskSessionCss = readFileSync('packages/web/src/task-session-view.css', 'utf8')
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
+const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')
 
-if (!reviewPage.includes('有新记录')) throw new Error('正式任务复盘缺少新记录提示')
-for (const label of ['源码', '证据详情']) {
-  if (!reviewPage.includes(label) && !taskMessage.includes(label)) throw new Error(`正式任务复盘缺少消息操作：${label}`)
+if (!reviewPage.includes("t('local.roundNav.newRecords')") || !officialZhCn.includes("newRecords: '有新记录'")) {
+  throw new Error('正式任务复盘缺少国际化新记录提示')
+}
+for (const [source, locale] of [
+  [taskMessage, "t('message.source')"],
+  [reviewPage, "t('local.evidence.evidenceDetail'"],
+]) {
+  if (!source.includes(locale)) throw new Error(`正式任务复盘缺少国际化消息操作：${locale}`)
+}
+for (const label of ["source: '源码'", "evidenceDetail: '证据详情 · {{count}}'"]) {
+  if (!officialZhCn.includes(label)) throw new Error(`简体中文任务复盘缺少消息操作文案：${label}`)
 }
 if (!reviewPage.includes('className="round-nav-filters"') || !reviewPage.includes('className="round-nav-actions"')) throw new Error('任务复盘必须保留轮次筛选组和操作组')
 if (!reviewPage.includes('className="round-nav-live"')) throw new Error('任务复盘必须保留新记录快捷入口')
@@ -31,11 +40,11 @@ for (const marker of [
 for (const marker of [
   'export interface TaskBoundaryNavigation',
   'className="task-boundary-nav"',
-  'aria-label="会话边界导航"',
-  'title="跳到开头"',
-  'aria-label="跳到开头"',
+  "aria-label={t('surface.boundaryNavigation')}",
+  "title={t('surface.jumpStart')}",
+  "aria-label={t('surface.jumpStart')}",
   'className="task-boundary-latest"',
-  'title="跳到最新"',
+  "title={t('surface.jumpLatest')}",
   'onClick={() => void resolvedBoundaryNavigation.onStart()}',
   'onClick={() => void resolvedBoundaryNavigation.onEnd()}',
 ]) {
@@ -80,7 +89,7 @@ if (!longCss.includes('.round-nav-filters') || !longCss.includes('.round-nav-act
 if (!mainSource.includes("import './task-detail.css'") || !mainSource.includes("import './task-session-view.css'")) throw new Error('Task Surface 共享组件与 Session 样式必须在 Web 入口加载')
 if (mainSource.includes("task-detail-prototype.css") || mainSource.includes("task-detail-polish.css") || mainSource.includes("task-feedback-polish.css")) throw new Error('正式入口不得恢复 Task Surface 临时覆盖层')
 if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('chat-avatar-agent')) throw new Error('Agent 输出不得恢复头像节点')
-if (!taskMessage.includes('{!user && <button') || !taskMessage.includes('<span>源码</span>')) throw new Error('源码切换只属于 Agent Markdown')
+if (!taskMessage.includes('{!user && <button') || !taskMessage.includes("t('message.source')")) throw new Error('源码切换只属于 Agent Markdown，且必须走国际化文案')
 if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) throw new Error('Agent 源码切换必须悬浮在正文内，不得单独占行')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(taskToolGroup)) throw new Error('Tool Group 不得制造独立折叠父层')
 if (!reviewPresentation.includes('nativeParentEventId') || !reviewPresentation.includes('parentObservationId') || !reviewPresentation.includes('matches.length !== 1')) throw new Error('Thinking / Tool 层级必须只依据显式父关系')

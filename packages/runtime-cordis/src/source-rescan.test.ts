@@ -49,6 +49,7 @@ function context(definition: SourceDefinition): AgentLensContext {
       async resolveHost() { return host },
       async resolveInstallation() { return installation },
     },
+    emit() {},
   } as unknown as AgentLensContext
 }
 
