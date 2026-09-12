@@ -189,7 +189,10 @@ export function BackupPage({
   const protectedFiles = visibleAssetSources.reduce((sum, source) => sum + source.fileCount, 0)
   const protectedBytes = visibleAssetSources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)
   const hasProtectedBytes = visibleAssetSources.some(source => source.totalBytes !== undefined)
-  const excludedFiles = visibleAssetSources.reduce((sum, source) => sum + source.excludedCount, 0)
+  const assetExcludedFiles = visibleAssetSources.reduce((sum, source) => sum + source.excludedCount, 0)
+  const selectedExcludedFiles = sources
+    .filter(source => selectedSources.includes(source.sourceId))
+    .reduce((sum, source) => sum + source.excludedCount, 0)
   const estimatedSelected = sources
     .filter(source => selectedSources.includes(source.sourceId))
     .reduce((sum, source) => sum + selectedKinds.reduce((kindSum, kind) => kindSum + kindFiles(source, kind), 0), 0)
@@ -386,7 +389,7 @@ export function BackupPage({
           <div className="backup-heading-actions">
             <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
             <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
-            <Button loading={refreshing} disabled={refreshing || Boolean(busy)} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/>{t('page.refresh')}</Button>
+            <Button size="small" className="backup-refresh-button" loading={refreshing} disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></Button>
           </div>
         </div>
 
@@ -404,7 +407,7 @@ export function BackupPage({
           </div>
           <div className="backup-overview-secondary">
             <span>{indexTime ? t('assetView.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
-            <span>{t('assetView.excluded', { count: excludedFiles.toLocaleString(locale) })}</span>
+            <span>{t('assetView.excluded', { count: assetExcludedFiles.toLocaleString(locale) })}</span>
             <span className={`badge ${indexRefreshing ? 'info' : 'ok'}`}>{indexRefreshing ? t('kpi.updating') : t('kpi.ready')}</span>
           </div>
         </section>
@@ -553,7 +556,7 @@ export function BackupPage({
         {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.optional')}</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
         {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.more')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
 
-        <div className="backup-safety-line"><UiIcon name="check" size={14}/><span>{t('create.safetyCompact', { count: excludedFiles.toLocaleString(locale) })}</span></div>
+        <div className="backup-safety-line"><UiIcon name="check" size={14}/><span>{t('create.safetyCompact', { count: selectedExcludedFiles.toLocaleString(locale) })}</span></div>
       </div>
     </Drawer>}
 
