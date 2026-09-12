@@ -784,9 +784,6 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}
-            description={agentDescriptionKey[selectedManagement.integrationId]
-              ? t(agentDescriptionKey[selectedManagement.integrationId]!)
-              : t('description.fallback')}
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
             onChange={(id, enabled) => model.setIntegrationEnabled(id, enabled).then(() => undefined)}
