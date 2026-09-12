@@ -521,7 +521,6 @@ export class IntegrationPackageService {
       if (
         item.productId !== official.productId
         || item.packageName !== official.package.packageName
-        || item.version !== official.package.bundledVersion
       ) {
         throw new Error(`Bundled Integration catalog identity mismatch: ${item.integrationId}`)
       }
