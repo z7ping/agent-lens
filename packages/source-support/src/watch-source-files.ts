@@ -65,7 +65,6 @@ export async function watchSourceFiles(
   watcher.on('add', path => schedule(path, 'add'))
   watcher.on('change', path => schedule(path, 'change'))
   watcher.on('unlink', path => schedule(path, 'unlink'))
-  watcher.on('error', reportError)
 
   const closeWatcher = (): Promise<void> => {
     if (closing) return closing
@@ -85,6 +84,30 @@ export async function watchSourceFiles(
     void closeWatcher()
   }
   options.signal.addEventListener('abort', abort, { once: true })
+
+  await new Promise<void>((resolve, reject) => {
+    if (!watcher || stopped || options.signal.aborted) {
+      resolve()
+      return
+    }
+
+    let ready = false
+    const handleReady = () => {
+      ready = true
+      resolve()
+    }
+    const handleError = (error: unknown) => {
+      reportError(error)
+      if (!ready) reject(error)
+    }
+    watcher.once('ready', handleReady)
+    watcher.on('error', handleError)
+  }).catch(async error => {
+    stopped = true
+    await closeWatcher()
+    options.signal.removeEventListener('abort', abort)
+    throw error
+  })
 
   return {
     async dispose(): Promise<void> {
