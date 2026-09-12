@@ -15,8 +15,7 @@ import type {
   SourceExecutionContext,
 } from '@agent-lens/core'
 import { isMissingPathError } from '@agent-lens/source-support'
-
-export const HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY = 'hermes:known-project-cwds:v1'
+import { HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 
 const PROJECT_HERMES_FILES = ['.hermes.md', 'HERMES.md'] as const
 const PROJECT_AGENTS_FILES = ['AGENTS.override.md', 'AGENTS.md', 'agents.md'] as const
@@ -510,7 +509,7 @@ async function contextAsset(
     },
     states: stateList(path, observedAt, capturedAt, [
       { state: 'configured', value: true },
-      { state: 'discoverable', value: true },
+      { state: 'discoverable', value: 'unknown' },
     ]),
   }
 }
