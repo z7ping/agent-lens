@@ -76,101 +76,59 @@
   color: color-mix(in srgb, var(--al-danger) 72%, var(--al-ink));
 }
 
-/* 指标与主布局 */
-.future-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0;
-  overflow: hidden;
-  margin-bottom: 10px;
-  border: 1px solid var(--al-line);
-  border-radius: 11px;
-  background: var(--al-surface);
+/* 当前资产主布局 */
+.backup-heading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
-.future-kpi {
-  min-width: 0;
-  min-height: 92px;
-  padding: 14px 15px;
-  border-right: 1px solid var(--al-line);
-}
-
-.future-kpi:last-child { border-right: 0; }
-
-.future-kpi-head {
+.backup-overview-strip {
   display: flex;
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  color: var(--al-muted);
-  font-size: 12px;
-  font-weight: 620;
+  gap: 18px;
+  padding: 11px 0 12px;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
 }
 
-.future-kpi strong {
-  display: block;
-  margin-top: 8px;
-  overflow: hidden;
-  color: var(--al-ink);
-  font-size: 22px;
-  line-height: 1.05;
-  font-weight: 740;
-  letter-spacing: -.035em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.future-kpi strong.future-kpi-status {
-  font-size: 18px;
-  letter-spacing: -.02em;
-}
-
-.future-kpi small {
-  display: block;
-  margin-top: 7px;
-  overflow: hidden;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.future-kpi .delta { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.delta.neutral { color: var(--al-muted); }
-
-.backup-meta-strip {
+.backup-overview-primary {
   display: flex;
   min-width: 0;
-  align-items: center;
-  gap: 10px 16px;
-  margin-bottom: 18px;
-  color: var(--al-muted);
-  font-size: 12px;
+  align-items: baseline;
+  gap: 10px;
 }
 
-.backup-meta-strip > span {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
+.backup-overview-primary b {
+  flex: 0 0 auto;
+  color: var(--al-ink);
+  font-size: 13px;
 }
 
-.backup-meta-strip > span:first-child { min-width: 0; flex: 1; }
-.backup-meta-strip b { flex: 0 0 auto; color: var(--al-ink-2); font-weight: 650; }
-.backup-meta-strip code {
-  min-width: 0;
+.backup-overview-primary span {
   overflow: hidden;
   color: var(--al-muted);
-  font-family: var(--font-mono);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.backup-snapshots-section { min-width: 0; }
+.backup-overview-secondary {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  color: var(--al-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.backup-assets-section {
+  margin-top: 18px;
+}
 
 .backup-section-head {
   display: flex;
@@ -182,7 +140,9 @@
 }
 
 .backup-section-head > div { min-width: 0; }
-.backup-section-head h2 {
+
+.backup-section-head h2,
+.backup-section-head h3 {
   margin: 0;
   color: var(--al-ink);
   font-size: 14px;
@@ -201,6 +161,213 @@
   white-space: nowrap;
 }
 
+.backup-assets-empty,
+.backup-history-empty {
+  padding: 18px 2px;
+  border-top: 1px solid var(--al-line);
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+/* 全部智能体：高密度资产摘要，不使用厚重卡片。 */
+.backup-agent-asset-summary {
+  padding: 14px 2px 15px;
+  border-top: 1px solid var(--al-line);
+}
+
+.backup-agent-asset-summary:last-child {
+  border-bottom: 1px solid var(--al-line);
+}
+
+.backup-agent-asset-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.backup-agent-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.backup-agent-title > span:last-child {
+  min-width: 0;
+}
+
+.backup-agent-title b {
+  display: block;
+  overflow: hidden;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-agent-title small {
+  display: block;
+  margin-top: 3px;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.backup-agent-kind-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0 8px 25px;
+}
+
+.backup-agent-kind-facts > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.backup-agent-kind-facts b {
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backup-agent-asset-foot {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  margin-left: 25px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.backup-agent-asset-foot code {
+  min-width: 0;
+  max-width: min(70%, 720px);
+  overflow: hidden;
+  color: var(--al-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 单智能体：把原详情抽屉升级为主内容。 */
+.backup-agent-detail {
+  border-top: 1px solid var(--al-line);
+}
+
+.backup-agent-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 15px 2px;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.backup-agent-detail-facts {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.backup-agent-detail-facts span {
+  color: var(--al-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.backup-agent-detail-facts b {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--al-ink-2);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-agent-detail-section {
+  padding: 16px 2px 4px;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.backup-asset-kind-list {
+  border-top: 1px solid var(--al-line);
+}
+
+.backup-asset-kind-row {
+  display: grid;
+  grid-template-columns: minmax(120px, .5fr) minmax(180px, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--al-line);
+  font-size: 12px;
+}
+
+.backup-asset-kind-row b {
+  color: var(--al-ink-2);
+  font-weight: 650;
+}
+
+.backup-asset-kind-row span {
+  color: var(--al-muted);
+}
+
+.backup-asset-kind-row span:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-location-list {
+  display: grid;
+  gap: 8px;
+}
+
+.backup-time-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0 10px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.backup-age-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--al-line);
+}
+
+.backup-age-facts span {
+  padding: 10px 10px 10px 0;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.backup-age-facts b {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--al-ink-2);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* 备份记录降级到当前资产之后。 */
+.backup-history-section {
+  margin-top: 26px;
+  padding-top: 15px;
+  border-top: 1px solid var(--al-line-strong);
+}
+
 .backup-snapshot-list {
   border-top: 1px solid var(--al-line);
   border-bottom: 1px solid var(--al-line);
@@ -211,7 +378,7 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
-  padding: 11px 2px;
+  padding: 10px 2px;
   border-bottom: 1px solid var(--al-line);
 }
 
@@ -226,22 +393,24 @@
 }
 
 .backup-snapshot-main > span:last-child { min-width: 0; }
-.backup-snapshot-main b {
+
+.backup-snapshot-main b,
+.backup-snapshot-main small {
   display: block;
   overflow: hidden;
-  color: var(--al-ink-2);
-  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.backup-snapshot-main b {
+  color: var(--al-ink-2);
+  font-size: 12px;
+}
+
 .backup-snapshot-main small {
-  display: block;
-  margin-top: 3px;
-  overflow: hidden;
+  margin-top: 2px;
   color: var(--al-muted);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .snapshot-icon {
@@ -290,35 +459,7 @@
 .link-btn:hover:not(:disabled) { text-decoration: underline; }
 .link-btn:disabled { cursor: default; opacity: .45; }
 
-.backup-empty {
-  display: grid;
-  min-height: 150px;
-  place-items: center;
-  align-content: center;
-  gap: 7px;
-  padding: 24px;
-  color: var(--al-muted);
-  text-align: center;
-}
-
-.backup-empty-workbench {
-  min-height: 220px;
-  border-top: 1px solid var(--al-line);
-  border-bottom: 1px solid var(--al-line);
-}
-
-.backup-empty b { color: var(--al-ink-2); font-size: 13px; }
-.backup-empty span { max-width: 420px; font-size: 12px; line-height: 1.55; }
-
-.backup-empty-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-/* 新建快照抽屉 */
+/* 新建快照只作为按需操作抽屉。 */
 .backup-create-drawer .ui-overlay-body { padding: 0 16px 16px; }
 
 .snapshot-builder {
@@ -378,22 +519,24 @@
 }
 
 .backup-source-copy { min-width: 0; flex: 1; }
-.backup-source-copy b {
+
+.backup-source-copy b,
+.backup-source-copy small {
   display: block;
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.backup-source-copy b {
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .backup-source-copy small {
-  display: block;
   margin-top: 2px;
-  overflow: hidden;
   color: var(--al-muted);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .builder-checks {
@@ -469,73 +612,6 @@
   color: var(--al-ink-2);
   font-size: 12px;
   font-weight: 650;
-}
-
-/* 导入与恢复 */
-.backup-restore-section {
-  margin-top: 24px;
-  padding-top: 4px;
-}
-
-.restore-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  border-top: 1px solid var(--al-line);
-}
-
-.restore-card {
-  display: grid;
-  grid-template-columns: minmax(170px, .5fr) minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: center;
-  padding: 12px 2px;
-  border-bottom: 1px solid var(--al-line);
-}
-
-.restore-card h3 { margin: 0; color: var(--al-ink-2); font-size: 13px; }
-
-.restore-flow {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.restore-node {
-  padding: 4px 7px;
-  border: 1px solid var(--al-line);
-  border-radius: 7px;
-  background: var(--al-soft-2);
-  color: var(--al-ink-2);
-  font-size: 12px;
-}
-
-.restore-arrow { color: var(--al-muted-2); }
-.restore-action { justify-self: end; }
-
-/* 抽屉内仍会复用这一事实条。 */
-.integrity-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--al-line);
-  border-radius: 9px;
-  background: var(--al-soft-2);
-  font-size: 12px;
-}
-
-.integrity-strip strong { color: var(--al-success); }
-.integrity-strip .grow { flex: 1; }
-.integrity-strip code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--al-muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 详情抽屉：Overlay 负责遮罩、层级、关闭与焦点；这里只保留业务内容布局。 */
