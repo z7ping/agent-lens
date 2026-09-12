@@ -15,9 +15,8 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
-import { CompactPageHeading } from '../components/CompactPageHeading'
 import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
-import { Button, Disclosure, IconButton, Select, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, Select, StatusBadge, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 import {
   IntegrationAdvancedActions,
@@ -593,12 +592,10 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
 
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      <CompactPageHeading title={t('page.title')} description={t('page.description')}>
-        <Toolbar aria-label={t('page.scanToolbar')} className="agents-rescan-toolbar">
-          <Button size="small" loading={scanBusy} disabled={scanBusy} onClick={() => void model.rescanAgentEnvironment().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{scanBusy ? t('page.scanning') : t('page.rescan')}</Button>
-          {rescanStatus}
-        </Toolbar>
-      </CompactPageHeading>
+      <div className="agents-page-actions" role="group" aria-label={t('page.scanToolbar')}>
+        {rescanStatus}
+        <Button size="small" loading={scanBusy} disabled={scanBusy} onClick={() => void model.rescanAgentEnvironment().catch(() => undefined)}><UiIcon name="refresh" size={14}/>{scanBusy ? t('page.scanning') : t('page.rescan')}</Button>
+      </div>
       {rows.length ? <div className="agents-browser">
         <nav className="agent-source-nav" aria-label={t('page.list')}>
           <div className="agent-source-nav-head"><b>{managingOrder ? t('page.orderTitle') : t('page.localAgents')}</b><span>{rows.length}</span></div>
