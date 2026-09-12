@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
 import { capturePolicyPlugin } from '@agent-lens/capture-policy'
+import { hermesLivePlugin } from '@agent-lens/live-hermes'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -92,6 +93,7 @@ app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
 app.useRuntime(piLiveRuntimePlugin)
+app.use(hermesLivePlugin)
 if (capabilities.localCapture) {
   app.use(codexSourcePlugin)
   app.use(claudeSourcePlugin)
