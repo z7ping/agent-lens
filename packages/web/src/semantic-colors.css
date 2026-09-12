@@ -25,6 +25,23 @@
 
 body { color: var(--al-text-primary); }
 
+/* 来源色属于共享语义表达，不由 Token 文件直接持有组件选择器。 */
+.source-dot.source-codex,
+.src-dot.dot-codex { background: var(--src-codex); }
+.source-dot.source-claude,
+.src-dot.dot-claude { background: var(--src-claude); }
+.source-dot.source-pi,
+.src-dot.dot-pi { background: var(--src-pi); }
+.source-dot.source-hermes,
+.src-dot.dot-hermes { background: var(--src-hermes); }
+.source-dot.source-opencode,
+.src-dot.dot-opencode { background: var(--src-opencode); }
+.source-dot.source-dsh,
+.src-dot.dot-dsh { background: var(--src-dsh); }
+.source-dot.source-unknown,
+.src-dot.dot-none { background: var(--al-muted-2); }
+
+
 .brand-mark,
 .btn.primary,
 .round-nav-live,

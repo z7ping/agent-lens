@@ -17,7 +17,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
 import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
-import { Button, IconButton, Select, StatusBadge, Toolbar, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, Select, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 import {
   IntegrationAdvancedActions,
@@ -221,7 +221,7 @@ function CopyPath({ path }: { path: string }) {
       setCopied(false)
     }
   }
-  return <button className="copy-link" onClick={() => void copy()}>{copied ? t('copied') : t('copy')}</button>
+  return <Button className="copy-link" size="small" onClick={() => void copy()}>{copied ? t('copied') : t('copy')}</Button>
 }
 
 function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAssetInventoryDto }) {
@@ -250,19 +250,18 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
   </div>
 }
 
-function DisclosureChevron() {
-  return <UiIcon className="disclosure-chevron" name="chevron-right" size={14}/>
-}
-
 function AssetGroup({ agent, type, assets }: { agent: AgentOverviewDto; type: string; assets: AgentAssetInventoryDto[] }) {
   const { t } = useTranslation('agents')
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? assets : assets.slice(0, USER_ASSET_LIMIT)
-  return <details className="disclosure-group">
-    <summary><DisclosureChevron/><span>{translatedLabel(assetTypeLabelKey, type, t)}</span><span className="disclosure-count">{assets.length}</span></summary>
+  return <Disclosure
+    className="disclosure-group"
+    summary={translatedLabel(assetTypeLabelKey, type, t)}
+    summaryMeta={<span className="disclosure-count">{assets.length}</span>}
+  >
     <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset}/>)}</div>
-    {assets.length > USER_ASSET_LIMIT && <button className="show-more-button" onClick={() => setShowAll(value => !value)}>{showAll ? t('collapse') : t('showMoreItems', { count: assets.length - USER_ASSET_LIMIT })}</button>}
-  </details>
+    {assets.length > USER_ASSET_LIMIT && <Button className="show-more-button" size="small" onClick={() => setShowAll(value => !value)}>{showAll ? t('collapse') : t('showMoreItems', { count: assets.length - USER_ASSET_LIMIT })}</Button>}
+  </Disclosure>
 }
 
 function FrequentAssets({ agent, assets }: { agent: AgentOverviewDto; assets: AgentAssetInventoryDto[] }) {
@@ -438,8 +437,11 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
 
     <section className="agent-secondary">
       {builtinAssets.length > 0 && <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>} 
-      <details className="disclosure-group">
-        <summary><DisclosureChevron/><span>{t('sections.runtimeConfig')}</span><span className="disclosure-count">{runtimeConfigCount}</span></summary>
+      <Disclosure
+        className="disclosure-group"
+        summary={t('sections.runtimeConfig')}
+        summaryMeta={<span className="disclosure-count">{runtimeConfigCount}</span>}
+      >
         <div className="runtime-config-list">
           {installation?.executable && <div className="runtime-config-row"><span>{t('sections.executable')}</span><code>{installation.executable}</code><CopyPath path={installation.executable}/></div>}
           {installation?.configRoot && <div className="runtime-config-row">
@@ -457,14 +459,17 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
           {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="runtime-config-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
           {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noRuntimeConfig')}</div>}
         </div>
-        {bindings.length > RUNTIME_CONFIG_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - RUNTIME_CONFIG_PATH_LIMIT })}</button>}
-      </details>
-      <details className="disclosure-group">
-        <summary title={t('sections.captureSupportTitle')}><DisclosureChevron/><span>{t('sections.captureSupport')}</span><span className="disclosure-count">{agent.capabilities.length}</span></summary>
+        {bindings.length > RUNTIME_CONFIG_PATH_LIMIT && <Button className="show-more-button" size="small" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - RUNTIME_CONFIG_PATH_LIMIT })}</Button>}
+      </Disclosure>
+      <Disclosure
+        className="disclosure-group"
+        summary={<span title={t('sections.captureSupportTitle')}>{t('sections.captureSupport')}</span>}
+        summaryMeta={<span className="disclosure-count">{agent.capabilities.length}</span>}
+      >
         <div className="capability-list">
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap, t)}><span>{translatedLabel(capabilityLabelKey, cap.name, t)} · {capabilityDetail(cap, t)}</span><b data-status={cap.status}>{translatedLabel(capabilityStatusLabelKey, cap.status, t)}</b></div>)}
         </div>
-      </details>
+      </Disclosure>
       <IntegrationAdvancedActions
         management={management}
         label={agentLabel(agent.sourceId, agent.displayName)}
