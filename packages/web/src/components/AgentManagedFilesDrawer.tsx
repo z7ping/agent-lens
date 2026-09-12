@@ -13,6 +13,7 @@ interface AgentManagedFilesDrawerProps {
   open: boolean
   model: AgentLensClientModel
   productId: string
+  agentName: string
   installationId: string
   root: ManagedAssetRoot
   rootLabel: string
@@ -29,6 +30,7 @@ export function AgentManagedFilesDrawer({
   open,
   model,
   productId,
+  agentName,
   installationId,
   root,
   rootLabel,
@@ -173,7 +175,7 @@ export function AgentManagedFilesDrawer({
   return <Drawer
     open={open}
     className="agent-managed-files-drawer"
-    title={t('managedFiles.title', { agent: productId, root: rootLabel })}
+    title={t('managedFiles.title', { agent: agentName, root: rootLabel })}
     description={rootPath}
     onClose={onClose}
   >
