@@ -173,6 +173,8 @@ test('Codex 指令资产按当前官方项目根与文件优先级映射作用�
     await writeFile(join(projectRoot, 'TEAM_GUIDE.md'), '# Project fallback\n', 'utf8')
     await writeFile(join(packageDir, 'AGENTS.md'), '# Lower priority\n', 'utf8')
     await writeFile(join(packageDir, 'AGENTS.override.md'), '# Package override\n', 'utf8')
+    await writeFile(join(cwd, 'AGENTS.override.md'), '   \n', 'utf8')
+    await writeFile(join(cwd, 'AGENTS.md'), '# Shadowed by empty override\n', 'utf8')
 
     const nativeSessionId = '11111111-1111-4111-8111-111111111111'
     await writeFile(
@@ -246,7 +248,27 @@ test('Codex 指令资产按当前官方项目根与文件优先级映射作用�
     assert.equal(override?.scope, 'project')
     assert.equal(override?.scopeRoot, projectRoot)
 
+    const emptyOverridePath = join(cwd, 'AGENTS.override.md')
+    assert.equal(byPath.get(emptyOverridePath)?.scope, 'project')
+    assert.equal(byPath.get(emptyOverridePath)?.scopeRoot, projectRoot)
+
     assert.equal(byPath.has(join(packageDir, 'AGENTS.md')), false)
+    assert.equal(byPath.has(join(cwd, 'AGENTS.md')), false)
+
+    const discoverableRows = storage.db.prepare(`
+      SELECT
+        b.path AS path,
+        s.value AS value
+      FROM asset_bindings b
+      JOIN asset_state_observations s ON s.asset_binding_id = b.id
+      WHERE s.state = 'discoverable'
+    `).all() as Array<{ path: string; value: string }>
+    const discoverableByPath = new Map(discoverableRows.map(row => [row.path, row.value]))
+
+    assert.equal(discoverableByPath.get(join(codexHome, 'AGENTS.md')), 'true')
+    assert.equal(discoverableByPath.get(join(projectRoot, 'TEAM_GUIDE.md')), 'unknown')
+    assert.equal(discoverableByPath.get(join(packageDir, 'AGENTS.override.md')), 'unknown')
+    assert.equal(discoverableByPath.get(emptyOverridePath), 'false')
   } finally {
     storage.close()
     await rm(codexHome, { recursive: true, force: true })
