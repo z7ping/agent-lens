@@ -142,7 +142,6 @@ export function IntegrationOnboarding({
       <header className="integration-onboarding-header">
         <div>
           <h1 id="integration-onboarding-title">{t('onboarding.title')}</h1>
-          <p>{t('onboarding.description')}</p>
         </div>
         <div className="integration-onboarding-scan-actions">
           <StatusBadge tone={scanning ? 'accent' : 'success'} dot>
