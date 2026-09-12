@@ -442,31 +442,35 @@
 .skill-source-list b { font-size: 12px; }
 .skill-source-list small { grid-column: 1 / -1; color: var(--al-muted-2); font-size: 12px; }
 
-/* 展开详情与资产 */
-.disclosure-group { border-top: 1px solid var(--al-line); }
+/* 展开详情与资产：复用统一 Disclosure，Agents 只持有页面级密度与分隔节奏。 */
+.disclosure-group.ui-disclosure {
+  border: 0;
+  border-top: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
 .agent-disclosures .disclosure-group:first-child,
 .agent-secondary .disclosure-group:first-child { border-top: 0; }
-.disclosure-group > summary {
-  display: flex;
+.disclosure-group.ui-disclosure > summary {
   min-height: 42px;
-  align-items: center;
   gap: 8px;
   padding: 0 18px;
   color: var(--al-ink-2);
   font-size: 13px;
   font-weight: 640;
-  cursor: pointer;
-  list-style: none;
 }
-.disclosure-group > summary::marker { content: ''; }
-.disclosure-group > summary::-webkit-details-marker { display: none; }
-.disclosure-chevron {
+.disclosure-group.ui-disclosure > summary .ui-disclosure-chevron {
   flex: 0 0 14px;
   color: var(--al-muted-2);
+  transform: rotate(-90deg);
   transition: transform .13s;
 }
-.disclosure-group[open] > summary > .disclosure-chevron { transform: rotate(90deg); }
-.disclosure-group > summary:hover { background: var(--al-soft-2); }
+.disclosure-group.ui-disclosure[open] > summary .ui-disclosure-chevron { transform: rotate(0); }
+.disclosure-group.ui-disclosure > summary:hover { background: var(--al-soft-2); }
+.disclosure-group.ui-disclosure > .ui-disclosure-body {
+  padding: 0;
+  border-top: 0;
+}
 .disclosure-count {
   display: grid;
   min-width: 22px;
@@ -510,9 +514,18 @@
 .asset-path { display: flex; min-width: 0; align-items: center; gap: 5px; margin-top: 7px; }
 .asset-path code { min-width: 0; flex: 1; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .copy-link,
-.show-more-button { padding: 3px 6px; border: 0; border-radius: 5px; background: transparent; color: var(--al-accent); font-size: 12px; font-weight: 620; }
-.copy-link:hover,
-.show-more-button:hover { background: var(--al-accent-soft); }
+.show-more-button {
+  padding-inline: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-accent);
+}
+.copy-link:hover:not(:disabled),
+.show-more-button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-accent-soft);
+  color: var(--al-accent);
+}
 
 .runtime-config-list,
 .capability-list { padding: 2px 18px 14px; }

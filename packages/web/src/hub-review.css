@@ -100,7 +100,7 @@
 }
 
 .hub-review-policy-note i[data-state='redacted'] {
-  color: var(--warning, #a16207);
+  color: var(--al-warning);
 }
 
 .hub-review-policy-note i[data-state='omitted'] {
@@ -188,7 +188,7 @@
 }
 
 .hub-review-availability[data-state='redacted'] {
-  color: var(--warning, #a16207);
+  color: var(--al-warning);
 }
 
 .hub-review-availability[data-state='omitted'],
@@ -238,7 +238,7 @@
   .hub-review-refs-chevron { transition: none; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 767.98px) {
   .hub-review-item-head {
     flex-direction: column;
   }

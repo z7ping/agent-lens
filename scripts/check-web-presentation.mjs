@@ -97,8 +97,37 @@ function tsxFiles(directory) {
     return entry.isDirectory() ? tsxFiles(path) : entry.isFile() && entry.name.endsWith('.tsx') ? [path] : []
   })
 }
+
+function cssFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name)
+    return entry.isDirectory() ? cssFiles(path) : entry.isFile() && entry.name.endsWith('.css') ? [path] : []
+  })
+}
+
+const allowedResponsiveBreakpoints = new Set(['575.98', '576', '767.98', '768', '991.98', '992', '1199.98', '1200', '1399.98', '1400'])
+const normalizedStylesFile = files.styles.replaceAll('\\', '/')
+for (const file of cssFiles(root)) {
+  const normalizedFile = file.replaceAll('\\', '/')
+  const source = readFileSync(file, 'utf8')
+  const tooSmall = [...pixelFonts(source), ...shorthandFonts(source)].filter(value => value > 0 && value < 12)
+  if (tooSmall.length) throw new Error(`${normalizedFile} 出现小于 12px 的有效字号：${[...new Set(tooSmall)].join(', ')}px`)
+
+  if (normalizedFile !== files.styles && /!important\b/.test(source)) {
+    throw new Error(`${normalizedFile} 不得用 !important 争夺表现所有权`)
+  }
+
+  for (const match of source.matchAll(/@media\s*\([^)]*(?:max-width|min-width)\s*:\s*([0-9.]+)px/gi)) {
+    if (!allowedResponsiveBreakpoints.has(match[1])) {
+      throw new Error(`${normalizedFile} 使用未纳入产品规范的响应式断点：${match[1]}px`)
+    }
+  }
+}
 for (const file of tsxFiles(root)) {
   const source = readFileSync(file, 'utf8')
+  if (/<details\b[^>]*className=["'][^"']*\bdisclosure-group\b/.test(source)) {
+    throw new Error(`${file} 的通用折叠区必须复用 Disclosure，不得手写 disclosure-group details`)
+  }
   if (/[×←→↑↓⌄⌕✓]/.test(source)) throw new Error(`${file} 不得使用字符充当正式界面图标`)
   if (/>(?:\s*)\+(?:\s+)[^<{]+</.test(source)) throw new Error(`${file} 不得使用加号字符充当新增图标`)
   if (!/(?:UiIcon|ToolKindIcon)\.tsx$/.test(file) && /<svg\b/.test(source)) throw new Error(`${file} 的通用图标必须复用 UiIcon`)

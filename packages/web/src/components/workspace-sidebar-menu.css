@@ -162,20 +162,12 @@
 
 .workspace-locale-selector small {
   color: var(--al-muted-2);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .workspace-locale-selector select {
   width: 100%;
-  min-height: 30px;
-  border: 1px solid var(--al-line);
-  border-radius: 7px;
-  background: var(--al-surface);
-  color: var(--al-ink);
-  font: inherit;
-  font-size: 12px;
-  padding: 0 7px;
 }
 
 .workspace-settings-separator {
