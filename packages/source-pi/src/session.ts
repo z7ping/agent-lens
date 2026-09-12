@@ -291,7 +291,14 @@ async function existingProjectCwds(values: readonly string[]): Promise<string[]>
     const raw = value.trim()
     if (!raw || !isAbsolute(raw)) continue
     const cwd = resolve(raw)
-    if (!await exists(cwd)) continue
+    let meta
+    try {
+      meta = await stat(cwd)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
+    if (!meta.isDirectory()) continue
     const key = projectCwdKey(cwd)
     if (!valid.has(key)) valid.set(key, cwd)
   }
