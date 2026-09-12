@@ -87,7 +87,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         contextSummary: '上下文摘要',
         modelChanged: '模型切换',
         branchSummary: '分支摘要',
-        runtimeStartupInfo: 'Runtime 启动信息',
+        runtimeStartupInfo: '运行启动信息',
         runtimeResourceCounts: '上下文 {{contexts}} · 技能 {{skills}} · 提示词 {{prompts}} · 扩展 {{extensions}} · 主题 {{themes}}',
         runtimeResourcesIncomplete: '启动资源读取不完整，无法确认实际加载数量',
         runtimeResourcesPartial: '部分资源读取失败',
