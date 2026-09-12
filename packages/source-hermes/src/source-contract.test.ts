@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
+import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareHermesCapabilities,
   discoverHermesAssets,
@@ -112,7 +112,7 @@ test('Hermes user assets follow profile semantics and explicit scope', async () 
   ].join('\n'), 'utf8')
 
   try {
-    const assets = []
+    const assets: DiscoveredAsset[] = []
     const ctx = {
       installation: {
         id: 'installation-hermes',
@@ -162,7 +162,7 @@ test('Hermes user assets follow profile semantics and explicit scope', async () 
     assert.equal(definitionNames.has('context:hermes-soul'), true)
 
     await writeFile(join(root, 'config.yaml'), 'plugins: [\n', 'utf8')
-    const assetsWithMalformedConfig = []
+    const assetsWithMalformedConfig: DiscoveredAsset[] = []
     for await (const asset of discoverHermesAssets(ctx)) assetsWithMalformedConfig.push(asset)
     const malformedNames = new Set(assetsWithMalformedConfig.map(asset =>
       `${asset.definition.type}:${asset.definition.canonicalName}`))
