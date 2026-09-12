@@ -592,7 +592,6 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     open
     className="review-inspector-overlay"
     title={title}
-    description={t('local.event.detailDescription')}
     onClose={onClose}
   >
     <div className="agent-scope" role="tablist" aria-label={t('local.event.categoriesAria')}>
@@ -817,7 +816,6 @@ function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspec
       <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
       <span className="raw-event-summary-copy">
         <span className="raw-event-summary-title">{t('local.rawEvents.title')} <span className="raw-event-summary-count">{items.length}</span></span>
-        <small>{t('local.rawEvents.description')}</small>
       </span>
       <time>{formatClock(items[items.length - 1]?.at ?? '')}</time>
     </summary>
@@ -1476,14 +1474,13 @@ export function ReviewPage({
               <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
                 <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')} {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
                 <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')} {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'latency' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')} {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
+                <button className={roundFilter === 'latency' ? 'active' : ''} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')} {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
               </div>
               <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
                 <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</button>
                 {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')} <UiIcon name="arrow-down" size={14}/></button>}
               </div>
               {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
-              <small>{t('local.roundNav.latencyNote')}</small>
             </div>
 
             <div className="review-flow">

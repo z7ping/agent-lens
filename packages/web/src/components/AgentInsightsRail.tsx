@@ -97,7 +97,7 @@ function CoverageCard({ agents }: { agents: AgentOverviewDto[] }) {
 
   return <section className="agent-insight-card agent-coverage-card">
     <header className="agent-insight-head">
-      <div><h2>{t('insightsRail.coverageTitle')}</h2><p>{t('insightsRail.coverageDescription')}</p></div>
+      <div><h2>{t('insightsRail.coverageTitle')}</h2></div>
       <span>{rows.length ? `Top ${rows.length}` : t('insightsRail.noRecords')}</span>
     </header>
     <div className="agent-insight-body">
@@ -172,7 +172,7 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
   return <aside className="agent-insights-rail" aria-label={t('insightsRail.aria')}>
     <section className="agent-insight-card agent-diagnostics-card">
       <header className="agent-insight-head">
-        <div><h2>{t('insightsRail.diagnosticsTitle')}</h2><p>{t('insightsRail.diagnosticsDescription', { agent: agentLabel(selectedAgent.sourceId, selectedAgent.displayName) })}</p></div>
+        <div><h2>{t('insightsRail.diagnosticsTitle')}</h2></div>
         <span data-state={hasIssue ? 'warn' : 'ok'}>{hasIssue ? t('insightsRail.issueSummary', { failed: failedStages, unknown: unknownCount.toLocaleString(locale) }) : t('insightsRail.healthy')}</span>
       </header>
       <div className="agent-insight-body">

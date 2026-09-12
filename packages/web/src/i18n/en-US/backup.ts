@@ -146,7 +146,7 @@ export const englishBackupMessages: LocaleMessagesDto = {
       excluded: 'Excluded by default',
       unclearValue: 'Unclear value',
       safetyTitle: 'Sensitive-data protection is always enabled',
-      safetyDescription: 'There is no off switch. If AgentLens detects credential filenames, private keys, common tokens, or secret assignments in configuration, the entire file is excluded and only the reason is recorded.',
+      safetyDescription: 'Sensitive files and secret content are excluded automatically and this cannot be disabled.',
       estimate: 'Approximately {{count}} categorized file references',
       estimateSize: 'Categorized size about {{size}}',
       sizePending: 'Size will appear after the updated scan index is available',
@@ -197,7 +197,7 @@ export const englishBackupMessages: LocaleMessagesDto = {
       blockedLabel: 'Blocked',
       files: 'Files',
       noteTitle: 'Preview only.',
-      noteDescription: 'This version has no direct write-back API, so viewing differences does not modify any files for detected agents.',
+      noteDescription: 'Viewing differences does not modify agent files.',
     },
     tree: {
       files: '{{count}} files',

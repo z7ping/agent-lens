@@ -118,7 +118,7 @@ export function BackgroundActivityStatus({ health }: { health: HealthResponseDto
     <Popover open={open} anchorRef={anchorRef} onClose={() => setOpen(false)} placement="right-end" className="background-activity-popover">
       <section aria-label={t('backgroundActivity.detailAria')}>
         <header className="background-activity-popover-head">
-          <div><b>{t('backgroundActivity.title')}</b><span>{t('backgroundActivity.description')}</span></div>
+          <div><b>{t('backgroundActivity.title')}</b></div>
           <span className={`background-activity-state is-${summary.tone}`}>{activity?.active.length ? t('backgroundActivity.processingCount', { count: activity.active.length }) : t('backgroundActivity.recentRecord')}</span>
         </header>
 

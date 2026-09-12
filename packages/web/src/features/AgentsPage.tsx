@@ -110,14 +110,6 @@ const assetScopeLabelKey: Record<string, string> = {
 const USER_ASSET_LIMIT = 24
 const RUNTIME_CONFIG_PATH_LIMIT = 18
 
-const agentDescriptionKey: Record<string, string> = {
-  codex: 'description.codex',
-  'claude-code': 'description.claudeCode',
-  pi: 'description.pi',
-  hermes: 'description.hermes',
-  opencode: 'description.opencode',
-}
-
 function translatedLabel(
   map: Record<string, string>,
   value: string,
@@ -304,7 +296,7 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   ]
 
   return <section className="skill-lifecycle">
-    <div className="section-heading-row"><div><h3>{t('lifecycle.title')}</h3><p>{t('lifecycle.description')}</p></div></div>
+    <div className="section-heading-row"><div><h3>{t('lifecycle.title')}</h3></div></div>
     <div className="skill-funnel">
       {rows.map(row => <div key={row.key} className="skill-funnel-row" data-active={row.active || undefined} data-muted={row.value === null || undefined}>
         <span>{row.label}</span>
@@ -342,13 +334,12 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
   return <section className="agent-primary-section pi-guidance">
     <div className="section-heading-row"><div>
       <h3>{t('piGuidance.title')}</h3>
-      <p>{t('piGuidance.description')}</p>
     </div></div>
     <div className="pi-guidance-list">
       {projectRules.length
         ? <div className="pi-guidance-item" data-tone="success">
             <UiIcon name="check" size={15}/>
-            <span><b>{t('piGuidance.projectRulesReadyTitle')}</b><small>{t('piGuidance.projectRulesReadyDescription', { count: projectRules.length })}</small></span>
+            <span><b>{t('piGuidance.projectRulesReadyTitle', { count: projectRules.length })}</b></span>
           </div>
         : <div className="pi-guidance-item" data-tone="warning">
             <UiIcon name="alert" size={15}/>
@@ -357,7 +348,7 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
       {defaultModels.length
         ? <div className="pi-guidance-item" data-tone="success">
             <UiIcon name="check" size={15}/>
-            <span><b>{t('piGuidance.defaultModelReadyTitle')}</b><small>{t('piGuidance.defaultModelReadyDescription', { models: defaultModels.map(asset => asset.canonicalName).slice(0, 3).join(' · ') })}</small></span>
+            <span><b>{t('piGuidance.defaultModelReadyTitle')}</b><small>{defaultModels.map(asset => asset.canonicalName).slice(0, 3).join(' · ')}</small></span>
           </div>
         : <div className="pi-guidance-item" data-tone="neutral">
             <UiIcon name="exclamation" size={15}/>
@@ -366,21 +357,21 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
       {skills.length
         ? <div className="pi-guidance-item" data-tone={discoverableSkills.length ? 'success' : 'neutral'}>
             <UiIcon name={discoverableSkills.length ? 'check' : 'exclamation'} size={15}/>
-            <span><b>{t('piGuidance.skillsReadyTitle', { count: skills.length })}</b><small>{t('piGuidance.skillsReadyDescription', { count: discoverableSkills.length })}</small></span>
+            <span><b>{t('piGuidance.skillsReadyTitle', { count: skills.length })}</b><small>{t('piGuidance.skillsDiscoverable', { count: discoverableSkills.length })}</small></span>
           </div>
         : <div className="pi-guidance-item" data-tone="neutral">
             <UiIcon name="exclamation" size={15}/>
-            <span><b>{t('piGuidance.noSkillsTitle')}</b><small>{t('piGuidance.noSkillsDescription')}</small></span>
+            <span><b>{t('piGuidance.noSkillsTitle')}</b></span>
           </div>}
       {uncertainExtensions.length > 0
         ? <div className="pi-guidance-item" data-tone="neutral">
             <UiIcon name="exclamation" size={15}/>
-            <span><b>{t('piGuidance.extensionsUnverifiedTitle', { count: uncertainExtensions.length })}</b><small>{t('piGuidance.extensionsUnverifiedDescription')}</small></span>
+            <span><b>{t('piGuidance.extensionsUnverifiedTitle', { count: uncertainExtensions.length })}</b></span>
           </div>
         : packageResources.length > 0
           ? <div className="pi-guidance-item" data-tone="success">
               <UiIcon name="check" size={15}/>
-              <span><b>{t('piGuidance.packageResourcesTitle', { count: packageResources.length })}</b><small>{t('piGuidance.packageResourcesDescription')}</small></span>
+              <span><b>{t('piGuidance.packageResourcesTitle', { count: packageResources.length })}</b></span>
             </div>
           : null}
     </div>
@@ -407,7 +398,6 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
   return <section className="agent-primary-section">
     <div className="section-heading-row"><div>
       <h3>{t('piGuidance.configurationTitle')}</h3>
-      <p>{t('piGuidance.configurationDescription')}</p>
     </div></div>
     <div className="asset-kpis">
       {metrics.map(metric => <div key={metric.key} className="asset-kpi"><strong>{metric.count}</strong><span>{metric.label}</span></div>)}
@@ -497,7 +487,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     <header className="agent-card-head">
       <div className="agent-identity">
         <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
-        <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2><p>{agentDescriptionKey[agent.sourceId] ? t(agentDescriptionKey[agent.sourceId]!) : t('description.fallback')}</p></div>
+        <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2></div>
       </div>
       <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
     </header>
@@ -543,7 +533,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       <PiUsageGuidance agent={agent}/>
       <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
     </> : <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3><p>{t('sections.myAssetsDescription')}</p></div><span className="section-total">{userAssetCount}</span></div>
+      <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
         {userGrouped.length ? userGrouped.map(([type, items]) => <div key={type} className="asset-kpi"><strong>{items.length}</strong><span>{translatedLabel(assetTypeLabelKey, type, t)}</span></div>) : <div className="muted-empty compact">{t('sections.noUserAssets')}</div>}
       </div>
@@ -551,7 +541,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     </section>}
 
     <section className="agent-primary-section">
-      <div className="section-heading-row"><div><h3>{t('sections.recentUsed')}</h3><p>{t('sections.recentUsedDescription')}</p></div></div>
+      <div className="section-heading-row"><div><h3>{t('sections.recentUsed')}</h3></div></div>
       <FrequentAssets agent={agent} assets={priorityAssets}/>
     </section>
 
@@ -794,9 +784,6 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}
-            description={agentDescriptionKey[selectedManagement.integrationId]
-              ? t(agentDescriptionKey[selectedManagement.integrationId]!)
-              : t('description.fallback')}
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
             onChange={(id, enabled) => model.setIntegrationEnabled(id, enabled).then(() => undefined)}

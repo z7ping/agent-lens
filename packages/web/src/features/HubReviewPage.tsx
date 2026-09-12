@@ -261,14 +261,11 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
   return <main className={`review-page hub-review-page ${embedded ? 'hub-review-page-embedded' : ''}`}>
     {!embedded && <div className="workspace-toolbar hub-review-toolbar">
       <IconButton className="icon-button hub-review-back" onClick={() => navigate('/review')} aria-label={t('hub.list.back')}><UiIcon name="arrow-left" size={16}/></IconButton>
-      <div>
-        <b>{t('hub.list.title')}</b>
-        <span>{t('hub.list.description')}</span>
-      </div>
+      <div><b>{t('hub.list.title')}</b></div>
     </div>}
     <div className="review-layout">
       {!embedded && <aside className="session-panel">
-        <div className="session-panel-head"><div><b>{t('hub.list.sessions')}</b><span>{t('hub.list.ordering')}</span></div><span className="count-badge">{localSessions.length + remoteSessions.length}</span></div>
+        <div className="session-panel-head"><div><b>{t('hub.list.sessions')}</b></div><span className="count-badge">{localSessions.length + remoteSessions.length}</span></div>
         <div className="session-scroll">
           {listLoading && <div className="empty-state">{t('hub.list.loading')}</div>}
           {listError && <div className="hub-session-list-warning">{listError}</div>}

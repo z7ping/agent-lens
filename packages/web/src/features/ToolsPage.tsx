@@ -233,7 +233,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
           </section>
 
           <section className="tool-table-card">
-            <div className="table-section-head"><div><h2>{t('page.toolCalls')}</h2><p>{t('page.tableDescription', { count: tools.length })}</p></div></div>
+            <div className="table-section-head"><div><h2>{t('page.toolCalls')}</h2></div></div>
             <div className="table-scroll">
               {tools.length ? <table className="tool-table">
                 <thead><tr>
@@ -267,7 +267,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
           </section>
 
           {(mostErrors || slowest) && <section className="tool-attention">
-            <div className="section-heading-row"><div><h3>{t('page.attention')}</h3><p>{t('page.attentionDescription')}</p></div></div>
+            <div className="section-heading-row"><div><h3>{t('page.attention')}</h3></div></div>
             <div className="tool-attention-list">
               {mostErrors && <button className="tool-attention-row" onClick={() => { void selectTool(toolKey(mostErrors.sourceIds, mostErrors.nativeToolName)) }}>
                 <span className="tool-attention-badge is-danger">{t('page.failureCluster')}</span>
@@ -283,7 +283,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
           </section>}
 
           {assets.length ? <section className="attributed-assets">
-            <div className="section-heading-row"><div><h3>{t('page.attributedAssets')}</h3><p>{t('page.attributedAssetsDescription')}</p></div></div>
+            <div className="section-heading-row"><div><h3>{t('page.attributedAssets')}</h3></div></div>
             <div className="attributed-asset-list">{assets.map(asset => <div key={`${asset.type}:${asset.canonicalName}`} className="attributed-asset"><b>{asset.canonicalName}</b><span>{assetTypeLabel(asset.type, t)}</span><span title={t('page.attributionMethod', { method: asset.attribution })}>{confidenceLabel(asset.confidence, t)}</span><span className="asset-usage-bar" aria-hidden="true"><i style={{ width: `${Math.max(4, asset.callCount / maxAssetCalls * 100)}%` }}/></span><strong>{asset.callCount}</strong><small>{t('page.times')}</small></div>)}</div>
           </section> : null}
         </>}
@@ -312,7 +312,7 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
           </button>}
 
           <section className="tool-session-section">
-            <div className="table-section-head"><div><h2>{t('page.relatedSessions')}</h2><p>{t('page.relatedDescription')}</p></div></div>
+            <div className="table-section-head"><div><h2>{t('page.relatedSessions')}</h2></div></div>
             <div className="tool-session-list">
               {detailLoadingKey === selectedToolKey && <div className="tool-drill-note">{t('page.loadingSessions')}</div>}
               {detailError && detailLoadingKey !== selectedToolKey && <div className="tool-drill-note">{t('page.loadingSessionsFailed', { error: detailError })}</div>}
