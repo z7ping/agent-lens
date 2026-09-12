@@ -124,9 +124,6 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const tailActions = sessionTailHost && primaryActions.length > 0
     ? createPortal(
         <section className="task-session-continuation" aria-label={t('header.continueSession')}>
-          <div className="task-session-continuation-copy">
-            <span>{t('header.continueDescription')}</span>
-          </div>
           <div className="task-session-continuation-actions">{primaryActions}</div>
         </section>,
         sessionTailHost,
@@ -191,7 +188,6 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
       open={compactInfoOpen}
       className="task-header-info-drawer"
       title={t('header.taskInfo')}
-      description={t('header.currentDetails')}
       onClose={() => setCompactInfoOpen(false)}
     >
       <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
