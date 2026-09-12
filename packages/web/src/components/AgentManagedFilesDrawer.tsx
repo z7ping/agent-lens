@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
   ManagedAssetDirectoryResponseDto,
@@ -9,7 +10,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { Button, Drawer, UiIcon } from './ui'
 
-function managedFileErrorMessage(error: unknown, t: (key: string) => string): string {
+function managedFileErrorMessage(error: unknown, t: TFunction): string {
   const status = error && typeof error === 'object' ? Reflect.get(error, 'status') : undefined
   if (status === 403) return t('managedFiles.errorForbidden')
   if (status === 404) return t('managedFiles.errorNotFound')
