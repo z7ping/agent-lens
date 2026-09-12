@@ -60,11 +60,11 @@ async function prepareAssetFixture() {
     'utf8',
   )
   await writeFile(join(root, 'AGENTS.md'), '# Global instructions\n', 'utf8')
-  return root
+  return { root, pluginRoot }
 }
 
 test('Codex asset scan materializes stable definitions, bindings, states and evidence', async () => {
-  const root = await prepareAssetFixture()
+  const { root, pluginRoot } = await prepareAssetFixture()
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
 
@@ -252,6 +252,17 @@ test('Codex 指令资产按当前官方项目根与文件优先级映射作用�
     })
     assert.ok(detected)
 
+    const initial = await runner.scan({
+      source: codexSourceDefinition,
+      host,
+      detected,
+      abortSignal: new AbortController().signal,
+    })
+    await storage.checkpoints.set(
+      `codex:${initial.installationId}`,
+      'codex:known-project-cwds:v1',
+      [cwd],
+    )
     await runner.scan({
       source: codexSourceDefinition,
       host,
