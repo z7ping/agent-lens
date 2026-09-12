@@ -427,7 +427,7 @@ export async function* ingestClaudeHistory(
   }
 
   const files = await listJsonlFiles(projectsDir, ctx.historyWindow)
-  const needsWorkspaceBackfill = remembered.length === 0
+  const needsWorkspaceBackfill = remembered.length === 0 || rememberedDataRoots.length === 0
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
     if (needsWorkspaceBackfill) {
