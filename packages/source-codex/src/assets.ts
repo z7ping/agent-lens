@@ -1,5 +1,5 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import type {
   DiscoveredAsset,
   EvidenceCandidate,
@@ -77,6 +77,11 @@ function states(
   }))
 }
 
+function codexSkillIdentity(skillDir: string): string {
+  const normalized = resolve(skillDir).replaceAll('\\', '/')
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
 async function* discoverSkills(
   configRoot: string,
   capturedAt: string,
@@ -100,6 +105,7 @@ async function* discoverSkills(
           type: 'skill',
           canonicalName: name,
           displayName: name,
+          upstreamIdentity: `codex-skill:${codexSkillIdentity(skillDir)}`,
         },
         binding: {
           path: skillDir,
@@ -374,6 +380,7 @@ export async function* discoverCodexAssets(
 }
 
 export const codexAssetInternals = {
+  codexSkillIdentity,
   mcpNamesFromConfig,
   pluginIdentityFromCachePath,
 }
