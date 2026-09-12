@@ -206,6 +206,7 @@ test('Claude legacy checkpoint gains file identity without replaying unchanged h
     type: 'user',
     sessionId: 'session-claude',
     uuid: 'user-1',
+    cwd: join(root, 'workspace'),
     message: { content: 'hello' },
   })
   await writeFile(path, `${line}\n`, 'utf8')
@@ -223,11 +224,16 @@ test('Claude legacy checkpoint gains file identity without replaying unchanged h
   const ctx = historyContext(projects, checkpoints)
 
   try {
+    await mkdir(join(root, 'workspace'), { recursive: true })
     const records = []
     for await (const item of ingestClaudeHistory(ctx)) records.push(item)
     assert.deepEqual(records, [])
     const checkpoint = checkpoints.get(claudeInternals.historyCheckpointKey(path)) as { fileId?: string }
     assert.ok(checkpoint.fileId)
+    assert.deepEqual(
+      checkpoints.get('claude:known-project-cwds:v1'),
+      [join(root, 'workspace')],
+    )
   } finally {
     await rm(root, { recursive: true, force: true })
   }
@@ -254,11 +260,18 @@ test('Claude static assets remain partial and do not claim runtime discoverabili
         lastSeenAt: '2026-09-11T00:00:00.000Z',
       },
       abortSignal: new AbortController().signal,
-    } as SourceExecutionContext)) assets.push(asset)
+      checkpoint: {
+        async get() { return undefined },
+        async set() {},
+      },
+    } as unknown as SourceExecutionContext)) assets.push(asset)
 
     const skill = assets.find(asset => asset.definition.type === 'skill')
     const mcp = assets.find(asset => asset.definition.type === 'mcp')
     const hook = assets.find(asset => asset.definition.type === 'hook')
+    assert.equal(skill?.binding?.scope, 'user')
+    assert.equal(skill?.binding?.scopeRoot, root)
+    assert.equal(mcp?.binding?.scope, 'user')
     assert.equal(skill?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
     assert.equal(mcp?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
     assert.equal(hook?.states?.find(state => state.state === 'enabled')?.value, 'unknown')
@@ -295,4 +308,103 @@ test('Claude sessionless runtime hook remains evidence-only', async () => {
   const normalized = await normalizeClaudeRecord(value, {} as never)
   assert.deepEqual(normalized.observations, [])
   assert.equal(normalized.evidenceCandidates.length, 1)
+})
+
+
+test('Claude project assets follow CLAUDE hierarchy, project settings, skills and MCP scopes', async () => {
+  const profile = await mkdtemp(join(tmpdir(), 'agent-lens-claude-profile-'))
+  const projectRoot = await mkdtemp(join(tmpdir(), 'agent-lens-claude-project-'))
+  const cwd = join(projectRoot, 'packages', 'web')
+  const packageDir = dirname(cwd)
+  await mkdir(join(projectRoot, '.git'), { recursive: true })
+  await mkdir(join(projectRoot, '.claude', 'rules'), { recursive: true })
+  await mkdir(join(projectRoot, '.claude', 'skills', 'root-skill'), { recursive: true })
+  await mkdir(join(packageDir, '.claude', 'skills', 'package-skill'), { recursive: true })
+  await mkdir(join(projectRoot, '.claude'), { recursive: true })
+  await mkdir(cwd, { recursive: true })
+
+  await writeFile(join(projectRoot, 'CLAUDE.md'), '# root instructions\n', 'utf8')
+  await writeFile(join(projectRoot, 'CLAUDE.local.md'), '# local root instructions\n', 'utf8')
+  await writeFile(join(packageDir, 'CLAUDE.md'), '# package instructions\n', 'utf8')
+  await writeFile(join(projectRoot, '.claude', 'CLAUDE.md'), '# alternate project instructions\n', 'utf8')
+  await writeFile(join(projectRoot, '.claude', 'rules', 'testing.md'), '# testing rule\n', 'utf8')
+  await writeFile(join(projectRoot, '.claude', 'skills', 'root-skill', 'SKILL.md'), '# root skill\n', 'utf8')
+  await writeFile(join(packageDir, '.claude', 'skills', 'package-skill', 'SKILL.md'), '# package skill\n', 'utf8')
+  await writeFile(join(projectRoot, '.mcp.json'), JSON.stringify({
+    mcpServers: { shared: { command: 'node' } },
+  }), 'utf8')
+  await writeFile(join(projectRoot, '.claude', 'settings.json'), JSON.stringify({
+    hooks: { PreToolUse: [{ hooks: [{ command: 'check' }] }] },
+    enabledPlugins: {
+      'review@test-market': true,
+      'disabled@test-market': false,
+    },
+  }), 'utf8')
+
+  const ctx = {
+    installation: {
+      id: 'installation-claude',
+      hostId: 'host',
+      productId: 'claude-code',
+      configRoot: profile,
+      dataRoot: join(profile, 'projects'),
+      firstSeenAt: '2026-09-11T00:00:00.000Z',
+      lastSeenAt: '2026-09-11T00:00:00.000Z',
+    },
+    abortSignal: new AbortController().signal,
+    checkpoint: {
+      async get<T>(key: string): Promise<T | undefined> {
+        return key === 'claude:known-project-cwds:v1'
+          ? [cwd] as unknown as T
+          : undefined
+      },
+      async set() {},
+    },
+  } as unknown as SourceExecutionContext
+
+  try {
+    const assets = []
+    for await (const asset of discoverClaudeAssets(ctx)) assets.push(asset)
+
+    const projectPaths = new Set(assets
+      .filter(asset => asset.binding?.scope === 'project')
+      .map(asset => asset.binding?.path))
+
+    assert.equal(projectPaths.has(join(projectRoot, 'CLAUDE.md')), true)
+    assert.equal(projectPaths.has(join(projectRoot, 'CLAUDE.local.md')), true)
+    assert.equal(projectPaths.has(join(packageDir, 'CLAUDE.md')), true)
+    assert.equal(projectPaths.has(join(projectRoot, '.claude', 'CLAUDE.md')), true)
+    assert.equal(projectPaths.has(join(projectRoot, '.claude', 'rules', 'testing.md')), true)
+    assert.equal(projectPaths.has(join(projectRoot, '.claude', 'skills', 'root-skill')), true)
+    assert.equal(projectPaths.has(join(packageDir, '.claude', 'skills', 'package-skill')), true)
+    assert.equal(projectPaths.has(join(projectRoot, '.mcp.json')), true)
+
+    const projectBindings = assets
+      .flatMap(asset => asset.binding?.scope === 'project' ? [asset.binding] : [])
+    assert.equal(projectBindings.every(binding => binding.scopeRoot === projectRoot), true)
+
+    const plugin = (name: string) => assets.find(asset =>
+      asset.definition.type === 'plugin'
+      && asset.definition.canonicalName === name)
+    assert.equal(plugin('review@test-market')?.states?.find(state => state.state === 'configured')?.value, true)
+    assert.equal(plugin('review@test-market')?.states?.find(state => state.state === 'installed')?.value, 'unknown')
+    assert.equal(plugin('review@test-market')?.states?.find(state => state.state === 'enabled')?.value, 'unknown')
+    assert.equal(plugin('disabled@test-market')?.states?.find(state => state.state === 'enabled')?.value, false)
+
+    const projectMcp = assets.find(asset =>
+      asset.definition.type === 'mcp'
+      && asset.definition.canonicalName === 'shared'
+      && asset.binding?.source === 'claude:project-mcp')
+    assert.equal(projectMcp?.binding?.scope, 'project')
+    assert.equal(projectMcp?.states?.find(state => state.state === 'discoverable')?.value, 'unknown')
+
+    const projectInstructions = assets.filter(asset =>
+      asset.binding?.scope === 'project'
+      && (asset.definition.type === 'context' || asset.definition.type === 'rule'))
+    assert.equal(projectInstructions.every(asset =>
+      asset.states?.some(state => state.state === 'discoverable' && state.value === 'unknown')), true)
+  } finally {
+    await rm(profile, { recursive: true, force: true })
+    await rm(projectRoot, { recursive: true, force: true })
+  }
 })
