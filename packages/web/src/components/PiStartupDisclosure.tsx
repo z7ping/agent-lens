@@ -160,7 +160,7 @@ export function PiStartupDisclosure({
     {packageUpdates.length > 0 && <details className="pi-startup-resource-details">
       <summary>{packageUpdateSummary}<UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/></summary>
       <div className="pi-startup-resources" aria-label={t('startup.packageUpdates')}>
-        {packageUpdates.map((update, index) => <div className="pi-startup-resource-row" key={`${update.scope}:${update.type}:${update.displayName}:${index}`}>
+        {packageUpdates.map((update, index) => <div className="pi-startup-resource-row pi-startup-package-row" key={`${update.scope}:${update.type}:${update.displayName}:${index}`}>
           <b>{update.displayName}</b>
           <span>{update.scope === 'project' ? t('startup.packageScopeProject') : t('startup.packageScopeUser')} · {update.type}</span>
         </div>)}
