@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 
 const scriptRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -86,6 +86,32 @@ async function packageVersion(root, spec) {
   return pkg.version
 }
 
+function assertIntegrationRuntimeManifest(candidate, spec) {
+  const manifest = candidate?.manifest
+  if (!manifest || typeof manifest !== 'object') {
+    throw new Error(`Integration bundle ${spec.integrationId} has no runtime manifest`)
+  }
+  for (const [field, expected] of [
+    ['integrationId', spec.integrationId],
+    ['productId', spec.productId],
+    ['apiVersion', spec.apiVersion],
+  ]) {
+    if (manifest[field] !== expected) {
+      throw new Error(
+        `Integration runtime manifest mismatch: ${spec.integrationId}: ${field}=${String(manifest[field])} != Catalog ${expected}`,
+      )
+    }
+  }
+  return manifest
+}
+
+async function validateBuiltIntegrationContract(entryPath, entryHash, spec) {
+  const moduleUrl = `${pathToFileURL(entryPath).href}?agentlens-build=${entryHash}`
+  const module = await import(moduleUrl)
+  const candidate = module[spec.entryExport]
+  assertIntegrationRuntimeManifest(candidate, spec)
+}
+
 function assertPortableBundle(source, integrationId) {
   const forbidden = [
     /(?:from\s*|import\s*\()\s*['"]@agent-lens\//,
@@ -134,6 +160,7 @@ export async function buildIntegrationPackages({
     const source = entry.toString('utf8')
     assertPortableBundle(source, spec.integrationId)
     const entryHash = sha256(entry)
+    await validateBuiltIntegrationContract(entryPath, entryHash, spec)
 
     const manifest = {
       schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
@@ -187,6 +214,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
 export const integrationBundleInternals = {
   sha256,
   assertPortableBundle,
+  assertIntegrationRuntimeManifest,
+  validateBuiltIntegrationContract,
   loadOfficialIntegrationCatalog,
   workspacePackageDirectory,
   bundleSpecFromCatalogEntry,
