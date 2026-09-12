@@ -163,11 +163,13 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
       executable: { commands: ['claude'], explicitEnvVar: 'CLAUDE_BIN' },
       roots: [
         ...roots('config',
+          { envVar: 'CLAUDE_CONFIG_DIR', exclusiveWhenSet: true },
           { envVar: 'CLAUDE_CODE_HOME', exclusiveWhenSet: true },
           { envVar: 'CLAUDE_HOME', exclusiveWhenSet: true },
           { path: '~/.claude' },
         ),
         ...roots('data',
+          { envVar: 'CLAUDE_CONFIG_DIR', append: ['projects'], exclusiveWhenSet: true },
           { envVar: 'CLAUDE_CODE_HOME', append: ['projects'], exclusiveWhenSet: true },
           { envVar: 'CLAUDE_HOME', append: ['projects'], exclusiveWhenSet: true },
           { path: '~/.claude/projects' },
