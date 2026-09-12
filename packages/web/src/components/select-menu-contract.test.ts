@@ -30,6 +30,10 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
   assert.match(selectSource, /createPortal\(/)
 })
 
+test('SelectMenu 浮层阻止 pointerdown 冒泡，避免嵌套弹层在选择前被关闭', () => {
+  assert.match(selectSource, /onPointerDown=\{event => event\.stopPropagation\(\)\}/)
+})
+
 test('SelectMenu 非搜索模式把真实 listbox 作为键盘焦点 Owner', () => {
   assert.match(selectSource, /const listboxRef = useRef<HTMLDivElement>\(null\)/)
   assert.match(selectSource, /\(searchable \? searchRef\.current : listboxRef\.current\)\?\.focus/)
