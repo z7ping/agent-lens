@@ -11,7 +11,7 @@ const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'ut
 for (const required of [
   "const [success, setSuccess] = useState('')",
   'const result = await api.createBackup',
-  'result.snapshot.files.length.toLocaleString()',
+  'result.snapshot.files.length.toLocaleString(locale)',
   'result.snapshot.excluded.length',
   'role="status"',
   "setSuccess(t('snapshotCreated'",
