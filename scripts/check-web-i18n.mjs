@@ -1,13 +1,19 @@
 import { readFile, readdir } from 'node:fs/promises'
-import { relative, resolve } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
 
 const ROOT = resolve('packages/web/src')
 const OFFICIAL_BASELINE = resolve(ROOT, 'i18n/official-zh-CN.ts')
+const OFFICIAL_BASELINE_DIRECTORY = resolve(ROOT, 'i18n/zh-CN')
 const CJK = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
 
-function ignored(path) {
+function isOfficialBaseline(path) {
   return path === OFFICIAL_BASELINE
+    || path.startsWith(`${OFFICIAL_BASELINE_DIRECTORY}${sep}`)
+}
+
+function ignored(path) {
+  return isOfficialBaseline(path)
     || /\.test\.[cm]?[jt]sx?$/.test(path)
     || /\.spec\.[cm]?[jt]sx?$/.test(path)
 }
@@ -41,6 +47,22 @@ function officialMessagesObject(file) {
     if (found) return
     if (ts.isPropertyAssignment(node)
       && propertyName(node) === 'messages'
+      && ts.isObjectLiteralExpression(node.initializer)) {
+      found = node.initializer
+      return
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  return found
+}
+
+function officialShardMessagesObject(file) {
+  let found = null
+  const visit = node => {
+    if (found) return
+    if (ts.isVariableDeclaration(node)
+      && node.initializer
       && ts.isObjectLiteralExpression(node.initializer)) {
       found = node.initializer
       return
@@ -139,15 +161,42 @@ function normalizedKey(raw, namespace) {
   return namespace ? `${namespace}.${raw}` : null
 }
 
-const officialSource = await readFile(OFFICIAL_BASELINE, 'utf8')
-const officialFile = sourceFile(OFFICIAL_BASELINE, officialSource)
-const messages = officialMessagesObject(officialFile)
-if (!messages) {
-  console.error('Web i18n gate failed: official zh-CN messages object was not found.')
-  process.exit(1)
+const officialKeys = new Set()
+const officialProblems = []
+const officialEntries = (await readdir(OFFICIAL_BASELINE_DIRECTORY, { withFileTypes: true }))
+  .filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
+  .sort((left, right) => left.name.localeCompare(right.name))
+
+for (const entry of officialEntries) {
+  const path = resolve(OFFICIAL_BASELINE_DIRECTORY, entry.name)
+  const source = await readFile(path, 'utf8')
+  const file = sourceFile(path, source)
+  const messages = officialShardMessagesObject(file)
+  if (!messages) {
+    officialProblems.push({ path, problem: 'official zh-CN message module object was not found' })
+    continue
+  }
+
+  const { keys, problems } = collectOfficialKeys(messages, file)
+  for (const problem of problems) officialProblems.push({ path, problem })
+  for (const key of keys) {
+    if (officialKeys.has(key)) {
+      officialProblems.push({ path, problem: `duplicate official key across zh-CN modules: ${key}` })
+    }
+    officialKeys.add(key)
+  }
 }
-const { keys: officialKeys, problems: officialProblems } = collectOfficialKeys(messages, officialFile)
-const violations = officialProblems.map(problem => ({ path: relative(process.cwd(), OFFICIAL_BASELINE).replaceAll('\\', '/'), line: 0, column: 0, text: problem }))
+
+if (officialEntries.length === 0) {
+  officialProblems.push({ path: OFFICIAL_BASELINE_DIRECTORY, problem: 'no official zh-CN message modules were found' })
+}
+
+const violations = officialProblems.map(({ path, problem }) => ({
+  path: relative(process.cwd(), path).replaceAll('\\', '/'),
+  line: 0,
+  column: 0,
+  text: problem,
+}))
 
 for (const path of await collect(ROOT)) {
   const source = await readFile(path, 'utf8')
