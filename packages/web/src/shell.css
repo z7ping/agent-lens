@@ -359,10 +359,6 @@
   border-radius: 99px;
 }
 
-.source-dot.bg-\[\#10A37F\] { background: var(--src-codex); }
-.source-dot.bg-\[\#D97757\] { background: var(--src-claude); }
-.source-dot.bg-\[\#7C6FE8\] { background: var(--src-pi); }
-
 .workspace-toolbar .agent-scope-manage,
 .agent-scope-manage { position: relative; z-index: 80; }
 .workspace-toolbar .agent-scope-manage[open] { z-index: 90; }
