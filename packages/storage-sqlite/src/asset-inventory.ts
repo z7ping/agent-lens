@@ -4,7 +4,6 @@ import type {
   AssetInventoryEntry,
   AssetInventoryReader,
   AssetState,
-  AssetScope,
   AssetStateObservation,
   AssetType,
 } from '@agent-lens/core'
@@ -43,6 +42,19 @@ function enumString<const T extends readonly string[]>(row: AssetRow, key: strin
   return value as T[number]
 }
 
+function optionalEnumString<const T extends readonly string[]>(
+  row: AssetRow,
+  key: string,
+  allowed: T,
+): T[number] | undefined {
+  const value = optionalString(row, key)
+  if (value === undefined) return undefined
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new TypeError(`SQLite asset inventory field ${key} has unsupported value: ${value}`)
+  }
+  return value as T[number]
+}
+
 function decodeEvidenceRefs(value: unknown): string[] {
   if (typeof value !== 'string' || value.length === 0) return []
   let parsed: unknown
@@ -73,12 +85,7 @@ function mapDefinition(value: unknown): AssetDefinition {
 function mapBinding(value: unknown): AssetBinding {
   const row = rowRecord(value)
   const runtimeProfileId = optionalString(row, 'runtime_profile_id')
-  const rawScope = optionalString(row, 'scope')
-  const scope = rawScope === undefined
-    ? undefined
-    : (ASSET_SCOPES as readonly string[]).includes(rawScope)
-      ? rawScope as AssetScope
-      : (() => { throw new TypeError(`SQLite asset inventory field scope has unsupported value: ${rawScope}`) })()
+  const scope = optionalEnumString(row, 'scope', ASSET_SCOPES)
   const scopeRoot = optionalString(row, 'scope_root')
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
