@@ -1,5 +1,7 @@
+import { translateProduct } from '../i18n/runtime'
+
 export type TaskRoundState = 'settled' | 'running' | 'stopped'
-export type TaskToolKind = 'shell' | 'read' | 'edit' | 'search' | 'mcp' | 'web' | 'tool'
+export type TaskToolKind = 'shell' | 'read' | 'edit' | 'search' | 'test' | 'mcp' | 'web' | 'tool'
 export type TaskToolStatus = 'running' | 'success' | 'error' | 'unknown'
 
 export interface TaskMetricModel {
