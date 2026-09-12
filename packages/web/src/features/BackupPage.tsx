@@ -485,7 +485,6 @@ export function BackupPage({
                   <section className="backup-agent-location">
                     <h3>{t('assetView.primaryLocation')}</h3>
                     <div className="backup-agent-location-path">
-                      <UiIcon name="folder" size={14}/>
                       <code title={primaryRoot?.path}>{primaryRoot?.path ?? t('assetView.locationPending')}</code>
                     </div>
                     {source.roots && source.roots.length > 1 && <span>{t('assetView.moreLocations', { count: source.roots.length - 1 })}</span>}
