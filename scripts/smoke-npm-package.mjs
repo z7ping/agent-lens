@@ -10,12 +10,19 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const temp = await mkdtemp(join(tmpdir(), 'agent-lens-npm-smoke-'))
 const packDir = join(temp, 'pack')
 const consumer = join(temp, 'consumer')
+const smokeHome = join(temp, 'home')
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? root,
-      env: { ...process.env, AGENT_LENS_DISABLE_UPDATE_CHECK: '1', ...(options.env ?? {}) },
+      env: {
+        ...process.env,
+        HOME: smokeHome,
+        USERPROFILE: smokeHome,
+        AGENT_LENS_DISABLE_UPDATE_CHECK: '1',
+        ...(options.env ?? {}),
+      },
       shell: options.shell ?? false,
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -64,6 +71,7 @@ let daemonStdout = ''
 let daemonStderr = ''
 
 try {
+  await mkdir(smokeHome, { recursive: true })
   const rootPackage = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const tarball = await resolveTarball()
 
@@ -111,8 +119,12 @@ try {
     cwd: consumer,
     env: {
       ...process.env,
+      HOME: smokeHome,
+      USERPROFILE: smokeHome,
       AGENT_LENS_DISABLE_UPDATE_CHECK: '1',
       AGENT_LENS_DB_PATH: join(temp, 'agent-lens.db'),
+      AGENT_LENS_VAULT_PATH: join(temp, 'vault'),
+      AGENT_LENS_ENABLED_SOURCES: 'none',
       AGENT_LENS_PORT: String(port),
       AGENT_LENS_WEB_ROOT: webRoot,
     },
