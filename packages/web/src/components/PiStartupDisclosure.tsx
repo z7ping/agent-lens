@@ -6,12 +6,12 @@ import { OperationProgress } from './StateViews'
 import { Button, UiIcon } from './ui'
 import { translateProduct } from '../i18n/runtime'
 
-const STAGES: Array<{ stage: PiLiveInitializationStageDto; labelKey: string; detailKey: string }> = [
-  { stage: 'starting_worker', labelKey: 'startup.stage.startingWorker', detailKey: 'startup.stage.startingWorkerDetail' },
-  { stage: 'loading_sdk', labelKey: 'startup.stage.loadingSdk', detailKey: 'startup.stage.loadingSdkDetail' },
-  { stage: 'loading_resources', labelKey: 'startup.stage.loadingResources', detailKey: 'startup.stage.loadingResourcesDetail' },
-  { stage: 'creating_session', labelKey: 'startup.stage.creatingSession', detailKey: 'startup.stage.creatingSessionDetail' },
-  { stage: 'binding_extensions', labelKey: 'startup.stage.bindingExtensions', detailKey: 'startup.stage.bindingExtensionsDetail' },
+const STAGES: Array<{ stage: PiLiveInitializationStageDto; labelKey: string }> = [
+  { stage: 'starting_worker', labelKey: 'startup.stage.startingWorker' },
+  { stage: 'loading_sdk', labelKey: 'startup.stage.loadingSdk' },
+  { stage: 'loading_resources', labelKey: 'startup.stage.loadingResources' },
+  { stage: 'creating_session', labelKey: 'startup.stage.creatingSession' },
+  { stage: 'binding_extensions', labelKey: 'startup.stage.bindingExtensions' },
 ]
 
 export function formatPiStartupDuration(value: number | undefined): string {
@@ -136,7 +136,7 @@ export function PiStartupDisclosure({
         const duration = recorded ?? ((active || failed) ? currentDuration : undefined)
         return <div key={item.stage} className={`pi-startup-step is-${status}`}>
           <span className="pi-startup-step-dot" aria-hidden="true">{done ? <UiIcon name="check" size={12}/> : failed ? <UiIcon name="exclamation" size={12}/> : null}</span>
-          <span className="pi-startup-step-copy"><b>{t(item.labelKey)}</b><small>{t(item.detailKey)}</small></span>
+          <span className="pi-startup-step-copy"><b>{t(item.labelKey)}</b></span>
           <span className="pi-startup-step-time">{status === 'pending' ? t('startup.waiting') : active ? `${formatPiStartupDuration(duration)}+` : formatPiStartupDuration(duration)}</span>
         </div>
       })}
@@ -166,15 +166,6 @@ export function PiStartupDisclosure({
         </div>)}
       </div>
     </details>}
-    {packageUpdates.length === 0 && state.packageUpdateCheck === 'complete' && <div className="pi-startup-diagnostics">
-      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdatesCurrent')}</span>
-    </div>}
-    {packageUpdates.length === 0 && state.packageUpdateCheck === 'checking' && <div className="pi-startup-diagnostics">
-      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateChecking')}</span>
-    </div>}
-    {state.packageUpdateCheck === 'unavailable' && <div className="pi-startup-diagnostics">
-      <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateUnavailable')}</span>
-    </div>}
     {state.packageUpdateCheck === 'failed' && <div className="pi-startup-diagnostics">
       <b>{t('startup.packageUpdates')}</b><span>{t('startup.packageUpdateFailed')}</span>
     </div>}
