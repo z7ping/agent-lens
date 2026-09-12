@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { isMissingPathError, readJsonlLines } from '@agent-lens/source-support'
+import { isMissingPathError } from '@agent-lens/source-support'
 import type {
   DiscoveredAsset,
   DiscoveredAssetStateHint,
@@ -13,7 +13,7 @@ import {
   resolvePiSdkResourceApi,
   type PiSdkResourceApi,
 } from '@agent-lens/runtime-cordis'
-import { listJsonlFiles } from './session'
+import { listPiProjectCwds } from './session'
 
 type PiResolvedPaths = Awaited<ReturnType<InstanceType<PiSdkResourceApi['DefaultPackageManager']>['resolve']>>
 type PiResolvedResource = PiResolvedPaths['skills'][number]
@@ -21,7 +21,6 @@ type PiSkill = ReturnType<PiSdkResourceApi['loadSkills']>['skills'][number]
 type ProjectTrustState = true | false | 'unknown'
 type EffectiveResourceState = boolean | 'unknown'
 
-const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex')
@@ -523,42 +522,6 @@ async function projectContextAssets(
   return assets
 }
 
-async function readSessionCwd(filePath: string): Promise<string | undefined> {
-  try {
-    for await (const line of readJsonlLines(filePath, 0)) {
-      if (line.endOffset > MAX_SESSION_HEADER_SCAN_BYTES) return undefined
-      if (!line.text.trim()) continue
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(line.text.replace(/^\uFEFF/, ''))
-      } catch {
-        if (!line.terminated) return undefined
-        continue
-      }
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue
-      const entry = parsed as Record<string, unknown>
-      if (entry.type !== 'session') return undefined
-      const cwd = typeof entry.cwd === 'string' ? entry.cwd.trim() : ''
-      return cwd && isAbsolute(cwd) ? resolve(cwd) : undefined
-    }
-  } catch (error) {
-    if (isMissingPathError(error)) return undefined
-    throw error
-  }
-  return undefined
-}
-
-export async function listPiProjectCwds(dataRoot: string | undefined): Promise<string[]> {
-  if (!dataRoot) return []
-  const cwds = new Map<string, string>()
-  for (const filePath of await listJsonlFiles(dataRoot)) {
-    const cwd = await readSessionCwd(filePath)
-    if (!cwd || !await isDirectory(cwd)) continue
-    if (!cwds.has(pathKey(cwd))) cwds.set(pathKey(cwd), cwd)
-  }
-  return [...cwds.values()]
-}
-
 async function resolvePaths(
   api: PiSdkResourceApi,
   cwd: string,
@@ -753,7 +716,7 @@ export async function resolvePiResourceAssets(
   }))
 
   const globalExtensionsMayOverrideTrust = userExtensions.some(resource => resource.enabled)
-  const projectCwds = await listPiProjectCwds(ctx.installation.dataRoot)
+  const projectCwds = await listPiProjectCwds(ctx)
   for (const cwd of projectCwds) {
     if (ctx.abortSignal.aborted) break
 
@@ -817,8 +780,6 @@ export async function resolvePiResourceAssets(
 }
 
 export const piResourceResolverInternals = {
-  readSessionCwd,
-  listPiProjectCwds,
   builtInProjectTrust,
   configuredResource,
   effectiveEnabled,
