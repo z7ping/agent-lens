@@ -9,12 +9,14 @@ import type {
   IntegrationManagementItemDto,
   IntegrationPackageOperationResponseDto,
   IntegrationToolDiscoveryItemDto,
+  type ManagedAssetRoot,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { CompactPageHeading } from '../components/CompactPageHeading'
+import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
 import { Button, IconButton, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { copyText } from '../client/clipboard'
 import {
@@ -305,7 +307,8 @@ function SkillLifecycle({ agent, skills }: { agent: AgentOverviewDto; skills: Ag
   </section>
 }
 
-function AgentCard({ agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
+function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
+  model: AgentLensClientModel
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
@@ -322,6 +325,7 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
 }) {
   const { t } = useTranslation('agents')
   const [showAllBindings, setShowAllBindings] = useState(false)
+  const [managedRoot, setManagedRoot] = useState<ManagedAssetRoot | null>(null)
   const installation = agent.installations[0]
   const grouped = useMemo(() => {
     const map = new Map<string, AgentAssetInventoryDto[]>()
@@ -350,6 +354,18 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
   const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t)
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
+  const assetsAvailable = agent.integration?.capabilities.some(capability =>
+    capability.capability === 'assets' && capability.availability === 'available'
+  ) ?? false
+  const managedRootPath = managedRoot === 'config'
+    ? installation?.configRoot
+    : managedRoot === 'data'
+      ? installation?.dataRoot
+      : undefined
+  const runtimeConfigCount = bindings.length
+    + (installation?.executable ? 1 : 0)
+    + (installation?.configRoot ? 1 : 0)
+    + (installation?.dataRoot ? 1 : 0)
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
     <header className="agent-card-head">
@@ -395,13 +411,23 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
     <section className="agent-secondary">
       {builtinAssets.length > 0 && <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>} 
       <details className="disclosure-group">
-        <summary><DisclosureChevron/><span>{t('sections.assemblyPaths')}</span><span className="disclosure-count">{bindings.length}</span></summary>
+        <summary><DisclosureChevron/><span>{t('sections.runtimeConfig')}</span><span className="disclosure-count">{runtimeConfigCount}</span></summary>
         <div className="assembly-list">
-          {installation?.executable && <div><span>{t('sections.executable')}</span><code>{installation.executable}</code></div>}
-          {installation?.configRoot && <div><span>{t('sections.config')}</span><code>{installation.configRoot}</code></div>}
-          {installation?.dataRoot && <div><span>{t('sections.data')}</span><code>{installation.dataRoot}</code></div>}
-          {visibleBindings.map(({ asset, binding }) => binding.path ? <div key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
-          {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noAssemblyPaths')}</div>}
+          {installation?.executable && <div className="assembly-row"><span>{t('sections.executable')}</span><code>{installation.executable}</code><CopyPath path={installation.executable}/></div>}
+          {installation?.configRoot && <div className="assembly-row">
+            <span>{t('sections.config')}</span>
+            <code>{installation.configRoot}</code>
+            <CopyPath path={installation.configRoot}/>
+            {assetsAvailable && <Button size="small" onClick={() => setManagedRoot('config')}>{t('sections.browse')}</Button>}
+          </div>}
+          {installation?.dataRoot && <div className="assembly-row">
+            <span>{t('sections.data')}</span>
+            <code>{installation.dataRoot}</code>
+            <CopyPath path={installation.dataRoot}/>
+            {assetsAvailable && <Button size="small" onClick={() => setManagedRoot('data')}>{t('sections.browse')}</Button>}
+          </div>}
+          {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="assembly-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
+          {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noRuntimeConfig')}</div>}
         </div>
         {bindings.length > ASSEMBLY_PATH_LIMIT && <button className="show-more-button" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - ASSEMBLY_PATH_LIMIT })}</button>}
       </details>
@@ -418,6 +444,16 @@ function AgentCard({ agent, management, discovery, discoveryScanning, discoveryE
         onRemove={onRemove}
       />
     </section>
+    {managedRoot && installation && managedRootPath && <AgentManagedFilesDrawer
+      open
+      model={model}
+      productId={agent.productId}
+      installationId={installation.id}
+      root={managedRoot}
+      rootLabel={managedRoot === 'config' ? t('sections.configDirectory') : t('sections.dataDirectory')}
+      rootPath={managedRootPath}
+      onClose={() => setManagedRoot(null)}
+    />}
   </article>
 }
 
@@ -607,6 +643,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
         <div className="agent-detail-pane">
           {selectedAgent ? <AgentCard
             key={selectedAgent.sourceId}
+            model={model}
             agent={selectedAgent}
             management={selectedManagement}
             discovery={selectedDiscovery}
