@@ -1,9 +1,9 @@
 /*
  * AgentLens 1.0 资产备份构图与响应式唯一所有者。
- * 桌面端以「快照列表 + 新建快照」工作台为主；不通过横向滚动容纳核心信息。
+ * 主页面只管理摘要、快照与低频恢复操作；创建流程进入共享 Drawer。
  */
 
-.backup-page > .future-heading > .btn {
+.backup-heading-actions > .btn {
   display: inline-flex;
   min-width: max-content;
   flex: 0 0 auto;
@@ -14,13 +14,12 @@
   white-space: nowrap;
 }
 
-.backup-page > .future-heading > .btn > svg {
+.backup-heading-actions > .btn > svg {
   display: block;
   flex: 0 0 auto;
 }
 
 @media (min-width: 1400px) {
-  .backup-workbench { grid-template-columns: minmax(0, 1fr) 360px; }
   .future-kpi { padding: 15px 17px; }
   .future-kpi strong { font-size: 24px; }
 }
@@ -34,8 +33,6 @@
   .future-kpi:nth-child(2n) { border-right: 0; }
   .future-kpi:nth-last-child(-n + 2) { border-bottom: 0; }
 
-  .backup-workbench { grid-template-columns: 1fr; }
-  .backup-create-panel { position: static; }
 }
 
 @media (max-width: 991.98px) {
@@ -64,7 +61,10 @@
     min-height: 0;
   }
 
-  .future-heading > .btn { margin-top: 12px; }
+  .backup-heading-actions {
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
 
   .future-kpis { grid-template-columns: 1fr; }
   .future-kpi:nth-child(n) {
@@ -107,6 +107,18 @@
   .backup-snapshot-row > .table-actions { justify-content: flex-start; padding-left: 32px; }
 
   .builder-check small { max-width: 46%; }
+
+  .backup-empty-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+  .backup-empty-actions > .btn { width: min(100%, 280px); justify-content: center; }
+
+  .backup-create-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .backup-create-footer > .btn { width: 100%; justify-content: center; }
 
   .restore-card {
     display: block;
