@@ -443,30 +443,27 @@
 .skill-source-list small { grid-column: 1 / -1; color: var(--al-muted-2); font-size: 12px; }
 
 /* 展开详情与资产 */
-.disclosure-group { border-top: 1px solid var(--al-line); }
+.disclosure-group.ui-disclosure {
+  border: 0;
+  border-top: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
+}
 .agent-disclosures .disclosure-group:first-child,
 .agent-secondary .disclosure-group:first-child { border-top: 0; }
-.disclosure-group > summary {
-  display: flex;
+.disclosure-group.ui-disclosure > summary {
   min-height: 42px;
-  align-items: center;
   gap: 8px;
   padding: 0 18px;
   color: var(--al-ink-2);
   font-size: 13px;
   font-weight: 640;
-  cursor: pointer;
-  list-style: none;
 }
-.disclosure-group > summary::marker { content: ''; }
-.disclosure-group > summary::-webkit-details-marker { display: none; }
-.disclosure-chevron {
-  flex: 0 0 14px;
-  color: var(--al-muted-2);
-  transition: transform .13s;
+.disclosure-group.ui-disclosure > summary:hover { background: var(--al-soft-2); }
+.disclosure-group.ui-disclosure > .ui-disclosure-body {
+  padding: 0;
+  border-top: 0;
 }
-.disclosure-group[open] > summary > .disclosure-chevron { transform: rotate(90deg); }
-.disclosure-group > summary:hover { background: var(--al-soft-2); }
 .disclosure-count {
   display: grid;
   min-width: 22px;
