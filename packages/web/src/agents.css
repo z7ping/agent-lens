@@ -554,6 +554,8 @@
 }
 .asset-usage { margin-left: auto; color: var(--al-accent); font-weight: 640; }
 .asset-name { overflow: hidden; margin-top: 5px; color: var(--al-ink-2); font-size: 13px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.asset-model-id { min-width: 0; margin-top: 2px; }
+.asset-model-id code { display: block; overflow: hidden; color: var(--al-muted-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .asset-states { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .asset-state,
 .asset-discovered { padding: 1px 6px; border-radius: 5px; background: var(--al-success-soft); color: var(--al-success); font-size: 12px; font-weight: 560; }
