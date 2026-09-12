@@ -201,7 +201,7 @@ test('Hermes project context follows current first-type-wins and AGENTS chain se
 
   const checkpoint = {
     async get<T>(key: string): Promise<T | undefined> {
-      return key === 'hermes:known-project-cwds:v1' ? [cwd] as T : undefined
+      return key === 'hermes:known-project-cwds:v1' ? [cwd] as unknown as T : undefined
     },
     async set() {},
   }
