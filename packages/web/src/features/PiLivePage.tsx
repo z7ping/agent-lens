@@ -97,13 +97,15 @@ function parsePackageUpdates(value: unknown): NonNullable<PiLiveStateDto['packag
     const row = record(item)
     const displayName = stringValue(row.displayName).trim()
     if (!displayName) return []
-    if (row.type !== 'npm' && row.type !== 'git') return []
-    if (row.scope !== 'user' && row.scope !== 'project') return []
+    const type = row.type
+    const scope = row.scope
+    if (type !== 'npm' && type !== 'git') return []
+    if (scope !== 'user' && scope !== 'project') return []
     return [{
       displayName,
-      type: row.type,
-      scope: row.scope,
-    }]
+      type,
+      scope,
+    } satisfies NonNullable<PiLiveStateDto['packageUpdates']>[number]]
   }).slice(0, 240)
 }
 
