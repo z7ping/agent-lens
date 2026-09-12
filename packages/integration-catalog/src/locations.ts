@@ -109,9 +109,12 @@ export function resolveHermesRoots(
 }
 
 export function resolveHermesConfigRoots(
+  env: SourceEnvironment = process.env,
   homeDir = homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): string[] {
-  return resolveCandidates('hermes', 'config', {}, homeDir, process.platform)
+  const roots = resolveCandidates('hermes', 'config', env, homeDir, platform)
+  return value(env, 'HERMES_HOME') ? roots.slice(0, 1) : roots
 }
 
 export function resolveOpenCodeRoots(
