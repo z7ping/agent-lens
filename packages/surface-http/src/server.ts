@@ -25,6 +25,7 @@ import {
   type SourceRecordResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
+import { handleAgentFilesRequest } from './agent-files-http'
 import { readBackgroundActivity } from './background-activity'
 import { handleBackupRequest } from './backup-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
@@ -230,6 +231,7 @@ export async function startHttpSurface(
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
+      if (await handleAgentFilesRequest(request, response, url, storage, options.sources)) return
       if (await handleIntegrationAuthorizationRequest(
         request,
         response,
@@ -395,7 +397,7 @@ export async function startHttpSurface(
           installationId: record.installationId,
           ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
           nativeType: record.nativeType,
-          ...(record.nativeId ? { nativeId: record.nativeId } : {}),
+          ...(record.nativeId ? { nativeId } : {}),
           ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
           ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
           capturedAt: record.capturedAt,
