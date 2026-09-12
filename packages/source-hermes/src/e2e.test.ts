@@ -38,6 +38,7 @@ test('Hermes Source combines native session title, state.db history, assets and 
   await mkdir(join(hermesRoot, 'skills', 'reviewer'), { recursive: true })
   await mkdir(workspace, { recursive: true })
   await mkdir(inbox, { recursive: true })
+  await writeFile(join(workspace, 'AGENTS.md'), '# Hermes workspace instructions\n', 'utf8')
   await writeFile(join(hermesRoot, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
   await writeFile(join(hermesRoot, 'config.yaml'), 'mcp_servers:\n  docs:\n    command: node\ntoolsets:\n  - hermes-cli\n', 'utf8')
 
@@ -101,6 +102,8 @@ test('Hermes Source combines native session title, state.db history, assets and 
     const host = await identity.resolveHost({ name: 'hermes-test-host' })
     const [detected] = await detectHermes({ host, env: { HERMES_HOME: hermesRoot } })
     assert.ok(detected)
+    assert.equal(detected.configRoot, hermesRoot)
+    assert.equal(detected.dataRoot, hermesRoot)
 
     const historyResult = await history.sync({
       source: hermesSourceDefinition,
@@ -127,6 +130,24 @@ test('Hermes Source combines native session title, state.db history, assets and 
       abortSignal: new AbortController().signal,
     })
     assert.ok(assetResult.assetsDiscovered >= 3)
+
+    const projectContext = storage.db.prepare(`
+      SELECT
+        d.type AS type,
+        b.path AS path,
+        b.scope AS scope,
+        b.scope_root AS scopeRoot
+      FROM asset_bindings b
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE b.scope = 'project'
+      ORDER BY b.path
+    `).all() as Array<{ type: string; path: string; scope: string; scopeRoot: string }>
+    assert.deepEqual(projectContext, [{
+      type: 'context',
+      path: join(workspace, 'AGENTS.md'),
+      scope: 'project',
+      scopeRoot: workspace,
+    }])
 
     const controller = new AbortController()
     const handle = await runtime.start({ source: hermesSourceDefinition, host, detected, abortSignal: controller.signal })
