@@ -21,6 +21,7 @@ async function prepareAssetFixture() {
   const pluginRoot = join(root, 'plugins', 'cache', 'test', 'acme-plugin', '1.2.3')
   await mkdir(join(pluginRoot, '.codex-plugin'), { recursive: true })
   await mkdir(join(pluginRoot, 'skills', 'plugin-skill'), { recursive: true })
+  await mkdir(join(pluginRoot, 'examples'), { recursive: true })
   await mkdir(join(root, 'plugins', 'data', 'acme-plugin-test'), { recursive: true })
 
   await writeFile(
@@ -31,6 +32,11 @@ async function prepareAssetFixture() {
   await writeFile(
     join(pluginRoot, '.codex-plugin', 'plugin.json'),
     JSON.stringify({ name: 'acme-plugin', version: '1.2.3' }),
+    'utf8',
+  )
+  await writeFile(
+    join(pluginRoot, 'examples', 'plugin.json'),
+    JSON.stringify({ name: 'nested-fake-plugin' }),
     'utf8',
   )
   await writeFile(
@@ -107,6 +113,7 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     assert.equal(identities.has('plugin:acme-plugin@test'), true)
     assert.equal(identities.has('plugin:configured-only@test'), true)
     assert.equal(identities.has('plugin:data'), false)
+    assert.equal(identities.has('plugin:nested-fake-plugin'), false)
     assert.equal(identities.has('hook:codex-hook:PreToolUse'), true)
     assert.equal(identities.has('rule:codex-global-instructions'), true)
 
@@ -142,6 +149,15 @@ test('Codex asset scan materializes stable definitions, bindings, states and evi
     assert.equal(stateFor('configured-only@test', 'installed'), 'unknown')
     assert.equal(stateFor('configured-only@test', 'configured'), 'true')
     assert.equal(stateFor('configured-only@test', 'enabled'), 'unknown')
+
+    const acmeBinding = storage.db.prepare(`
+      SELECT b.path AS path
+      FROM asset_bindings b
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE d.type = 'plugin' AND d.canonical_name = 'acme-plugin@test'
+      LIMIT 1
+    `).get() as { path: string } | undefined
+    assert.equal(acmeBinding?.path, pluginRoot)
 
     const staticEvidence = storage.db.prepare(
       "SELECT COUNT(*) AS count FROM evidence WHERE capture_method = 'static-scan'",
