@@ -1,65 +1,53 @@
 /*
  * AgentLens 1.0 资产备份响应式唯一所有者。
- * 主页面以当前资产为核心；筛选复用工作区侧栏，备份操作进入顶部动作与 Drawer。
+ * 遵循 Workspace / Insights / Agents 共用的 Bootstrap 断点。
  */
 
-.backup-heading-actions > .btn {
-  display: inline-flex;
-  min-width: max-content;
-  flex: 0 0 auto;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.backup-heading-actions > .btn > svg {
-  display: block;
-  flex: 0 0 auto;
-}
-
 @media (max-width: 1199.98px) {
-  .backup-overview-strip {
-    align-items: flex-start;
-  }
-
-  .backup-overview-primary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-}
-
-@media (max-width: 991.98px) {
-  .backup-page { padding-inline: 18px; }
-
-  .backup-overview-strip {
-    flex-direction: column;
-    gap: 7px;
-  }
-
-  .backup-overview-secondary {
-    flex-wrap: wrap;
-    white-space: normal;
-  }
-
   .backup-agent-asset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .backup-agent-location {
     grid-column: 1 / -1;
-    margin-top: 10px;
-    padding: 12px 0 0;
     border-top: 1px solid var(--al-line);
     border-left: 0;
   }
+}
 
-  .backup-asset-kind-row {
-    grid-template-columns: minmax(110px, .45fr) minmax(0, 1fr) auto;
-    gap: 10px;
+@media (max-width: 991.98px) {
+  .backup-content { padding-inline: 18px; }
+
+  .backup-overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .backup-overview-strip > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .backup-overview-strip > div:nth-child(3) {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--al-line);
+    border-right: 0;
+  }
+
+  .backup-agent-asset-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-agent-asset-group,
+  .backup-agent-location {
+    border-left: 0;
+  }
+
+  .backup-agent-asset-group + .backup-agent-asset-group,
+  .backup-agent-location {
+    border-top: 1px solid var(--al-line);
+  }
+
+  .backup-agent-location {
+    grid-column: auto;
   }
 
   .backup-snapshot-row {
@@ -67,56 +55,69 @@
     gap: 8px 14px;
   }
 
-  .backup-snapshot-main { grid-column: 1; grid-row: 1 / 3; }
-  .backup-snapshot-state { grid-column: 2; grid-row: 1; }
-  .backup-snapshot-row > .table-actions { grid-column: 2; grid-row: 2; }
+  .backup-snapshot-main {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  .backup-snapshot-state {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .backup-snapshot-row > .table-actions {
+    grid-column: 2;
+    grid-row: 2;
+  }
 }
 
 @media (max-width: 767.98px) {
-  .backup-page { padding: 20px 14px 48px; }
+  .backup-content { padding: 20px 14px 48px; }
 
-  .future-heading {
-    display: block;
-    min-height: 0;
+  .backup-breadcrumb-actions {
+    gap: 4px;
   }
 
-  .backup-heading-actions {
-    margin-top: 12px;
-    flex-wrap: wrap;
+  .backup-breadcrumb-actions .btn {
+    padding-inline: 7px;
   }
 
-  .backup-overview-primary span {
-    white-space: normal;
+  .backup-view-tabs {
+    gap: 18px;
+  }
+
+  .backup-overview-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-overview-strip > div {
+    padding: 8px 2px;
+    border-right: 0;
+  }
+
+  .backup-overview-strip > div + div {
+    border-top: 1px solid var(--al-line);
+  }
+
+  .backup-overview-strip > div:nth-child(3) {
+    grid-column: auto;
   }
 
   .backup-agent-asset-head {
-    gap: 8px;
-  }
-
-  .backup-agent-asset-grid {
-    grid-template-columns: 1fr;
-    padding-left: 0;
+    padding-inline: 14px;
   }
 
   .backup-agent-asset-group,
   .backup-agent-location {
-    padding: 11px 0 0;
-    border-left: 0;
-  }
-
-  .backup-agent-asset-group:first-child {
-    padding-top: 0;
-  }
-
-  .backup-agent-asset-group + .backup-agent-asset-group,
-  .backup-agent-location {
-    margin-top: 8px;
-    border-top: 1px solid var(--al-line);
-    border-left: 0;
+    padding: 11px 14px 13px;
   }
 
   .backup-agent-kind-list {
     grid-template-columns: 1fr;
+  }
+
+  .backup-agent-detail-section {
+    padding-inline: 14px;
   }
 
   .backup-asset-kind-header {
@@ -146,7 +147,7 @@
   .backup-snapshot-row {
     grid-template-columns: 1fr;
     gap: 7px;
-    padding: 12px 2px;
+    padding: 12px;
   }
 
   .backup-snapshot-main,
@@ -188,8 +189,8 @@
 }
 
 @media (max-width: 575.98px) {
-  .backup-heading-actions > .btn {
-    flex: 1 1 auto;
+  .backup-age-facts {
+    grid-template-columns: 1fr;
   }
 
   .app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::before,
