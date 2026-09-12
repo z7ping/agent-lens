@@ -40,9 +40,9 @@ import {
 import { isMissingPathError } from '@agent-lens/source-support'
 import {
   discoverHermesAssets,
-  HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
   hermesAssetInternals,
 } from './assets.js'
+import { HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
@@ -818,3 +818,4 @@ export const hermesSourceInternals = {
 }
 
 export * from './assets.js'
+export * from './workspace-context.js'
