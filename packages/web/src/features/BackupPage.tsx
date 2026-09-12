@@ -412,9 +412,8 @@ export function BackupPage() {
                 return <article key={snapshot.id} className="backup-snapshot-row">
                   <div className="backup-snapshot-main">
                     <span className="snapshot-icon">{checked ? (checked.valid ? <UiIcon name="check" size={14}/> : <UiIcon name="alert" size={14}/>) : <UiIcon name="dot" size={14}/>}</span>
-                    <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
+                    <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</small><small className="backup-snapshot-meta">{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
                   </div>
-                  <div className="backup-snapshot-sources">{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</div>
                   <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</div>
                   <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
                 </article>
