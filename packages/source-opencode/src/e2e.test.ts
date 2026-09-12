@@ -1,17 +1,22 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import Database from 'better-sqlite3'
 import {
+  DefaultAssetService,
   DefaultCapabilityService,
   DefaultCoverageService,
   DefaultEvidenceService,
   DefaultIdentityService,
   DefaultObservationService,
 } from '@agent-lens/core-services'
-import { SourceHistoryRunner, SourceRuntimeRunner } from '@agent-lens/core-services/source-runner'
+import {
+  SourceAssetRunner,
+  SourceHistoryRunner,
+  SourceRuntimeRunner,
+} from '@agent-lens/core-services/source-runner'
 import { createTestCapturePolicy } from '@agent-lens/core-services/test-support'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { detectOpenCode, openCodeSourceDefinition, openCodeSourceInternals } from './index'
@@ -28,11 +33,17 @@ async function waitFor(predicate: () => Promise<boolean>, timeoutMs = 3000): Pro
 test('OpenCode Source reads native SQLite title/history and observes in-place part updates', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-opencode-'))
   const sourceRoot = join(root, 'opencode')
+  const xdgConfigRoot = join(root, 'config')
+  const configRoot = join(xdgConfigRoot, 'opencode')
   const workspace = join(root, 'workspace')
   const dbPath = join(sourceRoot, 'opencode.db')
-  const { mkdir } = await import('node:fs/promises')
   await mkdir(sourceRoot, { recursive: true })
-  await mkdir(workspace, { recursive: true })
+  await mkdir(join(workspace, '.git'), { recursive: true })
+  await mkdir(join(workspace, '.opencode', 'skills', 'reviewer'), { recursive: true })
+  await mkdir(configRoot, { recursive: true })
+  await writeFile(join(workspace, 'AGENTS.md'), '# Workspace instructions\n', 'utf8')
+  await writeFile(join(workspace, '.opencode', 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')
+  await writeFile(join(configRoot, 'AGENTS.md'), '# Global instructions\n', 'utf8')
 
   const nativeDb = new Database(dbPath)
   nativeDb.exec(`
@@ -82,12 +93,22 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
     const observations = new DefaultObservationService(storage, identity)
     const capabilities = new DefaultCapabilityService()
     const coverage = new DefaultCoverageService(storage, evidence)
+    const assets = new DefaultAssetService(storage)
     const capturePolicy = createTestCapturePolicy(['opencode'])
     const history = new SourceHistoryRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
+    const assetRunner = new SourceAssetRunner(storage, identity, capabilities, assets, evidence, capturePolicy)
     const runtime = new SourceRuntimeRunner(storage, identity, observations, capabilities, coverage, capturePolicy)
     const host = await identity.resolveHost({ name: 'opencode-test-host' })
-    const [detected] = await detectOpenCode({ host, env: { OPENCODE_HOME: sourceRoot } })
+    const [detected] = await detectOpenCode({
+      host,
+      env: {
+        OPENCODE_HOME: sourceRoot,
+        XDG_CONFIG_HOME: xdgConfigRoot,
+      },
+    })
     assert.ok(detected)
+    assert.equal(detected.dataRoot, sourceRoot)
+    assert.equal(detected.configRoot, configRoot)
 
     const historyResult = await history.sync({
       source: openCodeSourceDefinition,
@@ -105,6 +126,43 @@ test('OpenCode Source reads native SQLite title/history and observes in-place pa
 
     const logical = await storage.repositories.sessions.getLogicalSession(facts[0]!.logicalSessionId)
     assert.equal(logical?.title, 'OpenCode 原生会话标题')
+
+    const assetResult = await assetRunner.scan({
+      source: openCodeSourceDefinition,
+      host,
+      detected,
+      abortSignal: new AbortController().signal,
+    })
+    assert.ok(assetResult.assetsDiscovered >= 3)
+
+    const projectAssets = storage.db.prepare(`
+      SELECT
+        d.type AS type,
+        d.display_name AS displayName,
+        b.path AS path,
+        b.scope AS scope,
+        b.scope_root AS scopeRoot
+      FROM asset_bindings b
+      JOIN asset_definitions d ON d.id = b.asset_id
+      WHERE b.scope = 'project'
+      ORDER BY b.path
+    `).all() as Array<{
+      type: string
+      displayName: string | null
+      path: string
+      scope: string
+      scopeRoot: string
+    }>
+    assert.ok(projectAssets.some(item =>
+      item.path === join(workspace, 'AGENTS.md')
+      && item.type === 'context'
+      && item.scopeRoot === workspace
+    ))
+    assert.ok(projectAssets.some(item =>
+      item.path === join(workspace, '.opencode', 'skills', 'reviewer')
+      && item.type === 'skill'
+      && item.scopeRoot === workspace
+    ))
 
     const controller = new AbortController()
     const handle = await runtime.start({ source: openCodeSourceDefinition, host, detected, abortSignal: controller.signal })

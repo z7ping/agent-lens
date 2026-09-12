@@ -150,3 +150,25 @@ test('policy tightening requires stream rollover and reconcile', () => {
     allowAutomaticHistoricalBackfill: false,
   })
 })
+
+
+test('AssetBinding scope is metadata while scopeRoot follows path redaction', () => {
+  const result = transformReplicationEntity({
+    entityType: 'AssetBinding',
+    body: {
+      id: 'binding-1',
+      assetId: 'asset-1',
+      installationId: 'install-1',
+      scope: 'project',
+      scopeRoot: '/Users/alice/work/agent-lens',
+      path: '/Users/alice/work/agent-lens/AGENTS.md',
+    },
+    phase: 'incremental',
+    policy: redacted,
+    history: includeExisting,
+  })
+
+  assert.deepEqual(result.body.scope, { state: 'value', value: 'project' })
+  assert.deepEqual(result.body.scopeRoot, { state: 'value', value: '/Users/[USER]/work/agent-lens' })
+  assert.deepEqual(result.body.path, { state: 'value', value: '/Users/[USER]/work/agent-lens/AGENTS.md' })
+})

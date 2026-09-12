@@ -538,11 +538,12 @@ export class DefaultAssetService implements AssetService {
       id: stableId('asset-binding', [input.assetId, input.installationId, input.path ?? '', input.source ?? '']),
       assetId: input.assetId,
       installationId: input.installationId,
+      ...(input.runtimeProfileId ? { runtimeProfileId: input.runtimeProfileId } : {}),
+      ...(input.scope ? { scope: input.scope } : {}),
+      ...(input.scopeRoot ? { scopeRoot: input.scopeRoot } : {}),
       ...(input.path ? { path: input.path } : {}),
       ...(input.source ? { source: input.source } : {}),
       ...(input.version ? { version: input.version } : {}),
-      ...(input.scope ? { scope: input.scope } : {}),
-      ...(input.scopeRoot ? { scopeRoot: input.scopeRoot } : {}),
     }
     await this.storage.repositories.assets.putBinding(binding)
     return binding

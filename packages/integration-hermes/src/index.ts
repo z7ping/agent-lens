@@ -8,7 +8,7 @@ export { integrationManifest as hermesIntegrationManifest } from './manifest'
 export const hermesIntegration = defineAgentLensIntegration(
   integrationManifest,
   [
-    { pluginId: '@agent-lens/source-hermes', capabilities: ['source'], activation: 'catalog', lifecycle: 'plugin', plugin: hermesSourcePlugin },
+    { pluginId: '@agent-lens/source-hermes', capabilities: ['source', 'assets'], activation: 'catalog', lifecycle: 'plugin', plugin: hermesSourcePlugin },
     { pluginId: '@agent-lens/live-hermes', capabilities: ['live'], authorization: 'explicit', activation: 'enabled', lifecycle: 'plugin', plugin: hermesLivePlugin },
   ],
 )

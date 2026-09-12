@@ -5,7 +5,9 @@ import {
   OFFICIAL_INTEGRATION_CATALOG,
   resolveClaudeLocation,
   resolveCodexLocation,
+  resolveHermesConfigRoots,
   resolveHermesRoots,
+  resolveOpenCodeConfigRoots,
   resolveOpenCodeRoots,
   resolvePiLocation,
   resolveToolDiscoveryRoots,
@@ -30,6 +32,19 @@ test('catalog location resolvers preserve existing source defaults', () => {
     configRoot: join(home, '.claude'),
     dataRoot: join(home, '.claude', 'projects'),
     explicit: false,
+  })
+  assert.deepEqual(resolveClaudeLocation({ CLAUDE_CONFIG_DIR: '/srv/claude-profile' }, home), {
+    configRoot: '/srv/claude-profile',
+    dataRoot: join('/srv/claude-profile', 'projects'),
+    explicit: true,
+  })
+  assert.deepEqual(resolveClaudeLocation({
+    CLAUDE_CONFIG_DIR: '/srv/current-claude',
+    CLAUDE_CODE_HOME: '/srv/legacy-claude',
+  }, home), {
+    configRoot: '/srv/current-claude',
+    dataRoot: join('/srv/current-claude', 'projects'),
+    explicit: true,
   })
   assert.deepEqual(resolvePiLocation({}, home), {
     configRoot: join(home, '.pi', 'agent'),
@@ -67,12 +82,35 @@ test('explicit relative product homes do not fall back to stale default discover
     platform: 'linux',
   })
   assert.equal(hermes.some(item => item.role === 'data'), false)
-  assert.equal(hermes.some(item => item.role === 'config' && item.path === '/home/tester/.hermes'), true)
+  assert.equal(hermes.some(item => item.role === 'config'), false)
+})
+
+test('OpenCode config roots use XDG config semantics independently from data roots', () => {
+  assert.equal(
+    resolveOpenCodeConfigRoots({}, home, 'linux')[0],
+    join(home, '.config', 'opencode'),
+  )
+  assert.equal(
+    resolveOpenCodeConfigRoots({ XDG_CONFIG_HOME: '/srv/xdg-config' }, home, 'linux')[0],
+    join('/srv/xdg-config', 'opencode'),
+  )
+  assert.equal(
+    resolveOpenCodeConfigRoots({ XDG_CONFIG_HOME: 'relative-config' }, home, 'linux')[0],
+    join(home, '.config', 'opencode'),
+  )
+  assert.equal(
+    resolveOpenCodeRoots({ XDG_DATA_HOME: '/srv/xdg-data' }, home, 'linux')[0],
+    join('/srv/xdg-data', 'opencode'),
+  )
 })
 
 test('Hermes and OpenCode keep their legacy non-expanding explicit home semantics', () => {
   assert.deepEqual(
     resolveHermesRoots({ HERMES_HOME: '~/custom-hermes' }, home, 'linux'),
+    ['~/custom-hermes'],
+  )
+  assert.deepEqual(
+    resolveHermesConfigRoots({ HERMES_HOME: '~/custom-hermes' }, home, 'linux'),
     ['~/custom-hermes'],
   )
   assert.equal(
@@ -85,6 +123,14 @@ test('Hermes and OpenCode source roots remain centralized in the catalog package
   assert.deepEqual(
     resolveHermesRoots({ HERMES_HOME: '/srv/hermes' }, home, 'linux'),
     ['/srv/hermes'],
+  )
+  assert.deepEqual(
+    resolveHermesConfigRoots({ HERMES_HOME: '/srv/hermes' }, home, 'linux'),
+    ['/srv/hermes'],
+  )
+  assert.equal(
+    resolveHermesConfigRoots({ LOCALAPPDATA: 'C:\\Users\\tester\\AppData\\Local' }, home, 'win32')[0],
+    join('C:\\Users\\tester\\AppData\\Local', 'hermes'),
   )
   assert.deepEqual(
     resolveOpenCodeRoots({ OPENCODE_HOME: '/srv/opencode' }, home, 'linux').slice(0, 2),

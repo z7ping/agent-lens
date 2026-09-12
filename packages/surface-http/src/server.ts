@@ -48,6 +48,7 @@ import {
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
+import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { readLaunchableProjects } from './launchable-projects'
 import { discoverLocalePacks } from './locale-packs'
 import { handlePiLiveRequest } from './pi-live'
@@ -255,6 +256,13 @@ export async function startHttpSurface(
         url,
         options.integrationPackages,
       )) return
+      if (await handleManagedAssetFilesRequest(
+        request,
+        response,
+        url,
+        storage,
+        options.integrationStatus,
+      )) return
 
       if (url.pathname === '/api/v1/agents/rescan') {
         if (request.method !== 'POST') {
@@ -389,7 +397,7 @@ export async function startHttpSurface(
           installationId: record.installationId,
           ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
           nativeType: record.nativeType,
-          ...(record.nativeId ? { nativeId: record.nativeId } : {}),
+          ...(record.nativeId ? { nativeId } : {}),
           ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
           ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
           capturedAt: record.capturedAt,

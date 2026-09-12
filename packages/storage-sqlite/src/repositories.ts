@@ -791,26 +791,29 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
       await executor.run(() => {
         db.prepare(`
           INSERT INTO asset_bindings(
-            id, asset_id, installation_id, path, source, version, scope, scope_root
+            id, asset_id, installation_id, runtime_profile_id,
+            scope, scope_root, path, source, version
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             asset_id = excluded.asset_id,
             installation_id = excluded.installation_id,
+            runtime_profile_id = excluded.runtime_profile_id,
+            scope = excluded.scope,
+            scope_root = excluded.scope_root,
             path = excluded.path,
             source = excluded.source,
-            version = excluded.version,
-            scope = excluded.scope,
-            scope_root = excluded.scope_root
+            version = excluded.version
         `).run(
           binding.id,
           binding.assetId,
           binding.installationId,
+          binding.runtimeProfileId ?? null,
+          binding.scope ?? null,
+          binding.scopeRoot ?? null,
           binding.path ?? null,
           binding.source ?? null,
           binding.version ?? null,
-          binding.scope ?? null,
-          binding.scopeRoot ?? null,
         )
       })
     },

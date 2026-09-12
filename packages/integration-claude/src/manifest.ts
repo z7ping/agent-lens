@@ -5,6 +5,6 @@ export const integrationManifest: AgentIntegrationManifest = {
   productId: 'claude-code',
   displayName: 'Claude Code',
   apiVersion: '1.0',
-  capabilities: ['source', 'hook'],
+  capabilities: ['source', 'hook', 'assets'],
   componentPluginIds: ['@agent-lens/source-claude'],
 }

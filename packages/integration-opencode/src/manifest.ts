@@ -5,6 +5,6 @@ export const integrationManifest: AgentIntegrationManifest = {
   productId: 'opencode',
   displayName: 'OpenCode',
   apiVersion: '1.0',
-  capabilities: ['source'],
+  capabilities: ['source', 'assets'],
   componentPluginIds: ['@agent-lens/source-opencode'],
 }

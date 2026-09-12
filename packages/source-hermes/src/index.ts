@@ -2,21 +2,17 @@ import { createHash } from 'node:crypto'
 import {
   access,
   mkdir,
-  opendir,
   readFile,
   readdir,
-  stat,
   unlink,
 } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import Database from 'better-sqlite3'
-import { parse as parseYaml } from 'yaml'
 import {
   evidenceFromSourceRecord,
   observationFromSourceRecord,
   type DetectedSource,
-  type DiscoveredAsset,
   type Disposable,
   type EvidenceCandidate,
   type NormalizedSourceOutput,
@@ -41,6 +37,11 @@ import {
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { isMissingPathError, watchSourceFiles, type SourceFileWatchHandle } from '@agent-lens/source-support'
+import {
+  discoverHermesAssets,
+  hermesAssetInternals,
+} from './assets.js'
+import { HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
@@ -162,10 +163,6 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function unique(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))]
-}
-
 export async function detectHermes(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
   const roots = resolveHermesRoots(env)
@@ -174,7 +171,7 @@ export async function detectHermes(ctx: SourceDetectionContext): Promise<Detecte
     if (await exists(join(root, DB_NAME))) { dataRoot = root; break }
   }
   let configRoot: string | undefined
-  for (const root of resolveHermesConfigRoots()) {
+  for (const root of resolveHermesConfigRoots(env)) {
     if (await exists(root)) { configRoot = root; break }
   }
   configRoot ??= dataRoot
@@ -351,6 +348,29 @@ function dbRecord(
 export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const root = ctx.installation.dataRoot
   if (!root || ctx.abortSignal.aborted || !await exists(join(root, DB_NAME))) return
+
+  const remembered = await ctx.checkpoint.get<string[]>(HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
+  const knownProjectCwds = new Map<string, string>()
+  for (const value of remembered) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    const key = process.platform === 'win32'
+      ? cwd.replaceAll('\\', '/').toLowerCase()
+      : cwd.replaceAll('\\', '/')
+    if (!knownProjectCwds.has(key)) knownProjectCwds.set(key, cwd)
+  }
+
+  const rememberWorkspace = (value: string | null) => {
+    const raw = value?.trim()
+    if (!raw || !isAbsolute(raw)) return
+    const cwd = resolve(raw)
+    const key = process.platform === 'win32'
+      ? cwd.replaceAll('\\', '/').toLowerCase()
+      : cwd.replaceAll('\\', '/')
+    if (!knownProjectCwds.has(key)) knownProjectCwds.set(key, cwd)
+  }
+
   const db = openDatabase(root)
   try {
     const parsedActiveSince = ctx.historyWindow?.activeSince ? Date.parse(ctx.historyWindow.activeSince) : Number.NaN
@@ -367,6 +387,7 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
       if (!rows.length) break
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
+        rememberWorkspace(row.cwd)
         yield dbRecord(row, ctx, 'history')
         rowId = row.row_id
         await ctx.checkpoint.set(checkpointKey, rowId)
@@ -375,6 +396,13 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
     }
   } finally {
     db.close()
+  }
+
+  if (!ctx.abortSignal.aborted) {
+    await ctx.checkpoint.set(
+      HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
+      [...knownProjectCwds.values()],
+    )
   }
 }
 
@@ -542,191 +570,6 @@ export async function startHermesRuntimeCapture(
       db = null
       active?.close()
     },
-  }
-}
-
-async function* walkSkillFiles(root: string): AsyncIterable<string> {
-  let dir
-  try {
-    dir = await opendir(root)
-  } catch (error) {
-    if (isMissingPathError(error)) return
-    throw error
-  }
-  for await (const entry of dir) {
-    const path = join(root, entry.name)
-    if (entry.isDirectory()) yield* walkSkillFiles(path)
-    else if (entry.isFile() && entry.name === 'SKILL.md') yield path
-  }
-}
-
-function assetEvidence(path: string, observedAt: string): EvidenceCandidate[] {
-  return [{
-    captureMethod: 'static-scan',
-    derivation: 'observed',
-    sourceLocator: { kind: 'file', path },
-    eventTime: observedAt,
-    capturedAt: new Date().toISOString(),
-    confidenceHint: 'exact',
-  }]
-}
-
-function installedState(path: string, observedAt: string): NonNullable<DiscoveredAsset['states']> {
-  return [{
-    state: 'installed',
-    value: true,
-    observedAt,
-    evidenceCandidates: assetEvidence(path, observedAt),
-  }]
-}
-
-async function* discoverSkillAssets(root: string): AsyncIterable<DiscoveredAsset> {
-  for await (const skillFile of walkSkillFiles(join(root, 'skills'))) {
-    let meta
-    try {
-      meta = await stat(skillFile)
-    } catch (error) {
-      if (isMissingPathError(error)) continue
-      throw error
-    }
-    const relative = skillFile.slice(join(root, 'skills').length + 1).replace(/[\\/]+SKILL\.md$/, '')
-    const name = relative.replace(/[\\/]+/g, ':') || basename(dirname(skillFile))
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: { type: 'skill', canonicalName: name, displayName: basename(dirname(skillFile)) },
-      binding: { path: skillFile, source: 'hermes:skills' },
-      states: installedState(skillFile, observedAt),
-    }
-  }
-}
-
-async function* discoverDirectoryAssets(root: string, directory: string, type: 'plugin' | 'memory'): AsyncIterable<DiscoveredAsset> {
-  const path = join(root, directory)
-  let entries
-  try {
-    entries = await readdir(path, { withFileTypes: true })
-  } catch (error) {
-    if (isMissingPathError(error)) return
-    throw error
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory() && type !== 'memory') continue
-    const itemPath = join(path, entry.name)
-    let meta
-    try {
-      meta = await stat(itemPath)
-    } catch (error) {
-      if (isMissingPathError(error)) continue
-      throw error
-    }
-    const observedAt = meta.mtime.toISOString()
-    yield {
-      definition: { type, canonicalName: entry.name, displayName: entry.name },
-      binding: { path: itemPath, source: `hermes:${directory}` },
-      states: installedState(itemPath, observedAt),
-    }
-  }
-}
-
-function stringSet(value: unknown): Set<string> {
-  if (!Array.isArray(value)) return new Set()
-  return new Set(value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim()))
-}
-
-function boolLike(value: unknown, fallback: boolean): boolean {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value !== 0
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-    if (['true', '1', 'yes', 'on'].includes(normalized)) return true
-    if (['false', '0', 'no', 'off'].includes(normalized)) return false
-  }
-  return fallback
-}
-
-function parseHermesConfig(text: string): Record<string, unknown> {
-  return asRecord(parseYaml(text))
-}
-
-async function* discoverConfigAssets(root: string): AsyncIterable<DiscoveredAsset> {
-  const configPath = join(root, 'config.yaml')
-  let text: string
-  let meta
-  try {
-    ;[text, meta] = await Promise.all([readFile(configPath, 'utf8'), stat(configPath)])
-  } catch (error) {
-    if (isMissingPathError(error)) return
-    throw error
-  }
-
-  const config = parseHermesConfig(text)
-  const observedAt = meta.mtime.toISOString()
-  const evidenceCandidates = assetEvidence(configPath, observedAt)
-  const mcpServers = asRecord(config.mcp_servers)
-
-  for (const [name, rawConfig] of Object.entries(mcpServers)) {
-    const server = asRecord(rawConfig)
-    const enabled = boolLike(server.enabled, true)
-    yield {
-      definition: { type: 'mcp', canonicalName: name, displayName: name },
-      binding: { path: configPath, source: 'hermes:config' },
-      states: [
-        { state: 'configured', value: true, observedAt, evidenceCandidates },
-        { state: 'enabled', value: enabled, observedAt, evidenceCandidates },
-        {
-          state: 'discoverable',
-          value: enabled ? 'unknown' : false,
-          observedAt,
-          ...(enabled ? {} : { evidenceCandidates }),
-        },
-      ],
-    }
-  }
-
-  const plugins = asRecord(config.plugins)
-  const enabledPlugins = stringSet(plugins.enabled)
-  const disabledPlugins = stringSet(plugins.disabled)
-  for (const name of new Set([...enabledPlugins, ...disabledPlugins])) {
-    const enabled = enabledPlugins.has(name) && !disabledPlugins.has(name)
-    yield {
-      definition: { type: 'plugin', canonicalName: name, displayName: name },
-      binding: { path: configPath, source: 'hermes:config' },
-      states: [
-        { state: 'configured', value: true, observedAt, evidenceCandidates },
-        { state: 'enabled', value: enabled, observedAt, evidenceCandidates },
-      ],
-    }
-  }
-
-  for (const section of ['toolsets', 'platform_toolsets']) {
-    const values = config[section]
-    const names = Array.isArray(values)
-      ? values.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim())
-      : Object.keys(asRecord(values))
-    for (const name of names) {
-      yield {
-        definition: { type: 'builtin', canonicalName: name, displayName: name },
-        binding: { path: configPath, source: `hermes:config:${section}` },
-        states: [{ state: 'configured', value: true, observedAt, evidenceCandidates }],
-      }
-    }
-  }
-}
-
-export async function* discoverHermesAssets(ctx: SourceExecutionContext): AsyncIterable<DiscoveredAsset> {
-  const roots = unique([ctx.installation.configRoot ?? '', ctx.installation.dataRoot ?? ''])
-  for (const root of roots) {
-    for (const group of [
-      discoverSkillAssets(root),
-      discoverDirectoryAssets(root, 'plugins', 'plugin'),
-      discoverDirectoryAssets(root, 'memories', 'memory'),
-      discoverConfigAssets(root),
-    ]) {
-      for await (const asset of group) {
-        if (ctx.abortSignal.aborted) return
-        yield asset
-      }
-    }
   }
 }
 
@@ -926,7 +769,7 @@ export async function declareHermesCapabilities(_detected: DetectedSource): Prom
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail', 'runtime-hook'] },
     { sourceId: SOURCE_ID, name: 'permission', status: 'partial', captureModes: ['runtime-hook'], reason: 'Available when the optional AgentLens Hermes observer plugin is explicitly enabled' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['runtime-hook'], reason: 'Available when the optional AgentLens Hermes observer plugin is explicitly enabled' },
-    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'User-scope files and config are observable; runtime-loaded, bundled, pip and project-plugin discovery requires stronger runtime evidence' },
+    { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'User-profile assets and history-known project context files are observable; runtime-loaded assets, external skill dirs, bundled/pip plugins and project plugins require stronger runtime evidence' },
     { sourceId: SOURCE_ID, name: 'thinking', status: 'unavailable', captureModes: [], reason: 'No stable source-visible reasoning mapping is implemented' },
     { sourceId: SOURCE_ID, name: 'context', status: 'unavailable', captureModes: [], reason: 'Context lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Usage mapping is not implemented' },
@@ -973,8 +816,12 @@ export const hermesSourceInternals = {
   rowFingerprint,
   parseInboxEnvelope,
   hookRecord,
-  parseHermesConfig,
-  boolLike,
+  parseHermesConfig: hermesAssetInternals.parseHermesConfig,
+  boolLike: hermesAssetInternals.boolLike,
   selectRows,
   hermesEnvelope,
 }
+
+export * from './assets.js'
+export * from './project-context.js'
+export * from './workspace-context.js'

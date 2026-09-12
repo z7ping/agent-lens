@@ -13,6 +13,9 @@ import type {
   IntegrationPreferencesResponseDto,
   IntegrationToolDiscoveryResponseDto,
   LiveUpdateArea,
+  ManagedAssetDirectoryResponseDto,
+  ManagedAssetFilePreviewResponseDto,
+  ManagedAssetRoot,
   LiveUpdateEventDto,
   ReviewDetailFilter,
   ReviewResponseDto,
@@ -200,6 +203,22 @@ export class AgentLensClientModel {
   getSnapshot = (): ClientSnapshot => this.snapshot
 
   sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
+
+  managedAssetDirectory = (
+    productId: string,
+    installationId: string,
+    root: ManagedAssetRoot,
+    path = '',
+  ): Promise<ManagedAssetDirectoryResponseDto> =>
+    this.api.managedAssetDirectory(productId, installationId, root, path)
+
+  managedAssetFile = (
+    productId: string,
+    installationId: string,
+    root: ManagedAssetRoot,
+    path: string,
+  ): Promise<ManagedAssetFilePreviewResponseDto> =>
+    this.api.managedAssetFile(productId, installationId, root, path)
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)

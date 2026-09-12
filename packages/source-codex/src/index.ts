@@ -41,7 +41,7 @@ export async function declareCodexCapabilities(
     { sourceId: 'codex', name: 'subagent', status: 'available', captureModes: ['runtime-hook'] },
     { sourceId: 'codex', name: 'usage', status: 'available', captureModes: ['history'] },
     { sourceId: 'codex', name: 'context', status: 'available', captureModes: ['history', 'runtime-hook'] },
-    { sourceId: 'codex', name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static files and configuration are observable; runtime discoverability and enablement require stronger Codex runtime evidence' },
+    { sourceId: 'codex', name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static files and the user config are observable; effective merged config, runtime discoverability and enablement require Codex app-server/runtime evidence' },
     { sourceId: 'codex', name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset invocation attribution is not yet implemented' },
     { sourceId: 'codex', name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible reasoning records can be observed' },
     { sourceId: 'codex', name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not yet implemented' },
@@ -81,10 +81,12 @@ const applyCodexSource = Object.assign(
 export const codexSourcePlugin = defineAgentLensPlugin(codexManifest, applyCodexSource)
 
 export * from './assets'
+export * from './config'
 export * from './current-protocol'
 export * from './detect'
 export * from './format'
 export * from './history'
+export * from './instructions'
 export * from './normalize'
 export * from './runtime'
 export * from './session-attribution'

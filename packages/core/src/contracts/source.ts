@@ -80,11 +80,11 @@ export interface SourceRecordEmitter {
 
 export interface DiscoveredAssetBindingHint {
   runtimeProfileId?: string
+  scope?: AssetScope
+  scopeRoot?: string
   path?: string
   source?: string
   version?: string
-  scope?: AssetScope
-  scopeRoot?: string
 }
 
 export interface DiscoveredAssetStateHint {

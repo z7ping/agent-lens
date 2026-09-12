@@ -39,9 +39,9 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
       installationId: 'installation:codex',
       path: '/tmp/.codex/skills/review',
       source: 'skills-dir',
-      version: '1.2.0',
       scope: 'project',
       scopeRoot: '/tmp/project',
+      version: '1.2.0',
     })
     await storage.repositories.assets.putState({
       id: 'state:installed:old',

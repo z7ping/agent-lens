@@ -84,20 +84,22 @@ function mapDefinition(value: unknown): AssetDefinition {
 
 function mapBinding(value: unknown): AssetBinding {
   const row = rowRecord(value)
+  const runtimeProfileId = optionalString(row, 'runtime_profile_id')
+  const scope = optionalEnumString(row, 'scope', ASSET_SCOPES)
+  const scopeRoot = optionalString(row, 'scope_root')
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
   const version = optionalString(row, 'version')
-  const scope = optionalEnumString(row, 'scope', ASSET_SCOPES)
-  const scopeRoot = optionalString(row, 'scope_root')
   return {
     id: requiredString(row, 'binding_id'),
     assetId: requiredString(row, 'asset_id'),
     installationId: requiredString(row, 'installation_id'),
+    ...(runtimeProfileId === undefined ? {} : { runtimeProfileId }),
+    ...(scope === undefined ? {} : { scope }),
+    ...(scopeRoot === undefined ? {} : { scopeRoot }),
     ...(path === undefined ? {} : { path }),
     ...(source === undefined ? {} : { source }),
     ...(version === undefined ? {} : { version }),
-    ...(scope === undefined ? {} : { scope }),
-    ...(scopeRoot === undefined ? {} : { scopeRoot }),
   }
 }
 
@@ -126,11 +128,12 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
           b.id AS binding_id,
           b.asset_id AS asset_id,
           b.installation_id AS installation_id,
+          b.runtime_profile_id AS runtime_profile_id,
+          b.scope AS scope,
+          b.scope_root AS scope_root,
           b.path AS path,
           b.source AS source,
           b.version AS version,
-          b.scope AS scope,
-          b.scope_root AS scope_root,
           d.type AS asset_type,
           d.canonical_name AS canonical_name,
           d.display_name AS display_name,

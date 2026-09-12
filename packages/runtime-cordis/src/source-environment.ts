@@ -5,6 +5,7 @@ export {
   resolveCodexLocation,
   resolveHermesConfigRoots,
   resolveHermesRoots,
+  resolveOpenCodeConfigRoots,
   resolveOpenCodeRoots,
   resolvePiLocation,
   type ResolvedSourceLocation,

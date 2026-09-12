@@ -36,11 +36,11 @@ export interface AgentAssetStateDto {
 export interface AgentAssetBindingDto {
   id: string
   installationId: string
+  scope?: 'installation' | 'user' | 'project' | 'workspace'
+  scopeRoot?: string
   path?: string
   source?: string
   version?: string
-  scope?: 'installation' | 'user' | 'project' | 'workspace'
-  scopeRoot?: string
   states: AgentAssetStateDto[]
 }
 
@@ -54,7 +54,7 @@ export interface AgentAssetInventoryDto {
 }
 
 export interface AgentIntegrationCapabilityStatusDto {
-  capability: 'source' | 'hook' | 'runtime' | 'live'
+  capability: 'source' | 'hook' | 'runtime' | 'live' | 'assets'
   availability: 'available' | 'unavailable' | 'error'
   authorization?: 'required' | 'granted'
   reasonCode?:

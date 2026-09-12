@@ -5,7 +5,7 @@ export const integrationManifest: AgentIntegrationManifest = {
   productId: 'hermes',
   displayName: 'Hermes',
   apiVersion: '1.0',
-  capabilities: ['source', 'hook', 'live'],
+  capabilities: ['source', 'hook', 'live', 'assets'],
   componentPluginIds: [
     '@agent-lens/source-hermes',
     '@agent-lens/live-hermes',

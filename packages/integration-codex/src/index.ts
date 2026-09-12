@@ -9,7 +9,7 @@ export const codexIntegration = defineAgentLensIntegration(
   [
     {
       pluginId: '@agent-lens/source-codex',
-      capabilities: ['source'],
+      capabilities: ['source', 'assets'],
       activation: 'catalog',
       lifecycle: 'plugin',
       plugin: codexSourcePlugin,

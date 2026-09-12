@@ -38,6 +38,7 @@ import {
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 
 const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024
+const KNOWN_PROJECT_CWDS_CHECKPOINT_KEY = 'pi:known-project-cwds:v1'
 
 interface PiSessionMetadata {
   nativeSessionId: string
@@ -279,6 +280,55 @@ async function sessionMetadata(filePath: string): Promise<PiSessionMetadata> {
   }
 }
 
+function projectCwdKey(value: string): string {
+  const normalized = resolve(value).replaceAll('\\', '/')
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+async function existingProjectCwds(values: readonly string[]): Promise<string[]> {
+  const valid = new Map<string, string>()
+  for (const value of values) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    let meta
+    try {
+      meta = await stat(cwd)
+    } catch (error) {
+      if (isMissingPathError(error)) continue
+      throw error
+    }
+    if (!meta.isDirectory()) continue
+    const key = projectCwdKey(cwd)
+    if (!valid.has(key)) valid.set(key, cwd)
+  }
+  return [...valid.values()]
+}
+
+export async function listPiProjectCwds(ctx: SourceExecutionContext): Promise<string[]> {
+  const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY)
+  if (remembered?.length) return existingProjectCwds(remembered)
+
+  const sessionsDir = ctx.installation.dataRoot
+  if (!sessionsDir) return []
+  const values = new Map<string, string>()
+  for (const filePath of await listJsonlFiles(sessionsDir)) {
+    if (ctx.abortSignal.aborted) break
+    const session = await sessionMetadata(filePath)
+    const raw = session.cwd?.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    const key = projectCwdKey(cwd)
+    if (!values.has(key)) values.set(key, cwd)
+  }
+
+  const existing = await existingProjectCwds([...values.values()])
+  if (!ctx.abortSignal.aborted) {
+    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, existing)
+  }
+  return existing
+}
+
 function historyCheckpointKey(filePath: string): string {
   // Keep the existing checkpoint generation stable. Parser upgrades must not turn the low-frequency
   // runtime reconciliation into an accidental full-history re-ingest on large installations.
@@ -292,6 +342,7 @@ function nativeId(entry: Record<string, unknown>): string | undefined {
 export async function* ingestPiFile(
   ctx: SourceExecutionContext,
   filePath: string,
+  onSession?: (session: PiSessionMetadata) => void | Promise<void>,
 ): AsyncIterable<SourceRecord> {
   if (ctx.abortSignal.aborted || extname(filePath).toLowerCase() !== '.jsonl') return
   let fileStat
@@ -320,6 +371,7 @@ export async function* ingestPiFile(
   let sequence = reset ? 0 : previous.sequence
   let incompleteTail = false
   const session = await sessionMetadata(filePath)
+  await onSession?.(session)
 
   for await (const line of readJsonlLines(filePath, offset)) {
     if (ctx.abortSignal.aborted) return
@@ -403,9 +455,29 @@ export async function* ingestPiFile(
 export async function* ingestPiHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
   const sessionsDir = ctx.installation.dataRoot
   if (!sessionsDir) return
+
+  const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
+  const knownCwds = new Map<string, string>()
+  for (const value of remembered) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    knownCwds.set(projectCwdKey(cwd), cwd)
+  }
+  const rememberSession = (session: PiSessionMetadata) => {
+    const raw = session.cwd?.trim()
+    if (!raw || !isAbsolute(raw)) return
+    const cwd = resolve(raw)
+    const key = projectCwdKey(cwd)
+    if (!knownCwds.has(key)) knownCwds.set(key, cwd)
+  }
+
   for (const filePath of await listJsonlFiles(sessionsDir, ctx.historyWindow)) {
     if (ctx.abortSignal.aborted) return
-    yield* ingestPiFile(ctx, filePath)
+    yield* ingestPiFile(ctx, filePath, rememberSession)
+  }
+  if (!ctx.abortSignal.aborted) {
+    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, [...knownCwds.values()])
   }
 }
 
@@ -416,6 +488,24 @@ export async function startPiRuntimeCapture(
   const sessionsDir = ctx.installation.dataRoot
   if (!sessionsDir || !await exists(sessionsDir)) return { dispose() {} }
 
+  const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
+  const knownCwds = new Map<string, string>()
+  for (const value of remembered) {
+    const raw = value.trim()
+    if (!raw || !isAbsolute(raw)) continue
+    const cwd = resolve(raw)
+    knownCwds.set(projectCwdKey(cwd), cwd)
+  }
+  const rememberSession = async (session: PiSessionMetadata) => {
+    const raw = session.cwd?.trim()
+    if (!raw || !isAbsolute(raw)) return
+    const cwd = resolve(raw)
+    const key = projectCwdKey(cwd)
+    if (knownCwds.has(key)) return
+    knownCwds.set(key, cwd)
+    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, [...knownCwds.values()])
+  }
+
   return startHistoryFileWatch({
     root: sessionsDir,
     signal: ctx.abortSignal,
@@ -425,7 +515,7 @@ export async function startPiRuntimeCapture(
       limit === undefined ? undefined : { sessionLimit: limit },
     ),
     onFile: async filePath => {
-      for await (const record of ingestPiFile(ctx, filePath)) {
+      for await (const record of ingestPiFile(ctx, filePath, rememberSession)) {
         if (ctx.abortSignal.aborted) return
         await emitter.emit(record)
       }
@@ -443,7 +533,9 @@ export async function startPiRuntimeCapture(
 }
 
 export const piSessionInternals = {
+  KNOWN_PROJECT_CWDS_CHECKPOINT_KEY,
   listJsonlFiles,
+  listPiProjectCwds,
   piSessionsDir,
   readJsonlLines,
   ingestPiFile,

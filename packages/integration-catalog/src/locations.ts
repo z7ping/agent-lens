@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { isAbsolute, join } from 'node:path'
 import {
   officialIntegrationCatalogEntry,
   resolveToolDiscoveryCandidatePath,
@@ -80,7 +81,11 @@ export function resolveClaudeLocation(
   return {
     configRoot: firstResolved('claude-code', 'config', env, homeDir),
     dataRoot: firstResolved('claude-code', 'data', env, homeDir),
-    explicit: Boolean(value(env, 'CLAUDE_CODE_HOME') ?? value(env, 'CLAUDE_HOME')),
+    explicit: Boolean(
+      value(env, 'CLAUDE_CONFIG_DIR')
+      ?? value(env, 'CLAUDE_CODE_HOME')
+      ?? value(env, 'CLAUDE_HOME')
+    ),
   }
 }
 
@@ -109,9 +114,12 @@ export function resolveHermesRoots(
 }
 
 export function resolveHermesConfigRoots(
+  env: SourceEnvironment = process.env,
   homeDir = homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): string[] {
-  return resolveCandidates('hermes', 'config', {}, homeDir, process.platform)
+  const roots = resolveCandidates('hermes', 'config', env, homeDir, platform)
+  return value(env, 'HERMES_HOME') ? roots.slice(0, 1) : roots
 }
 
 export function resolveOpenCodeRoots(
@@ -120,6 +128,18 @@ export function resolveOpenCodeRoots(
   platform: NodeJS.Platform = process.platform,
 ): string[] {
   return resolveCandidates('opencode', 'data', env, homeDir, platform)
+}
+
+export function resolveOpenCodeConfigRoots(
+  env: SourceEnvironment = process.env,
+  homeDir = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string[] {
+  const roots = resolveCandidates('opencode', 'config', env, homeDir, platform)
+  const xdgConfig = value(env, 'XDG_CONFIG_HOME')
+  if (!xdgConfig || isAbsolute(xdgConfig)) return roots
+  const unsafe = join(xdgConfig, 'opencode')
+  return roots.filter(root => root !== unsafe)
 }
 
 export const sourceLocationInternals = {

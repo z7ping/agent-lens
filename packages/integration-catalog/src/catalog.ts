@@ -163,11 +163,13 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
       executable: { commands: ['claude'], explicitEnvVar: 'CLAUDE_BIN' },
       roots: [
         ...roots('config',
+          { envVar: 'CLAUDE_CONFIG_DIR', exclusiveWhenSet: true },
           { envVar: 'CLAUDE_CODE_HOME', exclusiveWhenSet: true },
           { envVar: 'CLAUDE_HOME', exclusiveWhenSet: true },
           { path: '~/.claude' },
         ),
         ...roots('data',
+          { envVar: 'CLAUDE_CONFIG_DIR', append: ['projects'], exclusiveWhenSet: true },
           { envVar: 'CLAUDE_CODE_HOME', append: ['projects'], exclusiveWhenSet: true },
           { envVar: 'CLAUDE_HOME', append: ['projects'], exclusiveWhenSet: true },
           { path: '~/.claude/projects' },
@@ -188,6 +190,9 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
           id: 'config',
           role: 'config',
           candidates: [
+            { envVar: 'HERMES_HOME', expandHome: false, exclusiveWhenSet: true },
+            { envVar: 'LOCALAPPDATA', append: ['hermes'], platforms: ['win32'], expandHome: false },
+            { path: '~/AppData/Local/hermes', platforms: ['win32'] },
             { path: '~/.hermes' },
           ],
         },
@@ -214,6 +219,14 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
     discovery: {
       executable: { commands: ['opencode', 'opencode2'] },
       roots: [
+        {
+          id: 'config',
+          role: 'config',
+          candidates: [
+            { envVar: 'XDG_CONFIG_HOME', append: ['opencode'], expandHome: false },
+            { path: '~/.config/opencode' },
+          ],
+        },
         {
           id: 'data',
           role: 'data',

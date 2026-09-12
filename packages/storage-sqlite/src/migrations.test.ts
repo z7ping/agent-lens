@@ -54,6 +54,14 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       .all() as Array<{ name: string }>
     assert.ok(checkpointColumns.some(column => column.name === 'revision'))
 
+    const assetBindingColumns = storage.db.prepare("PRAGMA table_info('asset_bindings')")
+      .all() as Array<{ name: string }>
+    assert.ok(assetBindingColumns.some(column => column.name === 'scope'))
+    assert.ok(assetBindingColumns.some(column => column.name === 'scope_root'))
+    const assetBindingIndexes = storage.db.prepare("PRAGMA index_list('asset_bindings')")
+      .all() as Array<{ name: string }>
+    assert.ok(assetBindingIndexes.some(index => index.name === 'idx_asset_bindings_scope'))
+
     const checkpointTriggers = storage.db.prepare(`
       SELECT name FROM sqlite_master
       WHERE type = 'trigger' AND name = 'trg_source_checkpoint_revision_guard'
@@ -64,11 +72,6 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       .all() as Array<{ name: string }>
     assert.ok(maintenanceColumns.some(column => column.name === 'revision'))
     assert.ok(maintenanceColumns.some(column => column.name === 'priority'))
-
-    const assetBindingColumns = storage.db.prepare("PRAGMA table_info('asset_bindings')")
-      .all() as Array<{ name: string }>
-    assert.ok(assetBindingColumns.some(column => column.name === 'scope'))
-    assert.ok(assetBindingColumns.some(column => column.name === 'scope_root'))
 
     const projectionTables = storage.db.prepare(`
       SELECT name FROM sqlite_master
