@@ -141,32 +141,77 @@
   margin-left: auto;
 }
 
-.workspace-locale-selector {
-  display: grid;
-  gap: 5px;
-  margin: 7px 4px 2px;
-  padding: 8px 6px 2px;
-  border-top: 1px solid var(--al-line);
+.workspace-settings-menu-value {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.workspace-locale-selector > span {
+.workspace-locale-trigger .workspace-settings-menu-tail {
+  margin-left: 0;
+}
+
+.workspace-locale-popover {
+  width: 220px;
+  padding: 7px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+
+.workspace-locale-popover-title {
+  padding: 4px 8px 7px;
+  color: var(--al-muted-2);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.workspace-locale-options {
   display: grid;
   gap: 2px;
 }
 
-.workspace-locale-selector b {
+.workspace-locale-option {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--al-ink-2);
-  font-size: 12px;
-  font-weight: 620;
+  text-align: left;
 }
 
-.workspace-locale-selector small {
+.workspace-locale-option:hover:not(:disabled),
+.workspace-locale-option.is-active {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.workspace-locale-option > span {
+  display: grid;
+  gap: 2px;
+}
+
+.workspace-locale-option b {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workspace-locale-option small {
   color: var(--al-muted-2);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
 }
-
-.workspace-locale-selector .select-menu-trigger { width: 100%; }
 
 .workspace-settings-separator {
   height: 1px;
