@@ -1,5 +1,5 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import type {
   DiscoveredAsset,
   EvidenceCandidate,
@@ -160,14 +160,44 @@ async function* discoverMcpServers(
   }
 }
 
+function pluginConfigEntries(config: CodexTomlConfig | null): Map<string, Record<string, unknown>> {
+  const table = codexTable(config?.plugins)
+  const entries = new Map<string, Record<string, unknown>>()
+  if (!table) return entries
+  for (const [id, value] of Object.entries(table)) {
+    const plugin = codexTable(value)
+    if (plugin) entries.set(id, plugin)
+  }
+  return entries
+}
+
+function pluginIdentityFromCachePath(cacheRoot: string, manifestPath: string): {
+  configId?: string
+  pluginName?: string
+  version?: string
+} {
+  const relativeManifest = relative(cacheRoot, manifestPath).replaceAll('\\', '/')
+  const parts = relativeManifest.split('/').filter(Boolean)
+  if (parts.length < 4) return {}
+  const [marketplace, pluginName, version] = parts
+  if (!marketplace || !pluginName || !version) return {}
+  return {
+    configId: `${pluginName}@${marketplace}`,
+    pluginName,
+    version,
+  }
+}
+
 async function* discoverPluginManifests(
   configRoot: string,
   capturedAt: string,
+  config: CodexTomlConfig | null,
 ): AsyncIterable<DiscoveredAsset> {
-  const pluginsRoot = join(configRoot, 'plugins')
-  const seen = new Set<string>()
+  const cacheRoot = join(configRoot, 'plugins', 'cache')
+  const configured = pluginConfigEntries(config)
+  const seenConfigIds = new Set<string>()
 
-  for await (const manifestPath of walkNamedFile(join(pluginsRoot, 'cache'), 'plugin.json')) {
+  for await (const manifestPath of walkNamedFile(cacheRoot, 'plugin.json')) {
     const meta = await safeStat(manifestPath)
     if (!meta?.isFile()) continue
     let manifest: Record<string, unknown> = {}
@@ -175,36 +205,37 @@ async function* discoverPluginManifests(
       manifest = asRecord(JSON.parse(await readFile(manifestPath, 'utf8')))
     } catch (error) {
       if (!isMissingPathError(error) && !(error instanceof SyntaxError)) throw error
-      // Missing/malformed metadata does not erase the independently observed plugin directory.
+      // Cache layout still proves an installed plugin even when optional manifest metadata is unreadable.
     }
+
+    const cacheIdentity = pluginIdentityFromCachePath(cacheRoot, manifestPath)
+    const configId = cacheIdentity.configId
+    const configuredPlugin = configId ? configured.get(configId) : undefined
+    if (configId) seenConfigIds.add(configId)
 
     const name = typeof manifest.name === 'string' && manifest.name
       ? manifest.name
       : typeof manifest.id === 'string' && manifest.id
         ? manifest.id
-        : basename(dirname(manifestPath))
-    const version = typeof manifest.version === 'string' && manifest.version
+        : cacheIdentity.pluginName ?? basename(dirname(manifestPath))
+    const manifestVersion = typeof manifest.version === 'string' && manifest.version
       ? manifest.version
       : undefined
-    const upstreamIdentity = typeof manifest.id === 'string' && manifest.id
-      ? manifest.id
-      : undefined
+    const version = manifestVersion ?? cacheIdentity.version
     const bindingPath = dirname(manifestPath)
-    const key = `${name}:${bindingPath}`
-    if (seen.has(key)) continue
-    seen.add(key)
     const observedAt = meta.mtime.toISOString()
+    const configuredEnabled = configuredPlugin?.enabled
 
     yield {
       definition: {
         type: 'plugin',
-        canonicalName: name,
+        canonicalName: configId ?? name,
         displayName: name,
-        ...(upstreamIdentity ? { upstreamIdentity } : {}),
+        ...(configId ? { upstreamIdentity: configId } : {}),
       },
       binding: {
         path: bindingPath,
-        source: 'codex:plugin-manifest',
+        source: 'codex:plugin-cache',
         scope: 'user',
         scopeRoot: configRoot,
         ...(version ? { version } : {}),
@@ -213,42 +244,52 @@ async function* discoverPluginManifests(
         manifestPath,
         observedAt,
         capturedAt,
-        [{ state: 'installed', value: true }],
+        [
+          { state: 'installed', value: true },
+          ...(configuredPlugin ? [{ state: 'configured' as const, value: true as const }] : []),
+          ...(configuredPlugin && configuredEnabled === false
+            ? [{ state: 'enabled' as const, value: false as const }]
+            : configuredPlugin
+              ? [{ state: 'enabled' as const, value: 'unknown' as const }]
+              : []),
+        ],
       ),
     }
   }
 
-  for (const entry of await safeEntries(pluginsRoot)) {
-    if (!entry.isDirectory() || entry.name === 'cache') continue
-    const bindingPath = join(pluginsRoot, entry.name)
-    const key = `${entry.name}:${bindingPath}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const meta = await safeStat(bindingPath)
-    if (!meta) continue
-    const observedAt = meta.mtime.toISOString()
+  const configPath = join(configRoot, 'config.toml')
+  const configMeta = await safeStat(configPath)
+  if (!configMeta?.isFile()) return
+  const observedAt = configMeta.mtime.toISOString()
+  for (const [configId, plugin] of configured) {
+    if (seenConfigIds.has(configId)) continue
+    const enabled = plugin.enabled
     yield {
       definition: {
         type: 'plugin',
-        canonicalName: entry.name,
-        displayName: entry.name,
+        canonicalName: configId,
+        displayName: configId,
+        upstreamIdentity: configId,
       },
       binding: {
-        path: bindingPath,
-        source: 'codex:plugins',
+        path: configPath,
+        source: 'codex:config.toml:plugin',
         scope: 'user',
         scopeRoot: configRoot,
       },
       states: states(
-        bindingPath,
+        configPath,
         observedAt,
         capturedAt,
-        [{ state: 'installed', value: true }],
+        [
+          { state: 'configured', value: true },
+          { state: 'installed', value: 'unknown' },
+          { state: 'enabled', value: enabled === false ? false : 'unknown' },
+        ],
       ),
     }
   }
 }
-
 async function* discoverHooks(
   configRoot: string,
   capturedAt: string,
@@ -305,7 +346,7 @@ export async function* discoverCodexAssets(
   const groups = [
     discoverSkills(configRoot, capturedAt),
     discoverMcpServers(configRoot, capturedAt, config),
-    discoverPluginManifests(configRoot, capturedAt),
+    discoverPluginManifests(configRoot, capturedAt, config),
     discoverHooks(configRoot, capturedAt),
     discoverCodexInstructions(ctx, capturedAt, config),
   ]
@@ -320,4 +361,5 @@ export async function* discoverCodexAssets(
 
 export const codexAssetInternals = {
   mcpNamesFromConfig,
+  pluginIdentityFromCachePath,
 }
