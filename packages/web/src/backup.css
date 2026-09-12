@@ -37,31 +37,6 @@
   justify-content: center;
 }
 
-.prototype-flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 0;
-  padding: 3px 8px;
-  border: 1px solid color-mix(in srgb, var(--al-success) 28%, var(--al-line));
-  border-radius: 999px;
-  background: var(--al-success-soft);
-  color: var(--al-success);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-  vertical-align: middle;
-}
-
-.prototype-flag::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 99px;
-  background: currentColor;
-}
-
 .background-data-notice,
 .background-data-notice button { font-size: 12px; }
 
