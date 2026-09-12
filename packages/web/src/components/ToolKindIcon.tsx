@@ -1,4 +1,5 @@
 import { UiIcon, type UiIconName } from './UiIcon'
+import { agentLensI18n } from '../i18n/runtime'
 
 export type ToolVisualKind = 'shell' | 'read' | 'edit' | 'search' | 'test' | 'mcp' | 'web' | 'tool'
 
@@ -15,14 +16,7 @@ export function toolVisualKind(name: string): ToolVisualKind {
 }
 
 export function toolVisualLabel(kind: ToolVisualKind): string {
-  if (kind === 'shell') return 'Shell'
-  if (kind === 'read') return '读取'
-  if (kind === 'edit') return '修改'
-  if (kind === 'search') return '搜索'
-  if (kind === 'test') return '测试'
-  if (kind === 'mcp') return 'MCP'
-  if (kind === 'web') return '网络'
-  return '工具'
+  return agentLensI18n.t(`task:tool.kind.${kind}`)
 }
 
 const iconByKind: Record<ToolVisualKind, UiIconName> = {

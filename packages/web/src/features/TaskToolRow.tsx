@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { ToolKindIcon, toolVisualKind, toolVisualLabel } from '../components/ToolKindIcon'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
+import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import type { TaskToolModel } from './task-detail-model'
 
 export interface TaskToolRowProps {
@@ -11,11 +13,11 @@ export interface TaskToolRowProps {
   className?: string
 }
 
-function statusLabel(status: TaskToolModel['status']): string {
-  if (status === 'error') return '失败'
-  if (status === 'success') return '完成'
-  if (status === 'running') return '执行中'
-  return '未知'
+function statusLabel(status: TaskToolModel['status'], t: TFunction): string {
+  if (status === 'error') return t('tool.status.error')
+  if (status === 'success') return t('tool.status.success')
+  if (status === 'running') return t('tool.status.running')
+  return t('tool.status.unknown')
 }
 
 function statusClass(status: TaskToolModel['status']): string {
@@ -37,6 +39,7 @@ function durationLabel(ms: number): string {
 }
 
 export function TaskToolRow({ model, meta, details, onClick, className = '' }: TaskToolRowProps) {
+  const { t } = useTranslation('task')
   const [now, setNow] = useState(() => Date.now())
   const target = model.primary ?? model.secondary ?? '—'
   const visualKind = model.kind === 'tool' ? toolVisualKind(model.name) : model.kind
@@ -56,8 +59,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     ? <ToolKindIcon kind={visualKind}/>
     : <ToolKindIcon kind={model.kind}/>
   const content = <>
-    <span className={`task-tool-kind task-tool-kind-${visualKind}`}>{icon}<span>{toolVisualLabel(visualKind)}</span></span>
-    <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`}>{statusLabel(model.status)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
+    <span className={`task-tool-kind task-tool-kind-${visualKind}`}>{icon}<span>{t(`tool.kind.${visualKind}`)}</span></span>
+    <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`}>{statusLabel(model.status, t)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
     <b className="task-tool-action" title={model.name}>{model.name}</b>
     <span className="task-tool-target">
       <span className="task-tool-target-text" title={target}>{target}</span>
@@ -67,7 +70,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
 
   return <div className={`task-tool-row-shell ${details ? 'has-details' : ''}`.trim()} data-tool-fact="true">
     {onClick
-      ? <button className={rowClass} data-status={model.status} data-kind={visualKind} onClick={onClick} aria-label={`${model.name}，${statusLabel(model.status)}`}>{content}</button>
+      ? <button className={rowClass} data-status={model.status} data-kind={visualKind} onClick={onClick} aria-label={`${model.name}，${statusLabel(model.status, t)}`}>{content}</button>
       : <div className={rowClass} data-status={model.status} data-kind={visualKind}>{content}</div>}
     {details && <div className="task-tool-payload">{details}</div>}
   </div>

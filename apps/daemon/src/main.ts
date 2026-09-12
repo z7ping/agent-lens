@@ -2,7 +2,12 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { backupLocalPlugin } from '@agent-lens/backup-local'
-import { capturePolicyPlugin } from '@agent-lens/capture-policy'
+import { capturePolicyPlugin, resolveCapturePolicyPluginState } from '@agent-lens/capture-policy'
+import {
+  readCapturePolicyConfigurationSync,
+  writeCapturePolicyConfiguration,
+} from '@agent-lens/capture-policy/configuration'
+import { IntegrationPackageService } from '@agent-lens/integration-packages'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
@@ -11,21 +16,28 @@ import {
   abortableDelay,
   AgentLensApplication,
   coreServicesPlugin,
+  authorizedIntegrationCapabilities,
   discoverRegisteredSourceAssets,
+  grantIntegrationCapabilities,
+  integrationAuthorizationBootstrap,
+  integrationAuthorizationPath,
+  integrationPreferencesPath,
+  integrationPreferenceBootstrapUpdate,
+  IntegrationManagementService,
+  IntegrationPreferenceService,
+  loadInstalledAgentIntegration,
   nodeRuntimePlugin,
-  piLiveRuntimePlugin,
+  OfficialToolDiscoveryService,
   prepareRegisteredSources,
+  readIntegrationAuthorizationSync,
+  readIntegrationPreferencesSync,
   replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
+  writeIntegrationAuthorization,
   type RegisteredSourceFailure,
 } from '@agent-lens/runtime-cordis'
-import { claudeSourcePlugin } from '@agent-lens/source-claude'
-import { codexSourcePlugin } from '@agent-lens/source-codex'
-import { hermesSourcePlugin } from '@agent-lens/source-hermes'
-import { openCodeSourcePlugin } from '@agent-lens/source-opencode'
-import { piSourcePlugin } from '@agent-lens/source-pi'
 import {
   DEFAULT_AGENT_LENS_HTTP_PORT,
   httpSurfacePlugin,
@@ -65,10 +77,23 @@ import { createProjectDirectoryPicker } from './project-directory-picker.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
 const { dataRoot, profile: runtimeProfile, capabilities } = nodeRuntime
+const officialToolDiscovery = capabilities.localCapture
+  ? new OfficialToolDiscoveryService()
+  : null
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(dataRoot, 'agent-lens.db')
 const vaultPath = process.env.AGENT_LENS_VAULT_PATH
   ?? join(dataRoot, 'vault')
+const localePackDirectory = process.env.AGENT_LENS_LOCALE_PACK_DIR
+  ?? join(dataRoot, 'locales')
+const bundledIntegrationPackageDir = fileURLToPath(new URL('./integration-packages/', import.meta.url))
+const workspaceIntegrationPackageDir = fileURLToPath(new URL('../../../dist/integration-packages/', import.meta.url))
+const integrationBundleDir = process.env.AGENT_LENS_INTEGRATION_BUNDLE_DIR
+  ?? (existsSync(join(bundledIntegrationPackageDir, 'catalog.json'))
+    ? bundledIntegrationPackageDir
+    : workspaceIntegrationPackageDir)
+const integrationInstallRoot = process.env.AGENT_LENS_INTEGRATIONS_DIR
+  ?? join(dataRoot, 'integrations')
 const configuredPort = process.env.AGENT_LENS_PORT
   ? Number(process.env.AGENT_LENS_PORT)
   : DEFAULT_AGENT_LENS_HTTP_PORT
@@ -84,28 +109,244 @@ const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 const DATA_RUNTIME_RECOVERY_POLL_MS = 500
 let foregroundGate: ForegroundActivityGate | null = null
 const projectDirectoryPicker = createProjectDirectoryPicker()
+let capturePolicyStartup = resolveCapturePolicyPluginState()
+let persistedCapturePolicy = readCapturePolicyConfigurationSync(capturePolicyStartup.configurationPath)
+const legacyInstallation = existsSync(dbPath) || persistedCapturePolicy !== null
+const explicitSourceOverride = process.env.AGENT_LENS_ENABLED_SOURCES !== undefined
+
+// Physical Integration installs are opt-in for a genuinely fresh local
+// installation. Preserve every legacy/user/environment configuration.
+if (
+  capabilities.localCapture
+  && !legacyInstallation
+  && !explicitSourceOverride
+  && persistedCapturePolicy === null
+) {
+  await writeCapturePolicyConfiguration(capturePolicyStartup.configurationPath, [])
+  capturePolicyStartup = resolveCapturePolicyPluginState()
+  persistedCapturePolicy = readCapturePolicyConfigurationSync(capturePolicyStartup.configurationPath)
+}
+
+const enabledSourceIds = new Set(capturePolicyStartup.settings.enabledSources)
+const integrationAuthorizationFile = integrationAuthorizationPath()
+const integrationPreferencesFile = integrationPreferencesPath()
+const persistedIntegrationPreferences = capabilities.localCapture
+  ? readIntegrationPreferencesSync(integrationPreferencesFile)
+  : null
+const integrationPreferences = capabilities.localCapture
+  ? new IntegrationPreferenceService(integrationPreferencesFile, persistedIntegrationPreferences)
+  : null
+const integrationPreferenceBootstrap = integrationPreferenceBootstrapUpdate(
+  persistedIntegrationPreferences,
+  {
+    existingInstallation: legacyInstallation || explicitSourceOverride,
+    selectedIntegrationIds: [...enabledSourceIds],
+  },
+)
+if (integrationPreferences && integrationPreferenceBootstrap) {
+  await integrationPreferences.update(integrationPreferenceBootstrap)
+}
+let integrationAuthorization = readIntegrationAuthorizationSync(integrationAuthorizationFile)
+const integrationAuthorizationBootstrapConfiguration = integrationAuthorizationBootstrap(
+  integrationAuthorization,
+  {
+    // Only a pre-#148 installation has no persisted Integration preferences.
+    // A fresh #148 user may have a DB/config by their second restart, but must
+    // never receive Runtime/Live grants unless they explicitly authorize them.
+    legacyMigrationEligible:
+      persistedIntegrationPreferences === null
+      && (legacyInstallation || explicitSourceOverride),
+    selectedIntegrationIds: [...enabledSourceIds],
+  },
+)
+if (integrationAuthorizationBootstrapConfiguration) {
+  integrationAuthorization = await writeIntegrationAuthorization(
+    integrationAuthorizationFile,
+    integrationAuthorizationBootstrapConfiguration,
+  )
+}
+
+function authorizedCapabilities(productId: string) {
+  return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+}
 
 const app = new AgentLensApplication()
+const integrationPackageLoadFailures: Array<{ integrationId: string; error: string }> = []
+let integrationPackages: IntegrationPackageService | null = null
+if (capabilities.localCapture) {
+  const candidate = new IntegrationPackageService({
+    bundleDir: integrationBundleDir,
+    installRoot: integrationInstallRoot,
+    canRemove: integrationId => app.integrationStatus(integrationId)
+      ? {
+          allowed: false,
+          reason: 'Integration is loaded in the current AgentLens runtime; disable/restart before removal',
+        }
+      : { allowed: true },
+  })
+  try {
+    await candidate.initialize()
+    const legacySelected = legacyInstallation || explicitSourceOverride
+      ? candidate.catalog()
+          .filter(item => enabledSourceIds.has(item.productId))
+          .map(item => item.integrationId)
+      : []
+    const legacyPhysicalization = await candidate.ensureLegacyPhysicalization(legacySelected)
+    for (const operation of legacyPhysicalization.operations) {
+      if (operation.status === 'completed') continue
+      integrationPackageLoadFailures.push({
+        integrationId: operation.integrationId,
+        error: operation.message
+          ?? operation.errorCode
+          ?? 'Legacy Integration physicalization failed',
+      })
+    }
+    integrationPackages = candidate
+  } catch (error) {
+    console.warn('[AgentLens] Integration package lifecycle unavailable', error)
+  }
+}
+
+let integrationManagement: IntegrationManagementService | null = null
+
+function currentIntegrationManagement(): IntegrationManagementService {
+  if (!officialToolDiscovery || !integrationPreferences) {
+    throw new Error('Integration management is unavailable for this runtime profile')
+  }
+  integrationManagement ??= new IntegrationManagementService({
+    discovery: officialToolDiscovery,
+    preferences: integrationPreferences,
+    capturePolicy: app.context.capturePolicy,
+    ...(integrationPackages
+      ? { packageState: (integrationId: string) => integrationPackages!.state(integrationId) }
+      : {}),
+    integrationStatus: productId => app.resolveIntegrationStatus(productId),
+  })
+  return integrationManagement
+}
+
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
 app.use(dataRuntimeStoragePlugin, { path: dbPath })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
-app.useRuntime(piLiveRuntimePlugin)
 if (capabilities.localCapture) {
-  app.use(codexSourcePlugin)
-  app.use(claudeSourcePlugin)
-  app.use(piSourcePlugin)
-  app.use(hermesSourcePlugin)
-  app.use(openCodeSourcePlugin)
+  if (integrationPackages) {
+    for (const item of integrationPackages.catalog()) {
+      if (!enabledSourceIds.has(item.productId)) continue
+      const state = integrationPackages.state(item.integrationId)
+      if (
+        !state.installed
+        || state.integrity !== 'verified'
+        || state.compatibility !== 'compatible'
+      ) {
+        if (state.installed) {
+          integrationPackageLoadFailures.push({
+            integrationId: item.integrationId,
+            error: state.reason
+              ?? `Integration package cannot load: integrity=${state.integrity} compatibility=${state.compatibility}`,
+          })
+        }
+        continue
+      }
+      const entryPath = integrationPackages.installedEntryPath(item.integrationId)
+      if (!entryPath) continue
+      try {
+        const integration = await loadInstalledAgentIntegration(entryPath, item.integrationId)
+        app.useIntegration(integration, {
+          enabled: true,
+          authorizedCapabilities: authorizedCapabilities(integration.manifest.productId),
+        })
+      } catch (error) {
+        integrationPackageLoadFailures.push({
+          integrationId: item.integrationId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        console.error(`[AgentLens] installed Integration load failed: ${item.integrationId}`, error)
+      }
+    }
+  }
   app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
 app.use(httpSurfacePlugin, {
   port: configuredPort,
+  localePackDirectory,
   selectProjectDirectory: () => projectDirectoryPicker.select(),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
-  healthDetails: () => foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {},
+  healthDetails: () => ({
+    ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
+    ...(officialToolDiscovery
+      ? {
+          toolDiscovery: (() => {
+            const snapshot = officialToolDiscovery.snapshot()
+            return {
+              status: snapshot.status,
+              ...(snapshot.completedAt ? { completedAt: snapshot.completedAt } : {}),
+            }
+          })(),
+        }
+      : {}),
+    integrationPackageLoadFailures,
+    integrationFailures: app.integrationFailures.map(failure => ({
+      integrationId: failure.integrationId,
+      componentPluginId: failure.componentPluginId,
+      error: failure.error instanceof Error ? failure.error.message : String(failure.error),
+    })),
+  }),
+  integrationStatus: productId => app.resolveIntegrationStatus(productId),
+  ...(officialToolDiscovery
+    ? {
+        integrationDiscovery: {
+          snapshot: () => officialToolDiscovery.snapshot(),
+          rescan: () => officialToolDiscovery.rescan(),
+        },
+      }
+    : {}),
+  ...(officialToolDiscovery && integrationPreferences
+    ? {
+        integrationManagement: {
+          query: () => currentIntegrationManagement().query(),
+          preferences: () => currentIntegrationManagement().preferences(),
+          updatePreferences: request => currentIntegrationManagement().updatePreferences(request),
+          enabled: integrationId => currentIntegrationManagement().enabled(integrationId),
+          setEnabled: (integrationId, enabled) =>
+            currentIntegrationManagement().setEnabled(integrationId, enabled),
+        },
+      }
+    : {}),
+  ...(integrationPackages
+    ? {
+        integrationPackages: {
+          catalog: () => integrationPackages!.catalog(),
+          states: () => integrationPackages!.statesSnapshot(),
+          state: integrationId => {
+            try {
+              return integrationPackages!.state(integrationId)
+            } catch {
+              return null
+            }
+          },
+          install: integrationId => integrationPackages!.install(integrationId),
+          remove: integrationId => integrationPackages!.remove(integrationId),
+          update: integrationId => integrationPackages!.update(integrationId),
+          operation: operationId => integrationPackages!.operation(operationId),
+        },
+      }
+    : {}),
+  integrationAuthorization: {
+    available: productId => app.authorizableCapabilities(productId)
+      .filter((capability): capability is 'hook' | 'runtime' | 'live' => capability !== 'source'),
+    grant: async (productId, capabilities) => {
+      integrationAuthorization = await grantIntegrationCapabilities(
+        integrationAuthorizationFile,
+        productId,
+        capabilities,
+      )
+      app.recordIntegrationAuthorization(productId, capabilities)
+      return authorizedIntegrationCapabilities(integrationAuthorization, productId)
+    },
+  },
 })
 app.use(webPlugin, { staticDir: webRoot })
 
@@ -208,6 +449,17 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
+  if (officialToolDiscovery) {
+    void officialToolDiscovery.rescan()
+      .then(snapshot => {
+        const present = snapshot.items.filter(item => item.presence === 'present').length
+        const dataOnly = snapshot.items.filter(item => item.presence === 'data-only').length
+        console.info(`[AgentLens] tool discovery completed: present=${present} dataOnly=${dataOnly}`)
+      })
+      .catch(error => {
+        console.warn('[AgentLens] tool discovery failed', error)
+      })
+  }
   foregroundGate = new ForegroundActivityGate({
     loadProbe: () => ({
       foregroundPending: app.context.dataRuntime.foregroundPending(),

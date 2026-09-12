@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { taskDurationLabel, type TaskRoundModel } from './task-detail-model'
 import { UiIcon } from '../components/UiIcon'
 
@@ -29,6 +30,7 @@ export function TaskRound({
   forceRevision = 0,
   className = '',
 }: TaskRoundProps) {
+  const { t } = useTranslation('task')
   const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
 
   useEffect(() => {
@@ -69,11 +71,11 @@ export function TaskRound({
       <span className="task-round-label">{model.label}</span>
       {model.preview && <span className="task-round-preview">{model.preview}</span>}
       <span className="task-round-meta">
-        {model.state === 'running' && <span className="task-round-live">进行中</span>}
-        {model.state === 'stopped' && <span>已停止</span>}
-        {model.toolCount > 0 && <span>{model.toolCount} 调用</span>}
-        {model.errorCount > 0 && <span className="task-round-error">{model.errorCount} 错误</span>}
-        {model.highLatency && <span className="task-round-latency">耗时较高</span>}
+        {model.state === 'running' && <span className="task-round-live">{t('round.running')}</span>}
+        {model.state === 'stopped' && <span>{t('round.stopped')}</span>}
+        {model.toolCount > 0 && <span>{t('round.calls', { count: model.toolCount })}</span>}
+        {model.errorCount > 0 && <span className="task-round-error">{t('round.errors', { count: model.errorCount })}</span>}
+        {model.highLatency && <span className="task-round-latency">{t('round.highLatency')}</span>}
         {model.durationMs > 0 && <span>{taskDurationLabel(model.durationMs)}</span>}
         {summaryMeta}
       </span>

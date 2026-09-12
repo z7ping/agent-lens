@@ -6,7 +6,7 @@ import { join } from 'node:path'
 
 const MAX_STRING = 32 * 1024
 const SENSITIVE_KEY = /(password|passwd|secret|token|api[_-]?key|authorization|cookie)/i
-const DEFAULT_ENABLED_SOURCES = ['claude-code']
+const DEFAULT_ENABLED_SOURCES = ['codex']
 
 function capturePolicyConfigurationPath(env = process.env) {
   return env.AGENT_LENS_CAPTURE_POLICY_PATH

@@ -53,6 +53,25 @@ export interface AgentAssetInventoryDto {
   bindings: AgentAssetBindingDto[]
 }
 
+export interface AgentIntegrationCapabilityStatusDto {
+  capability: 'source' | 'hook' | 'runtime' | 'live'
+  availability: 'available' | 'unavailable' | 'error'
+  authorization?: 'required' | 'granted'
+  reasonCode?:
+    | 'authorization-required'
+    | 'authorization-restart-required'
+    | 'component-start-failed'
+    | 'dependency-start-failed'
+    | 'live-adapter-missing'
+    | 'live-availability-failed'
+  reason?: string
+}
+
+export interface AgentIntegrationStatusDto {
+  availability: 'available' | 'partial' | 'unavailable' | 'error'
+  capabilities: AgentIntegrationCapabilityStatusDto[]
+}
+
 export interface AgentOverviewDto {
   sourceId: string
   productId: string
@@ -60,6 +79,7 @@ export interface AgentOverviewDto {
   supported: boolean
   enabled: boolean
   detected: boolean
+  integration?: AgentIntegrationStatusDto
   installations: AgentInstallationOverviewDto[]
   capabilities: AgentCapabilityDto[]
   assetInventory: AgentAssetInventoryDto[]

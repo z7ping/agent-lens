@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { buildIntegrationPackages } from './build-integration-packages.mjs'
 
 // 正式安装态固定使用 56789；源码开发使用独立端口，避免已安装桌面端
 // 将开发 Runtime 误识别为可复用的正式 Runtime。
@@ -116,12 +117,14 @@ export async function waitForRuntimeReady(
 
 export function buildDevEnvironment(baseEnv, repoRoot, port) {
   const paths = devRuntimePaths(repoRoot, port)
+  const integrationBundleDir = join(repoRoot, '.agent-lens', 'dev', 'integration-packages')
   return {
     ...baseEnv,
     AGENT_LENS_PORT: String(port),
     AGENT_LENS_DEV_API_PORT: String(port),
     AGENT_LENS_DB_PATH: paths.dbPath,
     AGENT_LENS_VAULT_PATH: paths.vaultPath,
+    AGENT_LENS_INTEGRATION_BUNDLE_DIR: integrationBundleDir,
     AGENT_LENS_DAEMON_MODE: 'foreground',
     AGENT_LENS_RUNTIME_OWNER: 'cli',
   }
@@ -201,6 +204,14 @@ export async function runDevRuntime() {
   const devEnv = buildDevEnvironment(process.env, repoRoot, port)
 
   await mkdir(paths.dataRoot, { recursive: true })
+  const integrationBundleDir = join(repoRoot, '.agent-lens', 'dev', 'integration-packages')
+  devLog('正在准备官方 Integration bundle cache')
+  await buildIntegrationPackages({
+    root: repoRoot,
+    outDir: integrationBundleDir,
+    clean: true,
+  })
+  devLog('官方 Integration bundle cache 已就绪')
 
   if (port === startPort) {
     console.info(`[AgentLens] 开发运行时端口：${port}`)

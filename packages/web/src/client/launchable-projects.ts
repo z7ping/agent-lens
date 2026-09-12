@@ -1,4 +1,12 @@
 import type { LaunchableProjectsResponseDto } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
+
+class LaunchableProjectsRequestError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'LaunchableProjectsRequestError'
+  }
+}
 
 async function responseError(response: Response): Promise<Error> {
   let detail = ''
@@ -6,7 +14,7 @@ async function responseError(response: Response): Promise<Error> {
     const body = await response.json() as { message?: unknown }
     if (typeof body.message === 'string' && body.message) detail = `：${body.message}`
   } catch { /* non-json error */ }
-  return new Error(`可启动项目读取失败（状态码 ${response.status}）${detail}`)
+  return new LaunchableProjectsRequestError(translateProduct('errors:launchableProjectsStatus', { status: response.status, detail }))
 }
 
 export async function fetchLaunchableProjects(input: {
@@ -30,7 +38,7 @@ export async function fetchLaunchableProjects(input: {
     return response.json() as Promise<LaunchableProjectsResponseDto>
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
-    if (error instanceof Error && error.message.startsWith('可启动项目读取失败')) throw error
-    throw new Error('可启动项目读取失败，请检查 AgentLens 运行状态。')
+    if (error instanceof LaunchableProjectsRequestError) throw error
+    throw new LaunchableProjectsRequestError(translateProduct('errors:launchableProjectsFailed'))
   }
 }

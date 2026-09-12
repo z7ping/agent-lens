@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import type { TaskThinkingModel } from './task-detail-model'
 import { UiIcon } from '../components/UiIcon'
 
@@ -17,14 +19,16 @@ function DisclosureChevron() {
   </span>
 }
 
-function presentationLabel(label: string): string {
-  return label === '思考过程' ? '执行过程' : label
+function presentationLabel(label: string, t: TFunction): string {
+  return label === t('thinking.thinkingProcess') ? t('thinking.executionProcess') : label
 }
 
-function resolvedDefaultExpanded(model: TaskThinkingModel, defaultExpanded: boolean) {
+function resolvedDefaultExpanded(model: TaskThinkingModel, defaultExpanded: boolean, t: TFunction) {
   // Review 的聚合执行过程承载 commentary 与具体工具调用，默认展开；
   // 独立 reasoning / thinking 仍尊重调用方传入的默认状态。
-  return defaultExpanded || model.label === '思考过程' || model.label === '执行过程'
+  return defaultExpanded
+    || model.label === t('thinking.thinkingProcess')
+    || model.label === t('thinking.executionProcess')
 }
 
 export function TaskThinking({
@@ -35,12 +39,13 @@ export function TaskThinking({
   defaultExpanded = true,
   className = '',
 }: TaskThinkingProps) {
+  const { t } = useTranslation('task')
   const [expanded, setExpanded] = useState(defaultExpanded)
-  const label = presentationLabel(model.label)
+  const label = presentationLabel(model.label, t)
 
   useEffect(() => {
-    setExpanded(resolvedDefaultExpanded(model, defaultExpanded))
-  }, [defaultExpanded, model.id, model.label])
+    setExpanded(resolvedDefaultExpanded(model, defaultExpanded, t))
+  }, [defaultExpanded, model.id, model.label, t])
 
   return <details
     className={`task-thinking ${className}`.trim()}

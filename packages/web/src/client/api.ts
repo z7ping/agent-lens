@@ -12,6 +12,14 @@ import {
   type FacetResponseDto,
   type HealthResponseDto,
   type InsightsResponseDto,
+  type IntegrationAuthorizationCapabilityDto,
+  type IntegrationAuthorizationResponseDto,
+  type IntegrationEnabledUpdateResponseDto,
+  type IntegrationManagementResponseDto,
+  type IntegrationPackageOperationResponseDto,
+  type IntegrationPreferenceUpdateRequestDto,
+  type IntegrationPreferencesResponseDto,
+  type IntegrationToolDiscoveryResponseDto,
   type LiveUpdateEventDto,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
@@ -21,6 +29,7 @@ import {
   type SourceRecordResponseDto,
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
@@ -65,6 +74,13 @@ function responseErrorMessage(value: unknown): string | undefined {
   return typeof message === 'string' && message ? message : undefined
 }
 
+class AgentLensRequestError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message)
+    this.name = 'AgentLensRequestError'
+  }
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     const response = await fetch(path, {
@@ -77,23 +93,23 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
         const message = responseErrorMessage(await response.json())
         if (message) detail = `：${message}`
       } catch { /* non-json error */ }
-      throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）${detail}：${path}`)
+      throw new AgentLensRequestError(translateProduct('errors:apiRequestFailedStatus', { status: response.status, detail, path }), response.status)
     }
     return response.json() as Promise<T>
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
-    throw new Error('AgentLens 接口请求失败，请检查运行状态和连接。')
+    if (error instanceof AgentLensRequestError) throw error
+    throw new AgentLensRequestError(translateProduct('errors:apiRequestFailed'))
   }
 }
 
 async function requestBlob(path: string): Promise<Blob> {
   try {
     const response = await fetch(path, { headers: { accept: 'application/vnd.agentlens.backup' } })
-    if (!response.ok) throw new Error(`AgentLens 接口请求失败（状态码 ${response.status}）：${path}`)
+    if (!response.ok) throw new AgentLensRequestError(translateProduct('errors:apiRequestFailedStatus', { status: response.status, detail: '', path }), response.status)
     return response.blob()
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('AgentLens 接口请求失败')) throw error
-    throw new Error('备份包导出失败，请检查运行状态和连接。')
+    if (error instanceof AgentLensRequestError) throw error
+    throw new AgentLensRequestError(translateProduct('errors:backupExportFailed'))
   }
 }
 
@@ -153,6 +169,44 @@ export class AgentLensApi {
   rescanAgents(): Promise<AgentRescanResponseDto> {
     return requestJson('/api/v1/agents/rescan', { method: 'POST' })
   }
+  integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
+    return requestJson('/api/v1/integrations/discovery')
+  }
+  rescanIntegrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
+    return requestJson('/api/v1/integrations/discovery/rescan', { method: 'POST' })
+  }
+  integrations(): Promise<IntegrationManagementResponseDto> {
+    return requestJson('/api/v1/integrations')
+  }
+  updateIntegrationPreferences(
+    input: IntegrationPreferenceUpdateRequestDto,
+  ): Promise<IntegrationPreferencesResponseDto> {
+    return requestJson('/api/v1/integrations/preferences', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  }
+  installIntegration(integrationId: string): Promise<IntegrationPackageOperationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}/install`, {
+      method: 'POST',
+    })
+  }
+  removeIntegration(integrationId: string): Promise<IntegrationPackageOperationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}`, {
+      method: 'DELETE',
+    })
+  }
+  setIntegrationEnabled(
+    integrationId: string,
+    enabled: boolean,
+  ): Promise<IntegrationEnabledUpdateResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}/enabled`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    })
+  }
   capturePolicy(): Promise<CapturePolicyResponseDto> { return requestJson('/api/v1/capture-policy/sources') }
 
   updateCaptureSources(enabledSources: readonly string[]): Promise<CapturePolicyResponseDto> {
@@ -160,6 +214,17 @@ export class AgentLensApi {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabledSources }),
+    })
+  }
+
+  authorizeIntegration(
+    productId: string,
+    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
+  ): Promise<IntegrationAuthorizationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/authorization`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ capabilities }),
     })
   }
 

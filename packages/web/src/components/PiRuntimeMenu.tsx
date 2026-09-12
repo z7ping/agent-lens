@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, Dialog, IconButton, UiIcon } from './ui'
 import './pi-runtime-menu.css'
 
@@ -9,14 +10,15 @@ export function PiRuntimeMenu({
   busy: boolean
   onTerminate(): void
 }) {
+  const { t } = useTranslation('piLive')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   return <>
     <IconButton
       variant="danger"
       className="pi-runtime-terminate-button"
-      title="结束 Pi Runtime"
-      aria-label="结束 Pi Runtime"
+      title={t('runtimeMenu.terminateTitle')}
+      aria-label={t('runtimeMenu.terminateTitle')}
       disabled={busy}
       onClick={() => setConfirmOpen(true)}
     ><UiIcon name="power" size={16}/></IconButton>
@@ -24,19 +26,19 @@ export function PiRuntimeMenu({
     <Dialog
       open={confirmOpen}
       className="pi-runtime-terminate-dialog"
-      title="结束 Pi Runtime？"
-      description="这会终止当前后台 Pi Runtime；当前任务会停止，但已经写入的会话历史不会删除。"
+      title={t('runtimeMenu.dialogTitle')}
+      description={t('runtimeMenu.dialogDescription')}
       closeDisabled={busy}
       onClose={() => setConfirmOpen(false)}
       footer={<>
-        <Button disabled={busy} onClick={() => setConfirmOpen(false)}>取消</Button>
+        <Button disabled={busy} onClick={() => setConfirmOpen(false)}>{t('runtimeMenu.cancel')}</Button>
         <Button variant="danger" disabled={busy} onClick={() => {
           setConfirmOpen(false)
           onTerminate()
-        }}>结束 Runtime</Button>
+        }}>{t('runtimeMenu.terminate')}</Button>
       </>}
     >
-      <p className="pi-runtime-terminate-copy">如果只是想中断当前一轮生成，请使用“中断本轮”，不需要结束整个 Runtime。</p>
+      <p className="pi-runtime-terminate-copy">{t('runtimeMenu.hint')}</p>
     </Dialog>
   </>
 }

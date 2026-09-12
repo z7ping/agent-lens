@@ -154,6 +154,23 @@ test('config off prevents static assets from entering persistence', () => {
   }), null)
 })
 
+test('runtime startup audit follows config capture policy', () => {
+  const policy = new DefaultCapturePolicyService(settings({ config: 'off' }))
+  const output = normalized('runtime.startup', {
+    event: 'runtime.startup.audit',
+    resources: {
+      contexts: ['/workspace/AGENTS.md'],
+      skills: ['repo-review'],
+      prompts: [],
+      extensions: [],
+      themes: [],
+      diagnostics: [],
+    },
+  })
+  const safe = policy.sanitizeNormalizedOutput(output)
+  assert.deepEqual(safe.observations[0]?.payload, { capturePolicy: 'off' })
+})
+
 test('config off strips normalized asset hints as well as static discovery', () => {
   const policy = new DefaultCapturePolicyService(settings({ config: 'off' }))
   const output: NormalizedSourceOutput = {

@@ -1,15 +1,16 @@
 import type { HealthResponseDto } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
-const runtimeOwnerLabel: Record<string, string> = {
-  cli: '命令行',
-  service: '后台服务',
-  desktop: '桌面端',
-  unknown: '未知来源',
+const runtimeOwnerKey: Record<string, string> = {
+  cli: 'common:runtimeStatus.ownerCli',
+  service: 'common:runtimeStatus.ownerService',
+  desktop: 'common:runtimeStatus.ownerDesktop',
+  unknown: 'common:runtimeStatus.ownerUnknown',
 }
 
-const runtimeModeLabel: Record<string, string> = {
-  foreground: '前台',
-  managed: '托管',
+const runtimeModeKey: Record<string, string> = {
+  foreground: 'common:runtimeStatus.modeForeground',
+  managed: 'common:runtimeStatus.modeManaged',
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {
@@ -87,32 +88,53 @@ export function projectRuntimeStatus(health: HealthResponseDto | null, liveConne
   const coverageUnknown = numberValue(coverageSummary?.unknown)
   const healthy = health?.status === 'ok' && liveConnected && failedSourceStages === 0
   const label = !health
-    ? '连接中'
+    ? translateProduct('common:runtimeStatus.connecting')
     : health.status !== 'ok'
-      ? '运行降级'
+      ? translateProduct('common:runtimeStatus.degraded')
       : failedSourceStages > 0
-        ? '来源异常'
-        : liveConnected ? '运行正常' : '实时断开'
+        ? translateProduct('common:runtimeStatus.sourceError')
+        : liveConnected
+          ? translateProduct('common:runtimeStatus.healthy')
+          : translateProduct('common:runtimeStatus.liveDisconnected')
   const runtime = health?.runtime
-  const owner = runtime ? runtimeOwnerLabel[runtime.owner] ?? runtime.owner : '等待 Runtime'
+  const owner = runtime
+    ? runtimeOwnerKey[runtime.owner] ? translateProduct(runtimeOwnerKey[runtime.owner]!) : runtime.owner
+    : translateProduct('common:runtimeStatus.waitingRuntime')
   const portSummary = endpoint.port ? `:${endpoint.port}` : ''
 
   return {
     tone: !health ? 'connecting' : healthy ? 'healthy' : 'warning',
     label,
     summary: runtime ? `${label} · ${owner}${portSummary}` : label,
-    backend: !health ? '连接中' : health.status === 'ok' ? '正常' : '降级',
-    live: liveConnected ? '已连接' : '未连接',
+    backend: !health
+      ? translateProduct('common:runtimeStatus.connecting')
+      : health.status === 'ok'
+        ? translateProduct('common:runtimeStatus.backendHealthy')
+        : translateProduct('common:runtimeStatus.backendDegraded'),
+    live: liveConnected
+      ? translateProduct('common:runtimeStatus.liveConnected')
+      : translateProduct('common:runtimeStatus.liveDisconnectedState'),
     owner,
-    mode: runtime ? runtimeModeLabel[runtime.mode] ?? runtime.mode : '—',
+    mode: runtime
+      ? runtimeModeKey[runtime.mode] ? translateProduct(runtimeModeKey[runtime.mode]!) : runtime.mode
+      : '—',
     pid: runtime ? String(runtime.pid) : '—',
     startedAt: runtime?.startedAt ?? null,
-    storage: !health ? '等待连接' : health.storage.ok ? '正常' : '异常',
+    storage: !health
+      ? translateProduct('common:runtimeStatus.storageWaiting')
+      : health.storage.ok
+        ? translateProduct('common:runtimeStatus.storageHealthy')
+        : translateProduct('common:runtimeStatus.storageError'),
     schema: health?.storage.schemaVersion === undefined ? '—' : String(health.storage.schemaVersion),
     failedSourceStages,
     unknownTotal,
     coverage: coverageSummary
-      ? `完整 ${coverageComplete} · 部分 ${coveragePartial} · 来源不可用 ${coverageUnavailable} · 未知 ${coverageUnknown}`
+      ? translateProduct('common:runtimeStatus.coverage', {
+          complete: coverageComplete,
+          partial: coveragePartial,
+          unavailable: coverageUnavailable,
+          unknown: coverageUnknown,
+        })
       : null,
   }
 }

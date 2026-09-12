@@ -57,8 +57,7 @@ export class SourceRescanService {
   private async run(): Promise<SourceRescanSummary> {
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
     const startedAt = new Date().toISOString()
-    const enabledSourceIds = this.ctx.sources.list()
-      .filter(source => this.ctx.capturePolicy.isSourceEnabled(source.manifest.sourceId))
+    const sourceIds = this.ctx.sources.list()
       .map(source => source.manifest.sourceId)
     const prepared = await prepareRegisteredSources(this.ctx, this.runtimeSignal)
     if (this.runtimeSignal.aborted) throw new Error('AgentLens runtime is shutting down')
@@ -69,7 +68,7 @@ export class SourceRescanService {
         .map(failure => failure.sourceId),
     )
     const detectedNow = new Set(prepared.targets.map(target => target.source.manifest.sourceId))
-    for (const sourceId of enabledSourceIds) {
+    for (const sourceId of sourceIds) {
       // A failed detector is unknown, not "uninstalled". Preserve the previous
       // current-state answer when available instead of overwriting it with false.
       if (failedDetections.has(sourceId)) continue

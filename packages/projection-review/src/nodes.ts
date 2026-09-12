@@ -55,6 +55,7 @@ function toolName(item: TimelineItemDto): string {
 export function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategory {
   if (kind.startsWith('permission.')) return 'permission'
   if (kind.startsWith('subagent.')) return 'subagent'
+  if (kind === 'runtime.startup') return 'lifecycle'
   if (kind.startsWith('context.')) return 'context'
   if (kind.startsWith('model.') || kind.startsWith('reasoning.')) return 'model'
   if (kind === 'session.lifecycle') return 'lifecycle'
@@ -66,6 +67,7 @@ export function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategor
 function eventLabel(kind: TimelineItemDto['kind']): string {
   const labels: Partial<Record<TimelineItemDto['kind'], string>> = {
     'session.lifecycle': '会话生命周期',
+    'runtime.startup': 'Runtime 启动信息',
     'model.call': '模型调用',
     'model.changed': '模型切换',
     'tool.progress': '工具进度',

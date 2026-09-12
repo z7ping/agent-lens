@@ -10,6 +10,14 @@ export interface PiLiveInitializationTiming {
   durationMs: number
 }
 
+export interface PiLivePackageUpdate {
+  displayName: string
+  type: 'npm' | 'git'
+  scope: 'user' | 'project'
+}
+
+export type PiLivePackageUpdateCheckStatus = 'checking' | 'complete' | 'unavailable' | 'failed'
+
 export interface PiLiveStartupResources {
   contexts: string[]
   skills: string[]
@@ -71,6 +79,8 @@ export interface PiLiveRuntimeState {
   initializationTimings?: PiLiveInitializationTiming[] | undefined
   /** Current Pi runtime resource snapshot. Field name is retained for API compatibility. */
   startupResources?: PiLiveStartupResources | undefined
+  packageUpdates?: PiLivePackageUpdate[] | undefined
+  packageUpdateCheck?: PiLivePackageUpdateCheckStatus | undefined
   startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined
   error?: string | undefined

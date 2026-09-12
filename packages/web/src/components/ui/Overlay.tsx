@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UiIcon } from '../UiIcon'
 import { IconButton } from './Primitives'
 
@@ -93,6 +94,7 @@ function OverlayFrame({
   kind,
   side = 'right',
 }: OverlayFrameProps) {
+  const { t } = useTranslation('common')
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -121,7 +123,7 @@ function OverlayFrame({
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
           </div>
-          <IconButton aria-label="关闭" disabled={closeDisabled} onClick={onClose}><UiIcon name="close" size={16}/></IconButton>
+          <IconButton aria-label={t('overlay.close')} disabled={closeDisabled} onClick={onClose}><UiIcon name="close" size={16}/></IconButton>
         </header>
         <div className="ui-overlay-body">{children}</div>
         {footer && <footer className="ui-overlay-footer">{footer}</footer>}

@@ -22,7 +22,7 @@ _MAX_STRING = 32 * 1024
 _SENSITIVE_KEY = re.compile(r"password|passwd|secret|token|api[_-]?key|authorization|cookie", re.I)
 _PENDING_LOCK = threading.Lock()
 _PENDING_CALLS: dict[str, list[str]] = {}
-_DEFAULT_ENABLED_SOURCES = ("claude-code",)
+_DEFAULT_ENABLED_SOURCES = ("hermes",)
 
 
 def _configured_sources() -> tuple[str, ...] | None:

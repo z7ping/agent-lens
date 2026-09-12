@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import type {
+  AgentIntegrationRuntimeStatus,
   BackupService,
   CapabilityService,
   CapturePolicyService,
@@ -24,14 +25,30 @@ import {
   type SourceRecordResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
-import { handleAgentFilesRequest } from './agent-files-http'
 import { readBackgroundActivity } from './background-activity'
 import { handleBackupRequest } from './backup-http'
 import { handleCapturePolicyRequest } from './capture-policy-http'
+import {
+  handleIntegrationAuthorizationRequest,
+  type IntegrationAuthorizationController,
+} from './integration-http'
+import {
+  handleIntegrationDiscoveryRequest,
+  type IntegrationDiscoveryController,
+} from './integration-discovery-http'
+import {
+  handleIntegrationManagementRequest,
+  type IntegrationManagementController,
+} from './integration-management-http'
+import {
+  handleIntegrationPackageRequest,
+  type IntegrationPackageController,
+} from './integration-packages-http'
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { readLaunchableProjects } from './launchable-projects'
+import { discoverLocalePacks } from './locale-packs'
 import { handlePiLiveRequest } from './pi-live'
 import {
   parseInsightsQuery,
@@ -64,6 +81,14 @@ export interface HttpSurfaceOptions {
   piLive?: PiLiveService
   rescanAgents?: () => Promise<AgentRescanSummaryDto>
   sourceDetection?: (sourceId: string) => boolean | undefined
+  integrationStatus?: (
+    productId: string,
+  ) => AgentIntegrationRuntimeStatus | null | Promise<AgentIntegrationRuntimeStatus | null>
+  integrationAuthorization?: IntegrationAuthorizationController
+  integrationDiscovery?: IntegrationDiscoveryController
+  integrationManagement?: IntegrationManagementController
+  integrationPackages?: IntegrationPackageController
+  localePackDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -126,6 +151,7 @@ export async function startHttpSurface(
     options.capabilities,
     options.capturePolicy,
     options.sourceDetection,
+    options.integrationStatus,
   )
   const relationships = new SessionRelationshipProjection(storage)
   const staticMounts = new Map<string, HttpStaticMount>()
@@ -203,7 +229,30 @@ export async function startHttpSurface(
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
-      if (await handleAgentFilesRequest(request, response, url, storage, options.sources)) return
+      if (await handleIntegrationAuthorizationRequest(
+        request,
+        response,
+        url,
+        options.integrationAuthorization,
+      )) return
+      if (await handleIntegrationDiscoveryRequest(
+        request,
+        response,
+        url,
+        options.integrationDiscovery,
+      )) return
+      if (await handleIntegrationManagementRequest(
+        request,
+        response,
+        url,
+        options.integrationManagement,
+      )) return
+      if (await handleIntegrationPackageRequest(
+        request,
+        response,
+        url,
+        options.integrationPackages,
+      )) return
 
       if (url.pathname === '/api/v1/agents/rescan') {
         if (request.method !== 'POST') {
@@ -236,6 +285,10 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/background-activity') {
         writeJson(response, 200, await readBackgroundActivity(storage))
+        return
+      }
+      if (url.pathname === '/api/v1/locales') {
+        writeJson(response, 200, await discoverLocalePacks(options.localePackDirectory))
         return
       }
       if (url.pathname === '/api/v1/ready') {

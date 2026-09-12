@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
@@ -20,7 +22,7 @@ export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
 const PiLivePage = lazy(() => import('./PiLivePage').then(module => ({ default: module.PiLivePage })))
 const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
-type TaskDayGroup = '今天' | '昨天' | '更早'
+type TaskDayGroup = 'today' | 'yesterday' | 'earlier'
 type HistoryTaskEntry =
   | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
   | { kind: 'remote'; id: string; at: string; remote: HubReviewSessionSummaryDto }
@@ -41,31 +43,33 @@ function mergeLaunchableProjects(
   })
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, t: TFunction, locale: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
   const now = new Date()
   const diff = Math.max(0, now.getTime() - date.getTime())
   if (date.toDateString() === now.toDateString()) {
     const minutes = Math.floor(diff / 60_000)
-    if (minutes < 1) return '刚刚'
-    if (minutes < 60) return `${minutes} 分钟前`
-    return `${Math.floor(diff / 3_600_000)} 小时前`
+    if (minutes < 1) return t('center.time.justNow')
+    if (minutes < 60) return t('center.time.minutesAgo', { count: minutes })
+    return t('center.time.hoursAgo', { count: Math.floor(diff / 3_600_000) })
   }
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
   if (date.toDateString() === yesterday.toDateString()) {
-    return `昨天 ${new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)}`
+    return t('center.time.yesterdayAt', {
+      time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date),
+    })
   }
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
 function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return '更早'
-  if (date.toDateString() === now.toDateString()) return '今天'
+  if (!Number.isFinite(date.getTime())) return 'earlier'
+  if (date.toDateString() === now.toDateString()) return 'today'
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
-  if (date.toDateString() === yesterday.toDateString()) return '昨天'
-  return '更早'
+  if (date.toDateString() === yesterday.toDateString()) return 'yesterday'
+  return 'earlier'
 }
 
 function cleanTitle(value: string | undefined, fallback: string): string {
@@ -88,18 +92,22 @@ function remoteTime(item: HubReviewSessionSummaryDto): string {
   return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
 }
 
-function remoteTitle(item: HubReviewSessionSummaryDto): string {
+function remoteTitle(item: HubReviewSessionSummaryDto, t: TFunction): string {
   const title = availabilityString(item.title)
-  if (title) return cleanTitle(title, '远程任务')
-  if (item.title.state === 'redacted') return '标题已脱敏'
-  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? '标题未同步' : '远程任务'
-  return '远程任务'
+  if (title) return cleanTitle(title, t('center.remote.task'))
+  if (item.title.state === 'redacted') return t('center.remote.titleRedacted')
+  if (item.title.state === 'omitted') return item.title.reason === 'policy' ? t('center.remote.titleNotSynced') : t('center.remote.task')
+  return t('center.remote.task')
 }
 
-function remoteVisible(item: HubReviewSessionSummaryDto, review: ReturnType<AgentLensClientModel['getSnapshot']>['review']): boolean {
+function remoteVisible(
+  item: HubReviewSessionSummaryDto,
+  review: ReturnType<AgentLensClientModel['getSnapshot']>['review'],
+  t: TFunction,
+): boolean {
   if (review.filters.sourceIds !== null || review.filters.projectId || review.filters.status !== 'all') return false
   const search = review.filters.search.trim().toLowerCase()
-  if (search && !remoteTitle(item).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
+  if (search && !remoteTitle(item, t).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
   const time = remoteTime(item)
   if (!time || review.filters.range === 'all') return true
   const at = Date.parse(time)
@@ -139,8 +147,9 @@ function NewTaskPanel({
   onProjectLoadMore(): void
   onStarted(runtimeSessionId: string): void | Promise<void>
 }) {
+  const { t } = useTranslation('task')
   const [selectedKey, setSelectedKey] = useState('')
-  const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: '正在检测 Pi…' })
+  const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: t('center.newTask.checkingPi') })
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
   const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
@@ -160,28 +169,34 @@ function NewTaskPanel({
       setAvailability({
         checked: true,
         available: value.available,
-        label: value.available ? 'Pi 已就绪' : `Pi 不可用${value.reason ? ` · ${value.reason}` : ''}`,
+        label: value.available
+          ? t('center.newTask.piReady')
+          : t('center.newTask.piUnavailable', { reason: value.reason ? ` · ${value.reason}` : '' }),
       })
     }, reason => {
       if (!cancelled) setAvailability({ checked: true, available: false, label: reason instanceof Error ? reason.message : String(reason) })
     })
     return () => { cancelled = true }
-  }, [])
+  }, [t])
 
   const selected = options.find(option => option.key === selectedKey)
   const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
-  const agentStateLabel = !availability.checked ? '检测中' : availability.available ? '已就绪' : '不可用'
+  const agentStateLabel = !availability.checked
+    ? t('center.newTask.checking')
+    : availability.available
+      ? t('center.newTask.ready')
+      : t('center.newTask.unavailable')
   const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
   const manualDirectoryVisible = !nativeDirectoryPicker || manualDirectoryOpen
   const composerStateLabel = selectingDirectory
-    ? '正在打开系统目录选择器…'
+    ? t('center.newTask.openingPicker')
     : !availability.checked
-    ? '正在检测 Pi…'
+    ? t('center.newTask.checkingPi')
     : !availability.available
       ? availability.label
       : selected
-        ? '打开后直接在 Pi 页面输入任务'
-        : '等待可启动项目'
+        ? t('center.newTask.directInput')
+        : t('center.newTask.waitingProject')
   const start = async (project: { cwd: string; label: string }) => {
     if (starting || !availability.available) return
     setStarting(true)
@@ -219,7 +234,7 @@ function NewTaskPanel({
   const startManualDirectory = async () => {
     const cwd = manualDirectory.trim()
     if (!cwd) {
-      setError('请输入要启动 Pi 任务的工作目录。')
+      setError(t('center.newTask.directoryRequired'))
       return
     }
     const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean)
@@ -232,45 +247,45 @@ function NewTaskPanel({
       <header className="task-center-new-head">
         <div className="task-center-new-agent-mark" aria-hidden="true">Pi</div>
         <div>
-          <div className="task-center-new-kicker">新建任务</div>
-          <h1>新建 Pi 任务</h1>
-          <p>选择工作项目，进入 Pi 实时任务工作区。</p>
+          <div className="task-center-new-kicker">{t('center.newTask.kicker')}</div>
+          <h1>{t('center.newTask.title')}</h1>
+          <p>{t('center.newTask.description')}</p>
         </div>
         <span className="task-center-new-readiness" data-state={availabilityState}><i/>{agentStateLabel}</span>
       </header>
 
       <div className="task-center-new-fields">
         <label className="task-center-new-task-title">
-          <span>任务标题（可选）</span>
-          <Input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder="例如：修复目录选择无响应" disabled={starting} aria-label="Pi 任务标题"/>
+          <span>{t('center.newTask.taskTitle')}</span>
+          <Input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder={t('center.newTask.taskTitlePlaceholder')} disabled={starting} aria-label={t('center.newTask.taskTitleAria')}/>
         </label>
         <label className="task-center-new-project-field">
-          <span>已有项目</span>
+          <span>{t('center.newTask.existingProject')}</span>
           <SelectMenu
             value={selectedKey}
             options={projectOptions}
             onChange={setSelectedKey}
-            ariaLabel="选择已有 Pi 项目"
-            placeholder={options.length ? '选择项目' : '暂无可启动项目'}
+            ariaLabel={t('center.newTask.selectProjectAria')}
+            placeholder={options.length ? t('center.newTask.selectProject') : t('center.newTask.noProject')}
             variant="field"
             className="task-center-new-project-select"
             menuWidth={420}
             searchable
-            searchPlaceholder="搜索项目或工作目录"
+            searchPlaceholder={t('center.newTask.searchProject')}
             onSearchChange={onProjectSearch}
             loading={projectLoading}
             hasMore={projectHasMore}
             onLoadMore={onProjectLoadMore}
             loadingMore={projectLoadingMore}
-            loadMoreLabel="加载更多项目"
+            loadMoreLabel={t('center.newTask.loadMoreProjects')}
             disabled={!options.length && !projectHasMore && !projectLoading}
           />
         </label>
         <div className="task-center-new-directory-action">
-          <span>新项目</span>
+          <span>{t('center.newTask.newProject')}</span>
           <div className="task-center-new-directory-actions">
-            {nativeDirectoryPicker && <Button loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>选择目录新建并打开 <UiIcon name="arrow-right" size={14}/></Button>}
-            {nativeDirectoryPicker && <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>输入路径</Button>}
+            {nativeDirectoryPicker && <Button loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>{t('center.newTask.selectDirectory')} <UiIcon name="arrow-right" size={14}/></Button>}
+            {nativeDirectoryPicker && <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>{t('center.newTask.inputPath')}</Button>}
           </div>
         </div>
       </div>
@@ -278,47 +293,56 @@ function NewTaskPanel({
         <Input
           value={manualDirectory}
           onChange={event => setManualDirectory(event.target.value)}
-          placeholder="例如 F:\\workspace\\my-project"
-          aria-label="输入 Pi 新项目目录"
+          placeholder={t('center.newTask.pathPlaceholder')}
+          aria-label={t('center.newTask.pathAria')}
           disabled={starting}
           onKeyDown={event => {
             if (event.key === 'Enter') void startManualDirectory()
           }}
         />
-        <Button variant="primary" loading={starting} disabled={!availability.available} onClick={() => void startManualDirectory()}>用此路径新建并打开 <UiIcon name="arrow-right" size={14}/></Button>
-        {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">请输入运行 AgentLens 的这台计算机上的绝对路径。系统会先检查目录存在且可读写，再启动 Pi。</p>}
+        <Button variant="primary" loading={starting} disabled={!availability.available} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
+        {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
       </div>}
 
-      <div className="task-center-new-status"><b>{selected ? `在 ${selected.label} 中启动` : '等待选择项目'}</b><span>{composerStateLabel}</span></div>
+      <div className="task-center-new-status"><b>{selected ? t('center.newTask.startingIn', { project: selected.label }) : t('center.newTask.waitingSelection')}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       {projectDiscoveryError && <div className="task-center-project-hint" role="alert">{projectDiscoveryError}</div>}
-      {!options.length && availability.checked && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">当前没有可启动的本地项目；可选择目录新建项目并打开。</div>}
+      {!options.length && availability.checked && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
       <div className="task-center-new-actions">
-        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>打开已有项目 <UiIcon name="arrow-right" size={14}/></Button>
+        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>{t('center.newTask.openExisting')} <UiIcon name="arrow-right" size={14}/></Button>
       </div>
     </section>
   </div>
 }
 
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+  const { t, i18n } = useTranslation('task')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const sourceId = item.sourceIds[0] ?? ''
-  const fallback = item.projectName ? `${item.projectName} 任务` : `${agentLabel(sourceId, item.productId)} 任务`
+  const fallback = item.projectName
+    ? t('center.history.taskSuffix', { name: item.projectName })
+    : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>{sourceId === 'pi' ? <StatusBadge tone="success">可继续</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? '无项目'}</span><time>{formatTime(localTime(item))}</time></div>
+    <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>{sourceId === 'pi' ? <StatusBadge tone="success">{t('center.history.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')}</span><time>{formatTime(localTime(item), t, locale)}</time></div>
   </button>
 }
 
 function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+  const { t, i18n } = useTranslation('task')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const time = remoteTime(item)
+  const title = remoteTitle(item, t)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-title-row"><div className="session-item-title" title={remoteTitle(item)}>{sessionListTitle(remoteTitle(item), '远程任务')}</div></div>
-    <div className="session-item-meta"><span className="hub-session-source remote">远程 · {item.origin.nodeId}</span><time>{time ? formatTime(time) : '时间未同步'}</time></div>
+    <div className="session-item-title-row"><div className="session-item-title" title={title}>{sessionListTitle(title, t('center.remote.task'))}</div></div>
+    <div className="session-item-meta"><span className="hub-session-source remote">{t('center.remote.source', { node: item.origin.nodeId })}</span><time>{time ? formatTime(time, t, locale) : t('center.remote.timeNotSynced')}</time></div>
   </button>
 }
 
 export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensClientModel; mode: TaskCenterMode; sidebarHost?: HTMLDivElement | null }) {
+  const { t, i18n } = useTranslation('task')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
@@ -338,7 +362,11 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [resumingSessionId, setResumingSessionId] = useState('')
   const [piResumeError, setPiResumeError] = useState<{ sessionId: string; message: string } | null>(null)
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
-  const agentSelectionSummary = review.filters.sourceIds === null ? '全部智能体' : review.filters.sourceIds.length ? `已选 ${review.filters.sourceIds.length} 个` : '未选择'
+  const agentSelectionSummary = review.filters.sourceIds === null
+    ? t('center.history.allAgents')
+    : review.filters.sourceIds.length
+      ? t('center.history.selectedAgents', { count: review.filters.sourceIds.length })
+      : t('center.history.noneSelected')
   const projects = snapshot.facets?.projects ?? []
 
   const refreshRuntimes = useCallback(() => {
@@ -423,8 +451,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [launchablePage?.nextCursor, mode, projectLoading, projectLoadingMore, projectSearch])
 
   const localSessions = review.response?.items ?? []
-  const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects])
-  const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review)), [hubSessions, review])
+  const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
+  const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t)), [hubSessions, review, t])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
       ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item })),
@@ -437,13 +465,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       if (!Number.isFinite(leftAt) && Number.isFinite(rightAt)) return 1
       return left.id.localeCompare(right.id)
     })
-    const groups = new Map<TaskDayGroup, HistoryTaskEntry[]>([['今天', []], ['昨天', []], ['更早', []]])
+    const groups = new Map<TaskDayGroup, HistoryTaskEntry[]>([['today', []], ['yesterday', []], ['earlier', []]])
     const now = new Date()
     for (const item of combined) groups.get(taskDayGroup(item.at, now))!.push(item)
-    return (['今天', '昨天', '更早'] as const)
-      .map(label => ({ label, items: groups.get(label)! }))
+    return (['today', 'yesterday', 'earlier'] as const)
+      .map(key => ({ key, label: t(`center.day.${key}`), items: groups.get(key)! }))
       .filter(group => group.items.length > 0)
-  }, [localSessions, visibleHub])
+  }, [localSessions, visibleHub, t])
   const preferredProjectId = new URLSearchParams(location.search).get('project') || review.detail?.projectId || review.filters.projectId || undefined
 
   const newTask = () => {
@@ -515,34 +543,34 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     : ''
   const historyCount = localSessions.length + visibleHub.length
   const projectFilterOptions = [
-    { value: '', label: '全部项目' },
+    { value: '', label: t('center.history.allProjects') },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
 
-  const taskRail = <aside className="task-center-rail" aria-label="任务列表：进行中 + 历史">
+  const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
     <div className="task-center-rail-head">
-      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> 新建任务</Button>
-      <Toolbar className="task-center-toolbar" aria-label="筛选历史任务">
+      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
+      <Toolbar className="task-center-toolbar" aria-label={t('center.history.filterAria')}>
         <IconButton
           size="small"
           className={searchOpen || review.filters.search ? 'is-active' : ''}
           onClick={() => setSearchOpen(current => !current)}
-          title={searchOpen ? '收起搜索' : '搜索历史任务'}
-          aria-label={searchOpen ? '收起搜索' : '搜索历史任务'}
+          title={searchOpen ? t('center.history.collapseSearch') : t('center.history.searchTasks')}
+          aria-label={searchOpen ? t('center.history.collapseSearch') : t('center.history.searchTasks')}
           aria-pressed={searchOpen}
         ><UiIcon name="search" size={14}/></IconButton>
-        <IconButton size="small" onClick={() => void model.refreshReview()} title="刷新历史任务" aria-label="刷新历史任务"><UiIcon name="refresh" size={14}/></IconButton>
+        <IconButton size="small" onClick={() => void model.refreshReview()} title={t('center.history.refreshTasks')} aria-label={t('center.history.refreshTasks')}><UiIcon name="refresh" size={14}/></IconButton>
       </Toolbar>
     </div>
 
     <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}>
-      <div className="workspace-insight-filter-fields" aria-label="筛选历史任务">
-        <label><span>项目</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel="筛选项目" placeholder="全部项目" menuWidth={280} searchable searchPlaceholder="搜索项目" options={projectFilterOptions}/></label>
-        <label><span>时间</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel="筛选时间范围" menuWidth={156} options={[
-          { value: 'today', label: '今天' }, { value: '7d', label: '最近 7 天' }, { value: '30d', label: '最近 30 天' }, { value: 'all', label: '全部时间' },
+      <div className="workspace-insight-filter-fields" aria-label={t('center.history.filterAria')}>
+        <label><span>{t('center.history.project')}</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel={t('center.history.filterProject')} placeholder={t('center.history.allProjects')} menuWidth={280} searchable searchPlaceholder={t('center.history.searchProject')} options={projectFilterOptions}/></label>
+        <label><span>{t('center.history.time')}</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('center.history.filterTime')} menuWidth={156} options={[
+          { value: 'today', label: t('center.day.today') }, { value: '7d', label: t('center.history.sevenDays') }, { value: '30d', label: t('center.history.thirtyDays') }, { value: 'all', label: t('center.history.allTime') },
         ]}/></label>
-        <label><span>状态</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel="筛选状态" menuWidth={150} options={[
-          { value: 'all', label: '全部状态' }, { value: 'clean', label: '无错误' }, { value: 'with-errors', label: '有错误' },
+        <label><span>{t('center.history.status')}</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('center.history.filterStatus')} menuWidth={150} options={[
+          { value: 'all', label: t('center.history.allStatus') }, { value: 'clean', label: t('center.history.clean') }, { value: 'with-errors', label: t('center.history.withErrors') },
         ]}/></label>
       </div>
     </SidebarFilterDisclosure>
@@ -553,40 +581,40 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         <Input
           autoFocus
           className="task-center-search-input"
-          placeholder="搜索任务…"
+          placeholder={t('center.history.searchPlaceholder')}
           value={review.filters.search}
           onChange={event => model.setReviewFilters({ search: event.target.value })}
           onKeyDown={event => { if (event.key === 'Escape') setSearchOpen(false) }}
-          aria-label="搜索历史任务"
+          aria-label={t('center.history.searchTasks')}
         />
         {review.filters.search && <IconButton
           size="small"
           className="task-center-search-clear"
           onClick={() => model.setReviewFilters({ search: '' })}
-          title="清除搜索"
-          aria-label="清除搜索"
+          title={t('center.history.clearSearch')}
+          aria-label={t('center.history.clearSearch')}
         ><UiIcon name="close" size={14}/></IconButton>}
       </div>
     </div>}
 
     <div className="task-center-scroll">
       {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
-        <div className="task-center-group-title"><span>进行中</span><span>{runtimes.length}</span></div>
+        <div className="task-center-group-title"><span>{t('center.history.running')}</span><span>{runtimes.length}</span></div>
         {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), 'Pi 任务', ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
-          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || '未关联项目'}</span>{item.startedAt && <time>{formatTime(item.startedAt)}</time>}</div>
+          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), t('center.history.piTask'), ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
+          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || t('center.history.unlinkedProject')}</span>{item.startedAt && <time>{formatTime(item.startedAt, t, locale)}</time>}</div>
         </button>)}
       </section>}
 
-      {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.label}>
-        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.label === '更早' && review.response?.meta.hasMore ? '+' : ''}</span></div>
+      {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
+        <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
           ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
 
-      {!historyCount && !review.loading && <div className="task-center-empty">当前筛选范围没有历史任务。</div>}
-      {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>加载更多历史任务</Button>}
+      {!historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
+      {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>{t('center.history.loadMore')}</Button>}
     </div>
   </aside>
 
@@ -594,7 +622,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     {sidebarHost ? createPortal(taskRail, sidebarHost) : null}
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
-        <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label="正在加载任务详情"><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
+        <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage
             model={model}
             embedded
@@ -623,14 +651,18 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   </>
 }
 
-function runtimeStatusBadge(state: PiLiveStateDto): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
-  if (state.status === 'failed') return { label: '需要处理', tone: 'danger' }
-  if (state.status === 'initializing') return { label: '启动中', tone: 'warning', dot: true }
-  if (state.isStreaming) return { label: '执行中', tone: 'accent', dot: true }
-  return { label: '等待输入', tone: 'warning' }
+function runtimeStatusBadge(
+  state: PiLiveStateDto,
+  t: TFunction,
+): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
+  if (state.status === 'failed') return { label: t('center.runtimeStatus.failed'), tone: 'danger' }
+  if (state.status === 'initializing') return { label: t('center.runtimeStatus.initializing'), tone: 'warning', dot: true }
+  if (state.isStreaming) return { label: t('center.runtimeStatus.streaming'), tone: 'accent', dot: true }
+  return { label: t('center.runtimeStatus.idle'), tone: 'warning' }
 }
 
 function PiLiveRuntimeStatusBadge({ state }: { state: PiLiveStateDto }) {
-  const badge = runtimeStatusBadge(state)
+  const { t } = useTranslation('task')
+  const badge = runtimeStatusBadge(state, t)
   return <StatusBadge tone={badge.tone} dot={badge.dot}>{badge.label}</StatusBadge>
 }

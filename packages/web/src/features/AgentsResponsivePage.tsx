@@ -5,8 +5,9 @@ import { AgentsPage } from './AgentsPage'
 
 export function AgentsResponsivePage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
   const snapshot = useClientSnapshot(model)
-  return <div className="agents-responsive-shell">
+  const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
+  return <div className={`agents-responsive-shell ${hasSelectedOverview ? '' : 'without-insights'}`}>
     <AgentsPage model={model} sourceId={sourceId} onSourceIdChange={onSourceIdChange}/>
-    <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>
+    {hasSelectedOverview && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
   </div>
 }

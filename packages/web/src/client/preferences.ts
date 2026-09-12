@@ -1,5 +1,6 @@
 const PINNED_KEY = 'agent-lens.pinned-agents.v1'
 const AGENT_FILTER_KEY = 'agent-lens.agent-filter.v2'
+const AGENT_VISIBILITY_KEY = 'agent-lens.agent-visibility.v1'
 const THEME_KEY = 'agent-lens.theme.v1'
 const SIDEBAR_COLLAPSED_KEY = 'agent-lens.sidebar-collapsed.v1'
 
@@ -29,6 +30,36 @@ export function writeAgentFilterPreference(preference: AgentFilterPreference): v
     orderedAgentIds: uniqueStrings(preference.orderedAgentIds),
     visibleAgentIds: uniqueStrings(preference.visibleAgentIds),
   }))
+}
+
+export interface AgentVisibilityPreference {
+  visibleAgentIds: string[]
+}
+
+export function readAgentVisibilityPreference(): AgentVisibilityPreference | null {
+  try {
+    const raw = localStorage.getItem(AGENT_VISIBILITY_KEY)
+    if (raw !== null) {
+      const value = JSON.parse(raw) as Partial<AgentVisibilityPreference>
+      return { visibleAgentIds: uniqueStrings(value.visibleAgentIds) }
+    }
+    const legacy = readAgentFilterPreference()
+    return legacy ? { visibleAgentIds: [...legacy.visibleAgentIds] } : null
+  } catch { return null }
+}
+
+export function writeAgentVisibilityPreference(preference: AgentVisibilityPreference): void {
+  localStorage.setItem(AGENT_VISIBILITY_KEY, JSON.stringify({
+    visibleAgentIds: uniqueStrings(preference.visibleAgentIds),
+  }))
+}
+
+/**
+ * Read-only migration source for Slice B. New code must never persist global
+ * display order back to browser storage.
+ */
+export function readLegacyAgentOrderPreference(): string[] {
+  return readAgentFilterPreference()?.orderedAgentIds ?? []
 }
 
 function readPinnedAgents(): string[] | null {

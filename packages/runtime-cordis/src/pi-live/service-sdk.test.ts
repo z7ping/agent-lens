@@ -3,6 +3,7 @@ import test from 'node:test'
 import { inspectPiSdkCompatibility } from './pi-sdk-adapter'
 import { resolvePiLiveRuntimeSessionDir } from './in-process-host'
 import { DefaultPiLiveService } from './service'
+import type { PiLiveStartupAuditSnapshot } from './startup-audit'
 import type {
   InstalledPiSdk,
   PiSdkModel,
@@ -53,6 +54,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   const runtimeSkills: Array<{ name: string }> = [{ name: 'static-skill' }]
   const runtimePrompts: Array<{ name: string }> = [{ name: 'static-prompt' }]
   const runtimeThemes: Array<{ name: string }> = [{ name: 'static-theme' }]
+  const startupAudits: PiLiveStartupAuditSnapshot[] = []
 
   const session: PiSdkSession = {
     sessionManager: manager,
@@ -121,7 +123,11 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     },
   }
 
-  const service = new DefaultPiLiveService(async () => installed)
+  const service = new DefaultPiLiveService(
+    async () => installed,
+    undefined,
+    { recordStartupAudit: async snapshot => { startupAudits.push(snapshot) } },
+  )
   const initializing = await service.start({ cwd: '/workspace', provider: 'openai', model: 'gpt-test', name: 'AgentLens task' })
   assert.equal(initializing.status, 'initializing')
   const state = await waitUntilReady(service, initializing.runtimeSessionId)
@@ -134,9 +140,18 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(state.startupResources?.themes, ['static-theme', 'extension-theme'])
   assert.deepEqual(state.startupResources?.contexts, ['/workspace/AGENTS.md'])
 
+  for (let index = 0; index < 20 && startupAudits.length === 0; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal(startupAudits.length, 1)
+  assert.equal(startupAudits[0]?.nativeSessionId, 'native-session-1')
+  assert.equal(startupAudits[0]?.workspacePath, '/workspace')
+  assert.deepEqual(startupAudits[0]?.startupResources.skills, ['static-skill', 'extension-skill'])
+
   runtimeSkills.push({ name: 'late-runtime-skill' })
   const refreshed = await service.state(state.runtimeSessionId)
   assert.deepEqual(refreshed.startupResources?.skills, ['static-skill', 'extension-skill', 'late-runtime-skill'])
+  assert.equal(startupAudits.length, 1, 'startup audit must remain the ready-time snapshot')
 
   const events: Record<string, unknown>[] = []
   const unsubscribe = service.subscribe(state.runtimeSessionId, event => events.push(event.event))

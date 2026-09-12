@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import {
   Children,
   cloneElement,
@@ -18,6 +19,7 @@ import {
   type ReactNode,
 } from 'react'
 import { IconButton, UiIcon } from '../components/ui'
+import { agentLensI18n } from '../i18n/runtime'
 
 export type TaskSurfaceMode = 'review' | 'live' | 'hub' | 'new'
 
@@ -204,7 +206,9 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
       || renderId
     const label = element.dataset.roundLabel?.trim()
       || round?.querySelector<HTMLElement>('.task-round-label')?.textContent?.trim()
-      || (semanticId.includes('background') ? '后台活动' : `第 ${result.length + 1} 轮`)
+      || (semanticId.includes('background')
+        ? agentLensI18n.t('task:surface.backgroundActivity')
+        : agentLensI18n.t('task:surface.roundOrdinal', { count: result.length + 1 }))
     const preview = compactRailPreview(
       element.dataset.roundPreview
       || round?.dataset.roundPreview
@@ -301,6 +305,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   { mode, className, children, boundaryNavigation, ...props },
   ref,
 ) {
+  const { t } = useTranslation('task')
   const rootRef = useRef<HTMLElement>(null)
   const railItemsRef = useRef<TaskTurnRailItem[]>([])
   const railViewportRef = useRef<HTMLElement | null>(null)
@@ -438,19 +443,19 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     ? createPortal(
         <nav
           className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
-          aria-label="轮次导轨"
+          aria-label={t('surface.turnRail')}
           style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
         >
           {railItems.map(item => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
-            const tip = [item.label, item.preview, running ? '进行中' : '', item.error ? '有错误' : ''].filter(Boolean).join(' · ')
+            const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : ''].filter(Boolean).join(' · ')
             return <button
               key={item.id}
               type="button"
               className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
               data-tip={tip}
-              aria-label={`跳到${tip}`}
+              aria-label={t('surface.jumpTo', { tip })}
               aria-current={active ? 'step' : undefined}
               onClick={() => jumpToRound(item)}
             ><i/></button>
@@ -464,12 +469,12 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     ? createPortal(
         <nav
           className="task-boundary-nav"
-          aria-label="会话边界导航"
+          aria-label={t('surface.boundaryNavigation')}
           style={{ bottom: railPosition.boundaryBottom, left: railPosition.boundaryLeft }}
         >
           <IconButton
-            title="跳到开头"
-            aria-label="跳到开头"
+            title={t('surface.jumpStart')}
+            aria-label={t('surface.jumpStart')}
             disabled={resolvedBoundaryNavigation.startDisabled}
             onClick={() => void resolvedBoundaryNavigation.onStart()}
           >
@@ -478,8 +483,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           <IconButton
             className="task-boundary-latest"
             variant="primary"
-            title="跳到最新"
-            aria-label="跳到最新"
+            title={t('surface.jumpLatest')}
+            aria-label={t('surface.jumpLatest')}
             disabled={resolvedBoundaryNavigation.endDisabled}
             onClick={() => void resolvedBoundaryNavigation.onEnd()}
           >
@@ -496,12 +501,12 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     ? createPortal(
         <nav
           className="task-compact-round-nav"
-          aria-label="窄窗长会话导航"
+          aria-label={t('surface.compactNavigation')}
           style={{ bottom: railPosition.boundaryBottom }}
         >
           <IconButton
-            title="跳到最早"
-            aria-label="跳到最早"
+            title={t('surface.jumpEarliest')}
+            aria-label={t('surface.jumpEarliest')}
             disabled={resolvedBoundaryNavigation.startDisabled}
             onClick={() => void resolvedBoundaryNavigation.onStart()}
           >
@@ -510,8 +515,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           <span aria-live="polite">{activeRailIndex + 1} / {railItems.length}</span>
           {firstErrorItem && <IconButton
             className="task-compact-round-error"
-            title={`跳到错误轮次：${firstErrorItem.label}`}
-            aria-label={`跳到错误轮次：${firstErrorItem.label}`}
+            title={t('surface.jumpErrorRound', { label: firstErrorItem.label })}
+            aria-label={t('surface.jumpErrorRound', { label: firstErrorItem.label })}
             onClick={() => jumpToRound(firstErrorItem)}
           >
             <UiIcon name="exclamation" size={16}/>
@@ -519,8 +524,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           <IconButton
             className="task-compact-round-latest"
             variant="primary"
-            title="跳到最新"
-            aria-label="跳到最新"
+            title={t('surface.jumpLatest')}
+            aria-label={t('surface.jumpLatest')}
             disabled={resolvedBoundaryNavigation.endDisabled}
             onClick={() => void resolvedBoundaryNavigation.onEnd()}
           >

@@ -173,6 +173,7 @@ function observationScopes(kind: ObservationKind): CapturePolicyScope[] {
     || kind === 'permission.request' || kind === 'permission.response' || kind === 'artifact.action') {
     return ['tool']
   }
+  if (kind === 'runtime.startup') return ['config']
   if (kind === 'unknown') return ['prompt', 'tool']
   return []
 }

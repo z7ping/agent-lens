@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
+import { useTranslation } from 'react-i18next'
 import type { BackgroundActivityItemDto, BackgroundActivityResponseDto, HealthResponseDto } from '@agent-lens/protocol'
 import { fetchBackgroundActivity } from '../client/background-activity'
 import { agentLabel } from './AgentScope'
@@ -6,31 +8,33 @@ import { backgroundActivityLabel, summarizeBackgroundActivity } from './backgrou
 import { Popover } from './ui'
 import './background-activity-status.css'
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: string): string {
   const date = new Date(value)
   if (!Number.isFinite(date.getTime())) return value
-  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
 }
 
-function runtimeOwnerLabel(owner: NonNullable<HealthResponseDto['runtime']>['owner']): string {
-  if (owner === 'desktop') return '桌面端'
-  if (owner === 'service') return '后台服务'
-  if (owner === 'cli') return '命令行'
-  return '运行时'
+function runtimeOwnerLabel(owner: NonNullable<HealthResponseDto['runtime']>['owner'], t: TFunction): string {
+  if (owner === 'desktop') return t('backgroundActivity.ownerDesktop')
+  if (owner === 'service') return t('backgroundActivity.ownerService')
+  if (owner === 'cli') return t('backgroundActivity.ownerCli')
+  return t('backgroundActivity.ownerRuntime')
 }
 
 function itemLabel(item: BackgroundActivityItemDto, active: boolean): string {
   return backgroundActivityLabel(item, item.sourceId ? agentLabel(item.sourceId) : undefined, active)
 }
 
-function recentStateLabel(item: BackgroundActivityItemDto): string {
-  if (item.state === 'failed') return '失败'
-  if (item.state === 'degraded') return '异常'
-  if (item.state === 'paused') return '已暂停'
-  return '已完成'
+function recentStateLabel(item: BackgroundActivityItemDto, t: TFunction): string {
+  if (item.state === 'failed') return t('backgroundActivity.stateFailed')
+  if (item.state === 'degraded') return t('backgroundActivity.stateDegraded')
+  if (item.state === 'paused') return t('backgroundActivity.statePaused')
+  return t('backgroundActivity.stateCompleted')
 }
 
 export function BackgroundActivityStatus({ health }: { health: HealthResponseDto | null }) {
+  const { t, i18n } = useTranslation('common')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const anchorRef = useRef<HTMLButtonElement>(null)
   const [activity, setActivity] = useState<BackgroundActivityResponseDto | null>(null)
   const [loadError, setLoadError] = useState('')
@@ -88,13 +92,13 @@ export function BackgroundActivityStatus({ health }: { health: HealthResponseDto
     const base = summarizeBackgroundActivity(activity)
     const primary = activity?.active[0]
     if (!primary) return base
-    const suffix = activity!.active.length > 1 ? ` · 另有 ${activity!.active.length - 1} 项` : ''
+    const suffix = activity!.active.length > 1 ? t('backgroundActivity.moreActive', { count: activity!.active.length - 1 }) : ''
     return { ...base, label: `${itemLabel(primary, true)}${suffix}` }
-  }, [activity])
+  }, [activity, t])
 
   const runtimeText = health?.runtime
-    ? `${runtimeOwnerLabel(health.runtime.owner)}进程 PID ${health.runtime.pid}`
-    : '运行进程状态暂不可用'
+    ? t('backgroundActivity.runtimeProcess', { owner: runtimeOwnerLabel(health.runtime.owner, t), pid: health.runtime.pid })
+    : t('backgroundActivity.runtimeUnavailable')
   const runtimeTone = health?.status === 'ok' ? 'ok' : health ? 'degraded' : 'unknown'
 
   return <div className="workspace-background-activity">
@@ -102,7 +106,7 @@ export function BackgroundActivityStatus({ health }: { health: HealthResponseDto
       ref={anchorRef}
       type="button"
       className={`background-activity-trigger is-${summary.tone}`}
-      aria-label={`${summary.label}，查看后台活动`}
+      aria-label={t('backgroundActivity.triggerAria', { label: summary.label })}
       aria-expanded={open}
       title={summary.label}
       onClick={() => setOpen(current => !current)}
@@ -112,35 +116,35 @@ export function BackgroundActivityStatus({ health }: { health: HealthResponseDto
     </button>
 
     <Popover open={open} anchorRef={anchorRef} onClose={() => setOpen(false)} placement="right-end" className="background-activity-popover">
-      <section aria-label="后台活动详情">
+      <section aria-label={t('backgroundActivity.detailAria')}>
         <header className="background-activity-popover-head">
-          <div><b>后台活动</b><span>确认 AgentLens 当前是否仍在处理本地数据</span></div>
-          <span className={`background-activity-state is-${summary.tone}`}>{activity?.active.length ? `${activity.active.length} 项处理中` : '最近记录'}</span>
+          <div><b>{t('backgroundActivity.title')}</b><span>{t('backgroundActivity.description')}</span></div>
+          <span className={`background-activity-state is-${summary.tone}`}>{activity?.active.length ? t('backgroundActivity.processingCount', { count: activity.active.length }) : t('backgroundActivity.recentRecord')}</span>
         </header>
 
         <div className={`background-activity-process is-${runtimeTone}`}><span className="background-activity-process-dot" aria-hidden="true"/><span>{runtimeText}</span></div>
 
         <div className="background-activity-section">
-          <div className="background-activity-section-title">正在处理</div>
+          <div className="background-activity-section-title">{t('backgroundActivity.processing')}</div>
           {activity?.active.length
             ? <div className="background-activity-list">{activity.active.map(item => <div key={item.id} className="background-activity-item is-active">
                 <span className="background-activity-item-mark" aria-hidden="true"/>
-                <span className="background-activity-item-copy"><b>{itemLabel(item, true)}</b><small>{item.startedAt ? `开始于 ${formatTime(item.startedAt)}` : item.state === 'pending' ? '等待处理' : '处理中'}</small></span>
+                <span className="background-activity-item-copy"><b>{itemLabel(item, true)}</b><small>{item.startedAt ? t('backgroundActivity.startedAt', { time: formatTime(item.startedAt, locale) }) : item.state === 'pending' ? t('backgroundActivity.pending') : t('backgroundActivity.running')}</small></span>
               </div>)}</div>
-            : <div className="background-activity-empty">当前没有后台数据任务</div>}
+            : <div className="background-activity-empty">{t('backgroundActivity.noActive')}</div>}
         </div>
 
         <div className="background-activity-section">
-          <div className="background-activity-section-title">最近处理</div>
+          <div className="background-activity-section-title">{t('backgroundActivity.recent')}</div>
           {activity?.recent.length
             ? <div className="background-activity-list">{activity.recent.map(item => <div key={`${item.id}:${item.updatedAt}`} className={`background-activity-item is-${item.state}`}>
                 <span className="background-activity-item-mark" aria-hidden="true"/>
-                <span className="background-activity-item-copy"><b>{itemLabel(item, false)}</b><small>{recentStateLabel(item)} · {formatTime(item.completedAt ?? item.updatedAt)}</small>{item.errorSummary && <small className="background-activity-error" title={item.errorSummary}>{item.errorSummary}</small>}</span>
+                <span className="background-activity-item-copy"><b>{itemLabel(item, false)}</b><small>{recentStateLabel(item, t)} · {formatTime(item.completedAt ?? item.updatedAt, locale)}</small>{item.errorSummary && <small className="background-activity-error" title={item.errorSummary}>{item.errorSummary}</small>}</span>
               </div>)}</div>
-            : <div className="background-activity-empty">还没有可展示的后台处理记录</div>}
+            : <div className="background-activity-empty">{t('backgroundActivity.noRecent')}</div>}
         </div>
 
-        {loadError && <div className="background-activity-load-error">{loadError}，将自动重试。</div>}
+        {loadError && <div className="background-activity-load-error">{t('backgroundActivity.retrying', { error: loadError })}</div>}
       </section>
     </Popover>
   </div>

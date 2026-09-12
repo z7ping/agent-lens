@@ -3,6 +3,7 @@ import test from 'node:test'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 import { DefaultPiLiveService } from './service'
+import type { PiLiveStartupAuditSnapshot } from './startup-audit'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 
 function deferred<T>() {
@@ -67,6 +68,114 @@ test('Start 立即返回 initializing，后台就绪后原位切换为 ready', a
   const ready = await service.state(initial.runtimeSessionId)
   assert.equal(ready.status, 'ready')
   assert.equal(ready.processId, 1234)
+  await service.dispose()
+})
+
+test('启动资源审计使用 ready 前最后一份 Runtime 快照，而不是 pre-bind 快照', async () => {
+  const audits: PiLiveStartupAuditSnapshot[] = []
+  const host: PiRuntimeHost = {
+    start: async (id, _input, _signal, onEvent) => {
+      onEvent({
+        type: 'runtime_resources',
+        resources: {
+          contexts: ['/workspace/AGENTS.md'],
+          skills: ['static-skill'],
+          prompts: [],
+          extensions: [],
+          themes: [],
+          diagnostics: [],
+        },
+      })
+      onEvent({
+        type: 'runtime_resources',
+        resources: {
+          contexts: ['/workspace/AGENTS.md'],
+          skills: ['static-skill', 'extension-skill'],
+          prompts: ['extension-prompt'],
+          extensions: ['extension.ts'],
+          themes: ['extension-theme'],
+          diagnostics: [],
+        },
+      })
+      return {
+        ...handle(id, '/sessions/native.jsonl'),
+        state: async () => ({
+          ...readyState(id, '/sessions/native.jsonl'),
+          nativeSessionId: 'native-session',
+        }),
+      }
+    },
+  }
+  const service = new DefaultPiLiveService(
+    host,
+    undefined,
+    { recordStartupAudit: async snapshot => { audits.push(snapshot) } },
+  )
+  const initial = await service.start({ cwd: '/workspace' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await service.state(initial.runtimeSessionId)
+  for (let index = 0; index < 20 && audits.length === 0; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  assert.equal(audits.length, 1)
+  assert.deepEqual(audits[0]?.startupResources.skills, ['static-skill', 'extension-skill'])
+  assert.deepEqual(audits[0]?.startupResources.prompts, ['extension-prompt'])
+  assert.deepEqual(audits[0]?.startupResources.extensions, ['extension.ts'])
+  assert.deepEqual(audits[0]?.startupResources.themes, ['extension-theme'])
+  await service.dispose()
+})
+
+test('包更新在 ready 后完成时合并进同一启动审计', async () => {
+  const audits: PiLiveStartupAuditSnapshot[] = []
+  let completePackageCheck: (() => void) | undefined
+  const host: PiRuntimeHost = {
+    start: async (id, _input, _signal, onEvent) => {
+      onEvent({
+        type: 'runtime_resources',
+        resources: {
+          contexts: ['/workspace/AGENTS.md'],
+          skills: ['repo-review'],
+          prompts: [],
+          extensions: [],
+          themes: [],
+          diagnostics: [],
+        },
+      })
+      completePackageCheck = () => onEvent({
+        type: 'package_updates',
+        status: 'complete',
+        updates: [{ displayName: '@example/pi-extension', type: 'npm', scope: 'user' }],
+      })
+      return handle(id, '/sessions/native.jsonl')
+    },
+  }
+  const service = new DefaultPiLiveService(
+    host,
+    undefined,
+    { recordStartupAudit: async snapshot => { audits.push(snapshot) } },
+  )
+  const initial = await service.start({ cwd: '/workspace' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await service.state(initial.runtimeSessionId)
+  for (let index = 0; index < 20 && audits.length === 0; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal(audits.length, 1)
+  assert.equal(audits[0]?.packageUpdateCheck, undefined)
+
+  completePackageCheck?.()
+  for (let index = 0; index < 20 && audits.length < 2; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  assert.equal(audits.length, 2)
+  assert.equal(audits[1]?.attemptStartedAt, audits[0]?.attemptStartedAt)
+  assert.equal(audits[1]?.packageUpdateCheck, 'complete')
+  assert.deepEqual(audits[1]?.packageUpdates, [
+    { displayName: '@example/pi-extension', type: 'npm', scope: 'user' },
+  ])
+  assert.equal(typeof audits[1]?.packageUpdatesCheckedAt, 'string')
   await service.dispose()
 })
 

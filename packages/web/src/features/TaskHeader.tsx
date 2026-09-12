@@ -1,5 +1,6 @@
 import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import { Button, Drawer, Popover, UiIcon } from '../components/ui'
 import { useTaskSurfaceView } from './TaskSurface'
 
@@ -81,8 +82,9 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
 }
 
 export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
-  const resolvedStatus = status ?? '已完成'
-  const resolvedContext = context === '无项目' ? '未关联项目' : context
+  const { t } = useTranslation('task')
+  const resolvedStatus = status ?? t('header.completed')
+  const resolvedContext = context === t('header.noProject') ? t('header.unlinkedProject') : context
   const { showUsageDetails, setShowUsageDetails } = useTaskSurfaceView()
   const auditToggle = findAuditToggle(actions)
   const primaryActions = collectPrimaryActions(actions)
@@ -121,9 +123,9 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || inlineActions.length > 0
   const tailActions = sessionTailHost && primaryActions.length > 0
     ? createPortal(
-        <section className="task-session-continuation" aria-label="继续此会话">
+        <section className="task-session-continuation" aria-label={t('header.continueSession')}>
           <div className="task-session-continuation-copy">
-            <span>继续原会话，或从当前节点创建新会话。</span>
+            <span>{t('header.continueDescription')}</span>
           </div>
           <div className="task-session-continuation-actions">{primaryActions}</div>
         </section>,
@@ -156,17 +158,17 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             aria-haspopup="dialog"
             aria-expanded={compactInfoOpen}
             onClick={() => setCompactInfoOpen(true)}
-          >任务信息</Button>}
+          >{t('header.taskInfo')}</Button>}
           {auditToggle && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
               <Button
                 size="small"
                 className="task-view-menu-trigger"
-                aria-label="视图选项"
+                aria-label={t('header.viewOptions')}
                 aria-haspopup="menu"
                 aria-expanded={viewMenuOpen}
                 onClick={() => setViewMenuOpen(value => !value)}
-              >视图 <UiIcon name="chevron-down" size={14}/></Button>
+              >{t('header.view')} <UiIcon name="chevron-down" size={14}/></Button>
             </span>
             <Popover
               open={viewMenuOpen}
@@ -174,9 +176,9 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
               className="task-view-menu-popover"
               onClose={() => setViewMenuOpen(false)}
             >
-              <div className="task-view-menu-list" role="menu" aria-label="视图选项">
-                <button type="button" role="menuitemcheckbox" aria-checked={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>全部事件</span><b>{showAllEvents && <UiIcon name="check" size={14}/>}</b></button>
-                <button type="button" role="menuitemcheckbox" aria-checked={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>用量详情</span><b>{showUsageDetails && <UiIcon name="check" size={14}/>}</b></button>
+              <div className="task-view-menu-list" role="menu" aria-label={t('header.viewOptions')}>
+                <button type="button" role="menuitemcheckbox" aria-checked={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>{t('header.allEvents')}</span><b>{showAllEvents && <UiIcon name="check" size={14}/>}</b></button>
+                <button type="button" role="menuitemcheckbox" aria-checked={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>{t('header.usageDetails')}</span><b>{showUsageDetails && <UiIcon name="check" size={14}/>}</b></button>
               </div>
             </Popover>
           </>}
@@ -188,16 +190,16 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     <Drawer
       open={compactInfoOpen}
       className="task-header-info-drawer"
-      title="任务信息"
-      description="当前任务详情"
+      title={t('header.taskInfo')}
+      description={t('header.currentDetails')}
       onClose={() => setCompactInfoOpen(false)}
     >
-      <section className="task-header-compact-info-list" aria-label="任务信息">
+      <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
         {infoItems.length > 0
           ? infoItems.map((item, index) => <div key={`${item.label}-${index}`} data-tone={item.tone ?? ''}><span>{item.label}</span><b>{item.value}</b></div>)
           : <>
-            {resolvedContext && <div><span>上下文</span><b>{resolvedContext}</b></div>}
-            {submeta && <div><span>工作区</span><b>{submeta}</b></div>}
+            {resolvedContext && <div><span>{t('header.context')}</span><b>{resolvedContext}</b></div>}
+            {submeta && <div><span>{t('header.workspace')}</span><b>{submeta}</b></div>}
             {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
           </>}
       </section>

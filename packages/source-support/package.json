@@ -10,5 +10,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "tsx --test \"src/**/*.test.ts\""
   },
-  "dependencies": {}
+  "dependencies": {
+    "chokidar": "5.0.0"
+  }
 }

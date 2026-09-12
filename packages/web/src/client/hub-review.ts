@@ -3,10 +3,18 @@ import type {
   HubReviewSessionListDto,
   ReviewResponseDto,
 } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 const HUB_SESSION_CACHE_MS = 10_000
 const hubSessionCache = new Map<number, { at: number; value: HubReviewSessionListDto }>()
 const hubSessionInFlight = new Map<number, Promise<HubReviewSessionListDto>>()
+
+class HubReviewRequestError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'HubReviewRequestError'
+  }
+}
 
 async function responseError(response: Response, label: string): Promise<Error> {
   let detail = ''
@@ -14,7 +22,7 @@ async function responseError(response: Response, label: string): Promise<Error> 
     const body = await response.json() as { message?: unknown }
     if (typeof body.message === 'string' && body.message) detail = `：${body.message}`
   } catch { /* non-json error */ }
-  return new Error(`${label}（状态码 ${response.status}）${detail}`)
+  return new HubReviewRequestError(translateProduct('errors:labeledRequestStatus', { label, status: response.status, detail }))
 }
 
 export async function fetchHubReviewDetail(id: string, limit = 500): Promise<HubReviewDetailDto> {
@@ -23,11 +31,11 @@ export async function fetchHubReviewDetail(id: string, limit = 500): Promise<Hub
       `/api/v1/hub/review/${encodeURIComponent(id)}?limit=${Math.max(1, Math.min(limit, 500))}`,
       { headers: { accept: 'application/json' } },
     )
-    if (!response.ok) throw await responseError(response, '远程复盘读取失败')
+    if (!response.ok) throw await responseError(response, translateProduct('errors:remoteReviewLabel'))
     return response.json() as Promise<HubReviewDetailDto>
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('远程复盘读取失败')) throw error
-    throw new Error('远程复盘读取失败，请检查 AgentLens 运行状态。')
+    if (error instanceof HubReviewRequestError) throw error
+    throw new HubReviewRequestError(translateProduct('errors:remoteReviewFailed'))
   }
 }
 
@@ -44,13 +52,13 @@ export async function fetchHubReviewSessions(limit = 200, force = false): Promis
         `/api/v1/hub/review?limit=${normalizedLimit}`,
         { headers: { accept: 'application/json' } },
       )
-      if (!response.ok) throw await responseError(response, 'Hub 会话列表读取失败')
+      if (!response.ok) throw await responseError(response, translateProduct('errors:hubSessionsLabel'))
       const value = await response.json() as HubReviewSessionListDto
       hubSessionCache.set(normalizedLimit, { at: Date.now(), value })
       return value
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('Hub 会话列表读取失败')) throw error
-      throw new Error('Hub 会话列表读取失败，请检查 AgentLens 运行状态。')
+      if (error instanceof HubReviewRequestError) throw error
+      throw new HubReviewRequestError(translateProduct('errors:hubSessionsFailed'))
     } finally {
       hubSessionInFlight.delete(normalizedLimit)
     }
@@ -63,6 +71,6 @@ export async function fetchLocalReviewSessions(limit = 200): Promise<ReviewRespo
   const response = await fetch(`/api/v1/review?limit=${Math.max(1, Math.min(limit, 500))}`, {
     headers: { accept: 'application/json' },
   })
-  if (!response.ok) throw await responseError(response, '本机会话列表读取失败')
+  if (!response.ok) throw await responseError(response, translateProduct('errors:localSessionsLabel'))
   return response.json() as Promise<ReviewResponseDto>
 }

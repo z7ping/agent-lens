@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { readAgentFilterPreference, readSidebarCollapsed, writeAgentFilterPreference, writeSidebarCollapsed } from './preferences'
+import {
+  readAgentFilterPreference,
+  readAgentVisibilityPreference,
+  readLegacyAgentOrderPreference,
+  readSidebarCollapsed,
+  writeAgentFilterPreference,
+  writeAgentVisibilityPreference,
+  writeSidebarCollapsed,
+} from './preferences'
 
 function storage(initial: Record<string, string> = {}) {
   const values = new Map(Object.entries(initial))
@@ -27,6 +35,25 @@ test('智能体筛选偏好分别保存顺序和工具栏显示项并去重', ()
   try {
     writeAgentFilterPreference({ orderedAgentIds: ['pi', 'codex', 'pi'], visibleAgentIds: ['codex', 'codex'] })
     assert.deepEqual(readAgentFilterPreference(), { orderedAgentIds: ['pi', 'codex'], visibleAgentIds: ['codex'] })
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
+  }
+})
+
+test('浏览器快捷显示偏好不再写回全局智能体顺序', () => {
+  const previous = globalThis.localStorage
+  const memory = storage({
+    'agent-lens.agent-filter.v2': JSON.stringify({
+      orderedAgentIds: ['codex', 'pi'],
+      visibleAgentIds: ['codex', 'pi'],
+    }),
+  })
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: memory })
+  try {
+    assert.deepEqual(readLegacyAgentOrderPreference(), ['codex', 'pi'])
+    writeAgentVisibilityPreference({ visibleAgentIds: ['pi'] })
+    assert.deepEqual(readAgentVisibilityPreference(), { visibleAgentIds: ['pi'] })
+    assert.deepEqual(readLegacyAgentOrderPreference(), ['codex', 'pi'])
   } finally {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
   }

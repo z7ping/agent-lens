@@ -1,10 +1,15 @@
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
+import { useTranslation } from 'react-i18next'
 import { CommandRow, EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from './StateViews'
 
 export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClientModel; snapshot: ClientSnapshot }) {
+  const { t } = useTranslation('agents')
   const response = snapshot.agents
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `agents-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
+  const hasManagement = Boolean(snapshot.integrationManagement?.items.length)
+
+  if (!response && hasManagement) return null
 
   if (!response && snapshot.agentsError) {
     return <div className={`${shellClass} is-empty`}>
@@ -20,13 +25,13 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
     </div>
   }
 
-  if (!response.items.some(agent => agent.detected)) {
+  if (!response.items.some(agent => agent.detected) && !snapshot.integrationManagement?.items.length) {
     return <div className={`${shellClass} is-empty`}>
       <div className="agents-state-inner">
         <EmptyStatePanel
           icon="◇"
-          title="未检测到受支持的智能体"
-          description="本机暂未检测到 Codex、Claude Code、Pi、Hermes、OpenCode 或 DSH。AgentLens 不会把“未观察到”直接判断成“未安装”，可先运行诊断命令确认各来源的检测路径与采集状态。"
+          title={t('overlay.noAgentsTitle')}
+          description={t('overlay.noAgentsDescription')}
         >
           <CommandRow command="agent-lens doctor"/>
         </EmptyStatePanel>

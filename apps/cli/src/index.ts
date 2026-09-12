@@ -27,6 +27,7 @@ import {
   resolvePiLocation,
 } from '@agent-lens/runtime-cordis'
 import { resolveHookExecutionProfile } from './hook-execution'
+import { runPluginCommand } from './plugin-command'
 import {
   getLifecycleStatus,
   serviceRestart,
@@ -88,6 +89,11 @@ function usage(): string {
     '  agent-lens hook status [codex|claude|all] [--json]',
     '  agent-lens hook install [codex|claude|all]',
     '  agent-lens hook uninstall [codex|claude|all]',
+    '  agent-lens plugin list [--json]',
+    '  agent-lens plugin status <id> [--json]',
+    '  agent-lens plugin install <id> [--json]',
+    '  agent-lens plugin update <id> [--json]',
+    '  agent-lens plugin remove <id> [--json]',
     '  agent-lens --version',
   ].join('\n')
 }
@@ -311,10 +317,8 @@ async function setup(json: boolean): Promise<number> {
 
   const sources = sourceRoots()
   const hookProfile = resolveHookExecutionProfile()
-  let hooks = await getAllHookStatus(hookProfile.options)
+  const hooks = await getAllHookStatus(hookProfile.options)
   const hookTargets = setupHookTargets(sources, hooks)
-  for (const target of hookTargets) await installHooks(target, hookProfile.options)
-  if (hookTargets.length) hooks = await getAllHookStatus(hookProfile.options)
 
   const health = await healthOrNull()
   const result = {
@@ -326,7 +330,8 @@ async function setup(json: boolean): Promise<number> {
       target: item.target,
       installed: item.installed,
       ...(item.target === 'codex' ? { trusted: item.trusted } : {}),
-      changed: hookTargets.includes(item.target),
+      changed: false,
+      recommended: hookTargets.includes(item.target),
     })),
     hookExecution: process.platform === 'win32'
       ? { windowsNoWindow: hookProfile.windowsNoWindow, runnerPath: hookProfile.runnerPath ?? null }
@@ -349,9 +354,12 @@ async function setup(json: boolean): Promise<number> {
   for (const item of hooks) {
     const source = sources.find(sourceItem => sourceItem.source === item.target)
     if (!source?.detected) continue
-    const changed = hookTargets.includes(item.target) ? '，本次已补齐' : ''
+    const recommended = hookTargets.includes(item.target)
     const trust = item.target === 'codex' && item.trusted === false ? '，信任配置缺失' : ''
-    console.log(`${item.installed && item.trusted !== false ? '[OK]' : '[WARN]'} ${item.target} Hook：${item.installed ? '已安装' : '未安装'}${changed}${trust}`)
+    console.log(`${item.installed && item.trusted !== false ? '[OK]' : '[提示]'} ${item.target} Hook：${item.installed ? '已安装' : '未安装'}${trust}`)
+    if (recommended) {
+      console.log(`       如需启用 Hook 增强采集，请显式执行：agent-lens hook install ${item.target}`)
+    }
   }
   if (process.platform === 'win32') {
     console.log(`${hookProfile.windowsNoWindow ? '[OK]' : '[WARN]'} Windows Hook：${hookProfile.windowsNoWindow ? '已使用无窗口启动器' : '未找到无窗口启动器，将使用标准命令入口'}`)
@@ -822,6 +830,9 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === 'autostart') return runAutostart(args[1] ?? 'status', json)
   if (command === 'capture' && args[1] === 'sources') return runCaptureSources(args[2] ?? 'status', args.slice(3), json)
   if (command === 'hook') return runHook(args[1] ?? 'status', args[2], json)
+  if (command === 'plugin') {
+    return runPluginCommand(args[1] ?? 'list', args.slice(2), json, { apiUrl: daemonUrl })
+  }
   throw new Error(`Unknown command: ${command}\n\n${usage()}`)
 }
 

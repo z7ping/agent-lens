@@ -1,4 +1,5 @@
 import type { BackupDataRootSummaryDto, BackupDirectoryNodeDto } from '@agent-lens/protocol'
+import { useTranslation } from 'react-i18next'
 import { UiIcon } from './UiIcon'
 
 function formatBytes(bytes: number): string {
@@ -9,9 +10,11 @@ function formatBytes(bytes: number): string {
 }
 
 function DirectoryNode({ node }: { node: BackupDirectoryNodeDto }) {
+  const { t, i18n } = useTranslation('backup')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const children = node.children ?? []
   const expandable = children.length > 0 || Boolean(node.omittedChildren)
-  const meta = `${node.fileCount.toLocaleString()} 文件${node.totalBytes === undefined ? '' : ` · ${formatBytes(node.totalBytes)}`}`
+  const meta = `${t('tree.files', { count: node.fileCount.toLocaleString(locale) })}${node.totalBytes === undefined ? '' : ` · ${formatBytes(node.totalBytes)}`}`
 
   if (!expandable) return <div className="backup-tree-leaf">
     <span className="backup-tree-leaf-mark" aria-hidden="true"/>
@@ -27,25 +30,27 @@ function DirectoryNode({ node }: { node: BackupDirectoryNodeDto }) {
     </summary>
     <div className="backup-tree-children">
       {children.map(child => <DirectoryNode key={child.relativePath} node={child}/>)}
-      {Boolean(node.omittedChildren) && <div className="backup-tree-omitted">另有 {node.omittedChildren} 个同级目录未展开显示</div>}
+      {Boolean(node.omittedChildren) && <div className="backup-tree-omitted">{t('tree.omitted', { count: node.omittedChildren })}</div>}
     </div>
   </details>
 }
 
 export function BackupDataRootTree({ root, onCopy }: { root: BackupDataRootSummaryDto; onCopy(path: string): void }) {
+  const { t, i18n } = useTranslation('backup')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const tree = root.tree ?? []
   return <section className="backup-root-tree">
     <header className="backup-root-tree-head">
-      <span className="badge">{root.scope === 'config' ? '配置目录' : '数据目录'}</span>
+      <span className="badge">{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</span>
       <code title={root.path}>{root.path}</code>
-      <button className="link-btn" onClick={() => onCopy(root.path)}>复制路径</button>
+      <button className="link-btn" onClick={() => onCopy(root.path)}>{t('tree.copyPath')}</button>
     </header>
     <div className="backup-root-tree-meta">
-      <span>{root.fileCount === undefined ? '文件数待扫描' : `${root.fileCount.toLocaleString()} 文件`}</span>
+      <span>{root.fileCount === undefined ? t('tree.filesPending') : t('tree.files', { count: root.fileCount.toLocaleString(locale) })}</span>
       {root.totalBytes !== undefined && <span>{formatBytes(root.totalBytes)}</span>}
-      <span>默认仅展开第 1 层</span>
+      <span>{t('tree.defaultDepth')}</span>
     </div>
     {tree.length ? <div className="backup-tree">{tree.map(node => <DirectoryNode key={node.relativePath} node={node}/>)}</div>
-      : <div className="backup-tree-empty">根目录下没有可展示的子目录；文件可能直接位于该目录。</div>}
+      : <div className="backup-tree-empty">{t('tree.empty')}</div>}
   </section>
 }

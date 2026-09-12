@@ -1,6 +1,7 @@
 import type { PiLiveStateDto } from '@agent-lens/protocol'
 import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
 import type { PiLiveHistoryItem } from './pi-live-history'
+import { currentProductLocale, translateProduct } from '../i18n/runtime'
 
 export const PI_LIVE_HISTORY_ROUND_FACT_LIMIT = 8
 
@@ -40,19 +41,19 @@ function runtimeModelLabel(state: PiLiveStateDto | null): string {
 }
 
 function runtimeStatusLabel(state: PiLiveStateDto | null, connected: boolean): string {
-  if (!connected) return '实时通道断开 · 后台服务仍持有任务'
-  if (!state) return '正在连接'
-  if (state.status === 'initializing') return state.initializationMessage || '正在初始化 Pi Runtime'
-  if (state.status === 'failed') return 'Pi Runtime 初始化失败'
-  if (state.status === 'terminating') return '正在结束 Pi Runtime'
-  if (state.isCompacting) return '正在压缩上下文'
-  if (state.isStreaming) return '正在工作'
-  return '等待输入'
+  if (!connected) return translateProduct('piLive:projection.channelDisconnected')
+  if (!state) return translateProduct('piLive:projection.connecting')
+  if (state.status === 'initializing') return state.initializationMessage || translateProduct('piLive:projection.initializing')
+  if (state.status === 'failed') return translateProduct('piLive:projection.failed')
+  if (state.status === 'terminating') return translateProduct('piLive:projection.terminating')
+  if (state.isCompacting) return translateProduct('piLive:projection.compacting')
+  if (state.isStreaming) return translateProduct('piLive:projection.working')
+  return translateProduct('piLive:projection.waiting')
 }
 
 /** 同一 Pi Runtime 在任务列表、会话切换与页头使用一致的任务标题。 */
 export function piLiveSessionTitle(state: Pick<PiLiveStateDto, 'taskSummary' | 'sessionName'> | null | undefined): string {
-  return state?.taskSummary?.trim() || state?.sessionName?.trim() || '未命名任务'
+  return state?.taskSummary?.trim() || state?.sessionName?.trim() || translateProduct('piLive:projection.unnamedTask')
 }
 
 function factTime(item: PiLiveHistoryItem): number | null {
@@ -122,13 +123,13 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
     for (let index = 0; index < fragments; index += 1) {
       const items = round.items.slice(index * PI_LIVE_HISTORY_ROUND_FACT_LIMIT, (index + 1) * PI_LIVE_HISTORY_ROUND_FACT_LIMIT)
       const continuation = index > 0
-      const baseLabel = round.background ? '后台活动' : `第 ${round.ordinal} 轮`
+      const baseLabel = round.background ? translateProduct('piLive:projection.background') : translateProduct('piLive:projection.round', { count: round.ordinal })
       result.push({
         model: {
           id: `${round.background ? 'background' : `round-${round.ordinal}`}:${index}`,
           semanticId,
           ordinal: round.background ? undefined : round.ordinal,
-          label: continuation ? `${baseLabel} · 续` : baseLabel,
+          label: continuation ? translateProduct('piLive:projection.continuation', { label: baseLabel }) : baseLabel,
           state: 'settled',
           preview: continuation ? undefined : preview,
           toolCount: continuation ? items.filter(item => item.kind === 'tool').length : toolCount,
@@ -150,7 +151,7 @@ export function projectPiLiveRunningRound(input: PiLiveRunningRoundProjectionInp
   return {
     id: 'pi-live-current-round',
     semanticId: 'pi-live-current-round',
-    label: '当前轮次',
+    label: translateProduct('piLive:projection.currentRound'),
     state: input.isStreaming ? 'running' : 'stopped',
     toolCount: tools.length,
     errorCount: tools.filter(tool => tool.status === 'error').length,
@@ -178,9 +179,9 @@ export function projectPiLiveTaskDetail(input: {
     workspacePath: state?.workspacePath,
     statusLabel: runtimeStatusLabel(state, input.connected),
     metrics: [
-      ...(totalTokens > 0 ? [{ value: totalTokens.toLocaleString(), label: '词元' }] : []),
-      ...(totalCost > 0 ? [{ value: `$${totalCost.toFixed(4)}`, label: '成本' }] : []),
-      { value: state?.pendingMessageCount ?? 0, label: '排队', tone: state?.pendingMessageCount ? 'accent' : undefined },
+      ...(totalTokens > 0 ? [{ value: totalTokens.toLocaleString(currentProductLocale()), label: translateProduct('piLive:projection.tokens') }] : []),
+      ...(totalCost > 0 ? [{ value: `${totalCost.toFixed(4)}`, label: translateProduct('piLive:projection.cost') }] : []),
+      { value: state?.pendingMessageCount ?? 0, label: translateProduct('piLive:projection.queued'), tone: state?.pendingMessageCount ? 'accent' : undefined },
       { value: state?.processId ?? '—', label: 'PID' },
     ],
     rounds: [

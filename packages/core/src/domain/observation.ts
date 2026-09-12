@@ -151,6 +151,7 @@ export type ObservationKind =
   | 'context.compaction'
   | 'context.summary'
   | 'context.injected'
+  | 'runtime.startup'
   | 'artifact.action'
   | 'usage'
   | 'unknown'

@@ -53,6 +53,7 @@ export interface PiSdkSession {
   readonly isCompacting: AgentSession['isCompacting']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
+  readonly settingsManager?: AgentSession['settingsManager']
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
@@ -86,6 +87,11 @@ export interface PiSdkModule {
  * runtime because AgentLens may encounter an older compatible Pi SDK that still supports live
  * sessions but predates one of the resource APIs used by the Source adapter.
  */
+export interface PiSdkPackageUpdateApi {
+  getAgentDir: OfficialPiModule['getAgentDir']
+  DefaultPackageManager: OfficialPiModule['DefaultPackageManager']
+}
+
 export interface PiSdkResourceApi {
   SettingsManager: OfficialPiModule['SettingsManager']
   DefaultPackageManager: OfficialPiModule['DefaultPackageManager']
@@ -151,6 +157,14 @@ export function assertPiSdkModule(value: unknown, sdkEntry: string, version?: st
     )
   }
   return module as unknown as PiSdkModule
+}
+
+export function resolvePiSdkPackageUpdateApi(value: PiSdkModule): PiSdkPackageUpdateApi | null {
+  const module = capabilityTarget(value)
+  const required = ['getAgentDir', 'DefaultPackageManager'] as const
+  return missingCapabilities(module, required).length
+    ? null
+    : module as unknown as PiSdkPackageUpdateApi
 }
 
 export function resolvePiSdkResourceApi(value: PiSdkModule): PiSdkResourceApi | null {

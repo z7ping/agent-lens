@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { Drawer } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
@@ -16,6 +17,7 @@ export function TaskEvent({
   onInspect?: (() => void) | undefined
   raw?: unknown
 }) {
+  const { t } = useTranslation('task')
   const { showUsageDetails } = useTaskSurfaceView()
   const [rawDrawerOpen, setRawDrawerOpen] = useState(false)
   if (model.category === 'usage' && !showUsageDetails) return null
@@ -36,8 +38,8 @@ export function TaskEvent({
     {raw !== undefined && !onInspect && rawDrawerOpen && <Drawer
         open
         className="task-event-raw-drawer"
-        title={`${model.label} · 原始数据`}
-        description={model.nativeType ? `Pi 原生事件 · ${model.nativeType}` : '原始事件数据'}
+        title={t('event.rawTitle', { label: model.label })}
+        description={model.nativeType ? t('event.piNative', { type: model.nativeType }) : t('event.rawData')}
         onClose={() => setRawDrawerOpen(false)}
       >
         <div className="task-event-raw-drawer-body">
