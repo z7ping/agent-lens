@@ -26,6 +26,7 @@ import {
   OPENCODE_DB_NAME as DB_NAME,
   abortableDelay,
   defineAgentLensPlugin,
+  resolveOpenCodeConfigRoots,
   resolveOpenCodeRoots,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
@@ -178,13 +179,14 @@ async function exists(path: string): Promise<boolean> {
 
 export async function detectOpenCode(ctx: SourceDetectionContext): Promise<DetectedSource[]> {
   const env = ctx.env ?? process.env
+  const configRoot = resolveOpenCodeConfigRoots(env)[0]
   for (const root of resolveOpenCodeRoots(env)) {
     const dbPath = join(root, DB_NAME)
     if (!await exists(dbPath)) continue
     return [{
       sourceId: SOURCE_ID,
       productId: SOURCE_ID,
-      configRoot: root,
+      ...(configRoot ? { configRoot } : {}),
       dataRoot: root,
       confidence: 'exact',
     }]
