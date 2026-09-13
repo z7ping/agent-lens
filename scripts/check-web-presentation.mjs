@@ -23,7 +23,7 @@ for (const file of retired) if (existsSync(file)) throw new Error(`已退役表�
 
 if (!existsSync('AGENTS.md')) throw new Error('正式仓库必须保留根 AGENTS.md，确保所有编码 Agent 接手时读取统一约束')
 const agentRules = readFileSync('AGENTS.md', 'utf8')
-for (const required of ['UI / 组件契约（强制）', '已有对应 Primitive 时，页面不得自行重新实现', 'TaskSurface', '正常可见文字不得低于 `12px`', '### 图标规范']) {
+for (const required of ['UI / 组件契约（强制）', '已有对应 Primitive 时，页面不得自行重新实现', 'TaskSurface', '正常可见文字不得低于 `12px`', '### 图标规范', '### 工作区顶栏']) {
   if (!agentRules.includes(required)) throw new Error(`AGENTS.md 缺少统一 UI 强制约束：${required}`)
 }
 for (const required of [p('components/ui/Primitives.tsx'), p('components/ui/Overlay.tsx'), p('components/ui/index.ts')]) {
@@ -86,6 +86,7 @@ if (!/export \{ SelectMenu \} from '\.\.\/SelectMenu'/.test(readFileSync(p('comp
 if (/export function Select\b/.test(readFileSync(p('components/ui/Primitives.tsx'), 'utf8'))) throw new Error('原生 Select Primitive 已退役；统一使用 SelectMenu')
 if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('UiIcon 必须经统一 UI 出口导出')
 const appShell = readFileSync(p('App.tsx'), 'utf8')
+const workspaceSidebar = readFileSync(p('components/workspace-sidebar.css'), 'utf8')
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
 const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
 if (!appShell.includes('<WorkspaceTopBar') || !appShell.includes('className="workspace-breadcrumb"') || !appShell.includes('className="workspace-topbar-page-tools"')) throw new Error('右侧工作区必须保留统一单行 Topbar：面包屑 / 页面控件 / 页面操作共用同一层')
@@ -147,7 +148,7 @@ if (duplicated.length) throw new Error(`theme.css 不得重复声明基础 Token
 if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(css.shell)) throw new Error('Header 必须由 shell.css 关闭背景模糊')
 if (!css.shell.includes('.runtime-status-popover') || !css.shell.includes('.runtime-status-grid') || !css.shell.includes('.runtime-status-wide')) throw new Error('顶部运行状态事实 Popover 能力缺失')
 if (!/\.workspace-toolbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(css.shell)) throw new Error('工作区工具栏必须保持 50px 基线')
-if (!/\.workspace-topbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(css.shellResponsive)) throw new Error('统一 Workspace Topbar 必须保持 50px 单行基线')
+if (!/\.workspace-topbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(workspaceSidebar)) throw new Error('统一 Workspace Topbar 必须由 workspace-sidebar.css 持有 50px 单行基线')
 if (!/\.filter\s*\{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('筛选控件必须保持 34px / 13px')
 if (!/\.scope-chip\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('Agent 筛选 Chip 必须保持 32px / 13px')
 for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (!css.shellResponsive.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少断点 ${breakpoint}`)
