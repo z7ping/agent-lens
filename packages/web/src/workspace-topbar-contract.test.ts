@@ -27,7 +27,6 @@ test('面包屑只作为 Topbar 左侧内容，不再拥有独立行高和边框
 
 test('Backup 视图切换和一级操作注入 Topbar，不恢复第二条 Toolbar', () => {
   assert.match(app, /topbarHost=\{workspaceTopbarHost\}/)
-  assert.match(app, /pageToolsActive=\{onBackup\}/)
   assert.match(backup, /createPortal\(<div className="backup-topbar-controls"/)
   assert.match(backup, /<ToolbarGroup className="backup-view-switcher"/)
   assert.match(backup, /<ToolbarGroup className="backup-toolbar-actions"/)
@@ -40,6 +39,6 @@ test('Agents / Tools / Insights 不在统一 Topbar 下新增第二条一级工�
   assert.doesNotMatch(agents, /workspace-toolbar/)
 })
 
-test('窄屏保持单行优先，页面控件存在时允许隐藏低优先级面包屑', () => {
-  assert.match(shellResponsive, /@media \(max-width: 575\.98px\)[\s\S]*?\.workspace-topbar\.has-page-tools \.workspace-breadcrumb \{\s*display: none;/)
+test('窄屏保持单行优先，只压缩低优先级面包屑层级', () => {
+  assert.match(shellResponsive, /@media \(max-width: 575\.98px\)[\s\S]*?\.workspace-topbar \.workspace-breadcrumb li:not\(:last-child\)/)
 })
