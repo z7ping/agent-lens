@@ -780,7 +780,7 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--al-warning-soft);
   color: var(--al-warning);
   font-size: 20px;
