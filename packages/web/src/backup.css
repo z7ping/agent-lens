@@ -8,7 +8,6 @@
 .backup-page {
   min-width: 0;
   min-height: 0;
-  overflow: auto;
 }
 
 .backup-content {
@@ -18,12 +17,6 @@
 }
 
 .backup-file-input { display: none; }
-
-.backup-breadcrumb-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 
 .backup-error {
   display: flex;
@@ -44,20 +37,32 @@
   color: color-mix(in srgb, var(--al-danger) 72%, var(--al-ink));
 }
 
-/* 二级视图沿用工作区低噪音下划线导航，不做胶囊页签。 */
-.backup-view-tabs {
-  display: flex;
-  min-height: 40px;
-  align-items: stretch;
-  gap: 24px;
+.backup-success {
   margin: 0 0 12px;
-  border-bottom: 1px solid var(--al-line);
+  padding: 8px 10px;
+  border-left: 2px solid var(--al-success);
+  background: var(--al-success-soft);
+  color: var(--al-success);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.backup-view-tabs button {
+/* 二级视图与操作共用标准 Workspace Toolbar，避免正文再叠一层导航。 */
+.backup-toolbar {
+  justify-content: space-between;
+}
+
+.backup-view-switcher {
+  display: flex;
+  align-self: stretch;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.backup-view-switcher button {
   position: relative;
   min-width: 0;
-  padding: 0 2px;
+  padding: 0 10px;
   border: 0;
   background: transparent;
   color: var(--al-muted);
@@ -67,24 +72,28 @@
   cursor: pointer;
 }
 
-.backup-view-tabs button:hover {
+.backup-view-switcher button:hover {
   color: var(--al-ink);
 }
 
-.backup-view-tabs button.is-active {
+.backup-view-switcher button.is-active {
   color: var(--al-ink);
   font-weight: 680;
 }
 
-.backup-view-tabs button.is-active::after {
+.backup-view-switcher button.is-active::after {
   content: '';
   position: absolute;
-  right: 0;
+  right: 10px;
   bottom: -1px;
-  left: 0;
+  left: 10px;
   height: 2px;
   border-radius: 2px 2px 0 0;
   background: var(--al-accent);
+}
+
+.backup-toolbar-actions {
+  margin-left: auto;
 }
 
 /* 当前范围只保留一行摘要，避免标题 / Tab / KPI 三层叠加。 */
@@ -358,16 +367,20 @@
 .backup-age-facts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  border-top: 1px solid var(--al-line);
+  border-bottom: 1px solid var(--al-line);
 }
 
 .backup-age-facts span {
   min-width: 0;
-  padding: 8px 9px;
-  border-radius: 8px;
-  background: var(--al-soft-2);
+  padding: 8px 10px;
+  border-right: 1px solid var(--al-line);
   color: var(--al-muted);
   font-size: 12px;
+}
+
+.backup-age-facts span:last-child {
+  border-right: 0;
 }
 
 .backup-age-facts b {
@@ -681,7 +694,7 @@
   gap: 8px;
 }
 
-.future-drawer-body {
+.backup-drawer-body {
   padding: 16px 20px 28px;
   overflow: visible;
 }
@@ -740,17 +753,16 @@
 
 .preview-summary b { display: block; margin-bottom: 3px; color: var(--al-ink); font-size: 17px; }
 
-.future-note {
-  padding: 12px 14px;
-  border-left: 3px solid var(--al-accent);
-  border-radius: 9px;
-  background: var(--al-accent-soft);
-  color: color-mix(in srgb, var(--al-accent) 78%, var(--al-ink));
+.backup-preview-note {
+  padding: 9px 10px;
+  border-left: 2px solid var(--al-line-strong);
+  background: var(--al-soft-2);
+  color: var(--al-muted);
   font-size: 12px;
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
-.future-note b { color: var(--al-accent); }
+.backup-preview-note b { color: var(--al-ink-2); }
 
 /* 创建/导入确认：Dialog 负责外壳，只保留业务事实布局。 */
 .backup-confirm-overlay .ui-overlay-panel { width: min(100%, 500px); }
@@ -792,29 +804,3 @@
   font-size: 12px;
 }
 
-/* 首次扫描反馈 */
-.app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton {
-  position: relative;
-  padding-top: 86px;
-}
-
-.app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::before {
-  content: '正在扫描资产备份范围';
-  position: absolute;
-  top: 28px;
-  left: 28px;
-  color: var(--al-ink);
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.app-shell:has(.nav-item-active[href='/backup']) .workspace-skeleton::after {
-  content: '正在读取本机智能体的会话与资产目录。首次扫描或文件较多时可能需要一些时间。';
-  position: absolute;
-  top: 55px;
-  right: 28px;
-  left: 28px;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.6;
-}
