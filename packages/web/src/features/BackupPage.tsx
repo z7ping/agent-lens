@@ -416,6 +416,15 @@ export function BackupPage({
     }
   }
 
+  const openPhysicalDirectory = async (path: string) => {
+    setError('')
+    try {
+      await api.openHostDirectory(path)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
   if (!overview || overview.index?.ready === false) return <PageLoadingState
     eyebrow={t('loading.eyebrow')}
     statusLabel={t('loading.status')}
@@ -659,7 +668,10 @@ export function BackupPage({
                   <code title={root.path}>{root.path}</code>
                 </div>
                 <span className="backup-physical-path-meta">{t('tree.files', { count: root.fileCount.toLocaleString(locale) })} · {formatBytes(root.totalBytes)}</span>
-                <button className="link-btn" onClick={() => void copyPath(root.path)}>{t('tree.copyPath')}</button>
+                <div className="backup-physical-path-actions">
+                  <button className="link-btn" onClick={() => void openPhysicalDirectory(root.path)}>{t('tree.openDirectory')}</button>
+                  <button className="link-btn" onClick={() => void copyPath(root.path)}>{t('tree.copyPath')}</button>
+                </div>
               </div>)}
             </div>
           </section>
