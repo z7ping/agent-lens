@@ -456,7 +456,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.table-actions {
+.backup-table-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -464,7 +464,7 @@
   white-space: nowrap;
 }
 
-.link-btn {
+.backup-link-btn {
   padding: 3px 5px;
   border: 0;
   background: transparent;
@@ -473,8 +473,8 @@
   font-weight: 620;
 }
 
-.link-btn:hover:not(:disabled) { text-decoration: underline; }
-.link-btn:disabled { cursor: default; opacity: .45; }
+.backup-link-btn:hover:not(:disabled) { text-decoration: underline; }
+.backup-link-btn:disabled { cursor: default; opacity: .45; }
 
 /* 快照物理路径：只展示真实来源根目录，不复用含义不明的状态图标。 */
 .backup-physical-path-drawer .ui-overlay-body { padding: 0; }
@@ -699,17 +699,17 @@
   overflow: visible;
 }
 
-.drawer-section { padding: 14px 0; border-bottom: 1px solid var(--al-line); }
-.drawer-section:last-child { border-bottom: 0; }
-.drawer-section h3 { margin: 0 0 10px; font-size: 12px; }
+.backup-drawer-section { padding: 14px 0; border-bottom: 1px solid var(--al-line); }
+.backup-drawer-section:last-child { border-bottom: 0; }
+.backup-drawer-section h3 { margin: 0 0 10px; font-size: 12px; }
 
-.drawer-file-list {
+.backup-drawer-file-list {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
-.drawer-file {
+.backup-drawer-file {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -720,7 +720,7 @@
   font-size: 12px;
 }
 
-.drawer-file code {
+.backup-drawer-file code {
   min-width: 0;
   flex: 1;
   overflow: hidden;
