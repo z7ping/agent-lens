@@ -96,6 +96,13 @@ test('Dialog and Drawer own common accessibility behavior', () => {
   assert.match(overlay, /export function Drawer/)
 })
 
+test('Popover 在异步内容改变尺寸后重新定位', () => {
+  assert.match(overlay, /new ResizeObserver\(updatePosition\)/)
+  assert.match(overlay, /observer\?\.observe\(panel\)/)
+  assert.match(overlay, /observer\?\.observe\(anchor\)/)
+  assert.match(overlay, /observer\?\.disconnect\(\)/)
+})
+
 test('shared composites and Pi surfaces reuse UI primitives', () => {
   assert.match(composerPill, /import \{ SelectMenu, type SelectMenuOption \} from '\.\/ui'/)
   assert.match(stateViews, /import \{ Button \} from '\.\/ui'/)

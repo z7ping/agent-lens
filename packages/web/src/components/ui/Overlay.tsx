@@ -175,12 +175,11 @@ export function Popover({
 
   useLayoutEffect(() => {
     if (!open) return
+    const anchor = anchorRef.current
+    const panel = panelRef.current
+    if (!anchor || !panel) return
 
     const updatePosition = () => {
-      const anchor = anchorRef.current
-      const panel = panelRef.current
-      if (!anchor || !panel) return
-
       const margin = 12
       const anchorRect = anchor.getBoundingClientRect()
       const panelRect = panel.getBoundingClientRect()
@@ -211,9 +210,13 @@ export function Popover({
     }
 
     updatePosition()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePosition)
+    observer?.observe(panel)
+    observer?.observe(anchor)
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
     return () => {
+      observer?.disconnect()
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
