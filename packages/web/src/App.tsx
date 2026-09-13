@@ -100,6 +100,7 @@ function WorkspaceTopBar({
   onExpandSidebar,
   actions,
   onPageToolsHost,
+  pageToolsActive = false,
 }: {
   pathname: string
   snapshot: ClientSnapshot
@@ -109,6 +110,7 @@ function WorkspaceTopBar({
   onExpandSidebar(): void
   actions?: ReactNode
   onPageToolsHost(node: HTMLDivElement | null): void
+  pageToolsActive?: boolean
 }) {
   const { t } = useTranslation('navigation')
   let items: Array<{ label: string; to?: string }>
@@ -138,7 +140,7 @@ function WorkspaceTopBar({
     items = [{ label: 'AgentLens' }]
   }
 
-  return <div className="workspace-topbar">
+  return <div className={`workspace-topbar ${pageToolsActive ? 'has-page-tools' : ''}`}>
     <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title={t('openWorkspaceNavigation')} aria-label={t('openWorkspaceNavigation')}><UiIcon name="menu" size={16}/></IconButton>
     {sidebarCollapsed && <IconButton className="workspace-sidebar-restore-button" onClick={onExpandSidebar} title={t('expandSidebar')} aria-label={t('expandSidebar')}><UiIcon name="panel-left-open" size={16}/></IconButton>}
     <Breadcrumb
@@ -279,6 +281,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           sidebarCollapsed={sidebarCollapsed}
           onExpandSidebar={() => setDesktopSidebarCollapsed(false)}
           onPageToolsHost={setWorkspaceTopbarHost}
+          pageToolsActive={onBackup}
           actions={onAgents
             ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
             : undefined}
