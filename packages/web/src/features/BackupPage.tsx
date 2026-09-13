@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { createPortal } from 'react-dom'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -15,8 +14,7 @@ import { AgentLensApi } from '../client/api'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer, IconButton } from '../components/ui'
-import { UiIcon } from '../components/UiIcon'
+import { Button, Dialog, Drawer, IconButton, Toolbar, ToolbarGroup, UiIcon } from '../components/ui'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
 const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
@@ -149,13 +147,7 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
   return kindGroup.filter(kind => sumKindFiles(sources, sourceIds, kind) > 0)
 }
 
-export function BackupPage({
-  selectedAssetSourceId,
-  actionsHost,
-}: {
-  selectedAssetSourceId: string
-  actionsHost?: HTMLDivElement | null
-}) {
+export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: string }) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
@@ -452,36 +444,22 @@ export function BackupPage({
     </label>
   }
 
-  const headerActions = <div className="backup-breadcrumb-actions">
-    <Button size="small" disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
-    <Button size="small" variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
-    <IconButton size="small" disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
-  </div>
-
-  return <>
-    {actionsHost ? createPortal(headerActions, actionsHost) : null}
-    <main className="workspace-page backup-page">
-      <div className="page-content backup-content">
-        <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-        {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
-        {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
-
-        <div className="backup-view-tabs" role="tablist" aria-label={t('assetView.tabsAria')}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeView === 'assets'}
-            className={activeView === 'assets' ? 'is-active' : ''}
-            onClick={() => setActiveView('assets')}
-          >{t('assetView.currentTab')}</button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeView === 'history'}
-            className={activeView === 'history' ? 'is-active' : ''}
-            onClick={() => setActiveView('history')}
-          >{t('assetView.historyTab')}</button>
-        </div>
+  return <main className="workspace-page backup-page">
+    <Toolbar className="workspace-toolbar backup-toolbar" role="presentation">
+      <div className="backup-view-switcher" role="tablist" aria-label={t('assetView.tabsAria')}>
+        <button type="button" role="tab" aria-selected={activeView === 'assets'} className={activeView === 'assets' ? 'is-active' : ''} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
+        <button type="button" role="tab" aria-selected={activeView === 'history'} className={activeView === 'history' ? 'is-active' : ''} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
+      </div>
+      <ToolbarGroup className="backup-toolbar-actions" align="end">
+        <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
+        <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
+        <IconButton disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
+      </ToolbarGroup>
+    </Toolbar>
+    <div className="page-content backup-content">
+      <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
+      {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
+      {success && <div className="backup-success" role="status">{success}</div>}
 
         {activeView === 'assets' ? <>
           <div className="backup-scope-summary">
@@ -607,8 +585,7 @@ export function BackupPage({
             })}
           </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
         </section>}
-      </div>
-    </main>
+    </div>
 
     {createOpen && <Drawer
       open
@@ -652,7 +629,7 @@ export function BackupPage({
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
     >
-      <div className="future-drawer-body backup-physical-path-body">
+      <div className="backup-drawer-body backup-physical-path-body">
         {physicalRootSourceIds.map(sourceId => {
           const roots = physicalRoots.filter(root => root.sourceId === sourceId)
           return <section className="drawer-section backup-physical-source" key={sourceId}>
@@ -685,10 +662,10 @@ export function BackupPage({
       closeDisabled={Boolean(busy)}
       closeOnBackdrop={!busy}
     >
-      <div className="future-drawer-body">
+      <div className="backup-drawer-body">
         <section className="drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
         <section className="drawer-section"><h3>{t('preview.files')}</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><span className={`badge ${item.status === 'blocked' ? 'err' : item.status === 'modified' ? 'warn' : item.status === 'unchanged' ? 'ok' : 'info'}`}>{previewStatusLabel(item.status, t)}</span><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
-        <section className="drawer-section"><div className="future-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
+        <section className="drawer-section"><div className="backup-preview-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
       </div>
     </Drawer>}
 
