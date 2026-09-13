@@ -51,10 +51,8 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       create: '创建快照',
     },
     page: {
-      title: '资产备份',
       refresh: '刷新扫描',
       operationFailed: '操作失败',
-      operationDone: '操作完成',
       close: '关闭',
     },
     kpi: {
@@ -101,12 +99,10 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       sourceScale: '{{files}} 文件 · {{size}}',
       locationPending: '数据位置待扫描',
       moreLocations: '另有 {{count}} 个位置',
-      historyTitle: '备份记录',
       noHistory: '暂无本地快照。',
     },
     protection: {
       title: '保护范围',
-      description: '逻辑资产和物理文件分开显示。旧索引只知道文件数量时，会明确写成“文件”，不会把 4,000 个文件误称为 4,000 个 MCP。',
       detected: '已检测',
       notDetected: '未检测',
       logicalAssets: '逻辑资产',
