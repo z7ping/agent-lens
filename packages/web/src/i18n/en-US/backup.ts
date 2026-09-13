@@ -253,7 +253,6 @@ export const englishBackupMessages: LocaleMessagesDto = {
       openDirectory: 'Open directory',
       copyPath: 'Copy path',
       filesPending: 'File count pending scan',
-      defaultDepth: 'Only level 1 is expanded by default',
       empty: 'No child directories to show under this root; files may exist directly in the directory.',
     },
     confirm: {
