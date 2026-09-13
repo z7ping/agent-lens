@@ -41,18 +41,6 @@
 @media (max-width: 767.98px) {
   .backup-content { padding: 20px 14px 48px; }
 
-  .backup-toolbar {
-    gap: 6px;
-  }
-
-  .backup-toolbar-actions {
-    gap: 4px;
-  }
-
-  .backup-view-switcher {
-    gap: 18px;
-  }
-
   .backup-scope-main {
     align-items: flex-start;
     flex-direction: column;
@@ -167,23 +155,6 @@
 }
 
 @media (max-width: 575.98px) {
-  .backup-toolbar {
-    align-items: center;
-  }
-
-  .backup-view-switcher {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .backup-view-switcher button {
-    padding-inline: 7px;
-  }
-
-  .backup-toolbar-actions .btn {
-    padding-inline: 8px;
-  }
-
   .backup-agent-row-group {
     grid-template-columns: 1fr;
     gap: 3px;
