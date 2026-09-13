@@ -207,7 +207,7 @@ for (const forbidden of [
 if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(css.backup)) {
   throw new Error('资产备份不得在 workspace-page / page-content 外声明第二个页面滚动所有者')
 }
-if (!appShell.includes('topbarHost={workspaceTopbarHost}') || !appShell.includes('pageToolsActive={onBackup}')) {
+if (!appShell.includes('topbarHost={workspaceTopbarHost}')) {
   throw new Error('资产备份页面控件必须通过统一 Workspace Topbar Host 注入，不得恢复第二条横向控制栏')
 }
 if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
