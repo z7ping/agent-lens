@@ -452,6 +452,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
         <button type="button" aria-pressed={activeView === 'history'} className={activeView === 'history' ? 'is-active' : ''} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
       </div>
       <ToolbarGroup className="backup-toolbar-actions" align="end">
+        {activeView === 'history' && visibleSnapshots.length > 0 && <Button loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>}
         <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
         <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
         <IconButton disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
@@ -569,10 +570,6 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
             </div>}
           </section>
         </> : <section className="backup-history-section">
-          <div className="backup-section-head">
-            <div><h2>{t('assetView.historyTitle')}</h2></div>
-            {visibleSnapshots.length > 0 && <Button size="small" loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>}
-          </div>
           {visibleSnapshots.length ? <div className="backup-snapshot-list">
             {visibleSnapshots.map(snapshot => {
               const checked = verification[snapshot.id]
