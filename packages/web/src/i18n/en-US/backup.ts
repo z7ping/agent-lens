@@ -51,10 +51,8 @@ export const englishBackupMessages: LocaleMessagesDto = {
       create: 'Create snapshot',
     },
     page: {
-      title: 'Asset Backup',
       refresh: 'Refresh scan',
       operationFailed: 'Operation failed',
-      operationDone: 'Operation completed',
       close: 'Close',
     },
     kpi: {
@@ -102,12 +100,10 @@ export const englishBackupMessages: LocaleMessagesDto = {
       sourceScale: '{{files}} files · {{size}}',
       locationPending: 'Data location pending scan',
       moreLocations: '{{count}} more locations',
-      historyTitle: 'Backup history',
       noHistory: 'No local snapshots yet.',
     },
     protection: {
       title: 'Protection scope',
-      description: 'Logical assets and physical files are shown separately. When an older index only knows file counts, it explicitly says “files” instead of mislabeling 4,000 files as 4,000 MCPs.',
       detected: 'Detected',
       notDetected: 'Not detected',
       logicalAssets: 'Logical assets',
