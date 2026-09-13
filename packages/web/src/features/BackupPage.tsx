@@ -464,7 +464,7 @@ export function BackupPage({
     <main className="workspace-page backup-page">
       <div className="page-content backup-content">
         <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-        <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
+        <CompactPageHeading title={t('page.title')}/>
 
         {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
         {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
@@ -487,23 +487,25 @@ export function BackupPage({
         </div>
 
         {activeView === 'assets' ? <>
-          <section className="backup-overview-strip" aria-label={t('assetView.overviewAria')}>
-            <div><span>{t('assetView.scopeLabel')}</span><b>{focusedSource ? sourceLabel(focusedSource.sourceId, focusedSource.displayName) : t('assetView.allAgents')}</b></div>
-            <div><span>{t('assetView.scaleLabel')}</span><b>{focusedSource
-              ? t('assetView.focusedOverview', {
-                  files: protectedFiles.toLocaleString(locale),
-                  size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
-                })
-              : t('assetView.overview', {
-                  agents: visibleAssetSources.length.toLocaleString(locale),
-                  files: protectedFiles.toLocaleString(locale),
-                  size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
-                })}</b></div>
-            <div><span>{t('assetView.indexLabel')}</span><b className={indexRefreshing ? 'is-warning' : ''}>{indexTime ? t('assetView.indexState', {
-              time: formatTime(indexTime, locale),
-              excluded: assetExcludedFiles.toLocaleString(locale),
-            }) : t('protection.indexPreparing')}</b></div>
-          </section>
+          <div className="backup-scope-summary">
+            <div className="backup-scope-main">
+              <b>{focusedSource ? sourceLabel(focusedSource.sourceId, focusedSource.displayName) : t('assetView.allAgents')}</b>
+              <span>{focusedSource
+                ? t('assetView.focusedOverview', {
+                    files: protectedFiles.toLocaleString(locale),
+                    size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
+                  })
+                : t('assetView.overview', {
+                    agents: visibleAssetSources.length.toLocaleString(locale),
+                    files: protectedFiles.toLocaleString(locale),
+                    size: hasProtectedBytes ? formatBytes(protectedBytes) : t('sizePending'),
+                  })}</span>
+            </div>
+            <div className="backup-scope-meta">
+              <span>{indexTime ? t('assetView.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
+              <span>{t('assetView.excluded', { count: assetExcludedFiles.toLocaleString(locale) })}</span>
+            </div>
+          </div>
 
           <section className="backup-assets-section">
             {!visibleAssetSources.length && <div className="backup-assets-empty">{t('assetView.noAssets')}</div>}
@@ -512,48 +514,45 @@ export function BackupPage({
               const coreKinds = RECOMMENDED_KINDS.filter(kind => kindFiles(source, kind) > 0)
               const historyKinds = HISTORY_ASSET_KINDS.filter(kind => kindFiles(source, kind) > 0)
               const primaryRoot = source.roots?.[0]
-              return <article key={source.sourceId} className="backup-agent-asset-summary" data-source={source.sourceId}>
-                <div className="backup-agent-asset-head">
-                  <div className="backup-agent-title">
-                    <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
-                    <span><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{t('assetView.sourceScale', {
+              return <article key={source.sourceId} className="backup-agent-row">
+                <header className="backup-agent-row-head">
+                  <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
+                  <div>
+                    <b>{sourceLabel(source.sourceId, source.displayName)}</b>
+                    <span>{t('assetView.sourceScale', {
                       files: source.fileCount.toLocaleString(locale),
                       size: source.totalBytes === undefined ? t('sizePending') : formatBytes(source.totalBytes),
-                    })}</small></span>
+                    })}</span>
                   </div>
-                </div>
+                </header>
 
-                <div className="backup-agent-asset-grid">
-                  <section className="backup-agent-asset-group is-primary">
-                    <h3>{t('assetView.coreAssets')}</h3>
-                    <div className="backup-agent-kind-list">
+                <div className="backup-agent-row-body">
+                  <div className="backup-agent-row-group">
+                    <span className="backup-agent-row-label">{t('assetView.coreAssets')}</span>
+                    <div className="backup-agent-row-values">
                       {coreKinds.length ? coreKinds.map(kind => {
                         const logical = kindLogicalAssets(source, kind)
                         const count = logical ?? kindFiles(source, kind)
-                        return <div key={kind} className="backup-agent-kind-row"><span>{kindLabel(kind, t)}</span><b>{count.toLocaleString(locale)}</b></div>
-                      }) : <span className="backup-agent-group-empty">—</span>}
+                        return <span key={kind}><em>{kindLabel(kind, t)}</em><b>{count.toLocaleString(locale)}</b></span>
+                      }) : <span>—</span>}
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="backup-agent-asset-group is-secondary">
-                    <h3>{t('assetView.historyStatus')}</h3>
-                    <div className="backup-agent-kind-list">
+                  <div className="backup-agent-row-group is-secondary">
+                    <span className="backup-agent-row-label">{t('assetView.historyStatus')}</span>
+                    <div className="backup-agent-row-values">
                       {historyKinds.length ? historyKinds.map(kind => {
                         const logical = kindLogicalAssets(source, kind)
                         const count = logical ?? kindFiles(source, kind)
-                        return <div key={kind} className="backup-agent-kind-row"><span>{kindLabel(kind, t)}</span><b>{count.toLocaleString(locale)}</b></div>
-                      }) : <span className="backup-agent-group-empty">—</span>}
+                        return <span key={kind}><em>{kindLabel(kind, t)}</em><b>{count.toLocaleString(locale)}</b></span>
+                      }) : <span>—</span>}
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="backup-agent-location">
-                    <h3>{t('assetView.primaryLocation')}</h3>
-                    <div className="backup-agent-location-path">
-                      <code title={primaryRoot?.path}>{primaryRoot?.path ?? t('assetView.locationPending')}</code>
-                    </div>
+                  <div className="backup-agent-row-path">
+                    <code title={primaryRoot?.path}>{primaryRoot?.path ?? t('assetView.locationPending')}</code>
                     {source.roots && source.roots.length > 1 && <span>{t('assetView.moreLocations', { count: source.roots.length - 1 })}</span>}
-                    {source.latestModifiedAt && <span>{t('assetView.latest', { time: formatTime(source.latestModifiedAt, locale) })}</span>}
-                  </section>
+                  </div>
                 </div>
               </article>
             })}
