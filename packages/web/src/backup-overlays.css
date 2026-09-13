@@ -103,5 +103,5 @@
 
 @media (max-width: 575.98px) {
   .backup-root-tree-head { grid-template-columns: auto minmax(0, 1fr); }
-  .backup-root-tree-head .link-btn { grid-column: 1 / -1; justify-self: start; }
+  .backup-root-tree-head .backup-link-btn { grid-column: 1 / -1; justify-self: start; }
 }
