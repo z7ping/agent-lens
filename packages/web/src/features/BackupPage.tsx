@@ -459,7 +459,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
     </Toolbar>
     <div className="page-content backup-content">
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-      {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
+      {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="backup-link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}
 
         {activeView === 'assets' ? <>
@@ -581,7 +581,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
                   <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</small><small className="backup-snapshot-meta">{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
                 </div>
                 <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <StatusBadge tone={checked.valid ? 'success' : 'danger'}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</StatusBadge> : <StatusBadge>{t('snapshots.unverified')}</StatusBadge>}</div>
-                <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
+                <div className="backup-table-actions"><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
               </article>
             })}
           </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
@@ -634,7 +634,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
       <div className="backup-drawer-body backup-physical-path-body">
         {physicalRootSourceIds.map(sourceId => {
           const roots = physicalRoots.filter(root => root.sourceId === sourceId)
-          return <section className="drawer-section backup-physical-source" key={sourceId}>
+          return <section className="backup-drawer-section backup-physical-source" key={sourceId}>
             <h3>{sourceLabel(sourceId)}</h3>
             <div className="backup-physical-path-list">
               {roots.map(root => <div className="backup-physical-path-row" key={root.key}>
@@ -644,8 +644,8 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
                 </div>
                 <span className="backup-physical-path-meta">{t('tree.files', { count: root.fileCount.toLocaleString(locale) })} · {formatBytes(root.totalBytes)}</span>
                 <div className="backup-physical-path-actions">
-                  <button className="link-btn" onClick={() => void openPhysicalDirectory(root.path)}>{t('tree.openDirectory')}</button>
-                  <button className="link-btn" onClick={() => void copyPath(root.path)}>{t('tree.copyPath')}</button>
+                  <button className="backup-link-btn" onClick={() => void openPhysicalDirectory(root.path)}>{t('tree.openDirectory')}</button>
+                  <button className="backup-link-btn" onClick={() => void copyPath(root.path)}>{t('tree.copyPath')}</button>
                 </div>
               </div>)}
             </div>
@@ -665,9 +665,9 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
       closeOnBackdrop={!busy}
     >
       <div className="backup-drawer-body">
-        <section className="drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
-        <section className="drawer-section"><h3>{t('preview.files')}</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>{previewStatusLabel(item.status, t)}</StatusBadge><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
-        <section className="drawer-section"><div className="backup-preview-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
+        <section className="backup-drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
+        <section className="backup-drawer-section"><h3>{t('preview.files')}</h3><div className="backup-drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="backup-drawer-file preview-file"><StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>{previewStatusLabel(item.status, t)}</StatusBadge><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
+        <section className="backup-drawer-section"><div className="backup-preview-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
       </div>
     </Drawer>}
 
