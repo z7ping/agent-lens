@@ -29,9 +29,9 @@ test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定
 test('Backup 默认以当前资产为主视图，并在标准工作区工具栏切换备份记录', () => {
   assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
   assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
-  assert.match(backupPage, /className="backup-view-switcher"/)
-  assert.match(backupPage, /role="group" aria-label=\{t\('assetView\.tabsAria'\)\}/)
+  assert.match(backupPage, /<ToolbarGroup className="backup-view-switcher" role="group"/)
   assert.match(backupPage, /aria-pressed=\{activeView === 'assets'\}/)
+  assert.match(backupPage, /scope-chip-active/)
   assert.match(backupPage, /t\('assetView\.currentTab'\)/)
   assert.match(backupPage, /t\('assetView\.historyTab'\)/)
   assert.match(backupPage, /activeView === 'assets'/)
