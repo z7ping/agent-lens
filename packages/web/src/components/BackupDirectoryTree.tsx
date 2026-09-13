@@ -1,6 +1,6 @@
 import type { BackupDataRootSummaryDto, BackupDirectoryNodeDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
-import { UiIcon } from './UiIcon'
+import { UiIcon } from './ui'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
