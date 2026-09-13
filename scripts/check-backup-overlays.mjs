@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 const main = readFileSync('packages/web/src/main.tsx', 'utf8')
+const app = readFileSync('packages/web/src/App.tsx', 'utf8')
 const page = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
 const tree = readFileSync('packages/web/src/components/BackupDirectoryTree.tsx', 'utf8')
 const css = readFileSync('packages/web/src/backup-overlays.css', 'utf8')
@@ -27,7 +28,7 @@ if (main.includes("import './backup-scroll.css'") || existsSync('packages/web/sr
 
 for (const required of [
   'className="workspace-page backup-page"',
-  '<Toolbar className="workspace-toolbar backup-toolbar"',
+  'createPortal(<div className="backup-topbar-controls"',
   'className="backup-view-switcher"',
   'className="backup-agent-row"',
 ]) {
@@ -43,6 +44,18 @@ for (const forbidden of [
 }
 if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(pageCss)) {
   throw new Error('资产备份不得在 workspace-page 外再声明第二个页面滚动所有者')
+}
+
+for (const required of [
+  'function WorkspaceTopBar',
+  'className="workspace-topbar-page-tools"',
+  'pageToolsActive={onBackup}',
+  'topbarHost={workspaceTopbarHost}',
+]) {
+  if (!app.includes(required)) throw new Error(`资产备份必须接入单行 Workspace Topbar：${required}`)
+}
+if (page.includes('<Toolbar className="workspace-toolbar backup-toolbar"')) {
+  throw new Error('资产备份不得在 Workspace Topbar 下恢复第二行页面 Toolbar')
 }
 
 for (const required of [
@@ -108,4 +121,4 @@ if (!page.includes("useState<string[] | null>(null)") || !page.includes('const s
   throw new Error('渐进扫描期间必须以“全部已检测智能体”作为动态默认范围，不得锁定为首个完成的智能体')
 }
 
-console.log('资产备份统一 Toolbar / 滚动所有权 / Overlay / 目录树 / 解释层性能 / 渐进加载检查通过')
+console.log('资产备份单行 Topbar / 滚动所有权 / Overlay / 目录树 / 解释层性能 / 渐进加载检查通过')
