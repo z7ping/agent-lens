@@ -7,6 +7,8 @@ import type {
   BackupOverviewResponseDto,
   BackupProtectionSourceDto,
   BackupRestorePreviewResponseDto,
+  BackupSnapshotManifestDto,
+  BackupManifestFileDto,
   BackupVerifyResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
@@ -47,6 +49,52 @@ function formatTime(value: string, locale: string): string {
 
 function shortHash(value: string): string {
   return value.length > 12 ? `${value.slice(0, 6)}…${value.slice(-4)}` : value
+}
+
+function parentPhysicalPath(value: string): string {
+  const slash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'))
+  if (slash < 0) return value
+  if (slash === 2 && /^[A-Za-z]:[\\/]/.test(value)) return value.slice(0, 3)
+  return value.slice(0, slash) || value.slice(0, 1)
+}
+
+function manifestRootPath(file: BackupManifestFileDto): string {
+  const segments = file.sourceRelativePath.split('/').filter(Boolean)
+  let root = file.originalPath
+  for (let index = 0; index < segments.length; index += 1) root = parentPhysicalPath(root)
+  return root
+}
+
+interface SnapshotPhysicalRoot {
+  key: string
+  sourceId: string
+  scope: 'config' | 'data'
+  path: string
+  fileCount: number
+  totalBytes: number
+}
+
+function snapshotPhysicalRoots(manifest: BackupSnapshotManifestDto): SnapshotPhysicalRoot[] {
+  const roots = new Map<string, SnapshotPhysicalRoot>()
+  for (const file of manifest.files) {
+    const path = manifestRootPath(file)
+    const key = `${file.sourceId}\u0000${file.installationId}\u0000${file.sourceScope}\u0000${path}`
+    const root = roots.get(key) ?? {
+      key,
+      sourceId: file.sourceId,
+      scope: file.sourceScope,
+      path,
+      fileCount: 0,
+      totalBytes: 0,
+    }
+    root.fileCount += 1
+    root.totalBytes += file.size
+    roots.set(key, root)
+  }
+  return [...roots.values()].sort((left, right) =>
+    left.sourceId.localeCompare(right.sourceId)
+      || left.scope.localeCompare(right.scope)
+      || left.path.localeCompare(right.path))
 }
 
 function sourceLabel(sourceId: string, displayName?: string): string {
@@ -122,6 +170,7 @@ export function BackupPage({
   const [activeView, setActiveView] = useState<'assets' | 'history'>('assets')
   const [createOpen, setCreateOpen] = useState(false)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
+  const [physicalPathSnapshot, setPhysicalPathSnapshot] = useState<BackupSnapshotManifestDto | null>(null)
   const [preview, setPreview] = useState<BackupRestorePreviewResponseDto | null>(null)
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
@@ -266,6 +315,20 @@ export function BackupPage({
       const results: Record<string, BackupVerifyResponseDto> = {}
       for (const snapshot of visibleSnapshots) results[snapshot.id] = await api.verifyBackup(snapshot.id)
       setVerification(current => ({ ...current, ...results }))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const inspectPhysicalPaths = async (id: string) => {
+    if (busy) return
+    setBusy(`paths:${id}`)
+    setError('')
+    try {
+      const result = await api.backupSnapshot(id)
+      setPhysicalPathSnapshot(result.snapshot)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -525,7 +588,7 @@ export function BackupPage({
                   <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</small><small className="backup-snapshot-meta">{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
                 </div>
                 <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</div>
-                <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
+                <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
               </article>
             })}
           </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
@@ -564,6 +627,34 @@ export function BackupPage({
         {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.more')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
 
         <div className="backup-safety-line"><UiIcon name="check" size={14}/><span>{t('create.safetyCompact', { count: selectedExcludedFiles.toLocaleString(locale) })}</span></div>
+      </div>
+    </Drawer>}
+
+    {physicalPathSnapshot && <Drawer
+      open
+      className="backup-physical-path-drawer"
+      title={t('snapshots.physicalPaths')}
+      onClose={() => { if (!busy) setPhysicalPathSnapshot(null) }}
+      closeDisabled={Boolean(busy)}
+      closeOnBackdrop={!busy}
+    >
+      <div className="future-drawer-body backup-physical-path-body">
+        {Array.from(new Set(snapshotPhysicalRoots(physicalPathSnapshot).map(root => root.sourceId))).map(sourceId => {
+          const roots = snapshotPhysicalRoots(physicalPathSnapshot).filter(root => root.sourceId === sourceId)
+          return <section className="drawer-section backup-physical-source" key={sourceId}>
+            <h3>{sourceLabel(sourceId)}</h3>
+            <div className="backup-physical-path-list">
+              {roots.map(root => <div className="backup-physical-path-row" key={root.key}>
+                <div className="backup-physical-path-main">
+                  <span className="badge">{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</span>
+                  <code title={root.path}>{root.path}</code>
+                </div>
+                <span className="backup-physical-path-meta">{t('tree.files', { count: root.fileCount.toLocaleString(locale) })} · {formatBytes(root.totalBytes)}</span>
+                <button className="link-btn" onClick={() => void copyPath(root.path)}>{t('tree.copyPath')}</button>
+              </div>)}
+            </div>
+          </section>
+        })}
       </div>
     </Drawer>}
 
