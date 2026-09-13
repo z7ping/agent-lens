@@ -166,6 +166,7 @@ if (!css.agents.includes('智能体概览正式样式') || !css.agents.includes(
 if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentResponsive.includes('.agents-responsive-shell') || !css.agentResponsive.includes('.agent-insights-rail')) throw new Error('Agents xxl 响应式必须由 agent-insights-responsive.css 持有')
 if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
   || !css.backup.includes('.backup-topbar-controls')
+  || !css.backup.includes('.backup-assets-surface')
   || !css.backup.includes('.backup-scope-summary')
   || !css.backup.includes('.backup-agent-row')
   || !css.backup.includes('.backup-snapshot-list')
@@ -206,6 +207,9 @@ for (const forbidden of [
 }
 if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(css.backup)) {
   throw new Error('资产备份不得在 workspace-page / page-content 外声明第二个页面滚动所有者')
+}
+if (!/\.backup-assets-surface\s*\{[\s\S]*?background:\s*var\(--al-surface\);/m.test(css.backup)) {
+  throw new Error('当前资产必须由单一 Surface 承载，不能让主信息直接裸露在 Canvas 上')
 }
 if (!appShell.includes('topbarHost={workspaceTopbarHost}')) {
   throw new Error('资产备份页面控件必须通过统一 Workspace Topbar Host 注入，不得恢复第二条横向控制栏')
