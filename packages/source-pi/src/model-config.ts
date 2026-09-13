@@ -142,10 +142,11 @@ function modelsFromConfig(config: ParsedConfig, agentDir: string, capturedAt: st
         const model = asRecord(rawModel, `${config.path} provider ${provider} model`)
         const modelId = optionalString(model, 'id')
         if (!modelId) throw new TypeError(`${config.path} provider ${provider} model id must be a non-empty string`)
+        const displayName = optionalString(model, 'name')
         assets.push(configuredModelAsset({
           provider,
           modelId,
-          displayName: optionalString(model, 'name'),
+          ...(displayName ? { displayName } : {}),
           config,
           source: `pi:model:custom:${provider}`,
           scope: 'user',

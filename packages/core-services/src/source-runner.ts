@@ -152,6 +152,8 @@ export interface SourceHistorySyncInput {
   detected: DetectedSource
   abortSignal: AbortSignal
   historyWindow?: SourceHistoryWindow
+  /** 历史导入在前台请求活跃时可在记录边界暂停。 */
+  cooperate?: () => Promise<void>
 }
 
 export interface SourceParserReplayInput {
@@ -657,6 +659,7 @@ export class SourceHistoryRunner {
         checkpoint,
         ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
       })) {
+        if (input.cooperate) await input.cooperate()
         if (abortSignal.aborted) break
         result.records += 1
         const processed = await processSourceRecord(
