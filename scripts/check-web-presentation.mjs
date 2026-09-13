@@ -88,7 +88,7 @@ if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/u
 const appShell = readFileSync(p('App.tsx'), 'utf8')
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
 const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
-if (!appShell.includes('<WorkspaceBreadcrumb') || !appShell.includes('className="workspace-breadcrumb"')) throw new Error('右侧工作区必须保留统一面包屑')
+if (!appShell.includes('<WorkspaceTopBar') || !appShell.includes('className="workspace-breadcrumb"') || !appShell.includes('className="workspace-topbar-page-tools"')) throw new Error('右侧工作区必须保留统一单行 Topbar：面包屑 / 页面控件 / 页面操作共用同一层')
 if (!runtimeStatus.includes('<Popover') || !runtimeStatus.includes('placement="right-end"')) throw new Error('Runtime 详情必须通过统一 Portal Popover 逃离侧栏裁剪')
 if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在侧栏左下角')
 
@@ -147,6 +147,7 @@ if (duplicated.length) throw new Error(`theme.css 不得重复声明基础 Token
 if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(css.shell)) throw new Error('Header 必须由 shell.css 关闭背景模糊')
 if (!css.shell.includes('.runtime-status-popover') || !css.shell.includes('.runtime-status-grid') || !css.shell.includes('.runtime-status-wide')) throw new Error('顶部运行状态事实 Popover 能力缺失')
 if (!/\.workspace-toolbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(css.shell)) throw new Error('工作区工具栏必须保持 50px 基线')
+if (!/\.workspace-topbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(css.shellResponsive)) throw new Error('统一 Workspace Topbar 必须保持 50px 单行基线')
 if (!/\.filter\s*\{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('筛选控件必须保持 34px / 13px')
 if (!/\.scope-chip\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('Agent 筛选 Chip 必须保持 32px / 13px')
 for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (!css.shellResponsive.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少断点 ${breakpoint}`)
@@ -163,7 +164,7 @@ if (!css.insights.includes('使用洞察正式样式') || !css.insights.includes
 if (!css.agents.includes('智能体概览正式样式') || !css.agents.includes(".agent-card[data-source='hermes']") || !css.agents.includes(".agent-card[data-source='opencode']") || !css.agents.includes('.frequent-asset-row') || !css.agents.includes('.skill-funnel')) throw new Error('智能体概览关键能力样式缺失')
 if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentResponsive.includes('.agents-responsive-shell') || !css.agentResponsive.includes('.agent-insights-rail')) throw new Error('Agents xxl 响应式必须由 agent-insights-responsive.css 持有')
 if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
-  || !css.backup.includes('.backup-toolbar')
+  || !css.backup.includes('.backup-topbar-controls')
   || !css.backup.includes('.backup-scope-summary')
   || !css.backup.includes('.backup-agent-row')
   || !css.backup.includes('.backup-snapshot-list')
@@ -178,7 +179,7 @@ if (!css.backupResponsive.includes('.backup-agent-row') || !css.backupResponsive
 const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
 for (const required of [
   "from '../components/ui'",
-  '<Toolbar className="workspace-toolbar backup-toolbar"',
+  'createPortal(<div className="backup-topbar-controls"',
   '<ToolbarGroup className="backup-toolbar-actions" align="end">',
   'scope-chip-active',
   'className="backup-snapshot-header"',
@@ -194,7 +195,7 @@ for (const forbidden of [
   'className="drawer show',
   'backup-confirm-dialog',
   "window.addEventListener('keydown', closeOnEscape)",
-  'createPortal',
+  '<Toolbar className="workspace-toolbar backup-toolbar"',
   'backupBreadcrumbActionsHost',
   'className="page-scroll"',
   'className="future-',
@@ -204,6 +205,9 @@ for (const forbidden of [
 }
 if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(css.backup)) {
   throw new Error('资产备份不得在 workspace-page / page-content 外声明第二个页面滚动所有者')
+}
+if (!appShell.includes('topbarHost={workspaceTopbarHost}') || !appShell.includes('pageToolsActive={onBackup}')) {
+  throw new Error('资产备份页面控件必须通过统一 Workspace Topbar Host 注入，不得恢复第二条横向控制栏')
 }
 if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
   throw new Error('资产备份状态必须复用 StatusBadge，不得恢复页面私有 badge 方言')
