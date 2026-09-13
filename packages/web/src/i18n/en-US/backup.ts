@@ -253,6 +253,7 @@ export const englishBackupMessages: LocaleMessagesDto = {
       omitted: '{{count}} sibling directories not expanded',
       configRoot: 'Configuration directory',
       dataRoot: 'Data directory',
+      openDirectory: 'Open directory',
       copyPath: 'Copy path',
       filesPending: 'File count pending scan',
       defaultDepth: 'Only level 1 is expanded by default',
