@@ -47,49 +47,9 @@
   line-height: 1.5;
 }
 
-/* 二级视图与操作共用标准 Workspace Toolbar，避免正文再叠一层导航。 */
+/* 二级视图与操作共用标准 Workspace Toolbar；视图切换直接复用现有 Scope Chip。 */
 .backup-toolbar {
   justify-content: space-between;
-}
-
-.backup-view-switcher {
-  display: flex;
-  align-self: stretch;
-  align-items: stretch;
-  gap: 4px;
-}
-
-.backup-view-switcher button {
-  position: relative;
-  min-width: 0;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: var(--al-muted);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 560;
-  cursor: pointer;
-}
-
-.backup-view-switcher button:hover {
-  color: var(--al-ink);
-}
-
-.backup-view-switcher button.is-active {
-  color: var(--al-ink);
-  font-weight: 680;
-}
-
-.backup-view-switcher button.is-active::after {
-  content: '';
-  position: absolute;
-  right: 10px;
-  bottom: -1px;
-  left: 10px;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--al-accent);
 }
 
 .backup-toolbar-actions {
