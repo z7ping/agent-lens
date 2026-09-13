@@ -4,40 +4,56 @@
  * 断点固定采用 Bootstrap 5：sm 576 / md 768 / lg 992 / xl 1200 / xxl 1400。
  */
 
-.workspace-breadcrumb-shell {
+.workspace-topbar {
+  position: relative;
+  z-index: 40;
   display: flex;
+  width: 100%;
+  height: 50px;
   min-width: 0;
-  min-height: 38px;
-  flex: 0 0 38px;
-  align-items: stretch;
+  min-height: 50px;
+  flex: 0 0 50px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--al-line);
   background: var(--al-surface);
 }
 
-.workspace-breadcrumb-shell .workspace-breadcrumb {
+.workspace-topbar .workspace-breadcrumb {
   min-width: 0;
-  min-height: 37px;
-  flex: 1 1 auto;
-  border-bottom: 0;
+  flex: 0 1 auto;
 }
 
-.workspace-breadcrumb-actions {
+.workspace-topbar-page-tools {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  overflow: visible;
+}
+
+.workspace-topbar-page-tools:empty {
+  min-width: 0;
+}
+
+.workspace-topbar-actions {
   display: flex;
   min-width: 0;
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
-  padding: 0 10px 0 8px;
+  margin-left: auto;
 }
 
-.workspace-breadcrumb-actions .ui-status-badge {
+.workspace-topbar-actions .ui-status-badge {
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.workspace-breadcrumb-shell .workspace-mobile-nav-button,
+.workspace-topbar .workspace-mobile-nav-button,
 .workspace-mobile-backdrop,
 .workspace-sidebar-restore-button {
   display: none;
@@ -45,7 +61,7 @@
 
 .workspace-sidebar-restore-button {
   align-self: center;
-  margin-left: 6px;
+  margin-left: -2px;
   border-color: transparent;
   background: transparent;
   color: var(--al-muted);
@@ -130,7 +146,7 @@
     background: rgb(15 23 42 / .32);
   }
 
-  .workspace-breadcrumb-shell .workspace-mobile-nav-button {
+  .workspace-topbar .workspace-mobile-nav-button {
     display: inline-flex;
     width: 38px;
     min-width: 38px;
@@ -148,22 +164,32 @@
     color: var(--al-ink);
   }
 
-  .workspace-breadcrumb-shell {
-    min-height: 38px;
-    flex-basis: 38px;
-  }
-
-  .workspace-breadcrumb-shell .workspace-breadcrumb { padding-left: 4px; }
-
-  .workspace-breadcrumb-actions {
+  .workspace-topbar {
+    height: 50px;
+    min-height: 50px;
+    flex-basis: 50px;
     gap: 4px;
-    padding-right: 6px;
+    padding-inline: 4px 8px;
   }
 
-  .workspace-breadcrumb-actions .ui-status-badge { display: none; }
+  .workspace-topbar .workspace-breadcrumb { padding-inline: 4px 6px; }
+
+  .workspace-topbar-actions {
+    gap: 4px;
+  }
+
+  .workspace-topbar-actions .ui-status-badge { display: none; }
 }
 
 @media (max-width: 575.98px) {
+  .workspace-topbar .workspace-breadcrumb li:not(:last-child) {
+    display: none;
+  }
+
+  .workspace-topbar .workspace-breadcrumb li:last-child .ui-breadcrumb-separator {
+    display: none;
+  }
+
   .app-header-inner { gap: 6px; padding-inline: 7px; }
   .app-header .brand { display: flex; }
   .brand-logo { width: 25px; height: 25px; }
