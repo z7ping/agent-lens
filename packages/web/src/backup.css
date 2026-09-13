@@ -226,7 +226,7 @@
   align-items: baseline;
   gap: 6px;
   color: var(--al-ink-2);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .backup-agent-row-values em {
@@ -236,7 +236,7 @@
 
 .backup-agent-row-values b {
   color: var(--al-ink-2);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 660;
   font-variant-numeric: tabular-nums;
 }
@@ -332,7 +332,7 @@
   min-height: 38px;
   padding: 8px 2px;
   border-bottom: 1px solid var(--al-line);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .backup-asset-kind-row:last-child { border-bottom: 0; }
@@ -432,7 +432,7 @@
 
 .backup-snapshot-main b {
   color: var(--al-ink-2);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .backup-snapshot-main small {
@@ -452,7 +452,7 @@
 
 .backup-snapshot-state strong {
   color: var(--al-ink-2);
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
