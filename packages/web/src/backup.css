@@ -25,7 +25,7 @@
   margin: 0 0 12px;
   padding: 9px 12px;
   border: 1px solid color-mix(in srgb, var(--al-danger) 24%, var(--al-line));
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--al-danger-soft);
   color: var(--al-danger);
   font-size: 12px;
@@ -400,7 +400,7 @@
 .backup-snapshot-list {
   overflow: hidden;
   border: 1px solid var(--al-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--al-surface);
 }
 
@@ -717,7 +717,7 @@
   gap: 8px;
   padding: 8px 9px;
   border: 1px solid var(--al-line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--al-soft-2);
   font-size: 12px;
 }
@@ -746,7 +746,7 @@
 .preview-summary span {
   padding: 10px;
   border: 1px solid var(--al-line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--al-soft-2);
   color: var(--al-muted);
   font-size: 12px;
@@ -800,7 +800,7 @@
 .backup-confirm-facts span {
   padding: 6px 8px;
   border: 1px solid var(--al-line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--al-soft-2);
   color: var(--al-muted);
   font-size: 12px;
