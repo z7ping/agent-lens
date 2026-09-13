@@ -175,6 +175,15 @@ export function BackupPage({
   const [confirmation, setConfirmation] = useState<PendingConfirmation | null>(null)
   const importInput = useRef<HTMLInputElement>(null)
 
+  const physicalRoots = useMemo(
+    () => physicalPathSnapshot ? snapshotPhysicalRoots(physicalPathSnapshot) : [],
+    [physicalPathSnapshot],
+  )
+  const physicalRootSourceIds = useMemo(
+    () => [...new Set(physicalRoots.map(root => root.sourceId))],
+    [physicalRoots],
+  )
+
   const applyOverview = (next: BackupOverviewResponseDto) => {
     setOverview(next)
   }
@@ -639,8 +648,8 @@ export function BackupPage({
       closeOnBackdrop={!busy}
     >
       <div className="future-drawer-body backup-physical-path-body">
-        {Array.from(new Set(snapshotPhysicalRoots(physicalPathSnapshot).map(root => root.sourceId))).map(sourceId => {
-          const roots = snapshotPhysicalRoots(physicalPathSnapshot).filter(root => root.sourceId === sourceId)
+        {physicalRootSourceIds.map(sourceId => {
+          const roots = physicalRoots.filter(root => root.sourceId === sourceId)
           return <section className="drawer-section backup-physical-source" key={sourceId}>
             <h3>{sourceLabel(sourceId)}</h3>
             <div className="backup-physical-path-list">
@@ -655,6 +664,7 @@ export function BackupPage({
             </div>
           </section>
         })}
+        {!physicalRoots.length && <div className="backup-history-empty">{t('snapshots.noPhysicalPaths')}</div>}
       </div>
     </Drawer>}
 
