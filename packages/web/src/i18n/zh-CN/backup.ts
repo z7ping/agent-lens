@@ -126,7 +126,6 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       title: '最近快照',
       description: '快照创建后清单不可变；相同内容只在本地内容库保存一份。',
       workbenchHint: '校验、预演或导出已有快照',
-      rowMeta: '{{files}} 文件 · 排除 {{excluded}} · {{hash}}',
       verifyAll: '验证全部',
       filesAndExcluded: '{{files}} 文件 · 排除 {{excluded}}',
       columns: {
