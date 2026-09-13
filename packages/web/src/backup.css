@@ -47,12 +47,22 @@
   line-height: 1.5;
 }
 
-/* 二级视图与操作共用标准 Workspace Toolbar；视图切换直接复用现有 Scope Chip。 */
-.backup-toolbar {
-  justify-content: space-between;
+/* 页面级视图与操作注入统一 Workspace Topbar，不再占据第二行。 */
+.backup-topbar-controls {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.backup-view-switcher {
+  flex: 0 0 auto;
 }
 
 .backup-toolbar-actions {
+  min-width: 0;
+  flex: 0 0 auto;
   margin-left: auto;
 }
 
