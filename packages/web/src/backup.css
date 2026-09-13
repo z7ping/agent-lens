@@ -352,7 +352,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 备份记录使用与洞察列表一致的轻卡片容器。 */
+/* 备份记录：连续表格构图，信息列稳定，不做逐条卡片。 */
 .backup-history-section {
   margin-top: 2px;
 }
@@ -364,12 +364,31 @@
   background: var(--al-surface);
 }
 
+.backup-snapshot-header,
 .backup-snapshot-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
+  grid-template-columns: minmax(112px, 1fr) minmax(100px, .9fr) 72px 88px 96px auto;
+  gap: 10px;
   align-items: center;
-  padding: 10px 12px;
+}
+
+.backup-snapshot-header {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backup-snapshot-header > span:last-child {
+  text-align: right;
+}
+
+.backup-snapshot-row {
+  min-height: 54px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--al-line);
 }
 
@@ -379,8 +398,6 @@
 .backup-snapshot-main {
   min-width: 0;
 }
-
-.backup-snapshot-main > span:last-child { min-width: 0; }
 
 .backup-snapshot-main b,
 .backup-snapshot-main small {
@@ -401,19 +418,34 @@
   font-size: 12px;
 }
 
-.backup-snapshot-meta { color: var(--al-muted-2); }
-
-.backup-snapshot-state {
-  display: grid;
-  justify-items: end;
-  gap: 4px;
+.backup-snapshot-sources {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.backup-snapshot-state strong {
+.backup-snapshot-size {
   color: var(--al-ink-2);
   font-size: 13px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.backup-snapshot-state {
+  min-width: 0;
+}
+
+.backup-snapshot-hash {
+  overflow: hidden;
+  color: var(--al-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .backup-table-actions {
