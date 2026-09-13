@@ -252,7 +252,6 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       openDirectory: '打开目录',
       copyPath: '复制路径',
       filesPending: '文件数待扫描',
-      defaultDepth: '默认仅展开第 1 层',
       empty: '根目录下没有可展示的子目录；文件可能直接位于该目录。',
     },
     confirm: {
