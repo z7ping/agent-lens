@@ -48,7 +48,6 @@ export function BackupDataRootTree({ root, onCopy }: { root: BackupDataRootSumma
     <div className="backup-root-tree-meta">
       <span>{root.fileCount === undefined ? t('tree.filesPending') : t('tree.files', { count: root.fileCount.toLocaleString(locale) })}</span>
       {root.totalBytes !== undefined && <span>{formatBytes(root.totalBytes)}</span>}
-      <span>{t('tree.defaultDepth')}</span>
     </div>
     {tree.length ? <div className="backup-tree">{tree.map(node => <DirectoryNode key={node.relativePath} node={node}/>)}</div>
       : <div className="backup-tree-empty">{t('tree.empty')}</div>}
