@@ -66,6 +66,16 @@
   margin-left: auto;
 }
 
+/* 当前资产是一块连续内容面，不是裸露在 Canvas 上的文本，也不是逐智能体卡片。 */
+.backup-assets-surface {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: var(--al-surface);
+  box-shadow: none;
+}
+
 /* 当前范围只保留一行摘要，避免标题 / Tab / KPI 三层叠加。 */
 .backup-scope-summary {
   display: flex;
@@ -73,8 +83,9 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  padding: 2px 2px 10px;
+  padding: 11px 14px 10px;
   border-bottom: 1px solid var(--al-line);
+  background: var(--al-soft-2);
 }
 
 .backup-scope-main {
@@ -116,7 +127,10 @@
 
 .backup-assets-empty,
 .backup-history-empty {
-  padding: 28px 4px;
+  padding: 28px 14px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: var(--al-surface);
   color: var(--al-muted);
   font-size: 12px;
   line-height: 1.6;
@@ -129,8 +143,16 @@
   min-width: 0;
   grid-template-columns: 190px minmax(0, 1fr);
   gap: 20px;
-  padding: 14px 2px 15px;
+  padding: 14px 14px 15px;
   border-bottom: 1px solid var(--al-line);
+}
+
+.backup-agent-row:last-child {
+  border-bottom: 0;
+}
+
+.backup-agent-row:hover {
+  background: var(--al-soft-2);
 }
 
 .backup-agent-row-head {
@@ -246,8 +268,12 @@
 }
 
 .backup-agent-detail-section {
-  padding: 14px 2px 16px;
+  padding: 14px 14px 16px;
   border-bottom: 1px solid var(--al-line);
+}
+
+.backup-agent-detail-section:last-child {
+  border-bottom: 0;
 }
 
 .backup-agent-detail-section:first-child {
