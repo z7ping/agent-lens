@@ -179,6 +179,7 @@
 
 .backup-agent-row {
   min-height: 58px;
+  align-items: start;
   padding: 11px 14px;
   border-bottom: 1px solid var(--al-line);
 }
@@ -211,9 +212,16 @@
 .backup-agent-cell {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-self: start;
   gap: 4px 14px;
+}
+
+.backup-agent-cell-core {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.backup-agent-cell-history {
+  grid-template-columns: 1fr;
 }
 
 .backup-agent-cell > span {
