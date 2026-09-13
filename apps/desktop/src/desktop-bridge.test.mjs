@@ -29,6 +29,17 @@ test('Desktop 只接管项目目录 API，并由 Electron 主进程持有原生�
   assert.match(bridge, /encodeURIComponent\(cwd\)/)
 })
 
+test('Desktop 只为受信任渲染器打开已存在的绝对目录', async () => {
+  const bridge = await readFile(bridgePath, 'utf8')
+  assert.match(bridge, /\/api\/v1\/host\/open-directory/)
+  assert.match(bridge, /HOST_OPEN_DIRECTORY_PATH_HEADER/)
+  assert.match(bridge, /rendererOrigin\(contents\) !== trustedOrigin/)
+  assert.match(bridge, /isAbsolute\(normalized\)/)
+  assert.match(bridge, /metadata\.isDirectory\(\)/)
+  assert.match(bridge, /shell\.openPath\(normalized\)/)
+  assert.doesNotMatch(bridge, /shell\.openExternal/)
+})
+
 test('Desktop 不向 Web 暴露 Electron IPC 或 preload API', async () => {
   const bridge = await readFile(bridgePath, 'utf8')
   assert.doesNotMatch(bridge, /contextBridge|ipcRenderer|ipcMain|registerPreloadScript/)
