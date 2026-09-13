@@ -76,51 +76,66 @@
   box-shadow: none;
 }
 
-/* 当前范围只保留一行摘要，避免标题 / Tab / KPI 三层叠加。 */
-.backup-scope-summary {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 11px 14px 10px;
+/* 当前资产总览：只做一个视觉焦点，不恢复四张 KPI 卡。 */
+.backup-asset-overview {
+  display: grid;
+  grid-template-columns: minmax(150px, .72fr) minmax(150px, .72fr) minmax(260px, 1.4fr);
+  align-items: stretch;
   border-bottom: 1px solid var(--al-line);
   background: var(--al-soft-2);
 }
 
-.backup-scope-main {
-  display: flex;
+.backup-asset-overview > div {
   min-width: 0;
-  align-items: baseline;
-  gap: 10px;
+  padding: 14px 16px;
 }
 
-.backup-scope-main b {
-  flex: 0 0 auto;
-  color: var(--al-ink);
-  font-size: 13px;
-  font-weight: 690;
+.backup-asset-overview > div + div {
+  border-left: 1px solid var(--al-line);
 }
 
-.backup-scope-main span,
-.backup-scope-meta {
-  color: var(--al-muted);
-  font-size: 12px;
+.backup-asset-overview-primary strong,
+.backup-asset-overview-primary span {
+  display: block;
 }
 
-.backup-scope-main span {
-  min-width: 0;
+.backup-asset-overview-primary strong {
   overflow: hidden;
+  color: var(--al-ink);
+  font-size: 22px;
+  font-weight: 720;
+  line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.backup-scope-meta {
+.backup-asset-overview-primary span {
+  margin-top: 5px;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.backup-asset-overview-meta {
   display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 12px;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.backup-asset-overview-meta b {
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 680;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.backup-asset-overview-meta span {
+  color: var(--al-muted);
+  font-size: 12px;
 }
 
 .backup-assets-section { min-width: 0; }
@@ -140,13 +155,31 @@
   background: var(--al-surface);
 }
 
-/* 全部智能体使用单一扁平列表；不再为每个智能体套独立卡片。 */
+/* 全部智能体：固定列的高密度资产表，形成稳定阅读轴。 */
+.backup-agent-table {
+  min-width: 0;
+}
+
+.backup-agent-table-head,
 .backup-agent-row {
   display: grid;
-  min-width: 0;
-  grid-template-columns: 190px minmax(0, 1fr);
-  gap: 20px;
-  padding: 14px 14px 15px;
+  grid-template-columns: minmax(140px, .78fr) minmax(230px, 1.55fr) minmax(180px, 1.08fr) 92px 92px minmax(170px, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.backup-agent-table-head {
+  min-height: 36px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--al-line);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backup-agent-row {
+  min-height: 58px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--al-line);
 }
 
@@ -161,18 +194,12 @@
 .backup-agent-row-head {
   display: flex;
   min-width: 0;
-  align-items: flex-start;
-  gap: 9px;
-}
-
-.backup-agent-row-head > div { min-width: 0; }
-
-.backup-agent-row-head b,
-.backup-agent-row-head span {
-  display: block;
+  align-items: center;
+  gap: 8px;
 }
 
 .backup-agent-row-head b {
+  min-width: 0;
   overflow: hidden;
   color: var(--al-ink);
   font-size: 13px;
@@ -181,72 +208,53 @@
   white-space: nowrap;
 }
 
-.backup-agent-row-head span:not(.source-dot) {
-  margin-top: 3px;
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.backup-agent-row-body {
-  display: grid;
-  min-width: 0;
-  gap: 8px;
-}
-
-.backup-agent-row-group {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 80px minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
-}
-
-.backup-agent-row-label {
-  color: var(--al-muted);
-  font-size: 12px;
-  font-weight: 620;
-}
-
-.backup-agent-row-values {
+.backup-agent-cell {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
-  gap: 5px 18px;
+  gap: 4px 12px;
 }
 
-.backup-agent-row-values > span {
+.backup-agent-cell > span {
   display: inline-flex;
-  min-width: 74px;
+  min-width: 0;
   align-items: baseline;
-  gap: 6px;
+  gap: 5px;
   color: var(--al-ink-2);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.backup-agent-row-values em {
+.backup-agent-cell em {
   color: var(--al-muted);
   font-style: normal;
 }
 
-.backup-agent-row-values b {
+.backup-agent-cell b {
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 670;
+  font-variant-numeric: tabular-nums;
+}
+
+.backup-agent-cell-history em,
+.backup-agent-cell-history b {
+  color: var(--al-muted);
+}
+
+.backup-agent-files,
+.backup-agent-size {
   color: var(--al-ink-2);
   font-size: 13px;
   font-weight: 660;
   font-variant-numeric: tabular-nums;
-}
-
-.backup-agent-row-group.is-secondary .backup-agent-row-values em,
-.backup-agent-row-group.is-secondary .backup-agent-row-values b {
-  color: var(--al-muted);
+  white-space: nowrap;
 }
 
 .backup-agent-row-path {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 8px;
-  padding-left: 90px;
+  gap: 6px;
   color: var(--al-muted-2);
   font-size: 12px;
 }
@@ -263,6 +271,7 @@
 
 .backup-agent-row-path span {
   flex: 0 0 auto;
+  color: var(--al-muted);
 }
 
 /* 单智能体详情继续使用同一扁平内容模型，而不是另一种卡片语言。 */
