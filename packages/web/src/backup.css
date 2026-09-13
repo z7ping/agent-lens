@@ -128,13 +128,16 @@
 .backup-assets-empty,
 .backup-history-empty {
   padding: 28px 14px;
-  border: 1px solid var(--al-line);
-  border-radius: 10px;
-  background: var(--al-surface);
   color: var(--al-muted);
   font-size: 12px;
   line-height: 1.6;
   text-align: center;
+}
+
+.backup-history-empty {
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: var(--al-surface);
 }
 
 /* 全部智能体使用单一扁平列表；不再为每个智能体套独立卡片。 */
