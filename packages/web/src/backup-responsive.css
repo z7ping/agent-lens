@@ -6,15 +6,27 @@
 @media (max-width: 991.98px) {
   .backup-content { padding-inline: 18px; }
 
-  .backup-scope-summary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
+  .backup-asset-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .backup-asset-overview-meta {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--al-line);
+    border-left: 0 !important;
+  }
+
+  .backup-agent-table-head {
+    display: none;
   }
 
   .backup-agent-row {
-    grid-template-columns: 160px minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: 150px minmax(0, 1.2fr) minmax(0, 1fr) 82px 82px;
+    gap: 8px 12px;
+  }
+
+  .backup-agent-row-path {
+    grid-column: 2 / -1;
   }
 
   .backup-snapshot-header {
@@ -80,33 +92,36 @@
 
   .backup-content { padding: 20px 14px 48px; }
 
-  .backup-scope-main {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
+  .backup-asset-overview {
+    grid-template-columns: 1fr 1fr;
   }
 
-  .backup-scope-meta {
-    flex-wrap: wrap;
-    gap: 4px 12px;
+  .backup-asset-overview > div {
+    padding: 12px;
+  }
+
+  .backup-asset-overview-primary strong {
+    font-size: 19px;
   }
 
   .backup-agent-row {
-    grid-template-columns: 1fr;
-    gap: 9px;
-    padding-block: 13px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 14px;
+    padding: 12px;
   }
 
-  .backup-agent-row-group {
-    grid-template-columns: 72px minmax(0, 1fr);
-  }
-
+  .backup-agent-row-head,
   .backup-agent-row-path {
-    padding-left: 82px;
+    grid-column: 1 / -1;
+  }
+
+  .backup-agent-files,
+  .backup-agent-size {
+    justify-self: start;
   }
 
   .backup-agent-detail-section {
-    padding-inline: 2px;
+    padding-inline: 12px;
   }
 
   .backup-asset-kind-header {
@@ -205,17 +220,29 @@
     padding-inline: 7px;
   }
 
-  .backup-agent-row-group {
+  .backup-asset-overview {
     grid-template-columns: 1fr;
-    gap: 3px;
   }
 
-  .backup-agent-row-values {
-    gap: 4px 14px;
+  .backup-asset-overview > div + div {
+    border-top: 1px solid var(--al-line);
+    border-left: 0;
   }
 
+  .backup-agent-row {
+    grid-template-columns: 1fr;
+  }
+
+  .backup-agent-row-head,
+  .backup-agent-cell,
+  .backup-agent-files,
+  .backup-agent-size,
   .backup-agent-row-path {
-    padding-left: 0;
+    grid-column: 1;
+  }
+
+  .backup-agent-cell {
+    gap: 4px 14px;
   }
 
   .backup-age-facts {
