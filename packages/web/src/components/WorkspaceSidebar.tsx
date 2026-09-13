@@ -118,10 +118,6 @@ export function WorkspaceSidebar({
       </div>}
 
       {onBackup && <div className="workspace-context-menu workspace-agent-context">
-        <div className="workspace-context-utility">
-          <span>{t('navigation:sourceCount', { count: agents.length })}</span>
-          <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
-        </div>
         <SidebarFilterDisclosure
           defaultOpen
           showAllOption
