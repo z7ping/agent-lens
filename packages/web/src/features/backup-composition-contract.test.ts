@@ -72,6 +72,16 @@ test('备份记录不使用含义重复的状态图标，也不显示解释性�
   assert.doesNotMatch(backupPage, /description=\{t\('create\.description'\)\}/)
 })
 
+test('备份记录提供直达快照真实物理路径的检查入口', () => {
+  assert.match(backupPage, /inspectPhysicalPaths\(snapshot\.id\)/)
+  assert.match(backupPage, /api\.backupSnapshot\(id\)/)
+  assert.match(backupPage, /className="backup-physical-path-drawer"/)
+  assert.match(backupPage, /file\.originalPath/)
+  assert.match(backupPage, /file\.sourceRelativePath/)
+  assert.match(backupPage, /t\('snapshots\.physicalPaths'\)/)
+  assert.match(backupPage, /t\('tree\.copyPath'\)/)
+})
+
 test('备份记录跟随左侧智能体范围过滤，并保留校验、预演和导出能力', () => {
   assert.match(backupPage, /const visibleSnapshots = selectedAssetSourceId/)
   assert.match(backupPage, /snapshot\.sourceIds\.includes\(selectedAssetSourceId\)/)
