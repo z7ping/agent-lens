@@ -152,6 +152,8 @@ export const englishBackupMessages: LocaleMessagesDto = {
       verifyPassed: 'Verification passed',
       verifyFailed: 'Verification failed',
       unverified: 'Unverified',
+      physicalPaths: 'Physical paths',
+      noPhysicalPaths: 'No physical paths.',
       verify: 'Verify',
       preview: 'Restore preview',
       export: 'Export',
