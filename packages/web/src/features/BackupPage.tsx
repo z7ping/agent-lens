@@ -470,7 +470,7 @@ export function BackupPage({
       {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="backup-link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}
 
-        {activeView === 'assets' ? <>
+        {activeView === 'assets' ? <div className="backup-assets-surface">
           <div className="backup-scope-summary">
             <div className="backup-scope-main">
               <b>{focusedSource ? sourceLabel(focusedSource.sourceId, focusedSource.displayName) : t('assetView.allAgents')}</b>
@@ -576,7 +576,7 @@ export function BackupPage({
               </section>}
             </div>}
           </section>
-        </> : <section className="backup-history-section">
+        </div> : <section className="backup-history-section">
           {visibleSnapshots.length ? <div className="backup-snapshot-list">
             <div className="backup-snapshot-header" aria-hidden="true">
               <span>{t('snapshots.columns.snapshot')}</span>
