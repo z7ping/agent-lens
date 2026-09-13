@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -14,7 +15,7 @@ import { AgentLensApi } from '../client/api'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer, IconButton, StatusBadge, Toolbar, ToolbarGroup, UiIcon } from '../components/ui'
+import { Button, Dialog, Drawer, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
 const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
@@ -147,7 +148,13 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
   return kindGroup.filter(kind => sumKindFiles(sources, sourceIds, kind) > 0)
 }
 
-export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: string }) {
+export function BackupPage({
+  selectedAssetSourceId,
+  topbarHost,
+}: {
+  selectedAssetSourceId: string
+  topbarHost?: HTMLDivElement | null
+}) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
@@ -446,18 +453,18 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
 
   return <>
     <main className="workspace-page backup-page">
-    <Toolbar className="workspace-toolbar backup-toolbar" role="presentation">
+    {topbarHost ? createPortal(<div className="backup-topbar-controls">
       <ToolbarGroup className="backup-view-switcher" role="group" aria-label={t('assetView.tabsAria')}>
         <button type="button" aria-pressed={activeView === 'assets'} className={`scope-chip ${activeView === 'assets' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
         <button type="button" aria-pressed={activeView === 'history'} className={`scope-chip ${activeView === 'history' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
       </ToolbarGroup>
       <ToolbarGroup className="backup-toolbar-actions" align="end">
-        {activeView === 'history' && visibleSnapshots.length > 0 && <Button loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}>{t('snapshots.verifyAll')}</Button>}
-        <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
-        <Button variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/>{t('toolbar.create')}</Button>
+        {activeView === 'history' && visibleSnapshots.length > 0 && <Button aria-label={t('snapshots.verifyAll')} title={t('snapshots.verifyAll')} loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}><UiIcon name="check" size={14}/><span className="backup-toolbar-label">{t('snapshots.verifyAll')}</span></Button>}
+        <Button aria-label={t('toolbar.import')} title={t('toolbar.import')} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/><span className="backup-toolbar-label">{t('toolbar.import')}</span></Button>
+        <Button aria-label={t('toolbar.create')} title={t('toolbar.create')} variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/><span className="backup-toolbar-label">{t('toolbar.create')}</span></Button>
         <IconButton disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
       </ToolbarGroup>
-    </Toolbar>
+    </div>, topbarHost) : null}
     <div className="page-content backup-content">
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
       {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="backup-link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
