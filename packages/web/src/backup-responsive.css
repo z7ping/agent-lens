@@ -3,51 +3,18 @@
  * 遵循 Workspace / Insights / Agents 共用的 Bootstrap 断点。
  */
 
-@media (max-width: 1199.98px) {
-  .backup-agent-asset-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .backup-agent-location {
-    grid-column: 1 / -1;
-    border-top: 1px solid var(--al-line);
-    border-left: 0;
-  }
-}
-
 @media (max-width: 991.98px) {
   .backup-content { padding-inline: 18px; }
 
-  .backup-overview-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .backup-scope-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
   }
 
-  .backup-overview-strip > div:nth-child(2) {
-    border-right: 0;
-  }
-
-  .backup-overview-strip > div:nth-child(3) {
-    grid-column: 1 / -1;
-    border-top: 1px solid var(--al-line);
-    border-right: 0;
-  }
-
-  .backup-agent-asset-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .backup-agent-asset-group,
-  .backup-agent-location {
-    border-left: 0;
-  }
-
-  .backup-agent-asset-group + .backup-agent-asset-group,
-  .backup-agent-location {
-    border-top: 1px solid var(--al-line);
-  }
-
-  .backup-agent-location {
-    grid-column: auto;
+  .backup-agent-row {
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 16px;
   }
 
   .backup-snapshot-row {
@@ -86,38 +53,33 @@
     gap: 18px;
   }
 
-  .backup-overview-strip {
+  .backup-scope-main {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .backup-scope-meta {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .backup-agent-row {
     grid-template-columns: 1fr;
+    gap: 9px;
+    padding-block: 13px;
   }
 
-  .backup-overview-strip > div {
-    padding: 8px 2px;
-    border-right: 0;
+  .backup-agent-row-group {
+    grid-template-columns: 72px minmax(0, 1fr);
   }
 
-  .backup-overview-strip > div + div {
-    border-top: 1px solid var(--al-line);
-  }
-
-  .backup-overview-strip > div:nth-child(3) {
-    grid-column: auto;
-  }
-
-  .backup-agent-asset-head {
-    padding-inline: 14px;
-  }
-
-  .backup-agent-asset-group,
-  .backup-agent-location {
-    padding: 11px 14px 13px;
-  }
-
-  .backup-agent-kind-list {
-    grid-template-columns: 1fr;
+  .backup-agent-row-path {
+    padding-left: 82px;
   }
 
   .backup-agent-detail-section {
-    padding-inline: 14px;
+    padding-inline: 2px;
   }
 
   .backup-asset-kind-header {
@@ -166,6 +128,7 @@
 
   .backup-snapshot-row > .table-actions {
     justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .backup-physical-path-row {
@@ -204,6 +167,19 @@
 }
 
 @media (max-width: 575.98px) {
+  .backup-agent-row-group {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .backup-agent-row-values {
+    gap: 4px 14px;
+  }
+
+  .backup-agent-row-path {
+    padding-left: 0;
+  }
+
   .backup-age-facts {
     grid-template-columns: 1fr;
   }
