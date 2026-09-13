@@ -252,6 +252,7 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       omitted: '另有 {{count}} 个同级目录未展开显示',
       configRoot: '配置目录',
       dataRoot: '数据目录',
+      openDirectory: '打开目录',
       copyPath: '复制路径',
       filesPending: '文件数待扫描',
       defaultDepth: '默认仅展开第 1 层',
