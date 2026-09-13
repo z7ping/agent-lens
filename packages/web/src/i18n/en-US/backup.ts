@@ -95,7 +95,6 @@ export const englishBackupMessages: LocaleMessagesDto = {
       typeColumn: 'Asset type',
       quantityColumn: 'Quantity',
       sizeColumn: 'Size',
-      singleHint: 'Inspect the selected agent\'s asset composition, locations, and time distribution.',
       noAssets: 'No assets are available in the current scope.',
       sourceScale: '{{files}} files · {{size}}',
       locationPending: 'Data location pending scan',
