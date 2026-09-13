@@ -84,6 +84,12 @@ export const englishBackupMessages: LocaleMessagesDto = {
     assetView: {
       tabsAria: 'Asset backup views',
       currentTab: 'Current assets',
+      filesLabel: 'Files',
+      sizeLabel: 'Storage',
+      agentColumn: 'Agent',
+      locationColumn: 'Primary location',
+      agentCount: '{{count}} agents',
+
       historyTab: 'Backup history',
       allAgents: 'All agents',
       overview: '{{agents}} agents · {{files}} files · {{size}}',
