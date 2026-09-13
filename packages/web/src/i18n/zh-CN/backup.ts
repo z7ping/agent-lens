@@ -128,6 +128,16 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       workbenchHint: '校验、预演或导出已有快照',
       rowMeta: '{{files}} 文件 · 排除 {{excluded}} · {{hash}}',
       verifyAll: '验证全部',
+      filesAndExcluded: '{{files}} 文件 · 排除 {{excluded}}',
+      columns: {
+        snapshot: '快照',
+        source: '来源',
+        size: '大小',
+        integrity: '完整性',
+        hash: '哈希',
+        actions: '操作',
+      },
+
       snapshot: '快照',
       source: '来源',
       size: '大小',
