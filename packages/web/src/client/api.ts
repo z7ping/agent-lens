@@ -361,6 +361,13 @@ export class AgentLensApi {
     return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { method: 'POST' })
   }
 
+  openHostDirectory(path: string): Promise<{ opened: boolean }> {
+    return requestJson('/api/v1/host/open-directory', {
+      method: 'POST',
+      headers: { 'X-AgentLens-Host-Open-Directory-Path': encodeURIComponent(path) },
+    })
+  }
+
   backupRestorePreview(id: string): Promise<BackupRestorePreviewResponseDto> {
     return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/restore-preview`)
   }

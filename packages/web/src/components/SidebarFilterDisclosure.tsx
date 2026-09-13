@@ -16,6 +16,7 @@ interface SidebarFilterDisclosureProps {
   agentSelection?: AgentSelection
   children?: ReactNode
   defaultOpen?: boolean
+  showAllOption?: boolean
 }
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
@@ -27,6 +28,7 @@ export function SidebarFilterDisclosure({
   agentSelection,
   children,
   defaultOpen = false,
+  showAllOption = false,
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
   const [open, setOpen] = useState(defaultOpen)
@@ -71,7 +73,7 @@ export function SidebarFilterDisclosure({
     onToggle={event => setOpen(event.currentTarget.open)}
   >
     {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={resolvedSummary}>
-      {agentSelection.mode === 'multiple' && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>}
+      {(agentSelection.mode === 'multiple' || showAllOption) && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>}
       {orderedAgents.map(agent => {
         const selected = selectedIds.includes(agent.sourceId)
         return <button

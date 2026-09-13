@@ -39,6 +39,10 @@ export interface ParserReplayExecutionOptions {
   cooperate?: () => Promise<void>
 }
 
+export interface HistorySyncExecutionOptions {
+  cooperate?: () => Promise<void>
+}
+
 export async function resolveRuntimeHost(ctx: AgentLensContext): Promise<Host> {
   return ctx.identity.resolveHost({
     name: hostname(),
@@ -126,6 +130,7 @@ export async function syncRegisteredSourceHistory(
   abortSignal: AbortSignal,
   targets: RegisteredSourceTarget[],
   historyWindow?: SourceHistoryWindow,
+  options: HistorySyncExecutionOptions = {},
 ): Promise<RegisteredSourceStageResult<SourceHistorySyncResult>> {
   const runner = new SourceHistoryRunner(
     ctx.storage,
@@ -146,6 +151,7 @@ export async function syncRegisteredSourceHistory(
         ...target,
         abortSignal,
         ...(historyWindow ? { historyWindow } : {}),
+        ...(options.cooperate ? { cooperate: options.cooperate } : {}),
       }))
     } catch (error) {
       failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })

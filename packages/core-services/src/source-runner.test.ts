@@ -103,6 +103,7 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
   const declarations: CoverageDeclaration[] = []
   const persisted: string[] = []
   let receivedActiveSince: string | undefined
+  let cooperateCalls = 0
 
   const source: SourceDefinition = {
     manifest: {
@@ -176,9 +177,11 @@ test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence',
     detected,
     abortSignal: new AbortController().signal,
     historyWindow: { activeSince: '2026-08-18T00:00:00.000Z' },
+    cooperate: async () => { cooperateCalls += 1 },
   })
 
   assert.equal(result.records, 2)
+  assert.equal(cooperateCalls, 2)
   assert.equal(receivedActiveSince, '2026-08-18T00:00:00.000Z')
   assert.deepEqual(persisted, ['last', 'first'])
   assert.equal(declarations.length, 1)

@@ -91,7 +91,7 @@ function AgentRescanAction({
   </>
 }
 
-function WorkspaceBreadcrumb({
+function WorkspaceTopBar({
   pathname,
   snapshot,
   selectedAgentId,
@@ -99,6 +99,7 @@ function WorkspaceBreadcrumb({
   sidebarCollapsed,
   onExpandSidebar,
   actions,
+  onPageToolsHost,
 }: {
   pathname: string
   snapshot: ClientSnapshot
@@ -107,6 +108,7 @@ function WorkspaceBreadcrumb({
   sidebarCollapsed: boolean
   onExpandSidebar(): void
   actions?: ReactNode
+  onPageToolsHost(node: HTMLDivElement | null): void
 }) {
   const { t } = useTranslation('navigation')
   let items: Array<{ label: string; to?: string }>
@@ -136,7 +138,7 @@ function WorkspaceBreadcrumb({
     items = [{ label: 'AgentLens' }]
   }
 
-  return <div className="workspace-breadcrumb-shell">
+  return <div className="workspace-topbar">
     <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title={t('openWorkspaceNavigation')} aria-label={t('openWorkspaceNavigation')}><UiIcon name="menu" size={16}/></IconButton>
     {sidebarCollapsed && <IconButton className="workspace-sidebar-restore-button" onClick={onExpandSidebar} title={t('expandSidebar')} aria-label={t('expandSidebar')}><UiIcon name="panel-left-open" size={16}/></IconButton>}
     <Breadcrumb
@@ -145,7 +147,8 @@ function WorkspaceBreadcrumb({
         ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
         : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
     />
-    {actions && <div className="workspace-breadcrumb-actions">{actions}</div>}
+    <div className="workspace-topbar-page-tools" ref={onPageToolsHost}/>
+    {actions && <div className="workspace-topbar-actions">{actions}</div>}
   </div>
 }
 
@@ -158,7 +161,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [theme, setTheme] = useState(readTheme)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
-  const [backupSourceIds, setBackupSourceIds] = useState<string[] | null>(null)
+  const [backupAssetSourceId, setBackupAssetSourceId] = useState('')
+  const [workspaceTopbarHost, setWorkspaceTopbarHost] = useState<HTMLDivElement | null>(null)
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const agents = snapshot.facets?.agents ?? []
@@ -256,8 +260,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
         onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
-        backupSourceIds={backupSourceIds}
-        onBackupSourceIdsChange={setBackupSourceIds}
+        backupAssetSourceId={backupAssetSourceId}
+        onBackupAssetSourceIdChange={setBackupAssetSourceId}
         theme={theme}
         onToggleTheme={toggleTheme}
         onContextHost={setSidebarHost}
@@ -267,13 +271,14 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       />
       {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label={t('navigation:closeWorkspaceNavigation')} onClick={() => setMobileNavigationOpen(false)}/>} 
       <div ref={mainRef} className="app-main">
-        <WorkspaceBreadcrumb
+        <WorkspaceTopBar
           pathname={location.pathname}
           snapshot={snapshot}
           selectedAgentId={resolvedAgentOverviewSourceId}
           onOpenNavigation={() => setMobileNavigationOpen(true)}
           sidebarCollapsed={sidebarCollapsed}
           onExpandSidebar={() => setDesktopSidebarCollapsed(false)}
+          onPageToolsHost={setWorkspaceTopbarHost}
           actions={onAgents
             ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
             : undefined}
@@ -297,7 +302,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
-          <Route path="/backup" element={<BackupPage selectedSourceIds={backupSourceIds} onSelectedSourceIdsChange={setBackupSourceIds} />} />
+          <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
         </Suspense>

@@ -579,6 +579,12 @@ try {
         runtimeController.signal,
         prepared.targets,
         stage.window,
+        {
+          cooperate: async () => {
+            const gate = foregroundGate
+            if (gate) await gate.wait(runtimeController.signal)
+          },
+        },
       )
       logSourceFailures(history.failures)
       for (const result of history.results) {
