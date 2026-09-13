@@ -43,7 +43,7 @@ export function BackupDataRootTree({ root, onCopy }: { root: BackupDataRootSumma
     <header className="backup-root-tree-head">
       <StatusBadge>{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</StatusBadge>
       <code title={root.path}>{root.path}</code>
-      <button className="link-btn" onClick={() => onCopy(root.path)}>{t('tree.copyPath')}</button>
+      <button className="backup-link-btn" onClick={() => onCopy(root.path)}>{t('tree.copyPath')}</button>
     </header>
     <div className="backup-root-tree-meta">
       <span>{root.fileCount === undefined ? t('tree.filesPending') : t('tree.files', { count: root.fileCount.toLocaleString(locale) })}</span>
