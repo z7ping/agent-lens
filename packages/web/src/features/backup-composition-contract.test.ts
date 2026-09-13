@@ -72,6 +72,7 @@ test('导入与创建复用标准 Toolbar / ToolbarGroup，创建流程继续复
   assert.doesNotMatch(app, /backupBreadcrumbActionsHost/)
   assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
   assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
+  assert.match(backupPage, /activeView === 'history'.*t\('snapshots\.verifyAll'\)/)
   assert.match(backupPage, /t\('toolbar\.import'\)/)
   assert.match(backupPage, /t\('toolbar\.create'\)/)
   assert.match(backupPage, /className="backup-create-drawer"/)
