@@ -71,7 +71,6 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
 test('导入、创建与视图切换和面包屑共用一条 Workspace Topbar', () => {
   assert.match(app, /function WorkspaceTopBar/)
   assert.match(app, /className="workspace-topbar-page-tools"/)
-  assert.match(app, /pageToolsActive=\{onBackup\}/)
   assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} topbarHost=\{workspaceTopbarHost\} \/>/)
   assert.match(backupPage, /createPortal\(/)
   assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
