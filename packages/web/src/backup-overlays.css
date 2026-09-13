@@ -10,7 +10,7 @@
 .backup-root-tree {
   overflow: hidden;
   border: 1px solid var(--al-line);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--al-soft-2);
 }
 .backup-root-tree + .backup-root-tree { margin-top: 8px; }
@@ -53,7 +53,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 7px;
-  border-radius: 6px;
+  border-radius: 7px;
   list-style: none;
 }
 .backup-tree-node > summary { cursor: pointer; }
