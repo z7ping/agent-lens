@@ -127,7 +127,6 @@ export const englishBackupMessages: LocaleMessagesDto = {
       title: 'Recent snapshots',
       description: 'Snapshot manifests are immutable after creation; identical content is stored only once in the local content store.',
       workbenchHint: 'Verify, preview, or export existing snapshots',
-      rowMeta: '{{files}} files · {{excluded}} excluded · {{hash}}',
       verifyAll: 'Verify all',
       filesAndExcluded: '{{files}} files · {{excluded}} excluded',
       columns: {
