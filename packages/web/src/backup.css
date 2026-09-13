@@ -512,6 +512,51 @@
 .link-btn:hover:not(:disabled) { text-decoration: underline; }
 .link-btn:disabled { cursor: default; opacity: .45; }
 
+/* 快照物理路径：只展示真实来源根目录，不复用含义不明的状态图标。 */
+.backup-physical-path-drawer .ui-overlay-body { padding: 0; }
+
+.backup-physical-path-body {
+  padding-top: 6px;
+}
+
+.backup-physical-path-list {
+  display: grid;
+}
+
+.backup-physical-path-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--al-line);
+}
+
+.backup-physical-path-row:last-child { border-bottom: 0; }
+
+.backup-physical-path-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.backup-physical-path-main code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.backup-physical-path-meta {
+  color: var(--al-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* 新建快照只作为按需操作抽屉。 */
 .backup-create-drawer .ui-overlay-body { padding: 0 16px 16px; }
 
