@@ -353,7 +353,7 @@ export function IntegrationOnlyCard({
   const { t } = useTranslation('agents')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const status = integrationLifecycleState(undefined, management, discovery, discoveryScanning, t)
+  const status = integrationLifecycleState(undefined, management, discovery, discoveryScanning, t, discoveryError)
   const packageState = management.packageState
   const packageReady = integrationPackageReady(packageState)
   const packageNeedsRepair = packageState?.installed === true && !packageReady
