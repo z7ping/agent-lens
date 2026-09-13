@@ -168,6 +168,19 @@
     justify-content: flex-start;
   }
 
+  .backup-physical-path-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .backup-physical-path-main {
+    align-items: flex-start;
+  }
+
+  .backup-physical-path-meta {
+    padding-left: 0;
+  }
+
   .builder-check small { max-width: 46%; }
 
   .backup-create-footer {
