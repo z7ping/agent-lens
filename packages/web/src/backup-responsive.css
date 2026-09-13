@@ -181,6 +181,10 @@
     padding-left: 0;
   }
 
+  .backup-physical-path-actions {
+    justify-content: flex-start;
+  }
+
   .builder-check small { max-width: 46%; }
 
   .backup-create-footer {
