@@ -1,6 +1,6 @@
 import type { BackupDataRootSummaryDto, BackupDirectoryNodeDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
-import { UiIcon } from './ui'
+import { StatusBadge, UiIcon } from './ui'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -41,7 +41,7 @@ export function BackupDataRootTree({ root, onCopy }: { root: BackupDataRootSumma
   const tree = root.tree ?? []
   return <section className="backup-root-tree">
     <header className="backup-root-tree-head">
-      <span className="badge">{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</span>
+      <StatusBadge>{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</StatusBadge>
       <code title={root.path}>{root.path}</code>
       <button className="link-btn" onClick={() => onCopy(root.path)}>{t('tree.copyPath')}</button>
     </header>
