@@ -444,7 +444,8 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
     </label>
   }
 
-  return <main className="workspace-page backup-page">
+  return <>
+    <main className="workspace-page backup-page">
     <Toolbar className="workspace-toolbar backup-toolbar" role="presentation">
       <div className="backup-view-switcher" role="tablist" aria-label={t('assetView.tabsAria')}>
         <button type="button" role="tab" aria-selected={activeView === 'assets'} className={activeView === 'assets' ? 'is-active' : ''} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
@@ -585,7 +586,8 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
             })}
           </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
         </section>}
-    </div>
+      </div>
+    </main>
 
     {createOpen && <Drawer
       open
