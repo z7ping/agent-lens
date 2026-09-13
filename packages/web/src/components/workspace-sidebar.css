@@ -395,13 +395,13 @@
 
 .workspace-breadcrumb {
   display: flex;
-  min-height: 38px;
-  flex: 0 0 38px;
+  min-width: 0;
+  flex: 0 1 auto;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 10px;
   overflow: hidden;
-  border-bottom: 1px solid var(--al-line);
-  background: var(--al-surface);
+  border: 0;
+  background: transparent;
 }
 
 .workspace-breadcrumb ol,
@@ -713,9 +713,7 @@
   }
 
   .workspace-breadcrumb {
-    min-height: 36px;
-    flex-basis: 36px;
-    padding-inline: 12px;
+    padding-inline: 8px;
   }
 
   .workspace-primary-link > svg {
