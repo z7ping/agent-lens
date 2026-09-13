@@ -12,7 +12,6 @@ const explainability = readFileSync('packages/backup-local/src/explainability.ts
 const localService = readFileSync('packages/backup-local/src/service.ts', 'utf8')
 const swr = readFileSync('packages/backup-local/src/stale-while-revalidate.ts', 'utf8')
 const plugin = readFileSync('packages/backup-local/src/plugin.ts', 'utf8')
-const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')
 
 const backupImport = main.indexOf("import './backup.css'")
 const overlayImport = main.indexOf("import './backup-overlays.css'")
@@ -66,8 +65,8 @@ for (const required of ['position: fixed', 'z-index: 1400', 'overflow: auto', '@
   if (!overlayCss.includes(required)) throw new Error(`统一 Overlay 样式缺少正式交互约束：${required}`)
 }
 
-if (!tree.includes("t('tree.defaultDepth')") || !officialZhCn.includes("defaultDepth: '默认仅展开第 1 层'") || !tree.includes('<details className="backup-tree-node">')) {
-  throw new Error('备份目录树必须默认只展示第一层，并由用户逐级展开')
+if (!tree.includes('<details className="backup-tree-node">') || /<details[^>]+\bopen\b/.test(tree)) {
+  throw new Error('备份目录树必须通过原生 details 默认折叠，由用户按需逐级展开；不得依赖解释性文案')
 }
 for (const required of ['.backup-root-tree', '.backup-tree-node', '.backup-tree-children', '@media (max-width: 575.98px)']) {
   if (!css.includes(required)) throw new Error(`资产备份目录树缺少正式交互约束：${required}`)
