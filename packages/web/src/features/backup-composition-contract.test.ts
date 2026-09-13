@@ -29,6 +29,8 @@ test('Backup 默认以当前资产为主视图，并在标准工作区工具栏�
   assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
   assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
   assert.match(backupPage, /className="backup-view-switcher"/)
+  assert.match(backupPage, /role="group" aria-label=\{t\('assetView\.tabsAria'\)\}/)
+  assert.match(backupPage, /aria-pressed=\{activeView === 'assets'\}/)
   assert.match(backupPage, /t\('assetView\.currentTab'\)/)
   assert.match(backupPage, /t\('assetView\.historyTab'\)/)
   assert.match(backupPage, /activeView === 'assets'/)
