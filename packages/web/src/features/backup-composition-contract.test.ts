@@ -7,6 +7,7 @@ const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const sidebarFilter = readFileSync(new URL('../components/SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
+const directoryTree = readFileSync(new URL('../components/BackupDirectoryTree.tsx', import.meta.url), 'utf8')
 
 test('Backup 不重复渲染面包屑已经表达的页面标题', () => {
   assert.doesNotMatch(backupPage, /CompactPageHeading/)
@@ -78,6 +79,13 @@ test('导入与创建复用标准 Toolbar / ToolbarGroup，创建流程继续复
   assert.match(backupPage, /className="backup-create-drawer"/)
   assert.doesNotMatch(backupPage, /className="backup-create-panel"/)
   assert.doesNotMatch(backupPage, /className="backup-breadcrumb-actions"/)
+})
+
+test('Backup 状态与目录类型统一复用 StatusBadge，不恢复页面私有 badge 方言', () => {
+  assert.match(backupPage, /<StatusBadge/)
+  assert.match(directoryTree, /<StatusBadge/)
+  assert.doesNotMatch(backupPage, /className=(?:\{)?[`"']badge\b/)
+  assert.doesNotMatch(directoryTree, /className=(?:\{)?[`"']badge\b/)
 })
 
 test('备份记录不使用含义重复的状态图标，也不显示解释性副文案', () => {
