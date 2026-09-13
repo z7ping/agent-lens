@@ -14,7 +14,6 @@ import type {
 import { AgentLensApi } from '../client/api'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
-import { CompactPageHeading } from '../components/CompactPageHeading'
 import { PageLoadingState } from '../components/StateViews'
 import { Button, Dialog, Drawer, IconButton } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
@@ -464,8 +463,6 @@ export function BackupPage({
     <main className="workspace-page backup-page">
       <div className="page-content backup-content">
         <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-        <CompactPageHeading title={t('page.title')}/>
-
         {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
         {success && <div className="future-note" role="status"><b>{t('page.operationDone')}</b> · {success}</div>}
 
