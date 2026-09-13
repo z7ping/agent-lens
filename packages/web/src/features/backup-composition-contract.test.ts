@@ -111,6 +111,14 @@ test('物理路径抽屉可以直接请求桌面宿主打开系统目录', () =>
   assert.match(backupPage, /className="backup-physical-path-actions"/)
 })
 
+test('备份记录保持连续表格信息结构，并在窄屏降级为纵向行', () => {
+  assert.match(backupPage, /className="backup-snapshot-header"/)
+  assert.match(backupPage, /snapshots\.columns\.snapshot/)
+  assert.match(backupPage, /className="backup-snapshot-sources"/)
+  assert.match(backupPage, /className="backup-snapshot-hash"/)
+  assert.match(backupCss, /\.backup-snapshot-header \{[\s\S]*?display: none;/)
+})
+
 test('备份记录跟随左侧智能体范围过滤，并保留校验、预演和导出能力', () => {
   assert.match(backupPage, /const visibleSnapshots = selectedAssetSourceId/)
   assert.match(backupPage, /snapshot\.sourceIds\.includes\(selectedAssetSourceId\)/)
