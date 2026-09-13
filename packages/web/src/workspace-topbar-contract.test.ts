@@ -16,7 +16,7 @@ test('一级工作区统一使用单行 Workspace Topbar', () => {
   assert.match(app, /className="workspace-topbar-page-tools"/)
   assert.doesNotMatch(app, /workspace-breadcrumb-shell/)
   assert.doesNotMatch(app, /WorkspaceBreadcrumb/)
-  assert.match(shellResponsive, /\.workspace-topbar \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/)
+  assert.match(workspaceCss, /\.workspace-topbar \{[\s\S]*?height: 50px;[\s\S]*?min-height: 50px;/)
 })
 
 test('面包屑只作为 Topbar 左侧内容，不再拥有独立行高和边框', () => {
@@ -37,8 +37,7 @@ test('Backup 视图切换和一级操作注入 Topbar，不恢复第二条 Toolb
 test('Agents / Tools / Insights 不在统一 Topbar 下新增第二条一级工具栏', () => {
   assert.doesNotMatch(tools, /<Toolbar className="workspace-toolbar/)
   assert.doesNotMatch(insights, /<Toolbar className="workspace-toolbar/)
-  assert.match(workspaceCss, /\.app-shell \.agents-responsive-shell \.workspace-toolbar \{\s*display: none;/)
-  assert.match(agents, /workspace-toolbar/)
+  assert.doesNotMatch(agents, /workspace-toolbar/)
 })
 
 test('窄屏保持单行优先，页面控件存在时允许隐藏低优先级面包屑', () => {
