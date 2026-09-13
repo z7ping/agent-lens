@@ -8,6 +8,11 @@ const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.u
 const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const sidebarFilter = readFileSync(new URL('../components/SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
 
+test('Backup 不重复渲染面包屑已经表达的页面标题', () => {
+  assert.doesNotMatch(backupPage, /CompactPageHeading/)
+  assert.doesNotMatch(backupPage, /page\.description/)
+})
+
 test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定义 future 页面壳', () => {
   assert.match(backupPage, /className="workspace-page backup-page"/)
   assert.match(backupPage, /className="page-content backup-content"/)
