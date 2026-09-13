@@ -447,9 +447,9 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
   return <>
     <main className="workspace-page backup-page">
     <Toolbar className="workspace-toolbar backup-toolbar" role="presentation">
-      <div className="backup-view-switcher" role="tablist" aria-label={t('assetView.tabsAria')}>
-        <button type="button" role="tab" aria-selected={activeView === 'assets'} className={activeView === 'assets' ? 'is-active' : ''} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
-        <button type="button" role="tab" aria-selected={activeView === 'history'} className={activeView === 'history' ? 'is-active' : ''} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
+      <div className="backup-view-switcher" role="group" aria-label={t('assetView.tabsAria')}>
+        <button type="button" aria-pressed={activeView === 'assets'} className={activeView === 'assets' ? 'is-active' : ''} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
+        <button type="button" aria-pressed={activeView === 'history'} className={activeView === 'history' ? 'is-active' : ''} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
       </div>
       <ToolbarGroup className="backup-toolbar-actions" align="end">
         <Button disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/>{t('toolbar.import')}</Button>
