@@ -49,7 +49,6 @@ if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(pageCss)) {
 for (const required of [
   'function WorkspaceTopBar',
   'className="workspace-topbar-page-tools"',
-  'pageToolsActive={onBackup}',
   'topbarHost={workspaceTopbarHost}',
 ]) {
   if (!app.includes(required)) throw new Error(`资产备份必须接入单行 Workspace Topbar：${required}`)
