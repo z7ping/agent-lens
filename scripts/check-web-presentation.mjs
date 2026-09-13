@@ -180,6 +180,9 @@ for (const required of [
   "from '../components/ui'",
   '<Toolbar className="workspace-toolbar backup-toolbar"',
   '<ToolbarGroup className="backup-toolbar-actions" align="end">',
+  'scope-chip-active',
+  'className="backup-snapshot-header"',
+  '<StatusBadge',
   '<IconButton',
   '<Drawer',
   '<Dialog',
@@ -201,6 +204,9 @@ for (const forbidden of [
 }
 if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(css.backup)) {
   throw new Error('资产备份不得在 workspace-page / page-content 外声明第二个页面滚动所有者')
+}
+if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
+  throw new Error('资产备份状态必须复用 StatusBadge，不得恢复页面私有 badge 方言')
 }
 if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
 if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
