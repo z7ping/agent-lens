@@ -17,7 +17,7 @@ const retired = [
   'review-balanced.css', 'review-balanced-runtime.ts', 'review-polish.css', 'review-reference.css', 'review-message-actions.css',
   'review-v2-final.css', 'color-system.css', 'v2-1.css', 'v2-alignment.css', 'p0-polish.css', 'prototype.css',
   'desktop-responsive.css', 'task-execution.css', 'task-detail-prototype.css', 'task-detail-polish.css', 'task-feedback-polish.css',
-  'features/task-header.css',
+  'features/task-header.css', 'backup-scroll.css',
 ].map(p)
 for (const file of retired) if (existsSync(file)) throw new Error(`已退役表现层不应重新出现：${file}`)
 
@@ -162,19 +162,45 @@ if (!css.tools.includes('工具分析正式样式') || !css.tools.includes('.too
 if (!css.insights.includes('使用洞察正式样式') || !css.insights.includes('.insight-kpi-grid') || !css.insights.includes('.insight-trend') || !css.insights.includes('.insight-pattern-list')) throw new Error('使用洞察关键能力样式缺失')
 if (!css.agents.includes('智能体概览正式样式') || !css.agents.includes(".agent-card[data-source='hermes']") || !css.agents.includes(".agent-card[data-source='opencode']") || !css.agents.includes('.frequent-asset-row') || !css.agents.includes('.skill-funnel')) throw new Error('智能体概览关键能力样式缺失')
 if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentResponsive.includes('.agents-responsive-shell') || !css.agentResponsive.includes('.agent-insights-rail')) throw new Error('Agents xxl 响应式必须由 agent-insights-responsive.css 持有')
-if (!css.backup.includes('AgentLens 1.0 资产备份正式样式') || !css.backup.includes('正在扫描资产备份范围') || !css.backup.includes('.snapshot-builder') || !css.backup.includes('.preview-summary')) throw new Error('资产备份关键能力样式缺失')
-if (!css.backupResponsive.includes('1280×800 / 1366×768') || !css.backupResponsive.includes('@media (min-width: 1200px) and (max-width: 1399.98px)') || !css.backupResponsive.includes('white-space: nowrap') || !css.backupResponsive.includes('grid-column: 1 / -1')) throw new Error('资产备份 xl 主桌面响应式契约缺失')
+if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
+  || !css.backup.includes('.backup-toolbar')
+  || !css.backup.includes('.backup-scope-summary')
+  || !css.backup.includes('.backup-agent-row')
+  || !css.backup.includes('.backup-snapshot-list')
+  || !css.backup.includes('.snapshot-builder')
+  || !css.backup.includes('.preview-summary')) throw new Error('资产备份关键能力样式缺失')
+for (const breakpoint of ['991.98px', '767.98px', '575.98px']) {
+  if (!css.backupResponsive.includes(breakpoint)) throw new Error(`资产备份响应式缺少正式断点：${breakpoint}`)
+}
+if (!css.backupResponsive.includes('.backup-agent-row') || !css.backupResponsive.includes('.backup-snapshot-row')) {
+  throw new Error('资产备份响应式必须覆盖连续资产行与快照行')
+}
 const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
 for (const required of [
-  "import { Button, Dialog, Drawer, Toolbar, ToolbarGroup } from '../components/ui'",
-  '<Toolbar className="workspace-toolbar"',
+  "from '../components/ui'",
+  '<Toolbar className="workspace-toolbar backup-toolbar"',
+  '<ToolbarGroup className="backup-toolbar-actions" align="end">',
+  '<IconButton',
   '<Drawer',
   '<Dialog',
 ]) {
   if (!backupPage.includes(required)) throw new Error(`资产备份必须消费统一 UI 契约：${required}`)
 }
-for (const forbidden of ['className="scrim show', 'className="drawer show', 'backup-confirm-dialog', "window.addEventListener('keydown', closeOnEscape)"]) {
-  if (backupPage.includes(forbidden)) throw new Error(`资产备份不得恢复页面自建 Overlay：${forbidden}`)
+for (const forbidden of [
+  'className="scrim show',
+  'className="drawer show',
+  'backup-confirm-dialog',
+  "window.addEventListener('keydown', closeOnEscape)",
+  'createPortal',
+  'backupBreadcrumbActionsHost',
+  'className="page-scroll"',
+  'className="future-',
+  'className="prototype-',
+]) {
+  if (backupPage.includes(forbidden)) throw new Error(`资产备份不得恢复页面私有壳层 / Overlay / Prototype：${forbidden}`)
+}
+if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(css.backup)) {
+  throw new Error('资产备份不得在 workspace-page / page-content 外声明第二个页面滚动所有者')
 }
 if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
 if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
