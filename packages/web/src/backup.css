@@ -465,15 +465,17 @@
 }
 
 .backup-link-btn {
-  padding: 3px 5px;
+  min-height: 26px;
+  padding: 0 6px;
   border: 0;
+  border-radius: 7px;
   background: transparent;
   color: var(--al-accent);
   font-size: 12px;
   font-weight: 620;
 }
 
-.backup-link-btn:hover:not(:disabled) { text-decoration: underline; }
+.backup-link-btn:hover:not(:disabled) { background: var(--al-soft-2); text-decoration: none; }
 .backup-link-btn:disabled { cursor: default; opacity: .45; }
 
 /* 快照物理路径：只展示真实来源根目录，不复用含义不明的状态图标。 */
