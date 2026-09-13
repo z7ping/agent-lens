@@ -557,6 +557,14 @@
   white-space: nowrap;
 }
 
+.backup-physical-path-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  white-space: nowrap;
+}
+
 /* 新建快照只作为按需操作抽屉。 */
 .backup-create-drawer .ui-overlay-body { padding: 0 16px 16px; }
 
