@@ -571,13 +571,22 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
           </section>
         </> : <section className="backup-history-section">
           {visibleSnapshots.length ? <div className="backup-snapshot-list">
+            <div className="backup-snapshot-header" aria-hidden="true">
+              <span>{t('snapshots.columns.snapshot')}</span>
+              <span>{t('snapshots.columns.source')}</span>
+              <span>{t('snapshots.columns.size')}</span>
+              <span>{t('snapshots.columns.integrity')}</span>
+              <span>{t('snapshots.columns.hash')}</span>
+              <span>{t('snapshots.columns.actions')}</span>
+            </div>
             {visibleSnapshots.map(snapshot => {
               const checked = verification[snapshot.id]
               return <article key={snapshot.id} className="backup-snapshot-row">
-                <div className="backup-snapshot-main">
-                  <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</small><small className="backup-snapshot-meta">{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
-                </div>
-                <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <StatusBadge tone={checked.valid ? 'success' : 'danger'}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</StatusBadge> : <StatusBadge>{t('snapshots.unverified')}</StatusBadge>}</div>
+                <div className="backup-snapshot-main"><b>{formatTime(snapshot.createdAt, locale)}</b><small>{t('snapshots.filesAndExcluded', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale) })}</small></div>
+                <span className="backup-snapshot-sources">{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</span>
+                <strong className="backup-snapshot-size">{formatBytes(snapshot.totalBytes)}</strong>
+                <div className="backup-snapshot-state">{checked ? <StatusBadge tone={checked.valid ? 'success' : 'danger'}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</StatusBadge> : <StatusBadge>{t('snapshots.unverified')}</StatusBadge>}</div>
+                <code className="backup-snapshot-hash" title={snapshot.manifestSha256}>{shortHash(snapshot.manifestSha256)}</code>
                 <div className="backup-table-actions"><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
               </article>
             })}
