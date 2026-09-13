@@ -40,17 +40,21 @@ test('Backup 默认以当前资产为主视图，并把视图切换注入统一�
   assert.doesNotMatch(backupPage, /className="backup-restore-section"/)
 })
 
-test('当前资产使用单一 Surface 承载内容，避免裸露在 Canvas 上或逐智能体卡片化', () => {
+test('当前资产使用单一 Surface + 聚焦总览 + 高密度资产表，避免空、散、无重点', () => {
   assert.match(backupPage, /className="backup-assets-surface"/)
+  assert.match(backupPage, /className="backup-asset-overview"/)
+  assert.match(backupPage, /className="backup-agent-table"/)
+  assert.match(backupPage, /className="backup-agent-table-head"/)
   assert.match(backupMainCss, /\.backup-assets-surface \{[\s\S]*?background: var\(--al-surface\);/)
-  assert.match(backupMainCss, /\.backup-assets-surface \{[\s\S]*?border: 1px solid var\(--al-line\);/)
-  assert.match(backupMainCss, /\.backup-scope-summary \{[\s\S]*?background: var\(--al-soft-2\);/)
+  assert.match(backupMainCss, /\.backup-asset-overview \{[\s\S]*?background: var\(--al-soft-2\);/)
+  assert.match(backupMainCss, /\.backup-asset-overview-primary strong \{[\s\S]*?font-size: 22px;/)
   assert.doesNotMatch(backupPage, /className="backup-agent-card"/)
 })
 
-test('全部智能体使用单一扁平列表，并保留核心资产、历史状态和真实路径', () => {
+test('全部智能体使用固定列高密度资产表，并保留核心资产、历史状态和真实路径', () => {
+  assert.match(backupPage, /className="backup-agent-table"/)
   assert.match(backupPage, /className="backup-agent-row"/)
-  assert.match(backupPage, /className="backup-agent-row-body"/)
+  assert.match(backupPage, /className="backup-agent-cell backup-agent-cell-core"/)
   assert.match(backupPage, /className="backup-agent-row-path"/)
   assert.match(backupPage, /t\('assetView\.coreAssets'\)/)
   assert.match(backupPage, /t\('assetView\.historyStatus'\)/)
@@ -144,6 +148,6 @@ test('Backup 响应式不通过横向表格或滚动兜底核心资产信息', (
   assert.doesNotMatch(backupPage, /<table className="snapshot-table">/)
   assert.doesNotMatch(backupCss, /protection-table/)
   assert.doesNotMatch(backupCss, /snapshot-table/)
-  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-agent-row \{[\s\S]*?grid-template-columns: 1fr;/)
+  assert.match(backupCss, /@media \(max-width: 575\.98px\)[\s\S]*?\.backup-agent-row \{[\s\S]*?grid-template-columns: 1fr;/)
   assert.match(backupCss, /\.backup-create-footer \{[\s\S]*?flex-direction: column;/)
 })
