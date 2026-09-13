@@ -67,6 +67,13 @@ tokens
 - 图标继承当前文字或语义状态颜色，不在页面内声明独立色值；描边、端点和视框由 `UiIcon` 统一维护。
 - 纯图标操作必须使用 `IconButton` 并提供准确的 `aria-label`；图标与文字组合时由 `Button` 或对应 Primitive 负责间距和命中区。
 
+### 工作区顶栏
+
+- `Agents / Insights / Tools / Backup` 等一级工作区统一使用**单行 Workspace Topbar**：左侧当前位置（Breadcrumb）、中间页面级视图/范围控件、右侧页面操作必须共用同一横向层。
+- 面包屑不得再单独占一行；页面也不得在统一 Topbar 下再追加第二条 `workspace-toolbar` 来承载同级视图切换或一级操作。
+- 页面自身有状态切换或操作时，通过工作区提供的 Page Tools Host / 共享 ToolbarGroup 注入统一 Topbar；不要复制第二套 Header。
+- Task Center / Review / Pi Live 若因任务执行态确需独立上下文工具条，可以保留任务域工具条，但不能把普通一级页面的单行 Topbar 退化为两层导航。
+- 窄屏优先保留页面操作；可缩短/隐藏低优先级面包屑信息，但不得把同一级控件重新折成第二行。
 ### 间距与视觉分组
 
 - 状态点 / 图标与相邻文字必须通过 `flex/grid + gap` 明确控制，**不得依赖 JSX / HTML 空白字符形成视觉间距**。
