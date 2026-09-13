@@ -26,9 +26,9 @@ test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定
   assert.match(backupPage, /sourceDot\(source\.sourceId\)/)
 })
 
-test('Backup 默认以当前资产为主视图，并在标准工作区工具栏切换备份记录', () => {
+test('Backup 默认以当前资产为主视图，并把视图切换注入统一工作区顶栏', () => {
   assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
-  assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
+  assert.match(backupPage, /createPortal\(<div className="backup-topbar-controls"/)
   assert.match(backupPage, /<ToolbarGroup className="backup-view-switcher" role="group"/)
   assert.match(backupPage, /aria-pressed=\{activeView === 'assets'\}/)
   assert.match(backupPage, /scope-chip-active/)
@@ -68,17 +68,19 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
   assert.match(sidebarFilter, /agentSelection\.mode === 'multiple' \|\| showAllOption/)
 })
 
-test('导入与创建复用标准 Toolbar / ToolbarGroup，创建流程继续复用共享 Drawer', () => {
-  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} \/>/)
-  assert.doesNotMatch(app, /backupBreadcrumbActionsHost/)
-  assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
+test('导入、创建与视图切换和面包屑共用一条 Workspace Topbar', () => {
+  assert.match(app, /function WorkspaceTopBar/)
+  assert.match(app, /className="workspace-topbar-page-tools"/)
+  assert.match(app, /pageToolsActive=\{onBackup\}/)
+  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} topbarHost=\{workspaceTopbarHost\} \/>/)
+  assert.match(backupPage, /createPortal\(/)
   assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
   assert.match(backupPage, /activeView === 'history'.*t\('snapshots\.verifyAll'\)/)
   assert.match(backupPage, /t\('toolbar\.import'\)/)
   assert.match(backupPage, /t\('toolbar\.create'\)/)
   assert.match(backupPage, /className="backup-create-drawer"/)
+  assert.doesNotMatch(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
   assert.doesNotMatch(backupPage, /className="backup-create-panel"/)
-  assert.doesNotMatch(backupPage, /className="backup-breadcrumb-actions"/)
 })
 
 test('Backup 状态与目录类型统一复用 StatusBadge，不恢复页面私有 badge 方言', () => {
