@@ -13,6 +13,10 @@ test('Backup 不重复渲染面包屑已经表达的页面标题', () => {
   assert.doesNotMatch(backupPage, /page\.description/)
 })
 
+test('Backup 不保留 future / prototype 表现层命名', () => {
+  assert.doesNotMatch(backupPage, /future-|prototype-/)
+})
+
 test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定义 future 页面壳', () => {
   assert.match(backupPage, /className="workspace-page backup-page"/)
   assert.match(backupPage, /className="page-content backup-content"/)
@@ -21,9 +25,10 @@ test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定
   assert.match(backupPage, /sourceDot\(source\.sourceId\)/)
 })
 
-test('Backup 默认以当前资产为主视图，并把备份记录拆成独立页签', () => {
+test('Backup 默认以当前资产为主视图，并在标准工作区工具栏切换备份记录', () => {
   assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
-  assert.match(backupPage, /className="backup-view-tabs"/)
+  assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
+  assert.match(backupPage, /className="backup-view-switcher"/)
   assert.match(backupPage, /t\('assetView\.currentTab'\)/)
   assert.match(backupPage, /t\('assetView\.historyTab'\)/)
   assert.match(backupPage, /activeView === 'assets'/)
@@ -60,16 +65,16 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
   assert.match(sidebarFilter, /agentSelection\.mode === 'multiple' \|\| showAllOption/)
 })
 
-test('导入与创建进入统一面包屑操作区，创建流程继续复用共享 Drawer', () => {
-  assert.match(app, /setBackupBreadcrumbActionsHost/)
-  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} actionsHost=\{backupBreadcrumbActionsHost\}/)
-  assert.match(backupPage, /createPortal\(headerActions, actionsHost\)/)
-  assert.match(backupPage, /className="backup-breadcrumb-actions"/)
+test('导入与创建复用标准 Toolbar / ToolbarGroup，创建流程继续复用共享 Drawer', () => {
+  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} \/>/)
+  assert.doesNotMatch(app, /backupBreadcrumbActionsHost/)
+  assert.match(backupPage, /<Toolbar className="workspace-toolbar backup-toolbar"/)
+  assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
   assert.match(backupPage, /t\('toolbar\.import'\)/)
   assert.match(backupPage, /t\('toolbar\.create'\)/)
   assert.match(backupPage, /className="backup-create-drawer"/)
   assert.doesNotMatch(backupPage, /className="backup-create-panel"/)
-  assert.doesNotMatch(backupPage, /className="future-heading"/)
+  assert.doesNotMatch(backupPage, /className="backup-breadcrumb-actions"/)
 })
 
 test('备份记录不使用含义重复的状态图标，也不显示解释性副文案', () => {
