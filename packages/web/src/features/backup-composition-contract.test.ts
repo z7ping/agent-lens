@@ -51,6 +51,14 @@ test('当前资产使用单一 Surface + 聚焦总览 + 高密度资产表，避
   assert.doesNotMatch(backupPage, /className="backup-agent-card"/)
 })
 
+test('核心资产和历史状态使用稳定多行列表，不再挤成单行流式文本', () => {
+  assert.match(backupMainCss, /\.backup-agent-cell \{[\s\S]*?display: grid;/)
+  assert.match(backupMainCss, /\.backup-agent-cell-core \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
+  assert.match(backupMainCss, /\.backup-agent-cell-history \{[\s\S]*?grid-template-columns: 1fr;/)
+  assert.match(backupMainCss, /\.backup-agent-cell > span \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) auto;/)
+  assert.doesNotMatch(backupMainCss, /\.backup-agent-cell \{[\s\S]*?display: flex;/)
+})
+
 test('全部智能体使用固定列高密度资产表，并保留核心资产、历史状态和真实路径', () => {
   assert.match(backupPage, /className="backup-agent-table"/)
   assert.match(backupPage, /className="backup-agent-row"/)
