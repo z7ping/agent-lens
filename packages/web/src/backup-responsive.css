@@ -10,10 +10,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .backup-asset-overview-meta {
+  .backup-asset-overview > .backup-asset-overview-meta {
     grid-column: 1 / -1;
     border-top: 1px solid var(--al-line);
-    border-left: 0 !important;
+    border-left: 0;
   }
 
   .backup-agent-table-head {
