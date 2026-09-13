@@ -135,7 +135,6 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       scanning: '扫描中',
       location: '发现位置',
       dataOnlyHint: '只发现了配置或历史数据，不能据此断言当前仍安装了可执行程序。',
-      errorHint: '本机工具扫描失败；保持未知，不把失败结果显示成“未安装”。',
     },
     onboarding: {
       title: '选择要使用的智能体',

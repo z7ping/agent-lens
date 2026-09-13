@@ -353,7 +353,7 @@ export function IntegrationOnlyCard({
   const { t } = useTranslation('agents')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const status = integrationLifecycleState(undefined, management, discovery, discoveryScanning, t)
+  const status = integrationLifecycleState(undefined, management, discovery, discoveryScanning, t, discoveryError)
   const packageState = management.packageState
   const packageReady = integrationPackageReady(packageState)
   const packageNeedsRepair = packageState?.installed === true && !packageReady
@@ -403,13 +403,11 @@ export function IntegrationOnlyCard({
     </header>
 
     <div className="agent-installation">
-      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{integrationToolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
+      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b title={discoveryError || discovery?.reason || (discovery?.presence === 'data-only' ? t('toolPresence.dataOnlyHint') : undefined)} data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{integrationToolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.integrationVersion')}</small><b>{packageState?.installedVersion ?? packageState?.availableVersion ?? t('installation.notAdded')}</b></span>
       {presencePath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
 
-    {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
-    {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
     <section className="source-capture-control">
       <div>

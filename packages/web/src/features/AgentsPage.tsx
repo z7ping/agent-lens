@@ -467,7 +467,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, RUNTIME_CONFIG_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t)
+  const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t, discoveryError)
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
   const assetsAvailable = agent.integration?.capabilities.some(capability =>
@@ -493,7 +493,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     </header>
 
     <div className="agent-installation">
-      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{integrationToolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
+      <span className="agent-tool-presence"><small>{t('toolPresence.label')}</small><b title={discoveryError || discovery?.reason || (discovery?.presence === 'data-only' ? t('toolPresence.dataOnlyHint') : undefined)} data-presence={discoveryError ? 'error' : discovery?.presence ?? (discoveryScanning ? 'scanning' : 'absent')}>{integrationToolPresenceLabel(discovery, discoveryScanning, discoveryError, t)}</b></span>
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
       {management?.packageState && <span><small>{t('installation.integrationVersion')}</small><b>{management.packageState.installedVersion ?? management.packageState.availableVersion ?? t('installation.notAdded')}</b></span>}
       <span className="agent-config"><small>{t('installation.configDirectory')}</small>{agent.installations.length > 1
@@ -524,8 +524,6 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       </span>
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
     </div>
-    {discovery?.presence === 'data-only' && <p className="agent-discovery-note">{t('toolPresence.dataOnlyHint')}</p>}
-    {(discoveryError || discovery?.presence === 'error') && <p className="agent-discovery-note is-error" title={discoveryError || discovery?.reason}>{t('toolPresence.errorHint')}</p>}
 
     <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onInstall={onInstall} onAuthorize={onAuthorize}/>
 

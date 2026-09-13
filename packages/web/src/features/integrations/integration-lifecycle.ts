@@ -26,6 +26,7 @@ export function integrationLifecycleState(
   discovery: IntegrationToolDiscoveryItemDto | undefined,
   discoveryScanning: boolean,
   t: TFunction,
+  discoveryError = '',
 ): IntegrationLifecyclePresentation {
   if (management) {
     const packageState = management.packageState
@@ -37,10 +38,10 @@ export function integrationLifecycleState(
       }
     }
     if (!packageState.installed) {
-      if (discovery?.presence === 'error') {
+      if (discoveryError || discovery?.presence === 'error') {
         return {
           label: t('status.scanFailed'),
-          title: discovery.reason || t('status.scanFailedTitle'),
+          title: discoveryError || discovery?.reason || t('status.scanFailedTitle'),
           className: 'is-error',
         }
       }
@@ -73,6 +74,13 @@ export function integrationLifecycleState(
       }
     }
 
+    if (!agent?.detected && (discoveryError || discovery?.presence === 'error')) {
+      return {
+        label: t('status.scanFailed'),
+        title: discoveryError || discovery?.reason || t('status.scanFailedTitle'),
+        className: 'is-error',
+      }
+    }
     if (!agent?.detected && discoveryScanning) {
       return {
         label: t('status.scanning'),
@@ -130,6 +138,13 @@ export function integrationLifecycleState(
   }
 
   if (!agent) {
+    if (discoveryError || discovery?.presence === 'error') {
+      return {
+        label: t('status.scanFailed'),
+        title: discoveryError || discovery?.reason || t('status.scanFailedTitle'),
+        className: 'is-error',
+      }
+    }
     if (discoveryScanning) {
       return {
         label: t('status.scanning'),
@@ -164,10 +179,10 @@ export function integrationLifecycleState(
       className: 'is-enabled is-detected',
     }
   }
-  if (discovery?.presence === 'error') {
+  if (discoveryError || discovery?.presence === 'error') {
     return {
       label: t('status.scanFailed'),
-      title: discovery.reason || t('status.scanFailedTitle'),
+      title: discoveryError || discovery?.reason || t('status.scanFailedTitle'),
       className: 'is-error',
     }
   }

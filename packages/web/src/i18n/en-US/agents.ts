@@ -135,7 +135,6 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       scanning: 'Scanning',
       location: 'Discovered at',
       dataOnlyHint: 'Only configuration or historical data was found. This does not prove that an executable is still installed.',
-      errorHint: 'Local tool discovery failed. State remains unknown instead of being shown as “not installed”.',
     },
     onboarding: {
       title: 'Choose agents to use',

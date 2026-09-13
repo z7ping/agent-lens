@@ -177,3 +177,31 @@ test('missing Package Lifecycle remains unknown instead of pretending uninstalle
     'status.managementUnavailable',
   )
 })
+
+
+test('whole discovery failure does not pretend an uninstalled Integration means the local Tool is missing', () => {
+  const item = management({
+    packageState: {
+      integrationId: 'pi',
+      installed: false,
+      availableVersion: '1.0.0-alpha.5',
+      compatibility: 'compatible',
+      integrity: 'unknown',
+      restartRequired: false,
+    },
+  })
+
+  assert.equal(
+    integrationLifecycleState(undefined, item, undefined, false, t, 'discovery unavailable').label,
+    'status.scanFailed',
+  )
+})
+
+test('installed Integration with failed local Tool discovery is not presented as not detected', () => {
+  const item = management({ tool: discovery('error') })
+
+  assert.equal(
+    integrationLifecycleState(undefined, item, item.tool, false, t).label,
+    'status.scanFailed',
+  )
+})
