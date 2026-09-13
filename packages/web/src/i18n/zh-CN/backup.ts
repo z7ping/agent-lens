@@ -84,6 +84,12 @@ export const chineseBackupMessages: LocaleMessagesDto = {
     assetView: {
       tabsAria: '资产备份视图',
       currentTab: '当前资产',
+      filesLabel: '文件',
+      sizeLabel: '占用',
+      agentColumn: '智能体',
+      locationColumn: '主要位置',
+      agentCount: '{{count}} 个智能体',
+
       historyTab: '备份记录',
       allAgents: '全部智能体',
       overview: '{{agents}} 个智能体 · {{files}} 文件 · {{size}}',
