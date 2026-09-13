@@ -14,7 +14,7 @@ import { AgentLensApi } from '../client/api'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer, IconButton, Toolbar, ToolbarGroup, UiIcon } from '../components/ui'
+import { Button, Dialog, Drawer, IconButton, StatusBadge, Toolbar, ToolbarGroup, UiIcon } from '../components/ui'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
 const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
@@ -580,7 +580,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
                 <div className="backup-snapshot-main">
                   <span><b>{formatTime(snapshot.createdAt, locale)}</b><small>{snapshot.sourceIds.map(sourceId => sourceLabel(sourceId)).join(' · ') || '—'}</small><small className="backup-snapshot-meta">{t('snapshots.rowMeta', { files: snapshot.fileCount.toLocaleString(locale), excluded: snapshot.excludedCount.toLocaleString(locale), hash: shortHash(snapshot.manifestSha256) })}</small></span>
                 </div>
-                <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <span className={`badge ${checked.valid ? 'ok' : 'err'}`}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</span> : <span className="badge">{t('snapshots.unverified')}</span>}</div>
+                <div className="backup-snapshot-state"><strong>{formatBytes(snapshot.totalBytes)}</strong>{checked ? <StatusBadge tone={checked.valid ? 'success' : 'danger'}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</StatusBadge> : <StatusBadge>{t('snapshots.unverified')}</StatusBadge>}</div>
                 <div className="table-actions"><button className="link-btn" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
               </article>
             })}
@@ -615,7 +615,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
           </div>
         </div>
 
-        {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.contents')}</span><span className="badge ok">{t('create.recommended')}</span></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
+        {recommendedVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.contents')}</span><StatusBadge tone="success">{t('create.recommended')}</StatusBadge></div><div className="builder-checks">{recommendedVisible.map(renderKindCheck)}</div></div>}
         {optionalVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.optional')}</span></div><div className="builder-checks">{optionalVisible.map(renderKindCheck)}</div></div>}
         {otherVisible.length > 0 && <div className="builder-block"><div className="builder-label"><span>{t('create.more')}</span></div><div className="builder-checks">{otherVisible.map(renderKindCheck)}</div></div>}
 
@@ -639,7 +639,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
             <div className="backup-physical-path-list">
               {roots.map(root => <div className="backup-physical-path-row" key={root.key}>
                 <div className="backup-physical-path-main">
-                  <span className="badge">{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</span>
+                  <StatusBadge>{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</StatusBadge>
                   <code title={root.path}>{root.path}</code>
                 </div>
                 <span className="backup-physical-path-meta">{t('tree.files', { count: root.fileCount.toLocaleString(locale) })} · {formatBytes(root.totalBytes)}</span>
@@ -658,7 +658,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
     {preview && <Drawer
       open
       className="backup-preview-drawer"
-      title={<span className="backup-overlay-title">{t('preview.title')} <span className={`badge ${preview.blocked ? 'warn' : 'ok'}`}>{preview.blocked ? t('preview.blocked', { count: preview.blocked }) : t('preview.passed')}</span></span>}
+      title={<span className="backup-overlay-title">{t('preview.title')} <StatusBadge tone={preview.blocked ? 'warning' : 'success'}>{preview.blocked ? t('preview.blocked', { count: preview.blocked }) : t('preview.passed')}</StatusBadge></span>}
       description={preview.snapshotId}
       onClose={() => { if (!busy) setPreview(null) }}
       closeDisabled={Boolean(busy)}
@@ -666,7 +666,7 @@ export function BackupPage({ selectedAssetSourceId }: { selectedAssetSourceId: s
     >
       <div className="backup-drawer-body">
         <section className="drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
-        <section className="drawer-section"><h3>{t('preview.files')}</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><span className={`badge ${item.status === 'blocked' ? 'err' : item.status === 'modified' ? 'warn' : item.status === 'unchanged' ? 'ok' : 'info'}`}>{previewStatusLabel(item.status, t)}</span><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
+        <section className="drawer-section"><h3>{t('preview.files')}</h3><div className="drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="drawer-file preview-file"><StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>{previewStatusLabel(item.status, t)}</StatusBadge><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
         <section className="drawer-section"><div className="backup-preview-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
       </div>
     </Drawer>}
