@@ -151,6 +151,8 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       verifyPassed: '校验通过',
       verifyFailed: '校验失败',
       unverified: '未校验',
+      physicalPaths: '物理路径',
+      noPhysicalPaths: '暂无物理路径。',
       verify: '校验',
       preview: '恢复预演',
       export: '导出',
