@@ -26,12 +26,14 @@ test('Backup 默认以当前资产为主视图，并把备份记录拆成独立�
   assert.doesNotMatch(backupPage, /className="backup-restore-section"/)
 })
 
-test('全部智能体按智能体分段，并明确区分核心资产、历史状态和主要位置', () => {
-  assert.match(backupPage, /className="backup-agent-asset-summary"/)
-  assert.match(backupPage, /className="backup-agent-asset-grid"/)
+test('全部智能体使用单一扁平列表，并保留核心资产、历史状态和真实路径', () => {
+  assert.match(backupPage, /className="backup-agent-row"/)
+  assert.match(backupPage, /className="backup-agent-row-body"/)
+  assert.match(backupPage, /className="backup-agent-row-path"/)
   assert.match(backupPage, /t\('assetView\.coreAssets'\)/)
   assert.match(backupPage, /t\('assetView\.historyStatus'\)/)
-  assert.match(backupPage, /t\('assetView\.primaryLocation'\)/)
+  assert.doesNotMatch(backupPage, /className="backup-agent-asset-summary"/)
+  assert.doesNotMatch(backupPage, /className="backup-agent-asset-grid"/)
   assert.doesNotMatch(backupPage, /t\('assetView\.viewDetails'\)/)
 })
 
@@ -103,6 +105,6 @@ test('Backup 响应式不通过横向表格或滚动兜底核心资产信息', (
   assert.doesNotMatch(backupPage, /<table className="snapshot-table">/)
   assert.doesNotMatch(backupCss, /protection-table/)
   assert.doesNotMatch(backupCss, /snapshot-table/)
-  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-agent-asset-grid \{[\s\S]*?grid-template-columns: 1fr;/)
+  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-agent-row \{[\s\S]*?grid-template-columns: 1fr;/)
   assert.match(backupCss, /\.backup-create-footer \{[\s\S]*?flex-direction: column;/)
 })
