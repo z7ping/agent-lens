@@ -5,6 +5,7 @@ import test from 'node:test'
 const backupPage = readFileSync(new URL('./BackupPage.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.url), 'utf8')
+const backupMainCss = readFileSync(new URL('../backup.css', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const sidebarFilter = readFileSync(new URL('../components/SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
 const directoryTree = readFileSync(new URL('../components/BackupDirectoryTree.tsx', import.meta.url), 'utf8')
@@ -37,6 +38,14 @@ test('Backup 默认以当前资产为主视图，并把视图切换注入统一�
   assert.match(backupPage, /activeView === 'assets'/)
   assert.doesNotMatch(backupPage, /className="future-kpis"/)
   assert.doesNotMatch(backupPage, /className="backup-restore-section"/)
+})
+
+test('当前资产使用单一 Surface 承载内容，避免裸露在 Canvas 上或逐智能体卡片化', () => {
+  assert.match(backupPage, /className="backup-assets-surface"/)
+  assert.match(backupMainCss, /\.backup-assets-surface \{[\s\S]*?background: var\(--al-surface\);/)
+  assert.match(backupMainCss, /\.backup-assets-surface \{[\s\S]*?border: 1px solid var\(--al-line\);/)
+  assert.match(backupMainCss, /\.backup-scope-summary \{[\s\S]*?background: var\(--al-soft-2\);/)
+  assert.doesNotMatch(backupPage, /className="backup-agent-card"/)
 })
 
 test('全部智能体使用单一扁平列表，并保留核心资产、历史状态和真实路径', () => {
