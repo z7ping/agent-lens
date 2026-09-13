@@ -82,6 +82,12 @@ test('备份记录提供直达快照真实物理路径的检查入口', () => {
   assert.match(backupPage, /t\('tree\.copyPath'\)/)
 })
 
+test('物理路径抽屉可以直接请求桌面宿主打开系统目录', () => {
+  assert.match(backupPage, /api\.openHostDirectory\(path\)/)
+  assert.match(backupPage, /t\('tree\.openDirectory'\)/)
+  assert.match(backupPage, /className="backup-physical-path-actions"/)
+})
+
 test('备份记录跟随左侧智能体范围过滤，并保留校验、预演和导出能力', () => {
   assert.match(backupPage, /const visibleSnapshots = selectedAssetSourceId/)
   assert.match(backupPage, /snapshot\.sourceIds\.includes\(selectedAssetSourceId\)/)
