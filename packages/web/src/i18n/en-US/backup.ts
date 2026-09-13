@@ -129,6 +129,16 @@ export const englishBackupMessages: LocaleMessagesDto = {
       workbenchHint: 'Verify, preview, or export existing snapshots',
       rowMeta: '{{files}} files · {{excluded}} excluded · {{hash}}',
       verifyAll: 'Verify all',
+      filesAndExcluded: '{{files}} files · {{excluded}} excluded',
+      columns: {
+        snapshot: 'Snapshot',
+        source: 'Source',
+        size: 'Size',
+        integrity: 'Integrity',
+        hash: 'Hash',
+        actions: 'Actions',
+      },
+
       snapshot: 'Snapshot',
       source: 'Source',
       size: 'Size',
