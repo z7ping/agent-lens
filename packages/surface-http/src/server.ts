@@ -92,6 +92,7 @@ export interface HttpSurfaceOptions {
   integrationPackages?: IntegrationPackageController
   localePackDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
+  openHostPath?: (path: string) => Promise<'opened' | 'revealed'>
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
 
@@ -279,6 +280,41 @@ export async function startHttpSurface(
             opened: true,
             action: result === 'revealed' ? 'revealed' : 'opened',
           })
+          return
+        }
+        if (!result && options.openHostPath) {
+          const rawPath = request.headers[
+            generic ? 'x-agentlens-host-open-path-path' : 'x-agentlens-host-open-directory-path'
+          ]
+          if (Array.isArray(rawPath)) {
+            writeJson(response, 400, {
+              error: generic ? 'open_path_failed' : 'open_directory_failed',
+              message: '目标路径请求头无效。',
+            })
+            return
+          }
+          let path = ''
+          try {
+            path = rawPath ? decodeURIComponent(rawPath).trim() : ''
+          } catch {
+            path = ''
+          }
+          if (!path) {
+            writeJson(response, 400, {
+              error: generic ? 'open_path_failed' : 'open_directory_failed',
+              message: '目标路径无效。',
+            })
+            return
+          }
+          try {
+            const action = await options.openHostPath(path)
+            writeJson(response, 200, { opened: true, action })
+          } catch (error) {
+            writeJson(response, 400, {
+              error: generic ? 'open_path_failed' : 'open_directory_failed',
+              message: error instanceof Error ? error.message : String(error),
+            })
+          }
           return
         }
         if (!result) {
