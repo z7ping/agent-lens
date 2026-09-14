@@ -211,16 +211,18 @@ export class AgentLensClientModel {
     installationId: string,
     root: ManagedAssetRoot,
     path = '',
+    bindingId?: string,
   ): Promise<ManagedAssetDirectoryResponseDto> =>
-    this.api.managedAssetDirectory(productId, installationId, root, path)
+    this.api.managedAssetDirectory(productId, installationId, root, path, bindingId)
 
   managedAssetFile = (
     productId: string,
     installationId: string,
     root: ManagedAssetRoot,
     path: string,
+    bindingId?: string,
   ): Promise<ManagedAssetFilePreviewResponseDto> =>
-    this.api.managedAssetFile(productId, installationId, root, path)
+    this.api.managedAssetFile(productId, installationId, root, path, bindingId)
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
