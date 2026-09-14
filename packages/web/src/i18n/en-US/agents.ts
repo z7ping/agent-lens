@@ -302,6 +302,9 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       emptyDirectory: 'This directory is empty.',
       retry: 'Retry',
       preview: 'Preview',
+      viewMode: 'Document view',
+      rendered: 'Rendered',
+      source: 'Source',
       redacted: 'Redacted',
       metadataOnly: 'File metadata only',
       blockedReason: {
