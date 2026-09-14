@@ -256,6 +256,7 @@ export function AgentManagedFilesDrawer({
     setPathError(reason instanceof Error ? reason.message : String(reason))
   }
   const previewMarkdown = isMarkdownFile(previewName)
+  const documentPreview = previewOnly && isMarkdownFile(previewName ?? rootPath)
   const metadataOnlyMessage = preview?.previewStatus === 'metadata-only'
     ? managedPreviewBlockedMessage(preview.blockedReason, t)
     : ''
@@ -268,7 +269,7 @@ export function AgentManagedFilesDrawer({
         ? t('managedFiles.previewUnavailable')
         : t('managedFiles.selectFile')
 
-  const content = <div className={`managed-files-layout ${previewOnly ? 'is-preview-only is-document-preview' : ''}`}>
+  const content = <div className={`managed-files-layout ${previewOnly ? 'is-preview-only' : ''} ${documentPreview ? 'is-document-preview' : ''}`.trim()}>
 
       {!previewOnly && <section className="managed-files-tree" aria-label={t('managedFiles.treeAria')}>
         <div className="managed-files-root">
@@ -286,7 +287,7 @@ export function AgentManagedFilesDrawer({
           : renderDirectory('')}
       </section>}
       <section className="managed-file-preview" aria-label={t('managedFiles.previewAria')}>
-        {previewName && <div className="managed-file-preview-head" data-document={previewOnly || undefined}>
+        {previewName && <div className="managed-file-preview-head" data-document={documentPreview || undefined}>
           <div>
             <b>{previewName}</b>
             <span>{previewPath}</span>
@@ -323,7 +324,7 @@ export function AgentManagedFilesDrawer({
       </section>
     </div>
 
-  if (previewOnly) {
+  if (documentPreview) {
     return <Dialog
       open={open}
       className="agent-managed-file-document-dialog"
