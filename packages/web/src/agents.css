@@ -440,8 +440,9 @@
 .asset-discovered { padding: 1px 6px; border-radius: 5px; background: var(--al-success-soft); color: var(--al-success); font-size: 12px; font-weight: 560; }
 .asset-state[data-value='false'] { background: var(--al-danger-soft); color: var(--al-danger); }
 .asset-state[data-value='unknown'] { background: var(--al-soft); color: var(--al-muted); }
-.asset-path { display: flex; min-width: 0; align-items: center; gap: 5px; margin-top: 7px; }
+.asset-path { display: flex; min-width: 0; align-items: center; gap: 7px; margin-top: 7px; }
 .asset-path code { min-width: 0; flex: 1; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.asset-path-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; }
 .copy-link,
 .asset-preview-link,
 .show-more-button {
@@ -475,8 +476,17 @@
 .runtime-config-list span { min-width: 72px; color: var(--al-muted); }
 .runtime-config-list code { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
 .runtime-config-row code { flex: 1 1 auto; }
-.runtime-config-row .copy-link,
-.runtime-config-row .btn { flex: 0 0 auto; }
+.runtime-config-row .btn,
+.runtime-config-row .local-path-actions { flex: 0 0 auto; }
+.agent-path-error {
+  margin: 0 18px 12px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .capability-row { justify-content: space-between; align-items: flex-start; }
 
 .agent-managed-files-drawer .ui-overlay-panel { width: min(96vw, 920px); }
@@ -507,7 +517,15 @@
   background: var(--al-soft-2);
 }
 .managed-files-root span { color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.managed-files-root-path {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .managed-files-root code {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--al-muted);
   font-size: 12px;
@@ -607,6 +625,15 @@
   background: var(--al-warning-soft);
   color: var(--al-warning);
   font-weight: 620;
+}
+.managed-file-path-error {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-danger-soft);
+  color: var(--al-danger);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .managed-file-preview-content {
   min-height: 0;
