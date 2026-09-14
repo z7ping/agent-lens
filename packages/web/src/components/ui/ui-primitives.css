@@ -270,3 +270,18 @@
 .local-path-actions .local-path-action:disabled {
   opacity: .55;
 }
+.local-path-value {
+  min-width: 0;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.local-path-value code {
+  min-width: 0;
+  max-width: min(52vw, 560px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
