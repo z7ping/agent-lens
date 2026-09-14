@@ -81,10 +81,12 @@ export function AgentManagedFilesDrawer({
   const [preview, setPreview] = useState<ManagedAssetFilePreviewResponseDto | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [bindingDirectory, setBindingDirectory] = useState(false)
-  const [error, setError] = useState('')
+  const [directoryError, setDirectoryError] = useState('')
+  const [previewError, setPreviewError] = useState('')
   const [pathError, setPathError] = useState('')
   const [previewView, setPreviewView] = useState<'rendered' | 'source'>('source')
   const generationRef = useRef(0)
+  const previewRequestRef = useRef(0)
 
   const loadDirectory = useCallback(async (path: string, generation = generationRef.current) => {
     setLoadingDirectories(current => new Set(current).add(path))
@@ -92,10 +94,10 @@ export function AgentManagedFilesDrawer({
       const response = await model.managedAssetDirectory(productId, installationId, root, path, bindingId)
       if (generationRef.current !== generation) return
       setDirectories(current => ({ ...current, [path]: response }))
-      setError('')
+      setDirectoryError('')
     } catch (loadError) {
       if (generationRef.current !== generation) return
-      setError(managedFileErrorMessage(loadError, t))
+      setDirectoryError(managedFileErrorMessage(loadError, t))
     } finally {
       if (generationRef.current === generation) {
         setLoadingDirectories(current => {
@@ -108,7 +110,10 @@ export function AgentManagedFilesDrawer({
   }, [bindingId, installationId, model, productId, root, t])
 
   const loadBindingTarget = useCallback(async (generation = generationRef.current) => {
+    const request = previewRequestRef.current + 1
+    previewRequestRef.current = request
     setPreviewLoading(true)
+    setPreviewError('')
     try {
       const result = await model.managedAssetFile(
         productId,
@@ -117,20 +122,21 @@ export function AgentManagedFilesDrawer({
         '',
         bindingId,
       )
-      if (generationRef.current !== generation) return
+      if (generationRef.current !== generation || previewRequestRef.current !== request) return
       setPreview(result)
       setPreviewView(isMarkdownFile(result.name) ? 'rendered' : 'source')
-      setError('')
-    } catch (previewError) {
-      if (generationRef.current !== generation) return
-      if (managedFileStatus(previewError) === 409) {
+    } catch (error) {
+      if (generationRef.current !== generation || previewRequestRef.current !== request) return
+      if (managedFileStatus(error) === 409) {
         setBindingDirectory(true)
         void loadDirectory('', generation)
         return
       }
-      setError(managedFileErrorMessage(previewError, t))
+      setPreviewError(managedFileErrorMessage(error, t))
     } finally {
-      if (generationRef.current === generation) setPreviewLoading(false)
+      if (generationRef.current === generation && previewRequestRef.current === request) {
+        setPreviewLoading(false)
+      }
     }
   }, [bindingId, installationId, loadDirectory, model, productId, t])
 
@@ -145,13 +151,16 @@ export function AgentManagedFilesDrawer({
     setPreview(null)
     setPreviewLoading(false)
     setBindingDirectory(false)
-    setError('')
+    setDirectoryError('')
+    setPreviewError('')
     setPathError('')
     setPreviewView('source')
+    previewRequestRef.current += 1
     if (root === 'binding') void loadBindingTarget(generation)
     else void loadDirectory('', generation)
     return () => {
       generationRef.current += 1
+      previewRequestRef.current += 1
     }
   }, [open, productId, installationId, root, loadBindingTarget, loadDirectory])
 
@@ -169,16 +178,17 @@ export function AgentManagedFilesDrawer({
     }
   }
 
-  const selectFile = async (entry: ManagedAssetFileEntryDto) => {
+  const selectFile = useCallback(async (entry: ManagedAssetFileEntryDto) => {
     if (!entry.accessible || entry.kind !== 'file') return
+    const generation = generationRef.current
+    const request = previewRequestRef.current + 1
+    previewRequestRef.current = request
     setSelected(entry)
     setPreview(null)
     setPreviewView(isMarkdownFile(entry.name) ? 'rendered' : 'source')
-    setError('')
-    if (!entry.previewable) return
-
-    const generation = generationRef.current
+    setPreviewError('')
     setPreviewLoading(true)
+
     try {
       const result = await model.managedAssetFile(
         productId,
@@ -187,15 +197,27 @@ export function AgentManagedFilesDrawer({
         entry.relativePath,
         bindingId,
       )
-      if (generationRef.current !== generation) return
+      if (generationRef.current !== generation || previewRequestRef.current !== request) return
       setPreview(result)
-    } catch (previewError) {
-      if (generationRef.current !== generation) return
-      setError(managedFileErrorMessage(previewError, t))
+    } catch (error) {
+      if (generationRef.current !== generation || previewRequestRef.current !== request) return
+      setPreviewError(managedFileErrorMessage(error, t))
     } finally {
-      if (generationRef.current === generation) setPreviewLoading(false)
+      if (generationRef.current === generation && previewRequestRef.current === request) {
+        setPreviewLoading(false)
+      }
     }
-  }
+  }, [bindingId, installationId, model, productId, root, t])
+
+  useEffect(() => {
+    if (!open || root !== 'binding' || !bindingDirectory || selected) return
+    const skillEntry = directories['']?.entries.find(entry =>
+      entry.kind === 'file'
+      && entry.accessible
+      && entry.name.toLowerCase() === 'skill.md'
+    )
+    if (skillEntry) void selectFile(skillEntry)
+  }, [bindingDirectory, directories, open, root, selectFile, selected])
 
   const renderDirectory = (path: string): ReactNode => {
     const directory = directories[path]
@@ -279,9 +301,9 @@ export function AgentManagedFilesDrawer({
             <LocalPathActions path={rootPath} onOpen={openPath} onError={reportPathError}/>
           </div>
         </div>
-        {error && !Object.keys(directories).length
+        {directoryError && !Object.keys(directories).length
           ? <div className="managed-file-error">
-              <p>{error}</p>
+              <p>{directoryError}</p>
               <Button size="small" onClick={() => void loadDirectory('')}>{t('managedFiles.retry')}</Button>
             </div>
           : renderDirectory('')}
@@ -318,8 +340,8 @@ export function AgentManagedFilesDrawer({
               : <div className="managed-file-preview-empty">
                 <UiIcon name={selected?.sensitive ? 'alert' : 'tool-read'} size={20}/>
                 <span>{selectedMessage}</span>
-                {error && <small>{error}</small>}
-                {error && previewOnly && <Button size="small" onClick={() => void loadBindingTarget()}>{t('managedFiles.retry')}</Button>}
+                {previewError && <small>{previewError}</small>}
+                {previewError && previewOnly && <Button size="small" onClick={() => void loadBindingTarget()}>{t('managedFiles.retry')}</Button>}
               </div>}
       </section>
     </div>
