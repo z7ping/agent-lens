@@ -329,6 +329,48 @@
   font-weight: 500;
 }
 
+.workspace-agent-order {
+  display: grid;
+  gap: 7px;
+  padding-top: 4px;
+}
+
+.workspace-agent-order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.workspace-agent-order-list {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-agent-order-option {
+  display: grid;
+  min-height: 32px;
+  grid-template-columns: 16px 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 2px;
+  border-radius: 7px;
+  color: var(--al-ink-2);
+}
+
+.workspace-agent-order-option:hover { background: var(--al-soft); }
+.workspace-agent-order-option.is-dragging { background: var(--al-accent-soft); }
+.workspace-agent-order-option.is-fixed { color: var(--al-muted); }
+.workspace-agent-order-option b {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-agent-order-drag { color: var(--al-muted-2); cursor: grab; }
+.workspace-agent-order-option.is-fixed .workspace-agent-order-drag { cursor: default; opacity: .38; }
+.workspace-agent-order-buttons { display: flex; gap: 2px; }
+
 @media (max-width: 767.98px) {
   .workspace-settings-popover {
     right: auto;

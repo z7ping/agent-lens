@@ -147,12 +147,7 @@ html body .event-row{font-size:var(--text-secondary)}
 /* 智能体概览 */
 html body .agent-identity h2{font-size:17px}
 html body .agent-identity p{font-size:var(--text-secondary);line-height:1.6}
-html body .agent-status,
-html body .agent-source-nav-head b,
-html body .agent-source-nav-head span,
-html body .agent-source-copy small,
-html body .agent-source-state{font-size:var(--text-caption)}
-html body .agent-source-copy b{font-size:var(--text-secondary)}
+html body .agent-status{font-size:var(--text-caption)}
 html body .agent-installation small{font-size:var(--text-caption)}
 html body .agent-installation b,
 html body .agent-installation code{font-size:var(--text-secondary)}

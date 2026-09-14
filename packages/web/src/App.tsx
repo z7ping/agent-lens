@@ -206,6 +206,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       ?? ''
 
   useEffect(() => {
+    if (resolvedAgentOverviewSourceId && resolvedAgentOverviewSourceId !== agentOverviewSourceId) {
+      setAgentOverviewSourceId(resolvedAgentOverviewSourceId)
+    }
+  }, [agentOverviewSourceId, resolvedAgentOverviewSourceId])
+
+  useEffect(() => {
     void model.ensureIntegrationManagement().catch(() => undefined)
   }, [model])
 
@@ -301,7 +307,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
-          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} onSourceIdChange={setAgentOverviewSourceId} />} />
+          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} />} />
           <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>

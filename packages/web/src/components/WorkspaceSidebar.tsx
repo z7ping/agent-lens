@@ -114,7 +114,7 @@ export function WorkspaceSidebar({
           <span>{t('navigation:sourceCount', { count: agents.length })}</span>
           <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        <SidebarFilterDisclosure defaultOpen summary={t('navigation:agentSelection')} agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
+        <SidebarFilterDisclosure defaultOpen agentOrderManagement summary={t('navigation:agentSelection')} agents={agents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
       {onBackup && <div className="workspace-context-menu workspace-agent-context">

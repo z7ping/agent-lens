@@ -1,4 +1,4 @@
-import { useMemo, useState, type DragEvent } from 'react'
+import { useMemo, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -607,7 +607,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   </article>
 }
 
-export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: AgentLensClientModel; sourceId: string; onSourceIdChange(sourceId: string): void }) {
+export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; sourceId: string }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
   const overviewItems = useOrderedAgents(snapshot.agents?.items ?? [])
@@ -616,9 +616,7 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || discovery?.status === 'scanning'
-  const { ordered, canReorder, move, moveBy, reset } = useIntegrationOrder()
-  const [managingOrder, setManagingOrder] = useState(false)
-  const [draggedId, setDraggedId] = useState('')
+  const { ordered } = useIntegrationOrder()
 
   const discoveryItems = discovery?.items ?? []
   const claimedSourceIds = new Set<string>()
@@ -678,91 +676,9 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
     return result
   }
 
-  const selectRow = (integrationId: string, isNew: boolean | undefined) => {
-    onSourceIdChange(integrationId)
-    if (isNew) void model.acknowledgeIntegration(integrationId).catch(() => undefined)
-  }
-
-  const reorderableRows = rows.filter(row => canReorder(row.id))
-
   return <main className="workspace-page">
     <div className="page-content agents-content">
-      {rows.length ? <div className="agents-browser">
-        <nav className="agent-source-nav" aria-label={t('page.list')}>
-          <div className="agent-source-nav-head"><b>{managingOrder ? t('page.orderTitle') : t('page.localAgents')}</b><span>{rows.length}</span></div>
-          <div className="agent-source-nav-actions">
-            {managingOrder ? <>
-              <Button size="small" onClick={reset}>{t('scope.reset')}</Button>
-              <Button size="small" variant="primary" onClick={() => { setManagingOrder(false); setDraggedId('') }}>{t('page.orderDone')}</Button>
-            </> : <Button size="small" onClick={() => setManagingOrder(true)}>{t('page.manageOrder')}</Button>}
-          </div>
-
-          {managingOrder ? <div className="agent-order-list">
-            {rows.map(row => {
-              const reorderable = canReorder(row.id)
-              const reorderIndex = reorderableRows.findIndex(item => item.id === row.id)
-              return <div
-                key={row.id}
-                className={`agent-order-option ${draggedId === row.id ? 'is-dragging' : ''} ${reorderable ? '' : 'is-fixed'}`}
-                draggable={reorderable}
-                onDragStart={(event: DragEvent<HTMLDivElement>) => {
-                  if (!reorderable) return
-                  setDraggedId(row.id)
-                  event.dataTransfer.effectAllowed = 'move'
-                }}
-                onDragOver={event => {
-                  if (!reorderable) return
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'move'
-                }}
-                onDrop={event => {
-                  if (!reorderable) return
-                  event.preventDefault()
-                  if (draggedId) move(draggedId, row.id)
-                  setDraggedId('')
-                }}
-                onDragEnd={() => setDraggedId('')}
-              >
-                <UiIcon name="drag" size={16} className="agent-order-drag"/>
-                <span className={`source-dot ${sourceDot(row.id)}`}/>
-                <b>{row.displayName}</b>
-                <span className="agent-order-buttons">
-                  <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(row.id, -1)} aria-label={t('scope.moveUp', { agent: row.displayName })}><UiIcon name="arrow-big-up" size={14}/></IconButton>
-                  <IconButton size="small" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableRows.length - 1} onClick={() => moveBy(row.id, 1)} aria-label={t('scope.moveDown', { agent: row.displayName })}><UiIcon name="arrow-big-down" size={14}/></IconButton>
-                </span>
-              </div>
-            })}
-          </div> : rows.map(row => {
-            const assetCount = row.agent?.assetInventory.filter(asset => asset.type !== 'builtin').length ?? 0
-            const status = integrationLifecycleState(row.agent, row.management, row.discovery, discoveryScanning, t)
-            const packageState = row.management?.packageState
-            const subtitle = row.management && packageState && !packageState.installed
-              ? t('page.notAddedSubtitle')
-              : !row.agent && packageState?.restartRequired
-                ? t('page.waitingRestart')
-                : row.agent
-                  ? t('page.userAssets', { count: assetCount })
-                  : t('page.detailsUnavailable')
-            return <button
-              key={row.id}
-              className={`agent-source-option ${row.id === selectedSourceId ? 'is-active' : ''}`}
-              onClick={() => selectRow(row.id, row.management?.isNew)}
-              aria-current={row.id === selectedSourceId ? 'true' : undefined}
-              title={status.title}
-            >
-              <span className={`source-dot large ${sourceDot(row.id)}`}/>
-              <span className="agent-source-copy">
-                <span className="agent-source-name-line">
-                  <b>{row.displayName}</b>
-                  {row.management?.isNew && <em>{t('status.new')}</em>}
-                </span>
-                <small>{subtitle}</small>
-              </span>
-              <span className={`agent-source-state ${status.className}`}>{status.label}</span>
-            </button>
-          })}
-        </nav>
-        <div className="agent-detail-pane">
+      {rows.length ? <div className="agent-detail-pane">
           {selectedAgent ? <AgentCard
             key={selectedAgent.sourceId}
             model={model}
@@ -788,7 +704,6 @@ export function AgentsPage({ model, sourceId, onSourceIdChange }: { model: Agent
             onInstall={installIntegration}
             onRemove={id => model.removeIntegration(id)}
           /> : null}
-        </div>
       </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
     </div>
   </main>

@@ -681,17 +681,6 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* 智能体切换由全局上下文区持有，正文不重复第二套来源导航。 */
-.app-shell .agents-responsive-shell .agents-browser {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  margin-top: 0;
-}
-
-.app-shell .agents-responsive-shell .agent-source-nav {
-  display: none;
-}
-
 .app-shell .agents-responsive-shell .agents-content {
   padding-top: 18px;
 }
