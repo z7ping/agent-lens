@@ -280,7 +280,7 @@ function AssetGroup({
       key={asset.id}
       agent={agent}
       asset={asset}
-      onPreview={onPreview}
+      {...(onPreview ? { onPreview } : {})}
       onOpenPath={onOpenPath}
       onPathError={onPathError}
     />)}</div>
@@ -597,7 +597,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         type="instruction"
         label={t('piGuidance.projectRules')}
         assets={piProjectRuleAssets}
-        onPreview={assetsAvailable ? openAssetPreview : undefined}
+        {...(assetsAvailable ? { onPreview: openAssetPreview } : {})}
         onOpenPath={openPath}
         onPathError={reportPathError}
       />}
@@ -606,7 +606,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         agent={agent}
         type={type}
         assets={assets}
-        onPreview={assetsAvailable ? openAssetPreview : undefined}
+        {...(assetsAvailable ? { onPreview: openAssetPreview } : {})}
         onOpenPath={openPath}
         onPathError={reportPathError}
       />)}
