@@ -485,6 +485,7 @@
   display: grid;
   grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
 }
+.managed-files-layout.is-preview-only { grid-template-columns: minmax(0, 1fr); }
 .managed-files-tree,
 .managed-file-preview {
   min-width: 0;
@@ -581,6 +582,12 @@
   border-bottom: 1px solid var(--al-line);
 }
 .managed-file-preview-head > div { min-width: 0; display: grid; gap: 3px; }
+.managed-file-preview-head > .managed-file-preview-facts {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+}
 .managed-file-preview-head b { font-size: 13px; }
 .managed-file-preview-head span,
 .managed-file-preview-head small {
@@ -591,6 +598,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.managed-file-preview-head .managed-file-redacted {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--al-warning-soft);
+  color: var(--al-warning);
+  font-weight: 620;
 }
 .managed-file-preview-content {
   min-height: 0;
@@ -672,6 +686,7 @@
 
 @media (max-width: 767.98px) {
   .managed-files-layout { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 0.8fr) minmax(240px, 1.2fr); }
+  .managed-files-layout.is-preview-only { grid-template-rows: minmax(0, 1fr); }
   .managed-files-tree { border-right: 0; border-bottom: 1px solid var(--al-line); }
 }
 
