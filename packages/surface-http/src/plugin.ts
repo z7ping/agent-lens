@@ -29,6 +29,8 @@ export interface HttpSurfacePluginConfig {
   port?: number
   /** Opens the current host's native directory chooser for a new Pi project. */
   selectProjectDirectory?: () => Promise<string | undefined>
+  /** Opens or reveals a verified local path through the current host shell. */
+  openHostPath?: (path: string) => Promise<'opened' | 'revealed'>
   /** Dynamic control/data-plane health contribution; must remain O(1). */
   dataRuntimeHealth?: () => DataRuntimeHealthDto
   /** Additional O(1) runtime diagnostics merged into storage health details. */
@@ -206,6 +208,7 @@ const applyHttpSurface = Object.assign(
       ...(config.integrationPackages ? { integrationPackages: config.integrationPackages } : {}),
       ...(config.localePackDirectory ? { localePackDirectory: config.localePackDirectory } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
+      ...(config.openHostPath ? { openHostPath: config.openHostPath } : {}),
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
