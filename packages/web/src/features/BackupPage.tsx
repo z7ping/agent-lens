@@ -14,6 +14,7 @@ import type {
 import { AgentLensApi } from '../client/api'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
+import { LocalPathActions } from '../components/LocalPathActions'
 import { PageLoadingState } from '../components/StateViews'
 import { Button, Dialog, Drawer, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
 
@@ -406,21 +407,13 @@ export function BackupPage({
     else await importBackup(pending.file)
   }
 
-  const copyPath = async (path: string) => {
-    try {
-      await navigator.clipboard.writeText(path)
-    } catch {
-      setError(t('copyPathFailed'))
-    }
+  const openPhysicalPath = async (path: string) => {
+    setError('')
+    return api.openHostPath(path)
   }
 
-  const openPhysicalDirectory = async (path: string) => {
-    setError('')
-    try {
-      await api.openHostDirectory(path)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    }
+  const reportPathError = (reason: unknown) => {
+    setError(reason instanceof Error ? reason.message : String(reason))
   }
 
   if (!overview || overview.index?.ready === false) return <PageLoadingState
@@ -528,6 +521,7 @@ export function BackupPage({
                   <strong className="backup-agent-size">{source.totalBytes === undefined ? t('sizePending') : formatBytes(source.totalBytes)}</strong>
                   <div className="backup-agent-row-path">
                     <code title={primaryRoot?.path}>{primaryRoot?.path ?? t('assetView.locationPending')}</code>
+                    {primaryRoot?.path && <LocalPathActions path={primaryRoot.path} onOpen={openPhysicalPath} onError={reportPathError}/>}
                     {source.roots && source.roots.length > 1 && <span>+{source.roots.length - 1}</span>}
                   </div>
                 </article>
@@ -550,7 +544,12 @@ export function BackupPage({
               <section className="backup-agent-detail-section">
                 <div className="backup-section-head"><div><h3>{t('detail.locations')}</h3></div></div>
                 {focusedSource.roots?.length
-                  ? <div className="backup-location-list">{focusedSource.roots.map(root => <BackupDataRootTree key={`${root.scope}:${root.path}`} root={root} onCopy={path => void copyPath(path)}/>)}</div>
+                  ? <div className="backup-location-list">{focusedSource.roots.map(root => <BackupDataRootTree
+                      key={`${root.scope}:${root.path}`}
+                      root={root}
+                      onOpen={openPhysicalPath}
+                      onError={reportPathError}
+                    />)}</div>
                   : <div className="backup-assets-empty">{t('detail.locationsPending')}</div>}
               </section>
 
@@ -650,8 +649,7 @@ export function BackupPage({
                 </div>
                 <span className="backup-physical-path-meta">{t('tree.files', { count: root.fileCount.toLocaleString(locale) })} · {formatBytes(root.totalBytes)}</span>
                 <div className="backup-physical-path-actions">
-                  <button className="backup-link-btn" onClick={() => void openPhysicalDirectory(root.path)}>{t('tree.openDirectory')}</button>
-                  <button className="backup-link-btn" onClick={() => void copyPath(root.path)}>{t('tree.copyPath')}</button>
+                  <LocalPathActions path={root.path} onOpen={openPhysicalPath} onError={reportPathError}/>
                 </div>
               </div>)}
             </div>
@@ -672,7 +670,7 @@ export function BackupPage({
     >
       <div className="backup-drawer-body">
         <section className="backup-drawer-section"><h3>{t('preview.summary')}</h3><div className="preview-summary"><span><b>{preview.unchanged}</b> {t('preview.unchanged')}</span><span><b>{preview.missing}</b> {t('preview.missing')}</span><span><b>{preview.modified}</b> {t('preview.modified')}</span><span><b>{preview.blocked}</b> {t('preview.blockedLabel')}</span></div></section>
-        <section className="backup-drawer-section"><h3>{t('preview.files')}</h3><div className="backup-drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="backup-drawer-file preview-file"><StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>{previewStatusLabel(item.status, t)}</StatusBadge><code>{item.targetPath ?? item.archivePath}</code>{item.reason && <small>{item.reason}</small>}</div>)}</div></section>
+        <section className="backup-drawer-section"><h3>{t('preview.files')}</h3><div className="backup-drawer-file-list">{preview.items.map(item => <div key={`${item.sourceId}:${item.archivePath}`} className="backup-drawer-file preview-file"><StatusBadge tone={item.status === 'blocked' ? 'danger' : item.status === 'modified' ? 'warning' : item.status === 'unchanged' ? 'success' : 'accent'}>{previewStatusLabel(item.status, t)}</StatusBadge><code>{item.targetPath ?? item.archivePath}</code>{item.targetPath && <LocalPathActions path={item.targetPath} onOpen={openPhysicalPath} onError={reportPathError}/>} {item.reason && <small>{item.reason}</small>}</div>)}</div></section>
         <section className="backup-drawer-section"><div className="backup-preview-note"><b>{t('preview.noteTitle')}</b> {t('preview.noteDescription')}</div></section>
       </div>
     </Drawer>}
