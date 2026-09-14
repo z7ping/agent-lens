@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
+import { AgentLensApi } from '../client/api'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
+import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
@@ -360,6 +362,7 @@ function ExtensionPrompt({ request, onAnswer }: { request: ExtensionRequest; onA
 export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation('piLive')
   const localeRevision = i18n.resolvedLanguage ?? i18n.language
+  const hostApi = useMemo(() => new AgentLensApi(), [])
   const navigate = useNavigate()
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
@@ -394,6 +397,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [interruptNotice, setInterruptNotice] = useState(false)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [error, setError] = useState('')
+  const [pathError, setPathError] = useState('')
   const [syncWarningCode, setSyncWarningCode] = useState<'' | 'controls-refresh-failed' | 'history-reconcile-failed' | 'snapshot-sync-failed'>('')
   const [busy, setBusy] = useState(false)
   const [sendPending, setSendPending] = useState(false)
@@ -1093,7 +1097,20 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         infoItems={state ? [
           { label: t('header.model'), value: taskDetailModel.contextLabel ?? t('header.defaultModel') },
           { label: t('header.project'), value: state.projectName ?? t('header.noProject') },
-          ...(state.workspacePath ? [{ label: t('header.workspace'), value: <code title={state.workspacePath}>{state.workspacePath}</code> }] : []),
+          ...(state.workspacePath ? [{
+            label: t('header.workspace'),
+            value: <span className="local-path-value">
+              <code title={state.workspacePath}>{state.workspacePath}</code>
+              <LocalPathActions
+                path={state.workspacePath}
+                onOpen={path => {
+                  setPathError('')
+                  return hostApi.openHostPath(path)
+                }}
+                onError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
+              />
+            </span>,
+          }] : []),
           ...(state.gitBranch ? [{ label: t('header.branchLabel'), value: state.gitBranch }] : []),
           ...(state.startedAt ? [
             { label: t('header.startTime'), value: formatTaskDateTime(state.startedAt) },
@@ -1149,6 +1166,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           />}
           {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">{t('empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
+          {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
         </div>
       </div>
 
