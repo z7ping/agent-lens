@@ -224,6 +224,9 @@ export class AgentLensClientModel {
   ): Promise<ManagedAssetFilePreviewResponseDto> =>
     this.api.managedAssetFile(productId, installationId, root, path, bindingId)
 
+  openHostPath = (path: string): Promise<{ opened: boolean; action?: 'opened' | 'revealed' }> =>
+    this.api.openHostPath(path)
+
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
