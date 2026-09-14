@@ -1,14 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   buildDevEnvironment,
   devRuntimePaths,
   findAvailableDevPort,
+  integrationBundleDevFingerprint,
+  integrationBundleWorkspaceClosure,
   npmInvocation,
   parseDevPort,
   waitForRuntimeReady,
 } from './dev-runtime.mjs'
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 test('parseDevPort 使用默认端口并拒绝非法值', () => {
   assert.equal(parseDevPort(undefined), 56800)
@@ -122,4 +127,30 @@ test('Runtime Health 持续失败时给出明确超时', async () => {
     }),
     /Runtime 在 10ms 内未就绪：ECONNREFUSED/,
   )
+})
+
+test('开发 Integration 指纹只覆盖实际 workspace 依赖闭包', async () => {
+  const closure = await integrationBundleWorkspaceClosure(root)
+
+  for (const packageName of [
+    '@agent-lens/integration-pi',
+    '@agent-lens/integration-codex',
+    '@agent-lens/integration-claude',
+    '@agent-lens/integration-hermes',
+    '@agent-lens/integration-opencode',
+    '@agent-lens/runtime-cordis',
+    '@agent-lens/core',
+  ]) {
+    assert.equal(closure.includes(packageName), true, packageName)
+  }
+  assert.equal(closure.includes('@agent-lens/web'), false)
+  assert.equal(closure.includes('@agent-lens/projection-review'), false)
+})
+
+test('开发 Integration 指纹对相同源码保持稳定', async () => {
+  const first = await integrationBundleDevFingerprint(root)
+  const second = await integrationBundleDevFingerprint(root)
+
+  assert.match(first, /^[a-f0-9]{64}$/)
+  assert.equal(second, first)
 })
