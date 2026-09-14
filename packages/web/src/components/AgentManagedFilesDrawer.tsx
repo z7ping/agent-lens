@@ -11,8 +11,13 @@ import type { AgentLensClientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { Button, Drawer, UiIcon } from './ui'
 
-function managedFileErrorMessage(error: unknown, t: TFunction): string {
+function managedFileStatus(error: unknown): number | undefined {
   const status = error && typeof error === 'object' ? Reflect.get(error, 'status') : undefined
+  return typeof status === 'number' ? status : undefined
+}
+
+function managedFileErrorMessage(error: unknown, t: TFunction): string {
+  const status = managedFileStatus(error)
   if (status === 403) return t('managedFiles.errorForbidden')
   if (status === 404) return t('managedFiles.errorNotFound')
   if (status === 413) return t('managedFiles.errorTooLarge')
@@ -27,6 +32,7 @@ interface AgentManagedFilesDrawerProps {
   agentName: string
   installationId: string
   root: ManagedAssetRoot
+  bindingId?: string
   rootLabel: string
   rootPath: string
   onClose(): void
@@ -40,6 +46,7 @@ export function AgentManagedFilesDrawer({
   agentName,
   installationId,
   root,
+  bindingId,
   rootLabel,
   rootPath,
   onClose,
@@ -51,13 +58,14 @@ export function AgentManagedFilesDrawer({
   const [selected, setSelected] = useState<ManagedAssetFileEntryDto | null>(null)
   const [preview, setPreview] = useState<ManagedAssetFilePreviewResponseDto | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [bindingDirectory, setBindingDirectory] = useState(false)
   const [error, setError] = useState('')
   const generationRef = useRef(0)
 
   const loadDirectory = useCallback(async (path: string, generation = generationRef.current) => {
     setLoadingDirectories(current => new Set(current).add(path))
     try {
-      const response = await model.managedAssetDirectory(productId, installationId, root, path)
+      const response = await model.managedAssetDirectory(productId, installationId, root, path, bindingId)
       if (generationRef.current !== generation) return
       setDirectories(current => ({ ...current, [path]: response }))
       setError('')
@@ -73,7 +81,33 @@ export function AgentManagedFilesDrawer({
         })
       }
     }
-  }, [installationId, model, productId, root, t])
+  }, [bindingId, installationId, model, productId, root, t])
+
+  const loadBindingTarget = useCallback(async (generation = generationRef.current) => {
+    setPreviewLoading(true)
+    try {
+      const result = await model.managedAssetFile(
+        productId,
+        installationId,
+        'binding',
+        '',
+        bindingId,
+      )
+      if (generationRef.current !== generation) return
+      setPreview(result)
+      setError('')
+    } catch (previewError) {
+      if (generationRef.current !== generation) return
+      if (managedFileStatus(previewError) === 400) {
+        setBindingDirectory(true)
+        void loadDirectory('', generation)
+        return
+      }
+      setError(managedFileErrorMessage(previewError, t))
+    } finally {
+      if (generationRef.current === generation) setPreviewLoading(false)
+    }
+  }, [bindingId, installationId, loadDirectory, model, productId, t])
 
   useEffect(() => {
     if (!open) return
@@ -85,12 +119,14 @@ export function AgentManagedFilesDrawer({
     setSelected(null)
     setPreview(null)
     setPreviewLoading(false)
+    setBindingDirectory(false)
     setError('')
-    void loadDirectory('', generation)
+    if (root === 'binding') void loadBindingTarget(generation)
+    else void loadDirectory('', generation)
     return () => {
       generationRef.current += 1
     }
-  }, [open, productId, installationId, root, loadDirectory])
+  }, [open, productId, installationId, root, loadBindingTarget, loadDirectory])
 
   const toggleDirectory = (entry: ManagedAssetFileEntryDto) => {
     if (!entry.accessible || entry.kind !== 'directory') return
@@ -121,6 +157,7 @@ export function AgentManagedFilesDrawer({
         installationId,
         root,
         entry.relativePath,
+        bindingId,
       )
       if (generationRef.current !== generation) return
       setPreview(result)
@@ -178,11 +215,18 @@ export function AgentManagedFilesDrawer({
     })
   }
 
+  const previewOnly = root === 'binding' && !bindingDirectory
+  const previewName = selected?.name ?? preview?.name
+  const previewPath = selected?.relativePath || preview?.relativePath || rootPath
+  const previewSize = selected?.size ?? preview?.size
+
   const selectedMessage = selected?.sensitive
     ? t('managedFiles.sensitiveBlocked')
     : selected && !selected.previewable
       ? t('managedFiles.previewUnavailable')
-      : t('managedFiles.selectFile')
+      : previewOnly
+        ? t('managedFiles.previewUnavailable')
+        : t('managedFiles.selectFile')
 
   return <Drawer
     open={open}
@@ -191,8 +235,8 @@ export function AgentManagedFilesDrawer({
     description={rootPath}
     onClose={onClose}
   >
-    <div className="managed-files-layout">
-      <section className="managed-files-tree" aria-label={t('managedFiles.treeAria')}>
+    <div className={`managed-files-layout ${previewOnly ? 'is-preview-only' : ''}`}>
+      {!previewOnly && <section className="managed-files-tree" aria-label={t('managedFiles.treeAria')}>
         <div className="managed-files-root">
           <span>{rootLabel}</span>
           <code title={rootPath}>{rootPath}</code>
@@ -203,14 +247,17 @@ export function AgentManagedFilesDrawer({
               <Button size="small" onClick={() => void loadDirectory('')}>{t('managedFiles.retry')}</Button>
             </div>
           : renderDirectory('')}
-      </section>
+      </section>}
       <section className="managed-file-preview" aria-label={t('managedFiles.previewAria')}>
-        {selected && <div className="managed-file-preview-head">
+        {previewName && <div className="managed-file-preview-head">
           <div>
-            <b>{selected.name}</b>
-            <span>{selected.relativePath}</span>
+            <b>{previewName}</b>
+            <span>{previewPath}</span>
           </div>
-          {selected.size !== undefined && <small>{t('managedFiles.bytes', { count: selected.size })}</small>}
+          <div className="managed-file-preview-facts">
+            {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
+            {previewSize !== undefined && <small>{t('managedFiles.bytes', { count: previewSize })}</small>}
+          </div>
         </div>}
         {previewLoading
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
@@ -220,6 +267,7 @@ export function AgentManagedFilesDrawer({
                 <UiIcon name={selected?.sensitive ? 'alert' : 'tool-read'} size={20}/>
                 <span>{selectedMessage}</span>
                 {error && <small>{error}</small>}
+                {error && previewOnly && <Button size="small" onClick={() => void loadBindingTarget()}>{t('managedFiles.retry')}</Button>}
               </div>}
       </section>
     </div>
