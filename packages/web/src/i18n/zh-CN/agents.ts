@@ -301,6 +301,8 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       loadingPreview: '正在读取文件…',
       emptyDirectory: '这个目录是空的。',
       retry: '重试',
+      preview: '预览',
+      redacted: '已脱敏',
       symlink: '链接',
       sensitive: '敏感',
       noPreview: '不可预览',
