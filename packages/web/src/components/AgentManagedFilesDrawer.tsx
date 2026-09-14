@@ -9,7 +9,16 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { LocalPathActions } from './LocalPathActions'
 import { Button, Drawer, UiIcon } from './ui'
+
+function localPath(rootPath: string, relativePath: string): string {
+  if (!relativePath) return rootPath
+  const separator = rootPath.includes('\\') ? '\\' : '/'
+  const root = rootPath.replace(/[\\/]+$/, '')
+  const child = relativePath.replaceAll('/', separator)
+  return `${root}${separator}${child}`
+}
 
 function managedFileStatus(error: unknown): number | undefined {
   const status = error && typeof error === 'object' ? Reflect.get(error, 'status') : undefined
@@ -68,6 +77,7 @@ export function AgentManagedFilesDrawer({
   const [previewLoading, setPreviewLoading] = useState(false)
   const [bindingDirectory, setBindingDirectory] = useState(false)
   const [error, setError] = useState('')
+  const [pathError, setPathError] = useState('')
   const generationRef = useRef(0)
 
   const loadDirectory = useCallback(async (path: string, generation = generationRef.current) => {
@@ -129,6 +139,7 @@ export function AgentManagedFilesDrawer({
     setPreviewLoading(false)
     setBindingDirectory(false)
     setError('')
+    setPathError('')
     if (root === 'binding') void loadBindingTarget(generation)
     else void loadDirectory('', generation)
     return () => {
@@ -227,6 +238,10 @@ export function AgentManagedFilesDrawer({
   const previewName = selected?.name ?? preview?.name
   const previewPath = selected?.relativePath || preview?.relativePath || rootPath
   const previewSize = selected?.size ?? preview?.size
+  const previewTargetPath = localPath(rootPath, selected?.relativePath ?? preview?.relativePath ?? '')
+  const reportPathError = (reason: unknown) => {
+    setPathError(reason instanceof Error ? reason.message : String(reason))
+  }
   const metadataOnlyMessage = preview?.previewStatus === 'metadata-only'
     ? managedPreviewBlockedMessage(preview.blockedReason, t)
     : ''
@@ -250,7 +265,10 @@ export function AgentManagedFilesDrawer({
       {!previewOnly && <section className="managed-files-tree" aria-label={t('managedFiles.treeAria')}>
         <div className="managed-files-root">
           <span>{rootLabel}</span>
-          <code title={rootPath}>{rootPath}</code>
+          <div className="managed-files-root-path">
+            <code title={rootPath}>{rootPath}</code>
+            <LocalPathActions path={rootPath} onOpen={model.openHostPath} onError={reportPathError}/>
+          </div>
         </div>
         {error && !Object.keys(directories).length
           ? <div className="managed-file-error">
@@ -268,8 +286,10 @@ export function AgentManagedFilesDrawer({
           <div className="managed-file-preview-facts">
             {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
             {previewSize !== undefined && <small>{t('managedFiles.bytes', { count: previewSize })}</small>}
+            <LocalPathActions path={previewTargetPath} onOpen={model.openHostPath} onError={reportPathError}/>
           </div>
         </div>}
+        {pathError && <div className="managed-file-path-error" role="alert">{pathError}</div>}
         {previewLoading
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
           : preview?.content !== undefined
