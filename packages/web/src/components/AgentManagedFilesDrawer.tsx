@@ -123,7 +123,7 @@ export function AgentManagedFilesDrawer({
       setError('')
     } catch (previewError) {
       if (generationRef.current !== generation) return
-      if (managedFileStatus(previewError) === 400) {
+      if (managedFileStatus(previewError) === 409) {
         setBindingDirectory(true)
         void loadDirectory('', generation)
         return
