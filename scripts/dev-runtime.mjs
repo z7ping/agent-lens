@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildIntegrationPackages } from './build-integration-packages.mjs'
 
@@ -13,6 +14,14 @@ export const DEV_PORT_ATTEMPTS = 21
 // 30 秒对冷启动过于激进；仍可通过环境变量收紧或放宽。
 export const DEV_RUNTIME_READY_TIMEOUT_MS = 120_000
 export const DEV_RUNTIME_READY_INTERVAL_MS = 100
+const DEV_INTEGRATION_FINGERPRINT_FILE = '.dev-input-fingerprint'
+const OFFICIAL_INTEGRATION_WORKSPACES = [
+  '@agent-lens/integration-pi',
+  '@agent-lens/integration-codex',
+  '@agent-lens/integration-claude',
+  '@agent-lens/integration-hermes',
+  '@agent-lens/integration-opencode',
+]
 
 function devLog(message, ...details) {
   const stamp = new Date().toISOString()
@@ -37,6 +46,158 @@ export function devRuntimePaths(repoRoot, port) {
     integrationsPath: join(dataRoot, 'integrations'),
     integrationBundleDir: join(dataRoot, 'integration-packages'),
   }
+}
+
+async function readWorkspacePackageMap(repoRoot) {
+  const packagesRoot = join(repoRoot, 'packages')
+  const entries = await readdir(packagesRoot, { withFileTypes: true })
+  const packages = new Map()
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const directory = join(packagesRoot, entry.name)
+    try {
+      const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
+      if (typeof manifest.name !== 'string' || !manifest.name) continue
+      packages.set(manifest.name, { directory, manifest })
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue
+      throw error
+    }
+  }
+  return packages
+}
+
+export async function integrationBundleWorkspaceClosure(repoRoot) {
+  const packages = await readWorkspacePackageMap(repoRoot)
+  const visited = new Set()
+  const pending = [...OFFICIAL_INTEGRATION_WORKSPACES]
+
+  while (pending.length) {
+    const name = pending.shift()
+    if (!name || visited.has(name)) continue
+    const workspace = packages.get(name)
+    if (!workspace) throw new Error(`Integration 开发依赖缺少 workspace：${name}`)
+    visited.add(name)
+
+    const manifest = workspace.manifest
+    const dependencies = {
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+      ...manifest.devDependencies,
+    }
+    for (const dependency of Object.keys(dependencies)) {
+      if (dependency.startsWith('@agent-lens/') && packages.has(dependency) && !visited.has(dependency)) {
+        pending.push(dependency)
+      }
+    }
+  }
+
+  return [...visited].sort()
+}
+
+function isFingerprintSourceFile(path) {
+  return !/(?:^|[\\/])__tests__(?:[\\/]|$)/.test(path)
+    && !/\.(?:test|spec)\.[^.]+$/i.test(path)
+}
+
+async function collectFingerprintFiles(directory) {
+  const result = []
+  const entries = await readdir(directory, { withFileTypes: true })
+  for (const entry of entries) {
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) {
+      result.push(...await collectFingerprintFiles(path))
+    } else if (entry.isFile() && isFingerprintSourceFile(path)) {
+      result.push(path)
+    }
+  }
+  return result
+}
+
+async function addReadableFile(files, path) {
+  try {
+    await readFile(path)
+    files.add(path)
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return
+    throw error
+  }
+}
+
+export async function integrationBundleDevFingerprint(repoRoot) {
+  const packages = await readWorkspacePackageMap(repoRoot)
+  const closure = await integrationBundleWorkspaceClosure(repoRoot)
+  const files = new Set()
+
+  for (const path of [
+    join(repoRoot, 'package.json'),
+    join(repoRoot, 'package-lock.json'),
+    join(repoRoot, 'tsconfig.base.json'),
+    join(repoRoot, 'scripts', 'build-integration-packages.mjs'),
+  ]) {
+    await addReadableFile(files, path)
+  }
+
+  for (const packageName of closure) {
+    const workspace = packages.get(packageName)
+    if (!workspace) continue
+    await addReadableFile(files, join(workspace.directory, 'package.json'))
+    await addReadableFile(files, join(workspace.directory, 'tsconfig.json'))
+    const sourceRoot = join(workspace.directory, 'src')
+    try {
+      for (const path of await collectFingerprintFiles(sourceRoot)) files.add(path)
+    } catch (error) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error
+    }
+  }
+
+  const hash = createHash('sha256')
+  hash.update(`agent-lens-dev-integration-cache:v1\0node=${process.version}\0`)
+  for (const path of [...files].sort()) {
+    hash.update(relative(repoRoot, path).replaceAll('\\', '/'))
+    hash.update('\0')
+    hash.update(await readFile(path))
+    hash.update('\0')
+  }
+  return hash.digest('hex')
+}
+
+async function cachedIntegrationFingerprint(bundleDir) {
+  try {
+    const [fingerprint] = await Promise.all([
+      readFile(join(bundleDir, DEV_INTEGRATION_FINGERPRINT_FILE), 'utf8'),
+      readFile(join(bundleDir, 'catalog.json'), 'utf8'),
+    ])
+    return fingerprint.trim()
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return null
+    throw error
+  }
+}
+
+export async function prepareDevIntegrationBundles(repoRoot, paths) {
+  const fingerprint = await integrationBundleDevFingerprint(repoRoot)
+  const cached = await cachedIntegrationFingerprint(paths.integrationBundleDir)
+  if (cached === fingerprint) {
+    return { rebuilt: false, fingerprint }
+  }
+
+  // 只有 bundle 输入发生变化时才清理同版本的开发安装，确保 daemon
+  // 不会继续加载上一次源码对应的物理 Integration。
+  await rm(paths.integrationsPath, { recursive: true, force: true })
+  await buildIntegrationPackages({
+    root: repoRoot,
+    outDir: paths.integrationBundleDir,
+    clean: true,
+  })
+  await writeFile(
+    join(paths.integrationBundleDir, DEV_INTEGRATION_FINGERPRINT_FILE),
+    `${fingerprint}\n`,
+    'utf8',
+  )
+  return { rebuilt: true, fingerprint }
 }
 
 export function isPortAvailable(port, host = '127.0.0.1') {
@@ -206,17 +367,13 @@ export async function runDevRuntime() {
   const devEnv = buildDevEnvironment(process.env, repoRoot, port)
 
   await mkdir(paths.dataRoot, { recursive: true })
-  // Source builds keep the package version stable while Integration code can
-  // change between runs. Recreate only the development physical install so
-  // the daemon can never load a stale same-version bundle from a prior run.
-  await rm(paths.integrationsPath, { recursive: true, force: true })
-  devLog('正在准备官方 Integration bundle cache')
-  await buildIntegrationPackages({
-    root: repoRoot,
-    outDir: paths.integrationBundleDir,
-    clean: true,
-  })
-  devLog('官方 Integration bundle cache 已就绪')
+  const bundleStartedAt = Date.now()
+  devLog('正在检查官方 Integration bundle cache')
+  const bundle = await prepareDevIntegrationBundles(repoRoot, paths)
+  devLog(
+    bundle.rebuilt ? '官方 Integration bundle 已重建' : '官方 Integration bundle cache 命中，复用现有产物',
+    `耗时 ${Date.now() - bundleStartedAt}ms`,
+  )
 
   if (port === startPort) {
     console.info(`[AgentLens] 开发运行时端口：${port}`)
