@@ -566,8 +566,9 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
             }}
           />
         : <code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code>}
+        {configPath && <LocalPathActions path={configPath} onOpen={openPath} onError={reportPathError}/>}
       </span>
-      {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code></span>}
+      {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code><LocalPathActions path={presencePath} onOpen={openPath} onError={reportPathError}/></span>}
     </div>
 
     <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onInstall={onInstall} onAuthorize={onAuthorize}/>
