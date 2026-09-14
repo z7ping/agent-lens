@@ -42,3 +42,13 @@ test('本地路径统一复用轻量打开与复制动作', () => {
   assert.match(review, /<LocalPathActions/)
   assert.doesNotMatch(agents, /className="copy-link"/)
 })
+
+test('Markdown 资产使用宽文档模式并支持渲染与源码切换', () => {
+  assert.match(drawer, /function isMarkdownFile/)
+  assert.match(drawer, /documentPreview = previewOnly && isMarkdownFile/)
+  assert.match(drawer, /<Dialog/)
+  assert.match(drawer, /<MarkdownContent text=\{preview\.content\}/)
+  assert.match(drawer, /previewView === 'rendered'/)
+  assert.match(drawer, /previewView === 'source'/)
+  assert.match(drawer, /setPreviewView\(isMarkdownFile\(result\.name\) \? 'rendered' : 'source'\)/)
+})
