@@ -58,11 +58,14 @@ export interface ManagedDirectoryListing {
   entries: ManagedDirectoryEntry[]
 }
 
-export interface ManagedTextPreview {
+export interface ManagedFileMetadata {
   name: string
   relativePath: string
   size: number
   modifiedAt: string
+}
+
+export interface ManagedTextPreview extends ManagedFileMetadata {
   content: string
   redacted?: boolean
 }
@@ -308,6 +311,20 @@ export async function listManagedDirectory(
   })
 
   return { relativePath: target.relativePath, entries: values }
+}
+
+export async function inspectManagedFile(
+  root: string,
+  relativePath: string,
+): Promise<ManagedFileMetadata> {
+  const target = await secureExistingPath(root, relativePath)
+  if (target.kind !== 'file') throw new ManagedFileError('not-file', 'Managed path is not a file')
+  return {
+    name: basename(target.logicalPath),
+    relativePath: target.relativePath,
+    size: target.size,
+    modifiedAt: target.modifiedAt,
+  }
 }
 
 export async function previewManagedTextFile(
