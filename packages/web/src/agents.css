@@ -707,8 +707,16 @@
   border-left-color: var(--al-accent);
   background: transparent;
 }
-.agent-managed-file-document-dialog .managed-file-preview-content {
+.managed-file-preview > .copyable-code-block {
+  min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+}
+.managed-file-preview > .copyable-code-block > .managed-file-preview-content {
+  height: 100%;
+  box-sizing: border-box;
+}
+.agent-managed-file-document-dialog .managed-file-preview-content {
   margin: 0;
   padding: 24px 28px 40px;
   background: var(--al-soft-2);
