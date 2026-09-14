@@ -17,8 +17,8 @@ import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
+import { LocalPathActions } from '../components/LocalPathActions'
 import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
-import { copyText } from '../client/clipboard'
 import {
   IntegrationAdvancedActions,
   IntegrationControl,
@@ -202,29 +202,18 @@ function StateBadge({ state, value }: { state: string; value: boolean | 'unknown
   return <span className="asset-state" data-value={String(value)}>{label}</span>
 }
 
-function CopyPath({ path }: { path: string }) {
-  const { t } = useTranslation('agents')
-  const [copied, setCopied] = useState(false)
-  const copy = async () => {
-    try {
-      await copyText(path)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1200)
-    } catch {
-      setCopied(false)
-    }
-  }
-  return <Button className="copy-link" size="small" onClick={() => void copy()}>{copied ? t('copied') : t('copy')}</Button>
-}
-
 function AssetCard({
   agent,
   asset,
   onPreview,
+  onOpenPath,
+  onPathError,
 }: {
   agent: AgentOverviewDto
   asset: AgentAssetInventoryDto
   onPreview?(asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto): void
+  onOpenPath(path: string): Promise<unknown>
+  onPathError(error: unknown): void
 }) {
   const { t } = useTranslation('agents')
   const usage = assetUsageCount(agent, asset)
@@ -254,8 +243,10 @@ function AssetCard({
     </div>
     {path && binding && <div className="asset-path">
       <code title={path}>{shortPath(path)}</code>
-      <CopyPath path={path}/>
-      {onPreview && <Button className="asset-preview-link" size="small" onClick={() => onPreview(asset, binding)}>{t('managedFiles.preview')}</Button>}
+      <div className="asset-path-actions">
+        {onPreview && <Button className="asset-preview-link" size="small" onClick={() => onPreview(asset, binding)}>{t('managedFiles.preview')}</Button>}
+        <LocalPathActions path={path} onOpen={onOpenPath} onError={onPathError}/>
+      </div>
     </div>}
   </div>
 }
@@ -266,12 +257,16 @@ function AssetGroup({
   assets,
   label,
   onPreview,
+  onOpenPath,
+  onPathError,
 }: {
   agent: AgentOverviewDto
   type: string
   assets: AgentAssetInventoryDto[]
   label?: string
   onPreview?(asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto): void
+  onOpenPath(path: string): Promise<unknown>
+  onPathError(error: unknown): void
 }) {
   const { t } = useTranslation('agents')
   const [showAll, setShowAll] = useState(false)
@@ -281,7 +276,14 @@ function AssetGroup({
     summary={label ?? translatedLabel(assetTypeLabelKey, type, t)}
     summaryMeta={<span className="disclosure-count">{assets.length}</span>}
   >
-    <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset} onPreview={onPreview}/>)}</div>
+    <div className="asset-list-grid">{shown.map(asset => <AssetCard
+      key={asset.id}
+      agent={agent}
+      asset={asset}
+      onPreview={onPreview}
+      onOpenPath={onOpenPath}
+      onPathError={onPathError}
+    />)}</div>
     {assets.length > USER_ASSET_LIMIT && <Button className="show-more-button" size="small" onClick={() => setShowAll(value => !value)}>{showAll ? t('collapse') : t('showMoreItems', { count: assets.length - USER_ASSET_LIMIT })}</Button>}
   </Disclosure>
 }
@@ -450,6 +452,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const { t } = useTranslation('agents')
   const [showAllBindings, setShowAllBindings] = useState(false)
   const [managedRoot, setManagedRoot] = useState<ManagedAssetRoot | null>(null)
+  const [pathError, setPathError] = useState('')
   const [previewAsset, setPreviewAsset] = useState<{
     asset: AgentAssetInventoryDto
     binding: AgentAssetBindingDto
@@ -515,6 +518,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const openAssetPreview = (asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto) => {
     setManagedRoot(null)
     setPreviewAsset({ asset, binding })
+  }
+  const openPath = (path: string) => model.openHostPath(path)
+  const reportPathError = (error: unknown) => {
+    setPathError(error instanceof Error ? error.message : String(error))
   }
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
@@ -587,6 +594,8 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         label={t('piGuidance.projectRules')}
         assets={piProjectRuleAssets}
         onPreview={assetsAvailable ? openAssetPreview : undefined}
+        onOpenPath={openPath}
+        onPathError={reportPathError}
       />}
       {displayedUserGrouped.map(([type, assets]) => <AssetGroup
         key={type}
@@ -594,32 +603,40 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         type={type}
         assets={assets}
         onPreview={assetsAvailable ? openAssetPreview : undefined}
+        onOpenPath={openPath}
+        onPathError={reportPathError}
       />)}
       {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">{t('sections.inventoryUnavailable')}</div>}
     </section>
 
     <section className="agent-secondary">
-      {builtinAssets.length > 0 && <AssetGroup agent={agent} type="builtin" assets={builtinAssets}/>} 
+      {builtinAssets.length > 0 && <AssetGroup
+        agent={agent}
+        type="builtin"
+        assets={builtinAssets}
+        onOpenPath={openPath}
+        onPathError={reportPathError}
+      />} 
       <Disclosure
         className="disclosure-group"
         summary={t('sections.runtimeConfig')}
         summaryMeta={<span className="disclosure-count">{runtimeConfigCount}</span>}
       >
         <div className="runtime-config-list">
-          {installation?.executable && <div className="runtime-config-row"><span>{t('sections.executable')}</span><code>{installation.executable}</code><CopyPath path={installation.executable}/></div>}
+          {installation?.executable && <div className="runtime-config-row"><span>{t('sections.executable')}</span><code>{installation.executable}</code><LocalPathActions path={installation.executable} onOpen={openPath} onError={reportPathError}/></div>}
           {installation?.configRoot && <div className="runtime-config-row">
             <span>{t('sections.config')}</span>
             <code>{installation.configRoot}</code>
-            <CopyPath path={installation.configRoot}/>
             {assetsAvailable && <Button size="small" onClick={() => { setPreviewAsset(null); setManagedRoot('config') }}>{t('sections.browse')}</Button>}
+            <LocalPathActions path={installation.configRoot} onOpen={openPath} onError={reportPathError}/>
           </div>}
           {installation?.dataRoot && <div className="runtime-config-row">
             <span>{t('sections.data')}</span>
             <code>{installation.dataRoot}</code>
-            <CopyPath path={installation.dataRoot}/>
             {assetsAvailable && <Button size="small" onClick={() => { setPreviewAsset(null); setManagedRoot('data') }}>{t('sections.browse')}</Button>}
+            <LocalPathActions path={installation.dataRoot} onOpen={openPath} onError={reportPathError}/>
           </div>}
-          {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="runtime-config-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
+          {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="runtime-config-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code><LocalPathActions path={binding.path} onOpen={openPath} onError={reportPathError}/></div> : null)}
           {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noRuntimeConfig')}</div>}
         </div>
         {bindings.length > RUNTIME_CONFIG_PATH_LIMIT && <Button className="show-more-button" size="small" onClick={() => setShowAllBindings(value => !value)}>{showAllBindings ? t('collapse') : t('sections.showMorePaths', { count: bindings.length - RUNTIME_CONFIG_PATH_LIMIT })}</Button>}
@@ -640,6 +657,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         onRemove={onRemove}
       />
     </section>
+    {pathError && <div className="agent-path-error" role="alert"><span>{pathError}</span><button type="button" onClick={() => setPathError('')}>{t('dismiss')}</button></div>}
     {managedRoot && installation && managedRootPath && <AgentManagedFilesDrawer
       open
       model={model}
