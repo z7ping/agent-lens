@@ -14,7 +14,7 @@ test('Desktop 在主窗口创建前注册宿主请求适配', async () => {
   assert.ok(mainImport > bridgeImport)
 })
 
-test('Desktop 只接管项目目录 API，并由 Electron 主进程持有原生选择器', async () => {
+test('Desktop 由主进程接管宿主能力并持有原生目录选择器', async () => {
   const bridge = await readFile(bridgePath, 'utf8')
   assert.match(bridge, /\/api\/v1\/pi-live\/project-directory/)
   assert.match(bridge, /webRequest\.onBeforeSendHeaders/)
