@@ -178,9 +178,11 @@ export class AgentLensApi {
     installationId: string,
     root: ManagedAssetRoot,
     path = '',
+    bindingId?: string,
   ): Promise<ManagedAssetDirectoryResponseDto> {
     const params = new URLSearchParams({ installationId, root })
     if (path) params.set('path', path)
+    if (bindingId) params.set('bindingId', bindingId)
     return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`)
   }
   managedAssetFile(
@@ -188,8 +190,10 @@ export class AgentLensApi {
     installationId: string,
     root: ManagedAssetRoot,
     path: string,
+    bindingId?: string,
   ): Promise<ManagedAssetFilePreviewResponseDto> {
     const params = new URLSearchParams({ installationId, root, path })
+    if (bindingId) params.set('bindingId', bindingId)
     return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`)
   }
   integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
@@ -361,11 +365,15 @@ export class AgentLensApi {
     return requestJson(`/api/v1/backups/${encodeURIComponent(id)}/verify`, { method: 'POST' })
   }
 
-  openHostDirectory(path: string): Promise<{ opened: boolean }> {
-    return requestJson('/api/v1/host/open-directory', {
+  openHostPath(path: string): Promise<{ opened: boolean; action?: 'opened' | 'revealed' }> {
+    return requestJson('/api/v1/host/open-path', {
       method: 'POST',
-      headers: { 'X-AgentLens-Host-Open-Directory-Path': encodeURIComponent(path) },
+      headers: { 'X-AgentLens-Host-Open-Path-Path': encodeURIComponent(path) },
     })
+  }
+
+  openHostDirectory(path: string): Promise<{ opened: boolean; action?: 'opened' | 'revealed' }> {
+    return this.openHostPath(path)
   }
 
   backupRestorePreview(id: string): Promise<BackupRestorePreviewResponseDto> {

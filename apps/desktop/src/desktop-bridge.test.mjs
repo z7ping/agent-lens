@@ -14,7 +14,7 @@ test('Desktop 在主窗口创建前注册宿主请求适配', async () => {
   assert.ok(mainImport > bridgeImport)
 })
 
-test('Desktop 只接管项目目录 API，并由 Electron 主进程持有原生选择器', async () => {
+test('Desktop 由主进程接管宿主能力并持有原生目录选择器', async () => {
   const bridge = await readFile(bridgePath, 'utf8')
   assert.match(bridge, /\/api\/v1\/pi-live\/project-directory/)
   assert.match(bridge, /webRequest\.onBeforeSendHeaders/)
@@ -29,14 +29,17 @@ test('Desktop 只接管项目目录 API，并由 Electron 主进程持有原生�
   assert.match(bridge, /encodeURIComponent\(cwd\)/)
 })
 
-test('Desktop 只为受信任渲染器打开已存在的绝对目录', async () => {
+test('Desktop 只为受信任渲染器打开本地目录或定位本地文件', async () => {
   const bridge = await readFile(bridgePath, 'utf8')
+  assert.match(bridge, /\/api\/v1\/host\/open-path/)
   assert.match(bridge, /\/api\/v1\/host\/open-directory/)
-  assert.match(bridge, /HOST_OPEN_DIRECTORY_PATH_HEADER/)
+  assert.match(bridge, /HOST_OPEN_PATH_PATH_HEADER/)
   assert.match(bridge, /rendererOrigin\(contents\) !== trustedOrigin/)
   assert.match(bridge, /isAbsolute\(normalized\)/)
   assert.match(bridge, /metadata\.isDirectory\(\)/)
+  assert.match(bridge, /metadata\.isFile\(\)/)
   assert.match(bridge, /shell\.openPath\(normalized\)/)
+  assert.match(bridge, /shell\.showItemInFolder\(normalized\)/)
   assert.doesNotMatch(bridge, /shell\.openExternal/)
 })
 

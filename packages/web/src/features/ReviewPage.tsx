@@ -21,6 +21,7 @@ import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { LocalPathActions } from '../components/LocalPathActions'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -955,6 +956,7 @@ export function ReviewPage({
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [forkingPiSessionId, setForkingPiSessionId] = useState('')
   const [piForkError, setPiForkError] = useState<{ sessionId: string; message: string } | null>(null)
+  const [pathError, setPathError] = useState('')
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLDivElement>(null)
@@ -1438,7 +1440,20 @@ export function ReviewPage({
             { label: t('local.header.startTime'), value: formatDateTime(taskDetailModel.startedAt) },
             { label: t('local.header.endTime'), value: formatDateTime(taskDetailModel.endedAt) },
             { label: t('local.header.duration'), value: duration(detail.durationMs) },
-            ...(taskDetailModel.workspacePath ? [{ label: t('local.header.workspace'), value: <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code> }] : []),
+            ...(taskDetailModel.workspacePath ? [{
+              label: t('local.header.workspace'),
+              value: <span className="local-path-value">
+                <code title={taskDetailModel.workspacePath}>{taskDetailModel.workspacePath}</code>
+                <LocalPathActions
+                  path={taskDetailModel.workspacePath}
+                  onOpen={path => {
+                    setPathError('')
+                    return model.openHostPath(path)
+                  }}
+                  onError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
+                />
+              </span>,
+            }] : []),
             ...taskDetailModel.metrics.filter(metric => metric.label !== t('local.interaction.metricSpan')).map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
           ] : []}
           actions={<>
@@ -1462,6 +1477,7 @@ export function ReviewPage({
           onKeyDownCapture={noteReaderUserIntent}
         >
           {review.error && <div className="page-error">{review.error}</div>}
+          {pathError && <div className="page-error" role="alert">{pathError}</div>}
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
 

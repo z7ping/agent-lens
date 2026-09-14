@@ -1,3 +1,4 @@
+import { lstat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   AgentIntegrationRuntimeStatus,
@@ -17,6 +18,7 @@ import {
   isEnvironmentSecretFileName,
   isProtectedRuntimeDataFile,
   isSensitiveFileName,
+  inspectManagedFile,
   listManagedDirectory,
   previewManagedTextFile,
 } from '@agent-lens/source-support'
@@ -30,7 +32,9 @@ function rootPathForInstallation(
   installation: AgentInstallation,
   root: ManagedAssetRoot,
 ): string | undefined {
-  return root === 'config' ? installation.configRoot : installation.dataRoot
+  if (root === 'config') return installation.configRoot
+  if (root === 'data') return installation.dataRoot
+  return undefined
 }
 
 async function assertAssetsCapability(
@@ -52,12 +56,39 @@ async function managedRoot(
     productId: string
     installationId: string
     root: ManagedAssetRoot
+    bindingId?: string
   },
 ): Promise<string> {
   const installation = await storage.repositories.installations.get(input.installationId)
   if (!installation || installation.productId !== input.productId) {
     throw httpError(404, 'installation not found for integration')
   }
+
+  if (input.root === 'binding') {
+    const bindingId = input.bindingId?.trim()
+    if (!bindingId) throw badRequest('bindingId is required for binding root')
+    if (!storage.assetInventory) throw httpError(503, 'asset inventory is unavailable')
+
+    const entry = (await storage.assetInventory.listByInstallation(input.installationId))
+      .find(item => item.binding.id === bindingId)
+    const bindingPath = entry?.binding.path
+    if (!entry || !bindingPath) throw httpError(404, 'asset binding path is unavailable')
+
+    try {
+      const meta = await lstat(bindingPath)
+      if (meta.isSymbolicLink()) throw httpError(403, 'asset binding symbolic links are not previewable')
+    } catch (error) {
+      if (error && typeof error === 'object' && 'status' in error) throw error
+      const code = error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : ''
+      if (code === 'ENOENT') throw httpError(404, 'asset binding path does not exist')
+      if (code === 'EACCES' || code === 'EPERM') throw httpError(403, 'asset binding path is not readable')
+      throw error
+    }
+    return bindingPath
+  }
+
   const rootPath = rootPathForInstallation(installation, input.root)
   if (!rootPath) throw httpError(404, `${input.root} root is unavailable`)
   return rootPath
@@ -107,6 +138,7 @@ export async function readManagedAssetDirectory(
     installationId: string
     root: ManagedAssetRoot
     relativePath?: string
+    bindingId?: string
   },
 ): Promise<ManagedAssetDirectoryResponseDto> {
   const rootPath = await managedRoot(storage, input)
@@ -134,10 +166,19 @@ export async function readManagedAssetFile(
     installationId: string
     root: ManagedAssetRoot
     relativePath: string
+    bindingId?: string
   },
 ): Promise<ManagedAssetFilePreviewResponseDto> {
   const rootPath = await managedRoot(storage, input)
-  if (!input.relativePath.trim()) throw badRequest('file path is required')
+  if (input.root !== 'binding' && !input.relativePath.trim()) throw badRequest('file path is required')
+
+  let metadata
+  try {
+    metadata = await inspectManagedFile(rootPath, input.relativePath)
+  } catch (error) {
+    if (error instanceof ManagedFileError) throw managedFileHttpError(error)
+    throw error
+  }
 
   try {
     const preview = await previewManagedTextFile(rootPath, input.relativePath)
@@ -148,12 +189,37 @@ export async function readManagedAssetFile(
       rootPath,
       relativePath: preview.relativePath,
       name: preview.name,
+      kind: 'file',
       size: preview.size,
       modifiedAt: preview.modifiedAt,
+      previewStatus: preview.redacted ? 'redacted' : 'readable',
       content: preview.content,
+      ...(preview.redacted ? { redacted: true } : {}),
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
     }
   } catch (error) {
+    if (error instanceof ManagedFileError && (
+      error.code === 'sensitive'
+      || error.code === 'protected-data'
+      || error.code === 'too-large'
+      || error.code === 'binary'
+      || error.code === 'unreadable'
+    )) {
+      return {
+        productId: input.productId,
+        installationId: input.installationId,
+        root: input.root,
+        rootPath,
+        relativePath: metadata.relativePath,
+        name: metadata.name,
+        kind: 'file',
+        size: metadata.size,
+        modifiedAt: metadata.modifiedAt,
+        previewStatus: 'metadata-only',
+        blockedReason: error.code,
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
+      }
+    }
     if (error instanceof ManagedFileError) throw managedFileHttpError(error)
     throw error
   }
@@ -176,7 +242,9 @@ function routeMatch(pathname: string): { productId: string; kind: 'files' | 'fil
 
 function queryRoot(url: URL): ManagedAssetRoot {
   const root = url.searchParams.get('root')
-  if (root !== 'config' && root !== 'data') throw badRequest('root must be config or data')
+  if (root !== 'config' && root !== 'data' && root !== 'binding') {
+    throw badRequest('root must be config, data or binding')
+  }
   return root
 }
 
@@ -201,6 +269,7 @@ export async function handleManagedAssetFilesRequest(
   if (!installationId) throw badRequest('installationId is required')
   const root = queryRoot(url)
   const relativePath = url.searchParams.get('path') ?? ''
+  const bindingId = url.searchParams.get('bindingId')?.trim() || undefined
 
   const body = route.kind === 'files'
     ? await readManagedAssetDirectory(storage, {
@@ -208,12 +277,14 @@ export async function handleManagedAssetFilesRequest(
       installationId,
       root,
       relativePath,
+      ...(bindingId ? { bindingId } : {}),
     })
     : await readManagedAssetFile(storage, {
       productId: route.productId,
       installationId,
       root,
       relativePath,
+      ...(bindingId ? { bindingId } : {}),
     })
 
   writeJson(response, 200, body)

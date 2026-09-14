@@ -12,12 +12,15 @@ import {
 const DEFAULT_PORT = 56789
 const HOST_PICKER_HEADER = 'X-AgentLens-Host-Picker'
 const HOST_PROJECT_DIRECTORY_HEADER = 'X-AgentLens-Host-Project-Directory'
+const HOST_OPEN_PATH_PATH_HEADER = 'X-AgentLens-Host-Open-Path-Path'
+const HOST_OPEN_PATH_RESULT_HEADER = 'X-AgentLens-Host-Open-Path-Result'
 const HOST_OPEN_DIRECTORY_PATH_HEADER = 'X-AgentLens-Host-Open-Directory-Path'
 const HOST_OPEN_DIRECTORY_RESULT_HEADER = 'X-AgentLens-Host-Open-Directory-Result'
 const PROJECT_DIRECTORY_PICKER = 'project-directory'
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const trustedOrigin = `http://127.0.0.1:${port}`
 const projectDirectoryUrl = `${trustedOrigin}/api/v1/pi-live/project-directory`
+const openPathUrl = `${trustedOrigin}/api/v1/host/open-path`
 const openDirectoryUrl = `${trustedOrigin}/api/v1/host/open-directory`
 let pendingSelection = null
 
@@ -43,14 +46,20 @@ function headerValue(headers, name) {
   return typeof match?.[1] === 'string' ? match[1] : undefined
 }
 
-async function openDirectory(path) {
+async function openLocalPath(path) {
   const normalized = path.trim()
   if (!normalized || !isAbsolute(normalized)) return 'invalid-path'
   try {
     const metadata = await stat(normalized)
-    if (!metadata.isDirectory()) return 'not-directory'
-    const error = await shell.openPath(normalized)
-    return error ? `open-error:${encodeURIComponent(error)}` : 'opened'
+    if (metadata.isDirectory()) {
+      const error = await shell.openPath(normalized)
+      return error ? `open-error:${encodeURIComponent(error)}` : 'opened'
+    }
+    if (metadata.isFile()) {
+      shell.showItemInFolder(normalized)
+      return 'revealed'
+    }
+    return 'unsupported-path'
   } catch {
     return 'missing'
   }
@@ -73,7 +82,7 @@ function selectProjectDirectory(owner) {
 
 function registerDesktopHostRequests() {
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: [projectDirectoryUrl, openDirectoryUrl] },
+    { urls: [projectDirectoryUrl, openPathUrl, openDirectoryUrl] },
     (details, callback) => {
       if (details.method !== 'POST') {
         callback({ requestHeaders: details.requestHeaders })
@@ -86,25 +95,29 @@ function registerDesktopHostRequests() {
         return
       }
 
-      if (details.url === openDirectoryUrl) {
-        const encodedPath = headerValue(details.requestHeaders, HOST_OPEN_DIRECTORY_PATH_HEADER)
+      if (details.url === openPathUrl || details.url === openDirectoryUrl) {
+        const generic = details.url === openPathUrl
+        const encodedPath = headerValue(
+          details.requestHeaders,
+          generic ? HOST_OPEN_PATH_PATH_HEADER : HOST_OPEN_DIRECTORY_PATH_HEADER,
+        )
         let path = ''
         try {
           path = encodedPath ? decodeURIComponent(encodedPath).trim() : ''
         } catch {
           path = ''
         }
-        void openDirectory(path).then(result => {
+        void openLocalPath(path).then(result => {
           callback({
             requestHeaders: {
               ...details.requestHeaders,
-              [HOST_OPEN_DIRECTORY_RESULT_HEADER]: result,
+              [generic ? HOST_OPEN_PATH_RESULT_HEADER : HOST_OPEN_DIRECTORY_RESULT_HEADER]: result,
             },
           })
         }, () => callback({
           requestHeaders: {
             ...details.requestHeaders,
-            [HOST_OPEN_DIRECTORY_RESULT_HEADER]: 'open-error',
+            [generic ? HOST_OPEN_PATH_RESULT_HEADER : HOST_OPEN_DIRECTORY_RESULT_HEADER]: 'open-error',
           },
         }))
         return

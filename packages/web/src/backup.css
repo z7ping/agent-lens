@@ -277,6 +277,7 @@
 
 .backup-agent-row-path code {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--al-muted-2);
   font-family: var(--font-mono);
@@ -790,7 +791,8 @@
 }
 
 .preview-file { align-items: flex-start; flex-wrap: wrap; }
-.preview-file code { flex-basis: calc(100% - 90px); }
+.preview-file code { flex: 1 1 260px; }
+.preview-file .local-path-actions { margin-left: auto; }
 .preview-file small { width: 100%; padding-left: 2px; color: var(--al-danger); font-size: 12px; }
 
 .preview-summary {
@@ -861,4 +863,3 @@
   color: var(--al-muted);
   font-size: 12px;
 }
-

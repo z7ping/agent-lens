@@ -1,6 +1,6 @@
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
-export type ManagedAssetRoot = 'config' | 'data'
+export type ManagedAssetRoot = 'config' | 'data' | 'binding'
 
 export interface ManagedAssetFileEntryDto {
   name: string
@@ -26,6 +26,15 @@ export interface ManagedAssetDirectoryResponseDto {
   }
 }
 
+export type ManagedAssetPreviewStatus = 'readable' | 'redacted' | 'metadata-only'
+
+export type ManagedAssetPreviewBlockedReason =
+  | 'sensitive'
+  | 'protected-data'
+  | 'too-large'
+  | 'binary'
+  | 'unreadable'
+
 export interface ManagedAssetFilePreviewResponseDto {
   productId: string
   installationId: string
@@ -33,9 +42,13 @@ export interface ManagedAssetFilePreviewResponseDto {
   rootPath: string
   relativePath: string
   name: string
+  kind: 'file'
   size: number
   modifiedAt: string
-  content: string
+  previewStatus: ManagedAssetPreviewStatus
+  blockedReason?: ManagedAssetPreviewBlockedReason
+  content?: string
+  redacted?: boolean
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
   }
