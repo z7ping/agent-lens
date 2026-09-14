@@ -338,39 +338,39 @@ function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
     <div className="pi-guidance-list">
       {projectRules.length
         ? <div className="pi-guidance-item" data-tone="success">
-            <UiIcon name="check" size={15}/>
+            <UiIcon name="check" size={16}/>
             <span><b>{t('piGuidance.projectRulesReadyTitle', { count: projectRules.length })}</b></span>
           </div>
         : <div className="pi-guidance-item" data-tone="warning">
-            <UiIcon name="alert" size={15}/>
+            <UiIcon name="alert" size={16}/>
             <span><b>{t('piGuidance.noProjectRulesTitle')}</b><small>{t('piGuidance.noProjectRulesDescription')}</small></span>
           </div>}
       {defaultModels.length
         ? <div className="pi-guidance-item" data-tone="success">
-            <UiIcon name="check" size={15}/>
+            <UiIcon name="check" size={16}/>
             <span><b>{t('piGuidance.defaultModelReadyTitle')}</b><small>{defaultModels.map(asset => asset.canonicalName).slice(0, 3).join(' · ')}</small></span>
           </div>
         : <div className="pi-guidance-item" data-tone="neutral">
-            <UiIcon name="exclamation" size={15}/>
+            <UiIcon name="exclamation" size={16}/>
             <span><b>{t('piGuidance.noDefaultModelTitle')}</b><small>{t('piGuidance.noDefaultModelDescription')}</small></span>
           </div>}
       {skills.length
         ? <div className="pi-guidance-item" data-tone={discoverableSkills.length ? 'success' : 'neutral'}>
-            <UiIcon name={discoverableSkills.length ? 'check' : 'exclamation'} size={15}/>
+            <UiIcon name={discoverableSkills.length ? 'check' : 'exclamation'} size={16}/>
             <span><b>{t('piGuidance.skillsReadyTitle', { count: skills.length })}</b><small>{t('piGuidance.skillsDiscoverable', { count: discoverableSkills.length })}</small></span>
           </div>
         : <div className="pi-guidance-item" data-tone="neutral">
-            <UiIcon name="exclamation" size={15}/>
+            <UiIcon name="exclamation" size={16}/>
             <span><b>{t('piGuidance.noSkillsTitle')}</b></span>
           </div>}
       {uncertainExtensions.length > 0
         ? <div className="pi-guidance-item" data-tone="neutral">
-            <UiIcon name="exclamation" size={15}/>
+            <UiIcon name="exclamation" size={16}/>
             <span><b>{t('piGuidance.extensionsUnverifiedTitle', { count: uncertainExtensions.length })}</b></span>
           </div>
         : packageResources.length > 0
           ? <div className="pi-guidance-item" data-tone="success">
-              <UiIcon name="check" size={15}/>
+              <UiIcon name="check" size={16}/>
               <span><b>{t('piGuidance.packageResourcesTitle', { count: packageResources.length })}</b></span>
             </div>
           : null}

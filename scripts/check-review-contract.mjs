@@ -12,7 +12,7 @@ const taskDetailCss = readFileSync('packages/web/src/task-detail.css', 'utf8')
 const taskSessionCss = readFileSync('packages/web/src/task-session-view.css', 'utf8')
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
-const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')
+const officialZhCn = `${readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')}\n${readFileSync('packages/web/src/i18n/zh-CN/review.ts', 'utf8')}`
 
 if (!reviewPage.includes("t('local.roundNav.newRecords')") || !officialZhCn.includes("newRecords: '有新记录'")) {
   throw new Error('正式任务复盘缺少国际化新记录提示')

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 
 const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThinking, taskToolGroup, taskToolRow, taskDetailModel, taskCenterCss, taskDetailCss, taskSessionCss, reviewPage, page, piComposer, piTaskRound, piTaskProjection, hubPage, history, piNative, client, css, http, runtime, workerHost, workerEntry, inProcessHost, sdkLoader, sdkAdapter, runtimePackage, coreObservation, timelineProtocol] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
@@ -39,7 +39,13 @@ const workspaceSidebar = await readFile(new URL('../packages/web/src/components/
 const workspacePrimaryNavigation = await readFile(new URL('../packages/web/src/components/WorkspacePrimaryNavigation.tsx', import.meta.url), 'utf8')
 const resumeResolver = await readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8')
 const piLiveProtocol = await readFile(new URL('../packages/protocol/src/pi-live.ts', import.meta.url), 'utf8')
-const officialZhCn = await readFile(new URL('../packages/web/src/i18n/official-zh-CN.ts', import.meta.url), 'utf8')
+const zhCnDirectory = new URL('../packages/web/src/i18n/zh-CN/', import.meta.url)
+const officialZhCn = (await Promise.all([
+  readFile(new URL('../packages/web/src/i18n/official-zh-CN.ts', import.meta.url), 'utf8'),
+  ...(await readdir(zhCnDirectory))
+    .filter(file => file.endsWith('.ts'))
+    .map(file => readFile(new URL(file, zhCnDirectory), 'utf8')),
+])).join('\n')
 
 const failures = []
 const requireText = (source, pattern, label) => { if (!pattern.test(source)) failures.push(label) }

@@ -6,7 +6,11 @@ const virtualRound = readFileSync('packages/web/src/components/VirtualRoundMount
 const diagnostics = readFileSync('packages/web/src/components/AgentInsightsRail.tsx', 'utf8')
 const responsive = readFileSync('packages/web/src/agent-insights-responsive.css', 'utf8')
 const main = readFileSync('packages/web/src/main.tsx', 'utf8')
-const officialZhCn = readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')
+const officialZhCn = [
+  readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8'),
+  readFileSync('packages/web/src/i18n/zh-CN/backup.ts', 'utf8'),
+  readFileSync('packages/web/src/i18n/zh-CN/agents.ts', 'utf8'),
+].join('\n')
 
 for (const required of [
   "const [success, setSuccess] = useState('')",

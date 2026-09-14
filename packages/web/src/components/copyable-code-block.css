@@ -20,7 +20,7 @@
   background: color-mix(in srgb, var(--al-surface) 92%, transparent);
   box-shadow: 0 1px 3px rgb(16 24 40 / .08);
   color: var(--al-muted);
-  font: 600 11px/1 var(--font-ui);
+  font: 600 12px/1 var(--font-ui);
   cursor: pointer;
   opacity: .82;
   transition: color .15s ease, background-color .15s ease, border-color .15s ease, opacity .15s ease;

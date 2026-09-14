@@ -167,7 +167,7 @@ if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentRes
 if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
   || !css.backup.includes('.backup-topbar-controls')
   || !css.backup.includes('.backup-assets-surface')
-  || !css.backup.includes('.backup-scope-summary')
+  || !css.backup.includes('.backup-asset-overview')
   || !css.backup.includes('.backup-agent-row')
   || !css.backup.includes('.backup-snapshot-list')
   || !css.backup.includes('.snapshot-builder')

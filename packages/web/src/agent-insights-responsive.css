@@ -67,7 +67,8 @@
 .agent-diagnostic-unknown .agent-coverage-title small { margin-left: 0; padding-top: 1px; white-space: nowrap; }
 .agent-diagnostic-unknown > .disclosure-group { margin-top: 3px; border-top-color: color-mix(in srgb, var(--al-warning) 20%, var(--al-line)); }
 .agent-diagnostic-unknown > .disclosure-group > summary { min-height: 34px; padding-inline: 4px; gap: 8px; }
-.agent-diagnostic-unknown > .disclosure-group > .agent-coverage-list { gap: 6px; max-height: 320px; overflow-y: auto; padding-top: 4px; padding-right: 2px; }
+.agent-diagnostic-unknown > .disclosure-group > .ui-disclosure-body { max-height: 320px; overflow-y: auto; padding-top: 4px; padding-right: 2px; }
+.agent-diagnostic-unknown > .disclosure-group .agent-coverage-list { gap: 6px; }
 
 .agent-coverage-list { display: grid; gap: 8px; }
 .agent-coverage-row { padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 9px; background: var(--al-soft-2); }

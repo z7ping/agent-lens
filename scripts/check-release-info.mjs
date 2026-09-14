@@ -9,6 +9,7 @@ const webUpdatePath = 'packages/web/src/client/update.ts'
 const packagePath = 'packages/web/package.json'
 const changelogPath = 'CHANGELOG.md'
 const officialZhCnPath = 'packages/web/src/i18n/official-zh-CN.ts'
+const releaseZhCnPath = 'packages/web/src/i18n/zh-CN/release-errors.ts'
 
 const app = readFileSync(appPath, 'utf8')
 const sidebar = readFileSync(sidebarPath, 'utf8')
@@ -18,7 +19,7 @@ const css = readFileSync(releaseCssPath, 'utf8')
 const webUpdate = readFileSync(webUpdatePath, 'utf8')
 const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'))
 const changelog = readFileSync(changelogPath, 'utf8')
-const officialZhCn = readFileSync(officialZhCnPath, 'utf8')
+const officialZhCn = `${readFileSync(officialZhCnPath, 'utf8')}\n${readFileSync(releaseZhCnPath, 'utf8')}`
 
 if (!app.includes("import { WorkspaceSidebar } from './components/WorkspaceSidebar'")) {
   throw new Error('正式 Web Shell 必须接入统一左侧工作栏')

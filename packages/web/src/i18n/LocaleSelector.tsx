@@ -63,7 +63,7 @@ export function LocaleSelector() {
               <b>{pack.name}</b>
               <small>{pack.locale}</small>
             </span>
-            {active && <UiIcon name="check" size={15}/>}
+            {active && <UiIcon name="check" size={16}/>}
           </button>
         })}
       </div>

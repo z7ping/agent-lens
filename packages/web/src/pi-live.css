@@ -66,7 +66,7 @@
 
 .pi-live-disconnected { color: var(--al-warning); }
 .pi-live-header-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pi-live-header-branch { max-width: 220px; color: var(--al-muted); font: 11px/1.4 var(--font-mono); }
+.pi-live-header-branch { max-width: 220px; color: var(--al-muted); font: 12px/1.4 var(--font-mono); }
 .pi-live-header-branch::before { content: "·"; margin-right: 6px; color: var(--al-line-strong); }
 
 .pi-live-startup-spotlight { margin: 18px 0 14px; }
