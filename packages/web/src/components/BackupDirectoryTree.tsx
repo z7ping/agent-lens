@@ -1,5 +1,6 @@
 import type { BackupDataRootSummaryDto, BackupDirectoryNodeDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
+import { LocalPathActions } from './LocalPathActions'
 import { StatusBadge, UiIcon } from './ui'
 
 function formatBytes(bytes: number): string {
@@ -35,7 +36,15 @@ function DirectoryNode({ node }: { node: BackupDirectoryNodeDto }) {
   </details>
 }
 
-export function BackupDataRootTree({ root, onCopy }: { root: BackupDataRootSummaryDto; onCopy(path: string): void }) {
+export function BackupDataRootTree({
+  root,
+  onOpen,
+  onError,
+}: {
+  root: BackupDataRootSummaryDto
+  onOpen(path: string): Promise<unknown>
+  onError(error: unknown): void
+}) {
   const { t, i18n } = useTranslation('backup')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const tree = root.tree ?? []
@@ -43,7 +52,7 @@ export function BackupDataRootTree({ root, onCopy }: { root: BackupDataRootSumma
     <header className="backup-root-tree-head">
       <StatusBadge>{root.scope === 'config' ? t('tree.configRoot') : t('tree.dataRoot')}</StatusBadge>
       <code title={root.path}>{root.path}</code>
-      <button className="backup-link-btn" onClick={() => onCopy(root.path)}>{t('tree.copyPath')}</button>
+      <LocalPathActions path={root.path} onOpen={onOpen} onError={onError}/>
     </header>
     <div className="backup-root-tree-meta">
       <span>{root.fileCount === undefined ? t('tree.filesPending') : t('tree.files', { count: root.fileCount.toLocaleString(locale) })}</span>
