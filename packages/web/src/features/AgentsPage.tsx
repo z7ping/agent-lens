@@ -217,8 +217,24 @@ function AssetCard({
 }) {
   const { t } = useTranslation('agents')
   const usage = assetUsageCount(agent, asset)
-  const binding = asset.bindings.find(item => item.path)
+  const pathBindings = asset.bindings.filter(
+    (item): item is AgentAssetBindingDto & { path: string } => Boolean(item.path),
+  )
+  const [selectedBindingId, setSelectedBindingId] = useState(pathBindings[0]?.id ?? '')
+  const binding = pathBindings.find(item => item.id === selectedBindingId) ?? pathBindings[0]
   const path = binding?.path
+  const bindingOptions = pathBindings.map(item => {
+    const scope = item.scope ? translatedLabel(assetScopeLabelKey, item.scope, t) : t('managedFiles.location')
+    const label = item.scopeRoot && (item.scope === 'project' || item.scope === 'workspace')
+      ? `${scope} · ${scopeRootName(item.scopeRoot)}`
+      : scope
+    return {
+      value: item.id,
+      label,
+      description: item.path,
+      tooltip: item.path,
+    }
+  })
   const states = summarizedStates(asset)
   const scopes = assetScopeLabels(asset, t)
   const presentationType = assetPresentationType(asset.type)
@@ -241,6 +257,16 @@ function AssetCard({
     <div className="asset-states">
       {states.length ? <>{states.slice(0, 3).map(item => <StateBadge key={item.state} state={item.state} value={item.value}/>)}{states.length > 3 && <span className="asset-more-state">+{states.length - 3}</span>}</> : <span className="asset-discovered">{t('discovered')}</span>}
     </div>
+    {pathBindings.length > 1 && binding && <div className="asset-binding-selector">
+      <SelectMenu
+        ariaLabel={t('managedFiles.location')}
+        value={binding.id}
+        options={bindingOptions}
+        variant="pill"
+        menuWidth={420}
+        onChange={setSelectedBindingId}
+      />
+    </div>}
     {path && binding && <div className="asset-path">
       <code title={path}>{shortPath(path)}</code>
       <div className="asset-path-actions">
