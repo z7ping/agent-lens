@@ -8,6 +8,13 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     newData: '有新数据',
     copy: '复制',
     copied: '已复制',
+    localPath: {
+      open: '在文件管理器中打开',
+      opening: '正在打开',
+      copy: '复制路径',
+      copied: '路径已复制',
+      copyFailed: '复制路径失败',
+    },
     retry: '重试',
     loadFailed: '加载失败',
     loadingSessions: '正在加载会话',
