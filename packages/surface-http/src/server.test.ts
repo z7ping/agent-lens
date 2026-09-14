@@ -137,6 +137,52 @@ test('HTTP surface reads and updates AgentLens-managed user source authorization
   }
 })
 
+test('HTTP host path surface preserves desktop open and reveal results', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const surface = await startHttpSurface(storage, { port: 0 })
+
+  try {
+    const base = `http://${surface.host}:${surface.port}/api/v1/host/open-path`
+
+    const opened = await fetch(base, {
+      method: 'POST',
+      headers: { 'x-agentlens-host-open-path-result': 'opened' },
+    })
+    assert.equal(opened.status, 200)
+    assert.deepEqual(await opened.json(), { opened: true, action: 'opened' })
+
+    const revealed = await fetch(base, {
+      method: 'POST',
+      headers: { 'x-agentlens-host-open-path-result': 'revealed' },
+    })
+    assert.equal(revealed.status, 200)
+    assert.deepEqual(await revealed.json(), { opened: true, action: 'revealed' })
+
+    const missing = await fetch(base, {
+      method: 'POST',
+      headers: { 'x-agentlens-host-open-path-result': 'missing' },
+    })
+    assert.equal(missing.status, 400)
+    assert.match(String((await missing.json() as { message?: string }).message), /不存在|无法访问/)
+
+    const noDesktop = await fetch(base, { method: 'POST' })
+    assert.equal(noDesktop.status, 501)
+
+    const legacy = await fetch(
+      `http://${surface.host}:${surface.port}/api/v1/host/open-directory`,
+      {
+        method: 'POST',
+        headers: { 'x-agentlens-host-open-directory-result': 'opened' },
+      },
+    )
+    assert.equal(legacy.status, 200)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
 test('HTTP relationship surface requires and forwards logicalSessionId', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
