@@ -1,6 +1,6 @@
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
-export type ManagedAssetRoot = 'config' | 'data'
+export type ManagedAssetRoot = 'config' | 'data' | 'binding'
 
 export interface ManagedAssetFileEntryDto {
   name: string
@@ -36,6 +36,7 @@ export interface ManagedAssetFilePreviewResponseDto {
   size: number
   modifiedAt: string
   content: string
+  redacted?: boolean
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
   }
