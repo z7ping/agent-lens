@@ -16,6 +16,14 @@ function managedFileStatus(error: unknown): number | undefined {
   return typeof status === 'number' ? status : undefined
 }
 
+function managedPreviewBlockedMessage(
+  reason: ManagedAssetFilePreviewResponseDto['blockedReason'],
+  t: TFunction,
+): string {
+  if (!reason) return t('managedFiles.previewUnavailable')
+  return t(`managedFiles.blockedReason.${reason}`)
+}
+
 function managedFileErrorMessage(error: unknown, t: TFunction): string {
   const status = managedFileStatus(error)
   if (status === 403) return t('managedFiles.errorForbidden')
@@ -219,6 +227,9 @@ export function AgentManagedFilesDrawer({
   const previewName = selected?.name ?? preview?.name
   const previewPath = selected?.relativePath || preview?.relativePath || rootPath
   const previewSize = selected?.size ?? preview?.size
+  const metadataOnlyMessage = preview?.previewStatus === 'metadata-only'
+    ? managedPreviewBlockedMessage(preview.blockedReason, t)
+    : ''
 
   const selectedMessage = selected?.sensitive
     ? t('managedFiles.sensitiveBlocked')
@@ -261,9 +272,15 @@ export function AgentManagedFilesDrawer({
         </div>}
         {previewLoading
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
-          : preview
+          : preview?.content !== undefined
             ? <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
-            : <div className="managed-file-preview-empty">
+            : preview?.previewStatus === 'metadata-only'
+              ? <div className="managed-file-preview-empty">
+                  <UiIcon name="exclamation" size={20}/>
+                  <span>{t('managedFiles.metadataOnly')}</span>
+                  <small>{metadataOnlyMessage}</small>
+                </div>
+              : <div className="managed-file-preview-empty">
                 <UiIcon name={selected?.sensitive ? 'alert' : 'tool-read'} size={20}/>
                 <span>{selectedMessage}</span>
                 {error && <small>{error}</small>}
