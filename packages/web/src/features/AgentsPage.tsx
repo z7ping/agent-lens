@@ -519,7 +519,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     setManagedRoot(null)
     setPreviewAsset({ asset, binding })
   }
-  const openPath = (path: string) => model.openHostPath(path)
+  const openPath = (path: string) => {
+    setPathError('')
+    return model.openHostPath(path)
+  }
   const reportPathError = (error: unknown) => {
     setPathError(error instanceof Error ? error.message : String(error))
   }
