@@ -657,7 +657,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         onRemove={onRemove}
       />
     </section>
-    {pathError && <div className="agent-path-error" role="alert"><span>{pathError}</span><button type="button" onClick={() => setPathError('')}>{t('dismiss')}</button></div>}
+    {pathError && <div className="agent-path-error" role="alert">{pathError}</div>}
     {managedRoot && installation && managedRootPath && <AgentManagedFilesDrawer
       open
       model={model}
