@@ -106,15 +106,16 @@ test('受管资产预览复用 shared managed-files 的安全边界', async () =
     })
     assert.equal(preview.content, '# instructions\n')
 
-    await assert.rejects(
-      readManagedAssetFile(storage, {
-        productId: 'pi',
-        installationId: installation.id,
-        root: 'config',
-        relativePath: '.env.local',
-      }),
-      /protected by its file name/,
-    )
+    const sensitive = await readManagedAssetFile(storage, {
+      productId: 'pi',
+      installationId: installation.id,
+      root: 'config',
+      relativePath: '.env.local',
+    })
+    assert.equal(sensitive.previewStatus, 'metadata-only')
+    assert.equal(sensitive.blockedReason, 'sensitive')
+    assert.equal(sensitive.content, undefined)
+    assert.equal(sensitive.kind, 'file')
     await assert.rejects(
       readManagedAssetDirectory(storage, {
         productId: 'pi',
@@ -201,9 +202,31 @@ test('资产绑定预览继承敏感内容脱敏规则', async () => {
       bindingId: 'binding-preview',
       relativePath: '',
     })
+    assert.equal(preview.previewStatus, 'redacted')
     assert.equal(preview.redacted, true)
-    assert.match(preview.content, /\[REDACTED\]/)
-    assert.doesNotMatch(preview.content, /secret-key-value/)
+    assert.match(preview.content ?? '', /\[REDACTED\]/)
+    assert.doesNotMatch(preview.content ?? '', /secret-key-value/)
+  })
+})
+
+test('二进制资产只返回元信息，不伪装成可读文本', async () => {
+  await withInstallation(async ({ installation, configRoot }) => {
+    const binaryPath = join(configRoot, 'asset.bin')
+    await writeFile(binaryPath, Buffer.from([0, 1, 2, 3]))
+    const storage = storageFor(installation, binaryPath)
+
+    const preview = await readManagedAssetFile(storage, {
+      productId: 'pi',
+      installationId: installation.id,
+      root: 'binding',
+      bindingId: 'binding-preview',
+      relativePath: '',
+    })
+    assert.equal(preview.previewStatus, 'metadata-only')
+    assert.equal(preview.blockedReason, 'binary')
+    assert.equal(preview.kind, 'file')
+    assert.equal(preview.size, 4)
+    assert.equal(preview.content, undefined)
   })
 })
 
