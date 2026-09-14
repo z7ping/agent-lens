@@ -183,6 +183,53 @@ test('HTTP host path surface preserves desktop open and reveal results', async (
   }
 })
 
+test('HTTP host path surface falls back to injected local host opener', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const opened: string[] = []
+  const surface = await startHttpSurface(storage, {
+    port: 0,
+    openHostPath: async path => {
+      opened.push(path)
+      return path.endsWith('.md') ? 'revealed' : 'opened'
+    },
+  })
+
+  try {
+    const base = `http://${surface.host}:${surface.port}/api/v1/host/open-path`
+    const filePath = 'C:\\work\\AGENTS.md'
+    const fileResponse = await fetch(base, {
+      method: 'POST',
+      headers: {
+        'x-agentlens-host-open-path-path': encodeURIComponent(filePath),
+      },
+    })
+    assert.equal(fileResponse.status, 200)
+    assert.deepEqual(await fileResponse.json(), { opened: true, action: 'revealed' })
+    assert.deepEqual(opened, [filePath])
+
+    const directoryPath = 'C:\\work'
+    const legacyResponse = await fetch(
+      `http://${surface.host}:${surface.port}/api/v1/host/open-directory`,
+      {
+        method: 'POST',
+        headers: {
+          'x-agentlens-host-open-directory-path': encodeURIComponent(directoryPath),
+        },
+      },
+    )
+    assert.equal(legacyResponse.status, 200)
+    assert.deepEqual(await legacyResponse.json(), { opened: true, action: 'opened' })
+    assert.deepEqual(opened, [filePath, directoryPath])
+
+    const invalid = await fetch(base, { method: 'POST' })
+    assert.equal(invalid.status, 400)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
 test('HTTP relationship surface requires and forwards logicalSessionId', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
