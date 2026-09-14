@@ -301,6 +301,8 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       loadingPreview: 'Reading file…',
       emptyDirectory: 'This directory is empty.',
       retry: 'Retry',
+      preview: 'Preview',
+      redacted: 'Redacted',
       symlink: 'Link',
       sensitive: 'Sensitive',
       noPreview: 'No preview',
