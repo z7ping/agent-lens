@@ -286,7 +286,7 @@ export function AgentManagedFilesDrawer({
           : renderDirectory('')}
       </section>}
       <section className="managed-file-preview" aria-label={t('managedFiles.previewAria')}>
-        {previewName && <div className="managed-file-preview-head">
+        {previewName && <div className="managed-file-preview-head" data-document={previewOnly || undefined}>
           <div>
             <b>{previewName}</b>
             <span>{previewPath}</span>
@@ -327,7 +327,7 @@ export function AgentManagedFilesDrawer({
     return <Dialog
       open={open}
       className="agent-managed-file-document-dialog"
-      title={t('managedFiles.title', { agent: agentName, root: rootLabel })}
+      title={previewName ?? rootLabel}
       description={rootPath}
       onClose={onClose}
     >{content}</Dialog>
