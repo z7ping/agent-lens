@@ -75,3 +75,24 @@ test('预览阻断原因与协议枚举保持同名', () => {
   assert.doesNotMatch(zhAgents, /tooLarge:/)
   assert.doesNotMatch(enAgents, /tooLarge:/)
 })
+
+test('目录型 Skill 自动落到 SKILL.md 预览', () => {
+  assert.match(drawer, /entry\.name\.toLowerCase\(\) === 'skill\.md'/)
+  assert.match(drawer, /void selectFile\(skillEntry\)/)
+})
+
+test('文件预览使用请求序号避免旧响应覆盖新选择', () => {
+  assert.match(drawer, /const previewRequestRef = useRef\(0\)/)
+  assert.match(drawer, /previewRequestRef\.current !== request/)
+})
+
+test('目录内文件统一由后端裁决正文或元信息状态', () => {
+  assert.doesNotMatch(drawer, /if \(!entry\.previewable\) return/)
+  assert.match(drawer, /model\.managedAssetFile/)
+})
+
+test('目录错误与文件预览错误互不覆盖', () => {
+  assert.match(drawer, /directoryError/)
+  assert.match(drawer, /previewError/)
+  assert.doesNotMatch(drawer, /const \[error, setError\]/)
+})
