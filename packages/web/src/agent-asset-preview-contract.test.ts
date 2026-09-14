@@ -4,6 +4,8 @@ import test from 'node:test'
 
 const agents = readFileSync(new URL('./features/AgentsPage.tsx', import.meta.url), 'utf8')
 const drawer = readFileSync(new URL('./components/AgentManagedFilesDrawer.tsx', import.meta.url), 'utf8')
+const localPathActions = readFileSync(new URL('./components/LocalPathActions.tsx', import.meta.url), 'utf8')
+const backup = readFileSync(new URL('./features/BackupPage.tsx', import.meta.url), 'utf8')
 const overlay = readFileSync(new URL('./components/ui/Overlay.tsx', import.meta.url), 'utf8')
 
 test('智能体资产列表通过现有受管文件 Drawer 打开绑定预览', () => {
@@ -25,4 +27,14 @@ test('统一 Drawer 继续持有 Escape 与焦点恢复契约', () => {
   assert.match(overlay, /event\.key === 'Escape'/)
   assert.match(overlay, /previous\?\.isConnected/)
   assert.match(overlay, /previous\.focus/)
+})
+
+test('本地路径统一复用轻量打开与复制动作', () => {
+  assert.match(localPathActions, /<IconButton/)
+  assert.match(localPathActions, /name="folder-open"/)
+  assert.match(localPathActions, /name=\{copied \? 'check' : 'copy'\}/)
+  assert.match(agents, /<LocalPathActions/)
+  assert.match(drawer, /<LocalPathActions/)
+  assert.match(backup, /<LocalPathActions/)
+  assert.doesNotMatch(agents, /className="copy-link"/)
 })
