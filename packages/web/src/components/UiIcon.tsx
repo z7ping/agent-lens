@@ -18,6 +18,7 @@ import {
   Dot,
   FileText,
   Filter,
+  FolderOpen,
   FlaskConical,
   Globe,
   GripVertical,
@@ -68,6 +69,7 @@ export type UiIconName =
   | 'exclamation'
   | 'expand'
   | 'filter'
+  | 'folder-open'
   | 'language'
   | 'menu'
   | 'moon'
@@ -117,6 +119,7 @@ const icons = {
   exclamation: CircleAlert,
   expand: Maximize2,
   filter: Filter,
+  'folder-open': FolderOpen,
   language: Globe,
   menu: Menu,
   moon: Moon,
