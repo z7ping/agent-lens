@@ -13,6 +13,9 @@ import { isMissingPathError } from './source-fs'
 const SENSITIVE_FILE_NAME = /(?:^|[._-])(auth|credentials?|secrets?|tokens?)(?:[._-]|$)|\.(?:pem|key)$|^id_(?:rsa|ed25519)$/i
 const HIGH_CONFIDENCE_SECRET = /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9._~+\/-]{24,}|\bsk-(?:ant-)?[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{20,}/i
 const CONFIG_SECRET_ASSIGNMENT = /(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|passwd|authorization|private[_-]?key)\s*["']?\s*[:=]\s*["']?(?!\$\{)[^"'\s,}\]]{6,}/i
+const SECRET_CONFIG_KEY = /^(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|passwd|authorization|private[_-]?key)$/i
+const CONFIG_SECRET_LINE = /^(\s*["']?(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|passwd|authorization|private[_-]?key)["']?\s*[:=]\s*)(.+?)(\s*(?:,|#.*)?\s*)$/gim
+const REDACTED_SECRET = '[REDACTED]'
 
 export const DEFAULT_MANAGED_FILE_PREVIEW_BYTES = 512 * 1024
 
@@ -61,6 +64,7 @@ export interface ManagedTextPreview {
   size: number
   modifiedAt: string
   content: string
+  redacted?: boolean
 }
 
 function fsErrorCode(error: unknown): string | undefined {
@@ -121,6 +125,58 @@ export function containsConfigSecretAssignment(bytes: Uint8Array): boolean {
   const sample = Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.byteLength, DEFAULT_MANAGED_FILE_PREVIEW_BYTES))
   if (sample.includes(0)) return false
   return CONFIG_SECRET_ASSIGNMENT.test(sample.toString('utf8'))
+}
+
+function redactJsonSecrets(value: unknown): { value: unknown; redacted: boolean } {
+  if (Array.isArray(value)) {
+    let redacted = false
+    const items = value.map(item => {
+      const next = redactJsonSecrets(item)
+      redacted ||= next.redacted
+      return next.value
+    })
+    return { value: items, redacted }
+  }
+  if (!value || typeof value !== 'object') return { value, redacted: false }
+
+  let redacted = false
+  const record: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (SECRET_CONFIG_KEY.test(key)) {
+      record[key] = REDACTED_SECRET
+      redacted = true
+      continue
+    }
+    const next = redactJsonSecrets(item)
+    record[key] = next.value
+    redacted ||= next.redacted
+  }
+  return { value: record, redacted }
+}
+
+export function redactKnownConfigSecrets(content: string): { content: string; redacted: boolean } {
+  const trimmed = content.trimStart()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(content.replace(/^\uFEFF/, '')) as unknown
+      const result = redactJsonSecrets(parsed)
+      if (result.redacted) {
+        return {
+          content: `${JSON.stringify(result.value, null, 2)}\n`,
+          redacted: true,
+        }
+      }
+    } catch {
+      // Non-JSON text falls through to conservative line-based redaction.
+    }
+  }
+
+  let redacted = false
+  const next = content.replace(CONFIG_SECRET_LINE, (_match, prefix: string, _value: string, suffix: string) => {
+    redacted = true
+    return `${prefix}"${REDACTED_SECRET}"${suffix}`
+  })
+  return { content: next, redacted }
 }
 
 function decodeUtf8(bytes: Uint8Array): string | null {
@@ -297,7 +353,12 @@ export async function previewManagedTextFile(
 
   const content = decodeUtf8(bytes)
   if (content === null) throw new ManagedFileError('binary', 'Managed file is not valid UTF-8 text')
-  if (containsHighConfidenceSecret(bytes) || containsConfigSecretAssignment(bytes)) {
+
+  const sanitized = redactKnownConfigSecrets(content)
+  if (containsConfigSecretAssignment(bytes) && !sanitized.redacted) {
+    throw new ManagedFileError('sensitive', 'Managed file contains an unredacted protected configuration value')
+  }
+  if (containsHighConfidenceSecret(Buffer.from(sanitized.content, 'utf8'))) {
     throw new ManagedFileError('sensitive', 'Managed file contains protected credential material')
   }
 
@@ -306,6 +367,7 @@ export async function previewManagedTextFile(
     relativePath: target.relativePath,
     size: bytes.byteLength,
     modifiedAt: target.modifiedAt,
-    content,
+    content: sanitized.content,
+    ...(sanitized.redacted ? { redacted: true } : {}),
   }
 }
