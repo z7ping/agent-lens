@@ -306,7 +306,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       metadataOnly: '仅显示文件元信息',
       blockedReason: {
         sensitive: '该文件包含受保护的敏感内容，不显示正文。',
-        protectedData: '运行时或会话数据文件不提供正文预览。',
+        'protected-data': '运行时或会话数据文件不提供正文预览。',
         tooLarge: '文件超过安全预览大小限制。',
         binary: '该文件不是可安全解析的 UTF-8 文本。',
         unreadable: '当前权限或文件状态不允许读取正文。',
