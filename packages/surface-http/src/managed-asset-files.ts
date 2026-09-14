@@ -18,6 +18,7 @@ import {
   isEnvironmentSecretFileName,
   isProtectedRuntimeDataFile,
   isSensitiveFileName,
+  inspectManagedFile,
   listManagedDirectory,
   previewManagedTextFile,
 } from '@agent-lens/source-support'
@@ -171,6 +172,14 @@ export async function readManagedAssetFile(
   const rootPath = await managedRoot(storage, input)
   if (input.root !== 'binding' && !input.relativePath.trim()) throw badRequest('file path is required')
 
+  let metadata
+  try {
+    metadata = await inspectManagedFile(rootPath, input.relativePath)
+  } catch (error) {
+    if (error instanceof ManagedFileError) throw managedFileHttpError(error)
+    throw error
+  }
+
   try {
     const preview = await previewManagedTextFile(rootPath, input.relativePath)
     return {
@@ -180,13 +189,37 @@ export async function readManagedAssetFile(
       rootPath,
       relativePath: preview.relativePath,
       name: preview.name,
+      kind: 'file',
       size: preview.size,
       modifiedAt: preview.modifiedAt,
+      previewStatus: preview.redacted ? 'redacted' : 'readable',
       content: preview.content,
       ...(preview.redacted ? { redacted: true } : {}),
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
     }
   } catch (error) {
+    if (error instanceof ManagedFileError && (
+      error.code === 'sensitive'
+      || error.code === 'protected-data'
+      || error.code === 'too-large'
+      || error.code === 'binary'
+      || error.code === 'unreadable'
+    )) {
+      return {
+        productId: input.productId,
+        installationId: input.installationId,
+        root: input.root,
+        rootPath,
+        relativePath: metadata.relativePath,
+        name: metadata.name,
+        kind: 'file',
+        size: metadata.size,
+        modifiedAt: metadata.modifiedAt,
+        previewStatus: 'metadata-only',
+        blockedReason: error.code,
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
+      }
+    }
     if (error instanceof ManagedFileError) throw managedFileHttpError(error)
     throw error
   }
