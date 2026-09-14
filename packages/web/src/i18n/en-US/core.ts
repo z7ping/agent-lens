@@ -8,6 +8,13 @@ export const englishCoreMessages: LocaleMessagesDto = {
     newData: 'New data available',
     copy: 'Copy',
     copied: 'Copied',
+    localPath: {
+      open: 'Open in file manager',
+      opening: 'Opening',
+      copy: 'Copy path',
+      copied: 'Path copied',
+      copyFailed: 'Failed to copy path',
+    },
     retry: 'Retry',
     loadFailed: 'Load failed',
     loadingSessions: 'Loading sessions',
