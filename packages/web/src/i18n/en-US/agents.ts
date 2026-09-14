@@ -302,6 +302,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       emptyDirectory: 'This directory is empty.',
       retry: 'Retry',
       preview: 'Preview',
+      location: 'Asset location',
       viewMode: 'Document view',
       rendered: 'Rendered',
       source: 'Source',
@@ -310,7 +311,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       blockedReason: {
         sensitive: 'This file contains protected sensitive material, so its contents are hidden.',
         'protected-data': 'Runtime and session data files do not expose content previews.',
-        tooLarge: 'This file exceeds the safe preview size limit.',
+        'too-large': 'This file exceeds the safe preview size limit.',
         binary: 'This file is not safely parseable UTF-8 text.',
         unreadable: 'Current permissions or file state prevent reading its contents.',
       },

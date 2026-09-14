@@ -440,6 +440,17 @@
 .asset-discovered { padding: 1px 6px; border-radius: 5px; background: var(--al-success-soft); color: var(--al-success); font-size: 12px; font-weight: 560; }
 .asset-state[data-value='false'] { background: var(--al-danger-soft); color: var(--al-danger); }
 .asset-state[data-value='unknown'] { background: var(--al-soft); color: var(--al-muted); }
+.asset-binding-selector {
+  min-width: 0;
+  margin-top: 7px;
+}
+.asset-binding-selector .select-menu-trigger {
+  max-width: 100%;
+}
+.asset-binding-selector .select-menu-trigger-copy,
+.asset-binding-selector .select-menu-trigger-label {
+  min-width: 0;
+}
 .asset-path { display: flex; min-width: 0; align-items: center; gap: 7px; margin-top: 7px; }
 .asset-path code { min-width: 0; flex: 1; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .asset-path-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; }

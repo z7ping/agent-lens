@@ -96,6 +96,7 @@ async function managedRoot(
 
 function managedFileHttpError(error: ManagedFileError): Error {
   if (error.code === 'not-found') return httpError(404, error.message)
+  if (error.code === 'not-file') return httpError(409, error.message)
   if (error.code === 'too-large') return httpError(413, error.message)
   if (error.code === 'binary' || error.code === 'protected-data') return httpError(415, error.message)
   if (

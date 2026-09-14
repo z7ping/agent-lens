@@ -302,6 +302,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       emptyDirectory: '这个目录是空的。',
       retry: '重试',
       preview: '预览',
+      location: '资产位置',
       viewMode: '文档视图',
       rendered: '渲染',
       source: '源码',
@@ -310,7 +311,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       blockedReason: {
         sensitive: '该文件包含受保护的敏感内容，不显示正文。',
         'protected-data': '运行时或会话数据文件不提供正文预览。',
-        tooLarge: '文件超过安全预览大小限制。',
+        'too-large': '文件超过安全预览大小限制。',
         binary: '该文件不是可安全解析的 UTF-8 文本。',
         unreadable: '当前权限或文件状态不允许读取正文。',
       },
