@@ -66,3 +66,12 @@ test('多绑定资产必须显式选择当前位置，路径动作与预览共�
   assert.match(agents, /onPreview\(asset, binding\)/)
   assert.doesNotMatch(agents, /asset\.bindings\.find\(item => item\.path\)/)
 })
+
+test('预览阻断原因与协议枚举保持同名', () => {
+  const zhAgents = readFileSync(new URL('./i18n/zh-CN/agents.ts', import.meta.url), 'utf8')
+  const enAgents = readFileSync(new URL('./i18n/en-US/agents.ts', import.meta.url), 'utf8')
+  assert.match(zhAgents, /'too-large':/)
+  assert.match(enAgents, /'too-large':/)
+  assert.doesNotMatch(zhAgents, /tooLarge:/)
+  assert.doesNotMatch(enAgents, /tooLarge:/)
+})
