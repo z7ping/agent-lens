@@ -52,3 +52,17 @@ test('Markdown 资产使用宽文档模式并支持渲染与源码切换', () =>
   assert.match(drawer, /previewView === 'source'/)
   assert.match(drawer, /setPreviewView\(isMarkdownFile\(result\.name\) \? 'rendered' : 'source'\)/)
 })
+
+test('绑定目标判定不再把任意 400 当成目录', () => {
+  assert.match(drawer, /managedFileStatus\(previewError\) === 409/)
+  assert.doesNotMatch(drawer, /managedFileStatus\(previewError\) === 400/)
+})
+
+test('多绑定资产必须显式选择当前位置，路径动作与预览共享同一 binding', () => {
+  assert.match(agents, /const pathBindings = asset\.bindings\.filter/)
+  assert.match(agents, /selectedBindingId/)
+  assert.match(agents, /<SelectMenu/)
+  assert.match(agents, /value=\{binding\.id\}/)
+  assert.match(agents, /onPreview\(asset, binding\)/)
+  assert.doesNotMatch(agents, /asset\.bindings\.find\(item => item\.path\)/)
+})
