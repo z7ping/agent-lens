@@ -75,6 +75,7 @@ import {
 } from './storage-maintenance.js'
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
+import { openLocalPath } from './local-path-opener.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
 const { dataRoot, profile: runtimeProfile, capabilities } = nodeRuntime
@@ -274,6 +275,7 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
   port: configuredPort,
   localePackDirectory,
   selectProjectDirectory: () => projectDirectoryPicker.select(),
+  ...(capabilities.localCapture ? { openHostPath: openLocalPath } : {}),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
   healthDetails: () => ({
     ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
