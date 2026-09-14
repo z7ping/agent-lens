@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { stat } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, isAbsolute } from 'node:path'
 
 export type LocalPathOpenAction = 'opened' | 'revealed'
 
@@ -55,7 +55,7 @@ async function launchDetached(command: string, args: readonly string[]): Promise
 
 export async function openLocalPath(path: string): Promise<LocalPathOpenAction> {
   const normalized = path.trim()
-  if (!normalized) throw new Error('目标路径无效。')
+  if (!normalized || !isAbsolute(normalized)) throw new Error('目标路径无效。')
 
   let metadata
   try {
