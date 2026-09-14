@@ -239,6 +239,10 @@ export function AgentManagedFilesDrawer({
   const previewPath = selected?.relativePath || preview?.relativePath || rootPath
   const previewSize = selected?.size ?? preview?.size
   const previewTargetPath = localPath(rootPath, selected?.relativePath ?? preview?.relativePath ?? '')
+  const openPath = (path: string) => {
+    setPathError('')
+    return model.openHostPath(path)
+  }
   const reportPathError = (reason: unknown) => {
     setPathError(reason instanceof Error ? reason.message : String(reason))
   }
@@ -267,7 +271,7 @@ export function AgentManagedFilesDrawer({
           <span>{rootLabel}</span>
           <div className="managed-files-root-path">
             <code title={rootPath}>{rootPath}</code>
-            <LocalPathActions path={rootPath} onOpen={model.openHostPath} onError={reportPathError}/>
+            <LocalPathActions path={rootPath} onOpen={openPath} onError={reportPathError}/>
           </div>
         </div>
         {error && !Object.keys(directories).length
@@ -286,7 +290,7 @@ export function AgentManagedFilesDrawer({
           <div className="managed-file-preview-facts">
             {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
             {previewSize !== undefined && <small>{t('managedFiles.bytes', { count: previewSize })}</small>}
-            <LocalPathActions path={previewTargetPath} onOpen={model.openHostPath} onError={reportPathError}/>
+            <LocalPathActions path={previewTargetPath} onOpen={openPath} onError={reportPathError}/>
           </div>
         </div>}
         {pathError && <div className="managed-file-path-error" role="alert">{pathError}</div>}
