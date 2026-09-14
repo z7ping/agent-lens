@@ -443,6 +443,7 @@
 .asset-path { display: flex; min-width: 0; align-items: center; gap: 5px; margin-top: 7px; }
 .asset-path code { min-width: 0; flex: 1; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .copy-link,
+.asset-preview-link,
 .show-more-button {
   padding-inline: 6px;
   border-color: transparent;
@@ -450,6 +451,7 @@
   color: var(--al-accent);
 }
 .copy-link:hover:not(:disabled),
+.asset-preview-link:hover:not(:disabled),
 .show-more-button:hover:not(:disabled) {
   border-color: transparent;
   background: var(--al-accent-soft);
