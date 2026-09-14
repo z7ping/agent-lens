@@ -248,3 +248,25 @@
   .ui-button-spinner { animation: none; }
   .ui-disclosure-chevron { transition: none; }
 }
+.local-path-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.local-path-actions .local-path-action {
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted);
+}
+
+.local-path-actions .local-path-action:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-soft);
+  color: var(--al-ink-2);
+}
+
+.local-path-actions .local-path-action:disabled {
+  opacity: .55;
+}
