@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
+  AgentAssetBindingDto,
   AgentAssetInventoryDto,
   AgentOverviewDto,
   CapturePolicyResponseDto,
@@ -216,10 +217,19 @@ function CopyPath({ path }: { path: string }) {
   return <Button className="copy-link" size="small" onClick={() => void copy()}>{copied ? t('copied') : t('copy')}</Button>
 }
 
-function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAssetInventoryDto }) {
+function AssetCard({
+  agent,
+  asset,
+  onPreview,
+}: {
+  agent: AgentOverviewDto
+  asset: AgentAssetInventoryDto
+  onPreview?(asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto): void
+}) {
   const { t } = useTranslation('agents')
   const usage = assetUsageCount(agent, asset)
-  const path = asset.bindings.find(item => item.path)?.path
+  const binding = asset.bindings.find(item => item.path)
+  const path = binding?.path
   const states = summarizedStates(asset)
   const scopes = assetScopeLabels(asset, t)
   const presentationType = assetPresentationType(asset.type)
@@ -242,11 +252,27 @@ function AssetCard({ agent, asset }: { agent: AgentOverviewDto; asset: AgentAsse
     <div className="asset-states">
       {states.length ? <>{states.slice(0, 3).map(item => <StateBadge key={item.state} state={item.state} value={item.value}/>)}{states.length > 3 && <span className="asset-more-state">+{states.length - 3}</span>}</> : <span className="asset-discovered">{t('discovered')}</span>}
     </div>
-    {path && <div className="asset-path"><code title={path}>{shortPath(path)}</code><CopyPath path={path}/></div>}
+    {path && binding && <div className="asset-path">
+      <code title={path}>{shortPath(path)}</code>
+      <CopyPath path={path}/>
+      {onPreview && <Button className="asset-preview-link" size="small" onClick={() => onPreview(asset, binding)}>{t('managedFiles.preview')}</Button>}
+    </div>}
   </div>
 }
 
-function AssetGroup({ agent, type, assets, label }: { agent: AgentOverviewDto; type: string; assets: AgentAssetInventoryDto[]; label?: string }) {
+function AssetGroup({
+  agent,
+  type,
+  assets,
+  label,
+  onPreview,
+}: {
+  agent: AgentOverviewDto
+  type: string
+  assets: AgentAssetInventoryDto[]
+  label?: string
+  onPreview?(asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto): void
+}) {
   const { t } = useTranslation('agents')
   const [showAll, setShowAll] = useState(false)
   const shown = showAll ? assets : assets.slice(0, USER_ASSET_LIMIT)
@@ -255,7 +281,7 @@ function AssetGroup({ agent, type, assets, label }: { agent: AgentOverviewDto; t
     summary={label ?? translatedLabel(assetTypeLabelKey, type, t)}
     summaryMeta={<span className="disclosure-count">{assets.length}</span>}
   >
-    <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset}/>)}</div>
+    <div className="asset-list-grid">{shown.map(asset => <AssetCard key={asset.id} agent={agent} asset={asset} onPreview={onPreview}/>)}</div>
     {assets.length > USER_ASSET_LIMIT && <Button className="show-more-button" size="small" onClick={() => setShowAll(value => !value)}>{showAll ? t('collapse') : t('showMoreItems', { count: assets.length - USER_ASSET_LIMIT })}</Button>}
   </Disclosure>
 }
@@ -424,6 +450,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const { t } = useTranslation('agents')
   const [showAllBindings, setShowAllBindings] = useState(false)
   const [managedRoot, setManagedRoot] = useState<ManagedAssetRoot | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<{
+    asset: AgentAssetInventoryDto
+    binding: AgentAssetBindingDto
+  } | null>(null)
   const [selectedInstallationId, setSelectedInstallationId] = useState(agent.installations[0]?.id ?? '')
   const installation = agent.installations.find(item => item.id === selectedInstallationId) ?? agent.installations[0]
   const grouped = useMemo(() => {
@@ -482,6 +512,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     + (installation?.executable ? 1 : 0)
     + (installation?.configRoot ? 1 : 0)
     + (installation?.dataRoot ? 1 : 0)
+  const openAssetPreview = (asset: AgentAssetInventoryDto, binding: AgentAssetBindingDto) => {
+    setManagedRoot(null)
+    setPreviewAsset({ asset, binding })
+  }
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
     <header className="agent-card-head">
@@ -517,6 +551,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
             onChange={value => {
               setSelectedInstallationId(value)
               setManagedRoot(null)
+              setPreviewAsset(null)
               setShowAllBindings(false)
             }}
           />
@@ -546,8 +581,20 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     <SkillLifecycle agent={agent} skills={skillAssets}/>
 
     <section className="agent-disclosures">
-      {isPi && piProjectRuleAssets.length > 0 && <AssetGroup agent={agent} type="instruction" label={t('piGuidance.projectRules')} assets={piProjectRuleAssets}/>}
-      {displayedUserGrouped.map(([type, assets]) => <AssetGroup key={type} agent={agent} type={type} assets={assets}/>)}
+      {isPi && piProjectRuleAssets.length > 0 && <AssetGroup
+        agent={agent}
+        type="instruction"
+        label={t('piGuidance.projectRules')}
+        assets={piProjectRuleAssets}
+        onPreview={assetsAvailable ? openAssetPreview : undefined}
+      />}
+      {displayedUserGrouped.map(([type, assets]) => <AssetGroup
+        key={type}
+        agent={agent}
+        type={type}
+        assets={assets}
+        onPreview={assetsAvailable ? openAssetPreview : undefined}
+      />)}
       {agent.assetInventoryStatus === 'unavailable' && <div className="muted-empty compact">{t('sections.inventoryUnavailable')}</div>}
     </section>
 
@@ -564,13 +611,13 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
             <span>{t('sections.config')}</span>
             <code>{installation.configRoot}</code>
             <CopyPath path={installation.configRoot}/>
-            {assetsAvailable && <Button size="small" onClick={() => setManagedRoot('config')}>{t('sections.browse')}</Button>}
+            {assetsAvailable && <Button size="small" onClick={() => { setPreviewAsset(null); setManagedRoot('config') }}>{t('sections.browse')}</Button>}
           </div>}
           {installation?.dataRoot && <div className="runtime-config-row">
             <span>{t('sections.data')}</span>
             <code>{installation.dataRoot}</code>
             <CopyPath path={installation.dataRoot}/>
-            {assetsAvailable && <Button size="small" onClick={() => setManagedRoot('data')}>{t('sections.browse')}</Button>}
+            {assetsAvailable && <Button size="small" onClick={() => { setPreviewAsset(null); setManagedRoot('data') }}>{t('sections.browse')}</Button>}
           </div>}
           {visibleBindings.map(({ asset, binding }) => binding.path ? <div className="runtime-config-row" key={binding.id}><span>{translatedLabel(assetTypeLabelKey, asset.type, t)}</span><code>{binding.path}</code></div> : null)}
           {!installation && !bindings.some(item => item.binding.path) && <div className="muted-empty compact">{t('sections.noRuntimeConfig')}</div>}
@@ -603,6 +650,18 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       rootLabel={managedRoot === 'config' ? t('sections.configDirectory') : t('sections.dataDirectory')}
       rootPath={managedRootPath}
       onClose={() => setManagedRoot(null)}
+    />}
+    {previewAsset?.binding.path && <AgentManagedFilesDrawer
+      open
+      model={model}
+      productId={agent.productId}
+      agentName={agentLabel(agent.sourceId, agent.displayName)}
+      installationId={previewAsset.binding.installationId}
+      root="binding"
+      bindingId={previewAsset.binding.id}
+      rootLabel={previewAsset.asset.displayName ?? previewAsset.asset.canonicalName}
+      rootPath={previewAsset.binding.path}
+      onClose={() => setPreviewAsset(null)}
     />}
   </article>
 }
