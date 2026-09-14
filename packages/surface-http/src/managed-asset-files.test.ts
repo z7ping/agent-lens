@@ -187,6 +187,30 @@ test('目录型资产绑定只允许在绑定目录内浏览', async () => {
   })
 })
 
+test('文件预览遇到目录型绑定时返回明确的 409 类型冲突', async () => {
+  await withInstallation(async ({ installation, configRoot }) => {
+    const skillRoot = join(configRoot, '..', 'project-skill-conflict')
+    await mkdir(skillRoot, { recursive: true })
+    const storage = storageFor(installation, skillRoot)
+
+    await assert.rejects(
+      readManagedAssetFile(storage, {
+        productId: 'pi',
+        installationId: installation.id,
+        root: 'binding',
+        bindingId: 'binding-preview',
+        relativePath: '',
+      }),
+      error => Boolean(
+        error
+        && typeof error === 'object'
+        && 'statusCode' in error
+        && (error as { statusCode?: unknown }).statusCode === 409
+      ),
+    )
+  })
+})
+
 test('资产绑定预览继承敏感内容脱敏规则', async () => {
   await withInstallation(async ({ installation, configRoot }) => {
     const configPath = join(configRoot, 'models.json')
