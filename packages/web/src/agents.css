@@ -476,8 +476,12 @@
 .runtime-config-list span { min-width: 72px; color: var(--al-muted); }
 .runtime-config-list code { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
 .runtime-config-row code { flex: 1 1 auto; }
-.runtime-config-row .btn,
-.runtime-config-row .local-path-actions { flex: 0 0 auto; }
+.runtime-config-row .btn { flex: 0 0 auto; }
+.runtime-config-row .local-path-actions {
+  min-width: auto;
+  flex: 0 0 auto;
+  color: inherit;
+}
 .agent-path-error {
   margin: 0 18px 12px;
   padding: 7px 9px;
