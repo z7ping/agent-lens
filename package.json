@@ -49,8 +49,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "predev": "npm run typecheck",
     "dev": "node scripts/dev-runtime.mjs",
+    "dev:check": "npm run typecheck && npm run dev",
     "cli": "npm run start --workspace @agent-lens/cli --",
     "dev:web": "npm run dev --workspace @agent-lens/web",
     "build:web": "npm run build --workspace @agent-lens/web",
