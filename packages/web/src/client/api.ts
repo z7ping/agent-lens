@@ -178,9 +178,11 @@ export class AgentLensApi {
     installationId: string,
     root: ManagedAssetRoot,
     path = '',
+    bindingId?: string,
   ): Promise<ManagedAssetDirectoryResponseDto> {
     const params = new URLSearchParams({ installationId, root })
     if (path) params.set('path', path)
+    if (bindingId) params.set('bindingId', bindingId)
     return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`)
   }
   managedAssetFile(
@@ -188,8 +190,10 @@ export class AgentLensApi {
     installationId: string,
     root: ManagedAssetRoot,
     path: string,
+    bindingId?: string,
   ): Promise<ManagedAssetFilePreviewResponseDto> {
     const params = new URLSearchParams({ installationId, root, path })
+    if (bindingId) params.set('bindingId', bindingId)
     return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`)
   }
   integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
