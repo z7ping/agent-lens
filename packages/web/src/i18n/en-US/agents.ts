@@ -306,7 +306,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       metadataOnly: 'File metadata only',
       blockedReason: {
         sensitive: 'This file contains protected sensitive material, so its contents are hidden.',
-        protectedData: 'Runtime and session data files do not expose content previews.',
+        'protected-data': 'Runtime and session data files do not expose content previews.',
         tooLarge: 'This file exceeds the safe preview size limit.',
         binary: 'This file is not safely parseable UTF-8 text.',
         unreadable: 'Current permissions or file state prevent reading its contents.',
