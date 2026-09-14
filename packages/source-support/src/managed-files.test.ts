@@ -57,9 +57,35 @@ test('managed text preview returns safe UTF-8 text and blocks sensitive content'
 
     assert.equal((await previewManagedTextFile(root, 'AGENTS.md')).content, '# instructions\n')
     await assert.rejects(previewManagedTextFile(root, '.env'), error => errorCode(error) === 'sensitive')
-    await assert.rejects(previewManagedTextFile(root, 'config.toml'), error => errorCode(error) === 'sensitive')
+    const redacted = await previewManagedTextFile(root, 'config.toml')
+    assert.equal(redacted.redacted, true)
+    assert.match(redacted.content, /\[REDACTED\]/)
+    assert.doesNotMatch(redacted.content, /super-secret-value/)
     await assert.rejects(previewManagedTextFile(root, 'binary.bin'), error => errorCode(error) === 'binary')
     await assert.rejects(previewManagedTextFile(root, 'session.jsonl'), error => errorCode(error) === 'protected-data')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('managed text preview redacts nested JSON secret fields without exposing values', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-managed-json-redaction-'))
+  try {
+    await writeFile(join(root, 'models.json'), JSON.stringify({
+      providers: {
+        openai: {
+          apiKey: 'secret-model-key',
+          headers: { authorization: 'Bearer hidden-token-value-1234567890' },
+          models: [{ id: 'gpt-test' }],
+        },
+      },
+    }), 'utf8')
+
+    const preview = await previewManagedTextFile(root, 'models.json')
+    assert.equal(preview.redacted, true)
+    assert.match(preview.content, /"apiKey": "\[REDACTED\]"/)
+    assert.match(preview.content, /"authorization": "\[REDACTED\]"/)
+    assert.doesNotMatch(preview.content, /secret-model-key|hidden-token-value/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
