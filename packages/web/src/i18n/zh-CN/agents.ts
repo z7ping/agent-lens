@@ -302,6 +302,9 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       emptyDirectory: '这个目录是空的。',
       retry: '重试',
       preview: '预览',
+      viewMode: '文档视图',
+      rendered: '渲染',
+      source: '源码',
       redacted: '已脱敏',
       metadataOnly: '仅显示文件元信息',
       blockedReason: {
