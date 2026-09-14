@@ -75,6 +75,9 @@ test('managed text preview redacts nested JSON secret fields without exposing va
       providers: {
         openai: {
           apiKey: 'secret-model-key',
+          clientSecret: 'client-secret-value',
+          token: 'plain-token-value',
+          credentials: 'credential-value',
           headers: { authorization: 'Bearer hidden-token-value-1234567890' },
           models: [{ id: 'gpt-test' }],
         },
@@ -85,7 +88,10 @@ test('managed text preview redacts nested JSON secret fields without exposing va
     assert.equal(preview.redacted, true)
     assert.match(preview.content, /"apiKey": "\[REDACTED\]"/)
     assert.match(preview.content, /"authorization": "\[REDACTED\]"/)
-    assert.doesNotMatch(preview.content, /secret-model-key|hidden-token-value/)
+    assert.match(preview.content, /"clientSecret": "\[REDACTED\]"/)
+    assert.match(preview.content, /"token": "\[REDACTED\]"/)
+    assert.match(preview.content, /"credentials": "\[REDACTED\]"/)
+    assert.doesNotMatch(preview.content, /secret-model-key|client-secret-value|plain-token-value|credential-value|hidden-token-value/)
   } finally {
     await rm(root, { recursive: true, force: true })
   }
