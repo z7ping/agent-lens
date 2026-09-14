@@ -10,7 +10,12 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalPathActions } from './LocalPathActions'
-import { Button, Drawer, UiIcon } from './ui'
+import { MarkdownContent } from './MarkdownContent'
+import { Button, Dialog, Drawer, UiIcon } from './ui'
+
+function isMarkdownFile(name: string | undefined): boolean {
+  return Boolean(name && /\.(?:md|markdown|mdown|mkd)$/i.test(name))
+}
 
 function localPath(rootPath: string, relativePath: string): string {
   if (!relativePath) return rootPath
@@ -78,6 +83,7 @@ export function AgentManagedFilesDrawer({
   const [bindingDirectory, setBindingDirectory] = useState(false)
   const [error, setError] = useState('')
   const [pathError, setPathError] = useState('')
+  const [previewView, setPreviewView] = useState<'rendered' | 'source'>('source')
   const generationRef = useRef(0)
 
   const loadDirectory = useCallback(async (path: string, generation = generationRef.current) => {
@@ -113,6 +119,7 @@ export function AgentManagedFilesDrawer({
       )
       if (generationRef.current !== generation) return
       setPreview(result)
+      setPreviewView(isMarkdownFile(result.name) ? 'rendered' : 'source')
       setError('')
     } catch (previewError) {
       if (generationRef.current !== generation) return
@@ -140,6 +147,7 @@ export function AgentManagedFilesDrawer({
     setBindingDirectory(false)
     setError('')
     setPathError('')
+    setPreviewView('source')
     if (root === 'binding') void loadBindingTarget(generation)
     else void loadDirectory('', generation)
     return () => {
@@ -165,6 +173,7 @@ export function AgentManagedFilesDrawer({
     if (!entry.accessible || entry.kind !== 'file') return
     setSelected(entry)
     setPreview(null)
+    setPreviewView(isMarkdownFile(entry.name) ? 'rendered' : 'source')
     setError('')
     if (!entry.previewable) return
 
@@ -246,6 +255,7 @@ export function AgentManagedFilesDrawer({
   const reportPathError = (reason: unknown) => {
     setPathError(reason instanceof Error ? reason.message : String(reason))
   }
+  const previewMarkdown = isMarkdownFile(previewName)
   const metadataOnlyMessage = preview?.previewStatus === 'metadata-only'
     ? managedPreviewBlockedMessage(preview.blockedReason, t)
     : ''
@@ -258,14 +268,8 @@ export function AgentManagedFilesDrawer({
         ? t('managedFiles.previewUnavailable')
         : t('managedFiles.selectFile')
 
-  return <Drawer
-    open={open}
-    className="agent-managed-files-drawer"
-    title={t('managedFiles.title', { agent: agentName, root: rootLabel })}
-    description={rootPath}
-    onClose={onClose}
-  >
-    <div className={`managed-files-layout ${previewOnly ? 'is-preview-only' : ''}`}>
+  const content = <div className={`managed-files-layout ${previewOnly ? 'is-preview-only is-document-preview' : ''}`}>
+
       {!previewOnly && <section className="managed-files-tree" aria-label={t('managedFiles.treeAria')}>
         <div className="managed-files-root">
           <span>{rootLabel}</span>
@@ -290,6 +294,10 @@ export function AgentManagedFilesDrawer({
           <div className="managed-file-preview-facts">
             {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
             {previewSize !== undefined && <small>{t('managedFiles.bytes', { count: previewSize })}</small>}
+            {previewMarkdown && preview?.content !== undefined && <div className="managed-file-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
+              <button type="button" aria-pressed={previewView === 'rendered'} onClick={() => setPreviewView('rendered')}>{t('managedFiles.rendered')}</button>
+              <button type="button" aria-pressed={previewView === 'source'} onClick={() => setPreviewView('source')}>{t('managedFiles.source')}</button>
+            </div>}
             <LocalPathActions path={previewTargetPath} onOpen={openPath} onError={reportPathError}/>
           </div>
         </div>}
@@ -297,7 +305,9 @@ export function AgentManagedFilesDrawer({
         {previewLoading
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
           : preview?.content !== undefined
-            ? <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
+            ? previewMarkdown && previewView === 'rendered'
+              ? <div className="managed-file-document-scroll"><MarkdownContent text={preview.content} className="managed-file-markdown"/></div>
+              : <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
             : preview?.previewStatus === 'metadata-only'
               ? <div className="managed-file-preview-empty">
                   <UiIcon name="exclamation" size={20}/>
@@ -312,5 +322,22 @@ export function AgentManagedFilesDrawer({
               </div>}
       </section>
     </div>
-  </Drawer>
+
+  if (previewOnly) {
+    return <Dialog
+      open={open}
+      className="agent-managed-file-document-dialog"
+      title={t('managedFiles.title', { agent: agentName, root: rootLabel })}
+      description={rootPath}
+      onClose={onClose}
+    >{content}</Dialog>
+  }
+
+  return <Drawer
+    open={open}
+    className="agent-managed-files-drawer"
+    title={t('managedFiles.title', { agent: agentName, root: rootLabel })}
+    description={rootPath}
+    onClose={onClose}
+  >{content}</Drawer>
 }
