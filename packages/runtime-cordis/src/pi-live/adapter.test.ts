@@ -59,3 +59,32 @@ test('Pi Live Adapter does not expose an invalid Runtime thinking-control descri
   const adapter = new PiLiveAdapter(service)
   assert.equal(await adapter.thinkingControl('runtime-1'), null)
 })
+
+test('Pi Live Adapter accepts unified text and large-text messages without leaking Pi-specific markers', async () => {
+  const prompts: string[] = []
+  const service = {
+    prompt: async (_runtimeSessionId: string, value: string) => { prompts.push(value) },
+    steer: async () => {},
+    followUp: async () => {},
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service)
+  assert.equal(adapter.inputCapabilities.text, 'native')
+  assert.equal(adapter.inputCapabilities.largeText, 'transform')
+  assert.equal(adapter.inputCapabilities.image, 'unsupported')
+
+  await adapter.send('runtime-1', {
+    parts: [
+      { type: 'text', text: '分析下面日志' },
+      { type: 'large-text', text: 'line 1\nline 2', lineCount: 2, charCount: 13 },
+    ],
+  })
+
+  assert.deepEqual(prompts, ['分析下面日志\n\nline 1\nline 2'])
+  await assert.rejects(
+    () => adapter.send('runtime-1', {
+      parts: [{ type: 'image', attachmentId: 'attachment-1', mimeType: 'image/png' }],
+    }),
+    /does not support Live input part: image/,
+  )
+})
