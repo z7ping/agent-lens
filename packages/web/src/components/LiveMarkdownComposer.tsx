@@ -300,6 +300,7 @@ function EditablePlugin({ disabled }: { disabled: boolean }) {
 
 function LargePastePlugin() {
   const [editor] = useLexicalComposerContext()
+  const pendingCountRef = useRef(0)
   useEffect(() => editor.registerCommand(
     PASTE_COMMAND,
     event => {
@@ -364,7 +365,9 @@ function ImagePastePlugin({
         last?.selectNext()
       }
 
-      onPendingChange?.(true)
+      const wasIdle = pendingCountRef.current === 0
+      pendingCountRef.current += pending.length
+      if (wasIdle) onPendingChange?.(true)
       void Promise.allSettled(pending.map(async item => {
         try {
           const descriptor = await uploadLiveAttachment(item.file)
@@ -385,7 +388,10 @@ function ImagePastePlugin({
         } finally {
           URL.revokeObjectURL(item.previewUrl)
         }
-      })).then(() => onPendingChange?.(false))
+      })).then(() => {
+        pendingCountRef.current = Math.max(0, pendingCountRef.current - pending.length)
+        if (pendingCountRef.current === 0) onPendingChange?.(false)
+      })
       return true
     },
     COMMAND_PRIORITY_HIGH,
