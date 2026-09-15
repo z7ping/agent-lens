@@ -38,6 +38,11 @@
   border-radius: 14px;
 }
 
+.ui-overlay-dialog.is-size-small .ui-overlay-panel { width: min(100%, 480px); }
+.ui-overlay-dialog.is-size-medium .ui-overlay-panel { width: min(100%, 620px); }
+.ui-overlay-dialog.is-size-large .ui-overlay-panel { width: min(100%, 860px); }
+.ui-overlay-dialog.is-size-xlarge .ui-overlay-panel { width: min(100%, 1180px); }
+
 .ui-overlay-drawer .ui-overlay-panel {
   width: min(92vw, 560px);
   height: 100%;

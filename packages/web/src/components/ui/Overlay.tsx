@@ -69,6 +69,8 @@ export function useModalFocusScope({
   }, [open, panelRef])
 }
 
+export type DialogSize = 'small' | 'medium' | 'large' | 'xlarge'
+
 interface OverlayFrameProps {
   open: boolean
   title: ReactNode
@@ -81,6 +83,7 @@ interface OverlayFrameProps {
   closeDisabled?: boolean
   className?: string
   kind: 'dialog' | 'drawer'
+  dialogSize?: DialogSize
   side?: 'left' | 'right'
 }
 
@@ -96,6 +99,7 @@ function OverlayFrame({
   closeDisabled = false,
   className,
   kind,
+  dialogSize = 'medium',
   side = 'right',
 }: OverlayFrameProps) {
   const { t } = useTranslation('common')
@@ -107,7 +111,7 @@ function OverlayFrame({
 
   return createPortal(
     <div
-      className={`ui-overlay ui-overlay-${kind} ${kind === 'drawer' ? `is-${side}` : ''} ${className ?? ''}`.trim()}
+      className={`ui-overlay ui-overlay-${kind} ${kind === 'drawer' ? `is-${side}` : `is-size-${dialogSize}`} ${className ?? ''}`.trim()}
       role="presentation"
       onMouseDown={event => {
         if (!closeDisabled && closeOnBackdrop && event.target === event.currentTarget) onClose()
@@ -138,11 +142,11 @@ function OverlayFrame({
   )
 }
 
-export type DialogProps = Omit<OverlayFrameProps, 'kind' | 'side'>
-export type DrawerProps = Omit<OverlayFrameProps, 'kind'>
+export type DialogProps = Omit<OverlayFrameProps, 'kind' | 'side' | 'dialogSize'> & { size?: DialogSize }
+export type DrawerProps = Omit<OverlayFrameProps, 'kind' | 'dialogSize'>
 
-export function Dialog(props: DialogProps) {
-  return <OverlayFrame {...props} kind="dialog"/>
+export function Dialog({ size = 'medium', ...props }: DialogProps) {
+  return <OverlayFrame {...props} kind="dialog" dialogSize={size}/>
 }
 
 export function Drawer(props: DrawerProps) {
