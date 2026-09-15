@@ -137,6 +137,8 @@ function statusForError(error: unknown): number {
     if (Number.isInteger(status) && status >= 400 && status <= 599) return status
   }
   if (error instanceof Error && error.message.startsWith('Unknown Pi Live runtime session:')) return 404
+  if (error instanceof Error && /Live image attachment is unavailable/.test(error.message)) return 410
+  if (error instanceof Error && /Live (?:image attachment requires|input part)/.test(error.message)) return 400
   if (error instanceof Error && /not found/i.test(error.message)) return 503
   return 500
 }
