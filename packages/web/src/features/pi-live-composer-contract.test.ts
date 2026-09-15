@@ -11,6 +11,7 @@ const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
 const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
 const composer = readFileSync(new URL('../components/PiMarkdownComposer.tsx', import.meta.url), 'utf8')
+const zhLocale = readFileSync(new URL('../i18n/zh-CN/pi-live.ts', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
   assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel=\{t\('composer\.modelAria'\)\}/)
@@ -26,7 +27,7 @@ test('Pi Live thinking selector preserves Runtime values and only renders negoti
   assert.doesNotMatch(page, /thinkingLevelSemanticKey/)
   assert.doesNotMatch(page, /new Map<string, string>/)
   assert.match(page, /state\?\.capabilities\?\.thinkingLevelControl === true/)
-  assert.match(page, /parseLiveThinkingControlDto\(controls\.thinking\)/)
+  assert.match(page, /resolveLiveThinkingControl\([\s\S]*?controls\.thinking/)
   assert.match(page, /thinkingControl\.options\.map\(option =>/)
   assert.match(page, /value: option\.value/)
   assert.match(page, /value=\{thinkingControl\.value\}/)
@@ -35,6 +36,10 @@ test('Pi Live thinking selector preserves Runtime values and only renders negoti
   assert.match(page, /level === 'minimal'[\s\S]*?thinkingMinimal/)
   assert.match(page, /level === 'xhigh'[\s\S]*?thinkingXHigh/)
   assert.match(page, /level === 'max'[\s\S]*?thinkingMax/)
+  assert.match(zhLocale, /thinkingOff: '关闭推理'/)
+  assert.match(zhLocale, /thinkingMinimal: '极简'/)
+  assert.match(zhLocale, /thinkingXHigh: '超高'/)
+  assert.match(zhLocale, /thinkingMax: '最大'/)
 })
 
 test('Pi Live composer uses Lexical Markdown shortcuts and keeps Markdown as the runtime value', () => {
