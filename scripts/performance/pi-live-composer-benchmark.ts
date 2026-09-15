@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import { ComposerDraftPresenceGate } from '../../packages/web/src/components/pi-markdown-composer-state.js'
+import { ComposerDraftPresenceGate } from '../../packages/web/src/components/live-markdown-composer-state.js'
 import { sameStablePiLiveHistoryRoundProps } from '../../packages/web/src/features/pi-live-render-boundary.js'
 
 function argNumber(name: string, fallback: number): number {
