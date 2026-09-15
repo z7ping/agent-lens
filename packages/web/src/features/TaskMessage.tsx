@@ -53,8 +53,13 @@ export function TaskMessage({
   }, [collapsible])
 
   useLayoutEffect(() => {
-    // Agent 正文默认完整展开；用户长消息继续沿用紧凑折叠策略。
+    // Agent 正文默认完整展开；流式阶段不做五行折叠测量，也不重建 ResizeObserver。
     setExpanded(!user)
+    if (streaming && !user && view === 'rendered') {
+      setCanCollapse(false)
+      setCollapsedHeight(undefined)
+      return
+    }
     const element = surfaceRef.current
     if (!element) return
     const frame = window.requestAnimationFrame(measure)
@@ -64,7 +69,7 @@ export function TaskMessage({
       window.cancelAnimationFrame(frame)
       observer?.disconnect()
     }
-  }, [measure, text, user, view])
+  }, [measure, streaming, user, view])
 
   const roleClass = user ? 'task-message-user' : 'task-message-assistant'
   const bubbleClass = user ? 'task-message-bubble-user' : 'task-message-bubble-assistant'
