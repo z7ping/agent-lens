@@ -5,6 +5,9 @@ export interface PiLivePresentationDiagnostics {
   committedMutations: number
   commitCount: number
   maxQueueDepth: number
+  lastApplyDurationMs: number
+  maxApplyDurationMs: number
+  longApplyCount: number
 }
 
 /**
@@ -22,6 +25,9 @@ export class PiLivePresentationScheduler<T> {
     committedMutations: 0,
     commitCount: 0,
     maxQueueDepth: 0,
+    lastApplyDurationMs: 0,
+    maxApplyDurationMs: 0,
+    longApplyCount: 0,
   }
 
   constructor(
@@ -52,8 +58,13 @@ export class PiLivePresentationScheduler<T> {
     this.diagnostics.committedMutations += batch.length
     this.diagnostics.commitCount += 1
     this.commit(current => {
+      const startedAt = performance.now()
       let next = current
       for (const mutation of batch) next = mutation(next)
+      const durationMs = Math.max(0, performance.now() - startedAt)
+      this.diagnostics.lastApplyDurationMs = durationMs
+      this.diagnostics.maxApplyDurationMs = Math.max(this.diagnostics.maxApplyDurationMs, durationMs)
+      if (durationMs >= 16) this.diagnostics.longApplyCount += 1
       return next
     })
   }
