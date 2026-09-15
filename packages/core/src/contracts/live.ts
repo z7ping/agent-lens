@@ -35,14 +35,14 @@ export interface LiveTextPart {
 export interface LiveLargeTextPart {
   type: 'large-text'
   text: string
-  lineCount?: number
-  charCount?: number
+  lineCount?: number | undefined
+  charCount?: number | undefined
 }
 
 export interface LiveAttachmentDescriptor {
   attachmentId: string
-  name?: string
-  mimeType?: string
+  name?: string | undefined
+  mimeType?: string | undefined
   sizeBytes: number
 }
 
@@ -52,8 +52,8 @@ export interface LiveAttachment extends LiveAttachmentDescriptor {
 
 export interface PutLiveAttachmentInput {
   data: Uint8Array
-  name?: string
-  mimeType?: string
+  name?: string | undefined
+  mimeType?: string | undefined
 }
 
 export interface LiveAttachmentService {
@@ -69,9 +69,9 @@ export interface LiveAttachmentPartBase {
    * transform it, but must not expose native temporary paths as the contract.
    */
   attachmentId: string
-  name?: string
-  mimeType?: string
-  sizeBytes?: number
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes?: number | undefined
 }
 
 export interface LiveImagePart extends LiveAttachmentPartBase {
