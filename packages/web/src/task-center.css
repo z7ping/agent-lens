@@ -256,7 +256,7 @@
 .task-center-new-task-title { margin-bottom: 12px; }
 .task-center-launch-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .task-center-launch-choice.btn {
-  min-height: 72px;
+  min-height: 60px;
   justify-content: flex-start;
   gap: 10px;
   padding: 10px 11px;
@@ -270,23 +270,11 @@
 .task-center-launch-choice > span { display: grid; min-width: 0; gap: 3px; }
 .task-center-launch-choice b { font-size: 13px; font-weight: 700; }
 .task-center-launch-choice small { color: var(--al-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
-.task-center-launch-panel { display: grid; gap: 12px; margin-top: 10px; padding: 14px; border: 1px solid var(--al-line); border-radius: var(--radius-md); background: var(--al-soft-2); }
-.task-center-launch-panel-copy h2 { margin: 0; color: var(--al-ink); font-size: 13px; font-weight: 700; }
-.task-center-launch-panel-copy p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
+.task-center-launch-panel { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--al-line); border-radius: var(--radius-md); background: var(--al-soft-2); }
 .task-center-launch-panel-actions { display: flex; justify-content: flex-end; }
 .task-center-new-directory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .task-center-new-manual-directory { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .task-center-new-directory-hint { grid-column: 1 / -1; margin: 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
-.task-center-new-status {
-  display: grid;
-  gap: 2px;
-  margin-top: 16px;
-  padding: 12px 13px;
-  border-radius: 10px;
-  background: var(--al-soft-2);
-}
-.task-center-new-status b { color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
-.task-center-new-status span { color: var(--al-muted); font-size: 12px; }
 .task-center-new-operation { margin-top: 24px; }
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }

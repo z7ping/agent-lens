@@ -189,17 +189,6 @@ function NewTaskPanel({
       : t('center.newTask.unavailable')
   const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
   const manualDirectoryVisible = !nativeDirectoryPicker || manualDirectoryOpen
-  const composerStateLabel = selectingDirectory
-    ? t('center.newTask.openingPicker')
-    : !availability.checked
-    ? t('center.newTask.checkingPi')
-    : !availability.available
-      ? availability.label
-      : launchMode === 'existing'
-        ? selected ? t('center.newTask.existingReadyHint') : t('center.newTask.waitingProject')
-        : manualDirectory.trim()
-          ? t('center.newTask.directoryReadyHint')
-          : t('center.newTask.directoryPrompt')
   const start = async (project: { cwd: string; label: string }) => {
     if (starting || !availability.available) return
     setStarting(true)
@@ -279,11 +268,7 @@ function NewTaskPanel({
         </div>
 
         {launchMode === 'existing'
-          ? <section className="task-center-launch-panel" aria-labelledby="task-center-existing-project-title">
-              <div className="task-center-launch-panel-copy">
-                <h2 id="task-center-existing-project-title">{t('center.newTask.existingProject')}</h2>
-                <p>{t('center.newTask.existingHint')}</p>
-              </div>
+          ? <section className="task-center-launch-panel" aria-label={t('center.newTask.existingProject')}>
               <SelectMenu
                 value={selectedKey}
                 options={projectOptions}
@@ -307,11 +292,7 @@ function NewTaskPanel({
                 <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>{t('center.newTask.openExisting')} <UiIcon name="arrow-right" size={14}/></Button>
               </div>
             </section>
-          : <section className="task-center-launch-panel" aria-labelledby="task-center-new-project-title">
-              <div className="task-center-launch-panel-copy">
-                <h2 id="task-center-new-project-title">{t('center.newTask.newProject')}</h2>
-                <p>{t('center.newTask.newHint')}</p>
-              </div>
+          : <section className="task-center-launch-panel" aria-label={t('center.newTask.newProject')}>
               {nativeDirectoryPicker && <div className="task-center-new-directory-actions">
                 <Button variant="primary" loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>{t('center.newTask.selectDirectory')} <UiIcon name="arrow-right" size={14}/></Button>
                 <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>{t('center.newTask.inputPath')}</Button>
@@ -333,7 +314,6 @@ function NewTaskPanel({
             </section>}
       </div>
 
-      <div className="task-center-new-status"><b>{launchMode === 'existing' ? selected ? t('center.newTask.startingIn', { project: selected.label }) : t('center.newTask.waitingSelection') : t('center.newTask.newProject')}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       {projectDiscoveryError && <div className="task-center-project-hint" role="alert">{projectDiscoveryError}</div>}
       {!options.length && availability.checked && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
