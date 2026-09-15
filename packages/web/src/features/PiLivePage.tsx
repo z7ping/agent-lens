@@ -37,11 +37,11 @@ type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
 
 function liveMessageText(message: LiveMessageDto): string {
-  return message.parts
-    .filter(part => part.type === 'text' || part.type === 'large-text')
-    .map(part => part.text)
-    .join('\n\n')
-    .trim()
+  const blocks: string[] = []
+  for (const part of message.parts) {
+    if (part.type === 'text' || part.type === 'large-text') blocks.push(part.text)
+  }
+  return blocks.join('\n\n').trim()
 }
 
 function liveMessageHasContent(message: LiveMessageDto): boolean {
