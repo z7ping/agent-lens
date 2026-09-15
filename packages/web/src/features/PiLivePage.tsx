@@ -1,14 +1,22 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
+import {
+  liveMessagePlainTextDto,
+  type JsonValue,
+  type LiveMessageDto,
+  type PiLiveControlsDto,
+  type PiLiveQueueDto,
+  type PiLiveSnapshotDto,
+  type PiLiveStateDto,
+} from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { resolveLiveThinkingControl } from '../client/live-controls'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
-import { PiMarkdownComposer, type PiMarkdownComposerDraft, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
+import { LiveMarkdownComposer, type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
 import { PiRuntimeMenu } from '../components/PiRuntimeMenu'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { OperationProgress } from '../components/StateViews'
@@ -28,6 +36,10 @@ import { agentLensI18n } from '../i18n/runtime'
 
 type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
+
+function liveMessageText(message: LiveMessageDto): string {
+  return liveMessagePlainTextDto(message).trim()
+}
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
 interface ExtensionRequest {
   id: string
@@ -387,8 +399,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
   const readerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<PiMarkdownComposerHandle>(null)
-  const composerSubmitRef = useRef<(value: string, mode: 'default' | 'followUp') => void>(() => {})
+  const inputRef = useRef<LiveMarkdownComposerHandle>(null)
+  const composerSubmitRef = useRef<(message: LiveMessageDto, mode: 'default' | 'followUp') => void>(() => {})
   const composerEscapeRef = useRef<(() => void) | undefined>(undefined)
   const followControllerRef = useRef(new PiLiveFollowController())
   const followFrameRef = useRef<number | null>(null)
@@ -404,10 +416,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controls, setControls] = useState<PiLiveControlsDto>({ models: [] })
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
-  const [composerDraft, setComposerDraft] = useState<PiMarkdownComposerDraft>({ revision: 0, value: '' })
+  const [composerDraft, setComposerDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
-  const [startupQueued, setStartupQueued] = useState('')
+  const [startupQueued, setStartupQueued] = useState<LiveMessageDto | null>(null)
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
   const [currentOrdinal, setCurrentOrdinal] = useState<number | null>(null)
   const [currentItems, setCurrentItems] = useState<PiLiveHistoryItem[]>([])
@@ -439,8 +451,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setComposerHasContent(current => current === hasContent ? current : hasContent)
   }, [])
 
-  const onComposerSubmit = useCallback((value: string, submitMode: 'default' | 'followUp') => {
-    composerSubmitRef.current(value, submitMode)
+  const onComposerSubmit = useCallback((message: LiveMessageDto, submitMode: 'default' | 'followUp') => {
+    composerSubmitRef.current(message, submitMode)
   }, [])
 
   const onComposerEscape = useCallback(() => {
@@ -448,8 +460,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const submitComposerDefault = useCallback(() => {
-    const value = inputRef.current?.getMarkdown().trim() ?? ''
-    if (value) composerSubmitRef.current(value, 'default')
+    const message = inputRef.current?.getMessage()
+    if (message && liveMessageText(message)) composerSubmitRef.current(message, 'default')
   }, [])
 
   useEffect(() => {
@@ -862,14 +874,15 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
     if (!runtimeId || state?.status !== 'ready' || !startupQueued || startupSendingRef.current) return
-    const text = startupQueued
+    const message = startupQueued
+    const text = liveMessageText(message)
     startupSendingRef.current = true
     setBusy(true)
     setError('')
-    setStartupQueued(current => current === text ? '' : current)
+    setStartupQueued(current => current === message ? null : current)
     beginOptimisticPrompt(text)
     inputRef.current?.focus({ preventScroll: true })
-    void piLiveApi.prompt(runtimeId, text).then(() => {
+    void piLiveApi.prompt(runtimeId, message).then(() => {
       inputRef.current?.focus({ preventScroll: true })
     }, reason => {
       rollbackOptimisticPrompt(text)
@@ -883,12 +896,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   if (!runtimeId) return <PiLiveStart known={known}/>
 
-  const send = async (rawText: string, forcedMode?: QueueMode) => {
-    const text = rawText.trim()
+  const send = async (message: LiveMessageDto, forcedMode?: QueueMode) => {
+    const text = liveMessageText(message)
     if (!text || sendPending || queueMutationPending || extension) return
     if (!runtimeReady) {
       if (!canStageStartup) return
-      setStartupQueued(text)
+      setStartupQueued(message)
       setComposerValue('')
       inputRef.current?.focus({ preventScroll: true })
       return
@@ -905,10 +918,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     inputRef.current?.focus({ preventScroll: true })
     try {
       if (wasStreaming) {
-        if (selectedMode === 'steer') await piLiveApi.steer(runtimeId, text)
-        else await piLiveApi.followUp(runtimeId, text)
+        if (selectedMode === 'steer') await piLiveApi.steer(runtimeId, message)
+        else await piLiveApi.followUp(runtimeId, message)
       } else {
-        await piLiveApi.prompt(runtimeId, text)
+        await piLiveApi.prompt(runtimeId, message)
       }
     } catch (reason) {
       if (inputRef.current?.isEmpty() ?? true) setComposerValue(text)
@@ -1047,13 +1060,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const editStartupQueued = () => {
     if (!startupQueued) return
-    setComposerValue(startupQueued)
-    setStartupQueued('')
+    setComposerValue(liveMessageText(startupQueued))
+    setStartupQueued(null)
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
   }
 
   const removeStartupQueued = () => {
-    setStartupQueued('')
+    setStartupQueued(null)
     inputRef.current?.focus({ preventScroll: true })
   }
 
@@ -1309,7 +1322,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
           {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>{t('interruptedTitle')}</b><span>{t('interruptedDescription')}</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
-            <span>{t('queue.waitingReady')}</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('queue.edit')}</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>{t('queue.withdraw')}</Button></div>
+            <span>{t('queue.waitingReady')}</span><b>{liveMessageText(startupQueued)}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('queue.edit')}</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>{t('queue.withdraw')}</Button></div>
           </div>}
           {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
             <span>{item.mode === 'steer' ? t('queue.steer') : t('queue.followUp')}</span><b>{item.text}</b>
@@ -1331,7 +1344,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 onClick={() => setComposerExpanded(value => !value)}
               ><UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/></IconButton>
             </div>
-            <PiMarkdownComposer
+            <LiveMarkdownComposer
               ref={inputRef}
               draft={composerDraft}
               onDraftPresenceChange={onComposerDraftPresenceChange}
@@ -1341,6 +1354,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               placeholder={inputPlaceholder}
               title={t('composer.markdownHint')}
               ariaLabel={t('composer.inputAria')}
+              inputClassName="pi-live-input"
               disabled={runtimeTerminating}
             />
           </div>
