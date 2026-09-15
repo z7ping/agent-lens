@@ -22,7 +22,7 @@ const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plug
 const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
 const OTHER_KINDS: BackupAssetKindDto[] = ['other']
 const ALL_KINDS: BackupAssetKindDto[] = [...RECOMMENDED_KINDS, ...OPTIONAL_KINDS, ...OTHER_KINDS]
-const HISTORY_ASSET_KINDS: BackupAssetKindDto[] = [...OPTIONAL_KINDS, ...OTHER_KINDS]
+const DATA_ASSET_KINDS: BackupAssetKindDto[] = [...OPTIONAL_KINDS, ...OTHER_KINDS]
 
 type PendingConfirmation =
   | { type: 'create' }
@@ -239,7 +239,6 @@ export function BackupPage({
   const protectedFiles = visibleAssetSources.reduce((sum, source) => sum + source.fileCount, 0)
   const protectedBytes = visibleAssetSources.reduce((sum, source) => sum + (source.totalBytes ?? 0), 0)
   const hasProtectedBytes = visibleAssetSources.some(source => source.totalBytes !== undefined)
-  const assetExcludedFiles = visibleAssetSources.reduce((sum, source) => sum + source.excludedCount, 0)
   const selectedExcludedFiles = sources
     .filter(source => selectedSources.includes(source.sourceId))
     .reduce((sum, source) => sum + source.excludedCount, 0)
@@ -478,47 +477,54 @@ export function BackupPage({
                 ? sourceLabel(focusedSource.sourceId, focusedSource.displayName)
                 : t('assetView.agentCount', { count: visibleAssetSources.length.toLocaleString(locale) })}</b>
               <span>{indexTime ? t('assetView.index', { time: formatTime(indexTime, locale) }) : t('protection.indexPreparing')}</span>
-              <span>{t('assetView.excluded', { count: assetExcludedFiles.toLocaleString(locale) })}</span>
             </div>
           </div>
 
           <section className="backup-assets-section">
             {!visibleAssetSources.length && <div className="backup-assets-empty">{t('assetView.noAssets')}</div>}
 
-            {!focusedSource && visibleAssetSources.length > 0 && <div className="backup-agent-table">
-              <div className="backup-agent-table-head" aria-hidden="true">
-                <span>{t('assetView.agentColumn')}</span>
-                <span>{t('assetView.coreAssets')}</span>
-                <span>{t('assetView.historyStatus')}</span>
-                <span>{t('assetView.filesLabel')}</span>
-                <span>{t('assetView.sizeLabel')}</span>
-                <span>{t('assetView.locationColumn')}</span>
-              </div>
+            {!focusedSource && visibleAssetSources.length > 0 && <div className="backup-agent-list">
               {visibleAssetSources.map(source => {
                 const coreKinds = RECOMMENDED_KINDS.filter(kind => kindFiles(source, kind) > 0)
-                const historyKinds = HISTORY_ASSET_KINDS.filter(kind => kindFiles(source, kind) > 0)
+                const dataKinds = DATA_ASSET_KINDS.filter(kind => kindFiles(source, kind) > 0)
                 const primaryRoot = source.roots?.[0]
-                return <article key={source.sourceId} className="backup-agent-row">
-                  <div className="backup-agent-row-head">
-                    <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
-                    <b>{sourceLabel(source.sourceId, source.displayName)}</b>
+                const sourceSize = source.totalBytes === undefined ? t('sizePending') : formatBytes(source.totalBytes)
+                return <article key={source.sourceId} className="backup-agent-item">
+                  <header className="backup-agent-item-head">
+                    <div className="backup-agent-row-head">
+                      <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
+                      <b>{sourceLabel(source.sourceId, source.displayName)}</b>
+                    </div>
+                    <span className="backup-agent-scale">{t('assetView.sourceScale', {
+                      files: source.fileCount.toLocaleString(locale),
+                      size: sourceSize,
+                    })}</span>
+                  </header>
+
+                  <div className="backup-agent-groups">
+                    <div className="backup-agent-group">
+                      <span className="backup-agent-group-label">{t('assetView.coreAssets')}</span>
+                      <div className="backup-agent-stats">
+                        {coreKinds.length ? coreKinds.map(kind => {
+                          const logical = kindLogicalAssets(source, kind)
+                          const count = logical ?? kindFiles(source, kind)
+                          return <span key={kind} className="backup-agent-stat"><em>{kindLabel(kind, t)}</em><b>{count.toLocaleString(locale)}</b></span>
+                        }) : <span className="backup-agent-stat-empty">—</span>}
+                      </div>
+                    </div>
+
+                    <div className="backup-agent-group">
+                      <span className="backup-agent-group-label">{t('assetView.historyStatus')}</span>
+                      <div className="backup-agent-stats">
+                        {dataKinds.length ? dataKinds.map(kind => {
+                          const logical = kindLogicalAssets(source, kind)
+                          const count = logical ?? kindFiles(source, kind)
+                          return <span key={kind} className="backup-agent-stat"><em>{kindLabel(kind, t)}</em><b>{count.toLocaleString(locale)}</b></span>
+                        }) : <span className="backup-agent-stat-empty">—</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="backup-agent-cell backup-agent-cell-core">
-                    {coreKinds.length ? coreKinds.map(kind => {
-                      const logical = kindLogicalAssets(source, kind)
-                      const count = logical ?? kindFiles(source, kind)
-                      return <span key={kind}><em>{kindLabel(kind, t)}</em><b>{count.toLocaleString(locale)}</b></span>
-                    }) : <span>—</span>}
-                  </div>
-                  <div className="backup-agent-cell backup-agent-cell-history">
-                    {historyKinds.length ? historyKinds.map(kind => {
-                      const logical = kindLogicalAssets(source, kind)
-                      const count = logical ?? kindFiles(source, kind)
-                      return <span key={kind}><em>{kindLabel(kind, t)}</em><b>{count.toLocaleString(locale)}</b></span>
-                    }) : <span>—</span>}
-                  </div>
-                  <strong className="backup-agent-files">{source.fileCount.toLocaleString(locale)}</strong>
-                  <strong className="backup-agent-size">{source.totalBytes === undefined ? t('sizePending') : formatBytes(source.totalBytes)}</strong>
+
                   <div className="backup-agent-row-path">
                     <code title={primaryRoot?.path}>{primaryRoot?.path ?? t('assetView.locationPending')}</code>
                     {primaryRoot?.path && <LocalPathActions path={primaryRoot.path} onOpen={openPhysicalPath} onError={reportPathError}/>}

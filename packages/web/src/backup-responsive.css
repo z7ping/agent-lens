@@ -7,26 +7,14 @@
   .backup-content { padding-inline: 18px; }
 
   .backup-asset-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-wrap: wrap;
+    gap: 8px 20px;
   }
 
-  .backup-asset-overview > .backup-asset-overview-meta {
-    grid-column: 1 / -1;
-    border-top: 1px solid var(--al-line);
-    border-left: 0;
-  }
-
-  .backup-agent-table-head {
-    display: none;
-  }
-
-  .backup-agent-row {
-    grid-template-columns: 150px minmax(0, 1.2fr) minmax(0, 1fr) 82px 82px;
-    gap: 8px 12px;
-  }
-
-  .backup-agent-row-path {
-    grid-column: 2 / -1;
+  .backup-asset-overview-meta {
+    width: 100%;
+    flex: 1 0 100%;
+    justify-content: flex-start;
   }
 
   .backup-snapshot-header {
@@ -73,11 +61,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .backup-agent-cell {
-    grid-template-columns: 1fr;
-    gap: 3px;
-  }
-
   .backup-topbar-controls {
     gap: 4px;
   }
@@ -98,31 +81,30 @@
   .backup-content { padding: 20px 14px 48px; }
 
   .backup-asset-overview {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .backup-asset-overview > div {
-    padding: 12px;
+    padding: 11px 12px;
   }
 
   .backup-asset-overview-primary strong {
-    font-size: 19px;
+    font-size: 17px;
   }
 
-  .backup-agent-row {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px 14px;
+  .backup-agent-item {
     padding: 12px;
   }
 
-  .backup-agent-row-head,
-  .backup-agent-row-path {
-    grid-column: 1 / -1;
+  .backup-agent-item-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
-  .backup-agent-files,
-  .backup-agent-size {
-    justify-self: start;
+  .backup-agent-group {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .backup-agent-stats {
+    gap: 4px 16px;
   }
 
   .backup-agent-detail-section {
@@ -226,28 +208,25 @@
   }
 
   .backup-asset-overview {
-    grid-template-columns: 1fr;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
   }
 
-  .backup-asset-overview > div + div {
-    border-top: 1px solid var(--al-line);
-    border-left: 0;
+  .backup-asset-overview-meta {
+    width: auto;
+    flex: 0 1 auto;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
   }
 
-  .backup-agent-row {
-    grid-template-columns: 1fr;
+  .backup-agent-stats {
+    gap: 4px 12px;
   }
 
-  .backup-agent-row-head,
-  .backup-agent-cell,
-  .backup-agent-files,
-  .backup-agent-size,
   .backup-agent-row-path {
-    grid-column: 1;
-  }
-
-  .backup-agent-cell {
-    gap: 4px 14px;
+    align-items: flex-start;
   }
 
   .backup-age-facts {

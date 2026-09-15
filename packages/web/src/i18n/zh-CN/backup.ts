@@ -97,7 +97,7 @@ export const chineseBackupMessages: LocaleMessagesDto = {
       index: '索引 {{time}}',
       excluded: '扫描排除 {{count}} 项',
       coreAssets: '核心资产',
-      historyStatus: '历史与状态',
+      historyStatus: '数据',
       typeColumn: '资产类型',
       quantityColumn: '数量',
       sizeColumn: '大小',

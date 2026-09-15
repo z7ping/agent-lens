@@ -40,35 +40,36 @@ test('Backup 默认以当前资产为主视图，并把视图切换注入统一�
   assert.doesNotMatch(backupPage, /className="backup-restore-section"/)
 })
 
-test('当前资产使用单一 Surface + 聚焦总览 + 高密度资产表，避免空、散、无重点', () => {
+test('当前资产使用单一 Surface + 轻量摘要 + 智能体分组列表，避免横向表格争抢主次', () => {
   assert.match(backupPage, /className="backup-assets-surface"/)
   assert.match(backupPage, /className="backup-asset-overview"/)
-  assert.match(backupPage, /className="backup-agent-table"/)
-  assert.match(backupPage, /className="backup-agent-table-head"/)
+  assert.match(backupPage, /className="backup-agent-list"/)
+  assert.match(backupPage, /className="backup-agent-item"/)
   assert.match(backupMainCss, /\.backup-assets-surface \{[\s\S]*?background: var\(--al-surface\);/)
-  assert.match(backupMainCss, /\.backup-asset-overview \{[\s\S]*?background: var\(--al-soft-2\);/)
-  assert.match(backupMainCss, /\.backup-asset-overview-primary strong \{[\s\S]*?font-size: 22px;/)
+  assert.match(backupMainCss, /\.backup-asset-overview \{[\s\S]*?display: flex;/)
+  assert.match(backupMainCss, /\.backup-asset-overview-primary strong \{[\s\S]*?font-size: 18px;/)
+  assert.doesNotMatch(backupPage, /className="backup-agent-table"/)
   assert.doesNotMatch(backupPage, /className="backup-agent-card"/)
 })
 
-test('核心资产和历史状态使用稳定多行列表，不再挤成单行流式文本', () => {
-  assert.match(backupMainCss, /\.backup-agent-cell \{[\s\S]*?display: grid;/)
-  assert.match(backupMainCss, /\.backup-agent-cell-core \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
-  assert.match(backupMainCss, /\.backup-agent-cell-history \{[\s\S]*?grid-template-columns: 1fr;/)
-  assert.match(backupMainCss, /\.backup-agent-cell > span \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) auto;/)
-  assert.doesNotMatch(backupMainCss, /\.backup-agent-cell \{[\s\S]*?display: flex;/)
-})
-
-test('全部智能体使用固定列高密度资产表，并保留核心资产、历史状态和真实路径', () => {
-  assert.match(backupPage, /className="backup-agent-table"/)
-  assert.match(backupPage, /className="backup-agent-row"/)
-  assert.match(backupPage, /className="backup-agent-cell backup-agent-cell-core"/)
-  assert.match(backupPage, /className="backup-agent-row-path"/)
+test('全部智能体按核心资产与数据两层分组，数字与标签保持明确归属', () => {
+  assert.match(backupPage, /className="backup-agent-groups"/)
+  assert.match(backupPage, /className="backup-agent-group"/)
+  assert.match(backupPage, /className="backup-agent-stats"/)
+  assert.match(backupPage, /className="backup-agent-stat"/)
   assert.match(backupPage, /t\('assetView\.coreAssets'\)/)
   assert.match(backupPage, /t\('assetView\.historyStatus'\)/)
-  assert.doesNotMatch(backupPage, /className="backup-agent-asset-summary"/)
-  assert.doesNotMatch(backupPage, /className="backup-agent-asset-grid"/)
-  assert.doesNotMatch(backupPage, /t\('assetView\.viewDetails'\)/)
+  assert.match(backupMainCss, /\.backup-agent-group \{[\s\S]*?grid-template-columns: 76px minmax\(0, 1fr\);/)
+  assert.match(backupMainCss, /\.backup-agent-stats \{[\s\S]*?flex-wrap: wrap;/)
+})
+
+test('文件规模与真实路径在智能体行内降级展示，不再占据独立表格列', () => {
+  assert.match(backupPage, /className="backup-agent-scale"/)
+  assert.match(backupPage, /t\('assetView\.sourceScale'/)
+  assert.match(backupPage, /className="backup-agent-row-path"/)
+  assert.match(backupPage, /LocalPathActions/)
+  assert.doesNotMatch(backupPage, /className="backup-agent-files"/)
+  assert.doesNotMatch(backupPage, /className="backup-agent-size"/)
 })
 
 test('单智能体由左侧筛选驱动，主区域直接展示完整资产详情', () => {
@@ -156,6 +157,6 @@ test('Backup 响应式不通过横向表格或滚动兜底核心资产信息', (
   assert.doesNotMatch(backupPage, /<table className="snapshot-table">/)
   assert.doesNotMatch(backupCss, /protection-table/)
   assert.doesNotMatch(backupCss, /snapshot-table/)
-  assert.match(backupCss, /@media \(max-width: 575\.98px\)[\s\S]*?\.backup-agent-row \{[\s\S]*?grid-template-columns: 1fr;/)
+  assert.match(backupCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.backup-agent-group \{[\s\S]*?grid-template-columns: 1fr;/)
   assert.match(backupCss, /\.backup-create-footer \{[\s\S]*?flex-direction: column;/)
 })

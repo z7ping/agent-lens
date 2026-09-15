@@ -97,7 +97,7 @@ export const englishBackupMessages: LocaleMessagesDto = {
       index: 'Index {{time}}',
       excluded: '{{count}} excluded during scan',
       coreAssets: 'Core assets',
-      historyStatus: 'History & state',
+      historyStatus: 'Data',
       typeColumn: 'Asset type',
       quantityColumn: 'Quantity',
       sizeColumn: 'Size',
