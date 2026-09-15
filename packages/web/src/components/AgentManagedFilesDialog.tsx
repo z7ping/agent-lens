@@ -13,7 +13,7 @@ import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalPathActions } from './LocalPathActions'
 import { MarkdownContent } from './MarkdownContent'
 import { isMarkdownThemeId } from './markdown-theme'
-import { Button, Dialog, Drawer, SelectMenu, UiIcon } from './ui'
+import { Button, Dialog, SelectMenu, UiIcon } from './ui'
 
 function isMarkdownFile(name: string | undefined): boolean {
   return Boolean(name && /\.(?:md|markdown|mdown|mkd)$/i.test(name))
@@ -49,7 +49,7 @@ function managedFileErrorMessage(error: unknown, t: TFunction): string {
   return t('managedFiles.errorGeneric')
 }
 
-interface AgentManagedFilesDrawerProps {
+interface AgentManagedFilesDialogProps {
   open: boolean
   model: AgentLensClientModel
   productId: string
@@ -63,7 +63,7 @@ interface AgentManagedFilesDrawerProps {
 }
 
 
-export function AgentManagedFilesDrawer({
+export function AgentManagedFilesDialog({
   open,
   model,
   productId,
@@ -74,7 +74,7 @@ export function AgentManagedFilesDrawer({
   rootLabel,
   rootPath,
   onClose,
-}: AgentManagedFilesDrawerProps) {
+}: AgentManagedFilesDialogProps) {
   const { t } = useTranslation('agents')
   const [directories, setDirectories] = useState<Record<string, ManagedAssetDirectoryResponseDto>>({})
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -270,7 +270,6 @@ export function AgentManagedFilesDrawer({
 
   const previewOnly = root === 'binding' && !bindingDirectory
   const previewName = selected?.name ?? preview?.name
-  const previewPath = selected?.relativePath || preview?.relativePath || rootPath
   const previewSize = selected?.size ?? preview?.size
   const previewTargetPath = localPath(rootPath, selected?.relativePath ?? preview?.relativePath ?? '')
   const openPath = (path: string) => {
@@ -281,7 +280,6 @@ export function AgentManagedFilesDrawer({
     setPathError(reason instanceof Error ? reason.message : String(reason))
   }
   const previewMarkdown = isMarkdownFile(previewName)
-  const documentPreview = previewOnly && isMarkdownFile(previewName ?? rootPath)
   const metadataOnlyMessage = preview?.previewStatus === 'metadata-only'
     ? managedPreviewBlockedMessage(preview.blockedReason, t)
     : ''
@@ -294,7 +292,33 @@ export function AgentManagedFilesDrawer({
         ? t('managedFiles.previewUnavailable')
         : t('managedFiles.selectFile')
 
-  const content = <div className={`managed-files-layout ${previewOnly ? 'is-preview-only' : ''} ${documentPreview ? 'is-document-preview' : ''}`.trim()}>
+  const headerActions = previewOnly || previewName ? <>
+    {!previewOnly && previewName && <span className="managed-file-current-name" title={previewName}>{previewName}</span>}
+    {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
+    {previewSize !== undefined && <small className="managed-file-header-size">{t('managedFiles.bytes', { count: previewSize })}</small>}
+    {previewMarkdown && previewView === 'rendered' && <SelectMenu
+      className="managed-file-theme-select"
+      value={markdownTheme}
+      onChange={value => {
+        if (!isMarkdownThemeId(value)) return
+        setMarkdownTheme(value)
+        writeMarkdownTheme(value)
+      }}
+      ariaLabel={t('managedFiles.themeAria')}
+      menuWidth={220}
+      options={[
+        { value: 'next-helvetica', label: t('managedFiles.themeNextHelvetica'), description: t('managedFiles.themeNextHelveticaDescription') },
+        { value: 'agent-lens', label: t('managedFiles.themeAgentLens'), description: t('managedFiles.themeAgentLensDescription') },
+      ]}
+    />}
+    {previewMarkdown && preview?.content !== undefined && <div className="managed-file-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
+      <button type="button" aria-pressed={previewView === 'rendered'} onClick={() => setPreviewView('rendered')}>{t('managedFiles.rendered')}</button>
+      <button type="button" aria-pressed={previewView === 'source'} onClick={() => setPreviewView('source')}>{t('managedFiles.source')}</button>
+    </div>}
+    <LocalPathActions path={previewTargetPath} onOpen={openPath} onError={reportPathError}/>
+  </> : undefined
+
+  const content = <div className={`managed-files-layout ${previewOnly ? 'is-preview-only' : ''}`.trim()}>
 
       {!previewOnly && <section className="managed-files-tree" aria-label={t('managedFiles.treeAria')}>
         <div className="managed-files-root">
@@ -312,36 +336,6 @@ export function AgentManagedFilesDrawer({
           : renderDirectory('')}
       </section>}
       <section className="managed-file-preview" aria-label={t('managedFiles.previewAria')}>
-        {previewName && <div className="managed-file-preview-head" data-document={documentPreview || undefined}>
-          <div>
-            <b>{previewName}</b>
-            <span>{previewPath}</span>
-          </div>
-          <div className="managed-file-preview-facts">
-            {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
-            {previewSize !== undefined && <small>{t('managedFiles.bytes', { count: previewSize })}</small>}
-            {previewMarkdown && previewView === 'rendered' && <SelectMenu
-              className="managed-file-theme-select"
-              value={markdownTheme}
-              onChange={value => {
-                if (!isMarkdownThemeId(value)) return
-                setMarkdownTheme(value)
-                writeMarkdownTheme(value)
-              }}
-              ariaLabel={t('managedFiles.themeAria')}
-              menuWidth={220}
-              options={[
-                { value: 'next-helvetica', label: t('managedFiles.themeNextHelvetica'), description: t('managedFiles.themeNextHelveticaDescription') },
-                { value: 'agent-lens', label: t('managedFiles.themeAgentLens'), description: t('managedFiles.themeAgentLensDescription') },
-              ]}
-            />}
-            {previewMarkdown && preview?.content !== undefined && <div className="managed-file-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
-              <button type="button" aria-pressed={previewView === 'rendered'} onClick={() => setPreviewView('rendered')}>{t('managedFiles.rendered')}</button>
-              <button type="button" aria-pressed={previewView === 'source'} onClick={() => setPreviewView('source')}>{t('managedFiles.source')}</button>
-            </div>}
-            <LocalPathActions path={previewTargetPath} onOpen={openPath} onError={reportPathError}/>
-          </div>
-        </div>}
         {pathError && <div className="managed-file-path-error" role="alert">{pathError}</div>}
         {previewLoading
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
@@ -364,21 +358,12 @@ export function AgentManagedFilesDrawer({
       </section>
     </div>
 
-  if (documentPreview) {
-    return <Dialog
-      open={open}
-      className="agent-managed-file-document-dialog"
-      title={previewName ?? rootLabel}
-      description={rootPath}
-      onClose={onClose}
-    >{content}</Dialog>
-  }
-
-  return <Drawer
+  return <Dialog
     open={open}
-    className="agent-managed-files-drawer"
-    title={t('managedFiles.title', { agent: agentName, root: rootLabel })}
+    className={`agent-managed-files-dialog ${previewOnly ? 'is-preview-only' : 'is-directory-browser'}`}
+    title={previewOnly ? (previewName ?? rootLabel) : t('managedFiles.title', { agent: agentName, root: rootLabel })}
     description={rootPath}
+    headerActions={headerActions}
     onClose={onClose}
-  >{content}</Drawer>
+  >{content}</Dialog>
 }

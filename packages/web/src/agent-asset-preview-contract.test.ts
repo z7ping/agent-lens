@@ -3,30 +3,34 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const agents = readFileSync(new URL('./features/AgentsPage.tsx', import.meta.url), 'utf8')
-const drawer = readFileSync(new URL('./components/AgentManagedFilesDrawer.tsx', import.meta.url), 'utf8')
+const previewDialog = readFileSync(new URL('./components/AgentManagedFilesDialog.tsx', import.meta.url), 'utf8')
 const localPathActions = readFileSync(new URL('./components/LocalPathActions.tsx', import.meta.url), 'utf8')
 const backup = readFileSync(new URL('./features/BackupPage.tsx', import.meta.url), 'utf8')
 const piLive = readFileSync(new URL('./features/PiLivePage.tsx', import.meta.url), 'utf8')
 const review = readFileSync(new URL('./features/ReviewPage.tsx', import.meta.url), 'utf8')
 const overlay = readFileSync(new URL('./components/ui/Overlay.tsx', import.meta.url), 'utf8')
+const overlayCss = readFileSync(new URL('./components/ui/overlay.css', import.meta.url), 'utf8')
+const agentsCss = readFileSync(new URL('./agents.css', import.meta.url), 'utf8')
 const markdownThemes = readFileSync(new URL('./components/markdown-themes.css', import.meta.url), 'utf8')
 
-test('智能体资产列表通过现有受管文件 Drawer 打开绑定预览', () => {
+test('智能体资产列表统一通过受管文件 Dialog 打开绑定与目录预览', () => {
   assert.match(agents, /t\('managedFiles\.preview'\)/)
   assert.match(agents, /root="binding"/)
   assert.match(agents, /bindingId=\{previewAsset\.binding\.id\}/)
-  assert.match(agents, /<AgentManagedFilesDrawer/)
-  assert.doesNotMatch(agents, /<Dialog[^>]*asset/i)
+  assert.match(agents, /<AgentManagedFilesDialog/)
+  assert.doesNotMatch(agents, /AgentManagedFilesDrawer/)
 })
 
-test('资产绑定预览复用统一 Drawer 并保留安全状态', () => {
-  assert.match(drawer, /<Drawer/)
-  assert.match(drawer, /previewStatus === 'metadata-only'/)
-  assert.match(drawer, /preview\?\.redacted/)
-  assert.match(drawer, /bindingId/)
+test('单文件与目录型资产复用统一 Dialog 并保留安全状态', () => {
+  assert.match(previewDialog, /<Dialog/)
+  assert.doesNotMatch(previewDialog, /<Drawer/)
+  assert.match(previewDialog, /headerActions=\{headerActions\}/)
+  assert.match(previewDialog, /previewStatus === 'metadata-only'/)
+  assert.match(previewDialog, /preview\?\.redacted/)
+  assert.match(previewDialog, /bindingId/)
 })
 
-test('统一 Drawer 继续持有 Escape 与焦点恢复契约', () => {
+test('统一 Dialog 继续持有 Escape 与焦点恢复契约', () => {
   assert.match(overlay, /event\.key === 'Escape'/)
   assert.match(overlay, /previous\?\.isConnected/)
   assert.match(overlay, /previous\.focus/)
@@ -37,35 +41,40 @@ test('本地路径统一复用轻量打开与复制动作', () => {
   assert.match(localPathActions, /name=\{openState === 'opened' \|\| openState === 'revealed' \? 'check' : 'folder-open'\}/)
   assert.match(localPathActions, /name=\{copied \? 'check' : 'copy'\}/)
   assert.match(agents, /<LocalPathActions/)
-  assert.match(drawer, /<LocalPathActions/)
+  assert.match(previewDialog, /<LocalPathActions/)
   assert.match(backup, /<LocalPathActions/)
   assert.match(piLive, /<LocalPathActions/)
   assert.match(review, /<LocalPathActions/)
   assert.doesNotMatch(agents, /className="copy-link"/)
 })
 
-test('Markdown 资产使用宽文档模式并支持渲染与源码切换', () => {
-  assert.match(drawer, /function isMarkdownFile/)
-  assert.match(drawer, /documentPreview = previewOnly && isMarkdownFile/)
-  assert.match(drawer, /<Dialog/)
-  assert.match(drawer, /<MarkdownContent text=\{preview\.content\}/)
-  assert.match(drawer, /previewView === 'rendered'/)
-  assert.match(drawer, /previewView === 'source'/)
-  assert.match(drawer, /setPreviewView\(isMarkdownFile\(result\.name\) \? 'rendered' : 'source'\)/)
+test('Markdown 资产使用统一宽 Dialog 并把阅读控制收进 Header', () => {
+  assert.match(previewDialog, /function isMarkdownFile/)
+  assert.match(previewDialog, /className=\{\`agent-managed-files-dialog/)
+  assert.match(previewDialog, /headerActions=\{headerActions\}/)
+  assert.match(previewDialog, /<MarkdownContent text=\{preview\.content\}/)
+  assert.match(previewDialog, /previewView === 'rendered'/)
+  assert.match(previewDialog, /previewView === 'source'/)
+  assert.match(previewDialog, /setPreviewView\(isMarkdownFile\(result\.name\) \? 'rendered' : 'source'\)/)
+  assert.doesNotMatch(previewDialog, /managed-file-preview-head/)
+  assert.match(overlay, /headerActions\?: ReactNode/)
+  assert.match(overlayCss, /\.ui-overlay-header-actions/)
+  assert.match(agentsCss, /\.agent-managed-files-dialog \.ui-overlay-panel \{[\s\S]*?width:\s*min\(96vw, 1280px\)/)
+  assert.match(agentsCss, /grid-template-columns:\s*minmax\(240px, 280px\) minmax\(0, 1fr\)/)
 })
 
 test('Markdown 文档皮肤默认使用 Next Helvetica 且被限制在预览内容作用域', () => {
-  assert.match(drawer, /useState\(readMarkdownTheme\)/)
-  assert.match(drawer, /<SelectMenu[\s\S]*?managed-file-theme-select/)
-  assert.match(drawer, /<MarkdownContent[^>]*theme=\{markdownTheme\}/)
+  assert.match(previewDialog, /useState\(readMarkdownTheme\)/)
+  assert.match(previewDialog, /<SelectMenu[\s\S]*?managed-file-theme-select/)
+  assert.match(previewDialog, /<MarkdownContent[^>]*theme=\{markdownTheme\}/)
   assert.match(markdownThemes, /\.markdown\[data-markdown-theme='next-helvetica'\]/)
   assert.doesNotMatch(markdownThemes, /(^|[},]\s*)(?:html|body|:root)(?:\s|,|\{)/m)
   assert.doesNotMatch(markdownThemes, /!important/)
 })
 
 test('绑定目标判定不再把任意 400 当成目录', () => {
-  assert.match(drawer, /managedFileStatus\(error\) === 409/)
-  assert.doesNotMatch(drawer, /managedFileStatus\(error\) === 400/)
+  assert.match(previewDialog, /managedFileStatus\(error\) === 409/)
+  assert.doesNotMatch(previewDialog, /managedFileStatus\(error\) === 400/)
 })
 
 test('多绑定资产必须显式选择当前位置，路径动作与预览共享同一 binding', () => {
@@ -87,22 +96,22 @@ test('预览阻断原因与协议枚举保持同名', () => {
 })
 
 test('目录型 Skill 自动落到 SKILL.md 预览', () => {
-  assert.match(drawer, /entry\.name\.toLowerCase\(\) === 'skill\.md'/)
-  assert.match(drawer, /void selectFile\(skillEntry\)/)
+  assert.match(previewDialog, /entry\.name\.toLowerCase\(\) === 'skill\.md'/)
+  assert.match(previewDialog, /void selectFile\(skillEntry\)/)
 })
 
 test('文件预览使用请求序号避免旧响应覆盖新选择', () => {
-  assert.match(drawer, /const previewRequestRef = useRef\(0\)/)
-  assert.match(drawer, /previewRequestRef\.current !== request/)
+  assert.match(previewDialog, /const previewRequestRef = useRef\(0\)/)
+  assert.match(previewDialog, /previewRequestRef\.current !== request/)
 })
 
 test('目录内文件统一由后端裁决正文或元信息状态', () => {
-  assert.doesNotMatch(drawer, /if \(!entry\.previewable\) return/)
-  assert.match(drawer, /model\.managedAssetFile/)
+  assert.doesNotMatch(previewDialog, /if \(!entry\.previewable\) return/)
+  assert.match(previewDialog, /model\.managedAssetFile/)
 })
 
 test('目录错误与文件预览错误互不覆盖', () => {
-  assert.match(drawer, /directoryError/)
-  assert.match(drawer, /previewError/)
-  assert.doesNotMatch(drawer, /const \[error, setError\]/)
+  assert.match(previewDialog, /directoryError/)
+  assert.match(previewDialog, /previewError/)
+  assert.doesNotMatch(previewDialog, /const \[error, setError\]/)
 })

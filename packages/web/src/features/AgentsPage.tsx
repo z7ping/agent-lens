@@ -16,7 +16,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
-import { AgentManagedFilesDrawer } from '../components/AgentManagedFilesDrawer'
+import { AgentManagedFilesDialog } from '../components/AgentManagedFilesDialog'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
@@ -688,7 +688,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       />
     </section>
     {pathError && <div className="agent-path-error" role="alert">{pathError}</div>}
-    {managedRoot && installation && managedRootPath && <AgentManagedFilesDrawer
+    {managedRoot && installation && managedRootPath && <AgentManagedFilesDialog
       open
       model={model}
       productId={agent.productId}
@@ -699,7 +699,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       rootPath={managedRootPath}
       onClose={() => setManagedRoot(null)}
     />}
-    {previewAsset?.binding.path && <AgentManagedFilesDrawer
+    {previewAsset?.binding.path && <AgentManagedFilesDialog
       open
       model={model}
       productId={agent.productId}

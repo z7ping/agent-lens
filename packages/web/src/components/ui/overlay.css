@@ -70,6 +70,15 @@
   flex: 1 1 auto;
 }
 
+.ui-overlay-header-actions {
+  min-width: 0;
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .ui-overlay-heading h2 {
   margin: 0;
   color: var(--al-ink);
