@@ -14,6 +14,8 @@ export interface TaskMessageProps {
   actions?: ReactNode
   collapsible?: boolean
   streaming?: boolean
+  pending?: boolean
+  pendingLabel?: string
   className?: string
 }
 
@@ -27,6 +29,8 @@ export function TaskMessage({
   actions,
   collapsible = true,
   streaming = false,
+  pending = false,
+  pendingLabel,
   className = '',
 }: TaskMessageProps) {
   const { t } = useTranslation('task')
@@ -78,11 +82,21 @@ export function TaskMessage({
     className={`task-message-row ${roleClass} ${className}`.trim()}
     data-task-message-role={role}
     data-streaming={streaming ? 'true' : undefined}
-    aria-busy={streaming || undefined}
+    data-pending={pending ? 'true' : undefined}
+    aria-busy={streaming || pending || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
       <div className="task-message-meta"><b>{resolvedAuthor}</b>{meta}{time && <time>{time}</time>}</div>
-      <div className="markdown-message task-message-content" data-view={view}>
+      {pending && !user ? <div
+        className="task-message-response-pending"
+        role="status"
+        aria-live="polite"
+        aria-label={pendingLabel ?? t('message.waitingResponse')}
+      >
+        <span aria-hidden="true"/>
+        <span aria-hidden="true"/>
+        <span aria-hidden="true"/>
+      </div> : <div className="markdown-message task-message-content" data-view={view}>
         <div
           ref={surfaceRef}
           className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
@@ -97,7 +111,7 @@ export function TaskMessage({
             {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
           </button>}
         </div>}
-      </div>
+      </div>}
       {actions && <div className="task-message-actions">{actions}</div>}
     </div>
   </div>
