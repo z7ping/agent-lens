@@ -32,13 +32,17 @@ test('Pi Live assistant 与 thinking 都把 running 状态交给统一 MarkdownC
   assert.match(taskRound, /streaming=\{item\.state === 'running'\}/)
 })
 
-test('发送清空 value 时 Lexical 根节点被重建为普通段落', () => {
+test('显式草稿 revision 才重建 Lexical 文档，本地编辑不会形成受控值回声', () => {
+  assert.match(composer, /interface PiMarkdownComposerDraft[\s\S]*?revision: number[\s\S]*?value: string/)
+  assert.match(composer, /function ExternalDraftPlugin\(\{ draft \}/)
+  assert.match(composer, /\[draft\.revision, draft\.value, editor\]/)
+  assert.match(composer, /editor\.isComposing\(\)/)
   assert.match(composer, /function replaceMarkdownDocument\(editor: LexicalEditor, value: string\)/)
   assert.match(composer, /root\.clear\(\)/)
   assert.match(composer, /const paragraph = \$createParagraphNode\(\)/)
   assert.match(composer, /root\.append\(paragraph\)/)
   assert.match(composer, /paragraph\.selectStart\(\)/)
-  assert.match(composer, /replaceMarkdownDocument\(editor, value\)/)
+  assert.doesNotMatch(composer, /function ExternalValuePlugin/)
 })
 
 test('Pi Live 边界导航使用整数描边，避免 1.75px 小尺寸抗锯齿发虚', () => {
