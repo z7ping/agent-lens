@@ -142,6 +142,8 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     liveComposer: {
       largeTextSummary: '已粘贴文本 · {{lines}} 行 · {{chars}} 字符',
       removeLargeText: '删除粘贴文本',
+      image: '图片',
+      removeImage: '删除图片',
     },
     overlay: {
       close: '关闭',
