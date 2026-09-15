@@ -31,7 +31,7 @@ function handle(id: string, sessionFile?: string): PiRuntimeHandle {
     processId: 1234,
     state: async () => readyState(id, sessionFile),
     snapshot: async () => ({ state: readyState(id, sessionFile), entries: [], leafId: null }),
-    controls: async () => ({ models: [], thinkingLevels: [] }),
+    controls: async () => ({ models: [] }),
     setModel: async () => readyState(id, sessionFile), setThinkingLevel: async () => readyState(id, sessionFile),
     prompt: async () => {}, steer: async () => {}, followUp: async () => {},
     clearQueue: async () => ({ steering: [], followUp: [] }),
