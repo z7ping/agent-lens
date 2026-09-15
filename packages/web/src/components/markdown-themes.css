@@ -1,0 +1,103 @@
+/*
+ * 文档预览皮肤的统一作用域。
+ *
+ * 主题只允许从 [data-markdown-theme] 向内影响渲染后的 Markdown，不接管应用外壳、
+ * Dialog、Task Surface 或全局 html/body。Next Helvetica 的排版取向参考 NexT for
+ * Typora，但不复制其 Typora 专属规则或随附字体资源。
+ */
+
+.markdown[data-markdown-theme='next-helvetica'] {
+  width: min(100%, 960px);
+  color: var(--al-ink-2);
+  font-family: "Helvetica Neue", Helvetica, var(--font-ui);
+  font-size: 14px;
+  font-variant-ligatures: none;
+  line-height: 1.58;
+}
+
+.markdown[data-markdown-theme='next-helvetica'] p {
+  margin: .36em 0;
+  line-height: inherit;
+}
+
+.markdown[data-markdown-theme='next-helvetica'] h1,
+.markdown[data-markdown-theme='next-helvetica'] h2,
+.markdown[data-markdown-theme='next-helvetica'] h3,
+.markdown[data-markdown-theme='next-helvetica'] h4,
+.markdown[data-markdown-theme='next-helvetica'] h5,
+.markdown[data-markdown-theme='next-helvetica'] h6 {
+  margin: .88em 0 .3em;
+  padding: 0;
+  border: 0;
+  color: var(--al-ink);
+  font-family: inherit;
+  font-weight: 700;
+  line-height: 1.34;
+}
+
+.markdown[data-markdown-theme='next-helvetica'] h1 {
+  padding-bottom: .24em;
+  border-bottom: 1px solid var(--al-line);
+  font-size: 1.68em;
+}
+.markdown[data-markdown-theme='next-helvetica'] h2 { font-size: 1.36em; }
+.markdown[data-markdown-theme='next-helvetica'] h3 { font-size: 1.18em; }
+.markdown[data-markdown-theme='next-helvetica'] h4 { font-size: 1.08em; }
+.markdown[data-markdown-theme='next-helvetica'] h5,
+.markdown[data-markdown-theme='next-helvetica'] h6 { font-size: 1em; }
+
+.markdown[data-markdown-theme='next-helvetica'] ul,
+.markdown[data-markdown-theme='next-helvetica'] ol {
+  margin: .38em 0;
+  padding-left: 1.5em;
+}
+.markdown[data-markdown-theme='next-helvetica'] li { margin: .08em 0; }
+.markdown[data-markdown-theme='next-helvetica'] li > ul,
+.markdown[data-markdown-theme='next-helvetica'] li > ol { margin: .12em 0; }
+
+.markdown[data-markdown-theme='next-helvetica'] a {
+  color: var(--al-accent);
+  font-weight: 650;
+  text-decoration: none;
+}
+.markdown[data-markdown-theme='next-helvetica'] a:hover { text-decoration: underline; }
+
+.markdown[data-markdown-theme='next-helvetica'] :not(pre) > code {
+  border-radius: 3px;
+  background: var(--al-soft);
+  color: color-mix(in srgb, var(--al-accent) 82%, var(--al-ink));
+}
+
+.markdown[data-markdown-theme='next-helvetica'] pre {
+  margin: .55em 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.markdown[data-markdown-theme='next-helvetica'] blockquote {
+  margin: .48em 0;
+  padding: .05em 0 .05em .75em;
+  border-left: 3px solid var(--al-line-strong);
+  color: var(--al-muted);
+}
+
+.markdown[data-markdown-theme='next-helvetica'] .markdown-table-scroll {
+  margin: .55em 0;
+  border-radius: 7px;
+}
+.markdown[data-markdown-theme='next-helvetica'] .markdown-table-scroll th,
+.markdown[data-markdown-theme='next-helvetica'] .markdown-table-scroll td {
+  min-width: 84px;
+  padding: 5px 7px;
+  font-size: 13px;
+  line-height: 1.48;
+}
+
+.markdown[data-markdown-theme='next-helvetica'] hr { margin: .7em 0; }
+
+.markdown[data-markdown-theme='agent-lens'] {
+  width: min(100%, 860px);
+  margin-inline: auto;
+}

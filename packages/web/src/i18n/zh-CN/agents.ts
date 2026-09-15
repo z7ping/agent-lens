@@ -306,6 +306,11 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       viewMode: '文档视图',
       rendered: '渲染',
       source: '源码',
+      themeAria: 'Markdown 皮肤',
+      themeNextHelvetica: 'Next Helvetica',
+      themeNextHelveticaDescription: '紧凑技术文档排版',
+      themeAgentLens: 'AgentLens',
+      themeAgentLensDescription: '产品默认阅读排版',
       redacted: '已脱敏',
       metadataOnly: '仅显示文件元信息',
       blockedReason: {

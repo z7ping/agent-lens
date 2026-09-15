@@ -9,6 +9,7 @@ const backup = readFileSync(new URL('./features/BackupPage.tsx', import.meta.url
 const piLive = readFileSync(new URL('./features/PiLivePage.tsx', import.meta.url), 'utf8')
 const review = readFileSync(new URL('./features/ReviewPage.tsx', import.meta.url), 'utf8')
 const overlay = readFileSync(new URL('./components/ui/Overlay.tsx', import.meta.url), 'utf8')
+const markdownThemes = readFileSync(new URL('./components/markdown-themes.css', import.meta.url), 'utf8')
 
 test('智能体资产列表通过现有受管文件 Drawer 打开绑定预览', () => {
   assert.match(agents, /t\('managedFiles\.preview'\)/)
@@ -53,9 +54,18 @@ test('Markdown 资产使用宽文档模式并支持渲染与源码切换', () =>
   assert.match(drawer, /setPreviewView\(isMarkdownFile\(result\.name\) \? 'rendered' : 'source'\)/)
 })
 
+test('Markdown 文档皮肤默认使用 Next Helvetica 且被限制在预览内容作用域', () => {
+  assert.match(drawer, /useState\(readMarkdownTheme\)/)
+  assert.match(drawer, /<SelectMenu[\s\S]*?managed-file-theme-select/)
+  assert.match(drawer, /<MarkdownContent[^>]*theme=\{markdownTheme\}/)
+  assert.match(markdownThemes, /\.markdown\[data-markdown-theme='next-helvetica'\]/)
+  assert.doesNotMatch(markdownThemes, /(^|[},]\s*)(?:html|body|:root)(?:\s|,|\{)/m)
+  assert.doesNotMatch(markdownThemes, /!important/)
+})
+
 test('绑定目标判定不再把任意 400 当成目录', () => {
-  assert.match(drawer, /managedFileStatus\(previewError\) === 409/)
-  assert.doesNotMatch(drawer, /managedFileStatus\(previewError\) === 400/)
+  assert.match(drawer, /managedFileStatus\(error\) === 409/)
+  assert.doesNotMatch(drawer, /managedFileStatus\(error\) === 400/)
 })
 
 test('多绑定资产必须显式选择当前位置，路径动作与预览共享同一 binding', () => {

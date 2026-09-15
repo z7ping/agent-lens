@@ -4,9 +4,11 @@ import {
   readAgentFilterPreference,
   readAgentVisibilityPreference,
   readLegacyAgentOrderPreference,
+  readMarkdownTheme,
   readSidebarCollapsed,
   writeAgentFilterPreference,
   writeAgentVisibilityPreference,
+  writeMarkdownTheme,
   writeSidebarCollapsed,
 } from './preferences'
 
@@ -69,6 +71,21 @@ test('桌面侧栏收起状态可以持久化并安全恢复默认值', () => {
     assert.equal(readSidebarCollapsed(), true)
     writeSidebarCollapsed(false)
     assert.equal(readSidebarCollapsed(), false)
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
+  }
+})
+
+test('Markdown 皮肤默认使用 Next Helvetica 并拒绝未知持久化值', () => {
+  const previous = globalThis.localStorage
+  const memory = storage()
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: memory })
+  try {
+    assert.equal(readMarkdownTheme(), 'next-helvetica')
+    writeMarkdownTheme('agent-lens')
+    assert.equal(readMarkdownTheme(), 'agent-lens')
+    memory.setItem('agent-lens.markdown-theme.v1', 'unknown-theme')
+    assert.equal(readMarkdownTheme(), 'next-helvetica')
   } finally {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous })
   }

@@ -8,10 +8,12 @@ import type {
   ManagedAssetRoot,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
+import { readMarkdownTheme, writeMarkdownTheme } from '../client/preferences'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalPathActions } from './LocalPathActions'
 import { MarkdownContent } from './MarkdownContent'
-import { Button, Dialog, Drawer, UiIcon } from './ui'
+import { isMarkdownThemeId } from './markdown-theme'
+import { Button, Dialog, Drawer, SelectMenu, UiIcon } from './ui'
 
 function isMarkdownFile(name: string | undefined): boolean {
   return Boolean(name && /\.(?:md|markdown|mdown|mkd)$/i.test(name))
@@ -85,6 +87,7 @@ export function AgentManagedFilesDrawer({
   const [previewError, setPreviewError] = useState('')
   const [pathError, setPathError] = useState('')
   const [previewView, setPreviewView] = useState<'rendered' | 'source'>('source')
+  const [markdownTheme, setMarkdownTheme] = useState(readMarkdownTheme)
   const generationRef = useRef(0)
   const previewRequestRef = useRef(0)
 
@@ -317,6 +320,21 @@ export function AgentManagedFilesDrawer({
           <div className="managed-file-preview-facts">
             {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
             {previewSize !== undefined && <small>{t('managedFiles.bytes', { count: previewSize })}</small>}
+            {previewMarkdown && previewView === 'rendered' && <SelectMenu
+              className="managed-file-theme-select"
+              value={markdownTheme}
+              onChange={value => {
+                if (!isMarkdownThemeId(value)) return
+                setMarkdownTheme(value)
+                writeMarkdownTheme(value)
+              }}
+              ariaLabel={t('managedFiles.themeAria')}
+              menuWidth={220}
+              options={[
+                { value: 'next-helvetica', label: t('managedFiles.themeNextHelvetica'), description: t('managedFiles.themeNextHelveticaDescription') },
+                { value: 'agent-lens', label: t('managedFiles.themeAgentLens'), description: t('managedFiles.themeAgentLensDescription') },
+              ]}
+            />}
             {previewMarkdown && preview?.content !== undefined && <div className="managed-file-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
               <button type="button" aria-pressed={previewView === 'rendered'} onClick={() => setPreviewView('rendered')}>{t('managedFiles.rendered')}</button>
               <button type="button" aria-pressed={previewView === 'source'} onClick={() => setPreviewView('source')}>{t('managedFiles.source')}</button>
@@ -329,7 +347,7 @@ export function AgentManagedFilesDrawer({
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
           : preview?.content !== undefined
             ? previewMarkdown && previewView === 'rendered'
-              ? <div className="managed-file-document-scroll"><MarkdownContent text={preview.content} className="managed-file-markdown"/></div>
+              ? <div className="managed-file-document-scroll"><MarkdownContent text={preview.content} className="managed-file-markdown" theme={markdownTheme}/></div>
               : <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
             : preview?.previewStatus === 'metadata-only'
               ? <div className="managed-file-preview-empty">

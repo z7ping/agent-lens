@@ -306,6 +306,11 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       viewMode: 'Document view',
       rendered: 'Rendered',
       source: 'Source',
+      themeAria: 'Markdown skin',
+      themeNextHelvetica: 'Next Helvetica',
+      themeNextHelveticaDescription: 'Compact technical document typography',
+      themeAgentLens: 'AgentLens',
+      themeAgentLensDescription: 'Product default reading typography',
       redacted: 'Redacted',
       metadataOnly: 'File metadata only',
       blockedReason: {

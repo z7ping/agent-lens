@@ -1,7 +1,10 @@
+import { DEFAULT_MARKDOWN_THEME, isMarkdownThemeId, type MarkdownThemeId } from '../components/markdown-theme'
+
 const PINNED_KEY = 'agent-lens.pinned-agents.v1'
 const AGENT_FILTER_KEY = 'agent-lens.agent-filter.v2'
 const AGENT_VISIBILITY_KEY = 'agent-lens.agent-visibility.v1'
 const THEME_KEY = 'agent-lens.theme.v1'
+const MARKDOWN_THEME_KEY = 'agent-lens.markdown-theme.v1'
 const SIDEBAR_COLLAPSED_KEY = 'agent-lens.sidebar-collapsed.v1'
 
 export interface AgentFilterPreference {
@@ -80,6 +83,17 @@ export function readTheme(): ThemePreference {
 export function writeTheme(theme: ThemePreference): void {
   localStorage.setItem(THEME_KEY, theme)
   document.documentElement.dataset.theme = theme
+}
+
+export function readMarkdownTheme(): MarkdownThemeId {
+  try {
+    const stored = localStorage.getItem(MARKDOWN_THEME_KEY)
+    return isMarkdownThemeId(stored) ? stored : DEFAULT_MARKDOWN_THEME
+  } catch { return DEFAULT_MARKDOWN_THEME }
+}
+
+export function writeMarkdownTheme(theme: MarkdownThemeId): void {
+  try { localStorage.setItem(MARKDOWN_THEME_KEY, theme) } catch { /* ignore unavailable storage */ }
 }
 
 export function readSidebarCollapsed(): boolean {

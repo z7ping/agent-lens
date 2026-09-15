@@ -1,6 +1,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import type { MarkdownThemeId } from './markdown-theme'
 
 export interface MarkdownContentProps {
   text: string
@@ -12,6 +13,8 @@ export interface MarkdownContentProps {
    * formatting jump when generation finishes.
    */
   streaming?: boolean
+  /** Optional document skin. Task messages omit it and retain the shared Task Surface style. */
+  theme?: MarkdownThemeId
 }
 
 export interface StreamingMarkdownSegments {
@@ -71,9 +74,9 @@ export function splitStreamingMarkdown(text: string): StreamingMarkdownSegments 
  * react-markdown 负责 CommonMark 与安全渲染（不启用 raw HTML），remark-gfm 统一补齐
  * 表格、任务列表、删除线和自动链接等 GFM 语法；视觉继续由 AgentLens 自己的样式契约负责。
  */
-export function MarkdownContent({ text, className = '', streaming = false }: MarkdownContentProps) {
+export function MarkdownContent({ text, className = '', streaming = false, theme }: MarkdownContentProps) {
   const segments = streaming ? splitStreamingMarkdown(text) : { settled: text, tail: '' }
-  return <div className={`markdown ${streaming ? 'markdown-streaming' : ''} ${className}`.trim()}>
+  return <div className={`markdown ${streaming ? 'markdown-streaming' : ''} ${className}`.trim()} data-markdown-theme={theme}>
     {segments.settled && <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{segments.settled}</ReactMarkdown>}
     {segments.tail && <div className="markdown-streaming-tail">{segments.tail}</div>}
   </div>

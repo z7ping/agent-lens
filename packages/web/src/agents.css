@@ -681,15 +681,15 @@
   background: var(--al-accent-soft);
   color: var(--al-accent);
 }
+.managed-file-theme-select { min-width: 126px; }
 .managed-file-document-scroll {
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
-  padding: 30px 38px 48px;
+  padding: 24px 30px 34px;
   background: var(--al-surface);
 }
 .managed-file-markdown {
-  width: min(100%, 860px);
   margin: 0 auto;
   color: var(--al-ink-2);
   font-size: 14px;
