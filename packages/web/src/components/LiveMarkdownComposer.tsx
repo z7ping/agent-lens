@@ -344,14 +344,16 @@ function ImagePastePlugin({
 
       event.preventDefault()
       const pending = files.map(file => {
+        const attachmentId = globalThis.crypto.randomUUID()
         const previewUrl = URL.createObjectURL(file)
         const node = $createLiveImageNode({
+          attachmentId,
           name: file.name || undefined,
           mimeType: file.type || undefined,
           sizeBytes: file.size,
           previewUrl,
         })
-        return { file, node, nodeKey: node.getKey(), previewUrl }
+        return { attachmentId, file, node, nodeKey: node.getKey() }
       })
       const nodes = pending.map(item => item.node)
       $insertNodes(nodes)
@@ -370,23 +372,24 @@ function ImagePastePlugin({
       if (wasIdle) onPendingChange?.(true)
       void Promise.allSettled(pending.map(async item => {
         try {
-          const descriptor = await uploadLiveAttachment(item.file)
-          let attached = false
-          editor.update(() => {
-            const current = $getNodeByKey(item.nodeKey)
-            if (!$isLiveImageNode(current)) return
-            current.setAttachment(descriptor)
-            attached = true
+          const descriptor = await uploadLiveAttachment(item.file, item.attachmentId)
+          if (descriptor.attachmentId !== item.attachmentId) {
+            await removeLiveAttachment(descriptor.attachmentId).catch(() => undefined)
+            throw new Error('Live attachment ID changed during upload')
+          }
+          let nodeStillPresent = false
+          editor.getEditorState().read(() => {
+            nodeStillPresent = $isLiveImageNode($getNodeByKey(item.nodeKey))
           })
-          if (!attached) await removeLiveAttachment(descriptor.attachmentId).catch(() => undefined)
+          if (!nodeStillPresent) {
+            await removeLiveAttachment(item.attachmentId).catch(() => undefined)
+          }
         } catch (error) {
           editor.update(() => {
             const current = $getNodeByKey(item.nodeKey)
             if ($isLiveImageNode(current)) current.remove()
           })
           onError?.(error)
-        } finally {
-          URL.revokeObjectURL(item.previewUrl)
         }
       })).then(() => {
         pendingCountRef.current = Math.max(0, pendingCountRef.current - pending.length)
