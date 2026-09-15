@@ -1,12 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import type { StorageService } from '@agent-lens/core'
+import type { LiveService, StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
 import {
   liveMessagePlainTextDto,
   parseLiveMessageInputDto,
   type JsonValue,
+  type LiveMessageDto,
   type PiLiveStartRequestDto,
 } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
@@ -69,10 +70,18 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
-function piLiveMessageText(value: unknown): string {
+function piLiveMessage(value: unknown): LiveMessageDto {
+  try {
+    return parseLiveMessageInputDto(value)
+  } catch (error) {
+    throw httpError(400, error instanceof Error ? error.message : 'Invalid Live message')
+  }
+}
+
+function piLiveMessageText(message: LiveMessageDto): string {
   let text: string
   try {
-    text = liveMessagePlainTextDto(parseLiveMessageInputDto(value)).trim()
+    text = liveMessagePlainTextDto(message).trim()
   } catch (error) {
     throw httpError(400, error instanceof Error ? error.message : 'Invalid Live message')
   }
@@ -179,6 +188,7 @@ export async function handlePiLiveRequest(
   url: URL,
   service: PiLiveService | undefined,
   storage: StorageService,
+  lives?: LiveService,
   selectProjectDirectory?: () => Promise<string | undefined>,
 ): Promise<boolean> {
   if (url.pathname !== '/api/v1/pi-live' && !url.pathname.startsWith('/api/v1/pi-live/')) return false
@@ -319,23 +329,38 @@ export async function handlePiLiveRequest(
     }
     if (action === 'prompt' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
-      await service.prompt(
-        runtimeSessionId,
-        piLiveMessageText(body.message),
-        streamingBehavior(body.behavior),
-      )
+      const message = piLiveMessage(body.message)
+      const behavior = streamingBehavior(body.behavior)
+      const adapter = lives?.get('pi')
+      if (adapter) {
+        await adapter.send(runtimeSessionId, message, {
+          ...(behavior === 'steer'
+            ? { behavior: 'steer' as const }
+            : behavior === 'followUp'
+              ? { behavior: 'follow-up' as const }
+              : {}),
+        })
+      } else {
+        await service.prompt(runtimeSessionId, piLiveMessageText(message), behavior)
+      }
       writeJson(response, 202, { ok: true })
       return true
     }
     if (action === 'steer' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
-      await service.steer(runtimeSessionId, piLiveMessageText(body.message))
+      const message = piLiveMessage(body.message)
+      const adapter = lives?.get('pi')
+      if (adapter) await adapter.send(runtimeSessionId, message, { behavior: 'steer' })
+      else await service.steer(runtimeSessionId, piLiveMessageText(message))
       writeJson(response, 202, { ok: true })
       return true
     }
     if (action === 'follow-up' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
-      await service.followUp(runtimeSessionId, piLiveMessageText(body.message))
+      const message = piLiveMessage(body.message)
+      const adapter = lives?.get('pi')
+      if (adapter) await adapter.send(runtimeSessionId, message, { behavior: 'follow-up' })
+      else await service.followUp(runtimeSessionId, piLiveMessageText(message))
       writeJson(response, 202, { ok: true })
       return true
     }
