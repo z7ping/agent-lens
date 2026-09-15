@@ -1,6 +1,8 @@
 import { performance } from 'node:perf_hooks'
 import type { PiLiveEventDto } from '@agent-lens/protocol'
 import { PiLiveEventScheduler } from '../../packages/web/src/client/pi-live.js'
+import { PiLiveFollowController } from '../../packages/web/src/features/pi-live-follow-controller.js'
+import { PiLivePresentationScheduler } from '../../packages/web/src/features/pi-live-presentation.js'
 
 function argNumber(name: string, fallback: number): number {
   const prefix = `--${name}=`
@@ -37,12 +39,28 @@ try {
   const toolCalls = Math.floor(argNumber('tool-calls', 100))
   const budgetPushMs = argNumber('budget-push-ms', 500)
   const budgetDeliveredRatio = argNumber('budget-delivered-ratio', 0.02)
+  const budgetPresentationCommitRatio = argNumber('budget-presentation-commit-ratio', 0.01)
 
   let delivered = 0
   let batches = 0
+  let renderedMutations = 0
+  const follow = new PiLiveFollowController()
+  const presentation = new PiLivePresentationScheduler<number>(mutation => {
+    renderedMutations = mutation(renderedMutations)
+    if (follow.isFollowing) follow.recordScrollWrite()
+  }, 60_000)
   const scheduler = new PiLiveEventScheduler(events => {
     delivered += events.length
     batches += 1
+    for (const value of events) {
+      const type = typeof value.event.type === 'string' ? value.event.type : ''
+      if (type === 'message_update' || type === 'tool_execution_update') {
+        presentation.push(count => count + 1)
+      } else if (type === 'agent_settled' || type === 'tool_execution_start' || type === 'tool_execution_end') {
+        presentation.boundary(count => count + 1)
+      }
+    }
+    presentation.flush()
   })
 
   let sequence = 1
@@ -90,6 +108,9 @@ try {
   const deliveredAfterDispose = delivered
 
   const deliveredRatio = hiddenDiagnostics.deliveredEvents / hiddenDiagnostics.ingressEvents
+  const presentationDiagnostics = presentation.snapshot()
+  const followDiagnostics = follow.snapshot()
+  const presentationCommitRatio = presentationDiagnostics.commitCount / hiddenDiagnostics.ingressEvents
   const result = {
     benchmark: 'pi-live-scheduler',
     deltaEvents,
@@ -102,14 +123,23 @@ try {
     delivered,
     pushMs,
     deliveredRatio,
+    renderedMutations,
+    presentationCommits: presentationDiagnostics.commitCount,
+    presentationQueuedMutations: presentationDiagnostics.queuedMutations,
+    presentationMaxQueueDepth: presentationDiagnostics.maxQueueDepth,
+    presentationMaxApplyMs: presentationDiagnostics.maxApplyDurationMs,
+    presentationLongApplies: presentationDiagnostics.longApplyCount,
+    presentationCommitRatio,
+    scrollWrites: followDiagnostics.scrollWrites,
     visibleHiddenFlag: visibleDiagnostics.hidden,
     hiddenHiddenFlag: hiddenDiagnostics.hidden,
     staleDeliveriesOnDispose: deliveredAfterDispose - deliveredBeforeDispose,
     budgetPushMs,
     budgetDeliveredRatio,
+    budgetPresentationCommitRatio,
   }
 
-  console.log(`[AgentLens perf] Pi Live Scheduler ingress=${result.ingressEvents} delivered=${result.deliveredEvents} coalesced=${result.coalescedEvents} maxQueue=${result.maxQueueDepth} push=${pushMs.toFixed(2)}ms ratio=${(deliveredRatio * 100).toFixed(2)}% disposeStale=${result.staleDeliveriesOnDispose}`)
+  console.log(`[AgentLens perf] Pi Live Scheduler ingress=${result.ingressEvents} delivered=${result.deliveredEvents} coalesced=${result.coalescedEvents} presentationCommits=${result.presentationCommits} scrollWrites=${result.scrollWrites} maxApply=${result.presentationMaxApplyMs.toFixed(2)}ms push=${pushMs.toFixed(2)}ms ratio=${(deliveredRatio * 100).toFixed(2)}% disposeStale=${result.staleDeliveriesOnDispose}`)
   console.log(JSON.stringify(result))
 
   if (visibleDiagnostics.hidden) throw new Error('前台调度诊断错误地标记为后台')
@@ -117,7 +147,11 @@ try {
   if (result.staleDeliveriesOnDispose !== 0) throw new Error('Pi Live 调度器销毁时仍交付了已过期事件')
   if (pushMs > budgetPushMs) throw new Error(`Pi Live 高频事件入队 ${pushMs.toFixed(2)}ms 超过预算 ${budgetPushMs}ms`)
   if (deliveredRatio > budgetDeliveredRatio) throw new Error(`Pi Live 事件交付比 ${(deliveredRatio * 100).toFixed(2)}% 超过预算 ${(budgetDeliveredRatio * 100).toFixed(2)}%，背压合并不足`)
+  if (presentationCommitRatio > budgetPresentationCommitRatio) throw new Error(`Pi Live 展示提交比 ${(presentationCommitRatio * 100).toFixed(2)}% 超过预算 ${(budgetPresentationCommitRatio * 100).toFixed(2)}%`)
+  if (result.scrollWrites > result.presentationCommits) throw new Error('Pi Live 单个展示批次产生了多次程序滚动写入')
+  if (presentationDiagnostics.longApplyCount > 0) throw new Error(`Pi Live 展示批次出现 ${presentationDiagnostics.longApplyCount} 次 >=16ms 应用`)
   if (hiddenDiagnostics.coalescedEvents <= deltaEvents) throw new Error('Pi Live 高频 delta 未形成足够合并')
+  presentation.dispose()
 } finally {
   if (originalDocument === undefined) delete globalRecord.document
   else globalRecord.document = originalDocument
