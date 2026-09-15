@@ -7,6 +7,7 @@ const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url)
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const sessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
+const globalStyles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
 const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
@@ -81,6 +82,13 @@ test('Pi Live streaming assistant reuses TaskMessage and has no parallel respons
   assert.match(sessionCss, /\.task-session-view \.task-session-reader \{[\s\S]*?scrollbar-gutter:\s*stable;/)
   assert.match(sessionCss, /\.task-session-view \.task-session-reader \{[\s\S]*?overflow-anchor:\s*none;/)
   assert.doesNotMatch(css, /\.pi-live-reader\s*\{/)
+})
+
+test('Pi Live streaming assistant skips repeated collapse measurement and keeps markdown tail geometry stable', () => {
+  assert.match(taskMessage, /if \(streaming && !user && view === 'rendered'\) \{[\s\S]*?setCanCollapse\(false\)[\s\S]*?setCollapsedHeight\(undefined\)[\s\S]*?return/)
+  assert.match(taskMessage, /\[measure, streaming, user, view\]/)
+  assert.doesNotMatch(taskMessage, /\[measure, text, user, view\]/)
+  assert.match(globalStyles, /\.markdown-streaming-tail\s*\{[\s\S]*?margin:\s*\.42em 0;[\s\S]*?line-height:\s*inherit;[\s\S]*?white-space:\s*pre-wrap;/)
 })
 
 test('Pi Live sends optimistically into one stable ordered current round before the first token', () => {
