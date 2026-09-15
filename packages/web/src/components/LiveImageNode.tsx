@@ -1,5 +1,5 @@
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
-import type { LiveAttachmentDescriptorDto, LiveImagePartDto } from '@agent-lens/protocol'
+import type { LiveImagePartDto } from '@agent-lens/protocol'
 import {
   $applyNodeReplacement,
   $getNodeByKey,
@@ -10,7 +10,7 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from 'lexical'
-import type { JSX } from 'react'
+import { useEffect, useState, type JSX } from 'react'
 import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { translateProduct } from '../i18n/runtime'
 import { IconButton } from './ui'
@@ -45,8 +45,13 @@ function LiveImageBlock({
   nodeKey,
 }: LiveImageNodeInput & { nodeKey: NodeKey }) {
   const [editor] = useLexicalComposerContext()
-  const ready = Boolean(attachmentId)
-  const source = previewUrl || (attachmentId ? liveAttachmentPreviewUrl(attachmentId) : '')
+  const [previewFailed, setPreviewFailed] = useState(false)
+  useEffect(() => () => {
+    if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl)
+  }, [previewUrl])
+  const source = previewUrl && !previewFailed
+    ? previewUrl
+    : attachmentId ? liveAttachmentPreviewUrl(attachmentId) : ''
   const summary = [name || translateProduct('common:liveComposer.image'), formatBytes(sizeBytes)]
     .filter(Boolean)
     .join(' · ')
@@ -62,10 +67,17 @@ function LiveImageBlock({
     className="live-image-block"
     contentEditable={false}
     data-live-message-part="image"
-    data-upload-state={ready ? 'ready' : 'pending'}
   >
     {source
-      ? <img className="live-image-preview" src={source} alt="" draggable={false}/>
+      ? <img
+          className="live-image-preview"
+          src={source}
+          alt=""
+          draggable={false}
+          onError={() => {
+            if (previewUrl && !previewFailed) setPreviewFailed(true)
+          }}
+        />
       : <span className="live-image-preview live-image-preview-empty" aria-hidden="true">
           <UiIcon name="task" size={16}/>
         </span>}
@@ -161,15 +173,6 @@ export class LiveImageNode extends DecoratorNode<JSX.Element> {
       ...(node.__mimeType ? { mimeType: node.__mimeType } : {}),
       ...(node.__sizeBytes !== undefined ? { sizeBytes: node.__sizeBytes } : {}),
     }
-  }
-
-  setAttachment(descriptor: LiveAttachmentDescriptorDto): void {
-    const writable = this.getWritable()
-    writable.__attachmentId = descriptor.attachmentId
-    writable.__name = descriptor.name
-    writable.__mimeType = descriptor.mimeType
-    writable.__sizeBytes = descriptor.sizeBytes
-    writable.__previewUrl = undefined
   }
 
   decorate(): JSX.Element {
