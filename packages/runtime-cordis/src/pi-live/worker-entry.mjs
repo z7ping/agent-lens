@@ -502,7 +502,7 @@ function runtimeCapabilities(hasSessionRuntime) {
     ...(sdkVersion ? { sdkVersion } : {}),
     sessionRuntime: hasSessionRuntime,
     modelSwitching: typeof session?.setModel === 'function',
-    thinkingLevelControl: typeof session?.setThinkingLevel === 'function',
+    thinkingLevelControl: typeof session?.setThinkingLevel === 'function' && typeof session?.getAvailableThinkingLevels === 'function',
     extensionUi: typeof session?.bindExtensions === 'function',
   }
 }
@@ -610,6 +610,17 @@ async function selectModel(provider, modelId) {
   await session.setModel(model)
 }
 
+function thinkingControl() {
+  if (!capabilities?.thinkingLevelControl) return undefined
+  const current = session?.thinkingLevel
+  const levels = session?.getAvailableThinkingLevels?.()
+  if (typeof current !== 'string' || !current || !Array.isArray(levels) || levels.length === 0) return undefined
+  if (levels.some(level => typeof level !== 'string' || !level)) return undefined
+  const options = levels.map(level => ({ value: level, label: level }))
+  if (!options.some(option => option.value === current)) return undefined
+  return { capability: 'thinking-control', value: current, options }
+}
+
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   if (name === 'state') return state()
@@ -618,9 +629,20 @@ async function command(name, value = {}) {
     if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
     return nextSnapshotChunk(value.transferId)
   }
-  if (name === 'controls') return { models: modelSnapshot().map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: session.getAvailableThinkingLevels() }
+  if (name === 'controls') {
+    const thinking = thinkingControl()
+    return {
+      models: modelSnapshot().map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })),
+      ...(thinking ? { thinking } : {}),
+    }
+  }
   if (name === 'setModel') { await selectModel(value.provider, value.modelId); return state() }
-  if (name === 'setThinkingLevel') { session.setThinkingLevel(value.level); return state() }
+  if (name === 'setThinkingLevel') {
+    const levels = session.getAvailableThinkingLevels()
+    if (!levels.includes(value.level)) throw new Error(`Pi thinking level is not available: ${value.level}`)
+    session.setThinkingLevel(value.level)
+    return state()
+  }
   if (name === 'prompt') {
     await new Promise((resolveAccepted, rejectAccepted) => {
       let accepted = false
