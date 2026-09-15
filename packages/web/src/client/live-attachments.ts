@@ -12,9 +12,10 @@ async function responseMessage(response: Response): Promise<string> {
   return `Live attachment request failed (status ${response.status})`
 }
 
-export async function uploadLiveAttachment(file: File): Promise<LiveAttachmentDescriptorDto> {
+export async function uploadLiveAttachment(file: File, attachmentId: string): Promise<LiveAttachmentDescriptorDto> {
   const headers: Record<string, string> = {
     'content-type': file.type || 'application/octet-stream',
+    'x-agentlens-attachment-id': attachmentId,
   }
   if (file.name) headers['x-agentlens-file-name'] = encodeURIComponent(file.name)
 
