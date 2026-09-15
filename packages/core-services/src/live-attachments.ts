@@ -3,6 +3,7 @@ import type {
   LiveAttachment,
   LiveAttachmentDescriptor,
   LiveAttachmentService,
+  LIVE_ATTACHMENT_MAX_ITEM_BYTES,
   PutLiveAttachmentInput,
 } from '@agent-lens/core'
 
@@ -14,7 +15,7 @@ export interface LiveAttachmentLimits {
 }
 
 export const DEFAULT_LIVE_ATTACHMENT_LIMITS: LiveAttachmentLimits = {
-  maxItemBytes: 12 * 1024 * 1024,
+  maxItemBytes: LIVE_ATTACHMENT_MAX_ITEM_BYTES,
   maxTotalBytes: 64 * 1024 * 1024,
   maxEntries: 64,
   ttlMs: 60 * 60 * 1000,
