@@ -16,7 +16,7 @@ const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const recoveryStore = new CheckpointPiLiveRecoveryStore(ctx.storage.checkpoints)
   const startupAudit = createPiLiveStartupAuditSink(ctx)
   const service = new DefaultPiLiveService(undefined, recoveryStore, startupAudit)
-  const adapter = new PiLiveAdapter(service)
+  const adapter = new PiLiveAdapter(service, ctx.liveAttachments)
   const liveRegistration = ctx.lives.register(adapter)
   const unprovide = ctx.provide('piLive', service)
   void service.preload().catch(error => {
@@ -29,7 +29,7 @@ const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
   }
 }
 
-applyPiLiveRuntime.inject = ['storage', 'lives', 'sources', 'identity', 'observations', 'capturePolicy']
+applyPiLiveRuntime.inject = ['storage', 'lives', 'liveAttachments', 'sources', 'identity', 'observations', 'capturePolicy']
 
 /** Internal runtime service. Native Pi history remains owned by @agent-lens/source-pi; Live only adds runtime-only audit facts such as the startup resource snapshot. */
 export const piLiveRuntimePlugin = applyPiLiveRuntime
