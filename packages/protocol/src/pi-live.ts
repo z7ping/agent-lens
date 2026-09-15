@@ -1,3 +1,4 @@
+import type { LiveThinkingControlDto } from './live'
 import type { JsonValue } from './timeline'
 
 export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
@@ -65,7 +66,7 @@ export interface PiLiveModelOptionDto {
 
 export interface PiLiveControlsDto {
   models: PiLiveModelOptionDto[]
-  thinkingLevels: string[]
+  thinking?: LiveThinkingControlDto | undefined
 }
 
 export interface PiLiveSetModelRequestDto {
