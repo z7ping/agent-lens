@@ -14,10 +14,10 @@ function optionalText(value: unknown, field: string): string | undefined {
 
 function optionalCount(value: unknown, field: string): number | undefined {
   if (value === undefined) return undefined
-  if (!Number.isInteger(value) || Number(value) < 0) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     throw new TypeError(`Live message ${field} must be a non-negative integer`)
   }
-  return Number(value)
+  return value
 }
 
 function normalizePart(value: unknown): LiveMessagePart {
