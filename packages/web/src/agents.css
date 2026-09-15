@@ -505,7 +505,6 @@
 .capability-row { justify-content: space-between; align-items: flex-start; }
 
 .agent-managed-files-dialog .ui-overlay-panel {
-  width: min(96vw, 1280px);
   height: min(90vh, 920px);
 }
 .agent-managed-files-dialog .ui-overlay-header {
