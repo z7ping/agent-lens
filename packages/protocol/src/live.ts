@@ -10,6 +10,13 @@ export interface LiveLargeTextPartDto {
   charCount?: number | undefined
 }
 
+export interface LiveAttachmentDescriptorDto {
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes: number
+}
+
 export interface LiveAttachmentPartDto {
   attachmentId: string
   name?: string | undefined
