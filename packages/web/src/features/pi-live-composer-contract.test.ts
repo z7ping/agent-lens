@@ -12,6 +12,8 @@ const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
 const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
 const composer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
+const imageNode = readFileSync(new URL('../components/LiveImageNode.tsx', import.meta.url), 'utf8')
+const attachmentClient = readFileSync(new URL('../client/live-attachments.ts', import.meta.url), 'utf8')
 const zhLocale = readFileSync(new URL('../i18n/zh-CN/pi-live.ts', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
@@ -53,7 +55,10 @@ test('Pi Live composer keeps local draft inside Lexical and serializes Markdown 
   assert.match(page, /const \[composerHasContent, setComposerHasContent\] = useState\(false\)/)
   assert.match(page, /draft=\{composerDraft\}/)
   assert.match(page, /onDraftPresenceChange=\{onComposerDraftPresenceChange\}/)
-  assert.match(page, /const composerSubmitEnabled =/)
+  assert.match(page, /const \[composerAttachmentPending, setComposerAttachmentPending\] = useState\(false\)/)
+  assert.match(page, /const composerSubmitEnabled = !composerAttachmentPending/)
+  assert.match(page, /onAttachmentPendingChange=\{onComposerAttachmentPendingChange\}/)
+  assert.match(page, /onAttachmentError=\{onComposerAttachmentError\}/)
   assert.match(page, /const canSend = composerHasContent && composerSubmitEnabled/)
   assert.match(composer, /<ListPlugin\/>/)
   assert.match(composer, /MarkdownShortcutPlugin transformers=\{TRANSFORMERS\}/)
@@ -61,7 +66,17 @@ test('Pi Live composer keeps local draft inside Lexical and serializes Markdown 
   assert.match(composer, /PASTE_COMMAND/)
   assert.match(composer, /isLargeLivePaste\(text\)/)
   assert.match(composer, /\$createLiveLargeTextNode\(text\)/)
+  assert.match(composer, /function ImagePastePlugin/)
+  assert.match(composer, /file\.type\.startsWith\('image\/'\)/)
+  assert.match(composer, /\$createLiveImageNode\(\{/)
+  assert.match(composer, /uploadLiveAttachment\(item\.file\)/)
+  assert.match(composer, /pendingCountRef\.current \+= pending\.length/)
+  assert.match(composer, /LiveImageNode/)
   assert.match(composer, /getMessage\(\)[\s\S]{0,160}messageFromEditor\(editor\.getEditorState\(\)\)/)
+  assert.match(imageNode, /liveAttachmentPreviewUrl\(attachmentId\)/)
+  assert.match(imageNode, /getImagePart\(\): LiveImagePartDto \| null/)
+  assert.match(attachmentClient, /method: 'POST'/)
+  assert.match(attachmentClient, /method: 'DELETE'/)
   assert.match(composer, /INSERT_PARAGRAPH_COMMAND/)
   assert.match(composer, /if \(event\.shiftKey\) \{[\s\S]*?event\.preventDefault\(\)[\s\S]*?editor\.dispatchCommand\(INSERT_PARAGRAPH_COMMAND, undefined\)[\s\S]*?return true/)
   assert.match(composer, /function DraftPresencePlugin/)
@@ -192,8 +207,8 @@ test('Pi Live reconnect hydrates the streaming round from Snapshot into the same
 })
 
 test('Pi Live 生成中使用专用介入和继续通道并即时展示队列', () => {
-  assert.match(page, /if \(selectedMode === 'steer'\) await piLiveApi\.steer\(runtimeId, text\)/)
-  assert.match(page, /else await piLiveApi\.followUp\(runtimeId, text\)/)
+  assert.match(page, /if \(selectedMode === 'steer'\) await piLiveApi\.steer\(runtimeId, message\)/)
+  assert.match(page, /else await piLiveApi\.followUp\(runtimeId, message\)/)
   assert.match(page, /setPendingQueue\(current => \[\.\.\.current, pending\]\)/)
   assert.match(page, /t\('queue\.joining'\)/)
   assert.match(page, /pendingMessageCount=\{visiblePendingCount\}/)
@@ -213,7 +228,7 @@ test('Pi Live Escape 和中断本轮仅在执行中可用，且不受发送请�
   assert.match(page, /event\.key !== 'Escape'/)
   assert.match(page, /\{optimisticStreaming && <Button[\s\S]*?className="pi-live-stop"[\s\S]*?disabled=\{abortPending \|\| queueMutationPending\}/)
   assert.match(page, /abortPending \? t\('header\.interrupting'\) : t\('header\.interrupt'\)/)
-  assert.match(page, /onEscape=\{optimisticStreaming \? \(\) => void stop\(\) : undefined\}/)
+  assert.match(page, /onEscape=\{optimisticStreaming \? onComposerEscape : undefined\}/)
 })
 
 test('medium desktop viewports reclaim space instead of forcing connection text into another row', () => {
