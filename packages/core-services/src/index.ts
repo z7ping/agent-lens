@@ -102,6 +102,16 @@ export class DefaultLiveService implements LiveService {
     if (this.adapters.has(id)) {
       throw new Error(`AgentLens live adapter already registered: ${id}`)
     }
+
+    const declaresThinkingControl = adapter.capabilities.has('thinking-control')
+    const implementsThinkingControl = typeof adapter.thinkingControl === 'function'
+      && typeof adapter.setThinkingControl === 'function'
+    if (declaresThinkingControl !== implementsThinkingControl) {
+      throw new Error(
+        `AgentLens live adapter thinking-control capability/method mismatch: ${id}`,
+      )
+    }
+
     this.adapters.set(id, adapter)
     return {
       dispose: () => {
