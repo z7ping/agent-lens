@@ -1,0 +1,145 @@
+@reference "../styles.css";
+
+.live-markdown-composer {
+  position: relative;
+  min-width: 0;
+}
+
+.live-markdown-input {
+  cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.live-markdown-input[contenteditable='false'] {
+  cursor: default;
+  opacity: .68;
+}
+
+.live-markdown-placeholder {
+  position: absolute;
+  top: 15px;
+  right: 98px;
+  left: 18px;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 15px;
+  line-height: 1.55;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.live-large-text-block {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--al-radius-sm);
+  background: var(--al-soft-2);
+  color: var(--al-muted-strong);
+  font-size: 12px;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.live-large-text-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--al-muted);
+}
+
+.live-large-text-summary {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-large-text-remove {
+  flex: 0 0 auto;
+  border-color: transparent;
+  background: transparent;
+}
+
+/*
+ * Composer 是输入控件，不是正文阅读器。Markdown 语义需要可见，但不应因标题/列表
+ * 把输入框撑成文档编辑器；最终展示仍由统一 MarkdownContent 负责。
+ */
+.live-md-paragraph { margin: 0 0 2px; }
+.live-md-paragraph:last-child { margin-bottom: 0; }
+.live-md-h1, .live-md-h2, .live-md-h3, .live-md-h4, .live-md-h5, .live-md-h6 {
+  margin: 2px 0;
+  color: var(--al-ink);
+  line-height: 1.5;
+  font-weight: 680;
+}
+.live-md-h1 { font-size: 15.5px; }
+.live-md-h2 { font-size: 15px; }
+.live-md-h3, .live-md-h4, .live-md-h5, .live-md-h6 { font-size: 14.5px; }
+
+.live-md-ul, .live-md-ol {
+  margin: 2px 0;
+  padding-left: 19px;
+}
+.live-md-ul { list-style: disc outside; }
+.live-md-ol { list-style: decimal outside; }
+.live-md-listitem { margin: 0; }
+.live-md-listitem-nested { list-style: none; }
+.live-md-checklist { list-style: none; padding-left: 18px; }
+.live-md-listitem-checked,
+.live-md-listitem-unchecked {
+  position: relative;
+  list-style: none;
+}
+.live-md-listitem-checked::before,
+.live-md-listitem-unchecked::before {
+  position: absolute;
+  left: -18px;
+  top: .22em;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 3px;
+  content: '';
+}
+.live-md-listitem-checked::before {
+  border-color: var(--al-accent);
+  background: var(--al-accent);
+  box-shadow: inset 0 0 0 3px var(--al-surface);
+}
+
+.live-md-quote {
+  margin: 2px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--al-line-strong);
+  color: var(--al-muted-strong);
+}
+
+.live-md-code-block {
+  display: block;
+  margin: 3px 0;
+  padding: 5px 7px;
+  overflow-x: auto;
+  border: 1px solid var(--al-line);
+  border-radius: 6px;
+  background: var(--al-soft-2);
+  font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+}
+.live-md-inline-code {
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--al-soft-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .9em;
+}
+.live-md-link { color: var(--al-accent); text-decoration: underline; text-underline-offset: 2px; }
+.live-md-bold { font-weight: 700; }
+.live-md-italic { font-style: italic; }
+.live-md-strikethrough { text-decoration: line-through; }
