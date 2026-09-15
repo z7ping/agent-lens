@@ -47,7 +47,7 @@ class HistoryHost implements PiRuntimeHost {
     return {
       state: async () => state(),
       snapshot: async () => ({ state: state(), entries: [...this.entries], leafId: 'leaf-1' }),
-      controls: async () => ({ models: [], thinkingLevels: [] }),
+      controls: async () => ({ models: [] }),
       setModel: async () => state(),
       setThinkingLevel: async () => state(),
       prompt: async () => {},

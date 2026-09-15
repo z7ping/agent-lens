@@ -1,3 +1,4 @@
+import { isLiveThinkingControl } from '@agent-lens/core'
 import type {
   LiveAdapter,
   LiveAdapterManifest,
@@ -83,6 +84,19 @@ export class PiLiveAdapter implements LiveAdapter {
 
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot> {
     return this.service.snapshot(runtimeSessionId, since)
+  }
+
+  async thinkingControl(runtimeSessionId: string) {
+    const control = (await this.service.controls(runtimeSessionId)).thinking
+    return isLiveThinkingControl(control) ? control : null
+  }
+
+  async setThinkingControl(runtimeSessionId: string, value: string): Promise<PiLiveRuntimeState> {
+    const control = await this.thinkingControl(runtimeSessionId)
+    if (!control || !control.options.some(option => option.value === value)) {
+      throw new Error(`Pi Live thinking control does not offer value: ${value}`)
+    }
+    return this.service.setThinkingLevel(runtimeSessionId, value)
   }
 
   send(

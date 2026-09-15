@@ -5,11 +5,13 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
     common: {
       backgroundActivity: 'Background activity',
       model: 'Model',
+      thinkingOff: 'Off',
       thinkingMinimal: 'Minimal',
       thinkingLow: 'Low',
       thinkingMedium: 'Medium',
       thinkingHigh: 'High',
       thinkingXHigh: 'Extra high',
+      thinkingMax: 'Maximum',
       seconds: '{{count}} s',
       minutes: '{{count}} min',
       hoursMinutes: '{{hours}} h {{minutes}} min',

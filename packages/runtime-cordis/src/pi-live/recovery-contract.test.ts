@@ -39,7 +39,7 @@ function handle(
     processId: 1234,
     state: async () => state,
     snapshot: async () => ({ state, entries: [], leafId: null }),
-    controls: async () => ({ models: [], thinkingLevels: [] }),
+    controls: async () => ({ models: [] }),
     setModel: async () => state,
     setThinkingLevel: async () => state,
     prompt: async () => { options.onPrompt?.() },

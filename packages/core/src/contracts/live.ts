@@ -59,6 +59,52 @@ export interface LiveSendOptions {
   behavior?: 'normal' | 'steer' | 'follow-up'
 }
 
+export interface LiveControlDisplayInfo {
+  label?: string
+  description?: string
+}
+
+export interface LiveControlOption extends LiveControlDisplayInfo {
+  /**
+   * Runtime-owned opaque value. AgentLens must round-trip it unchanged and
+   * must not merge vendor-specific values by guessed semantics.
+   */
+  value: string
+}
+
+export interface LiveThinkingControl extends LiveControlDisplayInfo {
+  capability: 'thinking-control'
+  /** Current effective Runtime value. */
+  value: string
+  /** Runtime-provided options in Runtime order. */
+  options: readonly LiveControlOption[]
+}
+
+function liveControlRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+export function isLiveThinkingControl(value: unknown): value is LiveThinkingControl {
+  const control = liveControlRecord(value)
+  if (!control || control.capability !== 'thinking-control') return false
+  if (typeof control.value !== 'string' || !control.value) return false
+  if (control.label !== undefined && typeof control.label !== 'string') return false
+  if (control.description !== undefined && typeof control.description !== 'string') return false
+  if (!Array.isArray(control.options) || control.options.length === 0) return false
+
+  let hasCurrent = false
+  for (const candidate of control.options) {
+    const option = liveControlRecord(candidate)
+    if (!option || typeof option.value !== 'string' || !option.value) return false
+    if (option.label !== undefined && typeof option.label !== 'string') return false
+    if (option.description !== undefined && typeof option.description !== 'string') return false
+    if (option.value === control.value) hasCurrent = true
+  }
+  return hasCurrent
+}
+
 export interface LiveAdapter {
   readonly manifest: LiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName>
@@ -68,6 +114,10 @@ export interface LiveAdapter {
   start(input: unknown): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<LiveSnapshot>
+  /** Present only when the adapter declares thinking-control. */
+  thinkingControl?(runtimeSessionId: string): Promise<LiveThinkingControl | null>
+  /** Runtime-owned setter; value must be one returned by thinkingControl(). */
+  setThinkingControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
   send(runtimeSessionId: string, message: string, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   interrupt?(runtimeSessionId: string): Promise<unknown>

@@ -10,6 +10,7 @@ import type {
   PiSdkModel,
   PiSdkSession,
   PiSdkSessionManager,
+  PiSdkThinkingLevel,
 } from './sdk-loader'
 
 class FakeSessionManager implements PiSdkSessionManager {
@@ -299,6 +300,9 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
   const model: PiSdkModel = { provider: 'openai', id: 'gpt-refresh', name: 'GPT Refresh', reasoning: true }
   let availabilityCalls = 0
   let currentModel: PiSdkModel | undefined
+  let currentThinking: PiSdkThinkingLevel = 'medium'
+  const initialThinkingLevels: PiSdkThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+  const switchedThinkingLevels: PiSdkThinkingLevel[] = ['off', 'minimal', 'xhigh', 'max']
 
   const session = {
     sessionManager: manager,
@@ -306,7 +310,7 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
     sessionFile: manager.getSessionFile(),
     sessionName: manager.getSessionName(),
     get model() { return currentModel },
-    thinkingLevel: 'medium',
+    get thinkingLevel() { return currentThinking },
     isStreaming: false,
     isCompacting: false,
     pendingMessageCount: 0,
@@ -321,9 +325,12 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
     bindExtensions: async () => {},
     subscribe: () => () => {},
     setSessionName: () => {},
-    setModel: async (value: PiSdkModel) => { currentModel = value },
-    setThinkingLevel: () => {},
-    getAvailableThinkingLevels: () => ['off', 'medium', 'high'],
+    setModel: async (value: PiSdkModel) => {
+      currentModel = value
+      currentThinking = 'xhigh'
+    },
+    setThinkingLevel: level => { currentThinking = level },
+    getAvailableThinkingLevels: () => currentModel ? switchedThinkingLevels : initialThinkingLevels,
     prompt: async (_message: string, options?: { preflightResult?: (success: boolean) => void }) => {
       options?.preflightResult?.(true)
     },
@@ -353,11 +360,28 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
 
   const controls = await service.controls(state.runtimeSessionId)
   assert.deepEqual(controls.models, [])
+  assert.deepEqual(controls.thinking, {
+    capability: 'thinking-control',
+    value: 'medium',
+    options: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(value => ({ value, label: value })),
+  })
   assert.equal(availabilityCalls, 0, 'passive controls refresh must not probe provider availability')
 
   const changed = await service.setModel(state.runtimeSessionId, 'openai', 'gpt-refresh')
   assert.equal(availabilityCalls, 1, 'explicit model selection may refresh provider availability')
   assert.equal((changed.model as PiSdkModel | undefined)?.id, 'gpt-refresh')
+  assert.equal(changed.thinkingLevel, 'xhigh', 'Pi clamp result must remain the Runtime raw value')
+
+  const changedControls = await service.controls(state.runtimeSessionId)
+  assert.deepEqual(changedControls.thinking, {
+    capability: 'thinking-control',
+    value: 'xhigh',
+    options: ['off', 'minimal', 'xhigh', 'max'].map(value => ({ value, label: value })),
+  })
+
+  const maximum = await service.setThinkingLevel(state.runtimeSessionId, 'max')
+  assert.equal(maximum.thinkingLevel, 'max')
+  await assert.rejects(() => service.setThinkingLevel(state.runtimeSessionId, 'low'), /not available/)
 
   await service.dispose()
 })

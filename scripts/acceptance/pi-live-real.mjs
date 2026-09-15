@@ -233,9 +233,12 @@ try {
   check('SSE 实时通道已连接', true)
 
   const controls = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/controls`)
+  const thinkingOptions = Array.isArray(controls?.thinking?.options)
+    ? controls.thinking.options.filter(item => item && typeof item.value === 'string' && item.value)
+    : []
   report.controls = {
     modelCount: Array.isArray(controls?.models) ? controls.models.length : 0,
-    thinkingLevels: Array.isArray(controls?.thinkingLevels) ? controls.thinkingLevels : [],
+    thinkingValues: thinkingOptions.map(item => item.value),
   }
   check('真实 Pi Controls 可读取', report.controls.modelCount > 0, `${report.controls.modelCount} models`)
 
@@ -246,8 +249,9 @@ try {
     check('真实 Pi Model 设置链路', Boolean(changed?.model), `${same.provider}/${same.id}`)
   }
 
-  if (controls?.thinkingLevels?.length) {
-    const level = controls.thinkingLevels.includes(state.thinkingLevel) ? state.thinkingLevel : controls.thinkingLevels[0]
+  if (controls?.thinking?.capability === 'thinking-control' && thinkingOptions.length) {
+    const offered = thinkingOptions.map(item => item.value)
+    const level = offered.includes(controls.thinking.value) ? controls.thinking.value : offered[0]
     const changed = await post(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/thinking-level`, { level })
     check('真实 Pi Thinking Level 设置链路', changed?.thinkingLevel === level, String(level))
   }

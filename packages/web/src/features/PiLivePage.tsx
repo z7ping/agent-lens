@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
+import { resolveLiveThinkingControl } from '../client/live-controls'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -146,21 +147,15 @@ function modelCompactLabel(state: PiLiveStateDto | null): string {
   return stringValue(model.name || model.id || model.modelId) || agentLensI18n.t('piLive:common.model')
 }
 
-function thinkingLevelSemanticKey(level: string): string {
-  const normalized = level.trim().toLowerCase()
-  if (normalized === 'minimal' || normalized === 'none' || normalized === 'off') return 'minimal'
-  if (normalized === 'xhigh' || normalized === 'max' || normalized === 'maximum') return 'xhigh'
-  return normalized
-}
-
-function thinkingLevelLabel(level: string): string {
-  const normalized = thinkingLevelSemanticKey(level)
-  if (normalized === 'minimal') return agentLensI18n.t('piLive:common.thinkingMinimal')
-  if (normalized === 'low') return agentLensI18n.t('piLive:common.thinkingLow')
-  if (normalized === 'medium') return agentLensI18n.t('piLive:common.thinkingMedium')
-  if (normalized === 'high') return agentLensI18n.t('piLive:common.thinkingHigh')
-  if (normalized === 'xhigh') return agentLensI18n.t('piLive:common.thinkingXHigh')
-  return level
+function thinkingLevelLabel(level: string, runtimeLabel?: string): string {
+  if (level === 'off') return agentLensI18n.t('piLive:common.thinkingOff')
+  if (level === 'minimal') return agentLensI18n.t('piLive:common.thinkingMinimal')
+  if (level === 'low') return agentLensI18n.t('piLive:common.thinkingLow')
+  if (level === 'medium') return agentLensI18n.t('piLive:common.thinkingMedium')
+  if (level === 'high') return agentLensI18n.t('piLive:common.thinkingHigh')
+  if (level === 'xhigh') return agentLensI18n.t('piLive:common.thinkingXHigh')
+  if (level === 'max') return agentLensI18n.t('piLive:common.thinkingMax')
+  return runtimeLabel || level
 }
 
 function modelSelection(state: PiLiveStateDto | null): string {
@@ -377,7 +372,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
   const [state, setState] = useState<PiLiveStateDto | null>(null)
-  const [controls, setControls] = useState<PiLiveControlsDto>({ models: [], thinkingLevels: [] })
+  const [controls, setControls] = useState<PiLiveControlsDto>({ models: [] })
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
   const [input, setInput] = useState('')
@@ -425,7 +420,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     }
     setSnapshot(null)
     setState(null)
-    setControls({ models: [], thinkingLevels: [] })
+    setControls({ models: [] })
     setOptimisticPrompt('')
     setCurrentOrdinal(null)
     setCurrentItems([])
@@ -864,6 +859,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     try {
       const nextState = await piLiveApi.setThinkingLevel(runtimeId, level)
       setState(nextState)
+      setControls(await piLiveApi.controls(runtimeId))
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -1028,14 +1024,21 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       : syncWarningCode === 'snapshot-sync-failed'
         ? t('warning.snapshotFailed')
         : ''
-  const thinkingOptions = (() => {
-    const values = new Map<string, string>()
-    for (const level of controls.thinkingLevels) {
-      const key = thinkingLevelSemanticKey(level)
-      if (!values.has(key) || level === state?.thinkingLevel) values.set(key, level)
-    }
-    return [...values.values()].map(level => ({ value: level, label: thinkingLevelLabel(level) }))
-  })()
+  const thinkingControl = resolveLiveThinkingControl(
+    state?.capabilities?.thinkingLevelControl === true,
+    controls.thinking,
+  )
+  const thinkingOptions = thinkingControl
+    ? thinkingControl.options.map(option => ({
+        value: option.value,
+        label: thinkingLevelLabel(option.value, option.label),
+        ...(option.description ? { description: option.description } : {}),
+      }))
+    : []
+  const currentThinkingOption = thinkingControl?.options.find(option => option.value === thinkingControl.value)
+  const currentThinkingLabel = thinkingControl
+    ? thinkingLevelLabel(thinkingControl.value, currentThinkingOption?.label)
+    : t('composer.thinkingUnset')
   const composerStatus = startupQueued
     ? { label: t('connection.queued'), color: 'var(--al-accent)', title: t('connection.queuedTitle') }
     : runtimeInitializing
@@ -1232,17 +1235,17 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 }))}
                 onChange={selection => void changeModel(selection)}
               />
-              <ComposerPillSelect
+              {thinkingControl && <ComposerPillSelect
                 ariaLabel={t('composer.thinkingAria')}
-                title={t('composer.thinkingTitle', { level: state?.thinkingLevel ? thinkingLevelLabel(state.thinkingLevel) : t('composer.thinkingUnset') })}
-                value={state?.thinkingLevel ?? ''}
-                placeholder={state?.thinkingLevel ? thinkingLevelLabel(state.thinkingLevel) : t('composer.thinkingPlaceholder')}
+                title={t('composer.thinkingTitle', { level: currentThinkingLabel })}
+                value={thinkingControl.value}
+                placeholder={currentThinkingLabel || t('composer.thinkingPlaceholder')}
                 className="pi-live-thinking-picker"
                 menuWidth={168}
-                disabled={!runtimeReady || controlBusy || controls.thinkingLevels.length === 0}
+                disabled={!runtimeReady || controlBusy}
                 options={thinkingOptions}
                 onChange={level => void changeThinkingLevel(level)}
-              />
+              />}
             </div>
             <div className="pi-live-compose-mode" aria-label={t('composer.modeAria')}>
               <Button size="small" className={`pi-live-mode-action ${mode === 'steer' ? 'active' : ''}`} title={t('composer.steerTitle')} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>{t('composer.steer')}</Button>

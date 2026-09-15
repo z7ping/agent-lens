@@ -25,6 +25,7 @@ class FakePiLiveService implements PiLiveService {
   thinkingChanges: string[] = []
   model = { provider: 'test', id: 'model-1', name: 'Model One' }
   thinkingLevel = 'medium'
+  thinkingLevels = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
   terminateCalls = 0
   listener: PiLiveRuntimeListener | null = null
 
@@ -81,13 +82,21 @@ class FakePiLiveService implements PiLiveService {
         { provider: 'test', id: 'model-1', name: 'Model One', reasoning: true },
         { provider: 'test', id: 'model-2', name: 'Model Two', reasoning: true },
       ],
-      thinkingLevels: ['off', 'low', 'medium', 'high'],
+      thinking: {
+        capability: 'thinking-control' as const,
+        value: this.thinkingLevel,
+        options: this.thinkingLevels.map(value => ({ value, label: value })),
+      },
     }
   }
 
   async setModel(runtimeSessionId: string, provider: string, modelId: string) {
     this.modelChanges.push({ provider, modelId })
     this.model = { provider, id: modelId, name: modelId === 'model-2' ? 'Model Two' : modelId }
+    if (modelId === 'model-2') {
+      this.thinkingLevels = ['off', 'minimal', 'xhigh', 'max']
+      this.thinkingLevel = 'xhigh'
+    }
     return this.state(runtimeSessionId)
   }
 
@@ -260,7 +269,11 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
         { provider: 'test', id: 'model-1', name: 'Model One', reasoning: true },
         { provider: 'test', id: 'model-2', name: 'Model Two', reasoning: true },
       ],
-      thinkingLevels: ['off', 'low', 'medium', 'high'],
+      thinking: {
+        capability: 'thinking-control',
+        value: 'medium',
+        options: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(value => ({ value, label: value })),
+      },
     })
 
     const changedModel = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/model`, {
@@ -270,16 +283,25 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     })
     assert.equal(changedModel.status, 200)
     assert.deepEqual(piLive.modelChanges, [{ provider: 'test', modelId: 'model-2' }])
-    assert.deepEqual((await json(changedModel)).model, { provider: 'test', id: 'model-2', name: 'Model Two' })
+    const changedModelState = await json(changedModel)
+    assert.deepEqual(changedModelState.model, { provider: 'test', id: 'model-2', name: 'Model Two' })
+    assert.equal(changedModelState.thinkingLevel, 'xhigh')
+
+    const modelControls = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/controls`)
+    assert.deepEqual((await json(modelControls)).thinking, {
+      capability: 'thinking-control',
+      value: 'xhigh',
+      options: ['off', 'minimal', 'xhigh', 'max'].map(value => ({ value, label: value })),
+    })
 
     const changedThinking = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/thinking-level`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ level: 'high' }),
+      body: JSON.stringify({ level: 'max' }),
     })
     assert.equal(changedThinking.status, 200)
-    assert.deepEqual(piLive.thinkingChanges, ['high'])
-    assert.equal((await json(changedThinking)).thinkingLevel, 'high')
+    assert.deepEqual(piLive.thinkingChanges, ['max'])
+    assert.equal((await json(changedThinking)).thinkingLevel, 'max')
 
     const badBehavior = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
       method: 'POST',
