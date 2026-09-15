@@ -155,6 +155,7 @@ function NewTaskPanel({
   const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
   const [manualDirectory, setManualDirectory] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
+  const [launchMode, setLaunchMode] = useState<'existing' | 'directory'>('existing')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -194,9 +195,11 @@ function NewTaskPanel({
     ? t('center.newTask.checkingPi')
     : !availability.available
       ? availability.label
-      : selected
-        ? t('center.newTask.directInput')
-        : t('center.newTask.waitingProject')
+      : launchMode === 'existing'
+        ? selected ? t('center.newTask.existingReadyHint') : t('center.newTask.waitingProject')
+        : manualDirectory.trim()
+          ? t('center.newTask.directoryReadyHint')
+          : t('center.newTask.directoryPrompt')
   const start = async (project: { cwd: string; label: string }) => {
     if (starting || !availability.available) return
     setStarting(true)
@@ -242,6 +245,12 @@ function NewTaskPanel({
     await start({ cwd, label })
   }
 
+  const selectLaunchMode = (mode: 'existing' | 'directory') => {
+    setLaunchMode(mode)
+    setError('')
+    if (mode === 'directory' && !nativeDirectoryPicker) setManualDirectoryOpen(true)
+  }
+
   return <div className="task-center-new">
     <section className="task-center-new-card">
       <header className="task-center-new-head">
@@ -258,58 +267,76 @@ function NewTaskPanel({
           <span>{t('center.newTask.taskTitle')}</span>
           <Input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder={t('center.newTask.taskTitlePlaceholder')} disabled={starting} aria-label={t('center.newTask.taskTitleAria')}/>
         </label>
-        <label className="task-center-new-project-field">
-          <span>{t('center.newTask.existingProject')}</span>
-          <SelectMenu
-            value={selectedKey}
-            options={projectOptions}
-            onChange={setSelectedKey}
-            ariaLabel={t('center.newTask.selectProjectAria')}
-            placeholder={options.length ? t('center.newTask.selectProject') : t('center.newTask.noProject')}
-            variant="field"
-            className="task-center-new-project-select"
-            menuWidth={420}
-            searchable
-            searchPlaceholder={t('center.newTask.searchProject')}
-            onSearchChange={onProjectSearch}
-            loading={projectLoading}
-            hasMore={projectHasMore}
-            onLoadMore={onProjectLoadMore}
-            loadingMore={projectLoadingMore}
-            loadMoreLabel={t('center.newTask.loadMoreProjects')}
-            disabled={!options.length && !projectHasMore && !projectLoading}
-          />
-        </label>
-        <div className="task-center-new-directory-action">
-          <span>{t('center.newTask.newProject')}</span>
-          <div className="task-center-new-directory-actions">
-            {nativeDirectoryPicker && <Button loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>{t('center.newTask.selectDirectory')} <UiIcon name="arrow-right" size={14}/></Button>}
-            {nativeDirectoryPicker && <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>{t('center.newTask.inputPath')}</Button>}
-          </div>
+        <div className="task-center-launch-modes" role="radiogroup" aria-label={t('center.newTask.launchModeAria')}>
+          <Button className="task-center-launch-choice" role="radio" aria-checked={launchMode === 'existing'} onClick={() => selectLaunchMode('existing')}>
+            <UiIcon name="folder-open" size={16}/>
+            <span><b>{t('center.newTask.existingProject')}</b><small>{t('center.newTask.existingDescription')}</small></span>
+          </Button>
+          <Button className="task-center-launch-choice" role="radio" aria-checked={launchMode === 'directory'} onClick={() => selectLaunchMode('directory')}>
+            <UiIcon name="plus" size={16}/>
+            <span><b>{t('center.newTask.newProject')}</b><small>{t('center.newTask.newDescription')}</small></span>
+          </Button>
         </div>
-      </div>
-      {manualDirectoryVisible && <div className="task-center-new-manual-directory">
-        <Input
-          value={manualDirectory}
-          onChange={event => setManualDirectory(event.target.value)}
-          placeholder={t('center.newTask.pathPlaceholder')}
-          aria-label={t('center.newTask.pathAria')}
-          disabled={starting}
-          onKeyDown={event => {
-            if (event.key === 'Enter') void startManualDirectory()
-          }}
-        />
-        <Button variant="primary" loading={starting} disabled={!availability.available} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
-        {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
-      </div>}
 
-      <div className="task-center-new-status"><b>{selected ? t('center.newTask.startingIn', { project: selected.label }) : t('center.newTask.waitingSelection')}</b><span>{composerStateLabel}</span></div>
+        {launchMode === 'existing'
+          ? <section className="task-center-launch-panel" aria-labelledby="task-center-existing-project-title">
+              <div className="task-center-launch-panel-copy">
+                <h2 id="task-center-existing-project-title">{t('center.newTask.existingProject')}</h2>
+                <p>{t('center.newTask.existingHint')}</p>
+              </div>
+              <SelectMenu
+                value={selectedKey}
+                options={projectOptions}
+                onChange={setSelectedKey}
+                ariaLabel={t('center.newTask.selectProjectAria')}
+                placeholder={options.length ? t('center.newTask.selectProject') : t('center.newTask.noProject')}
+                variant="field"
+                className="task-center-new-project-select"
+                menuWidth={420}
+                searchable
+                searchPlaceholder={t('center.newTask.searchProject')}
+                onSearchChange={onProjectSearch}
+                loading={projectLoading}
+                hasMore={projectHasMore}
+                onLoadMore={onProjectLoadMore}
+                loadingMore={projectLoadingMore}
+                loadMoreLabel={t('center.newTask.loadMoreProjects')}
+                disabled={!options.length && !projectHasMore && !projectLoading}
+              />
+              <div className="task-center-launch-panel-actions">
+                <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>{t('center.newTask.openExisting')} <UiIcon name="arrow-right" size={14}/></Button>
+              </div>
+            </section>
+          : <section className="task-center-launch-panel" aria-labelledby="task-center-new-project-title">
+              <div className="task-center-launch-panel-copy">
+                <h2 id="task-center-new-project-title">{t('center.newTask.newProject')}</h2>
+                <p>{t('center.newTask.newHint')}</p>
+              </div>
+              {nativeDirectoryPicker && <div className="task-center-new-directory-actions">
+                <Button variant="primary" loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>{t('center.newTask.selectDirectory')} <UiIcon name="arrow-right" size={14}/></Button>
+                <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>{t('center.newTask.inputPath')}</Button>
+              </div>}
+              {manualDirectoryVisible && <div className="task-center-new-manual-directory">
+                <Input
+                  value={manualDirectory}
+                  onChange={event => setManualDirectory(event.target.value)}
+                  placeholder={t('center.newTask.pathPlaceholder')}
+                  aria-label={t('center.newTask.pathAria')}
+                  disabled={starting}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') void startManualDirectory()
+                  }}
+                />
+                <Button variant="primary" loading={starting} disabled={!availability.available} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
+                {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
+              </div>}
+            </section>}
+      </div>
+
+      <div className="task-center-new-status"><b>{launchMode === 'existing' ? selected ? t('center.newTask.startingIn', { project: selected.label }) : t('center.newTask.waitingSelection') : t('center.newTask.newProject')}</b><span>{composerStateLabel}</span></div>
       {error && <div className="pi-live-error" role="alert">{error}</div>}
       {projectDiscoveryError && <div className="task-center-project-hint" role="alert">{projectDiscoveryError}</div>}
       {!options.length && availability.checked && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
-      <div className="task-center-new-actions">
-        <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>{t('center.newTask.openExisting')} <UiIcon name="arrow-right" size={14}/></Button>
-      </div>
     </section>
   </div>
 }

@@ -254,9 +254,28 @@
 .task-center-new-fields { margin-top: 24px; }
 .task-center-new-fields label { display: grid; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 650; }
 .task-center-new-task-title { margin-bottom: 12px; }
-.task-center-new-directory-action { display: grid; gap: 6px; align-content: end; color: var(--al-muted); font-size: 12px; font-weight: 650; }
+.task-center-launch-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.task-center-launch-choice.btn {
+  min-height: 72px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 10px 11px;
+  border-color: var(--al-line);
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+  text-align: left;
+}
+.task-center-launch-choice.btn:hover { border-color: color-mix(in srgb, var(--al-accent) 42%, var(--al-line)); background: var(--al-accent-soft); }
+.task-center-launch-choice.btn[aria-checked='true'] { border-color: var(--al-accent); background: var(--al-accent-soft); color: var(--al-accent); }
+.task-center-launch-choice > span { display: grid; min-width: 0; gap: 3px; }
+.task-center-launch-choice b { font-size: 13px; font-weight: 700; }
+.task-center-launch-choice small { color: var(--al-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
+.task-center-launch-panel { display: grid; gap: 12px; margin-top: 10px; padding: 14px; border: 1px solid var(--al-line); border-radius: var(--radius-md); background: var(--al-soft-2); }
+.task-center-launch-panel-copy h2 { margin: 0; color: var(--al-ink); font-size: 13px; font-weight: 700; }
+.task-center-launch-panel-copy p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
+.task-center-launch-panel-actions { display: flex; justify-content: flex-end; }
 .task-center-new-directory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.task-center-new-manual-directory { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; margin-top: 12px; }
+.task-center-new-manual-directory { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .task-center-new-directory-hint { grid-column: 1 / -1; margin: 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
 .task-center-new-status {
   display: grid;
@@ -282,7 +301,8 @@
   .task-center-new-agent-mark { width: 40px; height: 40px; border-radius: 11px; }
   .task-center-new-readiness { grid-column: 2; justify-self: start; margin-top: 2px; }
   .task-center-new-fields { margin-top: 20px; }
+  .task-center-launch-modes { grid-template-columns: 1fr; }
   .task-center-new-manual-directory { grid-template-columns: minmax(0, 1fr); }
   .task-center-new-manual-directory .btn { width: 100%; }
-  .task-center-new-actions .btn { width: 100%; }
+  .task-center-launch-panel-actions .btn { width: 100%; }
 }

@@ -53,6 +53,11 @@ test('路径型项目选项第一行收敛为项目名，第二行保留路径�
 test('新建 Pi 任务使用聚焦启动卡片并提供已有项目与目录启动入口', () => {
   assert.match(taskCenterSource, /className="task-center-new-card"/)
   assert.match(taskCenterSource, /t\('center\.newTask\.title'\)/)
+  assert.match(taskCenterSource, /const \[launchMode, setLaunchMode\] = useState<'existing' \| 'directory'>\('existing'\)/)
+  assert.match(taskCenterSource, /role="radiogroup" aria-label=\{t\('center\.newTask\.launchModeAria'\)\}/)
+  assert.match(taskCenterSource, /aria-checked=\{launchMode === 'existing'\}/)
+  assert.match(taskCenterSource, /aria-checked=\{launchMode === 'directory'\}/)
+  assert.match(taskCenterSource, /launchMode === 'existing'/)
   assert.match(taskCenterSource, /t\('center\.newTask\.selectDirectory'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
   assert.match(taskCenterSource, /t\('center\.newTask\.openExisting'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
   assert.match(taskCenterSource, /mode === 'new' \? 'is-new-task' : ''/)
