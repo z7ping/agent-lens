@@ -1,6 +1,11 @@
 import type { LiveAvailability, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveThinkingControl } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
+
+export interface PiLiveImageInput {
+  data: string
+  mimeType: string
+}
 export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 export type PiLiveInitializationStage = 'starting_worker' | 'loading_sdk' | 'loading_resources' | 'creating_session' | 'binding_extensions' | 'ready'
 export type PiLiveHistoryAction = 'continue' | 'fork'
@@ -131,9 +136,9 @@ export interface PiLiveService {
   controls(runtimeSessionId: string): Promise<PiLiveControls>
   setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState>
-  prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void>
-  steer(runtimeSessionId: string, message: string): Promise<void>
-  followUp(runtimeSessionId: string, message: string): Promise<void>
+  prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void>
+  steer(runtimeSessionId: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void>
+  followUp(runtimeSessionId: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   clearQueue(runtimeSessionId: string): Promise<PiLiveQueueState>
   abort(runtimeSessionId: string, options?: { restoreQueue?: boolean }): Promise<PiLiveQueueState>
   respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
