@@ -75,6 +75,7 @@ interface OverlayFrameProps {
   description?: ReactNode
   children: ReactNode
   footer?: ReactNode
+  headerActions?: ReactNode
   onClose(): void
   closeOnBackdrop?: boolean
   closeDisabled?: boolean
@@ -89,6 +90,7 @@ function OverlayFrame({
   description,
   children,
   footer,
+  headerActions,
   onClose,
   closeOnBackdrop = true,
   closeDisabled = false,
@@ -125,6 +127,7 @@ function OverlayFrame({
             <h2 id={titleId}>{title}</h2>
             {description && <p id={descriptionId}>{description}</p>}
           </div>
+          {headerActions && <div className="ui-overlay-header-actions">{headerActions}</div>}
           <IconButton aria-label={t('overlay.close')} disabled={closeDisabled} onClick={onClose}><UiIcon name="close" size={16}/></IconButton>
         </header>
         <div className="ui-overlay-body">{children}</div>
