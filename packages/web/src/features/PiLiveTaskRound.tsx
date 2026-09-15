@@ -87,6 +87,14 @@ export function piLiveLifecycleSummary(entry: Extract<PiLiveHistoryItem, { kind:
   return entry.detail.replace(/\s*·\s*Pi\s*$/, '').trim()
 }
 
+export function hasPiLiveResponseActivity(items: PiLiveHistoryItem[]): boolean {
+  return items.some(item =>
+    (item.kind === 'message' && item.role === 'assistant')
+    || item.kind === 'thinking'
+    || item.kind === 'tool'
+  )
+}
+
 function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
   const result: HistoryRenderEntry[] = []
   let tools: HistoryTool[] = []
@@ -218,6 +226,13 @@ export function PiLiveCurrentTaskRound({
     summaryMeta={pendingMessageCount > 0 ? <span>{t('history.queued', { count: pendingMessageCount })}</span> : undefined}
   >
     {promptText && <TaskMessage role="user" text={promptText} author={t('history.user')} className="pi-live-task-message pi-live-optimistic-message"/>}
+    {model.state === 'running' && Boolean(promptText) && !hasPiLiveResponseActivity(items) && <TaskMessage
+      role="assistant"
+      text=""
+      author="Pi"
+      pending
+      className="pi-live-task-message pi-live-response-pending"
+    />}
     <HistoryEntries items={omitPiLivePromptMessages(items, promptText)} showAllEvents={showAllEvents}/>
   </TaskRound>
 }

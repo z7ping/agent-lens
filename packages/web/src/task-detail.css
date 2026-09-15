@@ -225,6 +225,28 @@
 .task-surface .task-message-bubble-assistant { display: block; width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--al-ink); }
 .task-surface .task-message-meta { display: none; min-width: 0; align-items: center; gap: 7px; color: var(--al-muted); font-size: 12px; }
 .task-surface .task-message-content { position: relative; font-size: 14px; }
+.task-surface .task-message-response-pending {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 1px;
+  color: var(--al-muted);
+}
+.task-surface .task-message-response-pending > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .28;
+  animation: task-message-response-pending 1.15s ease-in-out infinite;
+}
+.task-surface .task-message-response-pending > span:nth-child(2) { animation-delay: .14s; }
+.task-surface .task-message-response-pending > span:nth-child(3) { animation-delay: .28s; }
+@keyframes task-message-response-pending {
+  0%, 60%, 100% { transform: translateY(0); opacity: .28; }
+  30% { transform: translateY(-3px); opacity: .78; }
+}
 .task-surface .markdown-message { display: block; min-width: 0; }
 .task-surface .markdown-surface { position: relative; min-width: 0; overflow: visible; line-height: 1.68; overflow-wrap: anywhere; }
 .task-surface .task-message-content .markdown-surface.is-collapsed { overflow: hidden; }
@@ -495,4 +517,5 @@
   .task-surface .task-disclosure-chevron,
   .task-surface .task-tool-output-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
+  .task-surface .task-message-response-pending > span { animation: none; opacity: .55; }
 }

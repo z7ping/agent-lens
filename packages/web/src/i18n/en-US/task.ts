@@ -25,6 +25,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
     message: {
       you: 'You',
       agent: 'Agent',
+      waitingResponse: 'Waiting for the agent to respond',
       collapseFiveLines: 'Collapse to 5 lines',
       expand: 'Expand',
       viewMarkdownSource: 'View Markdown source',
