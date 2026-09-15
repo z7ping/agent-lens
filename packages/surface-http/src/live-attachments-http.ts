@@ -31,6 +31,11 @@ function attachmentName(request: IncomingMessage): string | undefined {
   return value
 }
 
+function requestedAttachmentId(request: IncomingMessage): string | undefined {
+  const raw = firstHeader(request.headers['x-agentlens-attachment-id'])?.trim()
+  return raw || undefined
+}
+
 function attachmentMimeType(request: IncomingMessage): string | undefined {
   const raw = firstHeader(request.headers['content-type'])
   const value = raw?.split(';')[0]?.trim().toLowerCase()
@@ -40,6 +45,8 @@ function attachmentMimeType(request: IncomingMessage): string | undefined {
 function mapAttachmentError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error)
   if (/exceeds item limit|too large/i.test(message)) throw httpError(413, message)
+  if (/attachment id is invalid/i.test(message)) throw httpError(400, message)
+  if (/attachment id already exists/i.test(message)) throw httpError(409, message)
   if (/cache is full|byte limit exceeded/i.test(message)) throw httpError(503, message)
   throw error
 }
@@ -70,9 +77,11 @@ export async function handleLiveAttachmentRequest(
         maxBytes: LIVE_ATTACHMENT_MAX_ITEM_BYTES,
         emptyBodyMessage: 'Live attachment body is required',
       })
+      const attachmentId = requestedAttachmentId(request)
       const name = attachmentName(request)
       const mimeType = attachmentMimeType(request)
       const descriptor = await attachments.put({
+        ...(attachmentId ? { attachmentId } : {}),
         data,
         ...(name ? { name } : {}),
         ...(mimeType ? { mimeType } : {}),
