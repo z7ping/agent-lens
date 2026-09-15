@@ -3,7 +3,12 @@ import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
-import type { JsonValue, PiLiveStartRequestDto } from '@agent-lens/protocol'
+import {
+  liveMessagePlainTextDto,
+  parseLiveMessageInputDto,
+  type JsonValue,
+  type PiLiveStartRequestDto,
+} from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
 import { resolvePiLiveResumeInput } from './pi-live-resume'
@@ -62,6 +67,17 @@ function nonEmpty(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function piLiveMessageText(value: unknown): string {
+  let text: string
+  try {
+    text = liveMessagePlainTextDto(parseLiveMessageInputDto(value)).trim()
+  } catch (error) {
+    throw httpError(400, error instanceof Error ? error.message : 'Invalid Live message')
+  }
+  if (!text) throw httpError(400, 'message must contain text')
+  return text
 }
 
 /**
@@ -305,7 +321,7 @@ export async function handlePiLiveRequest(
       const body = objectBody(await readJson(request))
       await service.prompt(
         runtimeSessionId,
-        nonEmpty(body.message, 'message'),
+        piLiveMessageText(body.message),
         streamingBehavior(body.behavior),
       )
       writeJson(response, 202, { ok: true })
@@ -313,13 +329,13 @@ export async function handlePiLiveRequest(
     }
     if (action === 'steer' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
-      await service.steer(runtimeSessionId, nonEmpty(body.message, 'message'))
+      await service.steer(runtimeSessionId, piLiveMessageText(body.message))
       writeJson(response, 202, { ok: true })
       return true
     }
     if (action === 'follow-up' && request.method === 'POST') {
       const body = objectBody(await readJson(request))
-      await service.followUp(runtimeSessionId, nonEmpty(body.message, 'message'))
+      await service.followUp(runtimeSessionId, piLiveMessageText(body.message))
       writeJson(response, 202, { ok: true })
       return true
     }
