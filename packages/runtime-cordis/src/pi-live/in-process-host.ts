@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { isLiveThinkingControl } from '@agent-lens/core'
 import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
@@ -163,9 +164,29 @@ class InProcessHandle implements PiRuntimeHandle {
   async snapshot(since?: string): Promise<PiLiveSnapshot> { const all = this.session.sessionManager.getEntries(); const index = since ? all.findIndex(entry => record(entry).id === since) : -1; return { state: await this.state(), entries: since && index >= 0 ? all.slice(index + 1) : all, leafId: this.session.sessionManager.getLeafId() } }
   private modelSnapshot(provider?: string): readonly PiSdkModel[] { const snapshot = [...this.session.modelRuntime.getAvailableSnapshot()]; const selected = this.session.model; const catalog = selected && !snapshot.some(model => model.provider === selected.provider && model.id === selected.id) ? [...snapshot, selected] : snapshot; return provider ? catalog.filter(model => model.provider === provider) : catalog }
   private async modelsForSelection(provider?: string): Promise<readonly PiSdkModel[]> { const snapshot = this.modelSnapshot(provider); return snapshot.length ? snapshot : await this.session.modelRuntime.getAvailable(provider) }
-  async controls(): Promise<PiLiveControls> { return { models: this.modelSnapshot().map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })), thinkingLevels: this.session.getAvailableThinkingLevels() } }
+  private thinkingControl(): PiLiveControls['thinking'] {
+    const levels = this.session.getAvailableThinkingLevels()
+    const candidate = {
+      capability: 'thinking-control' as const,
+      value: this.session.thinkingLevel,
+      options: levels.map(level => ({ value: level, label: level })),
+    }
+    return isLiveThinkingControl(candidate) ? candidate : undefined
+  }
+  async controls(): Promise<PiLiveControls> {
+    const thinking = this.thinkingControl()
+    return {
+      models: this.modelSnapshot().map(({ provider, id, name, reasoning }) => ({ provider, id, ...(name ? { name } : {}), ...(typeof reasoning === 'boolean' ? { reasoning } : {}) })),
+      ...(thinking ? { thinking } : {}),
+    }
+  }
   async setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { const model = (await this.modelsForSelection(provider)).find(item => item.provider === provider && item.id === modelId); if (!model) throw new Error(`Pi model is not available: ${provider}/${modelId}`); await this.session.setModel(model); return this.state() }
-  async setThinkingLevel(level: string): Promise<PiLiveRuntimeState> { this.session.setThinkingLevel(level as PiSdkThinkingLevel); return this.state() }
+  async setThinkingLevel(level: string): Promise<PiLiveRuntimeState> {
+    const available = this.session.getAvailableThinkingLevels()
+    if (!available.includes(level as PiSdkThinkingLevel)) throw new Error(`Pi thinking level is not available: ${level}`)
+    this.session.setThinkingLevel(level as PiSdkThinkingLevel)
+    return this.state()
+  }
   async prompt(message: string, behavior?: PiLiveStreamingBehavior): Promise<void> { await new Promise<void>((resolve, reject) => { let accepted = false; const accept = () => { if (!accepted) { accepted = true; resolve() } }; void this.session.prompt(message, { ...(behavior ? { streamingBehavior: behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => { if (!accepted) reject(error) }) }) }
   async steer(message: string): Promise<void> { await this.session.steer(message) }
   async followUp(message: string): Promise<void> { await this.session.followUp(message) }
