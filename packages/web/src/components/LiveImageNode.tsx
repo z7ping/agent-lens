@@ -11,7 +11,7 @@ import {
   type Spread,
 } from 'lexical'
 import type { JSX } from 'react'
-import { liveAttachmentPreviewUrl, removeLiveAttachment } from '../client/live-attachments'
+import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { translateProduct } from '../i18n/runtime'
 import { IconButton } from './ui'
 import { UiIcon } from './UiIcon'
@@ -56,7 +56,6 @@ function LiveImageBlock({
       const node = $getNodeByKey(nodeKey)
       if ($isLiveImageNode(node)) node.remove()
     })
-    if (attachmentId) void removeLiveAttachment(attachmentId).catch(() => undefined)
   }
 
   return <div
