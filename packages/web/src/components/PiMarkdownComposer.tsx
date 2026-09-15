@@ -7,6 +7,7 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { ContentEditable } from '@lexical/react/LexicalContentEditable'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
 import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin'
+import { ListPlugin } from '@lexical/react/LexicalListPlugin'
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin'
 import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -16,6 +17,7 @@ import {
   $getRoot,
   $getSelection,
   COMMAND_PRIORITY_HIGH,
+  INSERT_PARAGRAPH_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   type EditorState,
@@ -174,7 +176,12 @@ function KeyboardPlugin({
     const unregisterEnter = editor.registerCommand(
       KEY_ENTER_COMMAND,
       event => {
-        if (!event || event.shiftKey || event.isComposing || event.keyCode === 229) return false
+        if (!event || event.isComposing || event.keyCode === 229) return false
+        if (event.shiftKey) {
+          event.preventDefault()
+          editor.dispatchCommand(INSERT_PARAGRAPH_COMMAND, undefined)
+          return true
+        }
         event.preventDefault()
         if (canSubmitRef.current) {
           const value = markdownFromEditor(editor.getEditorState()).trim()
@@ -260,6 +267,7 @@ const PiMarkdownComposerImpl = forwardRef<PiMarkdownComposerHandle, PiMarkdownCo
         ErrorBoundary={LexicalErrorBoundary}
       />
       <HistoryPlugin/>
+      <ListPlugin/>
       <MarkdownShortcutPlugin transformers={TRANSFORMERS}/>
       <DraftPresencePlugin onChange={onDraftPresenceChange}/>
       <ExternalDraftPlugin draft={draft}/>
