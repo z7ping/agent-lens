@@ -57,8 +57,10 @@ export class PiLiveFollowController {
   observeScroll(distanceFromBottomPx: number): boolean {
     if (this.programmatic && !this.userIntent) return this.following
     const nearBottom = distanceFromBottomPx < this.bottomThresholdPx
+    const wasFollowing = this.following
     if (this.userIntent || !nearBottom) this.following = nearBottom
     else if (nearBottom) this.following = true
+    if (wasFollowing && !this.following) this.diagnostics.detachCount += 1
     this.userIntent = false
     return this.following
   }
