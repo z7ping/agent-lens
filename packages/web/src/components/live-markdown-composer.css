@@ -159,10 +159,6 @@
   user-select: none;
 }
 
-.live-image-block[data-upload-state='pending'] {
-  opacity: .72;
-}
-
 .live-image-preview {
   width: 52px;
   height: 38px;
