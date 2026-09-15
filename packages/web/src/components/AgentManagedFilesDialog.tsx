@@ -365,6 +365,7 @@ export function AgentManagedFilesDialog({
   return <Dialog
     open={open}
     className={`agent-managed-files-dialog ${previewOnly ? 'is-preview-only' : 'is-directory-browser'}`}
+    size="xlarge"
     title={<span title={dialogTitle}>{dialogTitle}</span>}
     description={<span title={rootPath}>{rootPath}</span>}
     headerActions={headerActions}

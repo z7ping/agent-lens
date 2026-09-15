@@ -22,7 +22,7 @@ export type {
 } from './Primitives'
 
 export { Dialog, Drawer, Popover, useModalFocusScope } from './Overlay'
-export type { DialogProps, DrawerProps, PopoverProps } from './Overlay'
+export type { DialogProps, DialogSize, DrawerProps, PopoverProps } from './Overlay'
 
 export { SelectMenu } from '../SelectMenu'
 export type { SelectMenuOption, SelectMenuVariant } from '../SelectMenu'
