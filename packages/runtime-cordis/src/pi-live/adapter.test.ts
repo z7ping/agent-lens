@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { LiveAttachmentService } from '@agent-lens/core'
 import { PiLiveAdapter } from './adapter'
-import type { PiLiveRuntimeState, PiLiveService } from './types'
+import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
+
+function attachmentService(overrides: Partial<LiveAttachmentService> = {}): LiveAttachmentService {
+  return {
+    put: async () => { throw new Error('not used') },
+    get: async () => null,
+    remove: async () => {},
+    dispose: async () => {},
+    ...overrides,
+  }
+}
 
 const readyState: PiLiveRuntimeState = {
   runtimeSessionId: 'runtime-1',
@@ -28,7 +39,7 @@ test('Pi Live Adapter exposes thinking-control only through Runtime-provided opa
     },
   } as unknown as PiLiveService
 
-  const adapter = new PiLiveAdapter(service)
+  const adapter = new PiLiveAdapter(service, attachmentService())
   assert.equal(adapter.capabilities.has('thinking-control'), true)
   assert.deepEqual((await adapter.thinkingControl('runtime-1'))?.options.map(option => option.value), [
     'off',
@@ -56,7 +67,7 @@ test('Pi Live Adapter does not expose an invalid Runtime thinking-control descri
     }),
   } as unknown as PiLiveService
 
-  const adapter = new PiLiveAdapter(service)
+  const adapter = new PiLiveAdapter(service, attachmentService())
   assert.equal(await adapter.thinkingControl('runtime-1'), null)
 })
 
@@ -68,10 +79,11 @@ test('Pi Live Adapter accepts unified text and large-text messages without leaki
     followUp: async () => {},
   } as unknown as PiLiveService
 
-  const adapter = new PiLiveAdapter(service)
+  const adapter = new PiLiveAdapter(service, attachmentService())
   assert.equal(adapter.inputCapabilities.text, 'native')
   assert.equal(adapter.inputCapabilities.largeText, 'transform')
-  assert.equal(adapter.inputCapabilities.image, 'unsupported')
+  assert.equal(adapter.inputCapabilities.image, 'native')
+  assert.equal(adapter.inputCapabilities.file, 'unsupported')
 
   await adapter.send('runtime-1', {
     parts: [
@@ -83,8 +95,75 @@ test('Pi Live Adapter accepts unified text and large-text messages without leaki
   assert.deepEqual(prompts, ['分析下面日志\n\nline 1\nline 2'])
   await assert.rejects(
     () => adapter.send('runtime-1', {
-      parts: [{ type: 'image', attachmentId: 'attachment-1', mimeType: 'image/png' }],
+      parts: [{ type: 'file', attachmentId: 'attachment-1', mimeType: 'text/plain' }],
     }),
-    /does not support Live input part: image/,
+    /does not support Live input part: file/,
   )
+})
+
+test('Pi Live Adapter resolves image attachments into official Pi image payloads and releases them after acceptance', async () => {
+  const sent: Array<{ message: string; images?: readonly PiLiveImageInput[] }> = []
+  const removed: string[] = []
+  const service = {
+    prompt: async (_runtimeSessionId: string, message: string, _behavior: unknown, images?: readonly PiLiveImageInput[]) => {
+      sent.push({ message, ...(images ? { images } : {}) })
+    },
+    steer: async () => {},
+    followUp: async () => {},
+  } as unknown as PiLiveService
+  const attachments = attachmentService({
+    get: async attachmentId => attachmentId === 'image-1'
+      ? {
+          attachmentId,
+          sizeBytes: 3,
+          mimeType: 'image/png',
+          data: new Uint8Array([1, 2, 3]),
+        }
+      : null,
+    remove: async attachmentId => { removed.push(attachmentId) },
+  })
+  const adapter = new PiLiveAdapter(service, attachments)
+
+  await adapter.send('runtime-1', {
+    parts: [
+      { type: 'text', text: '看图' },
+      { type: 'image', attachmentId: 'image-1', mimeType: 'image/png', sizeBytes: 3 },
+    ],
+  })
+
+  assert.deepEqual(sent, [{
+    message: '看图',
+    images: [{
+      type: 'image',
+      data: Buffer.from([1, 2, 3]).toString('base64'),
+      mimeType: 'image/png',
+    }],
+  }])
+  assert.deepEqual(removed, ['image-1'])
+})
+
+test('Pi Live Adapter keeps image attachments when native Pi send fails', async () => {
+  const removed: string[] = []
+  const service = {
+    prompt: async () => { throw new Error('Pi rejected prompt') },
+    steer: async () => {},
+    followUp: async () => {},
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService({
+    get: async attachmentId => ({
+      attachmentId,
+      sizeBytes: 1,
+      mimeType: 'image/png',
+      data: new Uint8Array([1]),
+    }),
+    remove: async attachmentId => { removed.push(attachmentId) },
+  }))
+
+  await assert.rejects(
+    () => adapter.send('runtime-1', {
+      parts: [{ type: 'image', attachmentId: 'image-1', mimeType: 'image/png' }],
+    }),
+    /Pi rejected prompt/,
+  )
+  assert.deepEqual(removed, [])
 })
