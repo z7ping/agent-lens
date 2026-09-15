@@ -36,7 +36,13 @@ import {
   type LexicalNode,
 } from 'lexical'
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react'
+import { removeLiveAttachment, uploadLiveAttachment } from '../client/live-attachments'
 import { ComposerDraftPresenceGate } from './live-markdown-composer-state'
+import {
+  $createLiveImageNode,
+  $isLiveImageNode,
+  LiveImageNode,
+} from './LiveImageNode'
 import {
   $createLiveLargeTextNode,
   $isLiveLargeTextNode,
@@ -45,9 +51,9 @@ import {
 
 const LARGE_TEXT_LINE_THRESHOLD = 10
 const LARGE_TEXT_CHAR_THRESHOLD = 1000
-const LARGE_TEXT_MARKER_PREFIX = '\uE000agentlens-live-large-text:'
-const LARGE_TEXT_MARKER_SUFFIX = '\uE001'
-const LARGE_TEXT_MARKER_PATTERN = /\uE000agentlens-live-large-text:([^\uE001]+)\uE001/g
+const LIVE_PART_MARKER_PREFIX = '\uE000agentlens-live-'
+const LIVE_PART_MARKER_SUFFIX = '\uE001'
+const LIVE_PART_MARKER_PATTERN = /\uE000agentlens-live-(large-text|image):([^\uE001]+)\uE001/g
 
 export interface LiveMarkdownComposerDraft {
   revision: number
@@ -72,6 +78,8 @@ export interface LiveMarkdownComposerProps {
   ariaLabel: string
   title?: string
   inputClassName?: string
+  onAttachmentPendingChange?(pending: boolean): void
+  onAttachmentError?(error: unknown): void
 }
 
 const theme = {
@@ -107,7 +115,17 @@ const theme = {
 const LARGE_TEXT_MARKER_TRANSFORMER: ElementTransformer = {
   dependencies: [LiveLargeTextNode],
   export: (node: LexicalNode) => $isLiveLargeTextNode(node)
-    ? `${LARGE_TEXT_MARKER_PREFIX}${node.getKey()}${LARGE_TEXT_MARKER_SUFFIX}`
+    ? `${LIVE_PART_MARKER_PREFIX}large-text:${node.getKey()}${LIVE_PART_MARKER_SUFFIX}`
+    : null,
+  regExp: /^(?!)$/,
+  replace: () => {},
+  type: 'element',
+}
+
+const IMAGE_MARKER_TRANSFORMER: ElementTransformer = {
+  dependencies: [LiveImageNode],
+  export: (node: LexicalNode) => $isLiveImageNode(node) && node.getAttachmentId()
+    ? `${LIVE_PART_MARKER_PREFIX}image:${node.getKey()}${LIVE_PART_MARKER_SUFFIX}`
     : null,
   regExp: /^(?!)$/,
   replace: () => {},
@@ -116,6 +134,7 @@ const LARGE_TEXT_MARKER_TRANSFORMER: ElementTransformer = {
 
 const MESSAGE_TRANSFORMERS: Transformer[] = [
   LARGE_TEXT_MARKER_TRANSFORMER,
+  IMAGE_MARKER_TRANSFORMER,
   ...TRANSFORMERS,
 ]
 
@@ -133,13 +152,22 @@ function markdownFromEditor(editorState: EditorState): string {
   return markdown
 }
 
-function collectLargeTextNodes(node: LexicalNode, values: Map<string, string>): void {
+function collectStructuredNodes(
+  node: LexicalNode,
+  largeText: Map<string, string>,
+  images: Map<string, NonNullable<ReturnType<LiveImageNode['getImagePart']>>>,
+): void {
   if ($isLiveLargeTextNode(node)) {
-    values.set(node.getKey(), node.getText())
+    largeText.set(node.getKey(), node.getText())
+    return
+  }
+  if ($isLiveImageNode(node)) {
+    const part = node.getImagePart()
+    if (part) images.set(node.getKey(), part)
     return
   }
   if ($isElementNode(node)) {
-    for (const child of node.getChildren()) collectLargeTextNodes(child, values)
+    for (const child of node.getChildren()) collectStructuredNodes(child, largeText, images)
   }
 }
 
@@ -148,13 +176,14 @@ function messageFromEditor(editorState: EditorState): LiveMessageDto {
 
   editorState.read(() => {
     const largeTextByKey = new Map<string, string>()
+    const imagesByKey = new Map<string, NonNullable<ReturnType<LiveImageNode['getImagePart']>>>()
     const root = $getRoot()
-    for (const child of root.getChildren()) collectLargeTextNodes(child, largeTextByKey)
+    for (const child of root.getChildren()) collectStructuredNodes(child, largeTextByKey, imagesByKey)
 
     const markdown = $convertToMarkdownString(MESSAGE_TRANSFORMERS, undefined, true)
     const parts: LiveMessageDto['parts'] = []
     let cursor = 0
-    LARGE_TEXT_MARKER_PATTERN.lastIndex = 0
+    LIVE_PART_MARKER_PATTERN.lastIndex = 0
 
     const appendText = (value: string) => {
       if (!value) return
@@ -164,19 +193,26 @@ function messageFromEditor(editorState: EditorState): LiveMessageDto {
     }
 
     let match: RegExpExecArray | null
-    while ((match = LARGE_TEXT_MARKER_PATTERN.exec(markdown)) !== null) {
+    while ((match = LIVE_PART_MARKER_PATTERN.exec(markdown)) !== null) {
       let before = markdown.slice(cursor, match.index)
       if (before.endsWith('\n')) before = before.slice(0, -1)
       appendText(before)
 
-      const text = largeTextByKey.get(match[1] ?? '')
-      if (text !== undefined) {
-        parts.push({
-          type: 'large-text',
-          text,
-          lineCount: text.split(/\r\n|\r|\n/).length,
-          charCount: text.length,
-        })
+      const type = match[1]
+      const key = match[2] ?? ''
+      if (type === 'large-text') {
+        const text = largeTextByKey.get(key)
+        if (text !== undefined) {
+          parts.push({
+            type: 'large-text',
+            text,
+            lineCount: text.split(/\r\n|\r|\n/).length,
+            charCount: text.length,
+          })
+        }
+      } else if (type === 'image') {
+        const image = imagesByKey.get(key)
+        if (image) parts.push(image)
       }
 
       cursor = match.index + match[0].length
@@ -290,6 +326,74 @@ function LargePastePlugin() {
   return null
 }
 
+function ImagePastePlugin({
+  onPendingChange,
+  onError,
+}: {
+  onPendingChange?: (pending: boolean) => void
+  onError?: (error: unknown) => void
+}) {
+  const [editor] = useLexicalComposerContext()
+  useEffect(() => editor.registerCommand(
+    PASTE_COMMAND,
+    event => {
+      if (!('clipboardData' in event) || !event.clipboardData) return false
+      const files = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
+      if (!files.length) return false
+
+      event.preventDefault()
+      const pending = files.map(file => {
+        const previewUrl = URL.createObjectURL(file)
+        const node = $createLiveImageNode({
+          name: file.name || undefined,
+          mimeType: file.type || undefined,
+          sizeBytes: file.size,
+          previewUrl,
+        })
+        return { file, node, nodeKey: node.getKey(), previewUrl }
+      })
+      const nodes = pending.map(item => item.node)
+      $insertNodes(nodes)
+      const last = nodes.at(-1)
+      const parent = last?.getParent()
+      if (last && $isRootOrShadowRoot(parent) && last.getNextSibling() === null) {
+        const paragraph = $createParagraphNode()
+        last.insertAfter(paragraph)
+        paragraph.selectStart()
+      } else {
+        last?.selectNext()
+      }
+
+      onPendingChange?.(true)
+      void Promise.allSettled(pending.map(async item => {
+        try {
+          const descriptor = await uploadLiveAttachment(item.file)
+          let attached = false
+          editor.update(() => {
+            const current = $getNodeByKey(item.nodeKey)
+            if (!$isLiveImageNode(current)) return
+            current.setAttachment(descriptor)
+            attached = true
+          })
+          if (!attached) await removeLiveAttachment(descriptor.attachmentId).catch(() => undefined)
+        } catch (error) {
+          editor.update(() => {
+            const current = $getNodeByKey(item.nodeKey)
+            if ($isLiveImageNode(current)) current.remove()
+          })
+          onError?.(error)
+        } finally {
+          URL.revokeObjectURL(item.previewUrl)
+        }
+      })).then(() => onPendingChange?.(false))
+      return true
+    },
+    COMMAND_PRIORITY_HIGH,
+  ), [editor, onError, onPendingChange])
+  return null
+}
+
+
 function KeyboardPlugin({
   canSubmit,
   onSubmit,
@@ -379,11 +483,13 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
   ariaLabel,
   title,
   inputClassName,
+  onAttachmentPendingChange,
+  onAttachmentError,
 }, ref) {
   return <LexicalComposer initialConfig={{
     namespace: 'AgentLensLiveMarkdownComposer',
     theme,
-    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, LinkNode, LiveLargeTextNode],
+    nodes: [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, LinkNode, LiveLargeTextNode, LiveImageNode],
     onError(error) { throw error },
   }}>
     <div
@@ -408,6 +514,7 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
       <ListPlugin/>
       <MarkdownShortcutPlugin transformers={TRANSFORMERS}/>
       <LargePastePlugin/>
+      <ImagePastePlugin onPendingChange={onAttachmentPendingChange} onError={onAttachmentError}/>
       <DraftPresencePlugin onChange={onDraftPresenceChange}/>
       <ExternalDraftPlugin draft={draft}/>
       <EditablePlugin disabled={disabled}/>
