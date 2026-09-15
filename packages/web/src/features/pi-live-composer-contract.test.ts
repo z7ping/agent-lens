@@ -14,12 +14,27 @@ const composer = readFileSync(new URL('../components/PiMarkdownComposer.tsx', im
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
   assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel=\{t\('composer\.modelAria'\)\}/)
-  assert.match(page, /<ComposerPillSelect[\s\S]*?ariaLabel=\{t\('composer\.thinkingAria'\)\}/)
+  assert.match(page, /thinkingControl && <ComposerPillSelect[\s\S]*?ariaLabel=\{t\('composer\.thinkingAria'\)\}/)
   assert.match(page, /title=\{state\?\.model \? t\('composer\.modelTitle'/)
   assert.match(page, /title=\{t\('composer\.thinkingTitle'/)
   assert.match(pill, /<SelectMenu[\s\S]*?variant="pill"/)
   assert.match(selectMenu, /createPortal\(/)
   assert.match(selectCss, /\.select-menu-popover\s*\{[\s\S]*?position:\s*fixed;/)
+})
+
+test('Pi Live thinking selector preserves Runtime values and only renders negotiated valid control', () => {
+  assert.doesNotMatch(page, /thinkingLevelSemanticKey/)
+  assert.doesNotMatch(page, /new Map<string, string>/)
+  assert.match(page, /state\?\.capabilities\?\.thinkingLevelControl === true/)
+  assert.match(page, /parseLiveThinkingControlDto\(controls\.thinking\)/)
+  assert.match(page, /thinkingControl\.options\.map\(option =>/)
+  assert.match(page, /value: option\.value/)
+  assert.match(page, /value=\{thinkingControl\.value\}/)
+  assert.match(page, /setControls\(await piLiveApi\.controls\(runtimeId\)\)/)
+  assert.match(page, /level === 'off'[\s\S]*?thinkingOff/)
+  assert.match(page, /level === 'minimal'[\s\S]*?thinkingMinimal/)
+  assert.match(page, /level === 'xhigh'[\s\S]*?thinkingXHigh/)
+  assert.match(page, /level === 'max'[\s\S]*?thinkingMax/)
 })
 
 test('Pi Live composer uses Lexical Markdown shortcuts and keeps Markdown as the runtime value', () => {
