@@ -3,6 +3,7 @@ import type { LiveAvailability, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 
 export interface PiLiveImageInput {
+  type: 'image'
   data: string
   mimeType: string
 }
