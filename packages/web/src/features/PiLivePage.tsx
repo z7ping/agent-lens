@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
@@ -8,7 +8,7 @@ import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
-import { PiMarkdownComposer, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
+import { PiMarkdownComposer, type PiMarkdownComposerDraft, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
 import { PiRuntimeMenu } from '../components/PiRuntimeMenu'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { OperationProgress } from '../components/StateViews'
@@ -18,6 +18,7 @@ import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLi
 import { PiLiveFollowController } from './pi-live-follow-controller'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLivePresentationScheduler } from './pi-live-presentation'
+import { sameStablePiLiveHistoryRoundProps } from './pi-live-render-boundary'
 import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
 import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
@@ -39,6 +40,28 @@ interface ExtensionRequest {
 }
 
 const PI_LIVE_EAGER_CHUNKS = 2
+
+const PiLiveHistoryVirtualRound = memo(function PiLiveHistoryVirtualRound({
+  projection,
+  showAllEvents,
+  eager,
+  estimate,
+}: {
+  projection: Parameters<typeof PiLiveHistoryTaskRound>[0]['projection']
+  showAllEvents: boolean
+  eager: boolean
+  estimate: number
+}) {
+  return <VirtualRoundMount
+    rootSelector=".pi-live-reader"
+    flowRoot
+    eager={eager}
+    estimate={estimate}
+  >
+    <PiLiveHistoryTaskRound projection={projection} showAllEvents={showAllEvents}/>
+  </VirtualRoundMount>
+}, sameStablePiLiveHistoryRoundProps)
+
 function piLiveStartupBackground() {
   return {
     model: {
@@ -365,6 +388,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
   const readerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<PiMarkdownComposerHandle>(null)
+  const composerSubmitRef = useRef<(value: string, mode: 'default' | 'followUp') => void>(() => {})
+  const composerEscapeRef = useRef<(() => void) | undefined>(undefined)
   const followControllerRef = useRef(new PiLiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
@@ -379,7 +404,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controls, setControls] = useState<PiLiveControlsDto>({ models: [] })
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
-  const [input, setInput] = useState('')
+  const [composerDraft, setComposerDraft] = useState<PiMarkdownComposerDraft>({ revision: 0, value: '' })
+  const [composerHasContent, setComposerHasContent] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState('')
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
@@ -402,6 +428,29 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [sendPending, setSendPending] = useState(false)
   const [abortPending, setAbortPending] = useState(false)
   const [queueMutationPending, setQueueMutationPending] = useState(false)
+
+  const setComposerValue = useCallback((value: string) => {
+    const hasContent = Boolean(value.trim())
+    setComposerHasContent(current => current === hasContent ? current : hasContent)
+    setComposerDraft(current => ({ revision: current.revision + 1, value }))
+  }, [])
+
+  const onComposerDraftPresenceChange = useCallback((hasContent: boolean) => {
+    setComposerHasContent(current => current === hasContent ? current : hasContent)
+  }, [])
+
+  const onComposerSubmit = useCallback((value: string, submitMode: 'default' | 'followUp') => {
+    composerSubmitRef.current(value, submitMode)
+  }, [])
+
+  const onComposerEscape = useCallback(() => {
+    composerEscapeRef.current?.()
+  }, [])
+
+  const submitComposerDefault = useCallback(() => {
+    const value = inputRef.current?.getMarkdown().trim() ?? ''
+    if (value) composerSubmitRef.current(value, 'default')
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -433,6 +482,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setSnapshot(null)
     setState(null)
     setControls({ models: [] })
+    setComposerValue('')
     setOptimisticPrompt('')
     setCurrentOrdinal(null)
     setCurrentItems([])
@@ -747,7 +797,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       }
       followControllerRef.current.endProgrammaticScroll()
     }
-  }, [runtimeId])
+  }, [runtimeId, setComposerValue])
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot, localeRevision])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history, localeRevision])
@@ -823,23 +873,23 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       inputRef.current?.focus({ preventScroll: true })
     }, reason => {
       rollbackOptimisticPrompt(text)
-      setInput(current => current || text)
+      if (inputRef.current?.isEmpty() ?? true) setComposerValue(text)
       setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
       startupSendingRef.current = false
       setBusy(false)
     })
-  }, [beginOptimisticPrompt, rollbackOptimisticPrompt, runtimeId, startupQueued, state?.status])
+  }, [beginOptimisticPrompt, rollbackOptimisticPrompt, runtimeId, setComposerValue, startupQueued, state?.status])
 
   if (!runtimeId) return <PiLiveStart known={known}/>
 
-  const send = async (forcedMode?: QueueMode) => {
-    const text = input.trim()
+  const send = async (rawText: string, forcedMode?: QueueMode) => {
+    const text = rawText.trim()
     if (!text || sendPending || queueMutationPending || extension) return
     if (!runtimeReady) {
       if (!canStageStartup) return
       setStartupQueued(text)
-      setInput('')
+      setComposerValue('')
       inputRef.current?.focus({ preventScroll: true })
       return
     }
@@ -848,7 +898,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     const selectedMode = forcedMode ?? mode
     setSendPending(true)
     setError('')
-    setInput('')
+    setComposerValue('')
     if (!wasStreaming) beginOptimisticPrompt(text)
     const pending = wasStreaming ? { id: `pending-${Date.now()}`, mode: selectedMode, text } : null
     if (pending) setPendingQueue(current => [...current, pending])
@@ -861,7 +911,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         await piLiveApi.prompt(runtimeId, text)
       }
     } catch (reason) {
-      setInput(current => current || text)
+      if (inputRef.current?.isEmpty() ?? true) setComposerValue(text)
       if (!wasStreaming) rollbackOptimisticPrompt(text)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -940,6 +990,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [optimisticStreaming, stop])
 
+  composerSubmitRef.current = (value, submitMode) => {
+    void send(value, submitMode === 'followUp' ? 'followUp' : undefined)
+  }
+  composerEscapeRef.current = optimisticStreaming ? () => { void stop() } : undefined
+
   const removeQueued = async (queueMode: QueueMode, queueIndex: number, text: string) => {
     if (queueMutationPending) return
     setQueueMutationPending(true)
@@ -979,7 +1034,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }
 
   const editRestored = (draft: RestoredDraft) => {
-    setInput(draft.text)
+    setComposerValue(draft.text)
     setMode(draft.mode)
     setRestored(items => items.filter(item => item.id !== draft.id))
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
@@ -992,7 +1047,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const editStartupQueued = () => {
     if (!startupQueued) return
-    setInput(startupQueued)
+    setComposerValue(startupQueued)
     setStartupQueued('')
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
   }
@@ -1072,7 +1127,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const runtimeInitializing = !state || state.status === 'initializing'
   const runtimeTerminating = state?.status === 'terminating'
   const canStageStartup = runtimeInitializing && !startupQueued
-  const canSend = Boolean(input.trim()) && !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const composerSubmitEnabled = !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const canSend = composerHasContent && composerSubmitEnabled
   const syncWarning = syncWarningCode === 'controls-refresh-failed'
     ? t('warning.modelRefreshFailed')
     : syncWarningCode === 'history-reconcile-failed'
@@ -1207,18 +1263,29 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           />}
           {visibleHistoryRounds.map((projection, index) => {
             const carriesStartup = Boolean(startupState?.status === 'ready' && projection.model.id === 'background:0')
+            const eager = carriesStartup || index >= visibleHistoryRounds.length - PI_LIVE_EAGER_CHUNKS
+            const estimate = piLiveTaskRoundEstimate(projection) + (carriesStartup ? 230 : 0)
+            if (!carriesStartup) {
+              return <PiLiveHistoryVirtualRound
+                key={projection.model.id}
+                projection={projection}
+                showAllEvents={showAllEvents}
+                eager={eager}
+                estimate={estimate}
+              />
+            }
             return <VirtualRoundMount
               key={projection.model.id}
               rootSelector=".pi-live-reader"
               flowRoot
-              eager={carriesStartup || index >= visibleHistoryRounds.length - PI_LIVE_EAGER_CHUNKS}
-              estimate={piLiveTaskRoundEstimate(projection) + (carriesStartup ? 230 : 0)}
+              eager={eager}
+              estimate={estimate}
             >
               <PiLiveHistoryTaskRound
                 projection={projection}
                 showAllEvents={showAllEvents}
-                beforeContent={carriesStartup ? startupContent : undefined}
-                summaryMeta={carriesStartup ? startupSummaryMeta : undefined}
+                beforeContent={startupContent}
+                summaryMeta={startupSummaryMeta}
               />
             </VirtualRoundMount>
           })}
@@ -1266,11 +1333,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             </div>
             <PiMarkdownComposer
               ref={inputRef}
-              value={input}
-              onChange={setInput}
-              canSubmit={canSend}
-              onSubmit={submitMode => void send(submitMode === 'followUp' ? 'followUp' : undefined)}
-              onEscape={optimisticStreaming ? () => void stop() : undefined}
+              draft={composerDraft}
+              onDraftPresenceChange={onComposerDraftPresenceChange}
+              canSubmit={composerSubmitEnabled}
+              onSubmit={onComposerSubmit}
+              onEscape={optimisticStreaming ? onComposerEscape : undefined}
               placeholder={inputPlaceholder}
               title={t('composer.markdownHint')}
               ariaLabel={t('composer.inputAria')}
@@ -1314,7 +1381,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               <Button size="small" className={`pi-live-mode-action ${mode === 'steer' ? 'active' : ''}`} title={t('composer.steerTitle')} aria-pressed={mode === 'steer'} onClick={() => { setMode('steer'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>{t('composer.steer')}</Button>
               <Button size="small" className={`pi-live-mode-action ${mode === 'followUp' ? 'active' : ''}`} title={t('composer.followUpTitle')} aria-pressed={mode === 'followUp'} onClick={() => { setMode('followUp'); requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })) }}>{t('composer.followUp')}</Button>
             </div>
-            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={() => void send()} aria-label={runtimeReady ? t('composer.send') : t('composer.sendWhenReady')}><UiIcon name="send" size={20}/></IconButton>
+            <IconButton variant="primary" className="pi-live-send" disabled={!canSend} onClick={submitComposerDefault} aria-label={runtimeReady ? t('composer.send') : t('composer.sendWhenReady')}><UiIcon name="send" size={20}/></IconButton>
           </div>
         </div>
       </div>

@@ -21,16 +21,24 @@ import {
   type EditorState,
   type LexicalEditor,
 } from 'lexical'
-import { forwardRef, useEffect, useImperativeHandle, type ForwardedRef } from 'react'
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react'
+import { ComposerDraftPresenceGate } from './pi-markdown-composer-state'
+
+export interface PiMarkdownComposerDraft {
+  revision: number
+  value: string
+}
 
 export interface PiMarkdownComposerHandle {
   focus(options?: FocusOptions): void
+  getMarkdown(): string
+  isEmpty(): boolean
 }
 
 export interface PiMarkdownComposerProps {
-  value: string
-  onChange(value: string): void
-  onSubmit(mode: 'default' | 'followUp'): void
+  draft: PiMarkdownComposerDraft
+  onDraftPresenceChange(hasContent: boolean): void
+  onSubmit(value: string, mode: 'default' | 'followUp'): void
   onEscape: (() => void) | undefined
   canSubmit: boolean
   disabled?: boolean
@@ -77,12 +85,21 @@ function markdownFromEditor(editorState: EditorState): string {
   return markdown
 }
 
+function editorHasContent(editorState: EditorState): boolean {
+  let hasContent = false
+  editorState.read(() => {
+    hasContent = Boolean($getRoot().getTextContent().trim())
+  })
+  return hasContent
+}
+
 function replaceMarkdownDocument(editor: LexicalEditor, value: string): void {
   editor.update(() => {
     const root = $getRoot()
     root.clear()
     if (value) {
       $convertFromMarkdownString(value, TRANSFORMERS, root, true)
+      root.selectEnd()
       return
     }
     const paragraph = $createParagraphNode()
@@ -91,17 +108,42 @@ function replaceMarkdownDocument(editor: LexicalEditor, value: string): void {
   })
 }
 
-function ExternalValuePlugin({ value }: { value: string }) {
+/**
+ * Only explicit parent commands carry a new revision. Local editing never
+ * changes this prop, so there is no controlled-value echo back into Lexical.
+ */
+function ExternalDraftPlugin({ draft }: { draft: PiMarkdownComposerDraft }) {
   const [editor] = useLexicalComposerContext()
   useEffect(() => {
-    let current = ''
-    editor.getEditorState().read(() => {
-      current = $convertToMarkdownString(TRANSFORMERS, undefined, true)
-    })
-    if (current === value) return
-    replaceMarkdownDocument(editor, value)
-  }, [editor, value])
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const apply = () => {
+      if (cancelled) return
+      if (editor.isComposing()) {
+        timer = setTimeout(apply, 16)
+        return
+      }
+      replaceMarkdownDocument(editor, draft.value)
+    }
+    apply()
+    return () => {
+      cancelled = true
+      if (timer !== undefined) clearTimeout(timer)
+    }
+  }, [draft.revision, draft.value, editor])
   return null
+}
+
+function DraftPresencePlugin({ onChange }: { onChange(hasContent: boolean): void }) {
+  const gate = useRef(new ComposerDraftPresenceGate())
+  return <OnChangePlugin
+    ignoreSelectionChange
+    onChange={editorState => {
+      const hasContent = editorHasContent(editorState)
+      if (!gate.current.accept(hasContent)) return
+      onChange(hasContent)
+    }}
+  />
 }
 
 function EditablePlugin({ disabled }: { disabled: boolean }) {
@@ -118,13 +160,26 @@ function KeyboardPlugin({
   onEscape,
 }: Pick<PiMarkdownComposerProps, 'canSubmit' | 'onSubmit' | 'onEscape'>) {
   const [editor] = useLexicalComposerContext()
+  const canSubmitRef = useRef(canSubmit)
+  const submitRef = useRef(onSubmit)
+  const escapeRef = useRef(onEscape)
+
+  useEffect(() => {
+    canSubmitRef.current = canSubmit
+    submitRef.current = onSubmit
+    escapeRef.current = onEscape
+  }, [canSubmit, onEscape, onSubmit])
+
   useEffect(() => {
     const unregisterEnter = editor.registerCommand(
       KEY_ENTER_COMMAND,
       event => {
         if (!event || event.shiftKey || event.isComposing || event.keyCode === 229) return false
         event.preventDefault()
-        if (canSubmit) onSubmit(event.altKey ? 'followUp' : 'default')
+        if (canSubmitRef.current) {
+          const value = markdownFromEditor(editor.getEditorState()).trim()
+          if (value) submitRef.current(value, event.altKey ? 'followUp' : 'default')
+        }
         return true
       },
       COMMAND_PRIORITY_HIGH,
@@ -132,9 +187,10 @@ function KeyboardPlugin({
     const unregisterEscape = editor.registerCommand(
       KEY_ESCAPE_COMMAND,
       event => {
-        if (!onEscape || event.isComposing || event.keyCode === 229) return false
+        const onEscapeCurrent = escapeRef.current
+        if (!onEscapeCurrent || event.isComposing || event.keyCode === 229) return false
         event.preventDefault()
-        onEscape()
+        onEscapeCurrent()
         return true
       },
       COMMAND_PRIORITY_HIGH,
@@ -143,7 +199,7 @@ function KeyboardPlugin({
       unregisterEnter()
       unregisterEscape()
     }
-  }, [canSubmit, editor, onEscape, onSubmit])
+  }, [editor])
   return null
 }
 
@@ -158,13 +214,19 @@ function ComposerRefPlugin({ forwardedRef }: { forwardedRef: ForwardedRef<PiMark
       if (rootElement) rootElement.focus(options)
       else editor.focus()
     },
+    getMarkdown() {
+      return markdownFromEditor(editor.getEditorState())
+    },
+    isEmpty() {
+      return !editorHasContent(editor.getEditorState())
+    },
   }), [editor])
   return null
 }
 
-export const PiMarkdownComposer = forwardRef<PiMarkdownComposerHandle, PiMarkdownComposerProps>(function PiMarkdownComposer({
-  value,
-  onChange,
+const PiMarkdownComposerImpl = forwardRef<PiMarkdownComposerHandle, PiMarkdownComposerProps>(function PiMarkdownComposer({
+  draft,
+  onDraftPresenceChange,
   onSubmit,
   onEscape,
   canSubmit,
@@ -199,17 +261,14 @@ export const PiMarkdownComposer = forwardRef<PiMarkdownComposerHandle, PiMarkdow
       />
       <HistoryPlugin/>
       <MarkdownShortcutPlugin transformers={TRANSFORMERS}/>
-      <OnChangePlugin
-        ignoreSelectionChange
-        onChange={editorState => {
-          const markdown = markdownFromEditor(editorState)
-          if (markdown !== value) onChange(markdown)
-        }}
-      />
-      <ExternalValuePlugin value={value}/>
+      <DraftPresencePlugin onChange={onDraftPresenceChange}/>
+      <ExternalDraftPlugin draft={draft}/>
       <EditablePlugin disabled={disabled}/>
       <KeyboardPlugin canSubmit={canSubmit} onSubmit={onSubmit} onEscape={onEscape}/>
       <ComposerRefPlugin forwardedRef={ref}/>
     </div>
   </LexicalComposer>
 })
+
+export const PiMarkdownComposer = memo(PiMarkdownComposerImpl)
+PiMarkdownComposer.displayName = 'PiMarkdownComposer'

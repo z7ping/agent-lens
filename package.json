@@ -82,6 +82,7 @@
     "perf:daemon-startup": "tsx scripts/performance/daemon-startup-benchmark.ts",
     "perf:web-live-visibility": "tsx scripts/performance/web-live-visibility-benchmark.ts",
     "perf:pi-live-scheduler": "tsx scripts/performance/pi-live-scheduler-benchmark.ts",
+    "perf:pi-live-composer": "tsx scripts/performance/pi-live-composer-benchmark.ts",
     "perf:pi-live-history": "tsx scripts/performance/pi-live-history-virtualization-benchmark.ts",
     "perf:daemon-idle-cpu": "tsx scripts/performance/daemon-idle-cpu-benchmark.ts",
     "perf:data-runtime-isolation": "tsx scripts/performance/data-runtime-isolation-benchmark.ts",
