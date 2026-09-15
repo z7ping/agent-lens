@@ -36,7 +36,7 @@ import {
   type LexicalNode,
 } from 'lexical'
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react'
-import { ComposerDraftPresenceGate } from './pi-markdown-composer-state'
+import { ComposerDraftPresenceGate } from './live-markdown-composer-state'
 import {
   $createLiveLargeTextNode,
   $isLiveLargeTextNode,
