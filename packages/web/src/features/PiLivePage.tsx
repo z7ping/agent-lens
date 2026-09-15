@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { parseLiveThinkingControlDto, type JsonValue, type PiLiveControlsDto, type PiLiveQueueDto, type PiLiveSnapshotDto, type PiLiveStateDto } from '@agent-lens/protocol'
+import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
+import { resolveLiveThinkingControl } from '../client/live-controls'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -1023,9 +1024,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       : syncWarningCode === 'snapshot-sync-failed'
         ? t('warning.snapshotFailed')
         : ''
-  const thinkingControl = state?.capabilities?.thinkingLevelControl === true
-    ? parseLiveThinkingControlDto(controls.thinking)
-    : null
+  const thinkingControl = resolveLiveThinkingControl(
+    state?.capabilities?.thinkingLevelControl === true,
+    controls.thinking,
+  )
   const thinkingOptions = thinkingControl
     ? thinkingControl.options.map(option => ({
         value: option.value,
