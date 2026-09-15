@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  liveMessagePlainTextDto,
   type JsonValue,
   type LiveMessageDto,
   type PiLiveControlsDto,
@@ -38,7 +37,23 @@ type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
 
 function liveMessageText(message: LiveMessageDto): string {
-  return liveMessagePlainTextDto(message).trim()
+  return message.parts
+    .filter(part => part.type === 'text' || part.type === 'large-text')
+    .map(part => part.text)
+    .join('\n\n')
+    .trim()
+}
+
+function liveMessageHasContent(message: LiveMessageDto): boolean {
+  return message.parts.some(part =>
+    part.type === 'image'
+    || part.type === 'file'
+    || ((part.type === 'text' || part.type === 'large-text') && Boolean(part.text.trim())),
+  )
+}
+
+function liveMessageHasAttachments(message: LiveMessageDto): boolean {
+  return message.parts.some(part => part.type === 'image' || part.type === 'file')
 }
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
 interface ExtensionRequest {
@@ -418,6 +433,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [mode, setMode] = useState<QueueMode>('steer')
   const [composerDraft, setComposerDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const [composerHasContent, setComposerHasContent] = useState(false)
+  const [composerAttachmentPending, setComposerAttachmentPending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState<LiveMessageDto | null>(null)
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
@@ -451,6 +467,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setComposerHasContent(current => current === hasContent ? current : hasContent)
   }, [])
 
+  const onComposerAttachmentPendingChange = useCallback((pending: boolean) => {
+    setComposerAttachmentPending(current => current === pending ? current : pending)
+  }, [])
+
+  const onComposerAttachmentError = useCallback(() => {
+    setError(t('composer.imageUploadFailed'))
+  }, [t])
+
   const onComposerSubmit = useCallback((message: LiveMessageDto, submitMode: 'default' | 'followUp') => {
     composerSubmitRef.current(message, submitMode)
   }, [])
@@ -461,7 +485,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const submitComposerDefault = useCallback(() => {
     const message = inputRef.current?.getMessage()
-    if (message && liveMessageText(message)) composerSubmitRef.current(message, 'default')
+    if (message && liveMessageHasContent(message)) composerSubmitRef.current(message, 'default')
   }, [])
 
   useEffect(() => {
@@ -495,6 +519,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setState(null)
     setControls({ models: [] })
     setComposerValue('')
+    setComposerAttachmentPending(false)
     setOptimisticPrompt('')
     setCurrentOrdinal(null)
     setCurrentItems([])
@@ -898,8 +923,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const send = async (message: LiveMessageDto, forcedMode?: QueueMode) => {
     const text = liveMessageText(message)
-    if (!text || sendPending || queueMutationPending || extension) return
+    const hasAttachments = liveMessageHasAttachments(message)
+    if (!liveMessageHasContent(message) || sendPending || queueMutationPending || extension || composerAttachmentPending) return
     if (!runtimeReady) {
+      if (hasAttachments) {
+        setError(t('composer.imageRequiresReady'))
+        return
+      }
       if (!canStageStartup) return
       setStartupQueued(message)
       setComposerValue('')
@@ -909,11 +939,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     if (startupQueued) return
     const wasStreaming = state?.isStreaming ?? false
     const selectedMode = forcedMode ?? mode
+    const pendingText = text || t('composer.imageOnly')
     setSendPending(true)
     setError('')
-    setComposerValue('')
+    if (!hasAttachments) setComposerValue('')
     if (!wasStreaming) beginOptimisticPrompt(text)
-    const pending = wasStreaming ? { id: `pending-${Date.now()}`, mode: selectedMode, text } : null
+    const pending = wasStreaming ? { id: `pending-${Date.now()}`, mode: selectedMode, text: pendingText } : null
     if (pending) setPendingQueue(current => [...current, pending])
     inputRef.current?.focus({ preventScroll: true })
     try {
@@ -923,8 +954,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       } else {
         await piLiveApi.prompt(runtimeId, message)
       }
+      if (hasAttachments) setComposerValue('')
     } catch (reason) {
-      if (inputRef.current?.isEmpty() ?? true) setComposerValue(text)
+      if (!hasAttachments && (inputRef.current?.isEmpty() ?? true)) setComposerValue(text)
       if (!wasStreaming) rollbackOptimisticPrompt(text)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -1140,7 +1172,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const runtimeInitializing = !state || state.status === 'initializing'
   const runtimeTerminating = state?.status === 'terminating'
   const canStageStartup = runtimeInitializing && !startupQueued
-  const composerSubmitEnabled = !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const composerSubmitEnabled = !composerAttachmentPending && !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
   const canSend = composerHasContent && composerSubmitEnabled
   const syncWarning = syncWarningCode === 'controls-refresh-failed'
     ? t('warning.modelRefreshFailed')
@@ -1355,6 +1387,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               title={t('composer.markdownHint')}
               ariaLabel={t('composer.inputAria')}
               inputClassName="pi-live-input"
+              onAttachmentPendingChange={onComposerAttachmentPendingChange}
+              onAttachmentError={onComposerAttachmentError}
               disabled={runtimeTerminating}
             />
           </div>
