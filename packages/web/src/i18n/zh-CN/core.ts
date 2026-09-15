@@ -139,6 +139,10 @@ export const chineseCoreMessages: LocaleMessagesDto = {
       failed: '复制失败',
       aria: '{{label}}代码块',
     },
+    liveComposer: {
+      largeTextSummary: '已粘贴文本 · {{lines}} 行 · {{chars}} 字符',
+      removeLargeText: '删除粘贴文本',
+    },
     overlay: {
       close: '关闭',
     },
