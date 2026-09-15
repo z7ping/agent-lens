@@ -518,8 +518,13 @@
   gap: 10px;
 }
 .agent-managed-files-dialog .ui-overlay-heading h2 {
+  min-width: 0;
   max-width: 320px;
   flex: 0 1 auto;
+}
+.agent-managed-files-dialog .ui-overlay-heading h2 > span,
+.agent-managed-files-dialog .ui-overlay-heading p > span {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -527,10 +532,7 @@
 .agent-managed-files-dialog .ui-overlay-heading p {
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
   margin: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .agent-managed-files-dialog .ui-overlay-header-actions {
   flex: 0 0 auto;

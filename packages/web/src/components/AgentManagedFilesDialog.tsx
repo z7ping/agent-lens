@@ -358,11 +358,15 @@ export function AgentManagedFilesDialog({
       </section>
     </div>
 
+  const dialogTitle = previewOnly
+    ? (previewName ?? rootLabel)
+    : t('managedFiles.title', { agent: agentName, root: rootLabel })
+
   return <Dialog
     open={open}
     className={`agent-managed-files-dialog ${previewOnly ? 'is-preview-only' : 'is-directory-browser'}`}
-    title={previewOnly ? (previewName ?? rootLabel) : t('managedFiles.title', { agent: agentName, root: rootLabel })}
-    description={rootPath}
+    title={<span title={dialogTitle}>{dialogTitle}</span>}
+    description={<span title={rootPath}>{rootPath}</span>}
     headerActions={headerActions}
     onClose={onClose}
   >{content}</Dialog>
