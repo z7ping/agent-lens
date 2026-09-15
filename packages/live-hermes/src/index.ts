@@ -2,12 +2,15 @@ import type {
   LiveAdapter,
   LiveAdapterManifest,
   LiveCapabilityName,
+  LiveMessageInput,
   LiveRuntimeEvent,
   LiveSendOptions,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet,
+  createLiveInputCapabilities,
   dispatchLiveSend,
+  liveMessageToPlainText,
 } from '@agent-lens/live-support'
 import {
   defineAgentLensPlugin,
@@ -27,6 +30,14 @@ const CAPABILITIES = [
   'interrupt',
 ] as const satisfies readonly LiveCapabilityName[]
 
+const INPUT_CAPABILITIES = createLiveInputCapabilities({
+  text: 'native',
+  largeText: 'transform',
+  image: 'unsupported',
+  file: 'unsupported',
+  multiline: 'native',
+})
+
 export const hermesLiveManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/live-hermes',
   pluginVersion: '1.0.0-alpha.5',
@@ -41,6 +52,7 @@ export const hermesLiveManifest: LiveAdapterManifest = {
 export class HermesLiveAdapter implements LiveAdapter {
   readonly manifest = hermesLiveManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
+  readonly inputCapabilities = INPUT_CAPABILITIES
 
   constructor(readonly service: DefaultHermesLiveService) {}
 
@@ -66,11 +78,14 @@ export class HermesLiveAdapter implements LiveAdapter {
 
   send(
     runtimeSessionId: string,
-    message: string,
+    message: LiveMessageInput,
     options: LiveSendOptions = {},
   ): Promise<void> {
     return dispatchLiveSend(message, options, {
-      normal: value => this.service.prompt(runtimeSessionId, value),
+      normal: value => this.service.prompt(
+        runtimeSessionId,
+        liveMessageToPlainText(value, this.inputCapabilities, this.manifest.displayName),
+      ),
     })
   }
 

@@ -1,16 +1,23 @@
+import { Buffer } from 'node:buffer'
 import { isLiveThinkingControl } from '@agent-lens/core'
 import type {
   LiveAdapter,
   LiveAdapterManifest,
+  LiveAttachmentService,
   LiveCapabilityName,
+  LiveMessage,
+  LiveMessageInput,
   LiveRuntimeEvent,
   LiveSendOptions,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet,
+  createLiveInputCapabilities,
   dispatchLiveSend,
+  requireLiveMessageSupport,
 } from '@agent-lens/live-support'
 import type {
+  PiLiveImageInput,
   PiLiveRuntimeState,
   PiLiveService,
   PiLiveSnapshot,
@@ -31,6 +38,14 @@ const CAPABILITIES = [
   'extension-ui',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
+
+const INPUT_CAPABILITIES = createLiveInputCapabilities({
+  text: 'native',
+  largeText: 'transform',
+  image: 'native',
+  file: 'unsupported',
+  multiline: 'native',
+})
 
 export const piLiveAdapterManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/runtime-cordis/pi-live',
@@ -63,8 +78,9 @@ function piStartInput(value: unknown): PiLiveStartInput {
 export class PiLiveAdapter implements LiveAdapter {
   readonly manifest = piLiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
+  readonly inputCapabilities = INPUT_CAPABILITIES
 
-  constructor(readonly service: PiLiveService) {}
+  constructor(readonly service: PiLiveService, private readonly attachments: LiveAttachmentService) {}
 
   availability() {
     return this.service.availability()
@@ -99,15 +115,71 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.setThinkingLevel(runtimeSessionId, value)
   }
 
+  private async resolveMessage(message: LiveMessage): Promise<{
+    text: string
+    images: PiLiveImageInput[]
+    attachmentIds: string[]
+  }> {
+    requireLiveMessageSupport(message, this.inputCapabilities, this.manifest.displayName)
+    const text: string[] = []
+    const images: PiLiveImageInput[] = []
+    const attachmentIds: string[] = []
+
+    for (const part of message.parts) {
+      if (part.type === 'text' || part.type === 'large-text') {
+        text.push(part.text)
+        continue
+      }
+      if (part.type === 'file') {
+        throw new Error(`${this.manifest.displayName} does not support Live input part: file`)
+      }
+
+      const attachment = await this.attachments.get(part.attachmentId)
+      if (!attachment) {
+        throw new Error(`Live image attachment is unavailable: ${part.attachmentId}`)
+      }
+      const mimeType = (part.mimeType || attachment.mimeType || '').trim().toLowerCase()
+      if (!mimeType.startsWith('image/')) {
+        throw new Error(`Live image attachment requires an image MIME type: ${part.attachmentId}`)
+      }
+      images.push({
+        type: 'image',
+        data: Buffer.from(attachment.data).toString('base64'),
+        mimeType,
+      })
+      attachmentIds.push(part.attachmentId)
+    }
+
+    return { text: text.join('\n\n'), images, attachmentIds }
+  }
+
+  private async sendResolved(
+    runtimeSessionId: string,
+    message: LiveMessage,
+    behavior: 'normal' | 'steer' | 'follow-up',
+  ): Promise<void> {
+    const resolved = await this.resolveMessage(message)
+    if (behavior === 'steer') {
+      await this.service.steer(runtimeSessionId, resolved.text, resolved.images)
+    } else if (behavior === 'follow-up') {
+      await this.service.followUp(runtimeSessionId, resolved.text, resolved.images)
+    } else {
+      await this.service.prompt(runtimeSessionId, resolved.text, undefined, resolved.images)
+    }
+    await Promise.all(resolved.attachmentIds.map(
+      attachmentId => this.attachments.remove(attachmentId).catch(() => undefined),
+    ))
+  }
+
   send(
     runtimeSessionId: string,
-    message: string,
+    message: LiveMessageInput,
     options: LiveSendOptions = {},
   ): Promise<void> {
     return dispatchLiveSend(message, options, {
-      normal: value => this.service.prompt(runtimeSessionId, value),
-      steer: value => this.service.steer(runtimeSessionId, value),
-      followUp: value => this.service.followUp(runtimeSessionId, value),
+      normal: value => this.sendResolved(runtimeSessionId, value, 'normal'),
+      steer: value => this.sendResolved(runtimeSessionId, value, 'steer'),
+      followUp: value => this.sendResolved(runtimeSessionId, value, 'follow-up'),
     })
   }
 

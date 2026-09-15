@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { LiveMessageInput, LiveService, LiveSendOptions } from '@agent-lens/core'
 import type {
   PiLiveRuntimeEvent,
   PiLiveRuntimeListener,
@@ -318,6 +319,35 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     assert.equal(prompt.status, 202)
     assert.deepEqual(piLive.prompts, [{ message: 'hello', behavior: 'steer' }])
 
+    const structuredPrompt = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          parts: [
+            { type: 'text', text: '分析日志' },
+            { type: 'large-text', text: 'line 1\nline 2', lineCount: 2, charCount: 13 },
+          ],
+        },
+      }),
+    })
+    assert.equal(structuredPrompt.status, 202)
+    assert.deepEqual(piLive.prompts, [
+      { message: 'hello', behavior: 'steer' },
+      { message: '分析日志\n\nline 1\nline 2' },
+    ])
+
+    const unsupportedAttachment = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          parts: [{ type: 'image', attachmentId: 'image-1', mimeType: 'image/png' }],
+        },
+      }),
+    })
+    assert.equal(unsupportedAttachment.status, 400)
+
     await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/steer`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: 'change direction' }),
     })
@@ -362,6 +392,62 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     const terminated = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}`, { method: 'DELETE' })
     assert.equal(terminated.status, 200)
     assert.equal(piLive.terminateCalls, 1)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
+
+test('Pi Live HTTP forwards structured image messages to the registered Live Adapter', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const piLive = new FakePiLiveService()
+  const sent: Array<{
+    runtimeSessionId: string
+    message: LiveMessageInput
+    options: LiveSendOptions
+  }> = []
+  const adapter = {
+    send: async (
+      runtimeSessionId: string,
+      message: LiveMessageInput,
+      options: LiveSendOptions = {},
+    ) => {
+      sent.push({ runtimeSessionId, message, options })
+    },
+  }
+  const lives = {
+    get: (liveId: string) => liveId === 'pi' ? adapter : null,
+  } as unknown as LiveService
+  const surface = await startHttpSurface(storage, { port: 0, piLive, lives })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const message = {
+      parts: [
+        { type: 'text' as const, text: '看这张图' },
+        {
+          type: 'image' as const,
+          attachmentId: 'image-1',
+          mimeType: 'image/png',
+          sizeBytes: 3,
+        },
+      ],
+    }
+    const response = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message }),
+    })
+
+    assert.equal(response.status, 202)
+    assert.deepEqual(sent, [{
+      runtimeSessionId: piLive.runtimeSessionId,
+      message,
+      options: {},
+    }])
+    assert.deepEqual(piLive.prompts, [])
   } finally {
     await surface.dispose()
     storage.close()

@@ -7,7 +7,7 @@ import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
-import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveControls, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -583,23 +583,23 @@ export class DefaultPiLiveService implements PiLiveService {
     this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
     return this.decorateReadyState(runtime, state)
   }
-  async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior): Promise<void> {
-    if (!message.trim()) return
+  async prompt(id: string, message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> {
+    if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
-    await runtime.handle!.prompt(message, behavior)
-    this.captureTaskSummary(runtime, message)
+    await runtime.handle!.prompt(message, behavior, images)
+    if (message.trim()) this.captureTaskSummary(runtime, message)
   }
-  async steer(id: string, message: string): Promise<void> {
-    if (!message.trim()) return
+  async steer(id: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void> {
+    if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
-    await runtime.handle!.steer(message)
-    this.captureTaskSummary(runtime, message)
+    await runtime.handle!.steer(message, images)
+    if (message.trim()) this.captureTaskSummary(runtime, message)
   }
-  async followUp(id: string, message: string): Promise<void> {
-    if (!message.trim()) return
+  async followUp(id: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void> {
+    if (!message.trim() && !images?.length) return
     const runtime = await this.readyRuntime(id)
-    await runtime.handle!.followUp(message)
-    this.captureTaskSummary(runtime, message)
+    await runtime.handle!.followUp(message, images)
+    if (message.trim()) this.captureTaskSummary(runtime, message)
   }
   async clearQueue(id: string): Promise<PiLiveQueueState> { return (await this.readyRuntime(id)).handle!.clearQueue() }
   async abort(id: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> { return (await this.readyRuntime(id)).handle!.abort(options.restoreQueue !== false) }

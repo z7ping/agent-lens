@@ -15,6 +15,90 @@ export type LiveCapabilityName =
   | 'extension-ui'
   | 'recovery'
 
+export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
+
+export const LIVE_ATTACHMENT_MAX_ITEM_BYTES = 12 * 1024 * 1024
+
+export interface LiveInputCapabilities {
+  text: LiveInputSupport
+  largeText: LiveInputSupport
+  image: LiveInputSupport
+  file: LiveInputSupport
+  multiline: LiveInputSupport
+}
+
+export interface LiveTextPart {
+  type: 'text'
+  text: string
+}
+
+export interface LiveLargeTextPart {
+  type: 'large-text'
+  text: string
+  lineCount?: number | undefined
+  charCount?: number | undefined
+}
+
+export interface LiveAttachmentDescriptor {
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes: number
+}
+
+export interface LiveAttachment extends LiveAttachmentDescriptor {
+  data: Uint8Array
+}
+
+export interface PutLiveAttachmentInput {
+  attachmentId?: string | undefined
+  data: Uint8Array
+  name?: string | undefined
+  mimeType?: string | undefined
+}
+
+export interface LiveAttachmentService {
+  put(input: PutLiveAttachmentInput): Promise<LiveAttachmentDescriptor>
+  get(attachmentId: string): Promise<LiveAttachment | null>
+  remove(attachmentId: string): Promise<void>
+  dispose(): Promise<void>
+}
+
+export interface LiveAttachmentPartBase {
+  /**
+   * AgentLens-owned opaque attachment reference. Adapters may resolve or
+   * transform it, but must not expose native temporary paths as the contract.
+   */
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes?: number | undefined
+}
+
+export interface LiveImagePart extends LiveAttachmentPartBase {
+  type: 'image'
+}
+
+export interface LiveFilePart extends LiveAttachmentPartBase {
+  type: 'file'
+}
+
+export type LiveMessagePart =
+  | LiveTextPart
+  | LiveLargeTextPart
+  | LiveImagePart
+  | LiveFilePart
+
+export interface LiveMessage {
+  parts: readonly LiveMessagePart[]
+}
+
+/**
+ * String remains a compatibility input while existing Pi/Hermes surfaces
+ * migrate. Adapters receive a normalized LiveMessage through live-support.
+ */
+export type LiveMessageInput = string | LiveMessage
+
 export interface LiveAdapterManifest extends AgentLensPluginManifest {
   pluginType: 'live'
   liveId: string
@@ -108,6 +192,7 @@ export function isLiveThinkingControl(value: unknown): value is LiveThinkingCont
 export interface LiveAdapter {
   readonly manifest: LiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName>
+  readonly inputCapabilities: Readonly<LiveInputCapabilities>
 
   availability(): Promise<LiveAvailability>
   list(): Promise<LiveRuntimeState[]>
@@ -118,7 +203,7 @@ export interface LiveAdapter {
   thinkingControl?(runtimeSessionId: string): Promise<LiveThinkingControl | null>
   /** Runtime-owned setter; value must be one returned by thinkingControl(). */
   setThinkingControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
-  send(runtimeSessionId: string, message: string, options?: LiveSendOptions): Promise<void>
+  send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   interrupt?(runtimeSessionId: string): Promise<unknown>
   terminate(runtimeSessionId: string): Promise<void>

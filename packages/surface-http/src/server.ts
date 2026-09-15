@@ -5,6 +5,8 @@ import type {
   CapabilityService,
   CapturePolicyService,
   Disposable,
+  LiveAttachmentService,
+  LiveService,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -48,6 +50,7 @@ import {
 import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
+import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { readLaunchableProjects } from './launchable-projects'
 import { discoverLocalePacks } from './locale-packs'
@@ -80,6 +83,8 @@ export interface HttpSurfaceOptions {
   capabilities?: CapabilityService
   capturePolicy?: CapturePolicyService
   backup?: BackupService
+  lives?: LiveService
+  liveAttachments?: LiveAttachmentService
   piLive?: PiLiveService
   rescanAgents?: (sourceId?: string) => Promise<AgentRescanSummaryDto>
   sourceDetection?: (sourceId: string) => boolean | undefined
@@ -229,7 +234,8 @@ export async function startHttpSurface(
     try {
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
-      if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.selectProjectDirectory)) return
+      if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
+      if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
       if (await handleAgentFilesRequest(request, response, url, storage, options.sources)) return

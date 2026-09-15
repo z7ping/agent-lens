@@ -14,7 +14,8 @@ type OfficialCreateAgentSessionOptions = NonNullable<Parameters<OfficialPiModule
 type OfficialExtensionBindings = Parameters<AgentSession['bindExtensions']>[0]
 
 export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'reasoning'>
-export type PiSdkPromptOptions = Pick<PromptOptions, 'streamingBehavior' | 'source' | 'preflightResult'>
+export type PiSdkImage = NonNullable<PromptOptions['images']>[number]
+export type PiSdkPromptOptions = Pick<PromptOptions, 'images' | 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
@@ -62,8 +63,8 @@ export interface PiSdkSession {
   setThinkingLevel(level: PiSdkThinkingLevel): ReturnType<AgentSession['setThinkingLevel']>
   getAvailableThinkingLevels(): ReturnType<AgentSession['getAvailableThinkingLevels']>
   prompt(message: Parameters<AgentSession['prompt']>[0], options?: PiSdkPromptOptions): Promise<void>
-  steer(message: Parameters<AgentSession['steer']>[0]): ReturnType<AgentSession['steer']>
-  followUp(message: Parameters<AgentSession['followUp']>[0]): ReturnType<AgentSession['followUp']>
+  steer(message: Parameters<AgentSession['steer']>[0], images?: Parameters<AgentSession['steer']>[1]): ReturnType<AgentSession['steer']>
+  followUp(message: Parameters<AgentSession['followUp']>[0], images?: Parameters<AgentSession['followUp']>[1]): ReturnType<AgentSession['followUp']>
   clearQueue(): ReturnType<AgentSession['clearQueue']>
   abortBash?: AgentSession['abortBash']
   abort(): ReturnType<AgentSession['abort']>

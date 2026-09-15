@@ -31,6 +31,13 @@ function liveAdapter(
       capabilities: [...capabilities],
     },
     capabilities: new Set(capabilities),
+    inputCapabilities: {
+      text: 'native',
+      largeText: 'transform',
+      image: 'unsupported',
+      file: 'unsupported',
+      multiline: 'native',
+    },
     availability: async () => ({ available: true }),
     list: async () => [readyState],
     start: async () => readyState,

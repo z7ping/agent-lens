@@ -187,9 +187,9 @@ class InProcessHandle implements PiRuntimeHandle {
     this.session.setThinkingLevel(level as PiSdkThinkingLevel)
     return this.state()
   }
-  async prompt(message: string, behavior?: PiLiveStreamingBehavior): Promise<void> { await new Promise<void>((resolve, reject) => { let accepted = false; const accept = () => { if (!accepted) { accepted = true; resolve() } }; void this.session.prompt(message, { ...(behavior ? { streamingBehavior: behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => { if (!accepted) reject(error) }) }) }
-  async steer(message: string): Promise<void> { await this.session.steer(message) }
-  async followUp(message: string): Promise<void> { await this.session.followUp(message) }
+  async prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> { await new Promise<void>((resolve, reject) => { let accepted = false; const accept = () => { if (!accepted) { accepted = true; resolve() } }; void this.session.prompt(message, { ...(images?.length ? { images: [...images] } : {}), ...(behavior ? { streamingBehavior: behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => { if (!accepted) reject(error) }) }) }
+  async steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { await this.session.steer(message, images?.length ? [...images] : undefined) }
+  async followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { await this.session.followUp(message, images?.length ? [...images] : undefined) }
   async clearQueue(): Promise<PiLiveQueueState> { return this.session.clearQueue() }
   async abort(restoreQueue = true): Promise<PiLiveQueueState> { const queue = restoreQueue ? this.session.clearQueue() : { steering: [], followUp: [] }; this.session.abortBash?.(); await this.session.abort(); return queue }
   async respondToExtension(requestId: string, response: unknown): Promise<void> { this.extensionUi.respond(requestId, response) }

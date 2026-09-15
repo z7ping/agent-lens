@@ -647,12 +647,12 @@ async function command(name, value = {}) {
     await new Promise((resolveAccepted, rejectAccepted) => {
       let accepted = false
       const accept = () => { if (!accepted) { accepted = true; resolveAccepted() } }
-      void session.prompt(value.message, { ...(value.behavior ? { streamingBehavior: value.behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => accepted ? undefined : rejectAccepted(error))
+      void session.prompt(value.message, { ...(Array.isArray(value.images) && value.images.length ? { images: value.images } : {}), ...(value.behavior ? { streamingBehavior: value.behavior } : {}), source: 'rpc', preflightResult: success => { if (success) accept() } }).then(accept, error => accepted ? undefined : rejectAccepted(error))
     })
     return
   }
-  if (name === 'steer') return await session.steer(value.message)
-  if (name === 'followUp') return await session.followUp(value.message)
+  if (name === 'steer') return await session.steer(value.message, Array.isArray(value.images) && value.images.length ? value.images : undefined)
+  if (name === 'followUp') return await session.followUp(value.message, Array.isArray(value.images) && value.images.length ? value.images : undefined)
   if (name === 'clearQueue') return session.clearQueue()
   if (name === 'abort') { const queue = value.restoreQueue === false ? { steering: [], followUp: [] } : session.clearQueue(); session.abortBash?.(); await session.abort(); return queue }
   if (name === 'extensionResponse') {

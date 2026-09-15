@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseLiveThinkingControlDto } from './live'
+import { liveMessagePlainTextDto, parseLiveMessageInputDto, parseLiveThinkingControlDto } from './live'
 
 test('Live protocol preserves Runtime thinking values, order, and duplicates without normalization', () => {
   const parsed = parseLiveThinkingControlDto({
@@ -36,4 +36,35 @@ test('Live protocol rejects incomplete or mismatched thinking control descriptio
     value: 'xhigh',
     options: [{ value: 'xhigh' }],
   }), null)
+})
+
+
+test('Live protocol preserves structured large text until an adapter transform boundary', () => {
+  const message = parseLiveMessageInputDto({
+    parts: [
+      { type: 'text', text: '分析日志' },
+      { type: 'large-text', text: 'line 1\nline 2', lineCount: 2, charCount: 13 },
+    ],
+  })
+
+  assert.deepEqual(message.parts[1], {
+    type: 'large-text',
+    text: 'line 1\nline 2',
+    lineCount: 2,
+    charCount: 13,
+  })
+  assert.equal(liveMessagePlainTextDto(message), '分析日志\n\nline 1\nline 2')
+})
+
+test('Live protocol rejects invalid attachment metadata and refuses implicit attachment flattening', () => {
+  assert.throws(
+    () => parseLiveMessageInputDto({ parts: [{ type: 'image', attachmentId: '' }] }),
+    /requires attachmentId/,
+  )
+  assert.throws(
+    () => liveMessagePlainTextDto(parseLiveMessageInputDto({
+      parts: [{ type: 'image', attachmentId: 'image-1', mimeType: 'image\/png' }],
+    })),
+    /requires adapter transformation/,
+  )
 })
