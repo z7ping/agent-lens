@@ -81,11 +81,6 @@ export async function handleLiveAttachmentRequest(
     return true
   }
 
-  if (request.method !== 'DELETE') {
-    writeJson(response, 405, { error: 'method_not_allowed' })
-    return true
-  }
-
   let attachmentId = ''
   try {
     attachmentId = decodeURIComponent(url.pathname.slice(ITEM_PREFIX.length)).trim()
@@ -96,7 +91,30 @@ export async function handleLiveAttachmentRequest(
     throw httpError(400, 'Live attachment id is invalid')
   }
 
-  await attachments.remove(attachmentId)
-  writeJson(response, 200, { removed: true })
+  if (request.method === 'GET') {
+    const attachment = await attachments.get(attachmentId)
+    if (!attachment) {
+      writeJson(response, 404, { error: 'not_found' })
+      return true
+    }
+    const inlineImage = attachment.mimeType?.startsWith('image/') === true
+    const contentType = inlineImage ? attachment.mimeType! : 'application/octet-stream'
+    response.statusCode = 200
+    response.setHeader('content-type', contentType)
+    response.setHeader('cache-control', 'no-store')
+    response.setHeader('x-content-type-options', 'nosniff')
+    response.setHeader('content-length', attachment.sizeBytes)
+    response.setHeader('content-disposition', inlineImage ? 'inline' : 'attachment')
+    response.end(Buffer.from(attachment.data))
+    return true
+  }
+
+  if (request.method === 'DELETE') {
+    await attachments.remove(attachmentId)
+    writeJson(response, 200, { removed: true })
+    return true
+  }
+
+  writeJson(response, 405, { error: 'method_not_allowed' })
   return true
 }
