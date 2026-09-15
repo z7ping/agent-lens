@@ -2,7 +2,8 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { splitMarkdownFrontmatter, type MarkdownFrontmatter } from './markdown-frontmatter'
-import type { MarkdownThemeId } from './markdown-theme'
+import { DEFAULT_MARKDOWN_THEME, type CustomMarkdownThemeId, type MarkdownThemeId } from './markdown-theme'
+import { scopedCustomMarkdownCss, useCustomMarkdownThemes } from './markdown-theme-registry'
 
 export interface MarkdownContentProps {
   text: string
@@ -92,10 +93,25 @@ export function splitStreamingMarkdown(text: string): StreamingMarkdownSegments 
  * 表格、任务列表、删除线和自动链接等 GFM 语法；视觉继续由 AgentLens 自己的样式契约负责。
  */
 export function MarkdownContent({ text, className = '', streaming = false, frontmatter = false, theme }: MarkdownContentProps) {
+  if (theme?.startsWith('custom:')) {
+    return <CustomThemedMarkdownContent text={text} className={className} streaming={streaming} frontmatter={frontmatter} theme={theme as CustomMarkdownThemeId}/>
+  }
+  return <MarkdownBody text={text} className={className} streaming={streaming} frontmatter={frontmatter} theme={theme}/>
+}
+
+function CustomThemedMarkdownContent({ text, className, streaming, frontmatter, theme }: { text: string; className: string; streaming: boolean; frontmatter: boolean; theme: CustomMarkdownThemeId }) {
+  const themes = useCustomMarkdownThemes()
+  const customTheme = themes.find(item => item.id === theme)
+  if (!customTheme) return <MarkdownBody text={text} className={className} streaming={streaming} frontmatter={frontmatter} theme={DEFAULT_MARKDOWN_THEME}/>
+  return <MarkdownBody text={text} className={className} streaming={streaming} frontmatter={frontmatter} theme={theme} customCss={scopedCustomMarkdownCss(customTheme)}/>
+}
+
+function MarkdownBody({ text, className, streaming, frontmatter, theme, customCss }: { text: string; className: string; streaming: boolean; frontmatter: boolean; theme: MarkdownThemeId | undefined; customCss?: string }) {
   const document = frontmatter ? splitMarkdownFrontmatter(text) : { body: text, frontmatter: null }
   const segments = streaming ? splitStreamingMarkdown(document.body) : { settled: document.body, tail: '' }
-  return <div className={`markdown ${streaming ? 'markdown-streaming' : ''} ${className}`.trim()} data-markdown-theme={theme}>
-    {document.frontmatter && <FrontmatterPanel value={document.frontmatter}/>}
+  return <div id={customCss ? 'write' : undefined} className={`markdown ${streaming ? 'markdown-streaming' : ''} ${className}`.trim()} data-markdown-theme={theme}>
+    {customCss && <style>{customCss}</style>}
+    {document.frontmatter && <FrontmatterPanel value={document.frontmatter}/>} 
     {segments.settled && <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{segments.settled}</ReactMarkdown>}
     {segments.tail && <div className="markdown-streaming-tail">{segments.tail}</div>}
   </div>

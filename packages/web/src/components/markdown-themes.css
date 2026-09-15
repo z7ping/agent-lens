@@ -101,3 +101,9 @@
   width: min(100%, 860px);
   margin-inline: auto;
 }
+
+.markdown[data-markdown-theme^='custom:'] {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  contain: layout paint style;
+}

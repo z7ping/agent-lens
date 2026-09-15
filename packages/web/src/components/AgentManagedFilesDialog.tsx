@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -8,11 +8,12 @@ import type {
   ManagedAssetRoot,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
-import { readMarkdownTheme, writeMarkdownTheme } from '../client/preferences'
+import { readMarkdownTheme, subscribeMarkdownTheme, writeMarkdownTheme } from '../client/preferences'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalPathActions } from './LocalPathActions'
 import { MarkdownContent } from './MarkdownContent'
 import { isMarkdownThemeId } from './markdown-theme'
+import { useCustomMarkdownThemes } from './markdown-theme-registry'
 import { Button, Dialog, SelectMenu, UiIcon } from './ui'
 
 function isMarkdownFile(name: string | undefined): boolean {
@@ -87,7 +88,8 @@ export function AgentManagedFilesDialog({
   const [previewError, setPreviewError] = useState('')
   const [pathError, setPathError] = useState('')
   const [previewView, setPreviewView] = useState<'rendered' | 'source'>('source')
-  const [markdownTheme, setMarkdownTheme] = useState(readMarkdownTheme)
+  const markdownTheme = useSyncExternalStore(subscribeMarkdownTheme, readMarkdownTheme, readMarkdownTheme)
+  const customMarkdownThemes = useCustomMarkdownThemes()
   const generationRef = useRef(0)
   const previewRequestRef = useRef(0)
 
@@ -301,7 +303,6 @@ export function AgentManagedFilesDialog({
       value={markdownTheme}
       onChange={value => {
         if (!isMarkdownThemeId(value)) return
-        setMarkdownTheme(value)
         writeMarkdownTheme(value)
       }}
       ariaLabel={t('managedFiles.themeAria')}
@@ -309,6 +310,7 @@ export function AgentManagedFilesDialog({
       options={[
         { value: 'next-helvetica', label: t('managedFiles.themeNextHelvetica'), description: t('managedFiles.themeNextHelveticaDescription') },
         { value: 'agent-lens', label: t('managedFiles.themeAgentLens'), description: t('managedFiles.themeAgentLensDescription') },
+        ...customMarkdownThemes.map(theme => ({ value: theme.id, label: theme.name, description: t('managedFiles.themeCustomDescription') })),
       ]}
     />}
     {previewMarkdown && preview?.content !== undefined && <div className="managed-file-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>

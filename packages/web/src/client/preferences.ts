@@ -5,6 +5,7 @@ const AGENT_FILTER_KEY = 'agent-lens.agent-filter.v2'
 const AGENT_VISIBILITY_KEY = 'agent-lens.agent-visibility.v1'
 const THEME_KEY = 'agent-lens.theme.v1'
 const MARKDOWN_THEME_KEY = 'agent-lens.markdown-theme.v1'
+const MARKDOWN_THEME_CHANGE_EVENT = 'agent-lens:markdown-theme-changed'
 const SIDEBAR_COLLAPSED_KEY = 'agent-lens.sidebar-collapsed.v1'
 
 export interface AgentFilterPreference {
@@ -93,7 +94,23 @@ export function readMarkdownTheme(): MarkdownThemeId {
 }
 
 export function writeMarkdownTheme(theme: MarkdownThemeId): void {
-  try { localStorage.setItem(MARKDOWN_THEME_KEY, theme) } catch { /* ignore unavailable storage */ }
+  try {
+    localStorage.setItem(MARKDOWN_THEME_KEY, theme)
+    window.dispatchEvent(new Event(MARKDOWN_THEME_CHANGE_EVENT))
+  } catch { /* ignore unavailable storage */ }
+}
+
+export function subscribeMarkdownTheme(listener: () => void): () => void {
+  const onChange = () => listener()
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === MARKDOWN_THEME_KEY) listener()
+  }
+  window.addEventListener(MARKDOWN_THEME_CHANGE_EVENT, onChange)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    window.removeEventListener(MARKDOWN_THEME_CHANGE_EVENT, onChange)
+    window.removeEventListener('storage', onStorage)
+  }
 }
 
 export function readSidebarCollapsed(): boolean {

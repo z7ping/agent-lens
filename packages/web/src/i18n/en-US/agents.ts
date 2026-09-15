@@ -311,6 +311,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       themeNextHelveticaDescription: 'Compact technical document typography',
       themeAgentLens: 'AgentLens',
       themeAgentLensDescription: 'Product default reading typography',
+      themeCustomDescription: 'Custom CSS theme imported in Settings',
       redacted: 'Redacted',
       metadataOnly: 'File metadata only',
       blockedReason: {

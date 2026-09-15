@@ -1,0 +1,115 @@
+.markdown-theme-manager .ui-overlay-body {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.markdown-theme-manager-import,
+.markdown-theme-manager-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.markdown-theme-manager-import {
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+  background: var(--al-soft);
+}
+
+.markdown-theme-manager-import > div,
+.markdown-theme-manager-copy { min-width: 0; }
+
+.markdown-theme-manager h3 {
+  margin: 0;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.markdown-theme-manager p {
+  margin: 3px 0 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.markdown-theme-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.markdown-theme-manager-import .btn,
+.markdown-theme-manager-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.markdown-theme-manager-notice {
+  padding: 8px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-sm);
+  color: var(--al-ink-2);
+  font-size: 12px;
+}
+
+.markdown-theme-manager-notice.is-success { border-color: var(--al-success); }
+.markdown-theme-manager-notice.is-danger { border-color: var(--al-danger); }
+
+.markdown-theme-manager-section {
+  display: grid;
+  gap: 8px;
+}
+
+.markdown-theme-manager-list {
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+}
+
+.markdown-theme-manager-row {
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 9px 10px;
+}
+
+.markdown-theme-manager-row + .markdown-theme-manager-row { border-top: 1px solid var(--al-line); }
+
+.markdown-theme-manager-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.markdown-theme-manager-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.markdown-theme-manager-empty {
+  padding: 18px;
+  border: 1px dashed var(--al-line-strong);
+  border-radius: var(--radius-md);
+  color: var(--al-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .markdown-theme-manager-import,
+  .markdown-theme-manager-row { align-items: flex-start; }
+  .markdown-theme-manager-row { flex-direction: column; }
+  .markdown-theme-manager-actions { align-self: stretch; justify-content: flex-end; }
+}

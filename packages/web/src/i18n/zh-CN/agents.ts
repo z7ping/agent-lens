@@ -311,6 +311,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       themeNextHelveticaDescription: '紧凑技术文档排版',
       themeAgentLens: 'AgentLens',
       themeAgentLensDescription: '产品默认阅读排版',
+      themeCustomDescription: '设置中导入的自定义 CSS 皮肤',
       redacted: '已脱敏',
       metadataOnly: '仅显示文件元信息',
       blockedReason: {

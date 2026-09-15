@@ -10,6 +10,7 @@ import { IntegrationOrderProvider } from './components/IntegrationOrderProvider'
 import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
+import { MarkdownThemeManager } from './components/MarkdownThemeManager'
 import { PageLoadingState } from './components/StateViews'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
@@ -165,6 +166,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [workspaceTopbarHost, setWorkspaceTopbarHost] = useState<HTMLDivElement | null>(null)
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
+  const [markdownThemeManagerOpen, setMarkdownThemeManagerOpen] = useState(false)
   const agents = snapshot.facets?.agents ?? []
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -270,12 +272,14 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         onBackupAssetSourceIdChange={setBackupAssetSourceId}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onOpenMarkdownThemes={() => setMarkdownThemeManagerOpen(true)}
         onContextHost={setSidebarHost}
         onCollapse={() => setDesktopSidebarCollapsed(true)}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
       {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label={t('navigation:closeWorkspaceNavigation')} onClick={() => setMobileNavigationOpen(false)}/>} 
+      <MarkdownThemeManager open={markdownThemeManagerOpen} onClose={() => setMarkdownThemeManagerOpen(false)}/>
       <div ref={mainRef} className="app-main">
         <WorkspaceTopBar
           pathname={location.pathname}

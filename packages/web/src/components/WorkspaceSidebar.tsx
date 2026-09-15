@@ -22,6 +22,7 @@ interface WorkspaceSidebarProps {
   onBackupAssetSourceIdChange(id: string): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
+  onOpenMarkdownThemes(): void
   onContextHost(node: HTMLDivElement | null): void
   onCollapse(): void
   mobileOpen?: boolean
@@ -38,6 +39,7 @@ export function WorkspaceSidebar({
   onBackupAssetSourceIdChange,
   theme,
   onToggleTheme,
+  onOpenMarkdownThemes,
   onContextHost,
   onCollapse,
   mobileOpen = false,
@@ -171,6 +173,18 @@ export function WorkspaceSidebar({
               >
                 <UiIcon name={theme === 'dark' ? 'sun' : 'moon'} size={14}/>
                 <span>{theme === 'dark' ? t('settings:switchToLight') : t('settings:switchToDark')}</span>
+              </button>
+              <button
+                type="button"
+                className="workspace-settings-menu-item"
+                onClick={() => {
+                  setSettingsOpen(false)
+                  onOpenMarkdownThemes()
+                }}
+              >
+                <UiIcon name="tool-read" size={14}/>
+                <span>{t('settings:markdownThemes')}</span>
+                <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
               </button>
               <LocaleSelector/>
             </div>
