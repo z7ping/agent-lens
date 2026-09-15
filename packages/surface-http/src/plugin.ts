@@ -198,6 +198,8 @@ const applyHttpSurface = Object.assign(
       ...(ctx.capabilities ? { capabilities: ctx.capabilities } : {}),
       ...(ctx.capturePolicy ? { capturePolicy: ctx.capturePolicy } : {}),
       ...(ctx.backup ? { backup: ctx.backup } : {}),
+      ...(ctx.lives ? { lives: ctx.lives } : {}),
+      ...(ctx.liveAttachments ? { liveAttachments: ctx.liveAttachments } : {}),
       ...(piLive ? { piLive } : {}),
       rescanAgents: sourceId => sourceRescan.rescan(sourceId),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
@@ -221,7 +223,7 @@ const applyHttpSurface = Object.assign(
       await surface.dispose()
     }
   },
-  { inject: ['storage', 'unifiedRead', 'sources', 'identity', 'capabilities', 'assets', 'evidence', 'capturePolicy', 'backup'] },
+  { inject: ['storage', 'unifiedRead', 'sources', 'identity', 'capabilities', 'assets', 'evidence', 'capturePolicy', 'backup', 'lives', 'liveAttachments'] },
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
