@@ -17,18 +17,18 @@ import { IconButton } from './ui'
 import { UiIcon } from './UiIcon'
 
 export interface LiveImageNodeInput {
-  attachmentId?: string
-  name?: string
-  mimeType?: string
-  sizeBytes?: number
-  previewUrl?: string
+  attachmentId?: string | undefined
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes?: number | undefined
+  previewUrl?: string | undefined
 }
 
 export type SerializedLiveImageNode = Spread<{
   attachmentId: string
-  name?: string
-  mimeType?: string
-  sizeBytes?: number
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes?: number | undefined
 }, SerializedLexicalNode>
 
 function formatBytes(sizeBytes?: number): string {
@@ -84,10 +84,10 @@ function LiveImageBlock({
 
 export class LiveImageNode extends DecoratorNode<JSX.Element> {
   __attachmentId: string
-  __name?: string
-  __mimeType?: string
-  __sizeBytes?: number
-  __previewUrl?: string
+  __name: string | undefined
+  __mimeType: string | undefined
+  __sizeBytes: number | undefined
+  __previewUrl: string | undefined
 
   $config() {
     return this.config('live-image', { extends: DecoratorNode })
