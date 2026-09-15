@@ -39,7 +39,7 @@
   margin: 3px 0;
   padding: 3px 4px 3px 8px;
   border: 1px solid var(--al-line);
-  border-radius: var(--al-radius-sm);
+  border-radius: var(--radius-sm);
   background: var(--al-soft-2);
   color: var(--al-muted-strong);
   font-size: 12px;
