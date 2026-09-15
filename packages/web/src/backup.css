@@ -76,22 +76,28 @@
   box-shadow: none;
 }
 
-/* 当前资产总览：只做一个视觉焦点，不恢复四张 KPI 卡。 */
+/* 当前资产总览：保持一条轻量摘要，文件规模降为辅助信息。 */
 .backup-asset-overview {
-  display: grid;
-  grid-template-columns: minmax(150px, .72fr) minmax(150px, .72fr) minmax(260px, 1.4fr);
-  align-items: stretch;
+  display: flex;
+  min-width: 0;
+  min-height: 54px;
+  align-items: center;
+  gap: 22px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--al-line);
   background: var(--al-soft-2);
 }
 
 .backup-asset-overview > div {
   min-width: 0;
-  padding: 14px 16px;
+  padding: 0;
 }
 
-.backup-asset-overview > div + div {
-  border-left: 1px solid var(--al-line);
+.backup-asset-overview-primary {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .backup-asset-overview-primary strong,
@@ -102,15 +108,15 @@
 .backup-asset-overview-primary strong {
   overflow: hidden;
   color: var(--al-ink);
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 720;
-  line-height: 1.05;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .backup-asset-overview-primary span {
-  margin-top: 5px;
+  margin: 0;
   color: var(--al-muted);
   font-size: 12px;
   font-weight: 620;
@@ -119,9 +125,10 @@
 .backup-asset-overview-meta {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .backup-asset-overview-meta b {
@@ -136,6 +143,7 @@
 .backup-asset-overview-meta span {
   color: var(--al-muted);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .backup-assets-section { min-width: 0; }
@@ -155,41 +163,32 @@
   background: var(--al-surface);
 }
 
-/* 全部智能体：固定列的高密度资产表，形成稳定阅读轴。 */
-.backup-agent-table {
+/* 全部智能体：连续分组列表。每行先看智能体，再看核心资产和数据，规模与路径降级。 */
+.backup-agent-list {
   min-width: 0;
 }
 
-.backup-agent-table-head,
-.backup-agent-row {
-  display: grid;
-  grid-template-columns: minmax(140px, .78fr) minmax(230px, 1.55fr) minmax(180px, 1.08fr) 92px 92px minmax(170px, 1fr);
-  gap: 14px;
-  align-items: center;
-}
-
-.backup-agent-table-head {
-  min-height: 36px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--al-line);
-  color: var(--al-muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.backup-agent-row {
-  min-height: 58px;
-  align-items: start;
-  padding: 11px 14px;
+.backup-agent-item {
+  min-width: 0;
+  padding: 13px 14px 12px;
   border-bottom: 1px solid var(--al-line);
 }
 
-.backup-agent-row:last-child {
+.backup-agent-item:last-child {
   border-bottom: 0;
 }
 
-.backup-agent-row:hover {
+.backup-agent-item:hover {
   background: var(--al-soft-2);
+}
+
+.backup-agent-item-head {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 9px;
 }
 
 .backup-agent-row-head {
@@ -209,61 +208,66 @@
   white-space: nowrap;
 }
 
-.backup-agent-cell {
+.backup-agent-scale {
+  flex: 0 0 auto;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.backup-agent-groups {
   display: grid;
   min-width: 0;
-  align-self: start;
-  gap: 4px 14px;
+  gap: 6px;
 }
 
-.backup-agent-cell-core {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.backup-agent-cell-history {
-  grid-template-columns: 1fr;
-}
-
-.backup-agent-cell > span {
+.backup-agent-group {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 76px minmax(0, 1fr);
   align-items: baseline;
-  gap: 7px;
+  gap: 12px;
+}
+
+.backup-agent-group-label {
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backup-agent-stats {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px 18px;
+}
+
+.backup-agent-stat {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
   color: var(--al-ink-2);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.backup-agent-cell em {
-  min-width: 0;
-  overflow: hidden;
+.backup-agent-stat em {
   color: var(--al-muted);
   font-style: normal;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.backup-agent-cell b {
+.backup-agent-stat b {
   color: var(--al-ink-2);
   font-size: 13px;
   font-weight: 670;
   font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
-.backup-agent-cell-history em,
-.backup-agent-cell-history b {
-  color: var(--al-muted);
-}
-
-.backup-agent-files,
-.backup-agent-size {
-  color: var(--al-ink-2);
-  font-size: 13px;
-  font-weight: 660;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.backup-agent-stat-empty {
+  color: var(--al-muted-2);
+  font-size: 12px;
 }
 
 .backup-agent-row-path {
@@ -271,6 +275,9 @@
   min-width: 0;
   align-items: center;
   gap: 6px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 62%, transparent);
   color: var(--al-muted-2);
   font-size: 12px;
 }
