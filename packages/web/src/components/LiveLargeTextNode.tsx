@@ -45,7 +45,7 @@ function LiveLargeTextBlock({
       <UiIcon name="task" size={14}/>
     </span>
     <span className="live-large-text-summary">
-      {translateProduct('common.liveComposer.largeTextSummary', {
+      {translateProduct('common:liveComposer.largeTextSummary', {
         lines: lineCount,
         chars: charCount,
       })}
@@ -53,8 +53,8 @@ function LiveLargeTextBlock({
     <IconButton
       size="small"
       className="live-large-text-remove"
-      aria-label={translateProduct('common.liveComposer.removeLargeText')}
-      title={translateProduct('common.liveComposer.removeLargeText')}
+      aria-label={translateProduct('common:liveComposer.removeLargeText')}
+      title={translateProduct('common:liveComposer.removeLargeText')}
       onClick={remove}
     >
       <UiIcon name="close" size={14}/>
