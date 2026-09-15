@@ -7,6 +7,7 @@ const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url)
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const sessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
+const globalStyles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
 const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
@@ -83,6 +84,13 @@ test('Pi Live streaming assistant reuses TaskMessage and has no parallel respons
   assert.doesNotMatch(css, /\.pi-live-reader\s*\{/)
 })
 
+test('Pi Live streaming assistant skips repeated collapse measurement and keeps markdown tail geometry stable', () => {
+  assert.match(taskMessage, /if \(streaming && !user && view === 'rendered'\) \{[\s\S]*?setCanCollapse\(false\)[\s\S]*?setCollapsedHeight\(undefined\)[\s\S]*?return/)
+  assert.match(taskMessage, /\[measure, streaming, user, view\]/)
+  assert.doesNotMatch(taskMessage, /\[measure, text, user, view\]/)
+  assert.match(globalStyles, /\.markdown-streaming-tail\s*\{[\s\S]*?margin:\s*\.42em 0;[\s\S]*?line-height:\s*inherit;[\s\S]*?white-space:\s*pre-wrap;/)
+})
+
 test('Pi Live sends optimistically into one stable ordered current round before the first token', () => {
   assert.match(page, /const \[optimisticPrompt, setOptimisticPrompt\] = useState\(''\)/)
   assert.match(page, /const \[currentOrdinal, setCurrentOrdinal\] = useState<number \| null>\(null\)/)
@@ -111,12 +119,25 @@ test('Pi Live SSE uses start/delta/end plus contentIndex to preserve interleaved
   assert.match(page, /startPiLiveTool\(items,[\s\S]*?contentIndex/)
 })
 
-test('Pi Live auto-follow is coalesced to one animation frame and follows currentItems', () => {
-  assert.match(page, /const followFrameRef = useRef<number \| null>\(null\)/)
-  assert.match(page, /if \(!followingRef\.current \|\| followFrameRef\.current !== null\) return/)
-  assert.match(page, /followFrameRef\.current = requestAnimationFrame\(\(\) => \{[\s\S]*?followFrameRef\.current = null[\s\S]*?reader\.scrollTop = target/)
-  assert.doesNotMatch(page, /return \(\) => cancelAnimationFrame\(frame\)/)
+test('Pi Live auto-follow has a single controller and at most one scroll write per presentation commit', () => {
+  assert.match(page, /const followControllerRef = useRef\(new PiLiveFollowController\(\)\)/)
+  assert.match(page, /if \(!controller\.isFollowing \|\| followFrameRef\.current !== null\) return/)
+  assert.match(page, /controller\.beginProgrammaticScroll\(\)[\s\S]*?controller\.recordScrollWrite\(\)[\s\S]*?reader\.scrollTop = target/)
+  assert.match(page, /onWheel=\{event => onReaderWheel\(event\.deltaY\)\}/)
+  assert.match(page, /onTouchStart=\{\(\) => followControllerRef\.current\.markUserIntent\(\)\}/)
+  assert.match(page, /onPointerDown=\{\(\) => followControllerRef\.current\.markUserIntent\(\)\}/)
   assert.match(page, /\[visibleHistoryRounds, currentItems, optimisticPrompt,[\s\S]*?restored, extension\?\.id\]/)
+})
+
+test('Pi Live batches display-only deltas while structural boundaries flush immediately', () => {
+  assert.match(page, /new PiLivePresentationScheduler<PiLiveHistoryItem\[\]>/)
+  assert.match(page, /update\.type === 'text_delta'[\s\S]*?presentation\.push\(items => appendPiLiveDelta/)
+  assert.match(page, /update\.type === 'thinking_delta'[\s\S]*?presentation\.push\(items => appendPiLiveDelta/)
+  assert.match(page, /type === 'tool_execution_update'[\s\S]*?presentation\.push\(items => updatePiLiveTool/)
+  assert.match(page, /update\.type === 'text_end'[\s\S]*?presentation\.boundary\(items => finishPiLiveContentBlock/)
+  assert.match(page, /type === 'agent_settled'[\s\S]*?presentation\.boundary\(current => settlePiLiveItems/)
+  assert.match(page, /const stop = useCallback[\s\S]*?presentationRef\.current\?\.flush\(\)/)
+  assert.match(page, /const terminate = async[\s\S]*?presentationRef\.current\?\.flush\(\)/)
 })
 
 test('Pi Live settle reconciles Snapshot into the same current block list instead of replacing a second subtree', () => {

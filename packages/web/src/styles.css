@@ -184,6 +184,14 @@ a:focus-visible {
   white-space: pre-wrap;
 }
 
+/* 流式未完成尾部使用与普通段落一致的几何基线，晋升为 Markdown 块时减少高度突变。 */
+.markdown-streaming-tail {
+  margin: .42em 0;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .markdown h1,
 .markdown h2,
 .markdown h3,
