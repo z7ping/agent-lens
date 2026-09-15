@@ -3,12 +3,15 @@ import type {
   LiveAdapter,
   LiveAdapterManifest,
   LiveCapabilityName,
+  LiveMessageInput,
   LiveRuntimeEvent,
   LiveSendOptions,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet,
+  createLiveInputCapabilities,
   dispatchLiveSend,
+  liveMessageToPlainText,
 } from '@agent-lens/live-support'
 import type {
   PiLiveRuntimeState,
@@ -31,6 +34,14 @@ const CAPABILITIES = [
   'extension-ui',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
+
+const INPUT_CAPABILITIES = createLiveInputCapabilities({
+  text: 'native',
+  largeText: 'transform',
+  image: 'unsupported',
+  file: 'unsupported',
+  multiline: 'native',
+})
 
 export const piLiveAdapterManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/runtime-cordis/pi-live',
@@ -63,6 +74,7 @@ function piStartInput(value: unknown): PiLiveStartInput {
 export class PiLiveAdapter implements LiveAdapter {
   readonly manifest = piLiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
+  readonly inputCapabilities = INPUT_CAPABILITIES
 
   constructor(readonly service: PiLiveService) {}
 
@@ -101,13 +113,15 @@ export class PiLiveAdapter implements LiveAdapter {
 
   send(
     runtimeSessionId: string,
-    message: string,
+    message: LiveMessageInput,
     options: LiveSendOptions = {},
   ): Promise<void> {
+    const plainText = (value: Parameters<typeof liveMessageToPlainText>[0]) =>
+      liveMessageToPlainText(value, this.inputCapabilities, this.manifest.displayName)
     return dispatchLiveSend(message, options, {
-      normal: value => this.service.prompt(runtimeSessionId, value),
-      steer: value => this.service.steer(runtimeSessionId, value),
-      followUp: value => this.service.followUp(runtimeSessionId, value),
+      normal: value => this.service.prompt(runtimeSessionId, plainText(value)),
+      steer: value => this.service.steer(runtimeSessionId, plainText(value)),
+      followUp: value => this.service.followUp(runtimeSessionId, plainText(value)),
     })
   }
 
