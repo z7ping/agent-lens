@@ -17,6 +17,8 @@ export type LiveCapabilityName =
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
 
+export const LIVE_ATTACHMENT_MAX_ITEM_BYTES = 12 * 1024 * 1024
+
 export interface LiveInputCapabilities {
   text: LiveInputSupport
   largeText: LiveInputSupport
