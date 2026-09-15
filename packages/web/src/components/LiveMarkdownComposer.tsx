@@ -300,7 +300,6 @@ function EditablePlugin({ disabled }: { disabled: boolean }) {
 
 function LargePastePlugin() {
   const [editor] = useLexicalComposerContext()
-  const pendingCountRef = useRef(0)
   useEffect(() => editor.registerCommand(
     PASTE_COMMAND,
     event => {
@@ -335,6 +334,7 @@ function ImagePastePlugin({
   onError?: (error: unknown) => void
 }) {
   const [editor] = useLexicalComposerContext()
+  const pendingCountRef = useRef(0)
   useEffect(() => editor.registerCommand(
     PASTE_COMMAND,
     event => {
