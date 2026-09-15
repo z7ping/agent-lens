@@ -51,6 +51,7 @@ export interface LiveAttachment extends LiveAttachmentDescriptor {
 }
 
 export interface PutLiveAttachmentInput {
+  attachmentId?: string | undefined
   data: Uint8Array
   name?: string | undefined
   mimeType?: string | undefined
