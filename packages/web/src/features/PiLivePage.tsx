@@ -15,7 +15,9 @@ import { OperationProgress } from '../components/StateViews'
 import { Button, Disclosure, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, settlePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
+import { PiLiveFollowController } from './pi-live-follow-controller'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
+import { PiLivePresentationScheduler } from './pi-live-presentation'
 import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
 import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
@@ -363,8 +365,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
   const readerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<PiMarkdownComposerHandle>(null)
-  const followingRef = useRef(true)
+  const followControllerRef = useRef(new PiLiveFollowController())
   const followFrameRef = useRef<number | null>(null)
+  const followReleaseFrameRef = useRef<number | null>(null)
+  const presentationRef = useRef<PiLivePresentationScheduler<PiLiveHistoryItem[]> | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
   const assistantMessageEpochRef = useRef(0)
   const startupSendingRef = useRef(false)
@@ -418,6 +422,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       cancelAnimationFrame(followFrameRef.current)
       followFrameRef.current = null
     }
+    if (followReleaseFrameRef.current !== null) {
+      cancelAnimationFrame(followReleaseFrameRef.current)
+      followReleaseFrameRef.current = null
+    }
+    followControllerRef.current = new PiLiveFollowController()
+    presentationRef.current?.dispose()
+    const presentation = new PiLivePresentationScheduler<PiLiveHistoryItem[]>(mutation => setCurrentItems(mutation))
+    presentationRef.current = presentation
     setSnapshot(null)
     setState(null)
     setControls({ models: [] })
@@ -467,6 +479,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
     const acceptSnapshot = (value: PiLiveSnapshotDto) => {
       if (!active || value.state.runtimeSessionId !== runtimeId) return
+      presentation.flush()
       setSnapshot(current => mergeSnapshot(current, value))
       setState(value.state)
       leafIdRef.current = value.leafId ?? undefined
@@ -490,6 +503,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
     const reconcileSettledSnapshot = async () => {
       try {
+        presentation.flush()
         const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
         if (!active) return
         const prompt = activePromptRef.current.trim()
@@ -561,14 +575,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           const type = stringValue(event.type)
           if (type === 'agent_start') {
             statePatch = { ...statePatch, isStreaming: true }
-            setCurrentItems([])
+            presentation.boundary(() => [])
             if (!activePromptRef.current) {
               setCurrentOrdinal(null)
               setOptimisticPrompt('')
             }
           } else if (type === 'agent_settled') {
             statePatch = { ...statePatch, isStreaming: false, pendingMessageCount: 0 }
-            setCurrentItems(current => settlePiLiveItems(current))
+            presentation.boundary(current => settlePiLiveItems(current))
             settled = true
           } else if (type === 'message_start') {
             const message = record(event.message)
@@ -589,38 +603,40 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               ...(contentIndex === undefined ? {} : { contentIndex }),
             }
             if (update.type === 'text_start') {
-              setCurrentItems(items => startPiLiveContentBlock(items, 'text', deltaOptions, stringValue(block.text)))
+              presentation.boundary(items => startPiLiveContentBlock(items, 'text', deltaOptions, stringValue(block.text)))
             } else if (update.type === 'text_delta' && delta) {
-              setCurrentItems(items => appendPiLiveDelta(items, 'text', delta, deltaOptions))
+              presentation.push(items => appendPiLiveDelta(items, 'text', delta, deltaOptions))
             } else if (update.type === 'text_end') {
               const content = stringValue(update.content) || stringValue(block.text)
-              setCurrentItems(items => finishPiLiveContentBlock(items, 'text', content, deltaOptions))
+              presentation.boundary(items => finishPiLiveContentBlock(items, 'text', content, deltaOptions))
             } else if (update.type === 'thinking_start') {
-              setCurrentItems(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, stringValue(block.thinking || block.text)))
+              presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, stringValue(block.thinking || block.text)))
             } else if (update.type === 'thinking_delta' && delta) {
-              setCurrentItems(items => appendPiLiveDelta(items, 'thinking', delta, deltaOptions))
+              presentation.push(items => appendPiLiveDelta(items, 'thinking', delta, deltaOptions))
             } else if (update.type === 'thinking_end') {
               const content = stringValue(update.content) || stringValue(block.thinking || block.text)
-              setCurrentItems(items => finishPiLiveContentBlock(items, 'thinking', content, deltaOptions))
+              presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', content, deltaOptions))
             } else if (update.type === 'toolcall_start' || update.type === 'toolcall_delta' || update.type === 'toolcall_end') {
               const completed = record(update.toolCall)
               const toolCall = Object.keys(completed).length ? completed : block
               const callId = stringValue(update.id || update.toolCallId || toolCall.id)
               if (callId) {
                 const args = toolCall.arguments ?? toolCall.args ?? update.arguments ?? update.args
-                setCurrentItems(items => startPiLiveTool(items, {
+                const mutation = (items: PiLiveHistoryItem[]) => startPiLiveTool(items, {
                   callId,
                   name: stringValue(update.toolName || update.name || toolCall.name) || 'tool',
                   summary: args === undefined ? '' : brief(args),
                   ...(contentIndex === undefined ? {} : { contentIndex }),
-                }))
+                })
+                if (update.type === 'toolcall_delta') presentation.push(mutation)
+                else presentation.boundary(mutation)
               }
             }
           } else if (type === 'message_end') {
             // 最终消息由 agent_settled Snapshot 对账；这里不重排或替换已经展示的 block。
           } else if (type === 'tool_execution_start') {
             const id = stringValue(event.toolCallId)
-            if (id) setCurrentItems(items => startPiLiveTool(items, {
+            if (id) presentation.boundary(items => startPiLiveTool(items, {
               callId: id,
               name: stringValue(event.toolName) || 'tool',
               summary: brief(event.args),
@@ -628,10 +644,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             }))
           } else if (type === 'tool_execution_update') {
             const id = stringValue(event.toolCallId)
-            if (id) setCurrentItems(items => updatePiLiveTool(items, id, toolOutput(event.partialResult)))
+            if (id) presentation.push(items => updatePiLiveTool(items, id, toolOutput(event.partialResult)))
           } else if (type === 'tool_execution_end') {
             const id = stringValue(event.toolCallId)
-            if (id) setCurrentItems(items => finishPiLiveTool(
+            if (id) presentation.boundary(items => finishPiLiveTool(
               items,
               id,
               event.isError === true ? 'error' : 'success',
@@ -702,7 +718,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         }
         if (Object.keys(statePatch).length) setState(current => current ? { ...current, ...statePatch } : current)
         setDiagnostics(nextDiagnostics)
-        if (!followingRef.current) setNewRecords(true)
+        if (!followControllerRef.current.isFollowing) setNewRecords(true)
         if (settled) void refreshAfterSettled()
         if (controlsChanged) {
           void piLiveApi.state(runtimeId).then(value => {
@@ -716,10 +732,17 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     return () => {
       active = false
       dispose()
+      presentation.dispose()
+      if (presentationRef.current === presentation) presentationRef.current = null
       if (followFrameRef.current !== null) {
         cancelAnimationFrame(followFrameRef.current)
         followFrameRef.current = null
       }
+      if (followReleaseFrameRef.current !== null) {
+        cancelAnimationFrame(followReleaseFrameRef.current)
+        followReleaseFrameRef.current = null
+      }
+      followControllerRef.current.endProgrammaticScroll()
     }
   }, [runtimeId])
 
@@ -764,13 +787,22 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   useEffect(() => {
-    if (!followingRef.current || followFrameRef.current !== null) return
+    const controller = followControllerRef.current
+    if (!controller.isFollowing || followFrameRef.current !== null) return
     followFrameRef.current = requestAnimationFrame(() => {
       followFrameRef.current = null
       const reader = readerRef.current
-      if (!reader || !followingRef.current) return
+      if (!reader || !controller.isFollowing) return
       const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
-      if (Math.abs(reader.scrollTop - target) > 1) reader.scrollTop = target
+      if (Math.abs(reader.scrollTop - target) <= 1) return
+      controller.beginProgrammaticScroll()
+      controller.recordScrollWrite()
+      reader.scrollTop = target
+      if (followReleaseFrameRef.current !== null) cancelAnimationFrame(followReleaseFrameRef.current)
+      followReleaseFrameRef.current = requestAnimationFrame(() => {
+        followReleaseFrameRef.current = null
+        controller.endProgrammaticScroll()
+      })
     })
   }, [visibleHistoryRounds, currentItems, optimisticPrompt, queue.steering.length, queue.followUp.length, restored, extension?.id])
 
@@ -870,6 +902,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const stop = useCallback(async () => {
     if (!optimisticStreaming || abortPending || queueMutationPending) return
+    presentationRef.current?.flush()
     setAbortPending(true)
     setError('')
     try {
@@ -881,6 +914,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       setRestored(drafts)
       setQueue({ steering: [], followUp: [] })
       setPendingQueue([])
+      presentationRef.current?.flush()
       setState(current => current ? { ...current, isStreaming: false, pendingMessageCount: 0 } : current)
       setCurrentItems(items => reconcilePiLiveItems(items, []))
       setInterruptNotice(true)
@@ -968,20 +1002,39 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const onReaderScroll = () => {
     const reader = readerRef.current
     if (!reader) return
-    followingRef.current = reader.scrollHeight - reader.scrollTop - reader.clientHeight < 140
-    if (followingRef.current) setNewRecords(false)
+    const following = followControllerRef.current.observeScroll(
+      reader.scrollHeight - reader.scrollTop - reader.clientHeight,
+    )
+    if (following) setNewRecords(false)
+  }
+
+  const onReaderWheel = (deltaY: number) => {
+    const controller = followControllerRef.current
+    if (deltaY < 0) controller.detach()
+    else controller.markUserIntent()
   }
 
   const jumpLatest = () => {
     const reader = readerRef.current
-    if (reader) reader.scrollTo({ top: reader.scrollHeight, behavior: 'auto' })
-    followingRef.current = true
+    const controller = followControllerRef.current
+    controller.restore()
+    if (reader) {
+      controller.beginProgrammaticScroll()
+      controller.recordScrollWrite()
+      reader.scrollTo({ top: reader.scrollHeight, behavior: 'auto' })
+      if (followReleaseFrameRef.current !== null) cancelAnimationFrame(followReleaseFrameRef.current)
+      followReleaseFrameRef.current = requestAnimationFrame(() => {
+        followReleaseFrameRef.current = null
+        controller.endProgrammaticScroll()
+      })
+    }
     setNewRecords(false)
     inputRef.current?.focus({ preventScroll: true })
   }
 
   const terminate = async () => {
     if (busy) return
+    presentationRef.current?.flush()
     setBusy(true)
     try {
       await piLiveApi.terminate(runtimeId)
@@ -1128,7 +1181,14 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         </>}
       />
 
-      <div ref={readerRef} className="pi-live-reader" onScroll={onReaderScroll}>
+      <div
+        ref={readerRef}
+        className="pi-live-reader"
+        onScroll={onReaderScroll}
+        onWheel={event => onReaderWheel(event.deltaY)}
+        onTouchStart={() => followControllerRef.current.markUserIntent()}
+        onPointerDown={() => followControllerRef.current.markUserIntent()}
+      >
         <div className="pi-live-document">
           {!state && <div className="pi-live-startup-spotlight"><OperationProgress
             statusLabel={t('loading.status')}
