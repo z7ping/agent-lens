@@ -443,6 +443,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setError('')
     setSyncWarningCode('')
     setInterruptNotice(false)
+    setNewRecords(false)
     setShowAllEvents(true)
     setStartupQueued('')
     setComposerExpanded(false)
@@ -633,6 +634,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               }
             }
           } else if (type === 'message_end') {
+            presentation.flush()
             // 最终消息由 agent_settled Snapshot 对账；这里不重排或替换已经展示的 block。
           } else if (type === 'tool_execution_start') {
             const id = stringValue(event.toolCallId)
@@ -711,6 +713,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             if (request) setExtension(request)
             if (type === 'extension_error') setError(stringValue(event.error) || agentLensI18n.t('piLive:warning.extensionFailed'))
             if (type === 'runtime_exit') {
+              presentation.flush()
               setError(stringValue(event.errorMessage) || agentLensI18n.t('piLive:warning.runtimeExited'))
               statePatch = { ...statePatch, isStreaming: false, isCompacting: false }
             }
