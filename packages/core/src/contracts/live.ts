@@ -37,6 +37,30 @@ export interface LiveLargeTextPart {
   charCount?: number
 }
 
+export interface LiveAttachmentDescriptor {
+  attachmentId: string
+  name?: string
+  mimeType?: string
+  sizeBytes: number
+}
+
+export interface LiveAttachment extends LiveAttachmentDescriptor {
+  data: Uint8Array
+}
+
+export interface PutLiveAttachmentInput {
+  data: Uint8Array
+  name?: string
+  mimeType?: string
+}
+
+export interface LiveAttachmentService {
+  put(input: PutLiveAttachmentInput): Promise<LiveAttachmentDescriptor>
+  get(attachmentId: string): Promise<LiveAttachment | null>
+  remove(attachmentId: string): Promise<void>
+  dispose(): Promise<void>
+}
+
 export interface LiveAttachmentPartBase {
   /**
    * AgentLens-owned opaque attachment reference. Adapters may resolve or
