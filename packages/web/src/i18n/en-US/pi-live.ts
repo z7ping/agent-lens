@@ -135,6 +135,9 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       followUp: 'Follow up',
       send: 'Send',
       sendWhenReady: 'Send when Pi is ready',
+      imageOnly: 'Image',
+      imageRequiresReady: 'Images can be sent after Pi is ready.',
+      imageUploadFailed: 'Failed to process the image. Try again.',
     },
     runtimeMenu: {
       terminateTitle: 'Terminate Pi Runtime',
