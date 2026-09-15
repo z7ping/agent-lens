@@ -11,6 +11,10 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     localPath: {
       open: '在文件管理器中打开',
       opening: '正在打开',
+      opened: '已在文件管理器中打开',
+      revealed: '已在文件管理器中定位',
+      unsupported: '当前运行环境不支持打开本地路径',
+      openFailed: '打开本地路径失败',
       copy: '复制路径',
       copied: '路径已复制',
       copyFailed: '复制路径失败',

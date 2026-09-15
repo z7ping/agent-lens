@@ -11,6 +11,10 @@ export const englishCoreMessages: LocaleMessagesDto = {
     localPath: {
       open: 'Open in file manager',
       opening: 'Opening',
+      opened: 'Opened in file manager',
+      revealed: 'Revealed in file manager',
+      unsupported: 'This runtime cannot open local paths',
+      openFailed: 'Failed to open local path',
       copy: 'Copy path',
       copied: 'Path copied',
       copyFailed: 'Failed to copy path',

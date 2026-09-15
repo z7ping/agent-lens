@@ -77,7 +77,7 @@ function responseErrorMessage(value: unknown): string | undefined {
   return typeof message === 'string' && message ? message : undefined
 }
 
-class AgentLensRequestError extends Error {
+export class AgentLensRequestError extends Error {
   constructor(message: string, readonly status?: number) {
     super(message)
     this.name = 'AgentLensRequestError'

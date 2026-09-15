@@ -33,7 +33,7 @@ test('统一 Drawer 继续持有 Escape 与焦点恢复契约', () => {
 
 test('本地路径统一复用轻量打开与复制动作', () => {
   assert.match(localPathActions, /<IconButton/)
-  assert.match(localPathActions, /name="folder-open"/)
+  assert.match(localPathActions, /name=\{openState === 'opened' \|\| openState === 'revealed' \? 'check' : 'folder-open'\}/)
   assert.match(localPathActions, /name=\{copied \? 'check' : 'copy'\}/)
   assert.match(agents, /<LocalPathActions/)
   assert.match(drawer, /<LocalPathActions/)

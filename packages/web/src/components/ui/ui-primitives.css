@@ -252,7 +252,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .local-path-actions .local-path-action {
@@ -269,6 +269,22 @@
 
 .local-path-actions .local-path-action:disabled {
   opacity: .55;
+}
+
+.local-path-feedback {
+  color: var(--al-muted);
+  font-size: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.local-path-feedback.is-opened,
+.local-path-feedback.is-revealed {
+  color: var(--al-success);
+}
+
+.local-path-feedback.is-failed,
+.local-path-feedback.is-unsupported {
+  color: var(--al-danger);
 }
 .local-path-value {
   min-width: 0;
