@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   LIVE_ATTACHMENT_MAX_ITEM_BYTES,
@@ -69,10 +70,12 @@ export async function handleLiveAttachmentRequest(
         maxBytes: LIVE_ATTACHMENT_MAX_ITEM_BYTES,
         emptyBodyMessage: 'Live attachment body is required',
       })
+      const name = attachmentName(request)
+      const mimeType = attachmentMimeType(request)
       const descriptor = await attachments.put({
         data,
-        ...(attachmentName(request) ? { name: attachmentName(request) } : {}),
-        ...(attachmentMimeType(request) ? { mimeType: attachmentMimeType(request) } : {}),
+        ...(name ? { name } : {}),
+        ...(mimeType ? { mimeType } : {}),
       })
       writeJson(response, 201, descriptor)
     } catch (error) {
