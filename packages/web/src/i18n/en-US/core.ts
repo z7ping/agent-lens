@@ -142,6 +142,8 @@ export const englishCoreMessages: LocaleMessagesDto = {
     liveComposer: {
       largeTextSummary: 'Pasted text · {{lines}} lines · {{chars}} chars',
       removeLargeText: 'Remove pasted text',
+      image: 'Image',
+      removeImage: 'Remove image',
     },
     overlay: {
       close: 'Close',
