@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import { LIVE_ATTACHMENT_MAX_ITEM_BYTES } from '@agent-lens/core'
 import type {
   LiveAttachment,
   LiveAttachmentDescriptor,
   LiveAttachmentService,
-  LIVE_ATTACHMENT_MAX_ITEM_BYTES,
   PutLiveAttachmentInput,
 } from '@agent-lens/core'
 
