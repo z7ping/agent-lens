@@ -78,8 +78,8 @@ export interface LiveMarkdownComposerProps {
   ariaLabel: string
   title?: string
   inputClassName?: string
-  onAttachmentPendingChange?(pending: boolean): void
-  onAttachmentError?(error: unknown): void
+  onAttachmentPendingChange?: ((pending: boolean) => void) | undefined
+  onAttachmentError?: ((error: unknown) => void) | undefined
 }
 
 const theme = {
@@ -330,8 +330,8 @@ function ImagePastePlugin({
   onPendingChange,
   onError,
 }: {
-  onPendingChange?: (pending: boolean) => void
-  onError?: (error: unknown) => void
+  onPendingChange?: ((pending: boolean) => void) | undefined
+  onError?: ((error: unknown) => void) | undefined
 }) {
   const [editor] = useLexicalComposerContext()
   const pendingCountRef = useRef(0)
