@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveAttachmentService } from '@agent-lens/core'
