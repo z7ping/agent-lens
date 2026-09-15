@@ -318,6 +318,35 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     assert.equal(prompt.status, 202)
     assert.deepEqual(piLive.prompts, [{ message: 'hello', behavior: 'steer' }])
 
+    const structuredPrompt = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          parts: [
+            { type: 'text', text: '分析日志' },
+            { type: 'large-text', text: 'line 1\nline 2', lineCount: 2, charCount: 13 },
+          ],
+        },
+      }),
+    })
+    assert.equal(structuredPrompt.status, 202)
+    assert.deepEqual(piLive.prompts, [
+      { message: 'hello', behavior: 'steer' },
+      { message: '分析日志\n\nline 1\nline 2' },
+    ])
+
+    const unsupportedAttachment = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/prompt`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          parts: [{ type: 'image', attachmentId: 'image-1', mimeType: 'image/png' }],
+        },
+      }),
+    })
+    assert.equal(unsupportedAttachment.status, 400)
+
     await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/steer`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: 'change direction' }),
     })
