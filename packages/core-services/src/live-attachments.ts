@@ -72,7 +72,13 @@ export class DefaultLiveAttachmentService implements LiveAttachmentService {
       throw new Error('Live attachment cache byte limit exceeded')
     }
 
-    const attachmentId = randomUUID()
+    const attachmentId = input.attachmentId?.trim() || randomUUID()
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(attachmentId)) {
+      throw new Error('Live attachment id is invalid')
+    }
+    if (this.items.has(attachmentId)) {
+      throw new Error('Live attachment id already exists')
+    }
     const stored: StoredAttachment = {
       attachmentId,
       data: new Uint8Array(input.data),
