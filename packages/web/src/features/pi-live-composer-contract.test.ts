@@ -11,7 +11,7 @@ const globalStyles = readFileSync(new URL('../styles.css', import.meta.url), 'ut
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
 const selectCss = readFileSync(new URL('../components/select-menu.css', import.meta.url), 'utf8')
-const composer = readFileSync(new URL('../components/PiMarkdownComposer.tsx', import.meta.url), 'utf8')
+const composer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
 const zhLocale = readFileSync(new URL('../i18n/zh-CN/pi-live.ts', import.meta.url), 'utf8')
 
 test('Pi Live model and thinking controls use custom pill menus instead of native selects', () => {
@@ -44,12 +44,12 @@ test('Pi Live thinking selector preserves Runtime values and only renders negoti
 })
 
 test('Pi Live composer keeps local draft inside Lexical and serializes Markdown only at explicit boundaries', () => {
-  assert.match(page, /<PiMarkdownComposer/)
+  assert.match(page, /<LiveMarkdownComposer/)
   assert.match(page, /ariaLabel=\{t\('composer\.inputAria'\)\}/)
   assert.doesNotMatch(page, /composerView|ReactMarkdown|<textarea[^>]*className="pi-live-input"/)
   assert.doesNotMatch(page, /const \[input, setInput\] = useState/)
   assert.doesNotMatch(page, /value=\{input\}|onChange=\{setInput\}/)
-  assert.match(page, /const \[composerDraft, setComposerDraft\] = useState<PiMarkdownComposerDraft>/)
+  assert.match(page, /const \[composerDraft, setComposerDraft\] = useState<LiveMarkdownComposerDraft>/)
   assert.match(page, /const \[composerHasContent, setComposerHasContent\] = useState\(false\)/)
   assert.match(page, /draft=\{composerDraft\}/)
   assert.match(page, /onDraftPresenceChange=\{onComposerDraftPresenceChange\}/)
@@ -57,6 +57,11 @@ test('Pi Live composer keeps local draft inside Lexical and serializes Markdown 
   assert.match(page, /const canSend = composerHasContent && composerSubmitEnabled/)
   assert.match(composer, /<ListPlugin\/>/)
   assert.match(composer, /MarkdownShortcutPlugin transformers=\{TRANSFORMERS\}/)
+  assert.match(composer, /function LargePastePlugin/)
+  assert.match(composer, /PASTE_COMMAND/)
+  assert.match(composer, /isLargeLivePaste\(text\)/)
+  assert.match(composer, /\$createLiveLargeTextNode\(text\)/)
+  assert.match(composer, /getMessage\(\)[\s\S]{0,160}messageFromEditor\(editor\.getEditorState\(\)\)/)
   assert.match(composer, /INSERT_PARAGRAPH_COMMAND/)
   assert.match(composer, /if \(event\.shiftKey\) \{[\s\S]*?event\.preventDefault\(\)[\s\S]*?editor\.dispatchCommand\(INSERT_PARAGRAPH_COMMAND, undefined\)[\s\S]*?return true/)
   assert.match(composer, /function DraftPresencePlugin/)
@@ -74,7 +79,7 @@ test('Pi Live composer keeps local draft inside Lexical and serializes Markdown 
   assert.match(composer, /const submitRef = useRef\(onSubmit\)/)
   assert.match(composer, /const escapeRef = useRef\(onEscape\)/)
   assert.match(composer, /return \(\) => \{[\s\S]*?unregisterEnter\(\)[\s\S]*?unregisterEscape\(\)[\s\S]*?\}\n  \}, \[editor\]\)/)
-  assert.match(composer, /export const PiMarkdownComposer = memo\(PiMarkdownComposerImpl\)/)
+  assert.match(composer, /export const LiveMarkdownComposer = memo\(LiveMarkdownComposerImpl\)/)
 })
 
 test('Composer presence updates do not invalidate stable history VirtualRoundMount subtrees', () => {
