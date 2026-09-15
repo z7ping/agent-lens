@@ -16,7 +16,7 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/web/src/task-session-view.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/web/src/components/PiMarkdownComposer.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLiveTaskRound.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/HubReviewPage.tsx', import.meta.url), 'utf8'),
@@ -177,15 +177,18 @@ requireText(piTaskProjection, /export function projectPiLiveTaskRounds/, '缺少
 if (/⌁/.test(`${page}\n${piTaskRound}`)) failures.push('Tool 不得恢复通用占位图标')
 
 requireText(piComposer, /KEY_ENTER_COMMAND/, 'Lexical 输入框缺少 Enter 命令边界')
+requireText(piComposer, /PASTE_COMMAND/, 'Live Composer 缺少统一粘贴命令边界')
+requireText(piComposer, /LiveLargeTextNode/, 'Live Composer 缺少结构化大文本节点')
+requireText(piComposer, /getMessage\(\)/, 'Live Composer 缺少统一结构化消息出口')
 requireText(piComposer, /event\.isComposing/, 'Lexical 输入框缺少 isComposing 保护')
 requireText(piComposer, /keyCode === 229/, 'Lexical 输入框缺少 IME 229 兼容')
 requireText(piComposer, /function ExternalDraftPlugin/, 'Composer 必须通过显式 draft revision 接受外部赋值')
 requireText(piComposer, /editor\.isComposing\(\)/, '外部草稿同步不得打断 IME composition')
 requireText(piComposer, /function DraftPresencePlugin/, 'Composer 本地编辑只允许向父级传播轻量内容存在性')
-requireText(piComposer, /export const PiMarkdownComposer = memo\(PiMarkdownComposerImpl\)/, 'Composer 必须与阅读区父级渲染隔离')
+requireText(piComposer, /export const LiveMarkdownComposer = memo\(LiveMarkdownComposerImpl\)/, 'Composer 必须与阅读区父级渲染隔离')
 requireText(piComposer, /\}, \[editor\]\)/, 'Lexical 键盘命令必须稳定注册，不得随父级状态重复注销')
 if (/const \[input, setInput\] = useState/.test(page)) failures.push('PiLivePage 不得重新持有逐键更新的完整 Composer 字符串')
-if (/value=\{input\}|onChange=\{setInput\}/.test(page)) failures.push('PiMarkdownComposer 不得恢复受控字符串回声')
+if (/value=\{input\}|onChange=\{setInput\}/.test(page)) failures.push('LiveMarkdownComposer 不得恢复受控字符串回声')
 requireText(page, /draft=\{composerDraft\}/, 'PiLivePage 缺少显式 Composer 草稿命令')
 requireText(page, /const canSend = composerHasContent && composerSubmitEnabled/, '发送可用状态必须只依赖轻量草稿存在性')
 requireText(page, /piLiveApi\.abort\(runtimeId, true\)/, '停止任务必须取回队列再 Abort')
