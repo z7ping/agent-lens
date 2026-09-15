@@ -10,6 +10,7 @@ import type {
   PiSdkModel,
   PiSdkSession,
   PiSdkSessionManager,
+  PiSdkThinkingLevel,
 } from './sdk-loader'
 
 class FakeSessionManager implements PiSdkSessionManager {
@@ -299,7 +300,9 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
   const model: PiSdkModel = { provider: 'openai', id: 'gpt-refresh', name: 'GPT Refresh', reasoning: true }
   let availabilityCalls = 0
   let currentModel: PiSdkModel | undefined
-  let currentThinking = 'medium'
+  let currentThinking: PiSdkThinkingLevel = 'medium'
+  const initialThinkingLevels: PiSdkThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+  const switchedThinkingLevels: PiSdkThinkingLevel[] = ['off', 'minimal', 'xhigh', 'max']
 
   const session = {
     sessionManager: manager,
@@ -327,9 +330,7 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
       currentThinking = 'xhigh'
     },
     setThinkingLevel: level => { currentThinking = level },
-    getAvailableThinkingLevels: () => currentModel
-      ? ['off', 'minimal', 'xhigh', 'max']
-      : ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+    getAvailableThinkingLevels: () => currentModel ? switchedThinkingLevels : initialThinkingLevels,
     prompt: async (_message: string, options?: { preflightResult?: (success: boolean) => void }) => {
       options?.preflightResult?.(true)
     },
