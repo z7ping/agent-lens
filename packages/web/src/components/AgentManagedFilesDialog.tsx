@@ -341,7 +341,7 @@ export function AgentManagedFilesDialog({
           ? <div className="managed-file-preview-empty">{t('managedFiles.loadingPreview')}</div>
           : preview?.content !== undefined
             ? previewMarkdown && previewView === 'rendered'
-              ? <div className="managed-file-document-scroll"><MarkdownContent text={preview.content} className="managed-file-markdown" theme={markdownTheme}/></div>
+              ? <div className="managed-file-document-scroll"><MarkdownContent text={preview.content} className="managed-file-markdown" frontmatter theme={markdownTheme}/></div>
               : <CopyableCodeBlock className="managed-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
             : preview?.previewStatus === 'metadata-only'
               ? <div className="managed-file-preview-empty">
