@@ -31,13 +31,17 @@ const markdownComponents: Components = {
 }
 
 function FrontmatterPanel({ value }: { value: MarkdownFrontmatter }) {
-  return <div className="markdown-frontmatter" data-invalid={value.error ? 'true' : undefined}>
+  if (value.error) {
+    return <div className="markdown-frontmatter" data-invalid="true">
+      <pre className="markdown-frontmatter-raw">{value.raw}</pre>
+    </div>
+  }
+  return <dl className="markdown-frontmatter">
     {value.entries.map(entry => <div className="markdown-frontmatter-row" key={entry.key}>
       <dt>{entry.key}</dt>
       <dd>{entry.value}</dd>
     </div>)}
-    {value.error && <pre className="markdown-frontmatter-raw">{value.raw}</pre>}
-  </div>
+  </dl>
 }
 
 /**
