@@ -65,3 +65,50 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
+
+
+/* 文档型 Markdown 的 YAML Frontmatter 使用独立元数据区，不进入 CommonMark 正文排版。 */
+.markdown-frontmatter {
+  margin: 0 0 18px;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-soft-2);
+}
+.markdown-frontmatter-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 132px) minmax(0, 1fr);
+  border-bottom: 1px solid var(--al-line);
+}
+.markdown-frontmatter-row:last-child { border-bottom: 0; }
+.markdown-frontmatter dt,
+.markdown-frontmatter dd {
+  min-width: 0;
+  margin: 0;
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.markdown-frontmatter dt {
+  color: var(--al-muted);
+  font-family: var(--font-mono);
+  font-weight: 650;
+}
+.markdown-frontmatter dd {
+  border-left: 1px solid var(--al-line);
+  color: var(--al-ink-2);
+}
+.markdown-frontmatter[data-invalid='true'] {
+  border-color: color-mix(in srgb, var(--al-warning) 36%, var(--al-line));
+}
+.markdown-frontmatter-raw {
+  margin: 0;
+  padding: 9px 10px;
+  overflow: auto;
+  background: transparent;
+  color: var(--al-ink-2);
+  font: 12px/1.55 var(--font-mono);
+  white-space: pre-wrap;
+}
