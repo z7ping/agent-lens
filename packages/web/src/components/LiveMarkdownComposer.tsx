@@ -25,6 +25,7 @@ import {
   $getSelection,
   $insertNodes,
   $isElementNode,
+  $isRootOrShadowRoot,
   COMMAND_PRIORITY_HIGH,
   INSERT_PARAGRAPH_COMMAND,
   KEY_ENTER_COMMAND,
@@ -274,7 +275,8 @@ function LargePastePlugin() {
       event.preventDefault()
       const node = $createLiveLargeTextNode(text)
       $insertNodes([node])
-      if (node.getNextSibling() === null) {
+      const parent = node.getParent()
+      if ($isRootOrShadowRoot(parent) && node.getNextSibling() === null) {
         const paragraph = $createParagraphNode()
         node.insertAfter(paragraph)
         paragraph.selectStart()
