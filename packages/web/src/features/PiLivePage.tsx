@@ -507,7 +507,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setInterruptNotice(false)
     setNewRecords(false)
     setShowAllEvents(true)
-    setStartupQueued('')
+    setStartupQueued(null)
     setComposerExpanded(false)
     setQueueMutationPending(false)
     assistantMessageEpochRef.current = 0
