@@ -1,4 +1,4 @@
-import type { LiveAvailability, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot } from '@agent-lens/core'
+import type { LiveAvailability, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveThinkingControl } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 export type PiLiveRuntimeStatus = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
@@ -64,7 +64,7 @@ export interface PiLiveModelOption {
 
 export interface PiLiveControls {
   models: PiLiveModelOption[]
-  thinkingLevels: string[]
+  thinking?: LiveThinkingControl | undefined
 }
 
 export interface PiLiveRuntimeState extends LiveRuntimeState {
