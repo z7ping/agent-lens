@@ -1,4 +1,4 @@
-import type { LiveThinkingControlDto } from './live'
+import type { LiveMessageInputDto, LiveThinkingControlDto } from './live'
 import type { JsonValue } from './timeline'
 
 export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
