@@ -78,6 +78,7 @@ test('captureStorageDiagnosticSnapshot 复用 checkpoint 并按日覆盖', async
     now: '2026-09-16T13:00:00.000Z',
   })
   assert.equal(result?.captured, true)
+  assert.equal(result?.nextDueInMs, 24 * 60 * 60 * 1000)
   assert.equal(result?.series.snapshots.length, 2)
   assert.equal(result?.series.snapshots.at(-1)?.day, '2026-09-16')
   assert.deepEqual(persisted, result?.series)
@@ -124,6 +125,7 @@ test('captureStorageDiagnosticSnapshot 24 小时内直接复用最近快照，�
   })
 
   assert.equal(result?.captured, false)
+  assert.equal(result?.nextDueInMs, 22.5 * 60 * 60 * 1000)
   assert.deepEqual(result?.series, existing)
   assert.equal(diagnosticsCalls, 0)
   assert.equal(writes, 0)
