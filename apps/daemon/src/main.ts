@@ -45,6 +45,8 @@ import {
 } from '@agent-lens/surface-http'
 import { webPlugin } from '@agent-lens/web'
 import { dataRuntimeStoragePlugin } from './data-runtime/storage-plugin.js'
+import type { DataRuntimeStorageService } from './data-runtime/storage-proxy.js'
+import { runReplicationMaintenanceLoop } from './replication-runtime.js'
 import {
   beginSessionSummaryProjectionRun,
   markSessionSummaryProjectionClean,
@@ -366,6 +368,7 @@ app.use(webPlugin, { staticDir: webRoot })
 const runtimeController = new AbortController()
 let syncPromise: Promise<void> | null = null
 let storageSnapshotPromise: Promise<void> | null = null
+let replicationMaintenancePromise: Promise<void> | null = null
 let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['results'] = []
 let shuttingDown = false
 let reuseSessionSummaryProjection = false
@@ -423,6 +426,7 @@ async function shutdown(signal: string): Promise<void> {
   try {
     if (syncPromise) await syncPromise.catch(() => undefined)
     if (storageSnapshotPromise) await storageSnapshotPromise.catch(() => undefined)
+    if (replicationMaintenancePromise) await replicationMaintenancePromise.catch(() => undefined)
     await disposeCaptureHandles()
     disposeHttpActivityTracking?.()
     disposeHttpActivityTracking = null
@@ -507,6 +511,24 @@ try {
 
   reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
+
+  replicationMaintenancePromise = runReplicationMaintenanceLoop({
+    storage: app.context.storage as DataRuntimeStorageService,
+    nodeId: app.context.node.identity.nodeId,
+    replicationUpstream: capabilities.replicationUpstream,
+    signal: runtimeController.signal,
+    cooperate: async () => {
+      if (!await waitForDataRuntime(runtimeController.signal)) return
+      const gate = foregroundGate
+      if (gate) await gate.wait(runtimeController.signal)
+    },
+    onInfo: message => console.info(`[AgentLens] ${message}`),
+    onError: error => {
+      if (!runtimeController.signal.aborted) {
+        console.warn('[AgentLens] replication maintenance failed; local capture remains online', error)
+      }
+    },
+  })
 
   storageSnapshotPromise = (async () => {
     await abortableDelay(
