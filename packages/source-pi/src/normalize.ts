@@ -32,6 +32,35 @@ function stringField(record: Record<string, unknown>, ...names: string[]): strin
   return undefined
 }
 
+function normalizedMessageAttachments(values: readonly unknown[]): {
+  attachments: Record<string, unknown>[]
+  remainder: unknown[]
+} {
+  const attachments: Record<string, unknown>[] = []
+  const remainder: unknown[] = []
+
+  for (const value of values) {
+    const block = asRecord(value)
+    const type = stringField(block, 'type')
+    const mimeType = stringField(block, 'mimeType', 'mime_type', 'mediaType', 'media_type')?.toLowerCase()
+    const data = stringField(block, 'data', 'base64')
+    if (type === 'image' && mimeType?.startsWith('image/') && data) {
+      attachments.push({
+        type: 'image',
+        mimeType,
+        data,
+        ...(stringField(block, 'name', 'fileName', 'file_name', 'filename')
+          ? { name: stringField(block, 'name', 'fileName', 'file_name', 'filename')! }
+          : {}),
+      })
+      continue
+    }
+    remainder.push(value)
+  }
+
+  return { attachments, remainder }
+}
+
 function entryNativeId(envelope: PiStoredEnvelope): string | undefined {
   return stringField(envelope.entry, 'id')
 }
@@ -116,18 +145,22 @@ export async function normalizePiRecord(
 
     if (fact.kind === 'message') {
       if (fact.role === 'user') {
+        const normalized = normalizedMessageAttachments(fact.nonTextContent)
         observations.push(piFactCandidate(record, envelope, fact, 'message.user', {
           text: fact.text,
-          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          ...(normalized.attachments.length ? { attachments: normalized.attachments } : {}),
+          ...(normalized.remainder.length ? { nonTextContent: normalized.remainder } : {}),
         }, offset))
         return
       }
 
       if (fact.role === 'assistant') {
+        const normalized = normalizedMessageAttachments(fact.nonTextContent)
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
           text: fact.text,
           ...(fact.content === undefined ? {} : { content: fact.content }),
-          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          ...(normalized.attachments.length ? { attachments: normalized.attachments } : {}),
+          ...(normalized.remainder.length ? { nonTextContent: normalized.remainder } : {}),
           ...(fact.model ? { model: fact.model } : {}),
           ...(fact.provider ? { provider: fact.provider } : {}),
           ...(fact.stopReason ? { stopReason: fact.stopReason } : {}),
