@@ -241,6 +241,14 @@ export const englishAgentsMessages: LocaleMessagesDto = {
         liveAvailabilityFailed: 'Live availability check failed',
       },
     },
+    observation: {
+      integrationStatus: 'Integration',
+      manageIntegration: 'Manage integration',
+      manageAuthorization: 'Review authorization',
+      noOverviewTitle: 'No observable data yet',
+      noOverviewDescription: 'The local tool is supported or detected, but there is no asset or usage data to show yet.',
+      legacySourceTitle: '{{agent}} still uses the legacy source switch',
+    },
     managementPage: {
       title: 'Agent Integration',
       loading: 'Loading integration state…',
