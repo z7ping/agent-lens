@@ -173,6 +173,11 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             path = excluded.path,
             repository_id = excluded.repository_id,
             worktree_id = excluded.worktree_id
+          WHERE workspaces.host_id IS NOT excluded.host_id
+             OR workspaces.project_id IS NOT excluded.project_id
+             OR workspaces.path IS NOT excluded.path
+             OR workspaces.repository_id IS NOT excluded.repository_id
+             OR workspaces.worktree_id IS NOT excluded.worktree_id
         `).run(
           workspace.id,
           workspace.hostId,
@@ -201,6 +206,12 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             title = excluded.title,
             started_at = excluded.started_at,
             ended_at = excluded.ended_at
+          WHERE logical_sessions.installation_id IS NOT excluded.installation_id
+             OR logical_sessions.project_id IS NOT excluded.project_id
+             OR logical_sessions.workspace_id IS NOT excluded.workspace_id
+             OR logical_sessions.title IS NOT excluded.title
+             OR logical_sessions.started_at IS NOT excluded.started_at
+             OR logical_sessions.ended_at IS NOT excluded.ended_at
         `).run(
           session.id,
           session.installationId,
@@ -236,6 +247,8 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           ON CONFLICT(id) DO UPDATE SET
             logical_session_id = excluded.logical_session_id,
             native_parent_session_id = excluded.native_parent_session_id
+          WHERE source_sessions.logical_session_id IS NOT excluded.logical_session_id
+             OR source_sessions.native_parent_session_id IS NOT excluded.native_parent_session_id
         `).run(
           session.id,
           session.sourceId,
@@ -294,6 +307,12 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             role = excluded.role,
             native_actor_id = excluded.native_actor_id,
             evidence_refs_json = excluded.evidence_refs_json
+          WHERE agent_actors.installation_id IS NOT excluded.installation_id
+             OR agent_actors.logical_session_id IS NOT excluded.logical_session_id
+             OR agent_actors.parent_actor_id IS NOT excluded.parent_actor_id
+             OR agent_actors.role IS NOT excluded.role
+             OR agent_actors.native_actor_id IS NOT excluded.native_actor_id
+             OR agent_actors.evidence_refs_json IS NOT excluded.evidence_refs_json
         `).run(
           actor.id,
           actor.installationId,
@@ -684,6 +703,13 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             event_time = excluded.event_time,
             captured_at = excluded.captured_at,
             missing_reason = excluded.missing_reason
+          WHERE evidence.confidence IS NOT excluded.confidence
+             OR evidence.source_record_id IS NOT excluded.source_record_id
+             OR evidence.source_locator_json IS NOT excluded.source_locator_json
+             OR evidence.parser_version IS NOT excluded.parser_version
+             OR evidence.event_time IS NOT excluded.event_time
+             OR evidence.captured_at IS NOT excluded.captured_at
+             OR evidence.missing_reason IS NOT excluded.missing_reason
         `).run(
           item.id,
           item.captureMethod,
