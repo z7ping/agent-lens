@@ -84,6 +84,11 @@ test('首次扫描失败不得落入“未发现”分组', () => {
   assert.doesNotMatch(onboarding, /missing = useMemo\(\(\) => items\.filter\(item => !selectable\(item\)\)/)
 })
 
+test('全局扫描失败不会把未知项塞进“其他支持/未检测到”分组', () => {
+  assert.match(page, /const discoveryFailed = Boolean\(snapshot\.integrationDiscoveryError\)/)
+  assert.match(page, /const supportedItems = discoveryFailed \? \[\] : items\.filter/)
+})
+
 test('扫描失败与 data-only 保持独立语义', () => {
   assert.match(page, /integrationToolPresenceLabel/)
   assert.match(page, /toolPresence\.dataOnlyHint/)
