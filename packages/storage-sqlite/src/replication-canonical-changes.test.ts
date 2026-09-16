@@ -55,6 +55,98 @@ test('Canonical INSERT and UPDATE append strictly increasing replication revisio
   }
 })
 
+test('SourceRecord 压缩表示在单次写入中完成，不额外制造 replication revision', async () => {
+  const db = await storage()
+  try {
+    await db.repositories.hosts.put({
+      id: 'host-source-record',
+      name: 'devbox',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: T0,
+      lastSeenAt: T0,
+    })
+    await db.repositories.installations.putProduct({
+      id: 'codex',
+      name: 'Codex',
+    })
+    await db.repositories.installations.put({
+      id: 'installation-source-record',
+      hostId: 'host-source-record',
+      productId: 'codex',
+      firstSeenAt: T0,
+      lastSeenAt: T0,
+    })
+
+    const before = await db.replicationCanonicalChanges.highWaterRevision()
+    const payload = { text: 'AgentLens '.repeat(2000) }
+    await db.repositories.sourceRecords.put({
+      id: 'source-record-compressed',
+      sourceId: 'codex',
+      installationId: 'installation-source-record',
+      nativeType: 'response_item/message',
+      capturedAt: T0,
+      locator: { kind: 'file', path: '/tmp/session.jsonl' },
+      payload,
+      parserVersion: '1',
+    })
+    const afterInsert = await db.replicationCanonicalChanges.highWaterRevision()
+
+    const insertChanges = await db.replicationCanonicalChanges.scan({
+      afterRevision: before,
+      throughRevision: afterInsert,
+      entityType: 'SourceRecord',
+      limit: 10,
+    })
+    assert.equal(insertChanges.items.length, 1)
+
+    const raw = db.db.prepare(`
+      SELECT payload_json AS payloadJson,
+             payload_encoding AS payloadEncoding,
+             length(payload_blob) AS blobBytes
+      FROM source_records
+      WHERE id = 'source-record-compressed'
+    `).get() as {
+      payloadJson: string
+      payloadEncoding: string
+      blobBytes: number
+    }
+    assert.equal(raw.payloadEncoding, 'gzip-json')
+    assert.equal(raw.payloadJson, 'null')
+    assert.ok(raw.blobBytes > 0)
+    assert.deepEqual(
+      (await db.repositories.sourceRecords.get('source-record-compressed'))?.payload,
+      payload,
+    )
+
+    const updatedPayload = { text: 'Updated '.repeat(2000) }
+    await db.repositories.sourceRecords.put({
+      id: 'source-record-compressed',
+      sourceId: 'codex',
+      installationId: 'installation-source-record',
+      nativeType: 'response_item/message',
+      capturedAt: T1,
+      locator: { kind: 'file', path: '/tmp/session.jsonl' },
+      payload: updatedPayload,
+      parserVersion: '1',
+    })
+    const afterUpdate = await db.replicationCanonicalChanges.highWaterRevision()
+    const updateChanges = await db.replicationCanonicalChanges.scan({
+      afterRevision: afterInsert,
+      throughRevision: afterUpdate,
+      entityType: 'SourceRecord',
+      limit: 10,
+    })
+    assert.equal(updateChanges.items.length, 1)
+    assert.deepEqual(
+      (await db.repositories.sourceRecords.get('source-record-compressed'))?.payload,
+      updatedPayload,
+    )
+  } finally {
+    db.close()
+  }
+})
+
 test('captured high-water excludes writes committed after bootstrap starts', async () => {
   const db = await storage()
   try {

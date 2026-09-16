@@ -16,6 +16,7 @@ import type {
   ToolRepository,
 } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
+import { encodeSourceRecordPayloadJson } from './source-record-compression'
 import {
   mapActor,
   mapAssetDefinition,
@@ -399,12 +400,15 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
       })
     },
     async put(record) {
+      const serializedPayload = encodeJson(record.payload)
+      const encodedPayload = encodeSourceRecordPayloadJson(serializedPayload)
       await executor.run(() => {
         db.prepare(`
           INSERT INTO source_records(
             id, source_id, installation_id, source_session_native_id, native_type, native_id,
-            source_sequence, occurred_at, captured_at, locator_json, fingerprint, payload_json, parser_version
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            source_sequence, occurred_at, captured_at, locator_json, fingerprint,
+            payload_json, parser_version, payload_encoding, payload_blob
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             source_session_native_id = excluded.source_session_native_id,
             native_type = excluded.native_type,
@@ -415,7 +419,9 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             locator_json = excluded.locator_json,
             fingerprint = excluded.fingerprint,
             payload_json = excluded.payload_json,
-            parser_version = excluded.parser_version
+            parser_version = excluded.parser_version,
+            payload_encoding = excluded.payload_encoding,
+            payload_blob = excluded.payload_blob
         `).run(
           record.id,
           record.sourceId,
@@ -428,8 +434,10 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           record.capturedAt,
           encodeJson(record.locator),
           record.fingerprint ?? null,
-          encodeJson(record.payload),
+          encodedPayload.payloadJson,
           record.parserVersion,
+          encodedPayload.payloadEncoding,
+          encodedPayload.payloadBlob,
         )
       })
     },
