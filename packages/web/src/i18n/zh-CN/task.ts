@@ -32,6 +32,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       returnRendered: '返回渲染结果',
       source: '源码',
       rendered: '渲染',
+      imageAttachment: '图片附件',
     },
     surface: {
       turnRail: '轮次导轨',
