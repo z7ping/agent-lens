@@ -239,5 +239,5 @@ test('from-now Snapshot Bootstrap 缺少有效 boundary 时拒绝扫描', async 
     /boundaryCapturedAt/,
   )
   assert.equal(scanned, false)
-  assert.equal(progress.value?.baselineRevision, 3)
+  assert.equal(progress.value, null)
 })
