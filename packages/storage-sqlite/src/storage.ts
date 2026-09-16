@@ -439,6 +439,10 @@ export class SqliteStorageService implements StorageService {
       const databaseBytes = typeof baseGrowth.databaseBytes === 'number'
         ? baseGrowth.databaseBytes
         : 0
+      const databaseAllocatedBytes = typeof baseGrowth.databaseAllocatedBytes === 'number'
+        ? baseGrowth.databaseAllocatedBytes
+        : databaseBytes
+      const persistentRetainedBytes = Math.max(databaseBytes, databaseAllocatedBytes)
       const currentSnapshot: StorageDiagnosticSnapshot | null = breakdown.available
         ? {
             version: 2,
@@ -448,7 +452,7 @@ export class SqliteStorageService implements StorageService {
               ? baseGrowth.hotFootprintBytes
               : 0,
             databaseBytes,
-            persistentRetainedBytes: databaseBytes,
+            persistentRetainedBytes,
             persistentRetainedScope: 'sqlite-main',
             walBytes,
             counts: totals,
