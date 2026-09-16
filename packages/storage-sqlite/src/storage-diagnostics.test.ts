@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
+import {
+  STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+  type StorageDiagnosticSnapshot,
+} from './storage-diagnostic-snapshots'
 
 test('health 保持轻量，diagnostics 区分物理占用、采集活动与真实增长', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
@@ -297,6 +302,60 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
     assert.ok(details.storageBreakdown.categories.replication.allocatedBytes > 0)
     assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'insufficient-history')
     assert.equal(details.growthMetrics.storageAmplificationRate.state, 'definition-required')
+  } finally {
+    await storage.close()
+  }
+})
+
+
+test('diagnostics 使用持久快照把 Canonical Growth Rate 从历史不足切换为可计算', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  await storage.maintenance.ensureDeferredIndexes()
+  try {
+    const first = await storage.diagnostics()
+    const firstDetails = first.details as {
+      storageSnapshot: { current: StorageDiagnosticSnapshot }
+      growthMetrics: { canonicalGrowthRate: { state: string } }
+    }
+    assert.equal(firstDetails.growthMetrics.canonicalGrowthRate.state, 'insufficient-history')
+
+    const current = firstDetails.storageSnapshot.current
+    const baselineAt = new Date(Date.parse(current.capturedAt) - 8 * 24 * 60 * 60 * 1000)
+    const baseline: StorageDiagnosticSnapshot = {
+      ...current,
+      day: baselineAt.toISOString().slice(0, 10),
+      capturedAt: baselineAt.toISOString(),
+    }
+    await storage.checkpoints.set(
+      STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+      STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+      { version: 1, snapshots: [baseline] },
+    )
+
+    const second = await storage.diagnostics()
+    const secondDetails = second.details as {
+      growthMetrics: {
+        canonicalGrowthRate: {
+          state: string
+          last7Days: {
+            state: string
+            intervalDays: number | null
+            canonical?: {
+              observationsDelta: number
+              allocatedBytesDelta: number
+            }
+          }
+        }
+      }
+    }
+    assert.equal(secondDetails.growthMetrics.canonicalGrowthRate.state, 'ready')
+    assert.equal(secondDetails.growthMetrics.canonicalGrowthRate.last7Days.state, 'ready')
+    assert.ok((secondDetails.growthMetrics.canonicalGrowthRate.last7Days.intervalDays ?? 0) >= 8)
+    assert.equal(
+      secondDetails.growthMetrics.canonicalGrowthRate.last7Days.canonical?.observationsDelta,
+      0,
+    )
   } finally {
     await storage.close()
   }
