@@ -30,7 +30,9 @@ for (const required of [
   'className="workspace-page backup-page"',
   'createPortal(<div className="backup-topbar-controls"',
   'className="backup-view-switcher"',
-  'className="backup-agent-row"',
+  'className="backup-agent-list"',
+  'className="backup-agent-item"',
+  'className="backup-agent-group"',
 ]) {
   if (!page.includes(required)) throw new Error(`资产备份缺少正式工作区构图：${required}`)
 }
