@@ -90,6 +90,19 @@ test('扫描失败与 data-only 保持独立语义', () => {
   assert.match(app, /status\.scanFailed/)
 })
 
+
+test('智能体页刷新同时重扫 Integration Discovery，允许运行中安装的新 Agent 出现', () => {
+  assert.match(app, /onRefreshAgents=\{\(\) => \{ void Promise\.allSettled\(\[model\.rescanIntegrationDiscovery\(\), model\.refreshFacetsAndAgents\(\)\]\) \}\}/)
+})
+
+test('接入页把本机发现状态与接入启停状态分开表达', () => {
+  assert.match(page, /const discoveredStatus = integrationLifecycleState/)
+  assert.match(page, /managementPage\.enabledTitle/)
+  assert.match(page, /managementPage\.disabledTitle/)
+  assert.match(page, /initialNewIdsRef/)
+  assert.match(page, /model\.acknowledgeIntegration/)
+})
+
 test('首次未发现时明确指向设置中的二次接入入口', () => {
   assert.match(zhAgents, /设置 → 智能体接入/)
 })
