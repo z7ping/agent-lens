@@ -18,6 +18,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { piLiveApi } from '../client/pi-live'
+import { reviewMessageAttachmentUrl } from '../client/review-attachments'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -704,6 +705,11 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
+    attachments={node.attachments?.map(attachment => ({
+      type: 'image',
+      src: reviewMessageAttachmentUrl(attachment.observationId, attachment.index),
+      ...(attachment.name ? { name: attachment.name } : {}),
+    }))}
     author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
