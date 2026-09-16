@@ -331,7 +331,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         agentSelectionAgents={agentSelectionItems}
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
-        onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
+        onRefreshAgents={() => { void Promise.allSettled([model.rescanIntegrationDiscovery(), model.refreshFacetsAndAgents()]) }}
         backupAssetSourceId={backupAssetSourceId}
         onBackupAssetSourceIdChange={setBackupAssetSourceId}
         theme={theme}
