@@ -19,6 +19,7 @@ import { withSqliteObservationPagination } from './observation-pagination'
 import { withSqliteParserReplayReplacement } from './parser-replay-replacement'
 import { SqliteProjectionBackfillMaintenance } from './projection-backfill'
 import { createSqliteRepositories } from './repositories'
+import { SqliteReplicationBootstrapLifecycleRepository } from './replication-bootstrap-lifecycle'
 import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
 import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
@@ -161,6 +162,7 @@ export class SqliteStorageService implements StorageService {
   readonly sourceRawAudit: SqliteSourceRawAuditReader
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
   readonly replication: SqliteReplicationStateRepository
+  readonly replicationBootstrapLifecycle: SqliteReplicationBootstrapLifecycleRepository
   readonly replicationCanonicalChanges: SqliteReplicationCanonicalChangeReader
   readonly executor: SqliteExecutor
 
@@ -209,6 +211,7 @@ export class SqliteStorageService implements StorageService {
     this.sourceRawAudit = new SqliteSourceRawAuditReader(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
     this.replication = new SqliteReplicationStateRepository(this.executor)
+    this.replicationBootstrapLifecycle = new SqliteReplicationBootstrapLifecycleRepository(this.executor)
     this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
   }
 
