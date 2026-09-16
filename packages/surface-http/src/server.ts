@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http'
-import type {
-  AgentIntegrationRuntimeStatus,
+import {
+  auditSourceRawRecoveryBatch,
+  type AgentIntegrationRuntimeStatus,
   BackupService,
   CapabilityService,
   CapturePolicyService,
@@ -405,6 +406,22 @@ export async function startHttpSurface(
         options.eventHub.connect(response)
         return
       }
+      if (url.pathname === '/api/v1/storage/source-raw-recovery-audit') {
+        if (!options.sources || !storage.sourceRawAudit) {
+          writeJson(response, 501, { error: 'source_raw_recovery_audit_unavailable' })
+          return
+        }
+        const afterId = url.searchParams.get('after')?.trim() || undefined
+        const limit = parseLimit(url.searchParams, 500) ?? 100
+        writeJson(response, 200, await auditSourceRawRecoveryBatch({
+          sources: options.sources,
+          storage,
+          ...(afterId ? { afterId } : {}),
+          limit,
+        }))
+        return
+      }
+
       if (url.pathname === '/api/v1/health') {
         const health = await readStorageHealth()
         const runtimeHealth = parseDataRuntimeHealth(health.details?.dataRuntime)
