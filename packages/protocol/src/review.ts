@@ -46,6 +46,16 @@ export interface ReviewSessionSummaryDto {
   searchMatchSources?: Array<'title' | 'user' | 'system' | 'review' | 'tool' | 'other'>
 }
 
+export interface ReviewMessageImageAttachmentDto {
+  type: 'image'
+  observationId: string
+  index: number
+  mimeType: string
+  name?: string
+}
+
+export type ReviewMessageAttachmentDto = ReviewMessageImageAttachmentDto
+
 export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   type: 'message'
   id: string
@@ -53,6 +63,7 @@ export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   at: string
   sourceId: string
   text: string
+  attachments?: ReviewMessageAttachmentDto[]
   payload: JsonValue
   evidence: TimelineEvidenceDto[]
   observationIds: string[]
