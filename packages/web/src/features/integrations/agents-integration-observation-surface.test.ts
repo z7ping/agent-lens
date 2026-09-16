@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const agentsPage = readFileSync(new URL('../AgentsPage.tsx', import.meta.url), 'utf8')
-const controls = readFileSync(new URL('./IntegrationManagementControls.tsx', import.meta.url), 'utf8')
+const observation = readFileSync(new URL('./IntegrationObservation.tsx', import.meta.url), 'utf8')
+const legacyControl = readFileSync(new URL('./LegacySourceCaptureControl.tsx', import.meta.url), 'utf8')
 const integrationPage = readFileSync(new URL('../IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const agentsCss = readFileSync(new URL('../../agents.css', import.meta.url), 'utf8')
 const agentResponsiveCss = readFileSync(new URL('../../agent-insights-responsive.css', import.meta.url), 'utf8')
@@ -22,9 +23,8 @@ test('managed integrations are observation-only on the Agents surface', () => {
 test('legacy source toggle is isolated to non-managed sources until DSH migration', () => {
   assert.match(agentsPage, /management\s*\?\s*<IntegrationObservationPanel/)
   assert.match(agentsPage, /:\s*<LegacySourceCaptureControl/)
-  assert.match(controls, /export function LegacySourceCaptureControl/)
-  assert.doesNotMatch(controls, /IntegrationAdvancedActions/)
-  assert.doesNotMatch(controls, /IntegrationOnlyCard/)
+  assert.match(legacyControl, /export function LegacySourceCaptureControl/)
+  assert.doesNotMatch(observation, /IntegrationAdvancedActions|IntegrationOnlyCard/)
 })
 
 test('Agents routes lifecycle work to the single integration management surface', () => {
@@ -44,9 +44,10 @@ test('integration observation uses flat status summary instead of a second manag
 })
 
 test('observation component exposes status, local discovery, availability and capabilities without lifecycle mutation', () => {
-  assert.match(controls, /integrationManagementLifecycleState\(management, t\)/)
-  assert.match(controls, /integrationToolPresenceLabel/)
-  assert.match(controls, /management\.availability/)
-  assert.match(controls, /management\.capabilities\.map/)
-  assert.doesNotMatch(controls, /installIntegration|removeIntegration|authorizeIntegration|setIntegrationEnabled/)
+  assert.match(observation, /integrationManagementLifecycleState\(management, t\)/)
+  assert.match(observation, /integrationToolPresenceLabel/)
+  assert.match(observation, /management\.availability/)
+  assert.match(observation, /management\.capabilities\.map/)
+  assert.doesNotMatch(observation, /installIntegration|removeIntegration|authorizeIntegration|setIntegrationEnabled/)
+  assert.doesNotMatch(legacyControl, /installIntegration|removeIntegration|authorizeIntegration|setIntegrationEnabled/)
 })
