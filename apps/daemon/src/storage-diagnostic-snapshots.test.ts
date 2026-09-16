@@ -74,10 +74,13 @@ test('captureStorageDiagnosticSnapshot 复用 checkpoint 并按日覆盖', async
     },
   } as unknown as Pick<StorageService, 'diagnostics' | 'checkpoints'>
 
-  const result = await captureStorageDiagnosticSnapshot(storage)
-  assert.equal(result?.snapshots.length, 2)
-  assert.equal(result?.snapshots.at(-1)?.day, '2026-09-16')
-  assert.deepEqual(persisted, result)
+  const result = await captureStorageDiagnosticSnapshot(storage, {
+    now: '2026-09-16T13:00:00.000Z',
+  })
+  assert.equal(result?.captured, true)
+  assert.equal(result?.series.snapshots.length, 2)
+  assert.equal(result?.series.snapshots.at(-1)?.day, '2026-09-16')
+  assert.deepEqual(persisted, result?.series)
 })
 
 test('captureStorageDiagnosticSnapshot 没有 diagnostics 能力时跳过', async () => {
@@ -86,4 +89,42 @@ test('captureStorageDiagnosticSnapshot 没有 diagnostics 能力时跳过', asyn
   } as unknown as Pick<StorageService, 'diagnostics' | 'checkpoints'>
 
   assert.equal(await captureStorageDiagnosticSnapshot(storage), null)
+})
+
+
+test('captureStorageDiagnosticSnapshot 24 小时内直接复用最近快照，不调用 diagnostics', async () => {
+  const existing = {
+    version: 2,
+    snapshots: [snapshot('2026-09-16', '2026-09-16T05:00:00.000Z')],
+  } satisfies StorageDiagnosticSnapshotSeries
+  let diagnosticsCalls = 0
+  let writes = 0
+  const storage = {
+    checkpoints: {
+      async get() {
+        return existing
+      },
+      async set() {
+        writes += 1
+      },
+    },
+    async diagnostics() {
+      diagnosticsCalls += 1
+      return {
+        ok: true,
+        details: {
+          storageSnapshot: { current: snapshot('2026-09-16', '2026-09-16T06:00:00.000Z') },
+        },
+      }
+    },
+  } as unknown as Pick<StorageService, 'diagnostics' | 'checkpoints'>
+
+  const result = await captureStorageDiagnosticSnapshot(storage, {
+    now: '2026-09-16T06:30:00.000Z',
+  })
+
+  assert.equal(result?.captured, false)
+  assert.deepEqual(result?.series, existing)
+  assert.equal(diagnosticsCalls, 0)
+  assert.equal(writes, 0)
 })
