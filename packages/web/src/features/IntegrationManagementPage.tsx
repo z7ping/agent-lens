@@ -289,25 +289,30 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
   const snapshot = useClientSnapshot(model)
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
-  const initialNewIdsRef = useRef<Set<string> | null>(null)
-  const acknowledgedRef = useRef(false)
-  if (management && initialNewIdsRef.current === null) {
-    initialNewIdsRef.current = new Set(management.items.filter(item => item.isNew).map(item => item.integrationId))
-  }
+  const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
+  const acknowledgementInFlightRef = useRef(false)
   const { ordered } = useIntegrationOrder()
 
   useEffect(() => {
-    if (!management || acknowledgedRef.current) return
+    if (!management || acknowledgementInFlightRef.current) return
     const newIds = management.items.filter(item => item.isNew).map(item => item.integrationId)
     if (!newIds.length) return
-    acknowledgedRef.current = true
+
+    setVisibleNewIds(current => {
+      const next = new Set(current)
+      for (const id of newIds) next.add(id)
+      return next
+    })
+
+    acknowledgementInFlightRef.current = true
     const acknowledgedIntegrationIds = [...new Set([
       ...management.preferences.acknowledgedIntegrationIds,
       ...newIds,
     ])]
-    void model.updateIntegrationPreferences({ acknowledgedIntegrationIds }).catch(() => {
-      acknowledgedRef.current = false
-    })
+    void model.updateIntegrationPreferences({ acknowledgedIntegrationIds }).then(
+      () => { acknowledgementInFlightRef.current = false },
+      () => { acknowledgementInFlightRef.current = false },
+    )
   }, [management, model])
 
   const items = useMemo(() => {
@@ -367,7 +372,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
         <div className="integration-management-list">
           {primaryItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
-            item={{ ...item, isNew: item.isNew || Boolean(initialNewIdsRef.current?.has(item.integrationId)) }}
+            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
             moveUpTargetId={primaryItems[index - 1]?.integrationId}
             moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
@@ -387,7 +392,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
         <div className="integration-management-list">
           {supportedItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
-            item={{ ...item, isNew: item.isNew || Boolean(initialNewIdsRef.current?.has(item.integrationId)) }}
+            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
             moveUpTargetId={supportedItems[index - 1]?.integrationId}
             moveDownTargetId={supportedItems[index + 1]?.integrationId}
             model={model}
