@@ -690,6 +690,17 @@ export class SqliteStorageService implements StorageService {
       const freelistBytes = typeof baseGrowth.reclaimableBytes === 'number'
         ? baseGrowth.reclaimableBytes
         : 0
+      const count = (tableName: string): number => countRow(this.db.prepare(
+        `SELECT COUNT(*) AS count FROM ${tableName}`,
+      ).get())
+      const recentCount = (tableName: string, column: string, cutoff: string): number => countRow(
+        this.db.prepare(`SELECT COUNT(*) AS count FROM ${tableName} WHERE ${column} >= ?`).get(cutoff),
+      )
+      const recentSessions = (cutoff: string): number => countRow(this.db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM session_summary_projection
+        WHERE ended_at >= ?
+      `).get(cutoff))
 
       return {
         ...health,
@@ -719,6 +730,24 @@ export class SqliteStorageService implements StorageService {
             ...baseGrowth,
             thirtyDayCutoff: growth.cutoffs.last30Days,
             sevenDayCutoff: growth.cutoffs.last7Days,
+            totals: {
+              sourceRecords: count('source_records'),
+              observations: count('observations'),
+              evidence: count('evidence'),
+              sessions: count('logical_sessions'),
+            },
+            last7Days: {
+              sourceRecords: recentCount('source_records', 'captured_at', growth.cutoffs.last7Days),
+              observations: recentCount('observations', 'captured_at', growth.cutoffs.last7Days),
+              evidence: recentCount('evidence', 'captured_at', growth.cutoffs.last7Days),
+              sessions: recentSessions(growth.cutoffs.last7Days),
+            },
+            last30Days: {
+              sourceRecords: recentCount('source_records', 'captured_at', growth.cutoffs.last30Days),
+              observations: recentCount('observations', 'captured_at', growth.cutoffs.last30Days),
+              evidence: recentCount('evidence', 'captured_at', growth.cutoffs.last30Days),
+              sessions: recentSessions(growth.cutoffs.last30Days),
+            },
             bySource: growth.bySource,
             byAgent: growth.byAgent,
             trend: growth.trend,
