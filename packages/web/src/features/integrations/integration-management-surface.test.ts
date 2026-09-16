@@ -103,10 +103,18 @@ test('首次扫描失败不得落入“未发现”分组', () => {
 
 test('接入页把本机发现状态与接入启停状态分开表达', () => {
   assert.match(page, /const discoveredStatus = integrationLifecycleState/)
+  assert.match(page, /!packageState\.installed/)
+  assert.match(page, /managementPage\.notAddedTitle/)
   assert.match(page, /managementPage\.enabledTitle/)
   assert.match(page, /managementPage\.disabledTitle/)
   assert.match(page, /visibleNewIds/)
   assert.match(page, /model\.updateIntegrationPreferences\(\{ acknowledgedIntegrationIds \}\)/)
+})
+
+
+test('未发现且未接入的官方智能体不展示无效的禁用添加按钮', () => {
+  assert.match(page, /packageState\.installed \|\| canInstall/)
+  assert.doesNotMatch(page, /disabled=\{!packageState\.installed && !canInstall\}/)
 })
 
 test('全局扫描失败不会把未知项塞进“其他支持/未检测到”分组', () => {
