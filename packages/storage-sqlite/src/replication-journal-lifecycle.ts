@@ -4,6 +4,10 @@ import type { SqliteExecutor } from './executor'
 
 export type ReplicationCaptureDependencyState = 'dependent' | 'retired'
 
+export const REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES = [
+  'CanonicalObservation',
+] as const satisfies readonly KnownReplicationEntityType[]
+
 export interface ReplicationCaptureWatermark {
   streamId: string
   generationId: string
@@ -29,6 +33,8 @@ export interface ReplicationJournalSafety {
   oldestRetainedRevision: number | null
   retainedChanges: number
   reclaimableChanges: number
+  uncoveredChanges: number
+  gcCoveredEntityTypes: readonly KnownReplicationEntityType[]
   dependentRoots: number
   blockingStreams: ReplicationJournalBlocker[]
 }
@@ -104,6 +110,8 @@ export function replicationJournalSafetyDetails(db: Database.Database): Replicat
       oldestRetainedRevision: null,
       retainedChanges: 0,
       reclaimableChanges: 0,
+      uncoveredChanges: 0,
+      gcCoveredEntityTypes: [...REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES],
       dependentRoots: 0,
       blockingStreams: [],
     }
@@ -171,8 +179,14 @@ export function replicationJournalSafetyDetails(db: Database.Database): Replicat
   const reclaimableChanges = requiredNumber(rowRecord(db.prepare(`
     SELECT COUNT(*) AS reclaimableChanges
     FROM replication_canonical_changes
-    WHERE revision <= ?
+    WHERE entity_type = 'CanonicalObservation'
+      AND revision <= ?
   `).get(safeJournalRevision)), 'reclaimableChanges')
+  const uncoveredChanges = requiredNumber(rowRecord(db.prepare(`
+    SELECT COUNT(*) AS uncoveredChanges
+    FROM replication_canonical_changes
+    WHERE entity_type <> 'CanonicalObservation'
+  `).get()), 'uncoveredChanges')
 
   return {
     available: true,
@@ -181,6 +195,8 @@ export function replicationJournalSafetyDetails(db: Database.Database): Replicat
     oldestRetainedRevision,
     retainedChanges,
     reclaimableChanges,
+    uncoveredChanges,
+    gcCoveredEntityTypes: [...REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES],
     dependentRoots: dependencies.length,
     blockingStreams: dependencies
       .filter(item => item.capturedRevision < highWaterRevision)
@@ -331,7 +347,8 @@ export class SqliteReplicationJournalLifecycleRepository {
         FROM (
           SELECT revision
           FROM replication_canonical_changes
-          WHERE revision <= ?
+          WHERE entity_type = 'CanonicalObservation'
+            AND revision <= ?
           ORDER BY revision
           LIMIT ?
         )
@@ -345,7 +362,9 @@ export class SqliteReplicationJournalLifecycleRepository {
         }
       }
       const result = this.executor.db.prepare(`
-        DELETE FROM replication_canonical_changes WHERE revision <= ?
+        DELETE FROM replication_canonical_changes
+        WHERE entity_type = 'CanonicalObservation'
+          AND revision <= ?
       `).run(boundary)
       return {
         deletedChanges: result.changes,
