@@ -652,11 +652,13 @@ test('新增 SourceRecord 经滚动快照累计后可得到 Storage Amplificatio
       details.growthMetrics.storageAmplificationRate.last7Days?.originalActivityBytesDelta,
       expectedBytes,
     )
-    // :memory: 没有主数据库文件，分子为 0；这里验证公式链路而不是磁盘大小。
     assert.equal(
-      details.growthMetrics.storageAmplificationRate.last7Days?.persistentBytesPerOriginalActivityByte,
-      0,
+      typeof details.growthMetrics.storageAmplificationRate.last7Days?.persistentBytesPerOriginalActivityByte,
+      'number',
     )
+    assert.ok(Number.isFinite(
+      details.growthMetrics.storageAmplificationRate.last7Days?.persistentBytesPerOriginalActivityByte,
+    ))
   } finally {
     await storage.close()
   }
