@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import {
   officialIntegrationCatalogEntry,
   resolveToolDiscoveryCandidatePath,
@@ -127,7 +127,7 @@ export function resolveDshHome(
   homeDir = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): string {
-  return firstResolved('dsh', 'data', env, homeDir, platform)
+  return resolve(firstResolved('dsh', 'data', env, homeDir, platform))
 }
 
 export function resolveOpenCodeRoots(
