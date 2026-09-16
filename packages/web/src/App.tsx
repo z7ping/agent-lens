@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } from './client/preferences'
 import { useReviewUrlSync } from './client/useReviewUrlSync'
@@ -226,6 +227,37 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
+  const agentSelectionMap = new Map<string, AgentFacetDto>(agents.map(agent => [agent.sourceId, agent]))
+  for (const agent of agentOverviewItems) {
+    agentSelectionMap.set(agent.sourceId, {
+      sourceId: agent.sourceId,
+      productId: agent.productId,
+      displayName: agent.displayName,
+      supported: agent.supported,
+      enabled: agent.enabled,
+      detected: agent.detected,
+      installationIds: agent.installations.map(item => item.id),
+    })
+  }
+  for (const management of managedIntegrationItems) {
+    const discoveryDetected = management.tool?.presence === 'present' || management.tool?.presence === 'data-only'
+    const overview = agentOverviewItems.find(item =>
+      item.productId === management.productId || item.sourceId === management.integrationId
+    )
+    if (!overview && !discoveryDetected) continue
+    const sourceId = overview?.sourceId ?? management.integrationId
+    const current = agentSelectionMap.get(sourceId)
+    agentSelectionMap.set(sourceId, {
+      sourceId,
+      productId: management.productId,
+      displayName: overview?.displayName ?? management.displayName,
+      supported: true,
+      enabled: management.enabled.configured,
+      detected: Boolean(current?.detected || overview?.detected || discoveryDetected),
+      installationIds: overview?.installations.map(item => item.id) ?? current?.installationIds ?? [],
+    })
+  }
+  const agentSelectionItems = [...agentSelectionMap.values()]
   const selectedIntegrationExists = managedIntegrationItems.some(item =>
     item.integrationId === agentOverviewSourceId || item.productId === agentOverviewSourceId
   )
@@ -297,6 +329,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
+        agentSelectionAgents={agentSelectionItems}
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
         onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
