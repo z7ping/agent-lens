@@ -125,6 +125,28 @@ test('OpenCode database marker is required before a data directory becomes produ
   }
 })
 
+test('DSH profile root is product evidence without inventing a CLI', async () => {
+  const root = join(tmpdir(), `agent-lens-dsh-discovery-${process.pid}-${Date.now()}`)
+  const dshHome = join(root, 'dsh')
+  await mkdir(join(dshHome, 'profiles', 'default'), { recursive: true })
+  try {
+    const items = await discoverOfficialTools({
+      env: { DSH_HOME: dshHome, PATH: '' },
+      homeDir: join(root, 'home'),
+      platform: process.platform,
+      timeoutMs: 1_000,
+      shellPathResolver: async () => undefined,
+      executableResolver: async () => undefined,
+    })
+    const dsh = items.find(item => item.integrationId === 'dsh')
+    assert.equal(dsh?.presence, 'data-only')
+    assert.equal(dsh?.dataRoot, dshHome)
+    assert.equal(dsh?.executable, undefined)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('discovery service exposes scanning state and coalesces concurrent rescans', async () => {
   const service = new OfficialToolDiscoveryService({
     env: { PATH: '' },
@@ -141,7 +163,7 @@ test('discovery service exposes scanning state and coalesces concurrent rescans'
   assert.equal(service.snapshot().status, 'scanning')
   const completed = await first
   assert.equal(completed.status, 'complete')
-  assert.equal(completed.items.length, 5)
+  assert.equal(completed.items.length, 6)
   assert.equal(typeof completed.completedAt, 'string')
 })
 
@@ -164,7 +186,7 @@ test('discovery service can rescan one integration without replacing other disco
   piExecutable = '/custom/bin/pi'
   const scoped = await service.rescan('pi')
 
-  assert.equal(scoped.items.length, 5)
+  assert.equal(scoped.items.length, 6)
   assert.equal(scoped.items.find(item => item.integrationId === 'pi')?.executable, '/custom/bin/pi')
   assert.deepEqual(scoped.items.find(item => item.integrationId === 'codex'), codexBefore)
 })
