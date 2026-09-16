@@ -30,6 +30,10 @@ function emptyDependencies(): CanonicalReplicationReader {
 class MemoryLifecycle implements ObservationBootstrapLifecycleStore {
   state: ObservationBootstrapLifecycleState | null = null
 
+  async get() {
+    return this.state
+  }
+
   async ensure(input: {
     streamId: string
     generationId: string
