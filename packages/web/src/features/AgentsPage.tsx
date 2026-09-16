@@ -24,7 +24,7 @@ import {
   LegacySourceCaptureControl,
 } from './integrations/IntegrationManagementControls'
 import {
-  integrationLifecycleState,
+  agentObservationState,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
@@ -520,7 +520,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, RUNTIME_CONFIG_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t, discoveryError)
+  const status = agentObservationState(agent, discovery, discoveryScanning, t, discoveryError)
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
   const assetsAvailable = agent.integration?.capabilities.some(capability =>
