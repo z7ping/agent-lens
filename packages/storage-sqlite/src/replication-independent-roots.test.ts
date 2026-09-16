@@ -47,7 +47,9 @@ test('Entity Head keeps latest revision metadata while Current-State Root body c
     })
 
     const secondHead = db.db.prepare(`
-      SELECT latest_revision AS latestRevision,
+      SELECT first_revision AS firstRevision,
+             first_changed_at AS firstChangedAt,
+             latest_revision AS latestRevision,
              latest_changed_at AS latestChangedAt
       FROM replication_entity_heads
       WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-1'
