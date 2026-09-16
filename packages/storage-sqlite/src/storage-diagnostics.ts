@@ -491,7 +491,9 @@ export function replicationJournalDetails(
       reason: 'replication-canonical-change-journal-unavailable',
       totalChanges: 0,
       distinctEntities: 0,
+      extraChangesBeyondFirst: 0,
       changesPerDistinctEntity: null,
+      extraChangesPerDistinctEntity: null,
       last7Days: 0,
       last30Days: 0,
       byEntityType: [],
@@ -513,11 +515,16 @@ export function replicationJournalDetails(
     if (!entityType) throw new TypeError('SQLite replication journal entityType must be a string')
     const changes = requiredNumber(row, 'changes')
     const distinctEntities = requiredNumber(row, 'distinctEntities')
+    const extraChangesBeyondFirst = Math.max(0, changes - distinctEntities)
     return {
       entityType,
       changes,
       distinctEntities,
+      extraChangesBeyondFirst,
       changesPerDistinctEntity: distinctEntities > 0 ? changes / distinctEntities : null,
+      extraChangesPerDistinctEntity: distinctEntities > 0
+        ? extraChangesBeyondFirst / distinctEntities
+        : null,
       last7Days: requiredNumber(row, 'last7Changes'),
       last30Days: requiredNumber(row, 'last30Changes'),
     }
@@ -525,13 +532,18 @@ export function replicationJournalDetails(
 
   const totalChanges = rows.reduce((sum, row) => sum + row.changes, 0)
   const distinctEntities = rows.reduce((sum, row) => sum + row.distinctEntities, 0)
+  const extraChangesBeyondFirst = Math.max(0, totalChanges - distinctEntities)
   return {
     available: true,
     basis: 'replication-canonical-change-journal',
     timeScan: 'full-journal-no-changed-at-index',
     totalChanges,
     distinctEntities,
+    extraChangesBeyondFirst,
     changesPerDistinctEntity: distinctEntities > 0 ? totalChanges / distinctEntities : null,
+    extraChangesPerDistinctEntity: distinctEntities > 0
+      ? extraChangesBeyondFirst / distinctEntities
+      : null,
     last7Days: rows.reduce((sum, row) => sum + row.last7Days, 0),
     last30Days: rows.reduce((sum, row) => sum + row.last30Days, 0),
     byEntityType: rows,
