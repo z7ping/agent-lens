@@ -313,7 +313,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
     const timer = window.setTimeout(() => {
       const target = [...document.querySelectorAll<HTMLElement>('[data-integration]')]
         .find(node => node.dataset.integration === targetIntegrationId)
-      target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      target?.scrollIntoView({ block: 'center', behavior: 'auto' })
     }, 0)
     return () => window.clearTimeout(timer)
   }, [management, targetIntegrationId])
