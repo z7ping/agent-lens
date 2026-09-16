@@ -1,3 +1,4 @@
+export * from './message-attachments'
 import type {
   JsonValue,
   ReviewDetailQueryDto,
