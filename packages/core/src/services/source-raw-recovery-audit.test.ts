@@ -129,3 +129,39 @@ test('Raw recovery audit 只把 verified + Canonical/Evidence 稳定记录判为
       ?.decision.reasons.includes('recovery-capability-unknown'),
   )
 })
+
+
+test('Raw recovery audit 对 Canonical 未稳定记录跳过昂贵 Source 验证', async () => {
+  let verifyCalls = 0
+  const definition = source('verified', 'verified')
+  definition.rawRecovery = {
+    ...definition.rawRecovery!,
+    async verify() {
+      verifyCalls += 1
+      return {
+        state: 'verified',
+        checkedAt: '2026-09-16T00:00:00.000Z',
+      }
+    },
+  }
+
+  const result = await auditSourceRawRecoveryBatch({
+    sources: { list: () => [definition] },
+    storage: {
+      sourceRawAudit: {
+        async list() {
+          return {
+            items: [candidate('raw-not-ready', 'verified', { canonicalStable: false })],
+            hasMore: false,
+          }
+        },
+      },
+    },
+  })
+
+  assert.equal(verifyCalls, 0)
+  assert.equal(result.items[0]?.recovery.state, 'unknown')
+  assert.equal(result.items[0]?.recovery.reason, 'verification-not-run')
+  assert.equal(result.items[0]?.decision.autoReclaimEligible, false)
+  assert.ok(result.items[0]?.decision.reasons.includes('canonical-not-stable'))
+})
