@@ -69,6 +69,13 @@ test('首次未选择的本机智能体仍可在智能体页二次接入', () =>
 })
 
 
+test('首次向导自动扫描但不默认选择或自动安装', () => {
+  assert.match(onboarding, /useState<Set<string>>\(\(\) => new Set\(\)\)/)
+  assert.match(onboarding, /const chosen = detected\.filter\(item => selected\.has\(item\.integrationId\)\)/)
+  assert.match(onboarding, /disabled=\{scanning \|\| selected\.size === 0\}/)
+  assert.match(onboarding, /onClick=\{\(\) => void finish\(\)\}/)
+})
+
 test('首次扫描失败不得落入“未发现”分组', () => {
   assert.match(onboarding, /item\.tool\?\.presence === 'error'/)
   assert.match(onboarding, /item\.tool\?\.presence === 'absent'/)
