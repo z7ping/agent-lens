@@ -1,5 +1,6 @@
 import {
   parsePiLiveEvent,
+  type LiveMessageInputDto,
   type JsonValue,
   type PiLiveAbortRequestDto,
   type PiLiveAvailabilityDto,
@@ -344,16 +345,16 @@ export class PiLiveApi {
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/thinking-level`, jsonRequest(body))
   }
 
-  prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehaviorDto): Promise<{ ok: true }> {
+  prompt(runtimeSessionId: string, message: LiveMessageInputDto, behavior?: PiLiveStreamingBehaviorDto): Promise<{ ok: true }> {
     const body: PiLivePromptRequestDto = { message, ...(behavior ? { behavior } : {}) }
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/prompt`, jsonRequest(body))
   }
 
-  steer(runtimeSessionId: string, message: string): Promise<{ ok: true }> {
+  steer(runtimeSessionId: string, message: LiveMessageInputDto): Promise<{ ok: true }> {
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/steer`, jsonRequest({ message }))
   }
 
-  followUp(runtimeSessionId: string, message: string): Promise<{ ok: true }> {
+  followUp(runtimeSessionId: string, message: LiveMessageInputDto): Promise<{ ok: true }> {
     return requestJson(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/follow-up`, jsonRequest({ message }))
   }
 

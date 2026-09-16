@@ -1,3 +1,100 @@
+export interface LiveTextPartDto {
+  type: 'text'
+  text: string
+}
+
+export interface LiveLargeTextPartDto {
+  type: 'large-text'
+  text: string
+  lineCount?: number | undefined
+  charCount?: number | undefined
+}
+
+export interface LiveAttachmentDescriptorDto {
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes: number
+}
+
+export interface LiveAttachmentPartDto {
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes?: number | undefined
+}
+
+export interface LiveImagePartDto extends LiveAttachmentPartDto {
+  type: 'image'
+}
+
+export interface LiveFilePartDto extends LiveAttachmentPartDto {
+  type: 'file'
+}
+
+export type LiveMessagePartDto =
+  | LiveTextPartDto
+  | LiveLargeTextPartDto
+  | LiveImagePartDto
+  | LiveFilePartDto
+
+export interface LiveMessageDto {
+  parts: LiveMessagePartDto[]
+}
+
+export type LiveMessageInputDto = string | LiveMessageDto
+
+export type LiveEventStatusDto =
+  | 'initializing'
+  | 'ready'
+  | 'running'
+  | 'idle'
+  | 'compacting'
+  | 'failed'
+  | 'terminating'
+  | 'terminated'
+
+export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' | 'failed'
+
+export type LiveEventDto =
+  | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
+  | {
+      type: 'message.start' | 'message.end'
+      role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
+      messageId?: string | undefined
+    }
+  | {
+      type:
+        | 'text.start'
+        | 'text.delta'
+        | 'text.end'
+        | 'reasoning.start'
+        | 'reasoning.delta'
+        | 'reasoning.end'
+      text?: string | undefined
+      delta?: string | undefined
+      messageId?: string | undefined
+      contentIndex?: number | undefined
+    }
+  | {
+      type: 'tool.start'
+      callId?: string | undefined
+      name: string
+      inputPreview?: string | undefined
+      contentIndex?: number | undefined
+    }
+  | { type: 'tool.output'; callId?: string | undefined; name?: string | undefined; output: string }
+  | {
+      type: 'tool.end'
+      callId?: string | undefined
+      name?: string | undefined
+      status: 'success' | 'error'
+      output?: string | undefined
+      durationMs?: number | undefined
+    }
+  | { type: 'error'; message: string }
+  | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
+
 export interface LiveControlDisplayInfoDto {
   label?: string | undefined
   description?: string | undefined
@@ -23,6 +120,188 @@ function record(value: unknown): Record<string, unknown> | null {
 function optionalText(value: unknown): string | undefined | null {
   if (value === undefined) return undefined
   return typeof value === 'string' ? value : null
+}
+
+function optionalCount(value: unknown): number | undefined | null {
+  if (value === undefined) return undefined
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null
+}
+
+function parseLiveMessagePartDto(value: unknown): LiveMessagePartDto {
+  const part = record(value)
+  if (!part || typeof part.type !== 'string') {
+    throw new TypeError('Live message part must be an object with type')
+  }
+  if (part.type === 'text') {
+    if (typeof part.text !== 'string') throw new TypeError('Live text part requires text')
+    return { type: 'text', text: part.text }
+  }
+  if (part.type === 'large-text') {
+    if (typeof part.text !== 'string') throw new TypeError('Live large-text part requires text')
+    const lineCount = optionalCount(part.lineCount)
+    const charCount = optionalCount(part.charCount)
+    if (lineCount === null) throw new TypeError('Live large-text lineCount must be a non-negative integer')
+    if (charCount === null) throw new TypeError('Live large-text charCount must be a non-negative integer')
+    return {
+      type: 'large-text',
+      text: part.text,
+      ...(lineCount !== undefined ? { lineCount } : {}),
+      ...(charCount !== undefined ? { charCount } : {}),
+    }
+  }
+  if (part.type === 'image' || part.type === 'file') {
+    if (typeof part.attachmentId !== 'string' || !part.attachmentId.trim()) {
+      throw new TypeError(`Live ${part.type} part requires attachmentId`)
+    }
+    const name = optionalText(part.name)
+    const mimeType = optionalText(part.mimeType)
+    const sizeBytes = optionalCount(part.sizeBytes)
+    if (name === null) throw new TypeError(`Live ${part.type} name must be a string`)
+    if (mimeType === null) throw new TypeError(`Live ${part.type} mimeType must be a string`)
+    if (sizeBytes === null) throw new TypeError(`Live ${part.type} sizeBytes must be a non-negative integer`)
+    return {
+      type: part.type,
+      attachmentId: part.attachmentId,
+      ...(name !== undefined ? { name } : {}),
+      ...(mimeType !== undefined ? { mimeType } : {}),
+      ...(sizeBytes !== undefined ? { sizeBytes } : {}),
+    }
+  }
+  throw new TypeError(`Unsupported Live message part type: ${part.type}`)
+}
+
+export function parseLiveMessageInputDto(value: unknown): LiveMessageDto {
+  if (typeof value === 'string') {
+    return { parts: [{ type: 'text', text: value }] }
+  }
+  const message = record(value)
+  if (!message || !Array.isArray(message.parts)) {
+    throw new TypeError('Live message must be a string or an object with parts')
+  }
+  return { parts: message.parts.map(parseLiveMessagePartDto) }
+}
+
+export function liveMessagePlainTextDto(message: LiveMessageDto): string {
+  const blocks: string[] = []
+  for (const part of message.parts) {
+    if (part.type === 'text' || part.type === 'large-text') {
+      blocks.push(part.text)
+      continue
+    }
+    throw new TypeError(`Live attachment part requires adapter transformation: ${part.type}`)
+  }
+  return blocks.join('\n\n')
+}
+
+const LIVE_EVENT_STATUSES = new Set<LiveEventStatusDto>([
+  'initializing',
+  'ready',
+  'running',
+  'idle',
+  'compacting',
+  'failed',
+  'terminating',
+  'terminated',
+])
+
+const LIVE_COMPLETION_STATUSES = new Set<LiveCompletionStatusDto>([
+  'completed',
+  'cancelled',
+  'interrupted',
+  'failed',
+])
+
+function eventText(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function eventCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+export function parseLiveEventDto(value: unknown): LiveEventDto | null {
+  const event = record(value)
+  if (!event || typeof event.type !== 'string') return null
+  const type = event.type
+
+  if (type === 'status') {
+    const status = event.status
+    if (typeof status !== 'string' || !LIVE_EVENT_STATUSES.has(status as LiveEventStatusDto)) return null
+    return {
+      type,
+      status: status as LiveEventStatusDto,
+      ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+    }
+  }
+  if (type === 'message.start' || type === 'message.end') {
+    const role = event.role
+    const validRole = role === undefined
+      || role === 'user' || role === 'assistant' || role === 'tool' || role === 'system' || role === 'unknown'
+    if (!validRole) return null
+    return {
+      type,
+      ...(role === undefined ? {} : { role }),
+      ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
+    }
+  }
+  if (type === 'text.start' || type === 'text.delta' || type === 'text.end'
+    || type === 'reasoning.start' || type === 'reasoning.delta' || type === 'reasoning.end') {
+    const contentIndex = eventCount(event.contentIndex)
+    return {
+      type,
+      ...(eventText(event.text) !== undefined ? { text: eventText(event.text) } : {}),
+      ...(eventText(event.delta) !== undefined ? { delta: eventText(event.delta) } : {}),
+      ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
+      ...(contentIndex !== undefined ? { contentIndex } : {}),
+    }
+  }
+  if (type === 'tool.start') {
+    if (typeof event.name !== 'string' || !event.name) return null
+    const contentIndex = eventCount(event.contentIndex)
+    return {
+      type,
+      name: event.name,
+      ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.inputPreview) !== undefined ? { inputPreview: eventText(event.inputPreview) } : {}),
+      ...(contentIndex !== undefined ? { contentIndex } : {}),
+    }
+  }
+  if (type === 'tool.output') {
+    if (typeof event.output !== 'string') return null
+    return {
+      type,
+      output: event.output,
+      ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.name) !== undefined ? { name: eventText(event.name) } : {}),
+    }
+  }
+  if (type === 'tool.end') {
+    if (event.status !== 'success' && event.status !== 'error') return null
+    const durationMs = eventCount(event.durationMs)
+    return {
+      type,
+      status: event.status,
+      ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.name) !== undefined ? { name: eventText(event.name) } : {}),
+      ...(eventText(event.output) !== undefined ? { output: eventText(event.output) } : {}),
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    }
+  }
+  if (type === 'error') {
+    return typeof event.message === 'string' && event.message ? { type, message: event.message } : null
+  }
+  if (type === 'completed') {
+    const status = event.status
+    if (typeof status !== 'string' || !LIVE_COMPLETION_STATUSES.has(status as LiveCompletionStatusDto)) return null
+    return {
+      type,
+      status: status as LiveCompletionStatusDto,
+      ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+    }
+  }
+  return null
 }
 
 export function parseLiveThinkingControlDto(value: unknown): LiveThinkingControlDto | null {

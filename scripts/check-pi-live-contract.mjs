@@ -16,7 +16,7 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/web/src/task-session-view.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/web/src/components/PiMarkdownComposer.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/PiLiveTaskRound.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/HubReviewPage.tsx', import.meta.url), 'utf8'),
@@ -35,6 +35,10 @@ const [app, taskCenter, taskSurface, taskHeader, taskMessage, taskRound, taskThi
   readFile(new URL('../packages/core/src/domain/observation.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
 ])
+const liveImageNode = await readFile(new URL('../packages/web/src/components/LiveImageNode.tsx', import.meta.url), 'utf8')
+const liveAttachmentClient = await readFile(new URL('../packages/web/src/client/live-attachments.ts', import.meta.url), 'utf8')
+const liveAttachmentHttp = await readFile(new URL('../packages/surface-http/src/live-attachments-http.ts', import.meta.url), 'utf8')
+const piAdapter = await readFile(new URL('../packages/runtime-cordis/src/pi-live/adapter.ts', import.meta.url), 'utf8')
 const workspaceSidebar = await readFile(new URL('../packages/web/src/components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const workspacePrimaryNavigation = await readFile(new URL('../packages/web/src/components/WorkspacePrimaryNavigation.tsx', import.meta.url), 'utf8')
 const resumeResolver = await readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8')
@@ -177,17 +181,33 @@ requireText(piTaskProjection, /export function projectPiLiveTaskRounds/, '缺少
 if (/⌁/.test(`${page}\n${piTaskRound}`)) failures.push('Tool 不得恢复通用占位图标')
 
 requireText(piComposer, /KEY_ENTER_COMMAND/, 'Lexical 输入框缺少 Enter 命令边界')
+requireText(piComposer, /PASTE_COMMAND/, 'Live Composer 缺少统一粘贴命令边界')
+requireText(piComposer, /LiveLargeTextNode/, 'Live Composer 缺少结构化大文本节点')
+requireText(piComposer, /LiveImageNode/, 'Live Composer 缺少结构化图片节点')
+requireText(piComposer, /function ImagePastePlugin/, 'Live Composer 缺少剪贴板图片粘贴边界')
+requireText(piComposer, /uploadLiveAttachment\\(item\\.file, item\\.attachmentId\\)/, 'Live Composer 图片必须先进入通用 Attachment Service')
+requireText(piComposer, /pendingCountRef\.current \+= pending\.length/, '并发图片上传必须保持有界发送锁')\nrequireText(piComposer, /globalThis\.crypto\.randomUUID\(\)/, '图片粘贴必须在上传前预留 opaque attachmentId')
+requireText(piComposer, /getMessage\(\)/, 'Live Composer 缺少统一结构化消息出口')
+requireText(liveImageNode, /getImagePart\(\): LiveImagePartDto \| null/, '图片节点必须输出统一 Live image part')
+requireText(liveImageNode, /liveAttachmentPreviewUrl\(attachmentId\)/, '图片预览必须使用 opaque attachmentId')
+requireText(liveAttachmentClient, /\/api\/v1\/live\/attachments/, 'Web 图片上传必须使用通用 Live attachment 端点')
+requireText(liveAttachmentHttp, /LIVE_ATTACHMENT_MAX_ITEM_BYTES/, 'Live attachment HTTP 必须保持单项大小上限')
+requireText(piAdapter, /image: 'native'/, 'Pi Adapter 必须显式声明原生图片能力')
+requireText(piAdapter, /this\.attachments\.get\(part\.attachmentId\)/, 'Pi Adapter 必须通过 opaque attachmentId 解析图片')
+requireText(piAdapter, /Buffer\.from\(attachment\.data\)\.toString\('base64'\)/, 'Pi Adapter 必须在适配边界转换官方图片载荷')
 requireText(piComposer, /event\.isComposing/, 'Lexical 输入框缺少 isComposing 保护')
 requireText(piComposer, /keyCode === 229/, 'Lexical 输入框缺少 IME 229 兼容')
 requireText(piComposer, /function ExternalDraftPlugin/, 'Composer 必须通过显式 draft revision 接受外部赋值')
 requireText(piComposer, /editor\.isComposing\(\)/, '外部草稿同步不得打断 IME composition')
 requireText(piComposer, /function DraftPresencePlugin/, 'Composer 本地编辑只允许向父级传播轻量内容存在性')
-requireText(piComposer, /export const PiMarkdownComposer = memo\(PiMarkdownComposerImpl\)/, 'Composer 必须与阅读区父级渲染隔离')
+requireText(piComposer, /export const LiveMarkdownComposer = memo\(LiveMarkdownComposerImpl\)/, 'Composer 必须与阅读区父级渲染隔离')
 requireText(piComposer, /\}, \[editor\]\)/, 'Lexical 键盘命令必须稳定注册，不得随父级状态重复注销')
 if (/const \[input, setInput\] = useState/.test(page)) failures.push('PiLivePage 不得重新持有逐键更新的完整 Composer 字符串')
-if (/value=\{input\}|onChange=\{setInput\}/.test(page)) failures.push('PiMarkdownComposer 不得恢复受控字符串回声')
+if (/value=\{input\}|onChange=\{setInput\}/.test(page)) failures.push('LiveMarkdownComposer 不得恢复受控字符串回声')
 requireText(page, /draft=\{composerDraft\}/, 'PiLivePage 缺少显式 Composer 草稿命令')
-requireText(page, /const canSend = composerHasContent && composerSubmitEnabled/, '发送可用状态必须只依赖轻量草稿存在性')
+requireText(page, /const \[composerAttachmentPending, setComposerAttachmentPending\] = useState\(false\)/, '页面缺少图片上传轻量状态')
+requireText(page, /const composerSubmitEnabled = !composerAttachmentPending/, '图片上传期间必须禁止发送')
+requireText(page, /const canSend = composerHasContent && composerSubmitEnabled/, '发送可用状态必须只依赖轻量草稿存在性与 Composer 边界')
 requireText(page, /piLiveApi\.abort\(runtimeId, true\)/, '停止任务必须取回队列再 Abort')
 requireText(page, /piLiveApi\.terminate\(runtimeId\)/, '结束 Runtime 必须是独立显式操作')
 requireText(page, /PiLiveFollowController/, '缺少统一 Reader 跟随控制器')
@@ -256,6 +276,8 @@ requireText(sdkLoader, /PI_SDK_PACKAGE_NAME/, 'Loader 必须只定位官方 Pi n
 requireText(workerHost, /discoverInstalledPiSdk\(input\.executable\)/, '宿主必须统一发现并验证官方 Pi SDK')
 requireText(workerHost, /sdkEntry: sdk\.sdkEntry/, '宿主必须把验证后的 SDK 入口传给 Worker')
 requireText(workerEntry, /await import\(pathToFileURL\(sdkEntry\)\.href\)/, 'Worker 必须加载宿主已验证的实际官方 SDK')
+requireText(workerEntry, /images: value\.images/, 'Pi Worker 必须把图片送入官方 Session prompt')
+requireText(sdkAdapter, /Pick<PromptOptions, 'images' \| 'streamingBehavior' \| 'source' \| 'preflightResult'>/, 'Pi SDK 类型边界必须来自官方 images PromptOptions')
 if (/function\s+(?:findExecutable|shimEntry|sdkEntryFor)\b/.test(workerEntry)) failures.push('Worker 不得重复维护 PATH 或 npm shim 的 SDK 发现逻辑')
 requireText(sdkLoader, /assertPiSdkModule\(imported, discovery\.sdkEntry, discovery\.version\)/, 'Loader 必须执行 Module capability 校验')
 if (/export interface PiSdk(?:Session|Module|Model)/.test(sdkLoader)) failures.push('Loader 不得维护手写 SDK 接口镜像')

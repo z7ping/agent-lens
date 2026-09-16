@@ -1,4 +1,4 @@
-import type { LiveThinkingControlDto } from './live'
+import { parseLiveEventDto, type LiveEventDto, type LiveMessageInputDto, type LiveThinkingControlDto } from './live'
 import type { JsonValue } from './timeline'
 
 export type PiLiveStreamingBehaviorDto = 'steer' | 'followUp'
@@ -118,7 +118,7 @@ export interface PiLiveSnapshotDto {
 }
 
 export interface PiLivePromptRequestDto {
-  message: string
+  message: LiveMessageInputDto
   behavior?: PiLiveStreamingBehaviorDto | undefined
 }
 
@@ -140,7 +140,10 @@ export interface PiLiveEventDto {
   runtimeSessionId: string
   sequence: number
   receivedAt: string
+  /** Pi-native payload retained for compatibility and diagnostics. */
   event: { [key: string]: JsonValue }
+  /** Agent-neutral event used by shared Live rendering. */
+  normalizedEvent?: LiveEventDto | undefined
 }
 
 function piLiveEventRecord(value: unknown, label: string): Record<string, unknown> {
@@ -182,5 +185,17 @@ export function parsePiLiveEvent(value: unknown): PiLiveEventDto {
   if (!event || Array.isArray(event) || typeof event !== 'object') {
     throw new TypeError('Pi Live event payload must be an object')
   }
-  return { runtimeSessionId, sequence, receivedAt, event }
+  const normalizedEvent = record.normalizedEvent === undefined
+    ? undefined
+    : parseLiveEventDto(record.normalizedEvent)
+  if (record.normalizedEvent !== undefined && !normalizedEvent) {
+    throw new TypeError('Pi Live normalized event is invalid')
+  }
+  return {
+    runtimeSessionId,
+    sequence,
+    receivedAt,
+    event,
+    ...(normalizedEvent ? { normalizedEvent } : {}),
+  }
 }

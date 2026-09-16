@@ -135,6 +135,9 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       followUp: '继续',
       send: '发送',
       sendWhenReady: 'Pi 就绪后发送',
+      imageOnly: '图片',
+      imageRequiresReady: 'Pi 就绪后才能发送图片。',
+      imageUploadFailed: '图片处理失败，请重试。',
     },
     runtimeMenu: {
       terminateTitle: '结束 Pi 运行实例',

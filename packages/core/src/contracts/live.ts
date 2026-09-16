@@ -15,6 +15,90 @@ export type LiveCapabilityName =
   | 'extension-ui'
   | 'recovery'
 
+export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
+
+export const LIVE_ATTACHMENT_MAX_ITEM_BYTES = 12 * 1024 * 1024
+
+export interface LiveInputCapabilities {
+  text: LiveInputSupport
+  largeText: LiveInputSupport
+  image: LiveInputSupport
+  file: LiveInputSupport
+  multiline: LiveInputSupport
+}
+
+export interface LiveTextPart {
+  type: 'text'
+  text: string
+}
+
+export interface LiveLargeTextPart {
+  type: 'large-text'
+  text: string
+  lineCount?: number | undefined
+  charCount?: number | undefined
+}
+
+export interface LiveAttachmentDescriptor {
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes: number
+}
+
+export interface LiveAttachment extends LiveAttachmentDescriptor {
+  data: Uint8Array
+}
+
+export interface PutLiveAttachmentInput {
+  attachmentId?: string | undefined
+  data: Uint8Array
+  name?: string | undefined
+  mimeType?: string | undefined
+}
+
+export interface LiveAttachmentService {
+  put(input: PutLiveAttachmentInput): Promise<LiveAttachmentDescriptor>
+  get(attachmentId: string): Promise<LiveAttachment | null>
+  remove(attachmentId: string): Promise<void>
+  dispose(): Promise<void>
+}
+
+export interface LiveAttachmentPartBase {
+  /**
+   * AgentLens-owned opaque attachment reference. Adapters may resolve or
+   * transform it, but must not expose native temporary paths as the contract.
+   */
+  attachmentId: string
+  name?: string | undefined
+  mimeType?: string | undefined
+  sizeBytes?: number | undefined
+}
+
+export interface LiveImagePart extends LiveAttachmentPartBase {
+  type: 'image'
+}
+
+export interface LiveFilePart extends LiveAttachmentPartBase {
+  type: 'file'
+}
+
+export type LiveMessagePart =
+  | LiveTextPart
+  | LiveLargeTextPart
+  | LiveImagePart
+  | LiveFilePart
+
+export interface LiveMessage {
+  parts: readonly LiveMessagePart[]
+}
+
+/**
+ * String remains a compatibility input while existing Pi/Hermes surfaces
+ * migrate. Adapters receive a normalized LiveMessage through live-support.
+ */
+export type LiveMessageInput = string | LiveMessage
+
 export interface LiveAdapterManifest extends AgentLensPluginManifest {
   pluginType: 'live'
   liveId: string
@@ -48,11 +132,97 @@ export interface LiveSnapshot {
   leafId?: string | null
 }
 
+export type LiveEventStatus =
+  | 'initializing'
+  | 'ready'
+  | 'running'
+  | 'idle'
+  | 'compacting'
+  | 'failed'
+  | 'terminating'
+  | 'terminated'
+
+export type LiveCompletionStatus = 'completed' | 'cancelled' | 'interrupted' | 'failed'
+
+export interface LiveStatusEvent {
+  type: 'status'
+  status: LiveEventStatus
+  message?: string | undefined
+}
+
+export interface LiveMessageBoundaryEvent {
+  type: 'message.start' | 'message.end'
+  role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
+  messageId?: string | undefined
+}
+
+export interface LiveContentEvent {
+  type:
+    | 'text.start'
+    | 'text.delta'
+    | 'text.end'
+    | 'reasoning.start'
+    | 'reasoning.delta'
+    | 'reasoning.end'
+  text?: string | undefined
+  delta?: string | undefined
+  messageId?: string | undefined
+  contentIndex?: number | undefined
+}
+
+export interface LiveToolStartEvent {
+  type: 'tool.start'
+  callId?: string | undefined
+  name: string
+  inputPreview?: string | undefined
+  contentIndex?: number | undefined
+}
+
+export interface LiveToolOutputEvent {
+  type: 'tool.output'
+  callId?: string | undefined
+  name?: string | undefined
+  output: string
+}
+
+export interface LiveToolEndEvent {
+  type: 'tool.end'
+  callId?: string | undefined
+  name?: string | undefined
+  status: 'success' | 'error'
+  output?: string | undefined
+  durationMs?: number | undefined
+}
+
+export interface LiveErrorEvent {
+  type: 'error'
+  message: string
+}
+
+export interface LiveCompletedEvent {
+  type: 'completed'
+  status: LiveCompletionStatus
+  message?: string | undefined
+}
+
+export type LiveEvent =
+  | LiveStatusEvent
+  | LiveMessageBoundaryEvent
+  | LiveContentEvent
+  | LiveToolStartEvent
+  | LiveToolOutputEvent
+  | LiveToolEndEvent
+  | LiveErrorEvent
+  | LiveCompletedEvent
+
 export interface LiveRuntimeEvent {
   runtimeSessionId: string
   sequence: number
   receivedAt: string
+  /** Native event retained for diagnostics and Agent-specific compatibility UI. */
   event: Readonly<Record<string, unknown>>
+  /** Agent-neutral event consumed by the shared Live renderer when this native event has stable common semantics. */
+  normalizedEvent?: Readonly<LiveEvent> | undefined
 }
 
 export interface LiveSendOptions {
@@ -108,6 +278,7 @@ export function isLiveThinkingControl(value: unknown): value is LiveThinkingCont
 export interface LiveAdapter {
   readonly manifest: LiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName>
+  readonly inputCapabilities: Readonly<LiveInputCapabilities>
 
   availability(): Promise<LiveAvailability>
   list(): Promise<LiveRuntimeState[]>
@@ -118,7 +289,7 @@ export interface LiveAdapter {
   thinkingControl?(runtimeSessionId: string): Promise<LiveThinkingControl | null>
   /** Runtime-owned setter; value must be one returned by thinkingControl(). */
   setThinkingControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
-  send(runtimeSessionId: string, message: string, options?: LiveSendOptions): Promise<void>
+  send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   interrupt?(runtimeSessionId: string): Promise<unknown>
   terminate(runtimeSessionId: string): Promise<void>

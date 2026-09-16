@@ -1,14 +1,21 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { JsonValue, PiLiveControlsDto, PiLiveQueueDto, PiLiveSnapshotDto, PiLiveStateDto } from '@agent-lens/protocol'
+import {
+  type JsonValue,
+  type LiveMessageDto,
+  type PiLiveControlsDto,
+  type PiLiveQueueDto,
+  type PiLiveSnapshotDto,
+  type PiLiveStateDto,
+} from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { resolveLiveThinkingControl } from '../client/live-controls'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
-import { PiMarkdownComposer, type PiMarkdownComposerDraft, type PiMarkdownComposerHandle } from '../components/PiMarkdownComposer'
+import { LiveMarkdownComposer, type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
 import { PiRuntimeMenu } from '../components/PiRuntimeMenu'
 import { PiStartupDisclosure, piStartupSummary } from '../components/PiStartupDisclosure'
 import { OperationProgress } from '../components/StateViews'
@@ -28,6 +35,26 @@ import { agentLensI18n } from '../i18n/runtime'
 
 type QueueMode = 'steer' | 'followUp'
 type PendingQueueSubmission = { id: string; mode: QueueMode; text: string }
+
+function liveMessageText(message: LiveMessageDto): string {
+  const blocks: string[] = []
+  for (const part of message.parts) {
+    if (part.type === 'text' || part.type === 'large-text') blocks.push(part.text)
+  }
+  return blocks.join('\n\n').trim()
+}
+
+function liveMessageHasContent(message: LiveMessageDto): boolean {
+  return message.parts.some(part =>
+    part.type === 'image'
+    || part.type === 'file'
+    || ((part.type === 'text' || part.type === 'large-text') && Boolean(part.text.trim())),
+  )
+}
+
+function liveMessageHasAttachments(message: LiveMessageDto): boolean {
+  return message.parts.some(part => part.type === 'image' || part.type === 'file')
+}
 interface RestoredDraft { id: string; mode: QueueMode; text: string }
 interface ExtensionRequest {
   id: string
@@ -387,8 +414,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const { runtimeSessionId } = useParams()
   const runtimeId = runtimeSessionId ? decodeURIComponent(runtimeSessionId) : ''
   const readerRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<PiMarkdownComposerHandle>(null)
-  const composerSubmitRef = useRef<(value: string, mode: 'default' | 'followUp') => void>(() => {})
+  const inputRef = useRef<LiveMarkdownComposerHandle>(null)
+  const composerSubmitRef = useRef<(message: LiveMessageDto, mode: 'default' | 'followUp') => void>(() => {})
   const composerEscapeRef = useRef<(() => void) | undefined>(undefined)
   const followControllerRef = useRef(new PiLiveFollowController())
   const followFrameRef = useRef<number | null>(null)
@@ -404,10 +431,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [controls, setControls] = useState<PiLiveControlsDto>({ models: [] })
   const [connected, setConnected] = useState(false)
   const [mode, setMode] = useState<QueueMode>('steer')
-  const [composerDraft, setComposerDraft] = useState<PiMarkdownComposerDraft>({ revision: 0, value: '' })
+  const [composerDraft, setComposerDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const [composerHasContent, setComposerHasContent] = useState(false)
+  const [composerAttachmentPending, setComposerAttachmentPending] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
-  const [startupQueued, setStartupQueued] = useState('')
+  const [startupQueued, setStartupQueued] = useState<LiveMessageDto | null>(null)
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
   const [currentOrdinal, setCurrentOrdinal] = useState<number | null>(null)
   const [currentItems, setCurrentItems] = useState<PiLiveHistoryItem[]>([])
@@ -439,8 +467,16 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setComposerHasContent(current => current === hasContent ? current : hasContent)
   }, [])
 
-  const onComposerSubmit = useCallback((value: string, submitMode: 'default' | 'followUp') => {
-    composerSubmitRef.current(value, submitMode)
+  const onComposerAttachmentPendingChange = useCallback((pending: boolean) => {
+    setComposerAttachmentPending(current => current === pending ? current : pending)
+  }, [])
+
+  const onComposerAttachmentError = useCallback(() => {
+    setError(t('composer.imageUploadFailed'))
+  }, [t])
+
+  const onComposerSubmit = useCallback((message: LiveMessageDto, submitMode: 'default' | 'followUp') => {
+    composerSubmitRef.current(message, submitMode)
   }, [])
 
   const onComposerEscape = useCallback(() => {
@@ -448,8 +484,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const submitComposerDefault = useCallback(() => {
-    const value = inputRef.current?.getMarkdown().trim() ?? ''
-    if (value) composerSubmitRef.current(value, 'default')
+    const message = inputRef.current?.getMessage()
+    if (message && liveMessageHasContent(message)) composerSubmitRef.current(message, 'default')
   }, [])
 
   useEffect(() => {
@@ -483,6 +519,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setState(null)
     setControls({ models: [] })
     setComposerValue('')
+    setComposerAttachmentPending(false)
     setOptimisticPrompt('')
     setCurrentOrdinal(null)
     setCurrentItems([])
@@ -495,7 +532,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setInterruptNotice(false)
     setNewRecords(false)
     setShowAllEvents(true)
-    setStartupQueued('')
+    setStartupQueued(null)
     setComposerExpanded(false)
     setQueueMutationPending(false)
     assistantMessageEpochRef.current = 0
@@ -622,89 +659,94 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         let controlsChanged = false
         let statePatch: Partial<PiLiveStateDto> = {}
         for (const wrapper of events) {
-          const event = record(wrapper.event)
-          const type = stringValue(event.type)
-          if (type === 'agent_start') {
+          const common = wrapper.normalizedEvent
+          if (common?.type === 'status' && common.status === 'running') {
             statePatch = { ...statePatch, isStreaming: true }
             presentation.boundary(() => [])
             if (!activePromptRef.current) {
               setCurrentOrdinal(null)
               setOptimisticPrompt('')
             }
-          } else if (type === 'agent_settled') {
+          } else if (common?.type === 'completed') {
             statePatch = { ...statePatch, isStreaming: false, pendingMessageCount: 0 }
             presentation.boundary(current => settlePiLiveItems(current))
             settled = true
-          } else if (type === 'message_start') {
-            const message = record(event.message)
-            if (message.role === 'assistant') assistantMessageEpochRef.current += 1
-          } else if (type === 'compaction_start') {
+            if (common.status === 'failed' && common.message) setError(common.message)
+          } else if (common?.type === 'message.start') {
+            if (common.role === 'assistant') assistantMessageEpochRef.current += 1
+          } else if (common?.type === 'text.start') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => startPiLiveContentBlock(items, 'text', deltaOptions, common.text ?? ''))
+          } else if (common?.type === 'text.delta' && common.delta) {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.push(items => appendPiLiveDelta(items, 'text', common.delta!, deltaOptions))
+          } else if (common?.type === 'text.end') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => finishPiLiveContentBlock(items, 'text', common.text ?? '', deltaOptions))
+          } else if (common?.type === 'reasoning.start') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, common.text ?? ''))
+          } else if (common?.type === 'reasoning.delta' && common.delta) {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.push(items => appendPiLiveDelta(items, 'thinking', common.delta!, deltaOptions))
+          } else if (common?.type === 'reasoning.end') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', common.text ?? '', deltaOptions))
+          } else if (common?.type === 'message.end') {
+            presentation.flush()
+          } else if (common?.type === 'tool.start') {
+            if (common.callId) {
+              presentation.boundary(items => startPiLiveTool(items, {
+                callId: common.callId!,
+                name: common.name || 'tool',
+                summary: common.inputPreview ?? '',
+                ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+                startedAtMs: Date.now(),
+              }))
+            }
+          } else if (common?.type === 'tool.output') {
+            if (common.callId) presentation.push(items => updatePiLiveTool(items, common.callId!, common.output))
+          } else if (common?.type === 'tool.end') {
+            if (common.callId) {
+              presentation.boundary(items => finishPiLiveTool(
+                items,
+                common.callId!,
+                common.status,
+                common.output ?? '',
+              ))
+            }
+          } else if (common?.type === 'error') {
+            setError(common.message)
+          }
+
+          // Pi-only compatibility state remains native. Shared task rendering above
+          // must not inspect Pi's private runtime payload vocabulary.
+          const event = record(wrapper.event)
+          const type = stringValue(event.type)
+          if (type === 'compaction_start') {
             statePatch = { ...statePatch, isCompacting: true }
           } else if (type === 'compaction_end') {
             statePatch = { ...statePatch, isCompacting: false }
           } else if (type === 'model_changed' || type === 'thinking_level_changed') {
             controlsChanged = true
-          } else if (type === 'message_update') {
-            const update = record(event.assistantMessageEvent)
-            const delta = stringValue(update.delta)
-            const contentIndex = typeof update.contentIndex === 'number' ? update.contentIndex : undefined
-            const block = assistantPartialContent(update, contentIndex)
-            const deltaOptions = {
-              messageEpoch: assistantMessageEpochRef.current,
-              ...(contentIndex === undefined ? {} : { contentIndex }),
-            }
-            if (update.type === 'text_start') {
-              presentation.boundary(items => startPiLiveContentBlock(items, 'text', deltaOptions, stringValue(block.text)))
-            } else if (update.type === 'text_delta' && delta) {
-              presentation.push(items => appendPiLiveDelta(items, 'text', delta, deltaOptions))
-            } else if (update.type === 'text_end') {
-              const content = stringValue(update.content) || stringValue(block.text)
-              presentation.boundary(items => finishPiLiveContentBlock(items, 'text', content, deltaOptions))
-            } else if (update.type === 'thinking_start') {
-              presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, stringValue(block.thinking || block.text)))
-            } else if (update.type === 'thinking_delta' && delta) {
-              presentation.push(items => appendPiLiveDelta(items, 'thinking', delta, deltaOptions))
-            } else if (update.type === 'thinking_end') {
-              const content = stringValue(update.content) || stringValue(block.thinking || block.text)
-              presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', content, deltaOptions))
-            } else if (update.type === 'toolcall_start' || update.type === 'toolcall_delta' || update.type === 'toolcall_end') {
-              const completed = record(update.toolCall)
-              const toolCall = Object.keys(completed).length ? completed : block
-              const callId = stringValue(update.id || update.toolCallId || toolCall.id)
-              if (callId) {
-                const args = toolCall.arguments ?? toolCall.args ?? update.arguments ?? update.args
-                const mutation = (items: PiLiveHistoryItem[]) => startPiLiveTool(items, {
-                  callId,
-                  name: stringValue(update.toolName || update.name || toolCall.name) || 'tool',
-                  summary: args === undefined ? '' : brief(args),
-                  ...(contentIndex === undefined ? {} : { contentIndex }),
-                })
-                if (update.type === 'toolcall_delta') presentation.push(mutation)
-                else presentation.boundary(mutation)
-              }
-            }
-          } else if (type === 'message_end') {
-            presentation.flush()
-            // 最终消息由 agent_settled Snapshot 对账；这里不重排或替换已经展示的 block。
-          } else if (type === 'tool_execution_start') {
-            const id = stringValue(event.toolCallId)
-            if (id) presentation.boundary(items => startPiLiveTool(items, {
-              callId: id,
-              name: stringValue(event.toolName) || 'tool',
-              summary: brief(event.args),
-              startedAtMs: Date.now(),
-            }))
-          } else if (type === 'tool_execution_update') {
-            const id = stringValue(event.toolCallId)
-            if (id) presentation.push(items => updatePiLiveTool(items, id, toolOutput(event.partialResult)))
-          } else if (type === 'tool_execution_end') {
-            const id = stringValue(event.toolCallId)
-            if (id) presentation.boundary(items => finishPiLiveTool(
-              items,
-              id,
-              event.isError === true ? 'error' : 'success',
-              toolOutput(event.result),
-            ))
           } else if (type === 'queue_update') {
             const steering = Array.isArray(event.steering) ? event.steering.filter((item): item is string => typeof item === 'string') : []
             const followUp = Array.isArray(event.followUp) ? event.followUp.filter((item): item is string => typeof item === 'string') : []
@@ -862,14 +904,15 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
     if (!runtimeId || state?.status !== 'ready' || !startupQueued || startupSendingRef.current) return
-    const text = startupQueued
+    const message = startupQueued
+    const text = liveMessageText(message)
     startupSendingRef.current = true
     setBusy(true)
     setError('')
-    setStartupQueued(current => current === text ? '' : current)
+    setStartupQueued(current => current === message ? null : current)
     beginOptimisticPrompt(text)
     inputRef.current?.focus({ preventScroll: true })
-    void piLiveApi.prompt(runtimeId, text).then(() => {
+    void piLiveApi.prompt(runtimeId, message).then(() => {
       inputRef.current?.focus({ preventScroll: true })
     }, reason => {
       rollbackOptimisticPrompt(text)
@@ -883,12 +926,17 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   if (!runtimeId) return <PiLiveStart known={known}/>
 
-  const send = async (rawText: string, forcedMode?: QueueMode) => {
-    const text = rawText.trim()
-    if (!text || sendPending || queueMutationPending || extension) return
+  const send = async (message: LiveMessageDto, forcedMode?: QueueMode) => {
+    const text = liveMessageText(message)
+    const hasAttachments = liveMessageHasAttachments(message)
+    if (!liveMessageHasContent(message) || sendPending || queueMutationPending || extension || composerAttachmentPending) return
     if (!runtimeReady) {
+      if (hasAttachments) {
+        setError(t('composer.imageRequiresReady'))
+        return
+      }
       if (!canStageStartup) return
-      setStartupQueued(text)
+      setStartupQueued(message)
       setComposerValue('')
       inputRef.current?.focus({ preventScroll: true })
       return
@@ -896,22 +944,24 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     if (startupQueued) return
     const wasStreaming = state?.isStreaming ?? false
     const selectedMode = forcedMode ?? mode
+    const pendingText = text || t('composer.imageOnly')
     setSendPending(true)
     setError('')
-    setComposerValue('')
+    if (!hasAttachments) setComposerValue('')
     if (!wasStreaming) beginOptimisticPrompt(text)
-    const pending = wasStreaming ? { id: `pending-${Date.now()}`, mode: selectedMode, text } : null
+    const pending = wasStreaming ? { id: `pending-${Date.now()}`, mode: selectedMode, text: pendingText } : null
     if (pending) setPendingQueue(current => [...current, pending])
     inputRef.current?.focus({ preventScroll: true })
     try {
       if (wasStreaming) {
-        if (selectedMode === 'steer') await piLiveApi.steer(runtimeId, text)
-        else await piLiveApi.followUp(runtimeId, text)
+        if (selectedMode === 'steer') await piLiveApi.steer(runtimeId, message)
+        else await piLiveApi.followUp(runtimeId, message)
       } else {
-        await piLiveApi.prompt(runtimeId, text)
+        await piLiveApi.prompt(runtimeId, message)
       }
+      if (hasAttachments) setComposerValue('')
     } catch (reason) {
-      if (inputRef.current?.isEmpty() ?? true) setComposerValue(text)
+      if (!hasAttachments && (inputRef.current?.isEmpty() ?? true)) setComposerValue(text)
       if (!wasStreaming) rollbackOptimisticPrompt(text)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -1047,13 +1097,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
 
   const editStartupQueued = () => {
     if (!startupQueued) return
-    setComposerValue(startupQueued)
-    setStartupQueued('')
+    setComposerValue(liveMessageText(startupQueued))
+    setStartupQueued(null)
     requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
   }
 
   const removeStartupQueued = () => {
-    setStartupQueued('')
+    setStartupQueued(null)
     inputRef.current?.focus({ preventScroll: true })
   }
 
@@ -1127,7 +1177,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const runtimeInitializing = !state || state.status === 'initializing'
   const runtimeTerminating = state?.status === 'terminating'
   const canStageStartup = runtimeInitializing && !startupQueued
-  const composerSubmitEnabled = !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
+  const composerSubmitEnabled = !composerAttachmentPending && !sendPending && !queueMutationPending && !extension && !runtimeTerminating && (runtimeReady ? !startupQueued : canStageStartup)
   const canSend = composerHasContent && composerSubmitEnabled
   const syncWarning = syncWarningCode === 'controls-refresh-failed'
     ? t('warning.modelRefreshFailed')
@@ -1309,7 +1359,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
           {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite"><UiIcon name="check" size={14}/><b>{t('interruptedTitle')}</b><span>{t('interruptedDescription')}</span></div>}
           {startupQueued && <div className="pi-live-startup-queue" role="status">
-            <span>{t('queue.waitingReady')}</span><b>{startupQueued}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('queue.edit')}</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>{t('queue.withdraw')}</Button></div>
+            <span>{t('queue.waitingReady')}</span><b>{liveMessageText(startupQueued)}</b><div><Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('queue.edit')}</Button><Button size="small" className="pi-live-queue-action" onClick={removeStartupQueued}>{t('queue.withdraw')}</Button></div>
           </div>}
           {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">{queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
             <span>{item.mode === 'steer' ? t('queue.steer') : t('queue.followUp')}</span><b>{item.text}</b>
@@ -1331,7 +1381,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 onClick={() => setComposerExpanded(value => !value)}
               ><UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/></IconButton>
             </div>
-            <PiMarkdownComposer
+            <LiveMarkdownComposer
               ref={inputRef}
               draft={composerDraft}
               onDraftPresenceChange={onComposerDraftPresenceChange}
@@ -1341,6 +1391,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               placeholder={inputPlaceholder}
               title={t('composer.markdownHint')}
               ariaLabel={t('composer.inputAria')}
+              inputClassName="pi-live-input"
+              onAttachmentPendingChange={onComposerAttachmentPendingChange}
+              onAttachmentError={onComposerAttachmentError}
               disabled={runtimeTerminating}
             />
           </div>

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { ComposerDraftPresenceGate } from './pi-markdown-composer-state'
+import { ComposerDraftPresenceGate } from './live-markdown-composer-state'
 
 test('Composer draft presence only propagates empty/non-empty transitions', () => {
   const gate = new ComposerDraftPresenceGate()

@@ -139,6 +139,12 @@ export const englishCoreMessages: LocaleMessagesDto = {
       failed: 'Copy failed',
       aria: '{{label}} code block',
     },
+    liveComposer: {
+      largeTextSummary: 'Pasted text · {{lines}} lines · {{chars}} chars',
+      removeLargeText: 'Remove pasted text',
+      image: 'Image',
+      removeImage: 'Remove image',
+    },
     overlay: {
       close: 'Close',
     },

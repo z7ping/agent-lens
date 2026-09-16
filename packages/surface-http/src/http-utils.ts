@@ -60,3 +60,22 @@ export async function readJsonBody(
     throw badRequest(options.invalidJsonMessage ?? 'Request body must be valid JSON')
   }
 }
+
+
+export async function readBinaryBody(
+  request: IncomingMessage,
+  options: { maxBytes: number; emptyBodyMessage?: string },
+): Promise<Uint8Array> {
+  let size = 0
+  const chunks: Buffer[] = []
+  for await (const chunk of request) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += bytes.byteLength
+    if (size > options.maxBytes) throw httpError(413, 'Request body is too large')
+    chunks.push(bytes)
+  }
+  if (!chunks.length || size === 0) {
+    throw badRequest(options.emptyBodyMessage ?? 'Binary body is required')
+  }
+  return new Uint8Array(Buffer.concat(chunks))
+}

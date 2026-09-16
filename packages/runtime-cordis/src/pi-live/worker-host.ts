@@ -5,6 +5,7 @@ import { deserialize } from 'node:v8'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveControls,
+  PiLiveImageInput,
   PiLiveInitializationTiming,
   PiLiveQueueState,
   PiLiveRuntimeCapabilities,
@@ -58,9 +59,9 @@ export interface PiRuntimeHandle {
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState>
-  prompt(message: string, behavior?: PiLiveStreamingBehavior): Promise<void>
-  steer(message: string): Promise<void>
-  followUp(message: string): Promise<void>
+  prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void>
+  steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
+  followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   clearQueue(): Promise<PiLiveQueueState>
   abort(restoreQueue?: boolean): Promise<PiLiveQueueState>
   respondToExtension(requestId: string, response: unknown): Promise<void>
@@ -319,9 +320,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   controls(): Promise<PiLiveControls> { return this.request('controls') }
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { return this.request('setModel', { provider, modelId }) }
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState> { return this.request('setThinkingLevel', { level }) }
-  prompt(message: string, behavior?: PiLiveStreamingBehavior): Promise<void> { return this.request('prompt', { message, behavior }) }
-  steer(message: string): Promise<void> { return this.request('steer', { message }) }
-  followUp(message: string): Promise<void> { return this.request('followUp', { message }) }
+  prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('prompt', { message, behavior, images }) }
+  steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('steer', { message, images }) }
+  followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('followUp', { message, images }) }
   clearQueue(): Promise<PiLiveQueueState> { return this.request('clearQueue') }
   abort(restoreQueue = true): Promise<PiLiveQueueState> { return this.request('abort', { restoreQueue }) }
   respondToExtension(requestId: string, response: unknown): Promise<void> { return this.request('extensionResponse', { requestId, response }) }
