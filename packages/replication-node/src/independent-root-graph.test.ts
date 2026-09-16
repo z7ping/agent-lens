@@ -59,7 +59,7 @@ function roots(
       const items = values
         .filter(value => value.entityType === entityType)
         .filter(value => value.originEntityId > afterId)
-        .filter(value => !changedAtOnOrAfter || value.changedAt >= changedAtOnOrAfter)
+        .filter(value => !changedAtOnOrAfter || value.firstChangedAt >= changedAtOnOrAfter)
         .sort((a, b) => a.originEntityId.localeCompare(b.originEntityId))
         .slice(0, limit)
       return {
@@ -75,8 +75,11 @@ test('AssetBinding Root reuses Canonical dependency graph and AssetDefinition sh
   const asset: IndependentReplicationRootSnapshot = {
     entityType: 'AssetDefinition',
     originEntityId: 'asset-1',
+    firstRevision: 10,
+    firstChangedAt: '2026-09-17T01:00:00.000Z',
     latestRevision: 10,
-    changedAt: '2026-09-17T01:00:00.000Z',
+    latestChangedAt: '2026-09-17T01:00:00.000Z',
+    historyCapturedAt: '2026-09-17T01:00:00.000Z',
     entity: {
       id: 'asset-1',
       type: 'skill',
@@ -87,8 +90,11 @@ test('AssetBinding Root reuses Canonical dependency graph and AssetDefinition sh
   const binding: IndependentReplicationRootSnapshot = {
     entityType: 'AssetBinding',
     originEntityId: 'binding-1',
+    firstRevision: 11,
+    firstChangedAt: NOW,
     latestRevision: 11,
-    changedAt: NOW,
+    latestChangedAt: NOW,
+    historyCapturedAt: NOW,
     entity: {
       id: 'binding-1',
       assetId: 'asset-1',
@@ -124,12 +130,15 @@ test('AssetBinding Root reuses Canonical dependency graph and AssetDefinition sh
   assert.equal(result.entities.at(-1)?.originEntityId, 'binding-1')
 })
 
-test('Current-State Root from-now authorization uses Entity Head changedAt instead of invented domain time', async () => {
+test('Current-State Root from-now authorization uses first history time even after later updates', async () => {
   const coverage: IndependentReplicationRootSnapshot = {
     entityType: 'Coverage',
     originEntityId: 'coverage-old',
-    latestRevision: 7,
-    changedAt: '2026-09-17T00:00:00.000Z',
+    firstRevision: 7,
+    firstChangedAt: '2026-09-17T00:00:00.000Z',
+    latestRevision: 9,
+    latestChangedAt: '2026-09-17T02:00:00.000Z',
+    historyCapturedAt: '2026-09-17T00:00:00.000Z',
     entity: {
       id: 'coverage-old',
       subjectType: 'host',
