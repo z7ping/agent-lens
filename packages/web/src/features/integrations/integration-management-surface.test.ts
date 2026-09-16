@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const page = readFileSync(new URL('../IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const agentsPage = readFileSync(new URL('../AgentsPage.tsx', import.meta.url), 'utf8')
+const onboarding = readFileSync(new URL('../IntegrationOnboarding.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const zhAgents = readFileSync(new URL('../../i18n/zh-CN/agents.ts', import.meta.url), 'utf8')
@@ -61,6 +62,15 @@ test('首次未选择的本机智能体仍可在智能体页二次接入', () =>
   assert.match(agentsPage, /<IntegrationOnlyCard/)
   assert.match(agentsPage, /model\.installIntegration/)
   assert.match(agentsPage, /model\.setIntegrationEnabled/)
+})
+
+
+test('首次扫描失败不得落入“未发现”分组', () => {
+  assert.match(onboarding, /item\.tool\?\.presence === 'error'/)
+  assert.match(onboarding, /item\.tool\?\.presence === 'absent'/)
+  assert.match(onboarding, /onboarding\.scanFailedAgents/)
+  assert.match(onboarding, /onboarding\.noneConfirmed/)
+  assert.doesNotMatch(onboarding, /missing = useMemo\(\(\) => items\.filter\(item => !selectable\(item\)\)/)
 })
 
 test('扫描失败与 data-only 保持独立语义', () => {
