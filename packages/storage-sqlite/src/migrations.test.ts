@@ -178,3 +178,113 @@ test('late native parent can repair child relation without losing native parent 
     storage.close()
   }
 })
+
+
+test('v27 从已有 v26 journal 回填 Entity Head 并补独立 Root watermark', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    await storage.replication.ensureStream({
+      relationshipId: 'rel-upgrade',
+      hubId: 'hub-upgrade',
+      streamId: 'stream-upgrade',
+      generationId: 'gen-upgrade',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      now: '2026-09-17T05:30:00.000Z',
+    })
+
+    storage.db.exec(`
+      DROP TRIGGER IF EXISTS trg_replication_entity_head_after_change;
+      DROP TABLE IF EXISTS replication_entity_heads;
+      DELETE FROM schema_migrations WHERE version = 27;
+      DELETE FROM replication_capture_watermarks
+      WHERE stream_id = 'stream-upgrade'
+        AND entity_type IN (
+          'SessionRelationship',
+          'Coverage',
+          'AssetDefinition',
+          'AssetBinding',
+          'AssetStateObservation',
+          'ToolDefinition'
+        );
+    `)
+
+    await storage.repositories.coverage.put({
+      id: 'coverage-pre-v27',
+      subjectType: 'node',
+      subjectId: 'node-upgrade',
+      capability: 'history',
+      status: 'complete',
+      evidenceRefs: [],
+    })
+    await storage.repositories.coverage.put({
+      id: 'coverage-pre-v27',
+      subjectType: 'node',
+      subjectId: 'node-upgrade',
+      capability: 'history',
+      status: 'partial',
+      reason: 'latest before v27',
+      evidenceRefs: [],
+    })
+
+    const latestJournal = storage.db.prepare(`
+      SELECT revision, changed_at AS changedAt
+      FROM replication_canonical_changes
+      WHERE entity_type = 'Coverage'
+        AND origin_entity_id = 'coverage-pre-v27'
+      ORDER BY revision DESC
+      LIMIT 1
+    `).get() as { revision: number; changedAt: string }
+
+    assert.equal(await storage.migrate(), 27)
+
+    const head = storage.db.prepare(`
+      SELECT latest_revision AS latestRevision,
+             latest_changed_at AS latestChangedAt
+      FROM replication_entity_heads
+      WHERE entity_type = 'Coverage'
+        AND origin_entity_id = 'coverage-pre-v27'
+    `).get() as { latestRevision: number; latestChangedAt: string }
+    assert.deepEqual(head, {
+      latestRevision: latestJournal.revision,
+      latestChangedAt: latestJournal.changedAt,
+    })
+
+    const independentWatermarks = storage.db.prepare(`
+      SELECT entity_type AS entityType,
+             captured_revision AS capturedRevision,
+             dependency_state AS dependencyState
+      FROM replication_capture_watermarks
+      WHERE stream_id = 'stream-upgrade'
+        AND entity_type IN (
+          'SessionRelationship',
+          'Coverage',
+          'AssetDefinition',
+          'AssetBinding',
+          'AssetStateObservation',
+          'ToolDefinition'
+        )
+      ORDER BY entity_type
+    `).all() as Array<{
+      entityType: string
+      capturedRevision: number
+      dependencyState: string
+    }>
+    assert.equal(independentWatermarks.length, 6)
+    assert.ok(independentWatermarks.every(item => item.capturedRevision === 0))
+    assert.ok(independentWatermarks.every(item => item.dependencyState === 'dependent'))
+
+    const current = await storage.replicationIndependentRoots.get(
+      'Coverage',
+      'coverage-pre-v27',
+    )
+    assert.equal(current?.entityType, 'Coverage')
+    if (current?.entityType === 'Coverage') {
+      assert.equal(current.entity.status, 'partial')
+      assert.equal(current.entity.reason, 'latest before v27')
+    }
+  } finally {
+    await storage.close()
+  }
+})
