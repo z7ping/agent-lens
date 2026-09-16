@@ -51,15 +51,28 @@ BEGIN
   WHERE excluded.latest_revision > replication_entity_heads.latest_revision;
 END;
 
--- Existing Streams must conservatively depend on every journal-producing R1
--- entity until the corresponding Root Snapshot/Reconciliation proves coverage.
+-- v27 makes the final contract self-contained: every existing Stream
+-- conservatively depends on all 18 replicated R1 entity roots until each Root
+-- Snapshot/Reconciliation proves coverage. ON CONFLICT keeps upgrades idempotent.
 INSERT INTO replication_capture_watermarks(
   stream_id, generation_id, entity_type, captured_revision, dependency_state, updated_at
 )
 SELECT s.stream_id, s.generation_id, entity_type, 0, 'dependent', s.updated_at
 FROM replication_streams s
 CROSS JOIN (
-  SELECT 'SessionRelationship' AS entity_type
+  SELECT 'AgentProduct' AS entity_type
+  UNION ALL SELECT 'Host'
+  UNION ALL SELECT 'AgentInstallation'
+  UNION ALL SELECT 'RuntimeProfile'
+  UNION ALL SELECT 'Project'
+  UNION ALL SELECT 'Workspace'
+  UNION ALL SELECT 'LogicalSession'
+  UNION ALL SELECT 'SourceSession'
+  UNION ALL SELECT 'SessionRelationship'
+  UNION ALL SELECT 'AgentActor'
+  UNION ALL SELECT 'SourceRecord'
+  UNION ALL SELECT 'Evidence'
+  UNION ALL SELECT 'CanonicalObservation'
   UNION ALL SELECT 'Coverage'
   UNION ALL SELECT 'AssetDefinition'
   UNION ALL SELECT 'AssetBinding'
