@@ -93,7 +93,7 @@ test('Independent Root Snapshot uses durable Entity Head changedAt for from-now 
 
     const page = await db.replicationIndependentRoots.scan({
       entityType: 'Coverage',
-      changedAtOnOrAfter: '2026-09-17T01:00:00.000Z',
+      changedAtOnOrAfter: '2026-09-17T03:00:00+02:00',
       limit: 100,
     })
     assert.deepEqual(
