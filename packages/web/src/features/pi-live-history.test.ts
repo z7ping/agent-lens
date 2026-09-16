@@ -206,7 +206,6 @@ test('Pi Live 仍将真实 Pi 错误显示为响应错误且位于已输出内�
   assert.equal(lifecycle.detail, 'error · Provider unavailable')
 })
 
-
 test('Pi Live persisted history keeps user images as message attachments instead of placeholder text', () => {
   const items = projectPiLiveHistory(snapshot([
     {
