@@ -13,6 +13,7 @@ export function agentLabel(sourceId: string, fallback?: string): string {
   if (sourceId === 'pi') return 'Pi'
   if (sourceId === 'hermes') return 'Hermes'
   if (sourceId === 'opencode') return 'OpenCode'
+  if (sourceId === 'dsh') return 'DeepSeek Harness'
   return fallback ?? sourceId
 }
 
