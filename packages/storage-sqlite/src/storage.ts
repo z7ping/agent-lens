@@ -378,28 +378,30 @@ export class SqliteStorageService implements StorageService {
         sessions: count('logical_sessions'),
       }
       const snapshotCapturedAt = new Date().toISOString()
-      const currentSnapshot: StorageDiagnosticSnapshot = {
-        version: 1,
-        day: snapshotCapturedAt.slice(0, 10),
-        capturedAt: snapshotCapturedAt,
-        hotFootprintBytes: typeof baseGrowth.hotFootprintBytes === 'number'
-          ? baseGrowth.hotFootprintBytes
-          : 0,
-        databaseBytes: typeof baseGrowth.databaseBytes === 'number'
-          ? baseGrowth.databaseBytes
-          : 0,
-        walBytes,
-        counts: totals,
-        categoryAllocatedBytes: {
-          canonical: breakdown.categories.canonical.allocatedBytes,
-          evidence: breakdown.categories.evidence.allocatedBytes,
-          sourceRaw: breakdown.categories.sourceRaw.allocatedBytes,
-          projection: breakdown.categories.projection.allocatedBytes,
-          replication: breakdown.categories.replication.allocatedBytes,
-          operational: breakdown.categories.operational.allocatedBytes,
-        },
-        replicationChanges: replicationJournal.totalChanges,
-      }
+      const currentSnapshot: StorageDiagnosticSnapshot | null = breakdown.available
+        ? {
+            version: 1,
+            day: snapshotCapturedAt.slice(0, 10),
+            capturedAt: snapshotCapturedAt,
+            hotFootprintBytes: typeof baseGrowth.hotFootprintBytes === 'number'
+              ? baseGrowth.hotFootprintBytes
+              : 0,
+            databaseBytes: typeof baseGrowth.databaseBytes === 'number'
+              ? baseGrowth.databaseBytes
+              : 0,
+            walBytes,
+            counts: totals,
+            categoryAllocatedBytes: {
+              canonical: breakdown.categories.canonical.allocatedBytes,
+              evidence: breakdown.categories.evidence.allocatedBytes,
+              sourceRaw: breakdown.categories.sourceRaw.allocatedBytes,
+              projection: breakdown.categories.projection.allocatedBytes,
+              replication: breakdown.categories.replication.allocatedBytes,
+              operational: breakdown.categories.operational.allocatedBytes,
+            },
+            replicationChanges: replicationJournal.totalChanges,
+          }
+        : null
       const growthMetrics = storageGrowthMetricsFromSnapshots(
         currentSnapshot,
         persistedSnapshots,
