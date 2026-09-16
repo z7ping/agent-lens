@@ -301,7 +301,11 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
     const newIds = management.items.filter(item => item.isNew).map(item => item.integrationId)
     if (!newIds.length) return
     acknowledgedRef.current = true
-    void Promise.all(newIds.map(id => model.acknowledgeIntegration(id))).catch(() => {
+    const acknowledgedIntegrationIds = [...new Set([
+      ...management.preferences.acknowledgedIntegrationIds,
+      ...newIds,
+    ])]
+    void model.updateIntegrationPreferences({ acknowledgedIntegrationIds }).catch(() => {
       acknowledgedRef.current = false
     })
   }, [management, model])
