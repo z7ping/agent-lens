@@ -36,6 +36,7 @@ test('重复提交 unchanged Observation 不再制造身份与 Evidence replicat
         payload: { text: 'done' },
         identityHints: {
           nativeSessionId: 'session-native-1',
+          workspacePath: '/workspace/agent-lens',
           nativeActorId: 'main',
           actorRole: 'main-agent' as const,
         },
