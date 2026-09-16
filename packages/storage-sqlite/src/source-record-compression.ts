@@ -123,18 +123,5 @@ export function withSqliteSourceRecordCompression(
       const record = await sourceRecords.findByNativeId(sourceId, installationId, nativeId)
       return restoreCompressedPayload(executor, record)
     },
-    async put(record) {
-      await sourceRecords.put(record)
-      const serialized = JSON.stringify(record.payload)
-      if (serialized === undefined) throw new TypeError('SQLite persistence requires JSON-serializable SourceRecord payload')
-      const encoded = encodeSourceRecordPayloadJson(serialized)
-      await executor.run(() => {
-        executor.db.prepare(`
-          UPDATE source_records
-          SET payload_json = ?, payload_blob = ?, payload_encoding = ?
-          WHERE id = ?
-        `).run(encoded.payloadJson, encoded.payloadBlob, encoded.payloadEncoding, record.id)
-      })
-    },
   }
 }
