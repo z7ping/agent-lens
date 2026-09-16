@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
-import { sourceActivityPayloadBytesBetween } from './storage-diagnostics'
+import { largePayloadProfile, sourceActivityPayloadBytesBetween } from './storage-diagnostics'
 import {
   STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
   STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
@@ -673,6 +673,85 @@ test('新增 SourceRecord 经滚动快照累计后可得到 Storage Amplificatio
     assert.ok(Number.isFinite(
       details.growthMetrics.storageAmplificationRate.last7Days?.persistentBytesPerOriginalActivityByte,
     ))
+  } finally {
+    await storage.close()
+  }
+})
+
+
+test('large Payload profile 区分 Raw / Canonical / Tool Result 的存储字节贡献', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const now = '2026-09-16T00:00:00.000Z'
+    storage.db.prepare(`
+      INSERT INTO hosts(id, name, platform, arch, created_at, last_seen_at)
+      VALUES ('host:large-payload', 'local', 'test', 'test', ?, ?)
+    `).run(now, now)
+    storage.db.prepare(`
+      INSERT INTO agent_products(id, name) VALUES ('pi', 'Pi')
+    `).run()
+    storage.db.prepare(`
+      INSERT INTO agent_installations(id, host_id, product_id, first_seen_at, last_seen_at)
+      VALUES ('pi:large-payload', 'host:large-payload', 'pi', ?, ?)
+    `).run(now, now)
+    storage.db.prepare(`
+      INSERT INTO logical_sessions(id, installation_id, started_at)
+      VALUES ('session:large-payload', 'pi:large-payload', ?)
+    `).run(now)
+    storage.db.prepare(`
+      INSERT INTO source_sessions(
+        id, source_id, installation_id, native_session_id, logical_session_id
+      ) VALUES (
+        'source-session:large-payload', 'pi', 'pi:large-payload',
+        'native:large-payload', 'session:large-payload'
+      )
+    `).run()
+
+    const largeJson = JSON.stringify({ text: 'x'.repeat(70 * 1024) })
+    storage.db.prepare(`
+      INSERT INTO source_records(
+        id, source_id, installation_id, native_type, captured_at,
+        locator_json, payload_json, parser_version, payload_encoding
+      ) VALUES (
+        'raw:large-payload', 'pi', 'pi:large-payload', 'message', ?,
+        '{}', ?, 'test', 'plain-json'
+      )
+    `).run(now, largeJson)
+    storage.db.prepare(`
+      INSERT INTO observations(
+        id, host_id, installation_id, logical_session_id, source_session_id,
+        kind, captured_at, payload_json
+      ) VALUES (
+        'observation:tool-result-large', 'host:large-payload', 'pi:large-payload',
+        'session:large-payload', 'source-session:large-payload',
+        'tool.result', ?, ?
+      )
+    `).run(now, largeJson)
+    storage.db.prepare(`
+      INSERT INTO observations(
+        id, host_id, installation_id, logical_session_id, source_session_id,
+        kind, captured_at, payload_json
+      ) VALUES (
+        'observation:small', 'host:large-payload', 'pi:large-payload',
+        'session:large-payload', 'source-session:large-payload',
+        'message.assistant', ?, '{"text":"small"}'
+      )
+    `).run(now)
+
+    const profile = largePayloadProfile(storage.db)
+    const raw64 = profile.sourceRaw.thresholds.find(item => item.threshold === '64KiB')
+    const canonical64 = profile.canonical.thresholds.find(item => item.threshold === '64KiB')
+    const tool64 = profile.toolResults.thresholds.find(item => item.threshold === '64KiB')
+    const raw256 = profile.sourceRaw.thresholds.find(item => item.threshold === '256KiB')
+
+    assert.equal(profile.basis, 'stored-payload-bytes-not-total-row-or-index-allocation')
+    assert.equal(raw64?.records, 1)
+    assert.equal(canonical64?.records, 1)
+    assert.equal(tool64?.records, 1)
+    assert.equal(raw256?.records, 0)
+    assert.ok((raw64?.shareOfPayloadBytes ?? 0) > 0.99)
+    assert.ok((tool64?.shareOfPayloadBytes ?? 0) > 0.99)
   } finally {
     await storage.close()
   }
