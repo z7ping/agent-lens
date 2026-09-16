@@ -740,16 +740,18 @@ async function pumpPeriodicReconciliationPage(input: {
 }
 
 export type IndependentRootRuntimeStepResult =
-  | { kind: 'bootstrap'; stage: BootstrapStage }
+  | { kind: 'bootstrap'; stage: BootstrapStage; didWork: true }
   | {
       kind: 'incremental'
       throughRevision: number
       nextRevision: number
+      didWork: true
     }
   | {
       kind: 'active'
       incrementalThroughRevision: number
       reconciliation: ObservationPeriodicReconciliationResult
+      didWork: boolean
     }
 
 export async function pumpIndependentRootRuntimeStep(input: {
@@ -779,7 +781,7 @@ export async function pumpIndependentRootRuntimeStep(input: {
     ...(input.pageLimit === undefined ? {} : { limit: input.pageLimit }),
   })
   if (!bootstrap.active) {
-    return { kind: 'bootstrap', stage: bootstrap.stage }
+    return { kind: 'bootstrap', stage: bootstrap.stage, didWork: true }
   }
 
   const bootstrapDelta = await input.deltaProgress.get({
@@ -814,6 +816,7 @@ export async function pumpIndependentRootRuntimeStep(input: {
       kind: 'incremental',
       throughRevision: incremental.throughRevision,
       nextRevision: incremental.nextRevision,
+      didWork: true,
     }
   }
 
@@ -840,5 +843,8 @@ export async function pumpIndependentRootRuntimeStep(input: {
     kind: 'active',
     incrementalThroughRevision: incremental.throughRevision,
     reconciliation,
+    didWork:
+      incremental.changeCount > 0
+      || reconciliation.kind !== 'not-due',
   }
 }
