@@ -57,7 +57,7 @@ async function step(
   })
 }
 
-test('Independent Root Runtime reaches active and keeps capturedRevision current after updates', async () => {
+test('Current-State Root Runtime reaches active and keeps capturedRevision current after updates', async () => {
   const storage = await createStorage()
   try {
     await storage.repositories.coverage.put({
