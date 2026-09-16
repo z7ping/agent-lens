@@ -366,7 +366,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
       <div className="integration-management-surface">
         <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
           <span><strong>{items.length}</strong>{t('managementPage.supported')}</span>
-          <span><strong>{detectedCount}</strong>{t('managementPage.detected')}</span>
+          <span><strong>{discoveryFailed ? '—' : detectedCount}</strong>{t('managementPage.detected')}</span>
           <span><strong>{installedCount}</strong>{t('managementPage.added')}</span>
           <span><strong>{enabledCount}</strong>{t('managementPage.enabled')}</span>
         </div>
