@@ -403,6 +403,78 @@ export function capturedActivityDetails(db: Database.Database) {
   }
 }
 
+
+function gzipOriginalSize(blob: unknown): number | null {
+  if (!(blob instanceof Uint8Array) || blob.byteLength < 4) return null
+  const offset = blob.byteLength - 4
+  return (
+    blob[offset]!
+    | (blob[offset + 1]! << 8)
+    | (blob[offset + 2]! << 16)
+    | (blob[offset + 3]! << 24)
+  ) >>> 0
+}
+
+export function sourceActivityPayloadBytesBetween(
+  db: Database.Database,
+  afterExclusive: string,
+  throughInclusive: string,
+) {
+  let records = 0
+  let originalPayloadBytes = 0
+  let unknownEncodingRecords = 0
+  let invalidPayloadRecords = 0
+
+  const rows = db.prepare(`
+    SELECT payload_json AS payloadJson,
+           payload_blob AS payloadBlob,
+           payload_encoding AS payloadEncoding
+    FROM source_records
+    WHERE captured_at > ? AND captured_at <= ?
+    ORDER BY captured_at ASC, id ASC
+  `).iterate(afterExclusive, throughInclusive)
+
+  for (const value of rows) {
+    const row = rowRecord(value)
+    const payloadEncoding = optionalString(row, 'payloadEncoding')
+    records += 1
+
+    if (payloadEncoding === 'gzip-json') {
+      const rawBytes = gzipOriginalSize(row.payloadBlob)
+      if (rawBytes === null) {
+        invalidPayloadRecords += 1
+        continue
+      }
+      originalPayloadBytes += rawBytes
+      continue
+    }
+
+    if (payloadEncoding === 'plain-json' || payloadEncoding === 'json') {
+      const payloadJson = optionalString(row, 'payloadJson')
+      if (payloadJson === null) {
+        invalidPayloadRecords += 1
+        continue
+      }
+      originalPayloadBytes += Buffer.byteLength(payloadJson, 'utf8')
+      continue
+    }
+
+    unknownEncodingRecords += 1
+  }
+
+  return {
+    state: unknownEncodingRecords === 0 && invalidPayloadRecords === 0
+      ? 'complete' as const
+      : 'partial' as const,
+    basis: 'source-record-payload-json-before-agentlens-compression',
+    records,
+    originalPayloadBytes,
+    unknownEncodingRecords,
+    invalidPayloadRecords,
+    gzipSizeBasis: 'gzip-isize-uint32',
+  }
+}
+
 export function replicationJournalDetails(
   db: Database.Database,
   cutoff7: string,
