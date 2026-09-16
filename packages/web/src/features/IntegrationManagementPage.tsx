@@ -14,6 +14,7 @@ import { Button, Dialog, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '.
 import {
   integrationCanInstall,
   integrationLifecycleState,
+  integrationManagementLifecycleState,
   integrationPackageReady,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
@@ -70,29 +71,7 @@ function IntegrationManagementRow({
   const packageReady = integrationPackageReady(packageState)
   const canInstall = integrationCanInstall(item.tool)
   const detected = isDetected(item)
-  const discoveredStatus = integrationLifecycleState(
-    { supported: true, enabled: item.enabled.effective, detected },
-    item,
-    item.tool,
-    discoveryScanning,
-    t,
-    discoveryError,
-  )
-  const status = !packageState
-    ? discoveredStatus
-    : !packageState.installed
-      ? { label: t('status.notAdded'), title: t('managementPage.notAddedTitle'), className: 'is-not-added' }
-      : !integrationPackageReady(packageState)
-        ? discoveredStatus
-        : item.enabled.restartRequired || packageState.restartRequired
-          ? { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
-          : !item.enabled.configured
-            ? { label: t('status.disabled'), title: t('managementPage.disabledTitle'), className: 'is-disabled' }
-            : item.availability === 'error'
-              ? { label: t('status.abnormal'), title: t('status.abnormalTitle'), className: 'is-error' }
-              : item.availability === 'unavailable'
-                ? { label: t('status.unavailable'), title: t('status.unavailableTitle'), className: 'is-history' }
-                : { label: t('status.enabled'), title: t('managementPage.enabledTitle'), className: 'is-enabled' }
+  const status = integrationManagementLifecycleState(item, t)
   const statusLabel = item.isNew && !packageState?.installed && canInstall
     ? `${t('status.new')} · ${t('status.notAdded')}`
     : status.label
