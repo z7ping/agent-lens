@@ -48,6 +48,8 @@ export interface IndependentReplicationRootSnapshotBase<
 > {
   entityType: TEntityType
   originEntityId: string
+  firstRevision: number
+  firstChangedAt: string
   latestRevision: number
   latestChangedAt: string
   historyCapturedAt: string
