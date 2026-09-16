@@ -3,11 +3,13 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { DatabaseSync } from 'node:sqlite'
 import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareHermesCapabilities,
   discoverHermesAssets,
   hermesSourceDefinition,
+  hermesSourceInternals,
   normalizeHermesRecord,
 } from './index'
 
@@ -327,4 +329,65 @@ test('Hermes Raw recovery 保守对待数据库 rowId，并保护 runtime hook',
   assert.equal(runtimeCapability?.authority, 'agent-lens-only')
   assert.equal(runtimeCapability?.replayable, false)
   assert.equal(runtimeCapability?.persistencePreference, 'preserve')
+})
+
+
+test('Hermes Raw recovery 能实际重读 SQLite row 并识别 drift', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-hermes-raw-recovery-'))
+  const dbPath = join(root, 'state.db')
+  const db = new DatabaseSync(dbPath)
+  try {
+    db.exec(`
+      CREATE TABLE sessions(id TEXT PRIMARY KEY, cwd TEXT, title TEXT);
+      CREATE TABLE messages(
+        id TEXT,
+        session_id TEXT,
+        role TEXT,
+        content TEXT,
+        timestamp TEXT,
+        tool_calls TEXT,
+        tool_call_id TEXT,
+        tool_name TEXT
+      );
+      INSERT INTO sessions(id, cwd, title)
+      VALUES ('session-1', '/workspace', 'Demo');
+      INSERT INTO messages(
+        id, session_id, role, content, timestamp, tool_calls, tool_call_id, tool_name
+      ) VALUES (
+        'message-1', 'session-1', 'assistant', 'hello',
+        '2026-09-16T00:00:00.000Z', NULL, NULL, NULL
+      );
+    `)
+    const row = hermesSourceInternals.selectRows(db, 0, 1)[0]
+    assert.ok(row)
+    const fingerprint = hermesSourceInternals.rowFingerprint(row!)
+    const sourceRecord: SourceRecord = {
+      id: 'hermes-db-recovery',
+      sourceId: 'hermes',
+      installationId: 'installation-hermes',
+      sourceSessionNativeId: 'session-1',
+      nativeType: 'message/assistant',
+      nativeId: 'message-1',
+      sourceSequence: 10,
+      capturedAt: '2026-09-16T00:00:00.000Z',
+      locator: { kind: 'database', path: dbPath, table: 'messages', rowId: String(row!.row_id) },
+      fingerprint,
+      payload: { message: {}, session: { nativeSessionId: 'session-1' } },
+      parserVersion: '3',
+    }
+
+    assert.equal(
+      (await hermesSourceDefinition.rawRecovery?.verify?.(sourceRecord))?.state,
+      'verified',
+    )
+
+    db.prepare('UPDATE messages SET content = ? WHERE rowid = ?').run('changed', row!.row_id)
+    assert.equal(
+      (await hermesSourceDefinition.rawRecovery?.verify?.(sourceRecord))?.state,
+      'drifted',
+    )
+  } finally {
+    db.close()
+    await rm(root, { recursive: true, force: true })
+  }
 })
