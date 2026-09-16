@@ -259,6 +259,8 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       add: '添加',
       enable: '开启',
       disable: '关闭',
+      enabledTitle: '智能体接入已安装并设置为开启；本机发现状态单独显示。',
+      disabledTitle: '智能体接入已安装但当前设置为关闭；本机发现状态单独显示。',
       authorize: '授权',
       uninstall: '卸载',
       orderAria: '智能体显示顺序',
