@@ -7,6 +7,7 @@ import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@age
 import {
   declareHermesCapabilities,
   discoverHermesAssets,
+  hermesSourceDefinition,
   normalizeHermesRecord,
 } from './index'
 
@@ -302,4 +303,28 @@ test('Hermes sessionless source record is preserved as evidence without syntheti
 
   assert.deepEqual(normalized.observations, [])
   assert.equal(normalized.evidenceCandidates.length, 1)
+})
+
+
+test('Hermes Raw recovery 保守对待数据库 rowId，并保护 runtime hook', () => {
+  const database = record({
+    message: { role: 'assistant', raw_content: 'hello' },
+    session: { nativeSessionId: 'session-hermes' },
+    captureChannel: 'history',
+  })
+  const dbCapability = hermesSourceDefinition.rawRecovery?.describe(database)
+  assert.equal(dbCapability?.authority, 'native-store')
+  assert.equal(dbCapability?.locatorStability, 'best-effort')
+  assert.equal(dbCapability?.verification, 'fingerprint')
+  assert.equal(dbCapability?.persistencePreference, 'preserve')
+
+  const runtime = {
+    ...database,
+    id: 'hermes-runtime-recovery',
+    locator: { kind: 'runtime-hook', path: '/tmp/inbox/event.json', hookEventId: 'event-1' } as const,
+  }
+  const runtimeCapability = hermesSourceDefinition.rawRecovery?.describe(runtime)
+  assert.equal(runtimeCapability?.authority, 'agent-lens-only')
+  assert.equal(runtimeCapability?.replayable, false)
+  assert.equal(runtimeCapability?.persistencePreference, 'preserve')
 })
