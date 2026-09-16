@@ -44,6 +44,73 @@ export interface LiveMessageDto {
 
 export type LiveMessageInputDto = string | LiveMessageDto
 
+export type LiveEventStatusDto =
+  | 'initializing'
+  | 'ready'
+  | 'running'
+  | 'idle'
+  | 'compacting'
+  | 'failed'
+  | 'terminating'
+  | 'terminated'
+
+export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' | 'failed'
+
+export type LiveEventDto =
+  | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
+  | {
+      type: 'message.start' | 'message.end'
+      role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
+      messageId?: string | undefined
+    }
+  | {
+      type:
+        | 'text.start'
+        | 'text.delta'
+        | 'text.end'
+        | 'reasoning.start'
+        | 'reasoning.delta'
+        | 'reasoning.end'
+      text?: string | undefined
+      delta?: string | undefined
+      messageId?: string | undefined
+      contentIndex?: number | undefined
+    }
+  | {
+      type: 'tool.start'
+      callId?: string | undefined
+      name: string
+      inputPreview?: string | undefined
+      contentIndex?: number | undefined
+    }
+  | { type: 'tool.output'; callId?: string | undefined; name?: string | undefined; output: string }
+  | {
+      type: 'tool.end'
+      callId?: string | undefined
+      name?: string | undefined
+      status: 'success' | 'error'
+      output?: string | undefined
+      durationMs?: number | undefined
+    }
+  | {
+      type: 'subagent.start'
+      subagentId?: string | undefined
+      childSessionId?: string | undefined
+      delegationId?: string | undefined
+      summary?: string | undefined
+    }
+  | {
+      type: 'subagent.end'
+      subagentId?: string | undefined
+      childSessionId?: string | undefined
+      delegationId?: string | undefined
+      status?: string | undefined
+      summary?: string | undefined
+      durationMs?: number | undefined
+    }
+  | { type: 'error'; message: string }
+  | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
+
 export interface LiveControlDisplayInfoDto {
   label?: string | undefined
   description?: string | undefined
@@ -142,6 +209,127 @@ export function liveMessagePlainTextDto(message: LiveMessageDto): string {
     throw new TypeError(`Live attachment part requires adapter transformation: ${part.type}`)
   }
   return blocks.join('\n\n')
+}
+
+const LIVE_EVENT_STATUSES = new Set<LiveEventStatusDto>([
+  'initializing',
+  'ready',
+  'running',
+  'idle',
+  'compacting',
+  'failed',
+  'terminating',
+  'terminated',
+])
+
+const LIVE_COMPLETION_STATUSES = new Set<LiveCompletionStatusDto>([
+  'completed',
+  'cancelled',
+  'interrupted',
+  'failed',
+])
+
+function eventText(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+
+function eventCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+export function parseLiveEventDto(value: unknown): LiveEventDto | null {
+  const event = record(value)
+  if (!event || typeof event.type !== 'string') return null
+  const type = event.type
+
+  if (type === 'status') {
+    const status = event.status
+    if (typeof status !== 'string' || !LIVE_EVENT_STATUSES.has(status as LiveEventStatusDto)) return null
+    return {
+      type,
+      status: status as LiveEventStatusDto,
+      ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+    }
+  }
+  if (type === 'message.start' || type === 'message.end') {
+    const role = event.role
+    const validRole = role === undefined
+      || role === 'user' || role === 'assistant' || role === 'tool' || role === 'system' || role === 'unknown'
+    if (!validRole) return null
+    return {
+      type,
+      ...(role === undefined ? {} : { role }),
+      ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
+    }
+  }
+  if (type === 'text.start' || type === 'text.delta' || type === 'text.end'
+    || type === 'reasoning.start' || type === 'reasoning.delta' || type === 'reasoning.end') {
+    const contentIndex = eventCount(event.contentIndex)
+    return {
+      type,
+      ...(eventText(event.text) !== undefined ? { text: eventText(event.text) } : {}),
+      ...(eventText(event.delta) !== undefined ? { delta: eventText(event.delta) } : {}),
+      ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
+      ...(contentIndex !== undefined ? { contentIndex } : {}),
+    }
+  }
+  if (type === 'tool.start') {
+    if (typeof event.name !== 'string' || !event.name) return null
+    const contentIndex = eventCount(event.contentIndex)
+    return {
+      type,
+      name: event.name,
+      ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.inputPreview) !== undefined ? { inputPreview: eventText(event.inputPreview) } : {}),
+      ...(contentIndex !== undefined ? { contentIndex } : {}),
+    }
+  }
+  if (type === 'tool.output') {
+    if (typeof event.output !== 'string') return null
+    return {
+      type,
+      output: event.output,
+      ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.name) !== undefined ? { name: eventText(event.name) } : {}),
+    }
+  }
+  if (type === 'tool.end') {
+    if (event.status !== 'success' && event.status !== 'error') return null
+    const durationMs = eventCount(event.durationMs)
+    return {
+      type,
+      status: event.status,
+      ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.name) !== undefined ? { name: eventText(event.name) } : {}),
+      ...(eventText(event.output) !== undefined ? { output: eventText(event.output) } : {}),
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    }
+  }
+  if (type === 'subagent.start' || type === 'subagent.end') {
+    const durationMs = eventCount(event.durationMs)
+    return {
+      type,
+      ...(eventText(event.subagentId) !== undefined ? { subagentId: eventText(event.subagentId) } : {}),
+      ...(eventText(event.childSessionId) !== undefined ? { childSessionId: eventText(event.childSessionId) } : {}),
+      ...(eventText(event.delegationId) !== undefined ? { delegationId: eventText(event.delegationId) } : {}),
+      ...(eventText(event.status) !== undefined ? { status: eventText(event.status) } : {}),
+      ...(eventText(event.summary) !== undefined ? { summary: eventText(event.summary) } : {}),
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    } as LiveEventDto
+  }
+  if (type === 'error') {
+    return typeof event.message === 'string' && event.message ? { type, message: event.message } : null
+  }
+  if (type === 'completed') {
+    const status = event.status
+    if (typeof status !== 'string' || !LIVE_COMPLETION_STATUSES.has(status as LiveCompletionStatusDto)) return null
+    return {
+      type,
+      status: status as LiveCompletionStatusDto,
+      ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+    }
+  }
+  return null
 }
 
 export function parseLiveThinkingControlDto(value: unknown): LiveThinkingControlDto | null {
