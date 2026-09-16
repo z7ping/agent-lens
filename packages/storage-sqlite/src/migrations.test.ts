@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { JOURNAL_REPLICATION_ENTITY_TYPES } from '@agent-lens/core/replication'
 import { SqliteStorageService } from './storage'
 
 test('storage migrations keep heavy indexes out of startup and maintenance creates them later', async () => {
@@ -274,6 +275,17 @@ test('v27 从已有 v26 journal 回填 Entity Head 并补独立 Root watermark',
     assert.equal(independentWatermarks.length, 6)
     assert.ok(independentWatermarks.every(item => item.capturedRevision === 0))
     assert.ok(independentWatermarks.every(item => item.dependencyState === 'dependent'))
+
+    const allWatermarks = storage.db.prepare(`
+      SELECT entity_type AS entityType
+      FROM replication_capture_watermarks
+      WHERE stream_id = 'stream-upgrade'
+      ORDER BY entity_type
+    `).all() as Array<{ entityType: string }>
+    assert.deepEqual(
+      allWatermarks.map(item => item.entityType),
+      [...JOURNAL_REPLICATION_ENTITY_TYPES].sort(),
+    )
 
     const current = await storage.replicationIndependentRoots.get(
       'Coverage',
