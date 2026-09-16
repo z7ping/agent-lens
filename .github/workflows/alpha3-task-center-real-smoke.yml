@@ -3,7 +3,7 @@ name: Task Center Real Smoke
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, synchronize, ready_for_review]
     branches:
       - main
     paths:
@@ -129,8 +129,12 @@ jobs:
             }
             if (-not $ready) { throw 'AgentLens Daemon 未在 30 秒内就绪' }
 
+            # 历史导入会主动让位于前台 HTTP 请求。这里先留出一个真实空闲窗口，
+            # 避免验收自身的高频 /review 轮询持续占用 foreground gate。
+            Start-Sleep -Seconds 15
+
             $reviewReady = $false
-            for ($i = 0; $i -lt 120; $i++) {
+            for ($i = 0; $i -lt 12; $i++) {
               try {
                 $review = Invoke-RestMethod -Uri "$env:AGENT_LENS_ACCEPTANCE_URL/api/v1/review?limit=10" -TimeoutSec 2
                 $items = @($review.items)
@@ -140,9 +144,9 @@ jobs:
                   break
                 }
               } catch {}
-              Start-Sleep -Milliseconds 250
+              Start-Sleep -Seconds 3
             }
-            if (-not $reviewReady) { throw '确定性 Codex fixture 未在 30 秒内按原生标题/最近活动时间进入 Review Projection' }
+            if (-not $reviewReady) { throw '确定性 Codex fixture 未在空闲窗口后进入 Review Projection' }
             $items = @($review.items)
             if ([DateTimeOffset]::Parse($items[0].startedAt) -ge [DateTimeOffset]::Parse('2026-08-01T00:00:00Z')) { throw "旧会话 B 被导入时间污染：$($items[0].startedAt)" }
             if ([DateTimeOffset]::Parse($items[1].startedAt) -ge [DateTimeOffset]::Parse('2026-08-01T00:00:00Z')) { throw "旧会话 A 被导入时间污染：$($items[1].startedAt)" }
