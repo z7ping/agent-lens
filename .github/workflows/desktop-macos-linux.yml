@@ -16,6 +16,21 @@ on:
       - 'package-lock.json'
       - 'docs/design/brand/agentlens-icon-master.svg'
       - '.github/workflows/desktop-macos-linux.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - 'apps/cli/src/hook-execution*'
+      - 'scripts/prepare-desktop.mjs'
+      - 'scripts/prepare-macos-icon.sh'
+      - 'scripts/check-brand-assets.mjs'
+      - 'scripts/check-release-signing.mjs'
+      - 'scripts/check-desktop-contract.mjs'
+      - 'scripts/smoke-desktop-runtime.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'docs/design/brand/agentlens-icon-master.svg'
+      - '.github/workflows/desktop-macos-linux.yml'
   release:
     types: [published]
   workflow_dispatch:
@@ -126,7 +141,7 @@ jobs:
           npm test
 
       - name: Build unsigned macOS desktop
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.release_tag == '' || steps.manual_release.outputs.prerelease == 'true')) || (github.event_name == 'release' && github.event.release.prerelease == true)
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (inputs.release_tag == '' || steps.manual_release.outputs.prerelease == 'true')) || (github.event_name == 'release' && github.event.release.prerelease == true)
         run: npm run ${{ matrix.build_script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
