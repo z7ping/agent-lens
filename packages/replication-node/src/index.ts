@@ -1,6 +1,5 @@
 export * from './entity-generator'
 export * from './canonical-graph'
-export * from './canonical-dependency-graph'
 export * from './independent-root-graph'
 export * from './independent-root-runtime'
 export * from './pending-candidate'
