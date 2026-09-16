@@ -1,6 +1,7 @@
 import type { CanonicalObservation } from '@agent-lens/core'
 import type {
   HistoryBoundary,
+  KnownReplicationEntityType,
   ReplicationPolicy,
 } from '@agent-lens/core/replication'
 import {
@@ -57,7 +58,7 @@ export interface ObservationCaptureProgressStore {
   advance(input: {
     streamId: string
     generationId: string
-    entityType: 'CanonicalObservation'
+    entityType: KnownReplicationEntityType
     capturedRevision: number
     now?: string
   }): Promise<unknown>
