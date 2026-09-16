@@ -261,6 +261,18 @@ export class SqliteReplicationStateRepository {
         for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
           registerCapture.run(next.streamId, next.generationId, entityType, now)
         }
+        // The new stream starts at revision 0 and therefore becomes the
+        // conservative journal blocker. The old stream no longer needs
+        // canonical change history; Frozen exact retries keep their immutable
+        // body independently of the journal.
+        this.executor.db.prepare(`
+          UPDATE replication_capture_watermarks
+          SET dependency_state = 'retired',
+              updated_at = ?
+          WHERE stream_id = ?
+            AND generation_id = ?
+            AND dependency_state <> 'retired'
+        `).run(now, previous.streamId, previous.generationId)
       }
 
       return {
@@ -474,6 +486,14 @@ export class SqliteReplicationStateRepository {
       }
 
       const existing = this.getFrozenBatchRow(input.streamId, input.sequence)
+      // Rollover freezes creation of new old-policy batches. Already Frozen
+      // sequence/body remains immutable and may still be exact-retried.
+      if (!existing && streamRowValue.status !== 'active') {
+        throw new DurableReplicationError(
+          'STREAM_INVALID',
+          `Cannot freeze a new batch on replication stream status ${streamRowValue.status}`,
+        )
+      }
       const decision = assertFreezeSequence({
         stream: mapStream(streamRowValue),
         incomingSequence: input.sequence,
