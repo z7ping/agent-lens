@@ -171,6 +171,7 @@ function storageRootAllowed(path: readonly string[]): boolean {
     'replicationCanonicalChanges',
     'replicationChangeProgress',
     'replicationJournalLifecycle',
+    'replicationIndependentRoots',
     'replicationObservationSnapshot',
     'replicationSnapshotBootstrapProgress',
     'replicationRuntimeControl',
