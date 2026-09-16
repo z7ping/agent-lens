@@ -23,6 +23,7 @@ import {
 } from './pending-sink'
 import {
   pendingCandidatesForWireGraph,
+  type PendingWireCandidate,
 } from './pending-candidate'
 import type {
   ObservationPeriodicReconciliationCycleStore,
@@ -431,7 +432,7 @@ function createReconciliationSource(input: {
         limit: args.limit,
       })
 
-      const candidates = new Map<string, ReturnType<typeof pendingCandidatesForWireGraph>[number]>()
+      const candidates = new Map<string, PendingWireCandidate>()
       for (const root of page.items) {
         const graph = await generateIndependentRootReplicaGraph({
           nodeId: input.nodeId,
