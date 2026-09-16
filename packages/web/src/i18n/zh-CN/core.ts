@@ -206,6 +206,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     refreshAgents: '刷新智能体',
     agentSelection: '选择智能体',
     backupScope: '资产范围',
+    agentCount: '{{count}} 个智能体',
     sourceCount: '{{count}} 个来源',
   },
   shell: {
