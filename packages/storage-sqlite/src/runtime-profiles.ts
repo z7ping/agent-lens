@@ -16,12 +16,6 @@ function rowRecord(value: unknown): RuntimeProfileRow | null {
     : null
 }
 
-function requiredString(row: RuntimeProfileRow, key: string): string {
-  const value = row[key]
-  if (typeof value !== 'string') throw new TypeError(`SQLite runtime profile field ${key} must be a string`)
-  return value
-}
-
 export class SqliteRuntimeProfileRepository {
   constructor(private readonly executor: SqliteExecutor) {}
 
