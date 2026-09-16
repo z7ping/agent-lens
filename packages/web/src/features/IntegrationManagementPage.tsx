@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -70,7 +70,7 @@ function IntegrationManagementRow({
   const packageReady = integrationPackageReady(packageState)
   const canInstall = integrationCanInstall(item.tool)
   const detected = isDetected(item)
-  const status = integrationLifecycleState(
+  const discoveredStatus = integrationLifecycleState(
     { supported: true, enabled: item.enabled.effective, detected },
     item,
     item.tool,
@@ -78,6 +78,17 @@ function IntegrationManagementRow({
     t,
     discoveryError,
   )
+  const status = packageState?.installed && integrationPackageReady(packageState)
+    ? item.enabled.restartRequired || packageState.restartRequired
+      ? { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
+      : !item.enabled.configured
+        ? { label: t('status.disabled'), title: t('managementPage.disabledTitle'), className: 'is-disabled' }
+        : item.availability === 'error'
+          ? { label: t('status.abnormal'), title: t('status.abnormalTitle'), className: 'is-error' }
+          : item.availability === 'unavailable'
+            ? { label: t('status.unavailable'), title: t('status.unavailableTitle'), className: 'is-history' }
+            : { label: t('status.enabled'), title: t('managementPage.enabledTitle'), className: 'is-enabled' }
+    : discoveredStatus
   const statusLabel = item.isNew && !packageState?.installed && canInstall
     ? `${t('status.new')} · ${t('status.notAdded')}`
     : status.label
@@ -278,7 +289,22 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
   const snapshot = useClientSnapshot(model)
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
+  const initialNewIdsRef = useRef<Set<string> | null>(null)
+  const acknowledgedRef = useRef(false)
+  if (management && initialNewIdsRef.current === null) {
+    initialNewIdsRef.current = new Set(management.items.filter(item => item.isNew).map(item => item.integrationId))
+  }
   const { ordered } = useIntegrationOrder()
+
+  useEffect(() => {
+    if (!management || acknowledgedRef.current) return
+    const newIds = management.items.filter(item => item.isNew).map(item => item.integrationId)
+    if (!newIds.length) return
+    acknowledgedRef.current = true
+    void Promise.all(newIds.map(id => model.acknowledgeIntegration(id))).catch(() => {
+      acknowledgedRef.current = false
+    })
+  }, [management, model])
 
   const items = useMemo(() => {
     const rows = [...(management?.items ?? [])]
@@ -337,7 +363,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
         <div className="integration-management-list">
           {primaryItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
-            item={item}
+            item={{ ...item, isNew: item.isNew || Boolean(initialNewIdsRef.current?.has(item.integrationId)) }}
             moveUpTargetId={primaryItems[index - 1]?.integrationId}
             moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
@@ -357,7 +383,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
         <div className="integration-management-list">
           {supportedItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
-            item={item}
+            item={{ ...item, isNew: item.isNew || Boolean(initialNewIdsRef.current?.has(item.integrationId)) }}
             moveUpTargetId={supportedItems[index - 1]?.integrationId}
             moveDownTargetId={supportedItems[index + 1]?.integrationId}
             model={model}
