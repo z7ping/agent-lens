@@ -4,7 +4,6 @@ import test from 'node:test'
 
 const agentsPage = readFileSync(new URL('../AgentsPage.tsx', import.meta.url), 'utf8')
 const observation = readFileSync(new URL('./IntegrationObservation.tsx', import.meta.url), 'utf8')
-const legacyControl = readFileSync(new URL('./LegacySourceCaptureControl.tsx', import.meta.url), 'utf8')
 const integrationPage = readFileSync(new URL('../IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const agentsCss = readFileSync(new URL('../../agents.css', import.meta.url), 'utf8')
 const agentResponsiveCss = readFileSync(new URL('../../agent-insights-responsive.css', import.meta.url), 'utf8')
@@ -20,10 +19,9 @@ test('managed integrations are observation-only on the Agents surface', () => {
   assert.doesNotMatch(agentsPage, /model\.setIntegrationEnabled/)
 })
 
-test('legacy source toggle is isolated to non-managed sources until DSH migration', () => {
-  assert.match(agentsPage, /management\s*\?\s*<IntegrationObservationPanel/)
-  assert.match(agentsPage, /:\s*<LegacySourceCaptureControl/)
-  assert.match(legacyControl, /export function LegacySourceCaptureControl/)
+test('Agents observation surface has no source or Integration lifecycle controls after DSH migration', () => {
+  assert.match(agentsPage, /management && <IntegrationObservationPanel/)
+  assert.doesNotMatch(agentsPage, /LegacySourceCaptureControl|setSourceEnabled|setIntegrationEnabled/)
   assert.doesNotMatch(observation, /IntegrationAdvancedActions|IntegrationOnlyCard/)
 })
 
@@ -49,5 +47,4 @@ test('observation component exposes status, local discovery, availability and ca
   assert.match(observation, /management\.availability/)
   assert.match(observation, /management\.capabilities\.map/)
   assert.doesNotMatch(observation, /installIntegration|removeIntegration|authorizeIntegration|setIntegrationEnabled/)
-  assert.doesNotMatch(legacyControl, /installIntegration|removeIntegration|authorizeIntegration|setIntegrationEnabled/)
 })
