@@ -69,7 +69,7 @@ function preservedCheck(
 export async function auditSourceRawRecoveryBatch(input: {
   sources: { list(): SourceDefinition[] }
   storage: { sourceRawAudit?: SourceRawAuditReader }
-  afterId?: string
+  cursor?: string
   limit?: number
   signal?: AbortSignal
 }): Promise<SourceRawRecoveryAuditBatch> {
@@ -92,7 +92,7 @@ export async function auditSourceRawRecoveryBatch(input: {
   const definitions = new Map(
     input.sources.list().map(definition => [definition.manifest.sourceId, definition]),
   )
-  const page = await reader.list(input.afterId, input.limit)
+  const page = await reader.list(input.cursor, input.limit)
   const items: SourceRawRecoveryAuditItem[] = []
 
   for (const candidate of page.items) {
