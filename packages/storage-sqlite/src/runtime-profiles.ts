@@ -109,7 +109,8 @@ export class SqliteRuntimeProfileRepository {
         UPDATE source_sessions
         SET runtime_profile_id = ?
         WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
+          AND runtime_profile_id IS NOT ?
+      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
       this.executor.db.prepare(`
         UPDATE logical_sessions
         SET runtime_profile_id = ?
@@ -117,7 +118,8 @@ export class SqliteRuntimeProfileRepository {
           SELECT logical_session_id FROM source_sessions
           WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
         )
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
+          AND runtime_profile_id IS NOT ?
+      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
     })
   }
 
@@ -127,7 +129,8 @@ export class SqliteRuntimeProfileRepository {
         UPDATE asset_bindings
         SET runtime_profile_id = ?
         WHERE id = ?
-      `).run(runtimeProfileId, assetBindingId)
+          AND runtime_profile_id IS NOT ?
+      `).run(runtimeProfileId, assetBindingId, runtimeProfileId)
     })
   }
 }
