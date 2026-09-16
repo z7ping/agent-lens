@@ -153,7 +153,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       retry: '重试',
       skip: '跳过',
       noneFound: '暂未发现支持的智能体',
-      noneFoundDescription: '可以稍后进入“智能体”页面重新扫描；AgentLens 不会自动安装或接管任何工具。',
+      noneFoundDescription: '可以稍后进入“设置 → 智能体接入”重新扫描；AgentLens 不会自动安装或接管任何工具。',
       notFound: '未发现：{{agents}}。以后安装这些工具后，AgentLens 会自动识别，但不会自动接管。',
       selectedCount: '已选择 {{count}} 个',
       later: '稍后设置',
