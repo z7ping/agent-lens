@@ -48,6 +48,14 @@ test('Policy Stream Rollover keeps Generation, freezes old Stream and transfers 
       now: '2026-09-17T00:00:02.000Z',
     })
 
+    await storage.replicationRuntimeControl.putAuthorization({
+      streamId: 'stream-old',
+      generationId: 'gen-active',
+      policy: { mode: 'full', revision: 'policy-1' },
+      history: { mode: 'include-existing', revision: 'history-1' },
+      now: '2026-09-17T00:00:02.500Z',
+    })
+
     for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
       await storage.replicationJournalLifecycle.advance({
         streamId: 'stream-old',
@@ -103,6 +111,26 @@ test('Policy Stream Rollover keeps Generation, freezes old Stream and transfers 
     )
     assert.ok(newWatermarks.every(item => item.capturedRevision === 0))
     assert.ok(newWatermarks.every(item => item.dependencyState === 'dependent'))
+
+    // Old authorization is retained for audit/retry, but rollover-required is
+    // not runnable. New stream is fail-closed until its full authorization is
+    // explicitly persisted.
+    assert.deepEqual(
+      await storage.replicationRuntimeControl.listRunnableStreams(),
+      [],
+    )
+    await storage.replicationRuntimeControl.putAuthorization({
+      streamId: 'stream-new',
+      generationId: 'gen-active',
+      policy: { mode: 'redacted', revision: 'policy-2' },
+      history: { mode: 'include-existing', revision: 'history-1' },
+      now: '2026-09-17T00:00:04.500Z',
+    })
+    assert.deepEqual(
+      (await storage.replicationRuntimeControl.listRunnableStreams())
+        .map(item => item.stream.streamId),
+      ['stream-new'],
+    )
 
     // Frozen old-policy body remains immutable and exact-retriable.
     const retry = await storage.replication.freezeBatch({
