@@ -377,10 +377,11 @@ export class SqliteStorageService implements StorageService {
         evidence: count('evidence'),
         sessions: count('logical_sessions'),
       }
+      const snapshotCapturedAt = new Date().toISOString()
       const currentSnapshot: StorageDiagnosticSnapshot = {
         version: 1,
-        day: new Date().toISOString().slice(0, 10),
-        capturedAt: new Date().toISOString(),
+        day: snapshotCapturedAt.slice(0, 10),
+        capturedAt: snapshotCapturedAt,
         hotFootprintBytes: typeof baseGrowth.hotFootprintBytes === 'number'
           ? baseGrowth.hotFootprintBytes
           : 0,
