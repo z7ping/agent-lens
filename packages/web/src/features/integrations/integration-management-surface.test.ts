@@ -100,7 +100,7 @@ test('接入页把本机发现状态与接入启停状态分开表达', () => {
   assert.match(page, /managementPage\.enabledTitle/)
   assert.match(page, /managementPage\.disabledTitle/)
   assert.match(page, /initialNewIdsRef/)
-  assert.match(page, /model\.acknowledgeIntegration/)
+  assert.match(page, /model\.updateIntegrationPreferences\(\{ acknowledgedIntegrationIds \}\)/)
 })
 
 test('首次未发现时明确指向设置中的二次接入入口', () => {
