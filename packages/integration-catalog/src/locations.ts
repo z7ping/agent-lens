@@ -122,6 +122,14 @@ export function resolveHermesConfigRoots(
   return value(env, 'HERMES_HOME') ? roots.slice(0, 1) : roots
 }
 
+export function resolveDshHome(
+  env: SourceEnvironment = process.env,
+  homeDir = homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return firstResolved('dsh', 'data', env, homeDir, platform)
+}
+
 export function resolveOpenCodeRoots(
   env: SourceEnvironment = process.env,
   homeDir = homedir(),
