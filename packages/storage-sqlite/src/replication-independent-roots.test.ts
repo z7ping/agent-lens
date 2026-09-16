@@ -8,7 +8,7 @@ async function storage() {
   return value
 }
 
-test('Entity Head keeps latest revision metadata while Independent Root body comes from Canonical tables', async () => {
+test('Entity Head keeps latest revision metadata while Current-State Root body comes from Canonical tables', async () => {
   const db = await storage()
   try {
     await db.repositories.coverage.put({
@@ -60,7 +60,7 @@ test('Entity Head keeps latest revision metadata while Independent Root body com
   }
 })
 
-test('Independent Root Snapshot uses durable Entity Head changedAt for from-now filtering', async () => {
+test('Current-State Root Snapshot uses durable Entity Head changedAt for from-now filtering', async () => {
   const db = await storage()
   try {
     await db.repositories.coverage.put({
