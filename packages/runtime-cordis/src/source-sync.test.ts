@@ -265,3 +265,57 @@ test('独立 parser replay 不触发原生历史读取并透传重放窗口与�
   assert.deepEqual(replayWindow, { sessionLimit: 10 })
   assert.deepEqual(replayStates, ['started', 'completed'])
 })
+
+test('profiled source detection resolves one installation identity and keeps profile roots out of installation', async () => {
+  const seenHints: Array<Record<string, unknown>> = []
+  const profiled = sourceDefinition('dsh', async () => [
+    {
+      sourceId: 'dsh',
+      productId: 'dsh',
+      configRoot: '/dsh/profiles/a',
+      dataRoot: '/dsh/profiles/a',
+      runtimeProfile: {
+        nativeProfileId: 'a',
+        name: 'a',
+        configRoot: '/dsh/profiles/a',
+        dataRoot: '/dsh/profiles/a',
+      },
+      confidence: 'exact',
+    },
+    {
+      sourceId: 'dsh',
+      productId: 'dsh',
+      configRoot: '/dsh/profiles/b',
+      dataRoot: '/dsh/profiles/b',
+      runtimeProfile: {
+        nativeProfileId: 'b',
+        name: 'b',
+        configRoot: '/dsh/profiles/b',
+        dataRoot: '/dsh/profiles/b',
+      },
+      confidence: 'exact',
+    },
+  ])
+  const ctx = {
+    sources: { list: () => [profiled] },
+    capturePolicy: capturePolicy(['dsh']),
+    identity: {
+      async resolveHost() { return host },
+      async resolveInstallation(hint: Record<string, unknown>) {
+        seenHints.push(hint)
+        return { ...installation, productId: 'dsh' }
+      },
+    },
+    emit() {},
+  } as unknown as AgentLensContext
+
+  const prepared = await prepareRegisteredSources(ctx, new AbortController().signal)
+
+  assert.equal(prepared.targets.length, 2)
+  assert.equal(seenHints.length, 2)
+  assert.deepEqual(seenHints.map(hint => ({ configRoot: hint.configRoot, dataRoot: hint.dataRoot })), [
+    { configRoot: undefined, dataRoot: undefined },
+    { configRoot: undefined, dataRoot: undefined },
+  ])
+})
+
