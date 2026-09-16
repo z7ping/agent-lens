@@ -9,7 +9,7 @@ import {
   type ReviewToolNodeDto,
   type TimelineItemDto,
 } from '@agent-lens/protocol'
-import { reviewMessageAttachments } from './message-attachments'
+import { reviewMessageAttachments, reviewMessagePublicPayload } from './message-attachments'
 
 export function asRecord(value: JsonValue): Record<string, JsonValue>
 export function asRecord(value: unknown): Record<string, unknown>
@@ -118,7 +118,7 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         ...reviewNodeSource(item),
         text: textFromPayload(item.payload) ?? (attachments.length ? '' : '（无可显示文本）'),
         ...(attachments.length ? { attachments } : {}),
-        payload: item.payload,
+        payload: reviewMessagePublicPayload(item.payload),
         evidence: item.evidence,
         observationIds: [item.id],
       }
