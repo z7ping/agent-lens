@@ -54,7 +54,9 @@ export function WorkspaceSidebar({
   const onReview = location.pathname.startsWith('/review')
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
+  const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
+  const hasNewIntegrations = snapshot.integrationManagement?.items.some(item => item.isNew) ?? false
 
   useModalFocusScope({ open: mobileOpen, onClose: onMobileClose, panelRef: sidebarRef })
 
@@ -134,7 +136,7 @@ export function WorkspaceSidebar({
     <div className="workspace-sidebar-footer">
       <div className="workspace-settings-anchor" ref={settingsAnchorRef}>
         <IconButton
-          className={`workspace-settings-button ${settingsOpen || onBackup ? 'is-active' : ''}`}
+          className={`workspace-settings-button ${settingsOpen || onIntegrations || onBackup ? 'is-active' : ''}`}
           aria-label={t('settings:openMenu')}
           aria-expanded={settingsOpen}
           title={t('navigation:settings')}
@@ -145,6 +147,19 @@ export function WorkspaceSidebar({
           <section className="workspace-settings-group" aria-labelledby="workspace-settings-management-title">
             <div id="workspace-settings-management-title" className="workspace-settings-group-title">{t('settings:management')}</div>
             <div className="workspace-settings-menu">
+              <button
+                type="button"
+                className={`workspace-settings-menu-item ${onIntegrations ? 'is-active' : ''}`}
+                onClick={() => {
+                  navigate('/integrations')
+                  onMobileClose()
+                }}
+              >
+                <UiIcon name="agent" size={14}/>
+                <span>{t('navigation:agentIntegration')}</span>
+                {hasNewIntegrations && <i className="workspace-nav-dot" aria-hidden="true"/>}
+                <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
+              </button>
               <button
                 type="button"
                 className={`workspace-settings-menu-item ${onBackup ? 'is-active' : ''}`}
