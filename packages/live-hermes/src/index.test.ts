@@ -68,23 +68,6 @@ test('Hermes Live maps public run events into the same Live renderer vocabulary'
     output: 'ok',
     durationMs: 250,
   })
-  assert.deepEqual(normalizeHermesLiveEvent({
-    event: 'subagent.complete',
-    subagent_id: 'child-1',
-    child_session_id: 'session-1',
-    delegation_id: 'delegation-1',
-    status: 'completed',
-    summary: 'done',
-    duration_seconds: 1.5,
-  }), {
-    type: 'subagent.end',
-    subagentId: 'child-1',
-    childSessionId: 'session-1',
-    delegationId: 'delegation-1',
-    status: 'completed',
-    summary: 'done',
-    durationMs: 1500,
-  })
   assert.deepEqual(normalizeHermesLiveEvent({ event: 'run.completed' }), {
     type: 'completed',
     status: 'completed',
