@@ -10,7 +10,6 @@ test('Assistant 隐藏操作在 hover 与 keyboard focus 下都可见且保持 o
   assert.match(taskDetailCss, /\.task-message-assistant:hover \.markdown-message-actions,[\s\S]*?\.task-message-assistant:focus-within \.markdown-message-actions,[\s\S]*?data-view='source'[\s\S]*?opacity: \.82;/)
 })
 
-
 test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 Agent', () => {
   assert.match(taskMessageSource, /attachments\?: readonly ReviewMessageAttachmentDto\[\]/)
   assert.match(taskMessageSource, /attachment\.type === 'image' && attachment\.dataUrl/)
