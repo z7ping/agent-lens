@@ -8,11 +8,12 @@ export interface SourceRawRetentionFacts {
   verification?: SourceRawRecoveryCheck
   canonicalStable: boolean
   evidenceStable: boolean
-  pinned: boolean
+  pinned: boolean | 'unknown'
 }
 
 export type SourceRawRetentionReason =
   | 'pinned'
+  | 'pin-state-unknown'
   | 'canonical-not-stable'
   | 'evidence-not-stable'
   | 'recovery-capability-unknown'
@@ -36,7 +37,8 @@ export function evaluateSourceRawRetention(
 ): SourceRawRetentionDecision {
   const reasons: SourceRawRetentionReason[] = []
 
-  if (facts.pinned) reasons.push('pinned')
+  if (facts.pinned === true) reasons.push('pinned')
+  else if (facts.pinned === 'unknown') reasons.push('pin-state-unknown')
   if (!facts.canonicalStable) reasons.push('canonical-not-stable')
   if (!facts.evidenceStable) reasons.push('evidence-not-stable')
 
