@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const page = readFileSync(new URL('../IntegrationManagementPage.tsx', import.meta.url), 'utf8')
+const agentsPage = readFileSync(new URL('../AgentsPage.tsx', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const zhAgents = readFileSync(new URL('../../i18n/zh-CN/agents.ts', import.meta.url), 'utf8')
@@ -43,6 +44,15 @@ test('未启用但已发现的智能体保持可见并支持二次接入', () =>
   assert.match(page, /item\.tool\?\.presence === 'data-only'/)
   assert.match(page, /managementPage\.add/)
   assert.match(page, /status\.notAdded/)
+})
+
+
+test('首次未选择的本机智能体仍可在智能体页二次接入', () => {
+  assert.match(app, /agentSelectionAgents=\{agentSelectionItems\}/)
+  assert.match(agentsPage, /const managedRows = managementItems\.map/)
+  assert.match(agentsPage, /<IntegrationOnlyCard/)
+  assert.match(agentsPage, /model\.installIntegration/)
+  assert.match(agentsPage, /model\.setIntegrationEnabled/)
 })
 
 test('扫描失败与 data-only 保持独立语义', () => {
