@@ -110,9 +110,13 @@ test('paused stream blocks GC until explicit retirement and diagnostics explains
     assert.equal(journal.safeJournalRevision, captured)
     assert.equal(journal.blockingStreams[0]?.streamId, 'stream-1')
 
-    await db.replicationJournalLifecycle.retire({
-      streamId: 'stream-1', generationId: 'gen-1', entityType: 'CanonicalObservation',
-    })
+    assert.equal(
+      await db.replicationJournalLifecycle.retireGeneration({
+        streamId: 'stream-1',
+        generationId: 'gen-1',
+      }),
+      OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES.length,
+    )
     assert.equal((await db.replicationJournalLifecycle.safety()).safeJournalRevision, highWater)
   } finally {
     db.close()
