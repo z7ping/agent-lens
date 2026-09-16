@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES } from '@agent-lens/core/replication'
+import { JOURNAL_REPLICATION_ENTITY_TYPES } from '@agent-lens/core/replication'
 import { SqliteStorageService } from './storage'
 
 const T0 = '2026-09-16T00:00:00.000Z'
@@ -24,13 +24,13 @@ function appendObservationChange(db: SqliteStorageService, id: string): void {
   `).run(id)
 }
 
-async function advanceObservationGraphCapture(
+async function advanceJournalCapture(
   db: SqliteStorageService,
   streamId: string,
   generationId: string,
   capturedRevision: number,
 ): Promise<void> {
-  for (const entityType of OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES) {
+  for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
     await db.replicationJournalLifecycle.advance({
       streamId,
       generationId,
@@ -78,7 +78,7 @@ test('paused stream blocks GC until explicit retirement and diagnostics explains
       relationshipId: 'rel-1', hubId: 'hub-1', streamId: 'stream-1', generationId: 'gen-1',
       policyRevision: 'policy-1', historyRevision: 'history-1',
     })
-    await advanceObservationGraphCapture(db, 'stream-1', 'gen-1', captured)
+    await advanceJournalCapture(db, 'stream-1', 'gen-1', captured)
     await db.replication.setStreamPolicyState({
       streamId: 'stream-1', status: 'paused',
       policyRevision: 'policy-1', historyRevision: 'history-1',
@@ -115,7 +115,7 @@ test('paused stream blocks GC until explicit retirement and diagnostics explains
         streamId: 'stream-1',
         generationId: 'gen-1',
       }),
-      OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES.length,
+      JOURNAL_REPLICATION_ENTITY_TYPES.length,
     )
     assert.equal((await db.replicationJournalLifecycle.safety()).safeJournalRevision, highWater)
   } finally {
@@ -132,7 +132,7 @@ test('journal GC does not depend on network ACK and preserves frozen exact-retry
       relationshipId: 'rel-frozen', hubId: 'hub-1', streamId: 'stream-frozen',
       generationId: 'gen-frozen', policyRevision: 'policy-1', historyRevision: 'history-1',
     })
-    await advanceObservationGraphCapture(
+    await advanceJournalCapture(
       db,
       'stream-frozen',
       'gen-frozen',
@@ -166,41 +166,57 @@ test('journal GC does not depend on network ACK and preserves frozen exact-retry
 })
 
 
-test('GC preserves journal rows outside the Observation Root Graph coverage contract', async () => {
+test('full R1 journal coverage reclaims all 18 Root types while Entity Head survives', async () => {
   const db = await storage()
   try {
     await putHost(db, 'host-covered', T0)
-    db.db.prepare(`
-      INSERT INTO replication_canonical_changes(entity_type, origin_entity_id)
-      VALUES ('Coverage', 'coverage-uncovered')
-    `).run()
+    await db.repositories.coverage.put({
+      id: 'coverage-covered',
+      subjectType: 'host',
+      subjectId: 'host-covered',
+      capability: 'history',
+      status: 'complete',
+      evidenceRefs: [],
+    })
     appendObservationChange(db, 'observation-covered')
 
     const safety = await db.replicationJournalLifecycle.safety()
-    assert.ok(safety.reclaimableChanges >= 1)
-    assert.ok(safety.uncoveredChanges >= 1)
+    assert.ok(safety.reclaimableChanges >= 3)
+    assert.equal(safety.uncoveredChanges, 0)
     assert.deepEqual(
       safety.gcCoveredEntityTypes,
-      OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+      JOURNAL_REPLICATION_ENTITY_TYPES,
     )
 
-    await db.replicationJournalLifecycle.reclaimBatch({ limit: 1000 })
+    const headBefore = db.db.prepare(`
+      SELECT latest_revision AS latestRevision
+      FROM replication_entity_heads
+      WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-covered'
+    `).get() as { latestRevision: number }
+    assert.ok(headBefore.latestRevision > 0)
+
+    await db.replicationJournalLifecycle.reclaimBatch({ limit: 10000 })
 
     const rows = db.db.prepare(`
       SELECT entity_type AS entityType, origin_entity_id AS originEntityId
       FROM replication_canonical_changes
+      WHERE origin_entity_id IN ('host-covered', 'coverage-covered', 'observation-covered')
       ORDER BY revision
     `).all() as Array<{ entityType: string; originEntityId: string }>
+    assert.deepEqual(rows, [])
 
-    assert.ok(rows.some(row =>
-      row.entityType === 'Coverage' && row.originEntityId === 'coverage-uncovered'
-    ))
-    assert.equal(rows.some(row =>
-      row.entityType === 'Host' && row.originEntityId === 'host-covered'
-    ), false)
-    assert.equal(rows.some(row =>
-      row.entityType === 'CanonicalObservation' && row.originEntityId === 'observation-covered'
-    ), false)
+    const headAfter = db.db.prepare(`
+      SELECT latest_revision AS latestRevision
+      FROM replication_entity_heads
+      WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-covered'
+    `).get() as { latestRevision: number }
+    assert.equal(headAfter.latestRevision, headBefore.latestRevision)
+
+    const coverage = await db.replicationIndependentRoots.get('Coverage', 'coverage-covered')
+    assert.equal(coverage?.entityType, 'Coverage')
+    if (coverage?.entityType === 'Coverage') {
+      assert.equal(coverage.entity.status, 'complete')
+    }
   } finally {
     db.close()
   }
