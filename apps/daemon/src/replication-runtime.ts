@@ -36,6 +36,7 @@ export interface ReplicationMaintenanceLoopOptions {
   cooperate?: () => Promise<void>
   pageLimit?: number
   gcLimit?: number
+  journalGcEnabled?: boolean
   reconciliationIntervalMs?: number
   onInfo?: (message: string) => void
   onError?: (error: unknown) => void
@@ -46,9 +47,8 @@ export interface ReplicationMaintenanceLoopOptions {
  *
  * Transport remains out of scope: this loop only turns persisted stream
  * authorization into Durable Pending/Frozen-ready state and keeps the local
- * journal bounded. With no configured upstream stream it still performs safe
- * journal GC for entity types whose future bootstrap no longer depends on
- * historical change rows.
+ * journal reclaimable. Destructive journal GC is deliberately gated and
+ * defaults off while ADR-0010 remains proposed.
  */
 export async function runReplicationMaintenanceLoop(
   options: ReplicationMaintenanceLoopOptions,
@@ -68,6 +68,7 @@ export async function runReplicationMaintenanceLoop(
   const gcLimit = options.gcLimit ?? DEFAULT_GC_LIMIT
   const reconciliationIntervalMs =
     options.reconciliationIntervalMs ?? DEFAULT_RECONCILIATION_INTERVAL_MS
+  const journalGcEnabled = options.journalGcEnabled ?? false
 
   while (!signal.aborted) {
     let didWork = false
@@ -97,26 +98,27 @@ export async function runReplicationMaintenanceLoop(
           captureProgress: storage.replicationJournalLifecycle,
           lifecycle: storage.replicationBootstrapLifecycle,
           cycles: storage.replicationRuntimeControl,
-          journalGc: storage.replicationJournalLifecycle,
           nodeId,
           streamId: item.stream.streamId,
           generationId: item.stream.generationId,
           policy: item.authorization.policy,
           history: item.authorization.history,
           pageLimit,
-          gcLimit,
           reconciliationIntervalMs,
         })
         didWork = true
 
-        if (result.kind === 'active' && result.reclaimedChanges > 0) {
-          options.onInfo?.(
-            `replication journal reclaimed=${result.reclaimedChanges} safeRevision=${result.safeJournalRevision}`,
-          )
+        if (journalGcEnabled && result.kind === 'active') {
+          const reclaimed = await storage.replicationJournalLifecycle.reclaimBatch({ limit: gcLimit })
+          if (reclaimed.deletedChanges > 0) {
+            options.onInfo?.(
+              `replication journal reclaimed=${reclaimed.deletedChanges} safeRevision=${reclaimed.safeJournalRevision}`,
+            )
+          }
         }
       }
 
-      if (!didWork) {
+      if (!didWork && journalGcEnabled) {
         const reclaimed = await storage.replicationJournalLifecycle.reclaimBatch({ limit: gcLimit })
         if (reclaimed.deletedChanges > 0) {
           options.onInfo?.(
