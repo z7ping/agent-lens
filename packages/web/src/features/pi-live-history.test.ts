@@ -200,3 +200,28 @@ test('Pi Live 仍将真实 Pi 错误显示为响应错误且位于已输出内�
   assert.equal(lifecycle.label, 'Pi 响应错误')
   assert.equal(lifecycle.detail, 'error · Provider unavailable')
 })
+
+
+test('Pi Live persisted history keeps user images as message attachments instead of placeholder text', () => {
+  const items = projectPiLiveHistory(snapshot([
+    {
+      type: 'message',
+      id: 'user-image',
+      timestamp: '2026-09-16T00:00:00.000Z',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },
+        ],
+      },
+    },
+  ]))
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.role, 'user')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.type, 'image')
+  assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
+})
