@@ -31,6 +31,8 @@ export interface ObservationSnapshotBootstrapProgress {
   generationId: string
   entityType: 'CanonicalObservation'
   baselineRevision: number
+  policyRevision: string
+  historyRevision: string
   cursor?: string
   snapshotComplete: boolean
   updatedAt: string
@@ -104,12 +106,21 @@ export async function pumpObservationSnapshotBootstrapPage(input: {
     state = {
       ...key,
       baselineRevision,
+      policyRevision: input.policy.revision,
+      historyRevision: input.history.revision,
       snapshotComplete: false,
       updatedAt: input.now ?? new Date().toISOString(),
     }
     // Crash safety: baseline must exist before any Canonical root is scanned.
     await input.progress.put(state)
     initialized = true
+  }
+
+  if (
+    state.policyRevision !== input.policy.revision
+    || state.historyRevision !== input.history.revision
+  ) {
+    throw new Error('Snapshot Bootstrap policy/history revision changed; re-bootstrap is required')
   }
 
   if (state.snapshotComplete) {
