@@ -125,6 +125,16 @@
   background: var(--al-soft-2);
 }
 
+.integration-management-row[data-target='true'] {
+  box-shadow: inset 3px 0 0 var(--al-accent);
+  background: color-mix(in srgb, var(--al-accent-soft) 36%, var(--al-surface));
+}
+
+.integration-management-row[data-target='true']:hover {
+  background: color-mix(in srgb, var(--al-accent-soft) 48%, var(--al-soft-2));
+}
+
+
 .integration-management-row[data-new='true'] {
   background:
     linear-gradient(
