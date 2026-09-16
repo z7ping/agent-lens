@@ -450,3 +450,74 @@ test('dependency-minimized candidate does not requeue after full candidate is fr
     storage.close()
   }
 })
+
+
+test('user content that resembles availability metadata is not mistaken for dependency minimization', async () => {
+  const storage = await createStorage(':memory:')
+  try {
+    await storage.replication.ensureStream({
+      relationshipId: 'rel-quality-user-content',
+      hubId: 'hub-quality',
+      streamId: 'stream-quality-user-content',
+      generationId: 'gen-quality-user-content',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      now: T0,
+    })
+    await storage.replication.enqueuePending({
+      id: 'pending-content-a',
+      streamId: 'stream-quality-user-content',
+      generationId: 'gen-quality-user-content',
+      dedupKey: 'entity-r1-user-content',
+      entityType: 'CanonicalObservation',
+      originEntityId: 'observation-1',
+      candidateHash: 'hash-content-a',
+      phase: 'incremental',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          payload: {
+            state: 'value',
+            value: {
+              state: 'omitted',
+              reason: 'dependency-minimized',
+            },
+          },
+        },
+      },
+      now: T0,
+    })
+
+    const replacement = await storage.replication.enqueuePending({
+      id: 'pending-content-b',
+      streamId: 'stream-quality-user-content',
+      generationId: 'gen-quality-user-content',
+      dedupKey: 'entity-r1-user-content',
+      entityType: 'CanonicalObservation',
+      originEntityId: 'observation-1',
+      candidateHash: 'hash-content-b',
+      phase: 'incremental',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          payload: {
+            state: 'value',
+            value: {
+              state: 'omitted',
+              reason: 'dependency-minimized',
+              changed: true,
+            },
+          },
+        },
+      },
+      now: T1,
+    })
+
+    assert.equal(replacement.replaced, true)
+    assert.equal(replacement.item.candidateHash, 'hash-content-b')
+  } finally {
+    storage.close()
+  }
+})
