@@ -2,7 +2,11 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { LiveService, StorageService } from '@agent-lens/core'
-import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
+import {
+  normalizePiLiveRuntimeEvent,
+  type PiLiveHistoryAction,
+  type PiLiveService,
+} from '@agent-lens/runtime-cordis'
 import {
   liveMessagePlainTextDto,
   parseLiveMessageInputDto,
@@ -155,6 +159,7 @@ async function connectEvents(
   request: IncomingMessage,
   response: ServerResponse,
   service: PiLiveService,
+  lives: LiveService | undefined,
   runtimeSessionId: string,
 ): Promise<void> {
   await service.state(runtimeSessionId)
@@ -166,11 +171,19 @@ async function connectEvents(
   response.flushHeaders?.()
   response.write(': agent-lens pi-live\n\n')
 
-  const unsubscribe = service.subscribe(runtimeSessionId, value => {
-    response.write(`id: ${value.sequence}\n`)
-    response.write('event: pi-live\n')
-    response.write(`data: ${JSON.stringify(jsonValue(value))}\n\n`)
-  })
+  const adapter = lives?.get('pi')
+  const unsubscribe = adapter
+    ? adapter.subscribe(runtimeSessionId, value => {
+        response.write(`id: ${value.sequence}\n`)
+        response.write('event: pi-live\n')
+        response.write(`data: ${JSON.stringify(jsonValue(value))}\n\n`)
+      })
+    : service.subscribe(runtimeSessionId, value => {
+        const normalized = normalizePiLiveRuntimeEvent(value)
+        response.write(`id: ${normalized.sequence}\n`)
+        response.write('event: pi-live\n')
+        response.write(`data: ${JSON.stringify(jsonValue(normalized))}\n\n`)
+      })
   const heartbeat = setInterval(() => response.write(': heartbeat\n\n'), SSE_HEARTBEAT_MS)
   heartbeat.unref?.()
   let cleaned = false
@@ -310,7 +323,7 @@ export async function handlePiLiveRequest(
       return true
     }
     if (action === 'events' && request.method === 'GET') {
-      await connectEvents(request, response, service, runtimeSessionId)
+      await connectEvents(request, response, service, lives, runtimeSessionId)
       return true
     }
     if (action === 'controls' && request.method === 'GET') {
