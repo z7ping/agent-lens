@@ -24,6 +24,7 @@ import {
   mapTool,
   mapWorkspace,
 } from './repository-row-mappers'
+import { restoreSourceRecordPayloadFromStorageRow } from './source-record-compression'
 
 type RootConfig = {
   table: string
@@ -41,7 +42,13 @@ const ROOTS: Readonly<Record<IndependentReplicationRootEntityType, RootConfig>> 
   SourceSession: { table: 'source_sessions', map: mapSourceSession },
   SessionRelationship: { table: 'session_relationships', map: mapRelationship },
   AgentActor: { table: 'agent_actors', map: mapActor },
-  SourceRecord: { table: 'source_records', map: mapSourceRecord },
+  SourceRecord: {
+    table: 'source_records',
+    map: value => restoreSourceRecordPayloadFromStorageRow(
+      mapSourceRecord(value),
+      value,
+    ),
+  },
   Evidence: { table: 'evidence', map: mapEvidence },
   Coverage: { table: 'coverage', map: mapCoverage },
   AssetDefinition: { table: 'asset_definitions', map: mapAssetDefinition },
