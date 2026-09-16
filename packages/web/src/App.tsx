@@ -18,6 +18,7 @@ import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './component
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
 const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
+const IntegrationManagementPage = lazy(() => import('./features/IntegrationManagementPage').then(module => ({ default: module.IntegrationManagementPage })))
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
@@ -92,6 +93,34 @@ function AgentRescanAction({
   </>
 }
 
+function IntegrationRescanAction({
+  model,
+  snapshot,
+}: {
+  model: AgentLensClientModel
+  snapshot: ClientSnapshot
+}) {
+  const { t } = useTranslation('agents')
+  const scanBusy = snapshot.integrationDiscoveryLoading
+    || snapshot.integrationDiscoveryRescanning
+    || snapshot.integrationManagement?.discovery.status === 'scanning'
+  const scanError = snapshot.integrationDiscoveryError
+
+  return <>
+    {scanError && <StatusBadge tone="danger" title={scanError}>{t('status.scanFailed')}</StatusBadge>}
+    <Button
+      size="small"
+      loading={Boolean(scanBusy)}
+      disabled={Boolean(scanBusy)}
+      title={t('onboarding.rescan')}
+      onClick={() => void model.rescanIntegrationDiscovery().catch(() => undefined)}
+    >
+      <UiIcon name="refresh" size={14}/>
+      {scanBusy ? t('status.scanning') : t('onboarding.rescan')}
+    </Button>
+  </>
+}
+
 function WorkspaceTopBar({
   pathname,
   snapshot,
@@ -133,6 +162,8 @@ function WorkspaceTopBar({
       item.integrationId === selectedAgentId || item.productId === selectedAgentId
     )
     items = [{ label: t('agents') }, { label: selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
+  } else if (pathname.startsWith('/integrations')) {
+    items = [{ label: t('settings') }, { label: t('agentIntegration') }]
   } else if (pathname.startsWith('/backup')) {
     items = [{ label: t('settings') }, { label: t('assetBackup') }]
   } else {
@@ -189,6 +220,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onTools = location.pathname.startsWith('/tools')
   const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
+  const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
   const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
@@ -291,7 +323,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           onPageToolsHost={setWorkspaceTopbarHost}
           actions={onAgents
             ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
-            : undefined}
+            : onIntegrations
+              ? <IntegrationRescanAction model={model} snapshot={snapshot}/>
+              : undefined}
         />
         {hasSseBanner && <div className="sse-banner" role="status" aria-live="polite">
           <span className="sse-banner-icon" aria-hidden="true"><UiIcon name="exclamation" size={14}/></span>
@@ -312,6 +346,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} />} />
+          <Route path="/integrations" element={<IntegrationManagementPage model={model} />} />
           <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
