@@ -73,7 +73,6 @@ import {
   compressLegacySourceRecords,
   ensureDeferredStorageIndexes,
 } from './storage-maintenance.js'
-import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
 import { openLocalPath } from './local-path-opener.js'
 import { readRuntimeStorageFootprint } from './storage-runtime-footprint.js'
@@ -274,7 +273,6 @@ if (capabilities.localCapture) {
       }
     }
   }
-  app.use(profiledDshSourcePlugin)
 }
 app.useRuntime(backupLocalPlugin, { vaultPath })
 const httpSurfaceConfig: HttpSurfacePluginConfig = {
