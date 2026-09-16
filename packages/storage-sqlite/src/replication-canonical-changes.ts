@@ -62,14 +62,19 @@ export class SqliteReplicationCanonicalChangeReader {
         LIMIT ?
       `).all(...params).map(canonicalChangeRow)
 
-      const nextRevision = rows.at(-1)?.revision ?? afterRevision
+      const done = rows.length < limit
+      // When this filtered scan is exhausted, every matching change through
+      // throughRevision has been considered even if the global journal also
+      // contains other entity types. Advancing to the fixed boundary gives the
+      // caller a continuous per-root capture watermark instead of pinning it to
+      // the last matching row forever.
+      const nextRevision = done
+        ? input.throughRevision
+        : rows.at(-1)?.revision ?? afterRevision
       return {
         items: rows,
         nextRevision,
-        // With an entity filter the global high-water can be greater than the
-        // last matching revision. Fewer than limit means all matching rows in
-        // this bounded interval have been consumed.
-        done: rows.length < limit,
+        done,
       }
     })
   }

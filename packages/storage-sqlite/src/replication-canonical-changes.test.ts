@@ -171,6 +171,34 @@ test('captured high-water excludes writes committed after bootstrap starts', asy
   }
 })
 
+test('filtered root scan exhausted 时推进到 throughRevision，即使区间只有其他实体', async () => {
+  const db = await storage()
+  try {
+    await db.repositories.hosts.put({
+      id: 'host-only',
+      name: 'devbox',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: T0,
+      lastSeenAt: T0,
+    })
+    const highWater = await db.replicationCanonicalChanges.highWaterRevision()
+    assert.ok(highWater > 0)
+
+    const page = await db.replicationCanonicalChanges.scan({
+      afterRevision: 0,
+      throughRevision: highWater,
+      entityType: 'CanonicalObservation',
+      limit: 10,
+    })
+    assert.deepEqual(page.items, [])
+    assert.equal(page.done, true)
+    assert.equal(page.nextRevision, highWater)
+  } finally {
+    db.close()
+  }
+})
+
 test('not-replicated Interaction writes do not enter the Canonical change journal', async () => {
   const db = await storage()
   try {
