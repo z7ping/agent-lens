@@ -76,6 +76,7 @@ import {
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
 import { openLocalPath } from './local-path-opener.js'
+import { readRuntimeStorageFootprint } from './storage-runtime-footprint.js'
 import {
   captureStorageDiagnosticSnapshot,
   STORAGE_DIAGNOSTIC_SNAPSHOT_INITIAL_DELAY_MS,
@@ -282,6 +283,9 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
   selectProjectDirectory: () => projectDirectoryPicker.select(),
   ...(capabilities.localCapture ? { openHostPath: openLocalPath } : {}),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
+  diagnosticsDetails: async () => ({
+    runtimeFootprint: await readRuntimeStorageFootprint(dataRoot),
+  }),
   healthDetails: () => ({
     ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
     ...(officialToolDiscovery
