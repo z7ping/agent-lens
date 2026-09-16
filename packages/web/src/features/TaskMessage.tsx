@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import type { ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -8,6 +9,7 @@ export type TaskMessageRole = 'user' | 'assistant'
 export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
+  attachments?: readonly ReviewMessageAttachmentDto[]
   author?: string
   time?: string | undefined
   meta?: ReactNode
@@ -23,6 +25,7 @@ export interface TaskMessageProps {
 export function TaskMessage({
   role,
   text,
+  attachments = [],
   author,
   time,
   meta,
@@ -96,22 +99,36 @@ export function TaskMessage({
         <span aria-hidden="true"/>
         <span aria-hidden="true"/>
         <span aria-hidden="true"/>
-      </div> : <div className="markdown-message task-message-content" data-view={view}>
-        <div
-          ref={surfaceRef}
-          className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
-          style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
-        >
-          {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
-          {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
-        </div>
-        {(canCollapse || !user) && <div className="markdown-message-actions">
-          {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
-          {!user && <button type="button" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
-            {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
-          </button>}
+      </div> : <>
+        {attachments.some(attachment => attachment.type === 'image' && attachment.dataUrl) && <div className="task-message-attachments">
+          {attachments.map((attachment, index) => attachment.type === 'image' && attachment.dataUrl
+            ? <img
+                key={`${attachment.type}:${attachment.name ?? index}:${index}`}
+                className="task-message-attachment-image"
+                src={attachment.dataUrl}
+                alt={attachment.name ?? t('message.imageAttachment')}
+                loading="lazy"
+                decoding="async"
+              />
+            : null)}
         </div>}
-      </div>}
+        {text && <div className="markdown-message task-message-content" data-view={view}>
+          <div
+            ref={surfaceRef}
+            className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
+            style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
+          >
+            {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
+            {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
+          </div>
+          {(canCollapse || !user) && <div className="markdown-message-actions">
+            {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
+            {!user && <button type="button" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+              {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
+            </button>}
+          </div>}
+        </div>}
+      </>}
       {actions && <div className="task-message-actions">{actions}</div>}
     </div>
   </div>
