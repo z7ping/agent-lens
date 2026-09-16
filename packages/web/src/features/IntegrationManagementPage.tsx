@@ -78,17 +78,21 @@ function IntegrationManagementRow({
     t,
     discoveryError,
   )
-  const status = packageState?.installed && integrationPackageReady(packageState)
-    ? item.enabled.restartRequired || packageState.restartRequired
-      ? { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
-      : !item.enabled.configured
-        ? { label: t('status.disabled'), title: t('managementPage.disabledTitle'), className: 'is-disabled' }
-        : item.availability === 'error'
-          ? { label: t('status.abnormal'), title: t('status.abnormalTitle'), className: 'is-error' }
-          : item.availability === 'unavailable'
-            ? { label: t('status.unavailable'), title: t('status.unavailableTitle'), className: 'is-history' }
-            : { label: t('status.enabled'), title: t('managementPage.enabledTitle'), className: 'is-enabled' }
-    : discoveredStatus
+  const status = !packageState
+    ? discoveredStatus
+    : !packageState.installed
+      ? { label: t('status.notAdded'), title: t('managementPage.notAddedTitle'), className: 'is-not-added' }
+      : !integrationPackageReady(packageState)
+        ? discoveredStatus
+        : item.enabled.restartRequired || packageState.restartRequired
+          ? { label: t('status.pendingRestart'), title: t('status.pendingRestartTitle'), className: 'is-history' }
+          : !item.enabled.configured
+            ? { label: t('status.disabled'), title: t('managementPage.disabledTitle'), className: 'is-disabled' }
+            : item.availability === 'error'
+              ? { label: t('status.abnormal'), title: t('status.abnormalTitle'), className: 'is-error' }
+              : item.availability === 'unavailable'
+                ? { label: t('status.unavailable'), title: t('status.unavailableTitle'), className: 'is-history' }
+                : { label: t('status.enabled'), title: t('managementPage.enabledTitle'), className: 'is-enabled' }
   const statusLabel = item.isNew && !packageState?.installed && canInstall
     ? `${t('status.new')} · ${t('status.notAdded')}`
     : status.label
@@ -174,15 +178,16 @@ function IntegrationManagementRow({
   const primaryAction = !packageState
     ? null
     : !packageReady
-      ? <Button
-          size="small"
-          variant={canInstall || packageState.installed ? 'primary' : 'default'}
-          loading={saving}
-          disabled={!packageState.installed && !canInstall}
-          onClick={() => void installOrRepair()}
-        >
-          {packageState.installed ? t('integration.repair') : t('managementPage.add')}
-        </Button>
+      ? packageState.installed || canInstall
+        ? <Button
+            size="small"
+            variant="primary"
+            loading={saving}
+            onClick={() => void installOrRepair()}
+          >
+            {packageState.installed ? t('integration.repair') : t('managementPage.add')}
+          </Button>
+        : null
       : <Button
           size="small"
           loading={saving}
