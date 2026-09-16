@@ -21,8 +21,8 @@ import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from 
 import {
   IntegrationObservationPanel,
   IntegrationOnlyObservationCard,
-  LegacySourceCaptureControl,
-} from './integrations/IntegrationManagementControls'
+} from './integrations/IntegrationObservation'
+import { LegacySourceCaptureControl } from './integrations/LegacySourceCaptureControl'
 import {
   agentObservationState,
   integrationToolPresenceLabel,
