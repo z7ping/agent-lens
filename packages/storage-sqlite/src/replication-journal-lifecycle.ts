@@ -324,6 +324,34 @@ export class SqliteReplicationJournalLifecycleRepository {
     })
   }
 
+  async retireGeneration(input: {
+    streamId: string
+    generationId: string
+    now?: string
+  }): Promise<number> {
+    return this.executor.transaction(async () => {
+      const stream = this.executor.db.prepare(`
+        SELECT generation_id AS generationId
+        FROM replication_streams
+        WHERE stream_id = ?
+      `).get(input.streamId)
+      if (!stream) throw new Error(`Replication stream not found: ${input.streamId}`)
+      if (requiredString(rowRecord(stream), 'generationId') !== input.generationId) {
+        throw new Error('Replication capture retirement generation does not match stream')
+      }
+      const now = input.now ?? new Date().toISOString()
+      const result = this.executor.db.prepare(`
+        UPDATE replication_capture_watermarks
+        SET dependency_state = 'retired',
+            updated_at = ?
+        WHERE stream_id = ?
+          AND generation_id = ?
+          AND dependency_state <> 'retired'
+      `).run(now, input.streamId, input.generationId)
+      return result.changes
+    })
+  }
+
   async safety(): Promise<ReplicationJournalSafety> {
     return this.executor.run(() => replicationJournalSafetyDetails(this.executor.db))
   }
