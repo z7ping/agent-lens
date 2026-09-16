@@ -51,8 +51,8 @@ export type ObservationReplicationRuntimeStepResult =
  * One bounded Node-side replication maintenance step.
  *
  * The caller owns scheduling/backpressure. This function never loops forever:
- * it performs at most one Bootstrap page, one Incremental page, one periodic
- * Reconciliation page and one bounded journal-GC batch.
+ * it performs at most one Bootstrap page, one Incremental page and one periodic
+ * Reconciliation page. Destructive journal GC is owned by daemon policy gating.
  */
 export async function pumpObservationReplicationRuntimeStep(input: {
   changes: CanonicalChangeSource
