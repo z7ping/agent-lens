@@ -53,4 +53,5 @@ CROSS JOIN (
   UNION ALL SELECT 'Evidence'
   UNION ALL SELECT 'CanonicalObservation'
 )
+WHERE 1
 ON CONFLICT(stream_id, generation_id, entity_type) DO NOTHING;
