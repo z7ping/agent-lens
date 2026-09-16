@@ -6,6 +6,8 @@ const DEFAULT_WARMUP = 3
 const DEFAULT_TIMEOUT_MS = 5_000
 const DEFAULT_TOOLS_BURST = 64
 const DEFAULT_MIXED_BURST = 128
+const DEFAULT_STORAGE_DIAGNOSTICS_BURST = 32
+const DEFAULT_STORAGE_DIAGNOSTICS_TIMEOUT_MS = 120_000
 const HEALTH_REFRESH_MS = 1_100
 const TOOLS_RESULT_CACHE_REFRESH_MS = 2_100
 
@@ -49,6 +51,8 @@ const options = {
   timeoutMs: positiveInt('timeout-ms', DEFAULT_TIMEOUT_MS),
   toolsBurst: nonNegativeInt('tools-burst', DEFAULT_TOOLS_BURST),
   burst: nonNegativeInt('burst', DEFAULT_MIXED_BURST),
+  storageDiagnosticsBurst: nonNegativeInt('storage-diagnostics-burst', DEFAULT_STORAGE_DIAGNOSTICS_BURST),
+  storageDiagnosticsTimeoutMs: positiveInt('storage-diagnostics-timeout-ms', DEFAULT_STORAGE_DIAGNOSTICS_TIMEOUT_MS),
 }
 
 const probes = [
@@ -65,9 +69,9 @@ const toolsProbe = probes.find(probe => probe.id === 'tools')
 if (!toolsProbe) throw new Error('Tools acceptance probe is missing')
 const mixedForegroundProbes = probes.filter(probe => ['taskCenter', 'facets', 'tools', 'agents'].includes(probe.id))
 
-async function request(path, acceptedStatuses) {
+async function request(path, acceptedStatuses, timeoutMs = options.timeoutMs) {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   timer.unref?.()
   const startedAt = performance.now()
   try {
@@ -192,6 +196,52 @@ for (const probe of probes) {
   console.log(`${result.passed ? 'PASS' : 'FAIL'} p95=${result.result.p95Ms}ms failures=${result.result.failures}/${result.result.count}`)
 }
 
+let storageDiagnostics = null
+if (options.storageDiagnosticsBurst > 0) {
+  const diagnosticsRequest = request(
+    '/api/v1/storage/diagnostics',
+    new Set([200]),
+    options.storageDiagnosticsTimeoutMs,
+  )
+  const concurrentForeground = await runBurst(
+    options.storageDiagnosticsBurst,
+    mixedForegroundProbes,
+  )
+  const result = await diagnosticsRequest
+  const details = result.body?.storage?.details
+  storageDiagnostics = {
+    passed: Boolean(result.ok && concurrentForeground.passed),
+    request: {
+      ok: result.ok,
+      status: result.status,
+      elapsedMs: rounded(result.elapsedMs),
+      ...(result.error ? { error: result.error } : {}),
+    },
+    concurrentForeground,
+    snapshot: details && typeof details === 'object' ? {
+      capacity: details.dataGrowth?.capacity ?? null,
+      storageBreakdown: details.storageBreakdown ? {
+        available: details.storageBreakdown.available,
+        basis: details.storageBreakdown.basis,
+        excludesFreelist: details.storageBreakdown.excludesFreelist,
+        categories: details.storageBreakdown.categories ?? null,
+        topObjects: Array.isArray(details.storageBreakdown.objects)
+          ? details.storageBreakdown.objects.slice(0, 15)
+          : [],
+      } : null,
+      capturedActivity: details.capturedActivity ?? null,
+      replicationJournal: details.replicationJournal ?? null,
+      spaceRecovery: details.spaceRecovery ?? null,
+      growthMetrics: details.growthMetrics ?? null,
+    } : null,
+  }
+  console.log(
+    `storage diagnostics ${storageDiagnostics.passed ? 'PASS' : 'FAIL'} `
+    + `elapsed=${storageDiagnostics.request.elapsedMs}ms `
+    + `foregroundFailures=${concurrentForeground.failures}/${concurrentForeground.count}`,
+  )
+}
+
 // The single-request probe above warms the short Tools aggregate cache. The
 // concurrency gates must start after that cache expires, otherwise a hot cache
 // could hide a broken same-key single-flight implementation.
@@ -213,7 +263,7 @@ if (options.burst > 0) {
 
 // HTTP health and Tool projection readiness both have short caches. Wait past
 // those TTLs, then explicitly refresh both final-state snapshots after bursts.
-if (toolsBurst || burst) await delay(HEALTH_REFRESH_MS)
+if (storageDiagnostics || toolsBurst || burst) await delay(HEALTH_REFRESH_MS)
 const [freshHealthResult, freshUsageResult] = await Promise.all([
   request('/api/v1/health', new Set([200, 503])),
   request('/api/v1/usage?limit=1', new Set([200])),
@@ -232,6 +282,7 @@ const report = {
   generatedAt: new Date().toISOString(),
   baseUrl: options.baseUrl,
   measurements: measurements.map(({ lastBody: _lastBody, ...measurement }) => measurement),
+  ...(storageDiagnostics ? { storageDiagnostics } : {}),
   ...(toolsBurst ? { toolsBurst } : {}),
   ...(burst ? { burst } : {}),
   projectionReadiness: {
@@ -249,6 +300,7 @@ const report = {
 console.log(JSON.stringify(report, null, 2))
 
 const failed = measurements.filter(item => !item.passed)
+if (storageDiagnostics && !storageDiagnostics.passed) failed.push({ label: 'storage diagnostics + foreground isolation' })
 if (toolsBurst && !toolsBurst.passed) failed.push({ label: 'cold Tools burst' })
 if (burst && !burst.passed) failed.push({ label: 'cold mixed foreground burst' })
 if (!freshHealthResult.ok) failed.push({ label: 'fresh post-burst health' })
