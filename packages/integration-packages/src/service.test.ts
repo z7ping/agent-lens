@@ -203,6 +203,28 @@ test('legacy physicalization isolates one broken package and retries only until 
   }
 })
 
+test('legacy DSH selection is physically installed through the same Integration lifecycle', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const migrated = await service.ensureLegacyPhysicalization(['dsh'])
+    assert.equal(migrated.migrated, true)
+    assert.deepEqual(migrated.operations.map(item => [item.integrationId, item.status]), [
+      ['dsh', 'completed'],
+    ])
+    assert.equal(service.state('dsh').installed, true)
+    assert.equal(service.state('dsh').integrity, 'verified')
+    assert.ok(service.installedEntryPath('dsh'))
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('failed update keeps the previously committed version current and loadable', async () => {
   const f = await fixture()
   try {
