@@ -49,7 +49,8 @@ export interface IndependentReplicationRootSnapshotBase<
   entityType: TEntityType
   originEntityId: string
   latestRevision: number
-  changedAt: string
+  latestChangedAt: string
+  historyCapturedAt: string
 }
 
 type EntityFor<TEntityType extends IndependentReplicationRootEntityType> =
