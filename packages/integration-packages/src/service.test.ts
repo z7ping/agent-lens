@@ -179,20 +179,24 @@ test('legacy physicalization isolates one broken package and retries only until 
     ])
     assert.equal(service.state('pi').installed, false)
     assert.equal(service.state('codex').installed, true)
-    assert.equal(
-      existsSync(join(f.installRoot, 'legacy-physicalization-v1.json')),
-      false,
+    const markerPath = join(f.installRoot, 'legacy-physicalization-v1.json')
+    assert.equal(existsSync(markerPath), true)
+    assert.deepEqual(
+      JSON.parse(await readFile(markerPath, 'utf8')).integrationIds,
+      ['codex'],
     )
 
     await writeFile(piEntry.path, piEntry.content, 'utf8')
     const second = await service.ensureLegacyPhysicalization(['pi', 'codex'])
     assert.equal(second.migrated, true)
-    assert.equal(second.operations.every(item => item.status === 'completed'), true)
+    assert.deepEqual(second.operations.map(item => [item.integrationId, item.status]), [
+      ['pi', 'completed'],
+    ])
     assert.equal(service.state('pi').installed, true)
     assert.equal(service.state('codex').installed, true)
-    assert.equal(
-      existsSync(join(f.installRoot, 'legacy-physicalization-v1.json')),
-      true,
+    assert.deepEqual(
+      new Set(JSON.parse(await readFile(markerPath, 'utf8')).integrationIds),
+      new Set(['codex', 'pi']),
     )
   } finally {
     await f.cleanup()
@@ -514,3 +518,35 @@ test('removing Integration package leaves data outside package install root unto
     await f.cleanup()
   }
 })
+
+test('legacy physicalization can add a newly official DSH Integration after an older marker already exists', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const first = await service.ensureLegacyPhysicalization(['pi'])
+    assert.equal(first.migrated, true)
+    assert.equal(service.state('pi').installed, true)
+    assert.equal(service.state('dsh').installed, false)
+
+    const second = await service.ensureLegacyPhysicalization(['pi', 'dsh'])
+    assert.equal(second.migrated, true)
+    assert.deepEqual(second.operations.map(item => [item.integrationId, item.status]), [
+      ['dsh', 'completed'],
+    ])
+    assert.equal(service.state('dsh').installed, true)
+
+    const marker = JSON.parse(await readFile(
+      join(f.installRoot, 'legacy-physicalization-v1.json'),
+      'utf8',
+    )) as { integrationIds: string[] }
+    assert.deepEqual(new Set(marker.integrationIds), new Set(['pi', 'dsh']))
+  } finally {
+    await f.cleanup()
+  }
+})
+
