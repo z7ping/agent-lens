@@ -71,7 +71,7 @@ export class SqliteCanonicalObservationSnapshotReader {
       })
       return {
         items,
-        nextCursor: ids.at(-1),
+        nextCursor: ids.at(-1)!,
         done,
       }
     })
