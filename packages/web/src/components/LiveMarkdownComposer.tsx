@@ -21,6 +21,7 @@ import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
 import { HeadingNode, QuoteNode } from '@lexical/rich-text'
 import {
   $createParagraphNode,
+  $getNodeByKey,
   $getRoot,
   $getSelection,
   $insertNodes,
@@ -358,7 +359,7 @@ function ImagePastePlugin({
       const nodes = pending.map(item => item.node)
       $insertNodes(nodes)
       const last = nodes.at(-1)
-      const parent = last?.getParent()
+      const parent = last?.getParent() ?? null
       if (last && $isRootOrShadowRoot(parent) && last.getNextSibling() === null) {
         const paragraph = $createParagraphNode()
         last.insertAfter(paragraph)

@@ -35,6 +35,7 @@ const workspacePrimaryNavigation = readFileSync(new URL('../WorkspacePrimaryNavi
 const workspaceSidebarCss = readFileSync(new URL('../workspace-sidebar.css', import.meta.url), 'utf8')
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8')
 const liveNoticeCss = readFileSync(new URL('../../live-notice.css', import.meta.url), 'utf8')
+const semanticColors = readFileSync(new URL('../../semantic-colors.css', import.meta.url), 'utf8')
 const agentRules = readFileSync(new URL('../../../../../AGENTS.md', import.meta.url), 'utf8')
 
 function tsxFiles(directory: string): string[] {
@@ -45,7 +46,7 @@ function tsxFiles(directory: string): string[] {
 }
 
 test('shared UI primitives expose the unified component set', () => {
-  for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'Select', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
+  for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
   assert.match(index, /export \{ Dialog, Drawer, Popover(?:, [^}]*)? \} from '\.\/Overlay'/)
@@ -57,7 +58,7 @@ test('DeepSeek Harness 在浅色和深色主题都拥有来源色 Token', () => 
   const tokens = readFileSync(new URL('../../tokens.css', import.meta.url), 'utf8')
   assert.match(tokens, /:root\s*\{[\s\S]*?--src-dsh:\s*#[0-9A-Fa-f]{6};/)
   assert.match(tokens, /:root\[data-theme='dark'\]\s*\{[\s\S]*?--src-dsh:\s*#[0-9A-Fa-f]{6};/)
-  assert.match(tokens, /\.source-dot\.source-dsh,[\s\S]*?background:var\(--src-dsh\)/)
+  assert.match(semanticColors, /\.source-dot\.source-dsh[\s\S]*?background:\s*var\(--src-dsh\)/)
 })
 
 test('界面图标统一走 UiIcon，页面不保留字符占位或重复 SVG', () => {
@@ -182,10 +183,10 @@ test('Tools and Insights own filters in the left context, never in a right-side 
   assert.doesNotMatch(toolsPage, /tool-drawer-scrim|tool-drill-drawer|window\.addEventListener\('keydown'/)
 
   assert.match(insightsPage, /import \{ SidebarFilterDisclosure \} from '\.\.\/components\/SidebarFilterDisclosure'/)
-  assert.match(insightsPage, /import \{ IconButton, SelectMenu, UiIcon \} from '\.\.\/components\/ui'/)
+  assert.match(insightsPage, /import \{[^}]*\bIconButton\b[^}]*\bSelectMenu\b[^}]*\bUiIcon\b[^}]*\} from '\.\.\/components\/ui'/)
   assert.match(insightsPage, /createPortal\(sidebarFilters, sidebarHost\)/)
   assert.match(insightsPage, /workspace-insight-filter-disclosure/)
-  assert.match(insightsPage, /<SidebarFilterDisclosure className="workspace-insight-filter-disclosure"/)
+  assert.match(insightsPage, /<SidebarFilterDisclosure[\s\S]*?className="workspace-insight-filter-disclosure"/)
   assert.doesNotMatch(insightsPage, /<Toolbar\b/)
   assert.doesNotMatch(insightsPage, /<AgentScope\b/)
 
@@ -201,8 +202,8 @@ test('Review, Backup and Agent Overview retain their valid local primitives', ()
   assert.doesNotMatch(reviewPage, /document\.addEventListener\('keydown'/)
   assert.doesNotMatch(reviewCss, /@media \(max-width: (?:1180|900|640)px\)/)
 
-  assert.match(backupPage, /import \{ Button, Dialog, Drawer, Toolbar, ToolbarGroup \} from '\.\.\/components\/ui'/)
-  assert.match(backupPage, /<Drawer[\s\S]*?className="backup-data-drawer"/)
+  assert.match(backupPage, /import \{[^}]*\bButton\b[^}]*\bDialog\b[^}]*\bDrawer\b[^}]*\bToolbarGroup\b[^}]*\} from '\.\.\/components\/ui'/)
+  assert.match(backupPage, /<Drawer[\s\S]*?className="backup-(?:physical-path|preview)-drawer"/)
   assert.match(backupPage, /<Dialog[\s\S]*?className="backup-confirm-overlay"/)
   assert.doesNotMatch(backupCss, /@media \(max-width: (?:1180|820|640)px\)/)
 

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type {
   AgentActor,
   AgentInstallation,
@@ -208,12 +209,16 @@ export class DefaultIdentityService implements IdentityService {
       : null
     const normalizedPath = normalizedPathIdentity(path)
     const id = stableId('workspace', [hint.hostId, normalizedPath])
+    const existing = await repository.getWorkspace(id)
     const workspace: Workspace = {
       id,
       hostId: hint.hostId,
-      ...(project ? { projectId: project.id } : {}),
+      ...(project?.id ?? existing?.projectId ? { projectId: project?.id ?? existing!.projectId } : {}),
       path,
-      ...(hint.gitRemote ? { repositoryId: hint.gitRemote } : {}),
+      ...(hint.gitRemote ?? existing?.repositoryId
+        ? { repositoryId: hint.gitRemote ?? existing!.repositoryId }
+        : {}),
+      ...(existing?.worktreeId ? { worktreeId: existing.worktreeId } : {}),
     }
     await repository.putWorkspace(workspace)
     return workspace
@@ -432,8 +437,10 @@ export class DefaultObservationService implements ObservationService {
           ...semantic,
           evidenceRefs: [...existing.evidenceRefs, ...added],
         }
-        const semanticChanged = JSON.stringify({ ...existing, evidenceRefs: [] })
-          !== JSON.stringify({ ...merged, evidenceRefs: [] })
+        const semanticChanged = !isDeepStrictEqual(
+          { ...existing, evidenceRefs: [] },
+          { ...merged, evidenceRefs: [] },
+        )
         if (semanticChanged || added.length) await tx.observations.put(merged)
         await repairChildren()
         if (!semanticChanged && !added.length) {

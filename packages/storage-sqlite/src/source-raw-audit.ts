@@ -77,8 +77,12 @@ export class SqliteSourceRawAuditReader implements SourceRawAuditReader {
              EXISTS(
                SELECT 1
                FROM evidence e
-               JOIN observation_evidence oe ON oe.evidence_id = e.id
                WHERE e.source_record_id = sr.id
+                 AND EXISTS(
+                   SELECT 1
+                   FROM observation_evidence oe
+                   WHERE oe.evidence_id = e.id
+                 )
              ) AS canonicalStable,
              EXISTS(
                SELECT 1

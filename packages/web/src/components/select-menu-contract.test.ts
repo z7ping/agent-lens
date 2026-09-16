@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const selectSource = readFileSync(new URL('./SelectMenu.tsx', import.meta.url), 'utf8')
@@ -9,14 +10,14 @@ const taskCenterSource = readFileSync(new URL('../features/TaskCenterPage.tsx', 
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-    const path = `${directory}/${entry.name}`
+    const path = join(directory, entry.name)
     return entry.isDirectory() ? sourceFiles(path) : entry.name.endsWith('.tsx') ? [path] : []
   })
 }
 
 test('Web 下拉入口统一使用 SelectMenu，而不是页面级原生 select', () => {
   const nativeSelectOwners = sourceFiles(sourceRoot).filter(path => /<select(?:\s|>)/.test(readFileSync(path, 'utf8')))
-  assert.deepEqual(nativeSelectOwners.map(path => path.replace(sourceRoot, '').replaceAll('\\', '/').replace(/^\/+/, '')), ['components/ui/Primitives.tsx'])
+  assert.deepEqual(nativeSelectOwners, [])
   assert.match(taskCenterSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
 })
 

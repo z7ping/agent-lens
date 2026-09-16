@@ -31,7 +31,7 @@ test('Task Review 将 commentary、reasoning 与工具统一放入思考过程',
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
   assert.match(reviewPage, /function RawEventGroup[\s\S]*?const \[expanded, setExpanded\] = useState\(false\)[\s\S]*?className="raw-event-group"/)
   assert.match(reviewPage, /t\('local\.rawEvents\.title'\)/)
-  assert.match(reviewPage, /t\('local\.rawEvents\.description'\)/)
+  assert.doesNotMatch(reviewPage, /local\.rawEvents\.description/)
   assert.match(reviewPage, /\{expanded && <div>\{items\.map\(item => <EventRow/)
 })
 

@@ -77,6 +77,10 @@ test('Raw audit reader 区分 Evidence-only 与 Canonical+Evidence', async () =>
       payload: { text: 'done' },
       evidenceRefs: ['evidence-b'],
     })
+    assert.deepEqual(
+      storage.db.prepare('SELECT * FROM observation_evidence').all(),
+      [{ observation_id: 'observation-b', evidence_id: 'evidence-b' }],
+    )
 
     const page = await storage.sourceRawAudit.list(undefined, 10)
     assert.equal(page.items.length, 2)
@@ -85,7 +89,7 @@ test('Raw audit reader 区分 Evidence-only 与 Canonical+Evidence', async () =>
     assert.equal(a?.evidenceStable, true)
     assert.equal(a?.canonicalStable, false)
     assert.equal(b?.evidenceStable, true)
-    assert.equal(b?.canonicalStable, true)
+    assert.equal(b?.canonicalStable, true, JSON.stringify(page.items))
     assert.equal(b?.pinned, false)
   } finally {
     await storage.close()

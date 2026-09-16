@@ -33,7 +33,7 @@ export class PiLiveFollowController {
   detach(): void {
     if (this.following) this.diagnostics.detachCount += 1
     this.following = false
-    this.userIntent = true
+    this.userIntent = false
   }
 
   restore(): void {

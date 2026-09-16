@@ -125,12 +125,11 @@ test('备份记录提供直达快照真实物理路径的检查入口', () => {
   assert.match(backupPage, /file\.originalPath/)
   assert.match(backupPage, /file\.sourceRelativePath/)
   assert.match(backupPage, /t\('snapshots\.physicalPaths'\)/)
-  assert.match(backupPage, /t\('tree\.copyPath'\)/)
+  assert.match(backupPage, /<LocalPathActions[\s\S]*?path=\{root\.path\}/)
 })
 
 test('物理路径抽屉可以直接请求桌面宿主打开系统目录', () => {
-  assert.match(backupPage, /api\.openHostDirectory\(path\)/)
-  assert.match(backupPage, /t\('tree\.openDirectory'\)/)
+  assert.match(backupPage, /const openPhysicalPath = async \(path: string\) => \{[\s\S]*?api\.openHostPath\(path\)/)
   assert.match(backupPage, /className="backup-physical-path-actions"/)
 })
 

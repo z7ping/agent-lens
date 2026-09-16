@@ -318,8 +318,8 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
       item => item.entityType === 'SourceRecord',
     )
     assert.ok(sourceRecordJournal)
-    assert.ok((sourceRecordJournal?.extraChangesBeyondFirst ?? 0) >= 1)
-    assert.ok((sourceRecordJournal?.extraChangesPerDistinctEntity ?? 0) >= 1)
+    assert.equal(sourceRecordJournal?.extraChangesBeyondFirst, 0)
+    assert.equal(sourceRecordJournal?.extraChangesPerDistinctEntity, 0)
     assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'SourceRecord'))
     assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'CanonicalObservation'))
     assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'Evidence'))

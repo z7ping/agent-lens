@@ -108,7 +108,7 @@ export async function auditSourceRawRecoveryBatch(input: {
     const capability = policy?.describe(candidate.record)
     let recovery = initialRecoveryCheck(capability, Boolean(policy?.verify))
     let decision = evaluateSourceRawRetention({
-      capability,
+      ...(capability ? { capability } : {}),
       verification: recovery,
       canonicalStable: candidate.canonicalStable,
       evidenceStable: candidate.evidenceStable,
@@ -128,7 +128,7 @@ export async function auditSourceRawRecoveryBatch(input: {
         }
       }
       decision = evaluateSourceRawRetention({
-        capability,
+        ...(capability ? { capability } : {}),
         verification: recovery,
         canonicalStable: candidate.canonicalStable,
         evidenceStable: candidate.evidenceStable,

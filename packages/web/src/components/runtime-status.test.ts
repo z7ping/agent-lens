@@ -67,6 +67,6 @@ test('实时断开和来源失败不会误报运行正常', () => {
 test('连接建立前保持明确的等待状态', () => {
   const status = projectRuntimeStatus(null, false, { origin: 'http://127.0.0.1:56800', port: 56800 })
   assert.equal(status.label, '连接中')
-  assert.equal(status.owner, '等待 Runtime')
+  assert.equal(status.owner, '等待运行服务')
   assert.equal(status.tone, 'connecting')
 })

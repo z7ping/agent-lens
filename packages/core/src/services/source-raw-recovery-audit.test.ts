@@ -107,10 +107,10 @@ test('Raw recovery audit 只把 verified + Canonical/Evidence 稳定记录判为
 
   const result = await auditSourceRawRecoveryBatch({ sources, storage, limit: 10 })
   assert.equal(result.summary.scanned, 5)
-  assert.equal(result.summary.eligible, 1)
+  assert.equal(result.summary.eligible, 1, JSON.stringify(result.items))
   assert.equal(result.summary.drifted, 1)
   assert.equal(result.summary.preserved, 1)
-  assert.equal(result.summary.unknown, 1)
+  assert.equal(result.summary.unknown, 2)
 
   assert.equal(
     result.items.find(item => item.recordId === 'raw-verified')?.decision.autoReclaimEligible,

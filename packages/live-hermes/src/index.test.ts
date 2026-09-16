@@ -4,7 +4,7 @@ import { HermesLiveAdapter, hermesLiveManifest, normalizeHermesLiveEvent } from 
 import type { DefaultHermesLiveService } from './service'
 
 test('Hermes Live does not advertise Pi thinking-control semantics', () => {
-  assert.equal(hermesLiveManifest.capabilities.includes('thinking-control'), false)
+  assert.equal(hermesLiveManifest.capabilities?.includes('thinking-control') ?? false, false)
 })
 
 test('Hermes Live shares the unified text message contract without claiming attachment support', async () => {

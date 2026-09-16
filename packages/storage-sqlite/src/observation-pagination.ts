@@ -130,6 +130,7 @@ function cleanupStaleParserDerivations(executor: SqliteExecutor, evidenceRefs: r
       JOIN evidence e ON e.id = oe.evidence_id
       JOIN source_records sr ON sr.id = e.source_record_id
       WHERE e.source_record_id = ?
+        AND e.parser_version IS NOT NULL
         AND COALESCE(e.parser_version, '') != COALESCE(sr.parser_version, '')
     `).all(sourceRecordId).map(row => stringField(row, 'observationId'))
     if (!ids.length) continue
@@ -143,6 +144,7 @@ function cleanupStaleParserDerivations(executor: SqliteExecutor, evidenceRefs: r
           FROM evidence e
           JOIN source_records sr ON sr.id = e.source_record_id
           WHERE e.source_record_id = ?
+            AND e.parser_version IS NOT NULL
             AND COALESCE(e.parser_version, '') != COALESCE(sr.parser_version, '')
         )
     `).run(...ids, sourceRecordId)

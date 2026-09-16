@@ -12,7 +12,7 @@ const insights = readFileSync(new URL('./features/InsightsPage.tsx', import.meta
 
 test('一级工作区统一使用单行 Workspace Topbar', () => {
   assert.match(app, /function WorkspaceTopBar/)
-  assert.match(app, /className=\{\`workspace-topbar/)
+  assert.match(app, /className="workspace-topbar"/)
   assert.match(app, /className="workspace-topbar-page-tools"/)
   assert.doesNotMatch(app, /workspace-breadcrumb-shell/)
   assert.doesNotMatch(app, /WorkspaceBreadcrumb/)

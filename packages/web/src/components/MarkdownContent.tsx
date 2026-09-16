@@ -34,7 +34,7 @@ const markdownComponents: Components = {
 function FrontmatterPanel({ value }: { value: MarkdownFrontmatter }) {
   if (value.error) {
     return <div className="markdown-frontmatter" data-invalid="true">
-      <pre className="markdown-frontmatter-raw">{value.raw}</pre>
+      <CopyableCodeBlock className="markdown-frontmatter-raw">{value.raw}</CopyableCodeBlock>
     </div>
   }
   return <dl className="markdown-frontmatter">

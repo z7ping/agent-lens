@@ -90,9 +90,9 @@ const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
   },
   async verify(record) {
     const result = await verifyJsonlLineSha256({
-      path: record.locator.path,
-      offset: record.locator.offset,
-      expectedFingerprint: record.fingerprint,
+      ...(record.locator.path === undefined ? {} : { path: record.locator.path }),
+      ...(record.locator.offset === undefined ? {} : { offset: record.locator.offset }),
+      ...(record.fingerprint === undefined ? {} : { expectedFingerprint: record.fingerprint }),
     })
     return {
       ...result,

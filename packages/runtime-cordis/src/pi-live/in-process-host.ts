@@ -12,6 +12,7 @@ import { toPiLiveWireEvent } from './sdk-event'
 import type { PiSdkLoader, PiSdkModel, PiSdkSession, PiSdkThinkingLevel } from './sdk-loader'
 import type {
   PiLiveControls,
+  PiLiveImageInput,
   PiLivePackageUpdate,
   PiLivePackageUpdateCheckStatus,
   PiLiveQueueState,

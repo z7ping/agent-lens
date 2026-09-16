@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const componentSource = readFileSync(new URL('./CopyableCodeBlock.tsx', import.meta.url), 'utf8')
@@ -9,14 +10,14 @@ const markdownSource = readFileSync(new URL('./MarkdownContent.tsx', import.meta
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-    const path = `${directory}/${entry.name}`
+    const path = join(directory, entry.name)
     return entry.isDirectory() ? sourceFiles(path) : entry.name.endsWith('.tsx') ? [path] : []
   })
 }
 
 test('所有代码块都通过统一复制组件渲染', () => {
   const directPreOwners = sourceFiles(sourceRoot)
-    .filter(path => !path.endsWith('/CopyableCodeBlock.tsx'))
+    .filter(path => !path.endsWith('CopyableCodeBlock.tsx'))
     .filter(path => /<pre(?:\s|>)/.test(readFileSync(path, 'utf8')))
 
   assert.deepEqual(directPreOwners, [])

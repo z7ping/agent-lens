@@ -91,14 +91,15 @@ export function storageBreakdownDetails(db: Database.Database) {
       SELECT s.name AS objectName,
              m.type AS objectType,
              CASE WHEN m.type = 'index' THEN m.tbl_name ELSE m.name END AS tableName,
-             s.pageno AS pages,
-             s.payload AS usefulPayloadBytes,
-             s.unused AS unusedBytes,
-             s.pgsize AS allocatedBytes
+        CAST(SUM(s.pgsize) / (SELECT page_size FROM pragma_page_size) AS INTEGER) AS pages,
+             COALESCE(SUM(s.payload), 0) AS usefulPayloadBytes,
+             COALESCE(SUM(s.unused), 0) AS unusedBytes,
+             COALESCE(SUM(s.pgsize), 0) AS allocatedBytes
       FROM dbstat('main', 1) s
       JOIN sqlite_master m ON m.name = s.name
       WHERE m.type IN ('table', 'index')
-      ORDER BY s.pgsize DESC, s.name
+      GROUP BY s.name, m.type, m.tbl_name, m.name
+      ORDER BY allocatedBytes DESC, s.name
     `).all().map(value => {
       const row = rowRecord(value)
       const objectName = optionalString(row, 'objectName')
@@ -577,14 +578,16 @@ export function replicationJournalDetails(
 
   const rows = db.prepare(`
     SELECT entity_type AS entityType,
-           COUNT(*) AS changes,
-           COUNT(DISTINCT origin_entity_id) AS distinctEntities,
-           SUM(CASE WHEN changed_at >= @cutoff7 THEN 1 ELSE 0 END) AS last7Changes,
-           SUM(CASE WHEN changed_at >= @cutoff30 THEN 1 ELSE 0 END) AS last30Changes
-    FROM replication_canonical_changes
+           SUM(changes) AS changes,
+           COUNT(*) AS distinctEntities
+    FROM (
+      SELECT entity_type, origin_entity_id, COUNT(*) AS changes
+      FROM replication_canonical_changes INDEXED BY idx_replication_canonical_changes_entity
+      GROUP BY entity_type, origin_entity_id
+    )
     GROUP BY entity_type
     ORDER BY changes DESC, entity_type
-  `).all({ cutoff7, cutoff30 }).map(value => {
+  `).all().map(value => {
     const row = rowRecord(value)
     const entityType = optionalString(row, 'entityType')
     if (!entityType) throw new TypeError('SQLite replication journal entityType must be a string')
@@ -600,10 +603,14 @@ export function replicationJournalDetails(
       extraChangesPerDistinctEntity: distinctEntities > 0
         ? extraChangesBeyondFirst / distinctEntities
         : null,
-      last7Days: requiredNumber(row, 'last7Changes'),
-      last30Days: requiredNumber(row, 'last30Changes'),
     }
   })
+
+  const timeRow = rowRecord(db.prepare(`
+    SELECT COALESCE(SUM(CASE WHEN changed_at >= @cutoff7 THEN 1 ELSE 0 END), 0) AS last7Changes,
+           COALESCE(SUM(CASE WHEN changed_at >= @cutoff30 THEN 1 ELSE 0 END), 0) AS last30Changes
+    FROM replication_canonical_changes
+  `).get({ cutoff7, cutoff30 }))
 
   const totalChanges = rows.reduce((sum, row) => sum + row.changes, 0)
   const distinctEntities = rows.reduce((sum, row) => sum + row.distinctEntities, 0)
@@ -619,8 +626,8 @@ export function replicationJournalDetails(
     extraChangesPerDistinctEntity: distinctEntities > 0
       ? extraChangesBeyondFirst / distinctEntities
       : null,
-    last7Days: rows.reduce((sum, row) => sum + row.last7Days, 0),
-    last30Days: rows.reduce((sum, row) => sum + row.last30Days, 0),
+    last7Days: requiredNumber(timeRow, 'last7Changes'),
+    last30Days: requiredNumber(timeRow, 'last30Changes'),
     byEntityType: rows,
   }
 }
