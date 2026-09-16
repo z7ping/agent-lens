@@ -132,7 +132,7 @@ function fromNowBoundary(history: HistoryBoundary): string | undefined {
     !history.boundaryCapturedAt
     || !Number.isFinite(Date.parse(history.boundaryCapturedAt))
   ) {
-    throw new Error('from-now Independent Root processing requires a valid boundaryCapturedAt')
+    throw new Error('from-now Current-State Root processing requires a valid boundaryCapturedAt')
   }
   return history.boundaryCapturedAt
 }
@@ -259,7 +259,7 @@ async function pumpSnapshotPage(input: {
     state.policyRevision !== input.policy.revision
     || state.historyRevision !== input.history.revision
   ) {
-    throw new Error('Independent Root Snapshot policy/history revision changed; re-bootstrap is required')
+    throw new Error('Current-State Root Snapshot policy/history revision changed; re-bootstrap is required')
   }
 
   await input.captureProgress.advance({
@@ -341,13 +341,13 @@ async function pumpBootstrapDeltaPage(input: {
     entityType: input.entityType,
   })
   if (!snapshot?.snapshotComplete) {
-    throw new Error('Independent Root Snapshot must complete before delta catch-up')
+    throw new Error('Current-State Root Snapshot must complete before delta catch-up')
   }
   if (
     snapshot.policyRevision !== input.policy.revision
     || snapshot.historyRevision !== input.history.revision
   ) {
-    throw new Error('Independent Root Snapshot policy/history revision changed; re-bootstrap is required')
+    throw new Error('Current-State Root Snapshot policy/history revision changed; re-bootstrap is required')
   }
 
   const key = {
@@ -360,7 +360,7 @@ async function pumpBootstrapDeltaPage(input: {
   if (!state) {
     const throughRevision = await input.changes.highWaterRevision()
     if (throughRevision < snapshot.baselineRevision) {
-      throw new Error('Replication high-water moved behind Independent Root baseline')
+      throw new Error('Replication high-water moved behind Current-State Root baseline')
     }
     state = {
       ...key,
@@ -373,7 +373,7 @@ async function pumpBootstrapDeltaPage(input: {
     state.revision < snapshot.baselineRevision
     || state.throughRevision < snapshot.baselineRevision
   ) {
-    throw new Error('Independent Root bootstrap delta progress precedes Snapshot baseline')
+    throw new Error('Current-State Root bootstrap delta progress precedes Snapshot baseline')
   }
 
   const result = await pumpIndependentRootChanges({
@@ -427,7 +427,7 @@ function createReconciliationSource(input: {
     }) {
       if (args.entityType !== input.entityType) {
         throw new Error(
-          `Independent Root reconciliation expected ${input.entityType}, got ${args.entityType}`,
+          `Current-State Root reconciliation expected ${input.entityType}, got ${args.entityType}`,
         )
       }
       const page = await input.roots.scan({
@@ -578,7 +578,7 @@ async function pumpIncrementalPage(input: {
   now?: string
 }): Promise<IndependentRootChangePumpResult> {
   if (!Number.isInteger(input.startRevision) || input.startRevision < 0) {
-    throw new TypeError('Independent Root incremental startRevision must be a non-negative integer')
+    throw new TypeError('Current-State Root incremental startRevision must be a non-negative integer')
   }
   const now = input.now ?? new Date().toISOString()
   const key = {
@@ -605,13 +605,13 @@ async function pumpIncrementalPage(input: {
     })
   }
   if (state.revision < input.startRevision) {
-    throw new Error('Independent Root incremental progress precedes Bootstrap watermark')
+    throw new Error('Current-State Root incremental progress precedes Bootstrap watermark')
   }
 
   if (state.revision === state.throughRevision) {
     const highWater = await input.changes.highWaterRevision()
     if (highWater < state.revision) {
-      throw new Error('Replication high-water moved behind Independent Root incremental progress')
+      throw new Error('Replication high-water moved behind Current-State Root incremental progress')
     }
     if (highWater === state.revision) {
       return {
@@ -731,7 +731,7 @@ async function pumpPeriodicReconciliationPage(input: {
     entityType: input.entityType,
   })
   if (!progress) {
-    throw new Error('Independent Root periodic Reconciliation requires incremental progress')
+    throw new Error('Current-State Root periodic Reconciliation requires incremental progress')
   }
   await input.incrementalProgress.put({
     ...progress,
@@ -749,10 +749,10 @@ async function pumpPeriodicReconciliationPage(input: {
 
   const nowTimestamp = Date.parse(now)
   if (!Number.isFinite(nowTimestamp)) {
-    throw new Error('Independent Root periodic Reconciliation now must be a valid timestamp')
+    throw new Error('Current-State Root periodic Reconciliation now must be a valid timestamp')
   }
   if (!Number.isFinite(input.intervalMs) || input.intervalMs <= 0) {
-    throw new TypeError('Independent Root periodic Reconciliation intervalMs must be positive')
+    throw new TypeError('Current-State Root periodic Reconciliation intervalMs must be positive')
   }
   const dueAt = new Date(nowTimestamp + input.intervalMs).toISOString()
   await input.cycles.completeReconciliationCycle({
@@ -823,7 +823,7 @@ export async function pumpIndependentRootRuntimeStep(input: {
     entityType: input.entityType,
   })
   if (!bootstrapDelta || bootstrapDelta.revision < bootstrapDelta.throughRevision) {
-    throw new Error('Active Independent Root lifecycle requires completed delta progress')
+    throw new Error('Active Current-State Root lifecycle requires completed delta progress')
   }
 
   const incremental = await pumpIncrementalPage({
