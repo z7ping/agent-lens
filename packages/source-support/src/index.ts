@@ -4,3 +4,5 @@ export * from './value'
 export * from './source-history-watch'
 export * from './watch-source-files'
 export * from './managed-files'
+
+export * from './raw-recovery'

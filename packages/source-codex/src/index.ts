@@ -8,6 +8,7 @@ import {
   defineAgentLensPlugin,
   type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
+import { verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverCodexAssets } from './assets'
 import {
   CODEX_CURRENT_PARSER_VERSION,
@@ -56,10 +57,55 @@ const ingestCurrentCodexHistory: NonNullable<SourceDefinition['ingestHistory']> 
   }
 }
 
+const jsonlRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
+  describe(record) {
+    const stable = record.locator.kind === 'file'
+      && Boolean(record.locator.path)
+      && record.locator.offset !== undefined
+      && Boolean(record.fingerprint)
+    return stable
+      ? {
+          authority: 'native-store',
+          locatorStability: 'stable',
+          mutability: 'append-oriented',
+          verification: 'fingerprint',
+          canReread: true,
+          canReparse: true,
+          replayable: true,
+          persistencePreference: 'reference',
+        }
+      : {
+          authority: record.locator.kind === 'runtime-hook' ? 'agent-lens-only' : 'unknown',
+          locatorStability: 'none',
+          mutability: record.locator.kind === 'runtime-hook' ? 'ephemeral' : 'unknown',
+          verification: 'none',
+          canReread: false,
+          canReparse: false,
+          replayable: false,
+          persistencePreference: 'preserve',
+          reason: record.locator.kind === 'runtime-hook'
+            ? 'runtime-hook source is consumed from an ephemeral inbox'
+            : 'record does not expose a stable JSONL path+offset+fingerprint locator',
+        }
+  },
+  async verify(record) {
+    const result = await verifyJsonlLineSha256({
+      path: record.locator.path,
+      offset: record.locator.offset,
+      expectedFingerprint: record.fingerprint,
+    })
+    return {
+      ...result,
+      checkedAt: new Date().toISOString(),
+    }
+  },
+}
+
 export const codexSourceDefinition: SourceDefinition = {
   manifest: codexManifest,
   detect: detectCodex,
   declareCapabilities: declareCodexCapabilities,
+  rawRecovery: jsonlRawRecovery,
   discoverAssets: discoverCodexAssets,
   ingestHistory: ingestCurrentCodexHistory,
   startCapture: startCodexRuntimeCapture,

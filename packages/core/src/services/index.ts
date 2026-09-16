@@ -64,6 +64,7 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
 } from '../contracts/source'
+import type { SourceRawAuditReader } from './source-raw-retention'
 import type { MaintenanceJobStore } from './maintenance'
 import type { ToolUsageObservationReader } from './tool-usage'
 
@@ -550,6 +551,7 @@ export interface StorageService {
   readonly projectionBackfill?: ProjectionBackfillMaintenance
   readonly runtimeProfiles?: RuntimeProfileRepository
   readonly sourceRuntimeStatus?: SourceRuntimeStatusRepository
+  readonly sourceRawAudit?: SourceRawAuditReader
   readonly sessionRelationshipCandidates?: SessionRelationshipCandidateRepository
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   /** Fast liveness/readiness path. Implementations should avoid whole-dataset aggregation here. */
@@ -557,3 +559,6 @@ export interface StorageService {
   /** Optional explicit deep diagnostics path; callers must not use this for readiness. */
   diagnostics?(): Promise<StorageHealth>
 }
+
+export * from './source-raw-retention'
+export * from './source-raw-recovery-audit'

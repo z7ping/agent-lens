@@ -3,12 +3,14 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
+import { DatabaseSync } from 'node:sqlite'
 import type { DiscoveredAsset, SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   declareOpenCodeCapabilities,
   discoverOpenCodeAssets,
   normalizeOpenCodeRecord,
   openCodeSourceInternals,
+  openCodeSourceDefinition,
 } from './index'
 
 function record(part: Record<string, unknown>, message: Record<string, unknown>, nativeId?: string): SourceRecord {
@@ -260,6 +262,78 @@ test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () 
       'unknown',
     )
   } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+test('OpenCode Raw recovery 将数据库 rowId 标成 best-effort 而不是稳定引用', () => {
+  const database = record({ type: 'text', text: 'hello' }, { role: 'assistant' }, 'part-1')
+  const capability = openCodeSourceDefinition.rawRecovery?.describe(database)
+  assert.equal(capability?.authority, 'native-store')
+  assert.equal(capability?.locatorStability, 'best-effort')
+  assert.equal(capability?.verification, 'fingerprint')
+  assert.equal(capability?.persistencePreference, 'preserve')
+})
+
+
+test('OpenCode Raw recovery 能实际重读 SQLite row 并识别 drift', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-opencode-raw-recovery-'))
+  const dbPath = join(root, 'opencode.db')
+  const db = new DatabaseSync(dbPath)
+  try {
+    db.exec(`
+      CREATE TABLE session(id TEXT PRIMARY KEY, directory TEXT, title TEXT);
+      CREATE TABLE message(id TEXT PRIMARY KEY, data TEXT);
+      CREATE TABLE part(
+        id TEXT,
+        message_id TEXT,
+        session_id TEXT,
+        time_created TEXT,
+        data TEXT
+      );
+      INSERT INTO session(id, directory, title)
+      VALUES ('session-1', '/workspace', 'Demo');
+      INSERT INTO message(id, data)
+      VALUES ('message-1', '{"role":"assistant"}');
+      INSERT INTO part(id, message_id, session_id, time_created, data)
+      VALUES (
+        'part-1', 'message-1', 'session-1',
+        '2026-09-16T00:00:00.000Z',
+        '{"type":"text","text":"hello"}'
+      );
+    `)
+    const row = openCodeSourceInternals.selectRows(db, 0, 1)[0]
+    assert.ok(row)
+    const fingerprint = openCodeSourceInternals.rowFingerprint(row!)
+    const sourceRecord: SourceRecord = {
+      id: 'opencode-db-recovery',
+      sourceId: 'opencode',
+      installationId: 'installation-opencode',
+      sourceSessionNativeId: 'session-1',
+      nativeType: 'part/text',
+      nativeId: 'part-1',
+      sourceSequence: 10,
+      capturedAt: '2026-09-16T00:00:00.000Z',
+      locator: { kind: 'database', path: dbPath, table: 'part', rowId: String(row!.row_id) },
+      fingerprint,
+      payload: { part: {}, message: {}, session: { nativeSessionId: 'session-1' } },
+      parserVersion: '3',
+    }
+
+    assert.equal(
+      (await openCodeSourceDefinition.rawRecovery?.verify?.(sourceRecord))?.state,
+      'verified',
+    )
+
+    db.prepare('UPDATE part SET data = ? WHERE rowid = ?')
+      .run('{"type":"text","text":"changed"}', row!.row_id)
+    assert.equal(
+      (await openCodeSourceDefinition.rawRecovery?.verify?.(sourceRecord))?.state,
+      'drifted',
+    )
+  } finally {
+    db.close()
     await rm(root, { recursive: true, force: true })
   }
 })

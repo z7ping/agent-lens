@@ -787,10 +787,95 @@ export const hermesManifest: SourcePluginManifest = {
   parserVersion: PARSER_VERSION,
 }
 
+const databaseRawRecovery: NonNullable<SourceDefinition['rawRecovery']> = {
+  describe(record) {
+    const recoverable = record.locator.kind === 'database'
+      && Boolean(record.locator.path)
+      && record.locator.rowId !== undefined
+      && Boolean(record.fingerprint)
+    return recoverable
+      ? {
+          authority: 'native-store',
+          locatorStability: 'best-effort',
+          mutability: 'mutable',
+          verification: 'fingerprint',
+          canReread: true,
+          canReparse: true,
+          replayable: true,
+          persistencePreference: 'preserve',
+          reason: 'database rowId can be re-read and fingerprinted but is not yet treated as a long-term stable business locator',
+        }
+      : {
+          authority: record.locator.kind === 'runtime-hook' ? 'agent-lens-only' : 'unknown',
+          locatorStability: 'none',
+          mutability: record.locator.kind === 'runtime-hook' ? 'ephemeral' : 'unknown',
+          verification: 'none',
+          canReread: false,
+          canReparse: false,
+          replayable: false,
+          persistencePreference: 'preserve',
+          reason: record.locator.kind === 'runtime-hook'
+            ? 'runtime-hook source is consumed from an ephemeral inbox'
+            : 'record does not expose a verifiable database row locator',
+        }
+  },
+  async verify(record) {
+    const checkedAt = new Date().toISOString()
+    const path = record.locator.path
+    const rowId = Number(record.locator.rowId)
+    if (
+      record.locator.kind !== 'database'
+      || !path
+      || !Number.isSafeInteger(rowId)
+      || rowId <= 0
+      || !record.fingerprint
+    ) {
+      return {
+        state: 'unsupported',
+        checkedAt,
+        reason: 'database-path-rowid-and-fingerprint-required',
+      }
+    }
+
+    try {
+      await access(path)
+    } catch (error) {
+      if (isMissingPathError(error)) {
+        return { state: 'unavailable', checkedAt, reason: 'source-database-missing' }
+      }
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'EACCES' || code === 'EPERM') {
+        return { state: 'unavailable', checkedAt, reason: 'source-database-not-readable' }
+      }
+      throw error
+    }
+
+    const db = new DatabaseSync(path, { readOnly: true, timeout: 1_500 })
+    try {
+      const row = selectRows(db, rowId - 1, 1)[0]
+      if (!row || row.row_id !== rowId) {
+        return { state: 'unavailable', checkedAt, reason: 'source-database-row-missing' }
+      }
+      const currentFingerprint = rowFingerprint(row)
+      return currentFingerprint === record.fingerprint
+        ? { state: 'verified', checkedAt, currentFingerprint }
+        : {
+            state: 'drifted',
+            checkedAt,
+            currentFingerprint,
+            reason: 'source-database-row-fingerprint-changed',
+          }
+    } finally {
+      db.close()
+    }
+  },
+}
+
 export const hermesSourceDefinition: SourceDefinition = {
   manifest: hermesManifest,
   detect: detectHermes,
   declareCapabilities: declareHermesCapabilities,
+  rawRecovery: databaseRawRecovery,
   discoverAssets: discoverHermesAssets,
   ingestHistory: ingestHermesHistory,
   startCapture: startHermesRuntimeCapture,

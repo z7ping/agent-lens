@@ -4,6 +4,7 @@ import type { SourceExecutionContext, SourceRecord } from '@agent-lens/core'
 import {
   CODEX_CURRENT_PARSER_VERSION,
   codexRuntimeInternals,
+  codexSourceDefinition,
   declareCodexCapabilities,
   normalizeCurrentCodexRecord,
 } from './index'
@@ -123,4 +124,33 @@ test('Codex sessionless runtime hook remains evidence-only', async () => {
   const normalized = await normalizeCurrentCodexRecord(value, {} as never)
   assert.deepEqual(normalized.observations, [])
   assert.equal(normalized.evidenceCandidates.length, 1)
+})
+
+
+test('Codex Raw recovery 只允许稳定 JSONL 行进入 reference 候选', () => {
+  const history = historyRecord({ type: 'event_msg', payload: { type: 'user_message', message: 'hi' } })
+  const historyCapability = codexSourceDefinition.rawRecovery?.describe(history)
+  assert.equal(historyCapability?.authority, 'native-store')
+  assert.equal(historyCapability?.locatorStability, 'stable')
+  assert.equal(historyCapability?.verification, 'fingerprint')
+  assert.equal(historyCapability?.persistencePreference, 'reference')
+
+  const runtime = {
+    ...history,
+    id: 'codex-runtime-contract',
+    locator: { kind: 'runtime-hook', path: '/tmp/inbox/event.json', hookEventId: 'event-1' } as const,
+  }
+  const runtimeCapability = codexSourceDefinition.rawRecovery?.describe(runtime)
+  assert.equal(runtimeCapability?.authority, 'agent-lens-only')
+  assert.equal(runtimeCapability?.replayable, false)
+  assert.equal(runtimeCapability?.persistencePreference, 'preserve')
+
+  const metadata = {
+    ...history,
+    id: 'codex-metadata-contract',
+    locator: { kind: 'file', path: '/tmp/session_index.jsonl' } as const,
+  }
+  const metadataCapability = codexSourceDefinition.rawRecovery?.describe(metadata)
+  assert.equal(metadataCapability?.canReread, false)
+  assert.equal(metadataCapability?.persistencePreference, 'preserve')
 })

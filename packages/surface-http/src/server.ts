@@ -1,14 +1,15 @@
 import { createServer, type Server } from 'node:http'
-import type {
-  AgentIntegrationRuntimeStatus,
-  BackupService,
-  CapabilityService,
-  CapturePolicyService,
-  Disposable,
-  LiveAttachmentService,
-  LiveService,
-  SourceService,
-  StorageService,
+import {
+  auditSourceRawRecoveryBatch,
+  type AgentIntegrationRuntimeStatus,
+  type BackupService,
+  type CapabilityService,
+  type CapturePolicyService,
+  type Disposable,
+  type LiveAttachmentService,
+  type LiveService,
+  type SourceService,
+  type StorageService,
 } from '@agent-lens/core'
 import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
@@ -406,6 +407,22 @@ export async function startHttpSurface(
         options.eventHub.connect(response)
         return
       }
+      if (url.pathname === '/api/v1/storage/source-raw-recovery-audit') {
+        if (!options.sources || !storage.sourceRawAudit) {
+          writeJson(response, 501, { error: 'source_raw_recovery_audit_unavailable' })
+          return
+        }
+        const cursor = url.searchParams.get('cursor')?.trim() || url.searchParams.get('after')?.trim() || undefined
+        const limit = parseLimit(url.searchParams, 500) ?? 100
+        writeJson(response, 200, await auditSourceRawRecoveryBatch({
+          sources: options.sources,
+          storage,
+          ...(cursor ? { cursor } : {}),
+          limit,
+        }))
+        return
+      }
+
       if (url.pathname === '/api/v1/storage/diagnostics') {
         if (!storage.diagnostics) {
           writeJson(response, 501, { error: 'storage_diagnostics_unavailable' })
