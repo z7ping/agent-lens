@@ -5,6 +5,7 @@ import type {
   LiveAdapterManifest,
   LiveAttachmentService,
   LiveCapabilityName,
+  LiveEvent,
   LiveMessage,
   LiveMessageInput,
   LiveRuntimeEvent,
@@ -67,6 +68,159 @@ function piStartInput(value: unknown): PiLiveStartInput {
     throw new TypeError('Pi Live start input requires cwd')
   }
   return input as PiLiveStartInput
+}
+
+function liveRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function liveText(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function livePreview(value: unknown, max = 4_000): string {
+  if (value === undefined || value === null) return ''
+  const text = typeof value === 'string'
+    ? value
+    : (() => {
+        try { return JSON.stringify(value) } catch { return String(value) }
+      })()
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
+function liveContentIndex(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined
+}
+
+function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undefined {
+  const update = liveRecord(event.assistantMessageEvent)
+  const type = liveText(update.type)
+  const contentIndex = liveContentIndex(update.contentIndex)
+  const partial = liveRecord(update.partial)
+  const content = Array.isArray(partial.content) ? partial.content : []
+  const block = contentIndex === undefined ? {} : liveRecord(content[contentIndex])
+  const common = contentIndex === undefined ? {} : { contentIndex }
+
+  if (type === 'text_start') {
+    return { type: 'text.start', text: liveText(block.text), ...common }
+  }
+  if (type === 'text_delta') {
+    const delta = liveText(update.delta)
+    return delta ? { type: 'text.delta', delta, ...common } : undefined
+  }
+  if (type === 'text_end') {
+    return { type: 'text.end', text: liveText(update.content) || liveText(block.text), ...common }
+  }
+  if (type === 'thinking_start') {
+    return {
+      type: 'reasoning.start',
+      text: liveText(block.thinking) || liveText(block.text),
+      ...common,
+    }
+  }
+  if (type === 'thinking_delta') {
+    const delta = liveText(update.delta)
+    return delta ? { type: 'reasoning.delta', delta, ...common } : undefined
+  }
+  if (type === 'thinking_end') {
+    return {
+      type: 'reasoning.end',
+      text: liveText(update.content) || liveText(block.thinking) || liveText(block.text),
+      ...common,
+    }
+  }
+  return undefined
+}
+
+/**
+ * Maps Pi-native runtime events to the Agent-neutral Live event vocabulary.
+ * Unmapped Pi events remain available through event.event for diagnostics and
+ * Pi-only compatibility UI, but shared renderers must consume normalizedEvent.
+ */
+export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
+  const type = liveText(event.type)
+  if (type === 'agent_start') return { type: 'status', status: 'running' }
+  if (type === 'agent_settled' || type === 'agent_end') {
+    return { type: 'completed', status: 'completed' }
+  }
+  if (type === 'message_start' || type === 'message_end') {
+    const message = liveRecord(event.message)
+    const rawRole = liveText(message.role)
+    const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
+      ? rawRole
+      : 'unknown'
+    const messageId = liveText(message.id)
+    return {
+      type: type === 'message_start' ? 'message.start' : 'message.end',
+      role,
+      ...(messageId ? { messageId } : {}),
+    }
+  }
+  if (type === 'message_update') return piMessageUpdateEvent(event)
+  if (type === 'tool_execution_start') {
+    const callId = liveText(event.toolCallId)
+    return {
+      type: 'tool.start',
+      ...(callId ? { callId } : {}),
+      name: liveText(event.toolName) || 'tool',
+      ...(event.args === undefined ? {} : { inputPreview: livePreview(event.args) }),
+    }
+  }
+  if (type === 'tool_execution_update') {
+    const callId = liveText(event.toolCallId)
+    const output = livePreview(event.partialResult)
+    if (!output) return undefined
+    return {
+      type: 'tool.output',
+      ...(callId ? { callId } : {}),
+      ...(liveText(event.toolName) ? { name: liveText(event.toolName) } : {}),
+      output,
+    }
+  }
+  if (type === 'tool_execution_end') {
+    const callId = liveText(event.toolCallId)
+    const output = livePreview(event.result)
+    return {
+      type: 'tool.end',
+      ...(callId ? { callId } : {}),
+      ...(liveText(event.toolName) ? { name: liveText(event.toolName) } : {}),
+      status: event.isError === true ? 'error' : 'success',
+      ...(output ? { output } : {}),
+    }
+  }
+  if (type === 'compaction_start') return { type: 'status', status: 'compacting' }
+  if (type === 'compaction_end') return { type: 'status', status: 'ready' }
+  if (type === 'runtime_initialization') {
+    const stage = liveText(event.stage)
+    return {
+      type: 'status',
+      status: stage === 'ready' ? 'ready' : 'initializing',
+      ...(liveText(event.message) ? { message: liveText(event.message) } : {}),
+    }
+  }
+  if (type === 'runtime_status') {
+    const status = liveText(event.status)
+    if (status === 'initializing' || status === 'ready' || status === 'failed'
+      || status === 'terminating' || status === 'terminated') {
+      return {
+        type: 'status',
+        status,
+        ...(liveText(event.message) ? { message: liveText(event.message) } : {}),
+      }
+    }
+  }
+  if (type === 'runtime_exit' || type === 'extension_error') {
+    const message = liveText(event.errorMessage) || liveText(event.error)
+    return { type: 'error', message: message || 'Pi Live runtime failed' }
+  }
+  return undefined
+}
+
+export function normalizePiLiveRuntimeEvent(value: LiveRuntimeEvent): LiveRuntimeEvent {
+  const normalizedEvent = normalizePiLiveEvent(value.event)
+  return normalizedEvent ? { ...value, normalizedEvent } : value
 }
 
 /**
@@ -187,7 +341,10 @@ export class PiLiveAdapter implements LiveAdapter {
     runtimeSessionId: string,
     listener: (event: LiveRuntimeEvent) => void,
   ): () => void {
-    return this.service.subscribe(runtimeSessionId, listener)
+    return this.service.subscribe(
+      runtimeSessionId,
+      event => listener(normalizePiLiveRuntimeEvent(event)),
+    )
   }
 
   interrupt(runtimeSessionId: string): Promise<unknown> {
