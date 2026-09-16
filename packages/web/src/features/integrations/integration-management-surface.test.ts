@@ -14,6 +14,12 @@ test('智能体接入页面以 Integration Management 为管理清单，不读�
   assert.doesNotMatch(page, /facets\?\.agents/)
 })
 
+test('智能体接入页面控件继续使用统一 Workspace Topbar', () => {
+  assert.match(app, /topbarHost=\{workspaceTopbarHost\}/)
+  assert.match(page, /createPortal/)
+  assert.match(page, /<ToolbarGroup className="integration-management-topbar-tools">/)
+})
+
 test('设置菜单持有稳定的智能体接入入口与独立路由', () => {
   assert.match(sidebar, /navigate\('\/integrations'\)/)
   assert.match(sidebar, /navigation:agentIntegration/)
@@ -37,6 +43,8 @@ test('智能体页选择器合并 Overview 与已发现 Integration，不再只�
   assert.match(app, /management\.tool\?\.presence === 'data-only'/)
   assert.match(app, /agentSelectionAgents=\{agentSelectionItems\}/)
   assert.match(sidebar, /agents=\{agentSelectionAgents\}/)
+  assert.match(sidebar, /navigation:agentCount/)
+  assert.doesNotMatch(sidebar, /sourceCount[^\n]*agentSelectionAgents/)
 })
 
 test('未启用但已发现的智能体保持可见并支持二次接入', () => {
