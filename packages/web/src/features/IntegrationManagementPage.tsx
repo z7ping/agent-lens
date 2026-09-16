@@ -48,6 +48,7 @@ function IntegrationManagementRow({
   model,
   discoveryScanning,
   discoveryError,
+  ordering,
 }: {
   item: IntegrationManagementItemDto
   moveUpTargetId?: string | undefined
@@ -55,6 +56,7 @@ function IntegrationManagementRow({
   model: AgentLensClientModel
   discoveryScanning: boolean
   discoveryError: string
+  ordering: boolean
 }) {
   const { t } = useTranslation('agents')
   const { move } = useIntegrationOrder()
@@ -223,7 +225,7 @@ function IntegrationManagementRow({
         onClick={() => void authorize()}
       >{t('managementPage.authorize')}</Button>}
       {primaryAction}
-      {packageState?.installed && <Button
+      {packageState?.installed && !item.enabled.configured && <Button
         size="small"
         variant="danger"
         disabled={saving}
@@ -233,7 +235,7 @@ function IntegrationManagementRow({
           setRemoveOpen(true)
         }}
       >{t('managementPage.uninstall')}</Button>}
-      <span className="integration-management-order-actions" aria-label={t('managementPage.orderAria')}>
+      {ordering && <span className="integration-management-order-actions" aria-label={t('managementPage.orderAria')}>
         <IconButton
           size="small"
           aria-label={t('managementPage.moveUp', { agent: item.displayName })}
@@ -246,7 +248,7 @@ function IntegrationManagementRow({
           disabled={!moveDownTargetId}
           onClick={() => { if (moveDownTargetId) move(item.integrationId, moveDownTargetId) }}
         ><UiIcon name="sort-down" size={14}/></IconButton>
-      </span>
+      </span>}
     </div>
 
     {error && <p className="integration-management-error" role="alert">{error}</p>}
@@ -274,6 +276,7 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
   const management = snapshot.integrationManagement
+  const [ordering, setOrdering] = useState(false)
   const { ordered } = useIntegrationOrder()
 
   const items = useMemo(() => {
@@ -308,6 +311,9 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
     <div className="page-content integration-management-content">
       <header className="integration-management-heading">
         <h1>{t('managementPage.title')}</h1>
+        <Button size="small" onClick={() => setOrdering(value => !value)}>
+          {ordering ? t('page.orderDone') : t('page.manageOrder')}
+        </Button>
       </header>
 
       <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
@@ -331,6 +337,7 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
             model={model}
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
+            ordering={ordering}
           />)}
           {!primaryItems.length && <div className="integration-management-empty">{t('managementPage.noLocalOrAdded')}</div>}
         </div>
@@ -350,6 +357,7 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
             model={model}
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
+            ordering={ordering}
           />)}
         </div>
       </section>}
