@@ -13,7 +13,6 @@ import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { Button, Dialog, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
 import {
   integrationCanInstall,
-  integrationLifecycleState,
   integrationManagementLifecycleState,
   integrationPackageReady,
   integrationToolPresenceLabel,
