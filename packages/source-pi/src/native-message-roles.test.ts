@@ -17,7 +17,7 @@ function sourceRecord(entry: Record<string, unknown>): SourceRecord {
     capturedAt: '2026-09-10T00:00:01.000Z',
     locator: { kind: 'file', path: '/tmp/pi/session.jsonl', offset: 1 },
     fingerprint: `fingerprint-${id ?? 'unknown'}`,
-    parserVersion: '8',
+    parserVersion: '9',
     payload: {
       entry,
       session: {
@@ -91,4 +91,44 @@ test('Pi user-triggered bash execution remains explicit activity without being m
   const observation = normalized.observations[0]!
   assert.equal(observation.kind, 'unknown')
   assert.equal((observation.payload as { event?: string }).event, 'pi.bash_execution')
+})
+
+test('Pi user image blocks become canonical message attachments without duplicate nonTextContent', async () => {
+  const normalized = await normalizePiRecord(sourceRecord({
+    type: 'message',
+    id: 'user-image',
+    message: {
+      role: 'user',
+      content: [
+        { type: 'text', text: '看看这张图' },
+        { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
+      ],
+    },
+  }), {} as never)
+
+  assert.equal(normalized.observations.length, 1)
+  const observation = normalized.observations[0]!
+  assert.equal(observation.kind, 'message.user')
+  assert.deepEqual(observation.payload, {
+    text: '看看这张图',
+    attachments: [{ type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' }],
+  })
+})
+
+test('Pi keeps unknown non-text blocks while extracting recognized images', async () => {
+  const normalized = await normalizePiRecord(sourceRecord({
+    type: 'message',
+    id: 'user-mixed-nontext',
+    message: {
+      role: 'user',
+      content: [
+        { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/jpeg' },
+        { type: 'future-content', value: 'keep-me' },
+      ],
+    },
+  }), {} as never)
+
+  const payload = normalized.observations[0]?.payload as Record<string, unknown>
+  assert.deepEqual(payload.attachments, [{ type: 'image', data: 'aW1hZ2U=', mimeType: 'image/jpeg' }])
+  assert.deepEqual(payload.nonTextContent, [{ type: 'future-content', value: 'keep-me' }])
 })
