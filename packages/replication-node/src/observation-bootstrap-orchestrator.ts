@@ -41,6 +41,11 @@ export interface ObservationBootstrapLifecycleState {
 }
 
 export interface ObservationBootstrapLifecycleStore {
+  get(input: {
+    streamId: string
+    generationId: string
+    entityType: 'CanonicalObservation'
+  }): Promise<ObservationBootstrapLifecycleState | null>
   ensure(input: {
     streamId: string
     generationId: string
@@ -108,7 +113,19 @@ export async function pumpObservationBootstrapGenerationStep(input: {
     historyRevision: input.history.revision,
     ...(input.now === undefined ? {} : { now: input.now }),
   }
-  let lifecycle = await input.lifecycle.ensure(key)
+  let lifecycle = await input.lifecycle.get({
+    streamId: input.streamId,
+    generationId: input.generationId,
+    entityType: 'CanonicalObservation',
+  })
+  if (!lifecycle) lifecycle = await input.lifecycle.ensure(key)
+
+  if (
+    lifecycle.policyRevision !== input.policy.revision
+    || lifecycle.historyRevision !== input.history.revision
+  ) {
+    throw new Error('Observation Bootstrap lifecycle policy/history revision changed; re-bootstrap is required')
+  }
 
   if (lifecycle.stage === 'staged') {
     lifecycle = await input.lifecycle.transition({ ...key, stage: 'snapshot' })
