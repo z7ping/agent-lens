@@ -12,6 +12,7 @@ import type {
 import {
   claudeInternals,
   claudeManifest,
+  claudeSourceDefinition,
   declareClaudeCapabilities,
   discoverClaudeAssets,
   ingestClaudeHistory,
@@ -432,4 +433,23 @@ test('Claude project assets follow CLAUDE hierarchy, project settings, skills an
     await rm(profile, { recursive: true, force: true })
     await rm(projectRoot, { recursive: true, force: true })
   }
+})
+
+
+test('Claude Raw recovery 区分 JSONL history 与 ephemeral runtime hook', () => {
+  const history = record({ type: 'user', message: { content: 'hello' } })
+  const historyCapability = claudeSourceDefinition.rawRecovery?.describe(history)
+  assert.equal(historyCapability?.locatorStability, 'stable')
+  assert.equal(historyCapability?.verification, 'fingerprint')
+  assert.equal(historyCapability?.persistencePreference, 'reference')
+
+  const runtime = {
+    ...history,
+    id: 'claude-runtime-contract',
+    locator: { kind: 'runtime-hook', path: '/tmp/inbox/event.json', hookEventId: 'event-1' } as const,
+  }
+  const runtimeCapability = claudeSourceDefinition.rawRecovery?.describe(runtime)
+  assert.equal(runtimeCapability?.authority, 'agent-lens-only')
+  assert.equal(runtimeCapability?.canReread, false)
+  assert.equal(runtimeCapability?.persistencePreference, 'preserve')
 })
