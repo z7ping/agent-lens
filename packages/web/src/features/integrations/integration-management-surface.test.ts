@@ -29,6 +29,15 @@ test('接入控制面覆盖扫描、添加、启停、授权、卸载与排序',
   assert.match(page, /useIntegrationOrder/)
 })
 
+
+test('智能体页选择器合并 Overview 与已发现 Integration，不再只等于 Source Facet', () => {
+  assert.match(app, /const agentSelectionMap = new Map<string, AgentFacetDto>/)
+  assert.match(app, /management\.tool\?\.presence === 'present'/)
+  assert.match(app, /management\.tool\?\.presence === 'data-only'/)
+  assert.match(app, /agentSelectionAgents=\{agentSelectionItems\}/)
+  assert.match(sidebar, /agents=\{agentSelectionAgents\}/)
+})
+
 test('未启用但已发现的智能体保持可见并支持二次接入', () => {
   assert.match(page, /item\.tool\?\.presence === 'present'/)
   assert.match(page, /item\.tool\?\.presence === 'data-only'/)
