@@ -94,6 +94,18 @@ export async function pumpObservationIncrementalPage(input: {
     if (highWater < state.revision) {
       throw new Error('Replication journal high-water moved behind incremental progress')
     }
+    if (highWater === state.revision) {
+      return {
+        throughRevision: state.throughRevision,
+        nextRevision: state.revision,
+        done: true,
+        changeCount: 0,
+        observationCount: 0,
+        blockedCount: 0,
+        pending: { total: 0, created: 0, replaced: 0, unchanged: 0 },
+        initialized,
+      }
+    }
     if (highWater > state.throughRevision) {
       state = { ...state, throughRevision: highWater, updatedAt: now }
       await input.progress.put(state)
