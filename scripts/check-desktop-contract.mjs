@@ -7,24 +7,46 @@ const requireText = (condition, message) => {
   if (!condition) throw new Error(`[desktop-contract] ${message}`)
 }
 
+const rootPackage = JSON.parse(read('package.json'))
 const desktopPackage = JSON.parse(read('apps/desktop/package.json'))
 requireText(desktopPackage.build?.productName === 'AgentLens', '桌面产品名必须为 AgentLens')
 requireText(desktopPackage.description.includes('智能体透镜'), '桌面描述缺少正式中文名“智能体透镜”')
 requireText(desktopPackage.build?.nsis?.runAfterFinish === true, 'Windows 交互安装完成后必须默认运行 AgentLens')
-for (const platform of ['win', 'mac', 'linux']) {
+for (const platform of ['win', 'linux']) {
   const targets = desktopPackage.build?.[platform]?.target ?? []
   requireText(targets.length > 0, `${platform} 缺少桌面打包目标`)
   requireText(targets.every(target => Array.isArray(target.arch) && target.arch.length === 1 && target.arch[0] === 'x64'), `${platform} 桌面发行必须仅允许 x64`)
 }
-for (const script of ['dist:win', 'dist:win:dir', 'dist:mac', 'dist:mac:release', 'dist:mac:dir', 'dist:linux', 'dist:linux:dir']) {
+const macTargets = desktopPackage.build?.mac?.target ?? []
+requireText(macTargets.length > 0, 'mac 缺少桌面打包目标')
+requireText(
+  macTargets.every(target => Array.isArray(target.arch) && target.arch.length === 2 && target.arch.includes('arm64') && target.arch.includes('x64')),
+  'macOS 桌面发行必须同时支持 arm64 与 x64',
+)
+for (const script of ['dist:win', 'dist:win:dir', 'dist:linux', 'dist:linux:dir']) {
   requireText(desktopPackage.scripts?.[script]?.includes('--x64'), `${script} 必须显式限制为 x64`)
 }
+requireText(desktopPackage.scripts?.['dist:mac'] === 'npm run dist:mac:arm64', 'dist:mac 默认必须指向 Apple Silicon arm64')
+requireText(desktopPackage.scripts?.['dist:mac:release'] === 'npm run dist:mac:arm64:release', 'dist:mac:release 默认必须指向 Apple Silicon arm64')
+requireText(desktopPackage.scripts?.['dist:mac:dir'] === 'npm run dist:mac:arm64:dir', 'dist:mac:dir 默认必须指向 Apple Silicon arm64')
+for (const script of ['dist:mac:arm64', 'dist:mac:arm64:release', 'dist:mac:arm64:dir']) {
+  requireText(desktopPackage.scripts?.[script]?.includes('--arm64'), `${script} 必须显式构建 arm64`)
+}
+for (const script of ['dist:mac:x64', 'dist:mac:x64:release', 'dist:mac:x64:dir']) {
+  requireText(desktopPackage.scripts?.[script]?.includes('--x64'), `${script} 必须显式构建 x64`)
+}
+requireText(rootPackage.scripts?.['desktop:mac'] === 'npm run desktop:mac:arm64', 'desktop:mac 默认必须指向 Apple Silicon arm64')
+requireText(rootPackage.scripts?.['desktop:mac:release'] === 'npm run desktop:mac:arm64:release', 'desktop:mac:release 默认必须指向 Apple Silicon arm64')
 
 const desktopWorkflow = read('.github/workflows/desktop-macos-linux.yml')
-requireText(desktopWorkflow.includes('runs-on: macos-15-intel'), 'macOS 桌面发行必须使用 Intel runner')
+requireText(desktopWorkflow.includes('runner: macos-15'), 'macOS arm64 发行必须使用 Apple Silicon runner')
+requireText(desktopWorkflow.includes('runner: macos-15-intel'), 'macOS x64 发行必须使用 Intel runner')
+requireText(desktopWorkflow.includes('arch: arm64') && desktopWorkflow.includes('arch: x64'), 'macOS Workflow 必须同时构建 arm64 与 x64')
+requireText(desktopWorkflow.includes('runs-on: ${{ matrix.runner }}'), 'macOS Workflow 必须按架构使用原生 runner')
+requireText(desktopWorkflow.includes('desktop:mac:arm64') && desktopWorkflow.includes('desktop:mac:x64'), 'macOS Workflow 缺少双架构构建脚本')
+requireText(desktopWorkflow.includes('SHA256SUMS-macos-${{ matrix.arch }}.txt'), 'macOS 校验文件必须按架构分别生成')
+requireText(!desktopWorkflow.includes('universal'), 'macOS 暂不允许 Universal 包，避免放大原生依赖与签名复杂度')
 requireText(desktopWorkflow.includes('runs-on: ubuntu-latest'), 'Linux 桌面发行必须使用 x64 runner')
-requireText(!/arm64|ubuntu-24\.04-arm|macos-latest/.test(desktopWorkflow), '桌面发行 Workflow 不得再包含 ARM64 runner 或产物')
-requireText(desktopWorkflow.includes('SHA256SUMS-macos-x64.txt'), 'macOS 校验文件必须明确为 x64')
 requireText(desktopWorkflow.includes('SHA256SUMS-linux-x64.txt'), 'Linux 校验文件必须明确为 x64')
 
 const bootstrap = read('apps/desktop/src/bootstrap.mjs')
@@ -65,4 +87,4 @@ requireText(installerCliSmoke.includes('npm-agent-lens-ci'), 'Windows Installer 
 requireText(installerCliSmoke.includes('npm 卸载后 Desktop CLI 没有自动兜底'), 'Windows Installer 冒烟没有覆盖 npm 卸载后的 Desktop CLI 回退')
 requireText(installerCliSmoke.includes('卸载 Desktop 错误删除了 npm CLI'), 'Windows Installer 冒烟没有覆盖 Desktop 卸载保护 npm')
 
-console.log('AgentLens 桌面契约检查通过：产品名、x64-only 发行、安装后启动、CLI 双发行优先级、即时窗口、Health 合并、日志目录与图标边缘均已锁定。')
+console.log('AgentLens 桌面契约检查通过：产品名、Windows/Linux x64、macOS arm64+x64 双架构、安装后启动、CLI 双发行优先级、即时窗口、Health 合并、日志目录与图标边缘均已锁定。')
