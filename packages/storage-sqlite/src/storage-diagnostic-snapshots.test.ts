@@ -183,30 +183,20 @@ test('snapshot delta 计算 Canonical / hot SQLite / Replication 与存储放大
   assert.equal(last30Days.canonical.observationsDelta, 130)
 
   assert.equal(metrics.storageAmplificationRate.state, 'ready')
-  assert.equal(metrics.storageAmplificationRate.last7Days.state, 'ready')
-  assert.equal(metrics.storageAmplificationRate.last30Days.state, 'ready')
-  if (
-    metrics.storageAmplificationRate.last7Days.state !== 'ready'
-    || metrics.storageAmplificationRate.last30Days.state !== 'ready'
-  ) {
+  if (!('last7Days' in metrics.storageAmplificationRate)) {
+    assert.fail('Storage amplification windows should be available')
+  }
+  const amplification7 = metrics.storageAmplificationRate.last7Days
+  const amplification30 = metrics.storageAmplificationRate.last30Days
+  assert.equal(amplification7.state, 'ready')
+  assert.equal(amplification30.state, 'ready')
+  if (amplification7.state !== 'ready' || amplification30.state !== 'ready') {
     assert.fail('Expected ready storage amplification windows')
   }
-  assert.equal(
-    metrics.storageAmplificationRate.last7Days.originalActivityBytesDelta,
-    2_000,
-  )
-  assert.equal(
-    metrics.storageAmplificationRate.last7Days.persistentRetainedBytesDelta,
-    700,
-  )
-  assert.equal(
-    metrics.storageAmplificationRate.last7Days.persistentBytesPerOriginalActivityByte,
-    0.35,
-  )
-  assert.equal(
-    metrics.storageAmplificationRate.last30Days.persistentBytesPerOriginalActivityByte,
-    0.4,
-  )
+  assert.equal(amplification7.originalActivityBytesDelta, 2_000)
+  assert.equal(amplification7.persistentRetainedBytesDelta, 700)
+  assert.equal(amplification7.persistentBytesPerOriginalActivityByte, 0.35)
+  assert.equal(amplification30.persistentBytesPerOriginalActivityByte, 0.4)
 })
 
 test('没有足够历史时不伪造增长率或放大率', () => {
@@ -220,6 +210,9 @@ test('没有足够历史时不伪造增长率或放大率', () => {
   assert.equal(metrics.canonicalGrowthRate.last7Days.state, 'insufficient-history')
   assert.equal(metrics.canonicalGrowthRate.last30Days.state, 'insufficient-history')
   assert.equal(metrics.storageAmplificationRate.state, 'insufficient-history')
+  if (!('last7Days' in metrics.storageAmplificationRate)) {
+    assert.fail('Insufficient amplification history should expose requested windows')
+  }
   assert.equal(metrics.storageAmplificationRate.last7Days.state, 'insufficient-history')
 })
 
@@ -245,6 +238,9 @@ test('原始活动统计纪元变化时不跨断点计算放大率', () => {
   })
 
   assert.equal(metrics.storageAmplificationRate.state, 'insufficient-history')
+  if (!('last7Days' in metrics.storageAmplificationRate)) {
+    assert.fail('Activity-epoch mismatch should expose requested windows')
+  }
   assert.equal(
     metrics.storageAmplificationRate.last7Days.state,
     'insufficient-activity-history',
