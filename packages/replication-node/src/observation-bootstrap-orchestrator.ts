@@ -16,6 +16,7 @@ import {
   pumpObservationSnapshotBootstrapPage,
   pumpObservationSnapshotDeltaPage,
   type CanonicalObservationSnapshotSource,
+  type ObservationCaptureProgressStore,
   type ObservationSnapshotBootstrapProgressStore,
   type ObservationSnapshotDeltaProgressStore,
 } from './observation-snapshot-bootstrap'
@@ -88,6 +89,7 @@ export async function pumpObservationBootstrapGenerationStep(input: {
   reconciliationSink: ReplicationReconciliationSink
   snapshotProgress: ObservationSnapshotBootstrapProgressStore
   deltaProgress: ObservationSnapshotDeltaProgressStore
+  captureProgress: ObservationCaptureProgressStore
   lifecycle: ObservationBootstrapLifecycleStore
   nodeId: string
   streamId: string
@@ -118,6 +120,7 @@ export async function pumpObservationBootstrapGenerationStep(input: {
       dependencies: input.dependencies,
       sink: input.pendingSink,
       progress: input.snapshotProgress,
+      captureProgress: input.captureProgress,
       nodeId: input.nodeId,
       streamId: input.streamId,
       generationId: input.generationId,
@@ -144,6 +147,7 @@ export async function pumpObservationBootstrapGenerationStep(input: {
       sink: input.pendingSink,
       snapshotProgress: input.snapshotProgress,
       deltaProgress: input.deltaProgress,
+      captureProgress: input.captureProgress,
       nodeId: input.nodeId,
       streamId: input.streamId,
       generationId: input.generationId,

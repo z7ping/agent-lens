@@ -53,6 +53,16 @@ export interface ObservationSnapshotBootstrapProgressStore {
   put(progress: ObservationSnapshotBootstrapProgress): Promise<void>
 }
 
+export interface ObservationCaptureProgressStore {
+  advance(input: {
+    streamId: string
+    generationId: string
+    entityType: 'CanonicalObservation'
+    capturedRevision: number
+    now?: string
+  }): Promise<unknown>
+}
+
 export interface ObservationSnapshotBootstrapPageResult {
   initialized: boolean
   baselineRevision: number
@@ -90,6 +100,7 @@ export async function pumpObservationSnapshotBootstrapPage(input: {
   dependencies: CanonicalReplicationReader
   sink: PendingCandidateSink
   progress: ObservationSnapshotBootstrapProgressStore
+  captureProgress?: ObservationCaptureProgressStore
   nodeId: string
   streamId: string
   generationId: string
@@ -127,6 +138,16 @@ export async function pumpObservationSnapshotBootstrapPage(input: {
     || state.historyRevision !== input.history.revision
   ) {
     throw new Error('Snapshot Bootstrap policy/history revision changed; re-bootstrap is required')
+  }
+
+  if (input.captureProgress) {
+    await input.captureProgress.advance({
+      streamId: input.streamId,
+      generationId: input.generationId,
+      entityType: 'CanonicalObservation',
+      capturedRevision: state.baselineRevision,
+      ...(input.now === undefined ? {} : { now: input.now }),
+    })
   }
 
   if (state.snapshotComplete) {
@@ -248,6 +269,7 @@ export async function pumpObservationSnapshotDeltaPage(input: {
   sink: PendingCandidateSink
   snapshotProgress: ObservationSnapshotBootstrapProgressStore
   deltaProgress: ObservationSnapshotDeltaProgressStore
+  captureProgress?: ObservationCaptureProgressStore
   nodeId: string
   streamId: string
   generationId: string
@@ -324,6 +346,15 @@ export async function pumpObservationSnapshotDeltaPage(input: {
     revision: nextRevision,
     updatedAt: input.now ?? new Date().toISOString(),
   })
+  if (input.captureProgress) {
+    await input.captureProgress.advance({
+      streamId: input.streamId,
+      generationId: input.generationId,
+      entityType: 'CanonicalObservation',
+      capturedRevision: nextRevision,
+      ...(input.now === undefined ? {} : { now: input.now }),
+    })
+  }
 
   return {
     ...result,
