@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import test from 'node:test'
 import {
   OFFICIAL_INTEGRATION_CATALOG,
@@ -87,9 +87,10 @@ test('explicit relative product homes do not fall back to stale default discover
 })
 
 test('DSH home follows the existing profile-root semantics', () => {
-  assert.equal(resolveDshHome({}, home, 'linux'), join(home, '.local', 'share', 'dsh'))
+  assert.equal(resolveDshHome({}, home, 'linux'), resolve(join(home, '.local', 'share', 'dsh')))
   assert.equal(resolveDshHome({ DSH_HOME: '/srv/dsh' }, home, 'linux'), '/srv/dsh')
   assert.equal(resolveDshHome({ XDG_DATA_HOME: '/srv/xdg-data' }, home, 'linux'), join('/srv/xdg-data', 'dsh'))
+  assert.equal(resolveDshHome({ DSH_HOME: 'relative-dsh' }, home, 'linux'), resolve('relative-dsh'))
 })
 
 test('OpenCode config roots use XDG config semantics independently from data roots', () => {
