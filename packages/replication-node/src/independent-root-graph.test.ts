@@ -124,7 +124,7 @@ test('AssetBinding Root reuses Canonical dependency graph and AssetDefinition sh
   assert.equal(result.entities.at(-1)?.originEntityId, 'binding-1')
 })
 
-test('Independent Root from-now authorization uses Entity Head changedAt instead of invented domain time', async () => {
+test('Current-State Root from-now authorization uses Entity Head changedAt instead of invented domain time', async () => {
   const coverage: IndependentReplicationRootSnapshot = {
     entityType: 'Coverage',
     originEntityId: 'coverage-old',
