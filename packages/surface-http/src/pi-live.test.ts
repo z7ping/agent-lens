@@ -384,6 +384,7 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     const streamed = new TextDecoder().decode((await reader.read()).value)
     assert.match(streamed, /event: pi-live/)
     assert.match(streamed, /agent_start/)
+    assert.match(streamed, /"normalizedEvent":\{"type":"status","status":"running"\}/)
     controller.abort()
     await reader.cancel().catch(() => undefined)
     await new Promise(resolve => setTimeout(resolve, 20))
