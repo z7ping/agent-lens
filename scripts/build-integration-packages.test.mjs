@@ -30,7 +30,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
 
   assert.deepEqual(
     specs.map(item => item.integrationId),
-    ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
   )
   assert.deepEqual(
     specs.map(item => item.entry),
@@ -40,6 +40,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
       join('packages', 'integration-claude', 'src', 'index.ts'),
       join('packages', 'integration-hermes', 'src', 'index.ts'),
       join('packages', 'integration-opencode', 'src', 'index.ts'),
+      join('packages', 'integration-dsh', 'src', 'index.ts'),
     ],
   )
   assert.deepEqual(
@@ -50,6 +51,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
       join('packages', 'integration-claude', 'src', 'manifest.ts'),
       join('packages', 'integration-hermes', 'src', 'manifest.ts'),
       join('packages', 'integration-opencode', 'src', 'manifest.ts'),
+      join('packages', 'integration-dsh', 'src', 'manifest.ts'),
     ],
   )
   assert.equal(specs.some(item => 'apiVersion' in item), false)
