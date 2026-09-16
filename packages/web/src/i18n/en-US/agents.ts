@@ -153,7 +153,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       retry: 'Retry',
       skip: 'Skip',
       noneFound: 'No supported agents found yet',
-      noneFoundDescription: 'You can rescan later from the Agents page. AgentLens will not automatically install or take over any tool.',
+      noneFoundDescription: 'You can rescan later from Settings → Agent Integration. AgentLens will not automatically install or take over any tool.',
       notFound: 'Not found: {{agents}}. If you install these tools later, AgentLens can detect them automatically but will not take them over automatically.',
       selectedCount: '{{count}} selected',
       later: 'Set up later',
