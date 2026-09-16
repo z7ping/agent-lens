@@ -15,6 +15,9 @@ import type {
 
 export const REDACTED = '[已脱敏]'
 export const NOT_CAPTURED = '[未采集：隐私策略关闭]'
+// Compatibility default for pre-Integration installations. DSH was historically an
+// opt-in Source even when the Daemon registered it directly, so promoting DSH into the
+// Official Integration Catalog must not silently enable it for legacy users.
 export const DEFAULT_ENABLED_SOURCES = ['claude-code', 'codex', 'pi', 'hermes', 'opencode'] as const
 
 const DEFAULT_MAX_TEXT: Record<CapturePolicyScope, number> = {
