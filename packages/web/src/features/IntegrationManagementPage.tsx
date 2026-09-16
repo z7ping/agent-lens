@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import type {
   IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
@@ -50,6 +51,7 @@ function IntegrationManagementRow({
   discoveryScanning,
   discoveryError,
   ordering,
+  highlighted,
 }: {
   item: IntegrationManagementItemDto
   moveUpTargetId?: string | undefined
@@ -58,6 +60,7 @@ function IntegrationManagementRow({
   discoveryScanning: boolean
   discoveryError: string
   ordering: boolean
+  highlighted: boolean
 }) {
   const { t } = useTranslation('agents')
   const { move } = useIntegrationOrder()
@@ -179,6 +182,7 @@ function IntegrationManagementRow({
     className="integration-management-row"
     data-integration={item.integrationId}
     data-new={item.isNew ? 'true' : undefined}
+    data-target={highlighted ? 'true' : undefined}
   >
     <div className="integration-management-identity">
       <span className={`source-dot ${sourceDot(item.integrationId)}`} aria-hidden="true"/>
@@ -274,6 +278,8 @@ function IntegrationManagementRow({
 export function IntegrationManagementPage({ model, topbarHost }: { model: AgentLensClientModel; topbarHost?: HTMLDivElement | null }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
+  const [searchParams] = useSearchParams()
+  const targetIntegrationId = searchParams.get('agent') ?? ''
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
@@ -301,6 +307,16 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
       () => { acknowledgementInFlightRef.current = false },
     )
   }, [management, model])
+
+  useEffect(() => {
+    if (!targetIntegrationId || !management) return
+    const timer = window.setTimeout(() => {
+      const target = [...document.querySelectorAll<HTMLElement>('[data-integration]')]
+        .find(node => node.dataset.integration === targetIntegrationId)
+      target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [management, targetIntegrationId])
 
   const items = useMemo(() => {
     const rows = [...(management?.items ?? [])]
@@ -370,6 +386,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
             ordering={ordering}
+            highlighted={item.integrationId === targetIntegrationId}
           />)}
           {!primaryItems.length && <div className="integration-management-empty">{t('managementPage.noLocalOrAdded')}</div>}
           </div>
@@ -389,6 +406,7 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
             ordering={ordering}
+            highlighted={item.integrationId === targetIntegrationId}
           />)}
           </div>
         </section>}
