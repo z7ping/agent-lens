@@ -22,11 +22,18 @@ test('Entity Head keeps latest revision metadata while Current-State Root body c
     })
 
     const firstHead = db.db.prepare(`
-      SELECT latest_revision AS latestRevision,
+      SELECT first_revision AS firstRevision,
+             first_changed_at AS firstChangedAt,
+             latest_revision AS latestRevision,
              latest_changed_at AS latestChangedAt
       FROM replication_entity_heads
       WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-1'
-    `).get() as { latestRevision: number; latestChangedAt: string }
+    `).get() as {
+      firstRevision: number
+      firstChangedAt: string
+      latestRevision: number
+      latestChangedAt: string
+    }
     assert.ok(firstHead.latestRevision > 0)
 
     await db.repositories.coverage.put({
@@ -44,12 +51,22 @@ test('Entity Head keeps latest revision metadata while Current-State Root body c
              latest_changed_at AS latestChangedAt
       FROM replication_entity_heads
       WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-1'
-    `).get() as { latestRevision: number; latestChangedAt: string }
+    `).get() as {
+      firstRevision: number
+      firstChangedAt: string
+      latestRevision: number
+      latestChangedAt: string
+    }
     assert.ok(secondHead.latestRevision > firstHead.latestRevision)
+    assert.equal(secondHead.firstRevision, firstHead.firstRevision)
+    assert.equal(secondHead.firstChangedAt, firstHead.firstChangedAt)
 
     const snapshot = await db.replicationIndependentRoots.get('Coverage', 'coverage-1')
+    assert.equal(snapshot?.firstRevision, firstHead.firstRevision)
+    assert.equal(snapshot?.firstChangedAt, firstHead.firstChangedAt)
     assert.equal(snapshot?.latestRevision, secondHead.latestRevision)
-    assert.equal(snapshot?.changedAt, secondHead.latestChangedAt)
+    assert.equal(snapshot?.latestChangedAt, secondHead.latestChangedAt)
+    assert.equal(snapshot?.historyCapturedAt, firstHead.firstChangedAt)
     assert.equal(snapshot?.entityType, 'Coverage')
     if (snapshot?.entityType === 'Coverage') {
       assert.equal(snapshot.entity.status, 'complete')
@@ -60,7 +77,7 @@ test('Entity Head keeps latest revision metadata while Current-State Root body c
   }
 })
 
-test('Current-State Root Snapshot uses durable Entity Head changedAt for from-now filtering', async () => {
+test('Current-State Root Snapshot uses firstChangedAt so later updates cannot bypass from-now', async () => {
   const db = await storage()
   try {
     await db.repositories.coverage.put({
@@ -82,18 +99,20 @@ test('Current-State Root Snapshot uses durable Entity Head changedAt for from-no
 
     db.db.prepare(`
       UPDATE replication_entity_heads
-      SET latest_changed_at = '2026-09-17T00:00:00.000Z'
+      SET first_changed_at = '2026-09-17T00:00:00.000Z',
+          latest_changed_at = '2026-09-17T03:00:00.000Z'
       WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-old'
     `).run()
     db.db.prepare(`
       UPDATE replication_entity_heads
-      SET latest_changed_at = '2026-09-17T02:00:00.000Z'
+      SET first_changed_at = '2026-09-17T02:00:00.000Z',
+          latest_changed_at = '2026-09-17T03:00:00.000Z'
       WHERE entity_type = 'Coverage' AND origin_entity_id = 'coverage-new'
     `).run()
 
     const page = await db.replicationIndependentRoots.scan({
       entityType: 'Coverage',
-      changedAtOnOrAfter: '2026-09-17T03:00:00+02:00',
+      changedAtOnOrAfter: '2026-09-17T01:00:00.000Z',
       limit: 100,
     })
     assert.deepEqual(
