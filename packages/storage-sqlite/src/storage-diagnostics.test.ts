@@ -451,3 +451,110 @@ test('source activity 字节统计同时覆盖 plain JSON 与 gzip JSON，且不
     await storage.close()
   }
 })
+
+
+test('重复触碰既有 SourceRecord 时重置活动统计纪元，避免把重扫算成新活动', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  await storage.maintenance.ensureDeferredIndexes()
+  try {
+    const now = new Date()
+    const capturedAt = now.toISOString()
+    storage.db.prepare(`
+      INSERT INTO hosts(id, name, platform, arch, created_at, last_seen_at)
+      VALUES ('host:rescan', 'local', 'test', 'test', ?, ?)
+    `).run(capturedAt, capturedAt)
+    storage.db.prepare(`
+      INSERT INTO agent_products(id, name)
+      VALUES ('pi', 'Pi')
+    `).run()
+    storage.db.prepare(`
+      INSERT INTO agent_installations(
+        id, host_id, product_id, first_seen_at, last_seen_at
+      ) VALUES ('pi:rescan', 'host:rescan', 'pi', ?, ?)
+    `).run(capturedAt, capturedAt)
+    await storage.repositories.sourceRecords.put({
+      id: 'source-record:rescan',
+      sourceId: 'pi',
+      installationId: 'pi:rescan',
+      nativeType: 'message',
+      nativeId: 'rescan',
+      capturedAt,
+      locator: { kind: 'file', path: 'session.jsonl' },
+      payload: { text: 'same native event' },
+      parserVersion: 'test',
+    })
+
+    const first = await storage.diagnostics()
+    const firstDetails = first.details as {
+      storageSnapshot: { current: StorageDiagnosticSnapshot }
+    }
+    const baselineAt = new Date(Date.parse(capturedAt) - 8 * 24 * 60 * 60 * 1000)
+    const baseline: StorageDiagnosticSnapshot = {
+      ...firstDetails.storageSnapshot.current,
+      day: baselineAt.toISOString().slice(0, 10),
+      capturedAt: baselineAt.toISOString(),
+      sourceActivity: {
+        epochCapturedAt: baselineAt.toISOString(),
+        originalPayloadBytesCumulative: 0,
+        recordsCumulative: 0,
+      },
+    }
+    await storage.checkpoints.set(
+      STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+      STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+      { version: 2, snapshots: [baseline] },
+    )
+
+    // Re-capture the same SourceRecord identity with a newer capture timestamp.
+    await storage.repositories.sourceRecords.put({
+      id: 'source-record:rescan',
+      sourceId: 'pi',
+      installationId: 'pi:rescan',
+      nativeType: 'message',
+      nativeId: 'rescan',
+      capturedAt: new Date().toISOString(),
+      locator: { kind: 'file', path: 'session.jsonl' },
+      payload: { text: 'same native event' },
+      parserVersion: 'test',
+    })
+
+    const second = await storage.diagnostics()
+    const details = second.details as {
+      storageSnapshot: {
+        current: StorageDiagnosticSnapshot
+        sourceActivityInterval: {
+          state: string
+          records: number
+          netNewSourceRecords: number
+          reason?: string
+        }
+      }
+      growthMetrics: {
+        storageAmplificationRate: {
+          state: string
+          last7Days?: { state: string }
+        }
+      }
+    }
+
+    assert.equal(details.storageSnapshot.sourceActivityInterval.records, 1)
+    assert.equal(details.storageSnapshot.sourceActivityInterval.netNewSourceRecords, 0)
+    assert.equal(details.storageSnapshot.sourceActivityInterval.state, 'partial')
+    assert.equal(
+      details.storageSnapshot.sourceActivityInterval.reason,
+      'recent-source-records-do-not-match-net-new-records',
+    )
+    assert.equal(
+      details.storageSnapshot.current.sourceActivity.originalPayloadBytesCumulative,
+      0,
+    )
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'insufficient-history')
+    assert.equal(
+      details.growthMetrics.storageAmplificationRate.last7Days?.state,
+      'insufficient-activity-history',
+    )
+  } finally {
+    await storage.close()
+  }
+})
