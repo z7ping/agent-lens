@@ -37,8 +37,8 @@ test('display order is normalized to official Integrations and marks global orde
   try {
     const updated = await service.update({ displayOrder: ['codex', 'dsh', 'pi', 'codex'] })
     assert.equal(updated.displayOrderConfigured, true)
-    assert.deepEqual(updated.displayOrder.slice(0, 2), ['codex', 'pi'])
-    assert.equal(updated.displayOrder.includes('dsh'), false)
+    assert.deepEqual(updated.displayOrder.slice(0, 3), ['codex', 'dsh', 'pi'])
+    assert.equal(updated.displayOrder.includes('dsh'), true)
     assert.equal(new Set(updated.displayOrder).size, updated.displayOrder.length)
   } finally {
     await rm(path, { force: true })
@@ -107,7 +107,7 @@ test('fresh install persists incomplete onboarding while legacy bootstrap comple
     }),
     {
       onboardingCompleted: true,
-      acknowledgedIntegrationIds: ['pi', 'codex'],
+      acknowledgedIntegrationIds: ['pi', 'dsh', 'codex'],
     },
   )
   assert.equal(
