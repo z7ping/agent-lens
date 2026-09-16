@@ -50,7 +50,7 @@ import {
   isMissingPathError,
   readJsonlLines,
   sourceFileIdentity,
-  startHistoryFileWatch,,
+  startHistoryFileWatch,
   verifyJsonlLineSha256,
 } from '@agent-lens/source-support'
 import { discoverClaudeAssets } from './assets.js'
