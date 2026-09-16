@@ -304,6 +304,20 @@
 .task-surface .task-message-actions button:hover { background: var(--al-soft-2); color: var(--al-ink-2); }
 .task-surface .task-message-user .markdown-message-actions { margin-top: 4px; }
 .task-surface .task-message-actions { display: none; }
+.task-surface .task-message-attachments { display: flex; max-width: 100%; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.task-surface .task-message-image {
+  display: block;
+  width: auto;
+  max-width: min(360px, 100%);
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-soft-2);
+}
+.task-surface .task-message-user .task-message-image {
+  border-color: color-mix(in srgb, var(--al-user-bubble-muted) 48%, transparent);
+}
 
 /* ── Thinking ── */
 .task-surface .task-thinking { position: relative; z-index: 1; margin: 1px 0 2px; overflow: visible; border: 0; background: transparent; }
