@@ -6,7 +6,6 @@ import type {
   AgentAssetBindingDto,
   AgentAssetInventoryDto,
   AgentOverviewDto,
-  CapturePolicyResponseDto,
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
   ManagedAssetRoot,
@@ -22,7 +21,6 @@ import {
   IntegrationObservationPanel,
   IntegrationOnlyObservationCard,
 } from './integrations/IntegrationObservation'
-import { LegacySourceCaptureControl } from './integrations/LegacySourceCaptureControl'
 import {
   agentObservationState,
   integrationToolPresenceLabel,
@@ -458,15 +456,13 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
   </section>
 }
 
-function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onManageIntegration }: {
+function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, onManageIntegration }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
   discoveryScanning: boolean
   discoveryError: string
-  policy: CapturePolicyResponseDto | null
-  onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
   onManageIntegration(integrationId: string): void
 }) {
   const { t } = useTranslation('agents')
@@ -591,15 +587,13 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code><LocalPathActions path={presencePath} onOpen={openPath} onError={reportPathError}/></span>}
     </div>
 
-    {management
-      ? <IntegrationObservationPanel
-          management={management}
-          discovery={discovery}
-          discoveryScanning={discoveryScanning}
-          discoveryError={discoveryError}
-          onManage={onManageIntegration}
-        />
-      : <LegacySourceCaptureControl agent={agent} policy={policy} onChange={onCaptureChange}/>} 
+    {management && <IntegrationObservationPanel
+      management={management}
+      discovery={discovery}
+      discoveryScanning={discoveryScanning}
+      discoveryError={discoveryError}
+      onManage={onManageIntegration}
+    />}
 
     {isPi ? <>
       <PiUsageGuidance agent={agent}/>
@@ -783,8 +777,6 @@ export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; s
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
-            policy={snapshot.capturePolicy}
-            onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
             onManageIntegration={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
           /> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
