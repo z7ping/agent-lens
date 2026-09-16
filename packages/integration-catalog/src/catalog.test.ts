@@ -5,6 +5,7 @@ import {
   OFFICIAL_INTEGRATION_CATALOG,
   resolveClaudeLocation,
   resolveCodexLocation,
+  resolveDshHome,
   resolveHermesConfigRoots,
   resolveHermesRoots,
   resolveOpenCodeConfigRoots,
@@ -15,10 +16,10 @@ import {
 
 const home = join('agentlens-test', 'home')
 
-test('official catalog keeps the five built-in integrations in stable product order', () => {
+test('official catalog keeps the six built-in integrations in stable product order', () => {
   assert.deepEqual(
     OFFICIAL_INTEGRATION_CATALOG.map(item => item.integrationId),
-    ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
   )
 })
 
@@ -83,6 +84,12 @@ test('explicit relative product homes do not fall back to stale default discover
   })
   assert.equal(hermes.some(item => item.role === 'data'), false)
   assert.equal(hermes.some(item => item.role === 'config'), false)
+})
+
+test('DSH home follows the existing profile-root semantics', () => {
+  assert.equal(resolveDshHome({}, home, 'linux'), join(home, '.local', 'share', 'dsh'))
+  assert.equal(resolveDshHome({ DSH_HOME: '/srv/dsh' }, home, 'linux'), '/srv/dsh')
+  assert.equal(resolveDshHome({ XDG_DATA_HOME: '/srv/xdg-data' }, home, 'linux'), join('/srv/xdg-data', 'dsh'))
 })
 
 test('OpenCode config roots use XDG config semantics independently from data roots', () => {
