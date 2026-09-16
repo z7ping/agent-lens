@@ -14,11 +14,13 @@ function snapshot(
   capturedAt = `${day}T12:00:00.000Z`,
 ): StorageDiagnosticSnapshot {
   return {
-    version: 1,
+    version: 2,
     day,
     capturedAt,
     hotFootprintBytes: 100,
     databaseBytes: 90,
+    persistentRetainedBytes: 90,
+    persistentRetainedScope: 'sqlite-main',
     walBytes: 10,
     counts: {
       sourceRecords: 10,
@@ -35,12 +37,17 @@ function snapshot(
       operational: 10,
     },
     replicationChanges: 10,
+    sourceActivity: {
+      epochCapturedAt: '2026-09-01T00:00:00.000Z',
+      originalPayloadBytesCumulative: 100,
+      recordsCumulative: 10,
+    },
   }
 }
 
 test('captureStorageDiagnosticSnapshot 复用 checkpoint 并按日覆盖', async () => {
   let persisted: StorageDiagnosticSnapshotSeries | null = {
-    version: 1,
+    version: 2,
     snapshots: [snapshot('2026-09-15')],
   }
   const current = snapshot('2026-09-16')
