@@ -130,3 +130,50 @@ test('Tool disappearance/recovery never mutates Installed or Enabled and acknowl
     await rm(path, { force: true })
   }
 })
+
+
+test('DSH remains visible in Integration Management when only local profile data is discovered and it is not enabled yet', async () => {
+  const path = join(tmpdir(), `agent-lens-integration-management-${process.pid}-dsh.json`)
+  const preferences = new IntegrationPreferenceService(path, null)
+  const discovery: OfficialToolDiscoverySnapshot = {
+    status: 'complete',
+    items: [{
+      integrationId: 'dsh',
+      productId: 'dsh',
+      displayName: 'DeepSeek Harness',
+      presence: 'data-only',
+      configRoot: '/srv/dsh',
+      dataRoot: '/srv/dsh',
+    }],
+    generatedAt: '2026-09-17T00:00:00.000Z',
+  }
+  const service = new IntegrationManagementService({
+    discovery: { snapshot: () => discovery },
+    preferences,
+    capturePolicy: capturePolicy(),
+    packageState: integrationId => integrationId === 'dsh'
+      ? {
+          integrationId: 'dsh',
+          installed: false,
+          availableVersion: '1.0.0-alpha.5',
+          compatibility: 'compatible',
+          integrity: 'unknown',
+          restartRequired: false,
+        }
+      : packageState(integrationId),
+    integrationStatus: () => null,
+  })
+
+  try {
+    await preferences.update({ onboardingCompleted: true })
+    const dsh = (await service.query()).items.find(item => item.integrationId === 'dsh')
+    assert.ok(dsh)
+    assert.equal(dsh.tool?.presence, 'data-only')
+    assert.equal(dsh.packageState?.installed, false)
+    assert.equal(dsh.enabled.configured, false)
+    assert.equal(dsh.enabled.effective, false)
+    assert.equal(dsh.isNew, true)
+  } finally {
+    await rm(path, { force: true })
+  }
+})
