@@ -5,7 +5,6 @@ import type {
 import type {
   SourceRecord,
 } from '../domain/observation'
-import type { SourceRecordId } from '../domain/common'
 
 export interface SourceRawAuditCandidate {
   record: SourceRecord
@@ -16,12 +15,13 @@ export interface SourceRawAuditCandidate {
 
 export interface SourceRawAuditPage {
   items: SourceRawAuditCandidate[]
-  cursor?: SourceRecordId
+  /** Opaque storage cursor; callers must only round-trip it. */
+  cursor?: string
   hasMore: boolean
 }
 
 export interface SourceRawAuditReader {
-  list(afterId?: SourceRecordId, limit?: number): Promise<SourceRawAuditPage>
+  list(cursor?: string, limit?: number): Promise<SourceRawAuditPage>
 }
 
 export interface SourceRawRetentionFacts {
