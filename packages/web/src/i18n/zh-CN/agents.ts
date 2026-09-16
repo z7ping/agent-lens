@@ -244,10 +244,8 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
     observation: {
       integrationStatus: '接入状态',
       manageIntegration: '管理接入',
-      manageAuthorization: '处理授权',
-      noOverviewTitle: '尚无可观察数据',
-      noOverviewDescription: '本机工具已被发现或受支持，但当前还没有可展示的资产与使用数据。',
-      legacySourceTitle: '{{agent}} 仍使用旧来源开关',
+      noOverviewTitle: '暂无可观察数据',
+      dataCapture: '数据采集',
     },
     managementPage: {
       title: '智能体接入',
