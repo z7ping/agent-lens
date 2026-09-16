@@ -75,6 +75,15 @@ function rootTable(entityType: IndependentReplicationRootEntityType): RootConfig
   return ROOTS[entityType]
 }
 
+function normalizedBoundary(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) {
+    throw new TypeError('Independent replication Root changedAtOnOrAfter must be an ISO-compatible timestamp')
+  }
+  return new Date(timestamp).toISOString()
+}
+
 function mapSnapshot(
   entityType: IndependentReplicationRootEntityType,
   value: unknown,
@@ -112,12 +121,13 @@ implements IndependentReplicationRootSnapshotSource {
     const config = rootTable(input.entityType)
     const limit = Math.max(1, Math.min(input.limit ?? 100, 5000))
     const afterId = input.afterId ?? ''
+    const changedAtOnOrAfter = normalizedBoundary(input.changedAtOnOrAfter)
     return this.executor.run(() => {
       const params: unknown[] = [input.entityType, afterId]
-      const boundary = input.changedAtOnOrAfter
-        ? 'AND h.latest_changed_at >= ?'
-        : ''
-      if (input.changedAtOnOrAfter) params.push(input.changedAtOnOrAfter)
+      const boundary = changedAtOnOrAfter === undefined
+        ? ''
+        : 'AND h.latest_changed_at >= ?'
+      if (changedAtOnOrAfter !== undefined) params.push(changedAtOnOrAfter)
       params.push(limit)
 
       const rows = this.executor.db.prepare(`
