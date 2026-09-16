@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { liveMessagePlainTextDto, parseLiveMessageInputDto, parseLiveThinkingControlDto } from './live'
+import { liveMessagePlainTextDto, parseLiveEventDto, parseLiveMessageInputDto, parseLiveThinkingControlDto } from './live'
 
 test('Live protocol preserves Runtime thinking values, order, and duplicates without normalization', () => {
   const parsed = parseLiveThinkingControlDto({
@@ -67,4 +67,31 @@ test('Live protocol rejects invalid attachment metadata and refuses implicit att
     })),
     /requires adapter transformation/,
   )
+})
+
+
+test('Live protocol validates normalized streaming events without vendor payload knowledge', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'tool.end',
+    callId: 'call-1',
+    name: 'terminal',
+    status: 'success',
+    output: 'ok',
+    durationMs: 250,
+  }), {
+    type: 'tool.end',
+    callId: 'call-1',
+    name: 'terminal',
+    status: 'success',
+    output: 'ok',
+    durationMs: 250,
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'completed',
+    status: 'interrupted',
+  }), {
+    type: 'completed',
+    status: 'interrupted',
+  })
+  assert.equal(parseLiveEventDto({ type: 'completed', status: 'unknown' }), null)
 })
