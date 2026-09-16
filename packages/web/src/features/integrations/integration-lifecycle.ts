@@ -20,6 +20,67 @@ export function integrationPackageReady(
     && state.compatibility === 'compatible'
 }
 
+export function integrationManagementLifecycleState(
+  management: IntegrationManagementItemDto,
+  t: TFunction,
+): IntegrationLifecyclePresentation {
+  const packageState = management.packageState
+  if (!packageState) {
+    return {
+      label: t('status.managementUnavailable'),
+      title: t('status.managementUnavailableTitle'),
+      className: 'is-error',
+    }
+  }
+  if (!packageState.installed) {
+    return {
+      label: t('status.notAdded'),
+      title: t('managementPage.notAddedTitle'),
+      className: 'is-not-added',
+    }
+  }
+  if (!integrationPackageReady(packageState)) {
+    return {
+      label: t('status.abnormal'),
+      title: packageState.reason || t('status.abnormalTitle'),
+      className: 'is-error',
+    }
+  }
+  if (management.enabled.restartRequired || packageState.restartRequired) {
+    return {
+      label: t('status.pendingRestart'),
+      title: t('status.pendingRestartTitle'),
+      className: 'is-history',
+    }
+  }
+  if (!management.enabled.configured) {
+    return {
+      label: t('status.disabled'),
+      title: t('managementPage.disabledTitle'),
+      className: 'is-disabled',
+    }
+  }
+  if (management.availability === 'error') {
+    return {
+      label: t('status.abnormal'),
+      title: t('status.abnormalTitle'),
+      className: 'is-error',
+    }
+  }
+  if (management.availability === 'unavailable') {
+    return {
+      label: t('status.unavailable'),
+      title: t('status.unavailableTitle'),
+      className: 'is-history',
+    }
+  }
+  return {
+    label: t('status.enabled'),
+    title: t('managementPage.enabledTitle'),
+    className: 'is-enabled',
+  }
+}
+
 export function integrationLifecycleState(
   agent: Pick<AgentOverviewDto, 'supported' | 'enabled' | 'detected'> | undefined,
   management: IntegrationManagementItemDto | undefined,
