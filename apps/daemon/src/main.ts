@@ -519,8 +519,10 @@ try {
       if (gate) await gate.wait(runtimeController.signal)
       if (runtimeController.signal.aborted) return
 
+      let nextSnapshotDelayMs = STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS
       try {
         const result = await captureStorageDiagnosticSnapshot(app.context.storage)
+        nextSnapshotDelayMs = result?.nextDueInMs ?? STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS
         const latest = result?.series.snapshots.at(-1)
         if (result?.captured && latest) {
           console.info(
@@ -534,7 +536,7 @@ try {
       }
 
       await abortableDelay(
-        result?.nextDueInMs ?? STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS,
+        nextSnapshotDelayMs,
         runtimeController.signal,
       )
     }
