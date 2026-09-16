@@ -271,6 +271,11 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             type = excluded.type,
             evidence_refs_json = excluded.evidence_refs_json,
             confidence = excluded.confidence
+          WHERE session_relationships.from_session_id IS NOT excluded.from_session_id
+             OR session_relationships.to_session_id IS NOT excluded.to_session_id
+             OR session_relationships.type IS NOT excluded.type
+             OR session_relationships.evidence_refs_json IS NOT excluded.evidence_refs_json
+             OR session_relationships.confidence IS NOT excluded.confidence
         `).run(
           relationship.id,
           relationship.fromSessionId,
@@ -750,6 +755,14 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             status = excluded.status,
             reason = excluded.reason,
             evidence_refs_json = excluded.evidence_refs_json
+          WHERE coverage.subject_type IS NOT excluded.subject_type
+             OR coverage.subject_id IS NOT excluded.subject_id
+             OR coverage.capability IS NOT excluded.capability
+             OR coverage.from_time IS NOT excluded.from_time
+             OR coverage.to_time IS NOT excluded.to_time
+             OR coverage.status IS NOT excluded.status
+             OR coverage.reason IS NOT excluded.reason
+             OR coverage.evidence_refs_json IS NOT excluded.evidence_refs_json
         `).run(
           item.id,
           item.subjectType,
@@ -812,6 +825,10 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             canonical_name = excluded.canonical_name,
             display_name = excluded.display_name,
             upstream_identity = excluded.upstream_identity
+          WHERE asset_definitions.type IS NOT excluded.type
+             OR asset_definitions.canonical_name IS NOT excluded.canonical_name
+             OR asset_definitions.display_name IS NOT excluded.display_name
+             OR asset_definitions.upstream_identity IS NOT excluded.upstream_identity
         `).run(
           definition.id,
           definition.type,
@@ -838,6 +855,14 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             path = excluded.path,
             source = excluded.source,
             version = excluded.version
+          WHERE asset_bindings.asset_id IS NOT excluded.asset_id
+             OR asset_bindings.installation_id IS NOT excluded.installation_id
+             OR asset_bindings.runtime_profile_id IS NOT excluded.runtime_profile_id
+             OR asset_bindings.scope IS NOT excluded.scope
+             OR asset_bindings.scope_root IS NOT excluded.scope_root
+             OR asset_bindings.path IS NOT excluded.path
+             OR asset_bindings.source IS NOT excluded.source
+             OR asset_bindings.version IS NOT excluded.version
         `).run(
           binding.id,
           binding.assetId,
@@ -862,6 +887,10 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             value = excluded.value,
             observed_at = excluded.observed_at,
             evidence_refs_json = excluded.evidence_refs_json
+          WHERE asset_state_observations.state IS NOT excluded.state
+             OR asset_state_observations.value IS NOT excluded.value
+             OR asset_state_observations.observed_at IS NOT excluded.observed_at
+             OR asset_state_observations.evidence_refs_json IS NOT excluded.evidence_refs_json
         `).run(
           state.id,
           state.assetBindingId,
@@ -894,6 +923,12 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             asset_definition_id = excluded.asset_definition_id,
             installation_id = excluded.installation_id,
             schema_hash = excluded.schema_hash
+          WHERE tool_definitions.canonical_name IS NOT excluded.canonical_name
+             OR tool_definitions.display_name IS NOT excluded.display_name
+             OR tool_definitions.source_type IS NOT excluded.source_type
+             OR tool_definitions.asset_definition_id IS NOT excluded.asset_definition_id
+             OR tool_definitions.installation_id IS NOT excluded.installation_id
+             OR tool_definitions.schema_hash IS NOT excluded.schema_hash
         `).run(
           definition.id,
           definition.canonicalName,
