@@ -140,7 +140,7 @@ export interface SourceRawRecoveryPolicy {
   describe(record: SourceRecord): SourceRawRecoveryCapability
   verify?(
     record: SourceRecord,
-    ctx: SourceRawRecoveryContext,
+    ctx?: SourceRawRecoveryContext,
   ): Promise<SourceRawRecoveryCheck>
 }
 
