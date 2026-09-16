@@ -33,6 +33,19 @@ function stringifyJson(value: JsonValue): string {
   return JSON.stringify(value)
 }
 
+function containsDependencyMinimized(value: JsonValue): boolean {
+  if (Array.isArray(value)) return value.some(item => containsDependencyMinimized(item))
+  if (value === null || typeof value !== 'object') return false
+  const record = value as { [key: string]: JsonValue }
+  if (
+    record.state === 'omitted'
+    && record.reason === 'dependency-minimized'
+  ) {
+    return true
+  }
+  return Object.values(record).some(item => containsDependencyMinimized(item))
+}
+
 function mapStream(row: StreamRow): ReplicationStreamState {
   return { ...row }
 }
@@ -202,10 +215,24 @@ export class SqliteReplicationStateRepository {
         WHERE stream_id = ? AND generation_id = ? AND dedup_key = ?
       `).get(input.streamId, input.generationId, input.dedupKey)
       const state = rawState ? candidateStateRow(rawState) : undefined
+      const previous = state?.lastPendingId
+        ? this.getPendingRow(state.lastPendingId)
+        : undefined
 
-      if (state?.lastCandidateHash === input.candidateHash && state.lastPendingId) {
-        const existing = this.getPendingRow(state.lastPendingId)
-        if (existing) return { item: mapPendingReplication(existing), created: false, replaced: false }
+      if (state?.lastCandidateHash === input.candidateHash && previous) {
+        return { item: mapPendingReplication(previous), created: false, replaced: false }
+      }
+
+      // A dependency-minimized candidate is a lossy representation of the same
+      // entity. Once a full/root candidate has been durably observed, a later
+      // dependency graph must never downgrade or re-queue that entity merely
+      // because traversal order changed.
+      if (
+        previous
+        && containsDependencyMinimized(input.payload)
+        && !containsDependencyMinimized(parseReplicationJson(previous.payloadJson))
+      ) {
+        return { item: mapPendingReplication(previous), created: false, replaced: false }
       }
 
       const rawOpen = this.executor.db.prepare(`
