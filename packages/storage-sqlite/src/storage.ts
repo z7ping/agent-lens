@@ -30,12 +30,14 @@ import { withSqliteSourceRecordCompression } from './source-record-compression'
 import {
   capturedActivityDetails,
   replicationJournalDetails,
+  sourceActivityPayloadBytesBetween,
   storageBreakdownDetails,
 } from './storage-diagnostics'
 import {
   STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
   STORAGE_DIAGNOSTIC_SNAPSHOT_RETENTION_DAYS,
   STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+  parseStorageDiagnosticSnapshotSeries,
   storageGrowthMetricsFromSnapshots,
   type StorageDiagnosticSnapshot,
 } from './storage-diagnostic-snapshots'
@@ -378,17 +380,52 @@ export class SqliteStorageService implements StorageService {
         sessions: count('logical_sessions'),
       }
       const snapshotCapturedAt = new Date().toISOString()
+      const persistedSeries = parseStorageDiagnosticSnapshotSeries(persistedSnapshots)
+      const previousSnapshot = persistedSeries.snapshots.at(-1) ?? null
+      const sourceActivityInterval = previousSnapshot
+        ? sourceActivityPayloadBytesBetween(
+            this.db,
+            previousSnapshot.capturedAt,
+            snapshotCapturedAt,
+          )
+        : {
+            state: 'baseline' as const,
+            basis: 'source-record-payload-json-before-agentlens-compression',
+            records: 0,
+            originalPayloadBytes: 0,
+            unknownEncodingRecords: 0,
+            invalidPayloadRecords: 0,
+            gzipSizeBasis: 'gzip-isize-uint32',
+          }
+      const sourceActivity = previousSnapshot && sourceActivityInterval.state === 'complete'
+        ? {
+            epochCapturedAt: previousSnapshot.sourceActivity.epochCapturedAt,
+            originalPayloadBytesCumulative:
+              previousSnapshot.sourceActivity.originalPayloadBytesCumulative
+              + sourceActivityInterval.originalPayloadBytes,
+            recordsCumulative:
+              previousSnapshot.sourceActivity.recordsCumulative
+              + sourceActivityInterval.records,
+          }
+        : {
+            epochCapturedAt: snapshotCapturedAt,
+            originalPayloadBytesCumulative: 0,
+            recordsCumulative: 0,
+          }
+      const databaseBytes = typeof baseGrowth.databaseBytes === 'number'
+        ? baseGrowth.databaseBytes
+        : 0
       const currentSnapshot: StorageDiagnosticSnapshot | null = breakdown.available
         ? {
-            version: 1,
+            version: 2,
             day: snapshotCapturedAt.slice(0, 10),
             capturedAt: snapshotCapturedAt,
             hotFootprintBytes: typeof baseGrowth.hotFootprintBytes === 'number'
               ? baseGrowth.hotFootprintBytes
               : 0,
-            databaseBytes: typeof baseGrowth.databaseBytes === 'number'
-              ? baseGrowth.databaseBytes
-              : 0,
+            databaseBytes,
+            persistentRetainedBytes: databaseBytes,
+            persistentRetainedScope: 'sqlite-main',
             walBytes,
             counts: totals,
             categoryAllocatedBytes: {
@@ -400,6 +437,7 @@ export class SqliteStorageService implements StorageService {
               operational: breakdown.categories.operational.allocatedBytes,
             },
             replicationChanges: replicationJournal.totalChanges,
+            sourceActivity,
           }
         : null
       const growthMetrics = storageGrowthMetricsFromSnapshots(
@@ -453,6 +491,7 @@ export class SqliteStorageService implements StorageService {
             retentionDays: STORAGE_DIAGNOSTIC_SNAPSHOT_RETENTION_DAYS,
             current: currentSnapshot,
             history: growthMetrics.history,
+            sourceActivityInterval,
           },
           growthMetrics,
           dataGrowth: {
