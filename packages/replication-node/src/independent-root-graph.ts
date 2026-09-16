@@ -1,5 +1,6 @@
 import {
   assetUpstreamPortableIdentity,
+  projectRepositoryPortableIdentity,
   sharedGroupKeyFor,
   type HistoryBoundary,
   type IndependentReplicationRootSnapshot,
@@ -18,6 +19,7 @@ import {
   type CanonicalReplicationReader,
 } from './canonical-dependency-graph'
 import {
+  agentProductSharedRef,
   generateWireEntity,
   nodeEntityRef,
 } from './entity-generator'
@@ -45,6 +47,18 @@ function assetAssertion(
     identityAlgorithm: portable.algorithm,
     normalizedPortableIdentity: portable.normalized,
     claimedSharedKey: sharedGroupKeyFor('AssetDefinition', portable),
+  }
+}
+
+function projectAssertion(
+  repositoryIdentity: string | undefined,
+): SharedIdentityAssertion | undefined {
+  const portable = projectRepositoryPortableIdentity(repositoryIdentity)
+  if (!portable) return undefined
+  return {
+    identityAlgorithm: portable.algorithm,
+    normalizedPortableIdentity: portable.normalized,
+    claimedSharedKey: sharedGroupKeyFor('Project', portable),
   }
 }
 
@@ -138,6 +152,156 @@ export async function generateIndependentRootReplicaGraph(
   let rootResult: ReturnType<typeof generateWireEntity> | undefined
 
   switch (input.root.entityType) {
+    case 'AgentProduct': {
+      const entity = input.root.entity
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'AgentProduct',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+      })
+      break
+    }
+
+    case 'Host': {
+      const entity = input.root.entity
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'Host',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+      })
+      break
+    }
+
+    case 'AgentInstallation': {
+      const entity = input.root.entity
+      await graph.emitHost(entity.hostId)
+      await graph.emitProduct(entity.productId)
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'AgentInstallation',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: {
+          host: nodeEntityRef('Host', entity.hostId),
+          product: agentProductSharedRef(entity.productId),
+        },
+      })
+      break
+    }
+
+    case 'RuntimeProfile': {
+      const entity = input.root.entity
+      await graph.emitInstallation(entity.installationId)
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'RuntimeProfile',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: {
+          installation: nodeEntityRef('AgentInstallation', entity.installationId),
+        },
+      })
+      break
+    }
+
+    case 'Project': {
+      const entity = input.root.entity
+      const sharedIdentity = projectAssertion(entity.repositoryIdentity)
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'Project',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        ...(sharedIdentity === undefined ? {} : { sharedIdentity }),
+      })
+      break
+    }
+
+    case 'Workspace': {
+      const entity = input.root.entity
+      await graph.emitHost(entity.hostId)
+      if (entity.projectId) await graph.emitProject(entity.projectId)
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'Workspace',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: replicationRefs({
+          host: nodeEntityRef('Host', entity.hostId),
+          project: entity.projectId
+            ? nodeEntityRef('Project', entity.projectId)
+            : undefined,
+        }),
+      })
+      break
+    }
+
+    case 'LogicalSession': {
+      const entity = input.root.entity
+      await graph.emitInstallation(entity.installationId)
+      if (entity.runtimeProfileId) {
+        await graph.emitRuntimeProfile(entity.runtimeProfileId)
+      }
+      if (entity.projectId) await graph.emitProject(entity.projectId)
+      if (entity.workspaceId) await graph.emitWorkspace(entity.workspaceId)
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'LogicalSession',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: replicationRefs({
+          installation: nodeEntityRef('AgentInstallation', entity.installationId),
+          runtimeProfile: entity.runtimeProfileId
+            ? nodeEntityRef('RuntimeProfile', entity.runtimeProfileId)
+            : undefined,
+          project: entity.projectId
+            ? nodeEntityRef('Project', entity.projectId)
+            : undefined,
+          workspace: entity.workspaceId
+            ? nodeEntityRef('Workspace', entity.workspaceId)
+            : undefined,
+        }),
+      })
+      break
+    }
+
+    case 'SourceSession': {
+      const entity = input.root.entity
+      await graph.emitInstallation(entity.installationId)
+      if (entity.runtimeProfileId) {
+        await graph.emitRuntimeProfile(entity.runtimeProfileId)
+      }
+      if (entity.logicalSessionId) {
+        await graph.emitLogicalSession(entity.logicalSessionId)
+      }
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'SourceSession',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: replicationRefs({
+          installation: nodeEntityRef('AgentInstallation', entity.installationId),
+          runtimeProfile: entity.runtimeProfileId
+            ? nodeEntityRef('RuntimeProfile', entity.runtimeProfileId)
+            : undefined,
+          logicalSession: entity.logicalSessionId
+            ? nodeEntityRef('LogicalSession', entity.logicalSessionId)
+            : undefined,
+        }),
+      })
+      break
+    }
+
     case 'SessionRelationship': {
       const entity = input.root.entity
       await graph.emitLogicalSession(entity.fromSessionId)
@@ -150,13 +314,77 @@ export async function generateIndependentRootReplicaGraph(
         entityType: 'SessionRelationship',
         originEntityId: entity.id,
         capturedAt: input.root.changedAt,
-        body: replicationBody(
-          entity as unknown as Readonly<Record<string, unknown>>,
-        ),
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           fromSession: nodeEntityRef('LogicalSession', entity.fromSessionId),
           toSession: nodeEntityRef('LogicalSession', entity.toSessionId),
           evidence: entity.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
+        }),
+      })
+      break
+    }
+
+    case 'AgentActor': {
+      const entity = input.root.entity
+      await graph.emitInstallation(entity.installationId)
+      if (entity.logicalSessionId) {
+        await graph.emitLogicalSession(entity.logicalSessionId)
+      }
+      if (entity.parentActorId) await graph.emitActor(entity.parentActorId)
+      for (const evidenceId of entity.evidenceRefs) {
+        await graph.emitEvidence(evidenceId)
+      }
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'AgentActor',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: replicationRefs({
+          installation: nodeEntityRef('AgentInstallation', entity.installationId),
+          logicalSession: entity.logicalSessionId
+            ? nodeEntityRef('LogicalSession', entity.logicalSessionId)
+            : undefined,
+          parentActor: entity.parentActorId
+            ? nodeEntityRef('AgentActor', entity.parentActorId)
+            : undefined,
+          evidence: entity.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
+        }),
+      })
+      break
+    }
+
+    case 'SourceRecord': {
+      const entity = input.root.entity
+      await graph.emitInstallation(entity.installationId)
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'SourceRecord',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: {
+          installation: nodeEntityRef('AgentInstallation', entity.installationId),
+        },
+      })
+      break
+    }
+
+    case 'Evidence': {
+      const entity = input.root.entity
+      if (entity.sourceRecordId) {
+        await graph.emitSourceRecord(entity.sourceRecordId)
+      }
+      rootResult = generateWireEntity({
+        ...common,
+        entityType: 'Evidence',
+        originEntityId: entity.id,
+        capturedAt: input.root.changedAt,
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
+        references: replicationRefs({
+          sourceRecord: entity.sourceRecordId
+            ? nodeEntityRef('SourceRecord', entity.sourceRecordId)
+            : undefined,
         }),
       })
       break
@@ -172,9 +400,7 @@ export async function generateIndependentRootReplicaGraph(
         entityType: 'Coverage',
         originEntityId: entity.id,
         capturedAt: input.root.changedAt,
-        body: replicationBody(
-          entity as unknown as Readonly<Record<string, unknown>>,
-        ),
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           evidence: entity.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
         }),
@@ -190,9 +416,7 @@ export async function generateIndependentRootReplicaGraph(
         entityType: 'AssetDefinition',
         originEntityId: entity.id,
         capturedAt: input.root.changedAt,
-        body: replicationBody(
-          entity as unknown as Readonly<Record<string, unknown>>,
-        ),
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         ...(sharedIdentity === undefined ? {} : { sharedIdentity }),
       })
       break
@@ -210,9 +434,7 @@ export async function generateIndependentRootReplicaGraph(
         entityType: 'AssetBinding',
         originEntityId: entity.id,
         capturedAt: input.root.changedAt,
-        body: replicationBody(
-          entity as unknown as Readonly<Record<string, unknown>>,
-        ),
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           assetDefinition: nodeEntityRef('AssetDefinition', entity.assetId),
           installation: nodeEntityRef('AgentInstallation', entity.installationId),
@@ -235,9 +457,7 @@ export async function generateIndependentRootReplicaGraph(
         entityType: 'AssetStateObservation',
         originEntityId: entity.id,
         capturedAt: input.root.changedAt,
-        body: replicationBody(
-          entity as unknown as Readonly<Record<string, unknown>>,
-        ),
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           assetBinding: nodeEntityRef('AssetBinding', entity.assetBindingId),
           evidence: entity.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
@@ -259,9 +479,7 @@ export async function generateIndependentRootReplicaGraph(
         entityType: 'ToolDefinition',
         originEntityId: entity.id,
         capturedAt: input.root.changedAt,
-        body: replicationBody(
-          entity as unknown as Readonly<Record<string, unknown>>,
-        ),
+        body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           assetDefinition: entity.assetDefinitionId
             ? nodeEntityRef('AssetDefinition', entity.assetDefinitionId)
@@ -275,7 +493,9 @@ export async function generateIndependentRootReplicaGraph(
     }
   }
 
-  if (!rootResult) throw new Error(`Unsupported Independent Root type: ${input.root.entityType}`)
+  if (!rootResult) {
+    throw new Error(`Unsupported Current-State Root type: ${input.root.entityType}`)
+  }
   if (rootResult.kind === 'blocked') return rootResult
   graph.emit(rootResult.entity)
   return { kind: 'graph', entities: graph.entities }
