@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
   type KnownReplicationEntityType,
   type ReplicationReconciliationSink,
 } from '@agent-lens/core/replication'
@@ -172,11 +171,7 @@ test('periodic reconciliation fixes one high-water and advances graph capture on
     assert.equal(second.nextDueAt, '2026-09-16T00:31:00.000Z')
   }
   assert.equal(scans, 2)
-  assert.deepEqual(
-    [...captured.keys()].sort(),
-    [...OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES].sort(),
-  )
-  assert.ok([...captured.values()].every(revision => revision === 10))
+  assert.deepEqual([...captured.entries()], [['CanonicalObservation', 10]])
   assert.equal(incrementalProgress.state?.revision, 10)
   assert.equal(incrementalProgress.state?.throughRevision, 10)
 })
