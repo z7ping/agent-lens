@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useMemo, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -9,7 +10,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { sourceDot } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
-import { Button, Dialog, IconButton, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
 import {
   integrationCanInstall,
   integrationLifecycleState,
@@ -272,7 +273,7 @@ function IntegrationManagementRow({
   </article>
 }
 
-export function IntegrationManagementPage({ model }: { model: AgentLensClientModel }) {
+export function IntegrationManagementPage({ model, topbarHost }: { model: AgentLensClientModel; topbarHost?: HTMLDivElement | null }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
   const management = snapshot.integrationManagement
@@ -308,12 +309,17 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
   }
 
   return <main className="workspace-page">
-    <div className="page-content integration-management-content">
-      <header className="integration-management-heading">
-        <h1>{t('managementPage.title')}</h1>
+    {topbarHost ? createPortal(
+      <ToolbarGroup className="integration-management-topbar-tools">
         <Button size="small" onClick={() => setOrdering(value => !value)}>
           {ordering ? t('page.orderDone') : t('page.manageOrder')}
         </Button>
+      </ToolbarGroup>,
+      topbarHost,
+    ) : null}
+    <div className="page-content integration-management-content">
+      <header className="integration-management-heading">
+        <h1>{t('managementPage.title')}</h1>
       </header>
 
       <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
