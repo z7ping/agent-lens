@@ -18,3 +18,5 @@ export * from './session-summaries'
 export * from './storage'
 export * from './provider'
 export * from './plugin'
+
+export * from './source-raw-audit'
