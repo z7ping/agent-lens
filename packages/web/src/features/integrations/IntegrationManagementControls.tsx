@@ -7,7 +7,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
-import { agentLabel, sourceDot } from '../../components/AgentScope'
+import { sourceDot } from '../../components/AgentScope'
 import { Button, StatusBadge } from '../../components/ui'
 import {
   integrationManagementLifecycleState,
@@ -89,8 +89,6 @@ export function IntegrationObservationPanel({
 }) {
   const { t } = useTranslation('agents')
   const status = integrationManagementLifecycleState(management, t)
-  const pendingAuthorization = management.capabilities.some(item => item.authorization === 'required')
-
   return <section className="integration-observation">
     <div className="integration-observation-main">
       <span className="integration-observation-fact">
@@ -121,8 +119,8 @@ export function IntegrationObservationPanel({
         {!management.capabilities.length && <span className="integration-observation-muted">{t('managementPage.capabilitiesPending')}</span>}
       </span>
     </div>
-    <Button size="small" variant={pendingAuthorization ? 'primary' : 'default'} onClick={() => onManage(management.integrationId)}>
-      {pendingAuthorization ? t('observation.manageAuthorization') : t('observation.manageIntegration')}
+    <Button size="small" onClick={() => onManage(management.integrationId)}>
+      {t('observation.manageIntegration')}
     </Button>
   </section>
 }
@@ -173,10 +171,7 @@ export function IntegrationOnlyObservationCard({
     </div>
 
     <section className="integration-placeholder-body">
-      <div>
-        <b>{t('observation.noOverviewTitle')}</b>
-        <span>{t('observation.noOverviewDescription')}</span>
-      </div>
+      <div><b>{t('observation.noOverviewTitle')}</b></div>
       <Button size="small" variant="primary" onClick={() => onManage(management.integrationId)}>
         {t('observation.manageIntegration')}
       </Button>
@@ -218,7 +213,7 @@ export function LegacySourceCaptureControl({
 
   return <section className="source-capture-control source-capture-control-legacy">
     <div>
-      <h3>{t('observation.legacySourceTitle', { agent: agentLabel(agent.sourceId, agent.displayName) })}</h3>
+      <h3>{t('observation.dataCapture')}</h3>
       {pending && <p className="source-capture-note">{configured ? t('integration.pendingEnabled') : t('integration.pendingDisabled')}</p>}
       {!editable && managedBy && <p className="source-capture-note">{t('integration.managedReadonly', {
         manager: managedBy === 'environment' ? t('integration.environmentManager') : t('integration.runtimeManager'),
