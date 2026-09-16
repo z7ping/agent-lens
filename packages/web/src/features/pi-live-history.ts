@@ -1,10 +1,17 @@
-import { normalizePiSessionEntry, type PiLiveSnapshotDto, type PiNativeFact, type PiNativeUsage } from '@agent-lens/protocol'
+import {
+  normalizePiSessionEntry,
+  reviewMessageAttachmentsFromPayload,
+  type PiLiveSnapshotDto,
+  type PiNativeFact,
+  type PiNativeUsage,
+  type ReviewMessageAttachmentDto,
+} from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
 
 export type PiLiveItemState = 'running' | 'settled'
 
 export type PiLiveHistoryItem =
-  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
+  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'thinking'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; at: string; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
@@ -38,10 +45,20 @@ function resultOutput(fact: Extract<PiNativeFact, { kind: 'tool-result' }>): str
   return [fact.output, details ? `Details: ${details}` : ''].filter(Boolean).join('\n\n')
 }
 
-function messageText(fact: Extract<PiNativeFact, { kind: 'message' }>): string {
-  if (fact.text.trim()) return fact.text
-  if (fact.nonTextContent.length) return translateProduct('piLive:history.nonTextContent', { count: fact.nonTextContent.length })
-  return ''
+function messagePresentation(fact: Extract<PiNativeFact, { kind: 'message' }>): {
+  text: string
+  attachments: ReviewMessageAttachmentDto[]
+} {
+  const attachments = reviewMessageAttachmentsFromPayload({ nonTextContent: fact.nonTextContent })
+  if (fact.text.trim()) return { text: fact.text, attachments }
+  if (attachments.length) return { text: '', attachments }
+  if (fact.nonTextContent.length) {
+    return {
+      text: translateProduct('piLive:history.nonTextContent', { count: fact.nonTextContent.length }),
+      attachments,
+    }
+  }
+  return { text: '', attachments }
 }
 
 export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLiveHistoryItem[] {
@@ -55,12 +72,13 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
   for (const fact of facts) {
     if (fact.kind === 'message') {
       if (fact.role === 'user' || fact.role === 'assistant') {
-        const text = messageText(fact)
-        if (text) items.push({
+        const presentation = messagePresentation(fact)
+        if (presentation.text || presentation.attachments.length) items.push({
           id: fact.id,
           kind: 'message',
           role: fact.role,
-          text,
+          text: presentation.text,
+          ...(presentation.attachments.length ? { attachments: presentation.attachments } : {}),
           at: fact.at,
           ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
         })
