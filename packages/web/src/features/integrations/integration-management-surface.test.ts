@@ -69,6 +69,10 @@ test('首次未选择的本机智能体仍可在智能体页二次接入', () =>
 })
 
 
+test('智能体页刷新同时重扫 Integration Discovery，允许运行中安装的新 Agent 出现', () => {
+  assert.match(app, /onRefreshAgents=\{\(\) => \{ void Promise\.allSettled\(\[model\.rescanIntegrationDiscovery\(\), model\.refreshFacetsAndAgents\(\)\]\) \}\}/)
+})
+
 test('首次向导自动扫描但不默认选择或自动安装', () => {
   assert.match(onboarding, /useState<Set<string>>\(\(\) => new Set\(\)\)/)
   assert.match(onboarding, /const chosen = detected\.filter\(item => selected\.has\(item\.integrationId\)\)/)
@@ -82,6 +86,19 @@ test('首次扫描失败不得落入“未发现”分组', () => {
   assert.match(onboarding, /onboarding\.scanFailedAgents/)
   assert.match(onboarding, /onboarding\.noneConfirmed/)
   assert.doesNotMatch(onboarding, /missing = useMemo\(\(\) => items\.filter\(item => !selectable\(item\)\)/)
+})
+
+test('接入页把本机发现状态与接入启停状态分开表达', () => {
+  assert.match(page, /const discoveredStatus = integrationLifecycleState/)
+  assert.match(page, /managementPage\.enabledTitle/)
+  assert.match(page, /managementPage\.disabledTitle/)
+  assert.match(page, /visibleNewIds/)
+  assert.match(page, /model\.updateIntegrationPreferences\(\{ acknowledgedIntegrationIds \}\)/)
+})
+
+test('全局扫描失败不会把未知项塞进“其他支持/未检测到”分组', () => {
+  assert.match(page, /const discoveryFailed = Boolean\(snapshot\.integrationDiscoveryError\)/)
+  assert.match(page, /const supportedItems = discoveryFailed \? \[\] : items\.filter/)
 })
 
 test('扫描失败与 data-only 保持独立语义', () => {
