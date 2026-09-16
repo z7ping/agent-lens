@@ -21,11 +21,16 @@ test('Pi Live 完成态只保留乐观用户消息并移除分片中的所有重
   const items: PiLiveHistoryItem[] = [
     { id: 'user-1', kind: 'message', role: 'user', text: '执行检查', at: '' },
     { id: 'assistant-1', kind: 'message', role: 'assistant', text: '执行检查', at: '' },
-    { id: 'user-2', kind: 'message', role: 'user', text: ' 执行检查 ', at: '' },
+    { id: 'user-2', kind: 'message', role: 'user', text: ' 执行检查 ', attachments: [{ type: 'image', dataUrl: 'data:image/png;base64,aA==' }], at: '' },
     { id: 'tool-1', kind: 'tool', callId: 'call-1', name: 'bash', summary: '', output: '', status: 'success', at: '' },
   ]
 
-  assert.deepEqual(omitPiLivePromptMessages(items, '执行检查').map(item => item.id), ['assistant-1', 'tool-1'])
+  const visible = omitPiLivePromptMessages(items, '执行检查')
+  assert.deepEqual(visible.map(item => item.id), ['assistant-1', 'user-2', 'tool-1'])
+  const attachmentOnly = visible[1]
+  assert.ok(attachmentOnly?.kind === 'message')
+  assert.equal(attachmentOnly.text, '')
+  assert.equal(attachmentOnly.attachments?.length, 1)
   assert.equal(omitPiLivePromptMessages(items).length, items.length)
 })
 
