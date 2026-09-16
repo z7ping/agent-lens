@@ -43,4 +43,5 @@ INSERT INTO replication_capture_watermarks(
 )
 SELECT stream_id, generation_id, 'CanonicalObservation', 0, 'dependent', updated_at
 FROM replication_streams
+WHERE 1
 ON CONFLICT(stream_id, generation_id, entity_type) DO NOTHING;

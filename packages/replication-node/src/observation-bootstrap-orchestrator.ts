@@ -4,6 +4,7 @@ import {
 } from '@agent-lens/core/replication'
 import type {
   HistoryBoundary,
+  KnownReplicationEntityType,
   ReplicationPolicy,
 } from '@agent-lens/core/replication'
 import type { CanonicalReplicationReader } from './canonical-graph'
@@ -32,7 +33,7 @@ export type ObservationBootstrapStage =
 export interface ObservationBootstrapLifecycleState {
   streamId: string
   generationId: string
-  entityType: 'CanonicalObservation'
+  entityType: KnownReplicationEntityType
   stage: ObservationBootstrapStage
   policyRevision: string
   historyRevision: string
