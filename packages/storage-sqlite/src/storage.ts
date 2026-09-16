@@ -102,6 +102,53 @@ function readonlyRecord(value: unknown): Readonly<Record<string, unknown>> | und
     : undefined
 }
 
+
+type StorageCategoryName =
+  | 'canonical'
+  | 'evidence'
+  | 'sourceRaw'
+  | 'projection'
+  | 'replication'
+  | 'operational'
+
+const CANONICAL_TABLES = new Set([
+  'hosts',
+  'agent_products',
+  'agent_installations',
+  'runtime_profiles',
+  'projects',
+  'workspaces',
+  'logical_sessions',
+  'source_sessions',
+  'session_relationships',
+  'agent_actors',
+  'interactions',
+  'observations',
+  'asset_definitions',
+  'asset_bindings',
+  'asset_state_observations',
+  'tool_definitions',
+])
+const EVIDENCE_TABLES = new Set(['evidence', 'observation_evidence', 'coverage'])
+const PROJECTION_TABLES = new Set([
+  'session_summary_projection',
+  'unknown_observation_projection',
+  'tool_usage_fact_projection',
+])
+
+function storageCategoryForTable(tableName: string): StorageCategoryName {
+  if (tableName === 'source_records') return 'sourceRaw'
+  if (CANONICAL_TABLES.has(tableName)) return 'canonical'
+  if (EVIDENCE_TABLES.has(tableName)) return 'evidence'
+  if (PROJECTION_TABLES.has(tableName)) return 'projection'
+  if (tableName.startsWith('replication_') || tableName.startsWith('hub_')) return 'replication'
+  return 'operational'
+}
+
+function ratioOrNull(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? numerator / denominator : null
+}
+
 export function describeStorageCapacity(footprintBytes: number, softLimitBytes = STORAGE_SOFT_LIMIT_BYTES) {
   const ratio = softLimitBytes > 0 ? footprintBytes / softLimitBytes : 0
   return {
@@ -248,14 +295,335 @@ export class SqliteStorageService implements StorageService {
     const freelistCount = Number(this.db.pragma('freelist_count', { simple: true }))
     const databaseBytes = fileSize(this.db.name)
     const walBytes = fileSize(`${this.db.name}-wal`)
+    const shmBytes = fileSize(`${this.db.name}-shm`)
     const logicalBytes = pageCount * pageSize
     const reclaimableBytes = freelistCount * pageSize
+    let tempAllocatedBytes = 0
+    try {
+      const tempPageCount = Number(this.db.pragma('temp.page_count', { simple: true }))
+      const tempPageSize = Number(this.db.pragma('temp.page_size', { simple: true }))
+      tempAllocatedBytes = tempPageCount * tempPageSize
+    } catch {
+      // TEMP storage can be unavailable before SQLite creates the temp schema.
+    }
+    const hotFootprintBytes = Math.max(databaseBytes, logicalBytes) + walBytes
     return {
       databaseBytes,
       walBytes,
+      shmBytes,
+      tempAllocatedBytes,
       logicalBytes,
+      databaseAllocatedBytes: logicalBytes,
       reclaimableBytes,
-      capacity: describeStorageCapacity(Math.max(databaseBytes, logicalBytes) + walBytes),
+      totalDiskBytes: databaseBytes + walBytes + shmBytes,
+      hotFootprintBytes,
+      capacity: {
+        ...describeStorageCapacity(hotFootprintBytes),
+        scope: 'hot-sqlite',
+        longTermTotalLimitBytes: null,
+      },
+    }
+  }
+
+  private storageBreakdownDetails() {
+    const categories: Record<StorageCategoryName, {
+      payloadBytes: number
+      allocatedBytes: number
+      tables: number
+    }> = {
+      canonical: { payloadBytes: 0, allocatedBytes: 0, tables: 0 },
+      evidence: { payloadBytes: 0, allocatedBytes: 0, tables: 0 },
+      sourceRaw: { payloadBytes: 0, allocatedBytes: 0, tables: 0 },
+      projection: { payloadBytes: 0, allocatedBytes: 0, tables: 0 },
+      replication: { payloadBytes: 0, allocatedBytes: 0, tables: 0 },
+      operational: { payloadBytes: 0, allocatedBytes: 0, tables: 0 },
+    }
+
+    try {
+      const tables = this.db.prepare(`
+        SELECT m.tbl_name AS tableName,
+               COALESCE(SUM(s.payload), 0) AS payloadBytes,
+               COALESCE(SUM(s.pgsize), 0) AS allocatedBytes
+        FROM dbstat s
+        JOIN sqlite_master m ON m.name = s.name
+        WHERE m.type IN ('table', 'index')
+        GROUP BY m.tbl_name
+        ORDER BY allocatedBytes DESC, tableName
+      `).all().map(value => {
+        const row = rowRecord(value)
+        const tableName = optionalString(row, 'tableName')
+        if (!tableName) throw new TypeError('SQLite dbstat tableName must be a string')
+        return {
+          tableName,
+          category: storageCategoryForTable(tableName),
+          payloadBytes: requiredNumber(row, 'payloadBytes'),
+          allocatedBytes: requiredNumber(row, 'allocatedBytes'),
+        }
+      })
+
+      for (const table of tables) {
+        const category = categories[table.category]
+        category.payloadBytes += table.payloadBytes
+        category.allocatedBytes += table.allocatedBytes
+        category.tables += 1
+      }
+      return { available: true, categories, tables }
+    } catch (error) {
+      return {
+        available: false,
+        reason: error instanceof Error ? error.message : String(error),
+        categories,
+        tables: [],
+      }
+    }
+  }
+
+  private growthDiagnosticsDetails() {
+    const now = Date.now()
+    const cutoff7 = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const cutoff30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const params = { cutoff7, cutoff30 }
+
+    const aggregateSql = `
+      WITH metrics AS (
+        SELECT source_id AS sourceId,
+               installation_id AS installationId,
+               'sourceRaw' AS kind,
+               captured_at AS capturedAt,
+               (
+                 length(CAST(locator_json AS BLOB))
+                 + length(CAST(payload_json AS BLOB))
+                 + COALESCE(length(payload_blob), 0)
+               ) AS approxBytes
+        FROM source_records
+        UNION ALL
+        SELECT ss.source_id AS sourceId,
+               o.installation_id AS installationId,
+               'canonical' AS kind,
+               o.captured_at AS capturedAt,
+               length(CAST(o.payload_json AS BLOB)) AS approxBytes
+        FROM observations o
+        JOIN source_sessions ss ON ss.id = o.source_session_id
+        UNION ALL
+        SELECT COALESCE(sr.source_id, 'unattributed') AS sourceId,
+               sr.installation_id AS installationId,
+               'evidence' AS kind,
+               e.captured_at AS capturedAt,
+               COALESCE(length(CAST(e.source_locator_json AS BLOB)), 0) AS approxBytes
+        FROM evidence e
+        LEFT JOIN source_records sr ON sr.id = e.source_record_id
+      )
+    `
+
+    const mapGrowthRow = (value: unknown, key: 'sourceId' | 'productId') => {
+      const row = rowRecord(value)
+      const id = optionalString(row, key)
+      if (!id) throw new TypeError(`SQLite growth diagnostic field ${key} must be a string`)
+      return {
+        [key]: id,
+        ...(key === 'productId' ? { productName: optionalString(row, 'productName') } : {}),
+        total: {
+          records: requiredNumber(row, 'totalRecords'),
+          approxBytes: requiredNumber(row, 'totalBytes'),
+        },
+        last7Days: {
+          records: requiredNumber(row, 'last7Records'),
+          approxBytes: requiredNumber(row, 'last7Bytes'),
+        },
+        last30Days: {
+          records: requiredNumber(row, 'last30Records'),
+          approxBytes: requiredNumber(row, 'last30Bytes'),
+        },
+        byKind: {
+          sourceRaw: {
+            records: requiredNumber(row, 'sourceRawRecords'),
+            approxBytes: requiredNumber(row, 'sourceRawBytes'),
+          },
+          canonical: {
+            records: requiredNumber(row, 'canonicalRecords'),
+            approxBytes: requiredNumber(row, 'canonicalBytes'),
+          },
+          evidence: {
+            records: requiredNumber(row, 'evidenceRecords'),
+            approxBytes: requiredNumber(row, 'evidenceBytes'),
+          },
+        },
+      }
+    }
+
+    const bySource = this.db.prepare(`
+      ${aggregateSql}
+      SELECT sourceId,
+             COUNT(*) AS totalRecords,
+             COALESCE(SUM(approxBytes), 0) AS totalBytes,
+             SUM(CASE WHEN capturedAt >= @cutoff7 THEN 1 ELSE 0 END) AS last7Records,
+             COALESCE(SUM(CASE WHEN capturedAt >= @cutoff7 THEN approxBytes ELSE 0 END), 0) AS last7Bytes,
+             SUM(CASE WHEN capturedAt >= @cutoff30 THEN 1 ELSE 0 END) AS last30Records,
+             COALESCE(SUM(CASE WHEN capturedAt >= @cutoff30 THEN approxBytes ELSE 0 END), 0) AS last30Bytes,
+             SUM(CASE WHEN kind = 'sourceRaw' THEN 1 ELSE 0 END) AS sourceRawRecords,
+             COALESCE(SUM(CASE WHEN kind = 'sourceRaw' THEN approxBytes ELSE 0 END), 0) AS sourceRawBytes,
+             SUM(CASE WHEN kind = 'canonical' THEN 1 ELSE 0 END) AS canonicalRecords,
+             COALESCE(SUM(CASE WHEN kind = 'canonical' THEN approxBytes ELSE 0 END), 0) AS canonicalBytes,
+             SUM(CASE WHEN kind = 'evidence' THEN 1 ELSE 0 END) AS evidenceRecords,
+             COALESCE(SUM(CASE WHEN kind = 'evidence' THEN approxBytes ELSE 0 END), 0) AS evidenceBytes
+      FROM metrics
+      GROUP BY sourceId
+      ORDER BY last30Bytes DESC, totalBytes DESC, sourceId
+    `).all(params).map(value => mapGrowthRow(value, 'sourceId'))
+
+    const byAgent = this.db.prepare(`
+      ${aggregateSql}
+      SELECT ai.product_id AS productId,
+             ap.name AS productName,
+             COUNT(*) AS totalRecords,
+             COALESCE(SUM(metrics.approxBytes), 0) AS totalBytes,
+             SUM(CASE WHEN metrics.capturedAt >= @cutoff7 THEN 1 ELSE 0 END) AS last7Records,
+             COALESCE(SUM(CASE WHEN metrics.capturedAt >= @cutoff7 THEN metrics.approxBytes ELSE 0 END), 0) AS last7Bytes,
+             SUM(CASE WHEN metrics.capturedAt >= @cutoff30 THEN 1 ELSE 0 END) AS last30Records,
+             COALESCE(SUM(CASE WHEN metrics.capturedAt >= @cutoff30 THEN metrics.approxBytes ELSE 0 END), 0) AS last30Bytes,
+             SUM(CASE WHEN metrics.kind = 'sourceRaw' THEN 1 ELSE 0 END) AS sourceRawRecords,
+             COALESCE(SUM(CASE WHEN metrics.kind = 'sourceRaw' THEN metrics.approxBytes ELSE 0 END), 0) AS sourceRawBytes,
+             SUM(CASE WHEN metrics.kind = 'canonical' THEN 1 ELSE 0 END) AS canonicalRecords,
+             COALESCE(SUM(CASE WHEN metrics.kind = 'canonical' THEN metrics.approxBytes ELSE 0 END), 0) AS canonicalBytes,
+             SUM(CASE WHEN metrics.kind = 'evidence' THEN 1 ELSE 0 END) AS evidenceRecords,
+             COALESCE(SUM(CASE WHEN metrics.kind = 'evidence' THEN metrics.approxBytes ELSE 0 END), 0) AS evidenceBytes
+      FROM metrics
+      JOIN agent_installations ai ON ai.id = metrics.installationId
+      JOIN agent_products ap ON ap.id = ai.product_id
+      GROUP BY ai.product_id, ap.name
+      ORDER BY last30Bytes DESC, totalBytes DESC, productId
+    `).all(params).map(value => mapGrowthRow(value, 'productId'))
+
+    const dailyRows = this.db.prepare(`
+      ${aggregateSql}
+      SELECT substr(capturedAt, 1, 10) AS day,
+             COUNT(*) AS records,
+             COALESCE(SUM(approxBytes), 0) AS approxBytes,
+             SUM(CASE WHEN kind = 'sourceRaw' THEN 1 ELSE 0 END) AS sourceRawRecords,
+             SUM(CASE WHEN kind = 'canonical' THEN 1 ELSE 0 END) AS canonicalRecords,
+             SUM(CASE WHEN kind = 'evidence' THEN 1 ELSE 0 END) AS evidenceRecords,
+             COALESCE(SUM(CASE WHEN kind = 'sourceRaw' THEN approxBytes ELSE 0 END), 0) AS sourceRawBytes,
+             COALESCE(SUM(CASE WHEN kind = 'canonical' THEN approxBytes ELSE 0 END), 0) AS canonicalBytes,
+             COALESCE(SUM(CASE WHEN kind = 'evidence' THEN approxBytes ELSE 0 END), 0) AS evidenceBytes
+      FROM metrics
+      WHERE capturedAt >= @cutoff30
+      GROUP BY substr(capturedAt, 1, 10)
+      ORDER BY day
+    `).all(params).map(value => {
+      const row = rowRecord(value)
+      return {
+        day: optionalString(row, 'day') ?? '',
+        records: requiredNumber(row, 'records'),
+        approxBytes: requiredNumber(row, 'approxBytes'),
+        sourceRawRecords: requiredNumber(row, 'sourceRawRecords'),
+        canonicalRecords: requiredNumber(row, 'canonicalRecords'),
+        evidenceRecords: requiredNumber(row, 'evidenceRecords'),
+        sourceRawBytes: requiredNumber(row, 'sourceRawBytes'),
+        canonicalBytes: requiredNumber(row, 'canonicalBytes'),
+        evidenceBytes: requiredNumber(row, 'evidenceBytes'),
+      }
+    })
+    const dailyByDay = new Map(dailyRows.map(item => [item.day, item]))
+    const last30Days = Array.from({ length: 30 }, (_, index) => {
+      const day = new Date(now - (29 - index) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      return dailyByDay.get(day) ?? {
+        day,
+        records: 0,
+        approxBytes: 0,
+        sourceRawRecords: 0,
+        canonicalRecords: 0,
+        evidenceRecords: 0,
+        sourceRawBytes: 0,
+        canonicalBytes: 0,
+        evidenceBytes: 0,
+      }
+    })
+
+    const windowMetrics = (cutoff: string) => {
+      const row = rowRecord(this.db.prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM source_records WHERE captured_at >= @cutoff) AS sourceRawRecords,
+          (SELECT COALESCE(SUM(
+             length(CAST(locator_json AS BLOB))
+             + length(CAST(payload_json AS BLOB))
+             + COALESCE(length(payload_blob), 0)
+           ), 0) FROM source_records WHERE captured_at >= @cutoff) AS sourceRawBytes,
+          (SELECT COUNT(*) FROM observations WHERE captured_at >= @cutoff) AS canonicalRecords,
+          (SELECT COALESCE(SUM(length(CAST(payload_json AS BLOB))), 0)
+             FROM observations WHERE captured_at >= @cutoff) AS canonicalBytes,
+          (SELECT COUNT(*) FROM evidence WHERE captured_at >= @cutoff) AS evidenceRecords,
+          (SELECT COALESCE(SUM(COALESCE(length(CAST(source_locator_json AS BLOB)), 0)), 0)
+             FROM evidence WHERE captured_at >= @cutoff) AS evidenceBytes,
+          (
+            (SELECT COALESCE(SUM(
+               COALESCE(length(CAST(first_user_payload AS BLOB)), 0)
+               + length(CAST(source_ids_json AS BLOB))
+             ), 0) FROM session_summary_projection WHERE ended_at >= @cutoff)
+            + (SELECT COALESCE(SUM(
+               length(CAST(observation_id AS BLOB))
+               + length(CAST(source_id AS BLOB))
+               + length(CAST(native_type AS BLOB))
+             ), 0) FROM unknown_observation_projection WHERE last_seen_at >= @cutoff)
+            + (SELECT COALESCE(SUM(
+               length(CAST(observation_id AS BLOB))
+               + length(CAST(source_id AS BLOB))
+               + length(CAST(product_id AS BLOB))
+               + COALESCE(length(CAST(tool_name AS BLOB)), 0)
+               + COALESCE(length(CAST(call_id AS BLOB)), 0)
+               + COALESCE(length(CAST(skill_name AS BLOB)), 0)
+             ), 0) FROM tool_usage_fact_projection WHERE effective_at >= @cutoff)
+          ) AS projectionBytes
+      `).get({ cutoff }))
+      const sourceRawBytes = requiredNumber(row, 'sourceRawBytes')
+      const canonicalBytes = requiredNumber(row, 'canonicalBytes')
+      const evidenceBytes = requiredNumber(row, 'evidenceBytes')
+      const projectionBytes = requiredNumber(row, 'projectionBytes')
+      const durableApproxBytes = sourceRawBytes + canonicalBytes + evidenceBytes + projectionBytes
+      return {
+        sourceRawRecords: requiredNumber(row, 'sourceRawRecords'),
+        sourceRawBytes,
+        canonicalRecords: requiredNumber(row, 'canonicalRecords'),
+        canonicalBytes,
+        evidenceRecords: requiredNumber(row, 'evidenceRecords'),
+        evidenceBytes,
+        projectionBytes,
+        durableApproxBytes,
+        storageAmplificationRate: ratioOrNull(durableApproxBytes, sourceRawBytes),
+      }
+    }
+    const sevenDays = windowMetrics(cutoff7)
+    const thirtyDays = windowMetrics(cutoff30)
+
+    return {
+      cutoffs: { last7Days: cutoff7, last30Days: cutoff30 },
+      bySource,
+      byAgent,
+      trend: {
+        last7Days: last30Days.slice(-7),
+        last30Days,
+      },
+      metrics: {
+        canonicalGrowthRate: {
+          basis: 'canonical-observations-captured',
+          last7Days: {
+            observationsPerDay: sevenDays.canonicalRecords / 7,
+            approxBytesPerDay: sevenDays.canonicalBytes / 7,
+          },
+          last30Days: {
+            observationsPerDay: thirtyDays.canonicalRecords / 30,
+            approxBytesPerDay: thirtyDays.canonicalBytes / 30,
+          },
+        },
+        storageAmplificationRate: {
+          basis: 'durable-logical-growth/source-raw-growth',
+          last7Days: sevenDays.storageAmplificationRate,
+          last30Days: thirtyDays.storageAmplificationRate,
+          windows: {
+            last7Days: sevenDays,
+            last30Days: thirtyDays,
+          },
+        },
+      },
     }
   }
 
@@ -311,19 +679,17 @@ export class SqliteStorageService implements StorageService {
         if (status) coverageSummary[status] += 1
       }
 
-      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-      const count = (tableName: string): number => countRow(this.db.prepare(
-        `SELECT COUNT(*) AS count FROM ${tableName}`,
-      ).get())
-      const recentCount = (tableName: string, column: string): number => countRow(this.db.prepare(
-        `SELECT COUNT(*) AS count FROM ${tableName} WHERE ${column} >= ?`,
-      ).get(cutoff))
-      const recentSessions = countRow(this.db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM session_summary_projection
-        WHERE ended_at >= ?
-      `).get(cutoff))
+      const growth = this.growthDiagnosticsDetails()
+      const breakdown = this.storageBreakdownDetails()
       const baseGrowth = readonlyRecord(health.details?.dataGrowth) ?? this.capacityDetails()
+      const projectionAllocatedBytes = breakdown.categories.projection.allocatedBytes
+      const walBytes = typeof baseGrowth.walBytes === 'number' ? baseGrowth.walBytes : 0
+      const tempAllocatedBytes = typeof baseGrowth.tempAllocatedBytes === 'number'
+        ? baseGrowth.tempAllocatedBytes
+        : 0
+      const freelistBytes = typeof baseGrowth.reclaimableBytes === 'number'
+        ? baseGrowth.reclaimableBytes
+        : 0
 
       return {
         ...health,
@@ -338,21 +704,25 @@ export class SqliteStorageService implements StorageService {
             summary: coverageSummary,
             items: coverageItems,
           },
+          storageBreakdown: breakdown,
+          reclaimableSpace: {
+            estimateOnly: true,
+            freelistBytes,
+            walBytes,
+            tempAllocatedBytes,
+            rebuildableProjectionBytes: projectionAllocatedBytes,
+            estimatedBytes: freelistBytes + walBytes + tempAllocatedBytes + projectionAllocatedBytes,
+            excludesSourceRaw: true,
+            reason: 'Phase 1 does not infer Source Raw recoverability before Source capability governance is implemented.',
+          },
           dataGrowth: {
             ...baseGrowth,
-            sevenDayCutoff: cutoff,
-            totals: {
-              sourceRecords: count('source_records'),
-              observations: count('observations'),
-              evidence: count('evidence'),
-              sessions: count('logical_sessions'),
-            },
-            last7Days: {
-              sourceRecords: recentCount('source_records', 'captured_at'),
-              observations: recentCount('observations', 'captured_at'),
-              evidence: recentCount('evidence', 'captured_at'),
-              sessions: recentSessions,
-            },
+            thirtyDayCutoff: growth.cutoffs.last30Days,
+            sevenDayCutoff: growth.cutoffs.last7Days,
+            bySource: growth.bySource,
+            byAgent: growth.byAgent,
+            trend: growth.trend,
+            metrics: growth.metrics,
           },
         },
       }
