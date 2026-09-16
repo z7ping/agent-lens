@@ -61,7 +61,7 @@ type Row = Record<string, unknown>
 
 function rowRecord(value: unknown): Row {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError('Independent replication Root row must be an object')
+    throw new TypeError('Current-State replication Root row must be an object')
   }
   return value as Row
 }
@@ -69,7 +69,7 @@ function rowRecord(value: unknown): Row {
 function requiredString(row: Row, key: string): string {
   const value = row[key]
   if (typeof value !== 'string') {
-    throw new TypeError(`Independent replication Root field ${key} must be a string`)
+    throw new TypeError(`Current-State replication Root field ${key} must be a string`)
   }
   return value
 }
@@ -77,7 +77,7 @@ function requiredString(row: Row, key: string): string {
 function requiredRevision(row: Row, key: string): number {
   const value = row[key]
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
-    throw new TypeError(`Independent replication Root field ${key} must be a non-negative integer`)
+    throw new TypeError(`Current-State replication Root field ${key} must be a non-negative integer`)
   }
   return value
 }
@@ -90,7 +90,7 @@ function normalizedBoundary(value: string | undefined): string | undefined {
   if (value === undefined) return undefined
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) {
-    throw new TypeError('Independent replication Root changedAtOnOrAfter must be an ISO-compatible timestamp')
+    throw new TypeError('Current-State replication Root changedAtOnOrAfter must be an ISO-compatible timestamp')
   }
   return new Date(timestamp).toISOString()
 }
@@ -103,7 +103,7 @@ function mapSnapshot(
   const originEntityId = requiredString(row, '__origin_entity_id')
   const entity = rootTable(entityType).map(value)
   if (!entity || typeof entity !== 'object' || !('id' in entity) || entity.id !== originEntityId) {
-    throw new Error(`Independent replication Root identity mismatch: ${entityType}:${originEntityId}`)
+    throw new Error(`Current-State replication Root identity mismatch: ${entityType}:${originEntityId}`)
   }
   return {
     entityType,
@@ -140,7 +140,7 @@ implements IndependentReplicationRootSnapshotSource {
       const params: unknown[] = [input.entityType, afterId]
       const boundary = changedAtOnOrAfter === undefined
         ? ''
-        : 'AND h.latest_changed_at >= ?'
+        : 'AND h.first_changed_at >= ?'
       if (changedAtOnOrAfter !== undefined) params.push(changedAtOnOrAfter)
       params.push(limit)
 
