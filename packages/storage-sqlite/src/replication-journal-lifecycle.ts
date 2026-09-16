@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3'
 import {
-  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+  JOURNAL_REPLICATION_ENTITY_TYPES,
   type KnownReplicationEntityType,
 } from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
@@ -8,7 +8,7 @@ import type { SqliteExecutor } from './executor'
 export type ReplicationCaptureDependencyState = 'dependent' | 'retired'
 
 export const REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES =
-  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES
+  JOURNAL_REPLICATION_ENTITY_TYPES
 
 export interface ReplicationCaptureWatermark {
   streamId: string
