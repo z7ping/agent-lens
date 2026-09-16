@@ -6,8 +6,35 @@ import { mapSourceRecord } from './repository-row-mappers'
 
 type AuditRow = {
   id: string
+  auditRowId: number
   canonicalStable: number
   evidenceStable: number
+} & Record<string, unknown>
+
+interface AuditCursor {
+  throughRowId: number
+  afterRowId: number
+}
+
+function safeRowId(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(`SQLite Raw audit ${label} must be a non-negative safe integer`)
+  }
+  return value
+}
+
+function encodeCursor(cursor: AuditCursor): string {
+  return `v1:${cursor.throughRowId}:${cursor.afterRowId}`
+}
+
+function decodeCursor(value: string | undefined): AuditCursor | null {
+  if (!value) return null
+  const match = /^v1:(\d+):(\d+)$/.exec(value)
+  if (!match) throw new Error('Invalid Source Raw audit cursor')
+  const throughRowId = safeRowId(Number(match[1]), 'throughRowId')
+  const afterRowId = safeRowId(Number(match[2]), 'afterRowId')
+  if (afterRowId > throughRowId) throw new Error('Invalid Source Raw audit cursor range')
+  return { throughRowId, afterRowId }
 }
 
 /**
