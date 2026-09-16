@@ -170,3 +170,68 @@ test('Snapshot Bootstrap progress 与 Stream / Generation 持久绑定', async (
     await storage.close()
   }
 })
+
+
+test('Snapshot Bootstrap progress 拒绝换绑与游标回退', async () => {
+  const storage = await seededStorage()
+  try {
+    await storage.replication.ensureStream({
+      relationshipId: 'relationship-guard',
+      hubId: 'hub-1',
+      streamId: 'stream-guard',
+      generationId: 'generation-1',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+    })
+    const progress = new SqliteReplicationSnapshotBootstrapProgressRepository(storage.executor)
+    const current = {
+      streamId: 'stream-guard',
+      generationId: 'generation-1',
+      entityType: 'CanonicalObservation' as const,
+      baselineRevision: 10,
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      cursor: 'observation-m',
+      snapshotComplete: false,
+      updatedAt: NEW,
+    }
+    await progress.put(current)
+
+    await assert.rejects(
+      progress.put({ ...current, baselineRevision: 11 }),
+      /cannot be rebound/,
+    )
+    await assert.rejects(
+      progress.put({ ...current, policyRevision: 'policy-2' }),
+      /cannot be rebound/,
+    )
+    await assert.rejects(
+      progress.put({ ...current, cursor: 'observation-a' }),
+      /cannot move backwards/,
+    )
+
+    await progress.put({
+      ...current,
+      cursor: 'observation-z',
+      snapshotComplete: true,
+    })
+    await assert.rejects(
+      progress.put({
+        ...current,
+        cursor: 'observation-z',
+        snapshotComplete: false,
+      }),
+      /cannot move from complete back to scanning/,
+    )
+
+    await assert.rejects(
+      progress.put({
+        ...current,
+        generationId: 'generation-other',
+      }),
+      /generation does not match stream/,
+    )
+  } finally {
+    await storage.close()
+  }
+})
