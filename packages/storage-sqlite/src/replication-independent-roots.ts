@@ -6,12 +6,23 @@ import type {
 } from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 import {
+  mapActor,
   mapAssetBinding,
   mapAssetDefinition,
   mapAssetStateObservation,
   mapCoverage,
+  mapEvidence,
+  mapHost,
+  mapInstallation,
+  mapLogicalSession,
+  mapProduct,
+  mapProject,
   mapRelationship,
+  mapRuntimeProfile,
+  mapSourceRecord,
+  mapSourceSession,
   mapTool,
+  mapWorkspace,
 } from './repository-row-mappers'
 
 type RootConfig = {
@@ -20,30 +31,23 @@ type RootConfig = {
 }
 
 const ROOTS: Readonly<Record<IndependentReplicationRootEntityType, RootConfig>> = {
-  SessionRelationship: {
-    table: 'session_relationships',
-    map: mapRelationship,
-  },
-  Coverage: {
-    table: 'coverage',
-    map: mapCoverage,
-  },
-  AssetDefinition: {
-    table: 'asset_definitions',
-    map: mapAssetDefinition,
-  },
-  AssetBinding: {
-    table: 'asset_bindings',
-    map: mapAssetBinding,
-  },
-  AssetStateObservation: {
-    table: 'asset_state_observations',
-    map: mapAssetStateObservation,
-  },
-  ToolDefinition: {
-    table: 'tool_definitions',
-    map: mapTool,
-  },
+  AgentProduct: { table: 'agent_products', map: mapProduct },
+  Host: { table: 'hosts', map: mapHost },
+  AgentInstallation: { table: 'agent_installations', map: mapInstallation },
+  RuntimeProfile: { table: 'runtime_profiles', map: mapRuntimeProfile },
+  Project: { table: 'projects', map: mapProject },
+  Workspace: { table: 'workspaces', map: mapWorkspace },
+  LogicalSession: { table: 'logical_sessions', map: mapLogicalSession },
+  SourceSession: { table: 'source_sessions', map: mapSourceSession },
+  SessionRelationship: { table: 'session_relationships', map: mapRelationship },
+  AgentActor: { table: 'agent_actors', map: mapActor },
+  SourceRecord: { table: 'source_records', map: mapSourceRecord },
+  Evidence: { table: 'evidence', map: mapEvidence },
+  Coverage: { table: 'coverage', map: mapCoverage },
+  AssetDefinition: { table: 'asset_definitions', map: mapAssetDefinition },
+  AssetBinding: { table: 'asset_bindings', map: mapAssetBinding },
+  AssetStateObservation: { table: 'asset_state_observations', map: mapAssetStateObservation },
+  ToolDefinition: { table: 'tool_definitions', map: mapTool },
 }
 
 type Row = Record<string, unknown>
