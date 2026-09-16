@@ -38,6 +38,10 @@ test('接入控制面覆盖扫描、添加、启停、授权、卸载与排序',
 })
 
 
+test('不会把完全未发现的官方 Integration 作为智能体页默认项', () => {
+  assert.doesNotMatch(app, /\?\? managedIntegrationItems\[0\]\?\.integrationId/)
+})
+
 test('智能体页选择器合并 Overview 与已发现 Integration，不再只等于 Source Facet', () => {
   assert.match(app, /const agentSelectionMap = new Map<string, AgentFacetDto>/)
   assert.match(app, /management\.tool\?\.presence === 'present'/)
