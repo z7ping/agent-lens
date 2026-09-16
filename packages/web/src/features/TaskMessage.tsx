@@ -5,9 +5,18 @@ import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
+export interface TaskMessageImageAttachment {
+  type: 'image'
+  src: string
+  name?: string | undefined
+}
+
+export type TaskMessageAttachment = TaskMessageImageAttachment
+
 export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
+  attachments?: readonly TaskMessageAttachment[]
   author?: string
   time?: string | undefined
   meta?: ReactNode
@@ -23,6 +32,7 @@ export interface TaskMessageProps {
 export function TaskMessage({
   role,
   text,
+  attachments = [],
   author,
   time,
   meta,
@@ -97,17 +107,27 @@ export function TaskMessage({
         <span aria-hidden="true"/>
         <span aria-hidden="true"/>
       </div> : <div className="markdown-message task-message-content" data-view={view}>
-        <div
+        {text && <div
           ref={surfaceRef}
           className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
           style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
         >
           {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
           {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
-        </div>
-        {(canCollapse || !user) && <div className="markdown-message-actions">
+        </div>}
+        {attachments.length > 0 && <div className="task-message-attachments">
+          {attachments.map((attachment, index) => <img
+            key={`${attachment.src}:${index}`}
+            className="task-message-image"
+            src={attachment.src}
+            alt={attachment.name ?? ''}
+            loading="lazy"
+            draggable={false}
+          />)}
+        </div>}
+        {(canCollapse || (!user && Boolean(text))) && <div className="markdown-message-actions">
           {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
-          {!user && <button type="button" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+          {!user && text && <button type="button" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
             {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
           </button>}
         </div>}
