@@ -39,6 +39,25 @@ export function reviewMessageImageSources(payload: JsonValue | unknown): ReviewM
   })
 }
 
+export function reviewMessagePublicPayload(payload: JsonValue): JsonValue {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload
+  const attachments = payload.attachments
+  if (!Array.isArray(attachments)) return payload
+  return {
+    ...payload,
+    attachments: attachments.map(value => {
+      const image = imageSource(value)
+      return image
+        ? {
+            type: 'image',
+            mimeType: image.mimeType,
+            ...(image.name ? { name: image.name } : {}),
+          }
+        : value
+    }),
+  }
+}
+
 export function reviewMessageAttachments(
   observationId: string,
   payload: JsonValue | unknown,
