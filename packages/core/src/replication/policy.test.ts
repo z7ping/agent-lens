@@ -172,3 +172,86 @@ test('AssetBinding scope is metadata while scopeRoot follows path redaction', ()
   assert.deepEqual(result.body.scopeRoot, { state: 'value', value: '/Users/[USER]/work/agent-lens' })
   assert.deepEqual(result.body.path, { state: 'value', value: '/Users/[USER]/work/agent-lens/AGENTS.md' })
 })
+
+
+test('from-now minimum dependency keeps Host and Installation identity/refs but omits nonessential fields', () => {
+  const host = transformReplicationEntity({
+    entityType: 'Host',
+    body: {
+      id: 'host-1',
+      name: 'devbox',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: '2026-08-01T00:00:00Z',
+      lastSeenAt: '2026-08-27T23:00:00Z',
+    },
+    capturedAt: '2026-08-27T23:00:00Z',
+    dependencyRequired: true,
+    phase: 'incremental',
+    policy: full,
+    history: fromNow,
+  })
+  assert.equal(host.historyAuthorization, 'minimum-dependency')
+  assert.deepEqual(host.body.id, { state: 'value', value: 'host-1' })
+  assert.deepEqual(host.body.name, { state: 'value', value: 'devbox' })
+  assert.deepEqual(host.body.platform, { state: 'value', value: 'linux' })
+  assert.deepEqual(host.body.arch, { state: 'value', value: 'x64' })
+  assert.deepEqual(host.body.createdAt, {
+    state: 'omitted',
+    reason: 'dependency-minimized',
+  })
+
+  const installation = transformReplicationEntity({
+    entityType: 'AgentInstallation',
+    body: {
+      id: 'install-1',
+      hostId: 'host-1',
+      productId: 'product-1',
+      version: '1.2.3',
+      executable: '/Users/alice/bin/agent',
+      firstSeenAt: '2026-08-01T00:00:00Z',
+      lastSeenAt: '2026-08-27T23:00:00Z',
+    },
+    capturedAt: '2026-08-27T23:00:00Z',
+    dependencyRequired: true,
+    phase: 'incremental',
+    policy: full,
+    history: fromNow,
+  })
+  assert.equal(installation.historyAuthorization, 'minimum-dependency')
+  assert.deepEqual(installation.body.id, { state: 'value', value: 'install-1' })
+  assert.deepEqual(installation.body.hostId, { state: 'value', value: 'host-1' })
+  assert.deepEqual(installation.body.productId, { state: 'value', value: 'product-1' })
+  assert.deepEqual(installation.body.version, {
+    state: 'omitted',
+    reason: 'dependency-minimized',
+  })
+  assert.deepEqual(installation.body.executable, {
+    state: 'omitted',
+    reason: 'dependency-minimized',
+  })
+})
+
+test('from-now AgentProduct dependency keeps the Shared Root identity shape', () => {
+  const product = transformReplicationEntity({
+    entityType: 'AgentProduct',
+    body: {
+      id: 'codex',
+      name: 'Codex',
+      vendor: 'OpenAI',
+      homepage: 'https://openai.com/',
+    },
+    capturedAt: '2026-08-27T23:00:00Z',
+    dependencyRequired: true,
+    phase: 'bootstrap',
+    policy: full,
+    history: fromNow,
+  })
+  assert.equal(product.historyAuthorization, 'minimum-dependency')
+  assert.deepEqual(product.body.id, { state: 'value', value: 'codex' })
+  assert.deepEqual(product.body.name, { state: 'value', value: 'Codex' })
+  assert.deepEqual(product.body.vendor, {
+    state: 'omitted',
+    reason: 'dependency-minimized',
+  })
+})
