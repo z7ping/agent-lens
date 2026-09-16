@@ -229,6 +229,7 @@ if (options.storageDiagnosticsBurst > 0) {
           ? details.storageBreakdown.objects.slice(0, 15)
           : [],
       } : null,
+      largePayloads: details.largePayloads ?? null,
       capturedActivity: details.capturedActivity ?? null,
       replicationJournal: details.replicationJournal ?? null,
       spaceRecovery: details.spaceRecovery ?? null,
