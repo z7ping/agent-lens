@@ -113,7 +113,7 @@ export async function generateIndependentRootReplicaGraph(
       ...common,
       entityType: 'AssetDefinition',
       originEntityId: snapshot.originEntityId,
-      capturedAt: snapshot.changedAt,
+      capturedAt: snapshot.historyCapturedAt,
       body: replicationBody(
         snapshot.entity as unknown as Readonly<Record<string, unknown>>,
       ),
@@ -136,7 +136,7 @@ export async function generateIndependentRootReplicaGraph(
       ...common,
       entityType: 'AssetBinding',
       originEntityId: snapshot.originEntityId,
-      capturedAt: snapshot.changedAt,
+      capturedAt: snapshot.historyCapturedAt,
       body: replicationBody(
         snapshot.entity as unknown as Readonly<Record<string, unknown>>,
       ),
@@ -162,7 +162,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'AgentProduct',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
       })
       break
@@ -174,7 +174,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'Host',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
       })
       break
@@ -188,7 +188,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'AgentInstallation',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: {
           host: nodeEntityRef('Host', entity.hostId),
@@ -205,7 +205,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'RuntimeProfile',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: {
           installation: nodeEntityRef('AgentInstallation', entity.installationId),
@@ -221,7 +221,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'Project',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         ...(sharedIdentity === undefined ? {} : { sharedIdentity }),
       })
@@ -236,7 +236,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'Workspace',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           host: nodeEntityRef('Host', entity.hostId),
@@ -260,7 +260,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'LogicalSession',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           installation: nodeEntityRef('AgentInstallation', entity.installationId),
@@ -291,7 +291,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'SourceSession',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           installation: nodeEntityRef('AgentInstallation', entity.installationId),
@@ -317,7 +317,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'SessionRelationship',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           fromSession: nodeEntityRef('LogicalSession', entity.fromSessionId),
@@ -342,7 +342,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'AgentActor',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           installation: nodeEntityRef('AgentInstallation', entity.installationId),
@@ -365,7 +365,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'SourceRecord',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: {
           installation: nodeEntityRef('AgentInstallation', entity.installationId),
@@ -383,7 +383,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'Evidence',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           sourceRecord: entity.sourceRecordId
@@ -403,7 +403,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'Coverage',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           evidence: entity.evidenceRefs.map(id => nodeEntityRef('Evidence', id)),
@@ -419,7 +419,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'AssetDefinition',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         ...(sharedIdentity === undefined ? {} : { sharedIdentity }),
       })
@@ -437,7 +437,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'AssetBinding',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           assetDefinition: nodeEntityRef('AssetDefinition', entity.assetId),
@@ -460,7 +460,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'AssetStateObservation',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           assetBinding: nodeEntityRef('AssetBinding', entity.assetBindingId),
@@ -482,7 +482,7 @@ export async function generateIndependentRootReplicaGraph(
         ...common,
         entityType: 'ToolDefinition',
         originEntityId: entity.id,
-        capturedAt: input.root.changedAt,
+        capturedAt: input.root.historyCapturedAt,
         body: replicationBody(entity as unknown as Readonly<Record<string, unknown>>),
         references: replicationRefs({
           assetDefinition: entity.assetDefinitionId
