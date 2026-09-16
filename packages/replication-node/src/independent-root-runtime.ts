@@ -337,6 +337,12 @@ async function pumpBootstrapDeltaPage(input: {
   if (!snapshot?.snapshotComplete) {
     throw new Error('Independent Root Snapshot must complete before delta catch-up')
   }
+  if (
+    snapshot.policyRevision !== input.policy.revision
+    || snapshot.historyRevision !== input.history.revision
+  ) {
+    throw new Error('Independent Root Snapshot policy/history revision changed; re-bootstrap is required')
+  }
 
   const key = {
     streamId: input.streamId,
@@ -357,6 +363,11 @@ async function pumpBootstrapDeltaPage(input: {
       updatedAt: input.now ?? new Date().toISOString(),
     }
     await input.deltaProgress.put(state)
+  } else if (
+    state.revision < snapshot.baselineRevision
+    || state.throughRevision < snapshot.baselineRevision
+  ) {
+    throw new Error('Independent Root bootstrap delta progress precedes Snapshot baseline')
   }
 
   const result = await pumpIndependentRootChanges({
@@ -549,6 +560,9 @@ async function pumpIncrementalPage(input: {
   limit?: number
   now?: string
 }): Promise<IndependentRootChangePumpResult> {
+  if (!Number.isInteger(input.startRevision) || input.startRevision < 0) {
+    throw new TypeError('Independent Root incremental startRevision must be a non-negative integer')
+  }
   const now = input.now ?? new Date().toISOString()
   const key = {
     streamId: input.streamId,
