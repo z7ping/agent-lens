@@ -164,6 +164,7 @@ function storageRootAllowed(path: readonly string[]): boolean {
     'projectionBackfill',
     'runtimeProfiles',
     'sourceRuntimeStatus',
+    'sourceRawAudit',
     'sessionRelationshipCandidates',
     'replication',
     'replicationCanonicalChanges',

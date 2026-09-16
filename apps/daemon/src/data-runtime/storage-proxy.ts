@@ -56,6 +56,7 @@ function isReadPath(path: readonly string[]): boolean {
 function isMaintenanceReadPath(path: readonly string[]): boolean {
   const method = path.at(-1) ?? ''
   return path[0] === 'diagnostics'
+    || path[0] === 'sourceRawAudit'
     || method === 'listForParserReplay'
     || method === 'toolUsageFactCoverageForMaintenance'
     || method === 'repairToolUsageFactCursor'
@@ -490,6 +491,7 @@ export class DataRuntimeStorageService implements StorageService {
   readonly projectionBackfill: SqliteStorageService['projectionBackfill']
   readonly runtimeProfiles: SqliteStorageService['runtimeProfiles']
   readonly sourceRuntimeStatus: SqliteStorageService['sourceRuntimeStatus']
+  readonly sourceRawAudit: SqliteStorageService['sourceRawAudit']
   readonly sessionRelationshipCandidates: SqliteStorageService['sessionRelationshipCandidates']
   readonly replication: SqliteStorageService['replication']
   readonly replicationCanonicalChanges: SqliteStorageService['replicationCanonicalChanges']
@@ -519,6 +521,7 @@ export class DataRuntimeStorageService implements StorageService {
     this.projectionBackfill = namespaceProxy(executor, ['projectionBackfill'])
     this.runtimeProfiles = namespaceProxy(executor, ['runtimeProfiles'])
     this.sourceRuntimeStatus = namespaceProxy(executor, ['sourceRuntimeStatus'])
+    this.sourceRawAudit = namespaceProxy(executor, ['sourceRawAudit'])
     this.sessionRelationshipCandidates = namespaceProxy(executor, ['sessionRelationshipCandidates'])
     this.replication = namespaceProxy(executor, ['replication'])
     this.replicationCanonicalChanges = namespaceProxy(executor, ['replicationCanonicalChanges'])

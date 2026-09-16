@@ -66,6 +66,8 @@ test('Data Runtime routes analytics reads to foreground pool and maintenance sca
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['projectionBackfill', 'repairToolUsageFactCursor']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['repositories', 'sourceRecords', 'listForParserReplay']), true)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['diagnostics']), true)
+  assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['sourceRawAudit', 'list']), true)
+  assert.equal(dataRuntimeStorageInternals.timeoutFor(['sourceRawAudit', 'list'], true), 120_000)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceReadPath(['sessionSummaryProjection', 'query']), false)
   assert.equal(dataRuntimeStorageInternals.isMaintenanceOperation(['projectionBackfill', 'backfillToolUsageFacts']), true)
   assert.equal(dataRuntimeStorageInternals.timeoutFor(['projectionBackfill', 'backfillToolUsageFacts'], false), 120_000)
@@ -248,6 +250,19 @@ test('writer worker crash keeps foreground readers online and recovers write own
     await runtime.storage.repositories.hosts.put(host('after-writer-recovery'))
     assert.equal((await runtime.storage.repositories.hosts.get('after-writer-recovery'))?.id, 'after-writer-recovery')
     assert.equal(runtime.dataRuntime.snapshot().ok, true)
+  } finally {
+    await runtime.dispose()
+  }
+})
+
+
+test('Data Runtime 暴露 Raw recovery audit，并通过维护 Reader 执行', async () => {
+  const runtime = await fixture()
+  try {
+    const result = await runtime.storage.sourceRawAudit.list(undefined, 10)
+    assert.deepEqual(result, { items: [], hasMore: false })
+    assert.equal(runtime.writer.snapshot().role, 'writer')
+    assert.equal(runtime.maintenanceReader.state(), 'ready')
   } finally {
     await runtime.dispose()
   }
