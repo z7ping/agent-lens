@@ -7,7 +7,12 @@ import {
   type SourceNormalizationContext,
   type SourceRecord,
 } from '@agent-lens/core'
-import { normalizePiSessionEntry, type PiNativeFact } from '@agent-lens/protocol'
+import {
+  normalizePiSessionEntry,
+  piNativeImageAttachment,
+  piNativeImageAttachments,
+  type PiNativeFact,
+} from '@agent-lens/protocol'
 
 interface PiStoredEnvelope {
   entry: Record<string, unknown>
@@ -115,10 +120,13 @@ export async function normalizePiRecord(
     const offset = index + 1
 
     if (fact.kind === 'message') {
+      const attachments = piNativeImageAttachments(fact.nonTextContent)
+      const residualNonTextContent = fact.nonTextContent.filter(value => !piNativeImageAttachment(value))
       if (fact.role === 'user') {
         observations.push(piFactCandidate(record, envelope, fact, 'message.user', {
           text: fact.text,
-          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          ...(attachments.length ? { attachments } : {}),
+          ...(residualNonTextContent.length ? { nonTextContent: residualNonTextContent } : {}),
         }, offset))
         return
       }
@@ -127,7 +135,8 @@ export async function normalizePiRecord(
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
           text: fact.text,
           ...(fact.content === undefined ? {} : { content: fact.content }),
-          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          ...(attachments.length ? { attachments } : {}),
+          ...(residualNonTextContent.length ? { nonTextContent: residualNonTextContent } : {}),
           ...(fact.model ? { model: fact.model } : {}),
           ...(fact.provider ? { provider: fact.provider } : {}),
           ...(fact.stopReason ? { stopReason: fact.stopReason } : {}),
