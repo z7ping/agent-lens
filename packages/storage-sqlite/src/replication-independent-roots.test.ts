@@ -105,3 +105,60 @@ test('Current-State Root Snapshot uses durable Entity Head changedAt for from-no
     db.close()
   }
 })
+
+
+test('Current-State Root restores gzip-compressed SourceRecord payload from canonical storage', async () => {
+  const db = await storage()
+  try {
+    const now = '2026-09-17T03:00:00.000Z'
+    await db.repositories.hosts.put({
+      id: 'host-source-record',
+      name: 'source-record-host',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: now,
+      lastSeenAt: now,
+    })
+    await db.repositories.installations.putProduct({
+      id: 'product-source-record',
+      name: 'Source Product',
+    })
+    await db.repositories.installations.put({
+      id: 'install-source-record',
+      hostId: 'host-source-record',
+      productId: 'product-source-record',
+      firstSeenAt: now,
+      lastSeenAt: now,
+    })
+    const payload = { text: 'compressible-source-record-'.repeat(400) }
+    await db.repositories.sourceRecords.put({
+      id: 'source-record-compressed',
+      sourceId: 'pi',
+      installationId: 'install-source-record',
+      nativeType: 'event',
+      capturedAt: now,
+      locator: { kind: 'file', path: '/tmp/source-record.jsonl' },
+      payload,
+      parserVersion: 'parser-1',
+    })
+
+    const raw = db.db.prepare(`
+      SELECT payload_json AS payloadJson, payload_encoding AS payloadEncoding
+      FROM source_records
+      WHERE id = 'source-record-compressed'
+    `).get() as { payloadJson: string; payloadEncoding: string }
+    assert.equal(raw.payloadEncoding, 'gzip-json')
+    assert.equal(raw.payloadJson, 'null')
+
+    const root = await db.replicationIndependentRoots.get(
+      'SourceRecord',
+      'source-record-compressed',
+    )
+    assert.equal(root?.entityType, 'SourceRecord')
+    if (root?.entityType === 'SourceRecord') {
+      assert.deepEqual(root.entity.payload, payload)
+    }
+  } finally {
+    db.close()
+  }
+})
