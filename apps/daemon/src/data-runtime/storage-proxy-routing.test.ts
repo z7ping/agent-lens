@@ -62,6 +62,8 @@ test('replication background reads and writes use maintenance Data Runtime budge
     ['replicationCanonicalChanges', 'highWaterRevision'],
     ['replicationCanonicalChanges', 'scan'],
     ['replicationObservationSnapshot', 'scan'],
+    ['replicationIndependentRoots', 'scan'],
+    ['replicationIndependentRoots', 'get'],
     ['replicationJournalLifecycle', 'safety'],
   ]
   for (const path of reads) {
