@@ -71,10 +71,10 @@ test('Independent Root Runtime reaches active and keeps capturedRevision current
     const baseline = await storage.replicationCanonicalChanges.highWaterRevision()
 
     const first = await step(storage)
-    assert.deepEqual(first, { kind: 'bootstrap', stage: 'delta' })
+    assert.deepEqual(first, { kind: 'bootstrap', stage: 'delta', didWork: true })
 
     const second = await step(storage)
-    assert.deepEqual(second, { kind: 'bootstrap', stage: 'reconcile' })
+    assert.deepEqual(second, { kind: 'bootstrap', stage: 'reconcile', didWork: true })
 
     const third = await step(storage)
     assert.equal(third.kind, 'active')
@@ -137,8 +137,8 @@ test('orphan Host without any Observation is still covered by its own Current-St
     })
     const baseline = await storage.replicationCanonicalChanges.highWaterRevision()
 
-    assert.deepEqual(await step(storage, 'Host'), { kind: 'bootstrap', stage: 'delta' })
-    assert.deepEqual(await step(storage, 'Host'), { kind: 'bootstrap', stage: 'reconcile' })
+    assert.deepEqual(await step(storage, 'Host'), { kind: 'bootstrap', stage: 'delta', didWork: true })
+    assert.deepEqual(await step(storage, 'Host'), { kind: 'bootstrap', stage: 'reconcile', didWork: true })
     const active = await step(storage, 'Host')
     assert.equal(active.kind, 'active')
 
