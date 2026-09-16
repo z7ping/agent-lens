@@ -173,30 +173,6 @@
   font-weight: 680;
 }
 
-.integration-placeholder-body span {
-  color: var(--al-muted);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.source-capture-control-legacy {
-  border-left: 2px solid var(--al-warning);
-}
-
-@media (max-width: 767.98px) {
-  .integration-observation,
-  .integration-placeholder-body {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .integration-observation-main {
-    display: grid;
-    width: 100%;
-    gap: 7px;
-  }
-}
-
 .source-capture-control {
   display: flex;
   align-items: center;
