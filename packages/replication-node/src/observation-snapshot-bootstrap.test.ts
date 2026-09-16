@@ -377,8 +377,14 @@ test('Snapshot 未完成或授权 revision 变化时拒绝 delta catch-up', asyn
   )
 
   snapshotProgress.value = {
-    ...snapshotProgress.value,
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    entityType: 'CanonicalObservation',
+    baselineRevision: 10,
+    policyRevision: 'policy-1',
+    historyRevision: 'history-1',
     snapshotComplete: true,
+    updatedAt: '2026-09-16T00:20:00.000Z',
   }
   await assert.rejects(
     pumpObservationSnapshotDeltaPage({
