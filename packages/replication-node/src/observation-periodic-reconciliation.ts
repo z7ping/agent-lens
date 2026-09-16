@@ -2,6 +2,7 @@ import {
   OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
   reconcileReplicationPage,
   type HistoryBoundary,
+  type KnownReplicationEntityType,
   type ReplicationPolicy,
   type ReplicationReconciliationSink,
 } from '@agent-lens/core/replication'
@@ -24,7 +25,7 @@ import type {
 export interface ObservationPeriodicReconciliationCycle {
   streamId: string
   generationId: string
-  entityType: 'CanonicalObservation'
+  entityType: KnownReplicationEntityType
   cycle: number
   status: 'idle' | 'running'
   throughRevision: number
@@ -38,7 +39,7 @@ export interface ObservationPeriodicReconciliationCycleStore {
   beginReconciliationCycle(input: {
     streamId: string
     generationId: string
-    entityType: 'CanonicalObservation'
+    entityType: KnownReplicationEntityType
     throughRevision: number
     now?: string
   }): Promise<
@@ -48,7 +49,7 @@ export interface ObservationPeriodicReconciliationCycleStore {
   completeReconciliationCycle(input: {
     streamId: string
     generationId: string
-    entityType: 'CanonicalObservation'
+    entityType: KnownReplicationEntityType
     nextDueAt: string
     now?: string
   }): Promise<ObservationPeriodicReconciliationCycle>
