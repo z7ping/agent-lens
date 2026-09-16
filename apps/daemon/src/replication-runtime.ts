@@ -112,6 +112,7 @@ export async function runReplicationMaintenanceLoop(
         })
 
         let allRootsActive = result.kind === 'active'
+        let streamDidWork = result.didWork
         for (const entityType of INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES) {
           if (signal.aborted) return
           await options.cooperate?.()
@@ -138,17 +139,19 @@ export async function runReplicationMaintenanceLoop(
             reconciliationIntervalMs,
           })
           allRootsActive = allRootsActive && independentResult.kind === 'active'
+          streamDidWork = streamDidWork || independentResult.didWork
         }
-        didWork = true
 
         if (journalGcEnabled && allRootsActive) {
           const reclaimed = await storage.replicationJournalLifecycle.reclaimBatch({ limit: gcLimit })
           if (reclaimed.deletedChanges > 0) {
+            streamDidWork = true
             options.onInfo?.(
               `replication journal reclaimed=${reclaimed.deletedChanges} safeRevision=${reclaimed.safeJournalRevision}`,
             )
           }
         }
+        didWork = didWork || streamDidWork
       }
 
       if (!didWork && journalGcEnabled) {
