@@ -15,10 +15,10 @@ import {
 
 const home = join('agentlens-test', 'home')
 
-test('official catalog keeps the five built-in integrations in stable product order', () => {
+test('official catalog keeps the six built-in integrations in stable product order', () => {
   assert.deepEqual(
     OFFICIAL_INTEGRATION_CATALOG.map(item => item.integrationId),
-    ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
   )
 })
 
@@ -137,3 +137,23 @@ test('Hermes and OpenCode source roots remain centralized in the catalog package
     ['/srv/opencode', join(home, '.local', 'share', 'opencode')],
   )
 })
+
+test('DSH discovery follows DSH_HOME/XDG data semantics and requires a profiles root marker', () => {
+  const explicit = resolveToolDiscoveryRoots('dsh', {
+    env: { DSH_HOME: '/srv/dsh' },
+    homeDir: '/home/tester',
+    platform: 'linux',
+  })
+  assert.deepEqual(explicit.map(item => ({ role: item.role, path: item.path, marker: item.marker })), [
+    { role: 'config', path: '/srv/dsh', marker: 'profiles' },
+    { role: 'data', path: '/srv/dsh', marker: 'profiles' },
+  ])
+
+  const xdg = resolveToolDiscoveryRoots('dsh', {
+    env: { XDG_DATA_HOME: '/srv/xdg-data' },
+    homeDir: '/home/tester',
+    platform: 'linux',
+  })
+  assert.equal(xdg.find(item => item.role === 'data')?.path, join('/srv/xdg-data', 'dsh'))
+})
+
