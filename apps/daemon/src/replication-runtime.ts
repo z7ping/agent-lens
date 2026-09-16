@@ -111,11 +111,12 @@ export async function runReplicationMaintenanceLoop(
           reconciliationIntervalMs,
         })
 
+        let allRootsActive = result.kind === 'active'
         for (const entityType of INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES) {
           if (signal.aborted) return
           await options.cooperate?.()
           if (signal.aborted) return
-          await pumpIndependentRootRuntimeStep({
+          const independentResult = await pumpIndependentRootRuntimeStep({
             entityType,
             changes: storage.replicationCanonicalChanges,
             roots: storage.replicationIndependentRoots,
@@ -136,10 +137,11 @@ export async function runReplicationMaintenanceLoop(
             pageLimit,
             reconciliationIntervalMs,
           })
+          allRootsActive = allRootsActive && independentResult.kind === 'active'
         }
         didWork = true
 
-        if (journalGcEnabled && result.kind === 'active') {
+        if (journalGcEnabled && allRootsActive) {
           const reclaimed = await storage.replicationJournalLifecycle.reclaimBatch({ limit: gcLimit })
           if (reclaimed.deletedChanges > 0) {
             options.onInfo?.(
