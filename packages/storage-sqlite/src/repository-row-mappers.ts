@@ -425,7 +425,7 @@ export function mapAssetBinding(value: unknown): AssetBinding {
     assetId: requiredString(row, 'asset_id'),
     installationId: requiredString(row, 'installation_id'),
     ...(runtimeProfileId === undefined ? {} : { runtimeProfileId }),
-    ...(scope === undefined ? {} : { scope: scope as AssetBinding['scope'] }),
+    ...(scope === undefined ? {} : { scope: scope as NonNullable<AssetBinding['scope']> }),
     ...(scopeRoot === undefined ? {} : { scopeRoot }),
     ...(path === undefined ? {} : { path }),
     ...(source === undefined ? {} : { source }),
