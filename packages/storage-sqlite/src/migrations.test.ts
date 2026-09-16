@@ -10,8 +10,8 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
     const migrations = storage.db.prepare(
       'SELECT version, name FROM schema_migrations ORDER BY version',
     ).all() as Array<{ version: number; name: string }>
-    assert.equal(migrations.at(-1)?.version, 26)
-    assert.equal(migrations.at(-1)?.name, 'replication-runtime-orchestration')
+    assert.equal(migrations.at(-1)?.version, 27)
+    assert.equal(migrations.at(-1)?.name, 'replication-entity-heads')
 
     const indexesBefore = storage.db.prepare("PRAGMA index_list('observations')").all() as Array<{ name: string }>
     const namesBefore = new Set(indexesBefore.map(item => item.name))
@@ -101,6 +101,7 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       'replication_canonical_changes',
       'replication_capture_watermarks',
       'replication_change_progress',
+      'replication_entity_heads',
       'replication_entity_state',
       'replication_frozen_batches',
       'replication_journal_state',
