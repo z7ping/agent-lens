@@ -66,3 +66,14 @@ export interface HealthResponseDto {
     details?: { [key: string]: JsonValue }
   }
 }
+
+
+export interface StorageDiagnosticsResponseDto {
+  protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+  generatedAt: string
+  storage: {
+    ok: boolean
+    schemaVersion?: number
+    details?: { [key: string]: JsonValue }
+  }
+}
