@@ -557,3 +557,5 @@ export interface StorageService {
   /** Optional explicit deep diagnostics path; callers must not use this for readiness. */
   diagnostics?(): Promise<StorageHealth>
 }
+
+export * from './source-raw-retention'
