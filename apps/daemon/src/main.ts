@@ -534,7 +534,7 @@ try {
       }
 
       await abortableDelay(
-        STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS,
+        result?.nextDueInMs ?? STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS,
         runtimeController.signal,
       )
     }
