@@ -62,7 +62,18 @@ export type ObservationRootReplicationEntityType =
 
 
 export const INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES = [
+  'AgentProduct',
+  'Host',
+  'AgentInstallation',
+  'RuntimeProfile',
+  'Project',
+  'Workspace',
+  'LogicalSession',
+  'SourceSession',
   'SessionRelationship',
+  'AgentActor',
+  'SourceRecord',
+  'Evidence',
   'Coverage',
   'AssetDefinition',
   'AssetBinding',
@@ -74,8 +85,8 @@ export type IndependentReplicationRootEntityType =
   typeof INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES[number]
 
 export const JOURNAL_REPLICATION_ENTITY_TYPES = [
-  ...OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
   ...INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES,
+  'CanonicalObservation',
 ] as const satisfies readonly KnownReplicationEntityType[]
 export type SharedRootEntityType = 'AgentProduct'
 export type ConditionalSharedEntityType = 'Project' | 'AssetDefinition'
