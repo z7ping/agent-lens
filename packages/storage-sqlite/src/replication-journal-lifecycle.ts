@@ -1,12 +1,14 @@
 import type Database from 'better-sqlite3'
-import type { KnownReplicationEntityType } from '@agent-lens/core/replication'
+import {
+  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+  type KnownReplicationEntityType,
+} from '@agent-lens/core/replication'
 import type { SqliteExecutor } from './executor'
 
 export type ReplicationCaptureDependencyState = 'dependent' | 'retired'
 
-export const REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES = [
-  'CanonicalObservation',
-] as const satisfies readonly KnownReplicationEntityType[]
+export const REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES =
+  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES
 
 export interface ReplicationCaptureWatermark {
   streamId: string
@@ -176,17 +178,18 @@ export function replicationJournalSafetyDetails(db: Database.Database): Replicat
   `).get())
   const retainedChanges = requiredNumber(retained, 'retainedChanges')
   const oldestRetainedRevision = nullableNumber(retained, 'oldestRetainedRevision')
+  const coveredPlaceholders = REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES.map(() => '?').join(', ')
   const reclaimableChanges = requiredNumber(rowRecord(db.prepare(`
     SELECT COUNT(*) AS reclaimableChanges
     FROM replication_canonical_changes
-    WHERE entity_type = 'CanonicalObservation'
+    WHERE entity_type IN (${coveredPlaceholders})
       AND revision <= ?
-  `).get(safeJournalRevision)), 'reclaimableChanges')
+  `).get(...REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES, safeJournalRevision)), 'reclaimableChanges')
   const uncoveredChanges = requiredNumber(rowRecord(db.prepare(`
     SELECT COUNT(*) AS uncoveredChanges
     FROM replication_canonical_changes
-    WHERE entity_type <> 'CanonicalObservation'
-  `).get()), 'uncoveredChanges')
+    WHERE entity_type NOT IN (${coveredPlaceholders})
+  `).get(...REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES)), 'uncoveredChanges')
 
   return {
     available: true,
@@ -347,12 +350,12 @@ export class SqliteReplicationJournalLifecycleRepository {
         FROM (
           SELECT revision
           FROM replication_canonical_changes
-          WHERE entity_type = 'CanonicalObservation'
+          WHERE entity_type IN (${REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES.map(() => '?').join(', ')})
             AND revision <= ?
           ORDER BY revision
           LIMIT ?
         )
-      `).get(safety.safeJournalRevision, limit)), 'boundary')
+      `).get(...REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES, safety.safeJournalRevision, limit)), 'boundary')
       if (boundary === null) {
         return {
           deletedChanges: 0,
@@ -363,9 +366,9 @@ export class SqliteReplicationJournalLifecycleRepository {
       }
       const result = this.executor.db.prepare(`
         DELETE FROM replication_canonical_changes
-        WHERE entity_type = 'CanonicalObservation'
+        WHERE entity_type IN (${REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES.map(() => '?').join(', ')})
           AND revision <= ?
-      `).run(boundary)
+      `).run(...REPLICATION_JOURNAL_GC_COVERED_ENTITY_TYPES, boundary)
       return {
         deletedChanges: result.changes,
         deletedThroughRevision: boundary,
