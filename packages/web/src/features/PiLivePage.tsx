@@ -659,89 +659,94 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         let controlsChanged = false
         let statePatch: Partial<PiLiveStateDto> = {}
         for (const wrapper of events) {
-          const event = record(wrapper.event)
-          const type = stringValue(event.type)
-          if (type === 'agent_start') {
+          const common = wrapper.normalizedEvent
+          if (common?.type === 'status' && common.status === 'running') {
             statePatch = { ...statePatch, isStreaming: true }
             presentation.boundary(() => [])
             if (!activePromptRef.current) {
               setCurrentOrdinal(null)
               setOptimisticPrompt('')
             }
-          } else if (type === 'agent_settled') {
+          } else if (common?.type === 'completed') {
             statePatch = { ...statePatch, isStreaming: false, pendingMessageCount: 0 }
             presentation.boundary(current => settlePiLiveItems(current))
             settled = true
-          } else if (type === 'message_start') {
-            const message = record(event.message)
-            if (message.role === 'assistant') assistantMessageEpochRef.current += 1
-          } else if (type === 'compaction_start') {
+            if (common.status === 'failed' && common.message) setError(common.message)
+          } else if (common?.type === 'message.start') {
+            if (common.role === 'assistant') assistantMessageEpochRef.current += 1
+          } else if (common?.type === 'text.start') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => startPiLiveContentBlock(items, 'text', deltaOptions, common.text ?? ''))
+          } else if (common?.type === 'text.delta' && common.delta) {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.push(items => appendPiLiveDelta(items, 'text', common.delta!, deltaOptions))
+          } else if (common?.type === 'text.end') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => finishPiLiveContentBlock(items, 'text', common.text ?? '', deltaOptions))
+          } else if (common?.type === 'reasoning.start') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, common.text ?? ''))
+          } else if (common?.type === 'reasoning.delta' && common.delta) {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.push(items => appendPiLiveDelta(items, 'thinking', common.delta!, deltaOptions))
+          } else if (common?.type === 'reasoning.end') {
+            const deltaOptions = {
+              messageEpoch: assistantMessageEpochRef.current,
+              ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+            }
+            presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', common.text ?? '', deltaOptions))
+          } else if (common?.type === 'message.end') {
+            presentation.flush()
+          } else if (common?.type === 'tool.start') {
+            if (common.callId) {
+              presentation.boundary(items => startPiLiveTool(items, {
+                callId: common.callId!,
+                name: common.name || 'tool',
+                summary: common.inputPreview ?? '',
+                ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+                startedAtMs: Date.now(),
+              }))
+            }
+          } else if (common?.type === 'tool.output') {
+            if (common.callId) presentation.push(items => updatePiLiveTool(items, common.callId!, common.output))
+          } else if (common?.type === 'tool.end') {
+            if (common.callId) {
+              presentation.boundary(items => finishPiLiveTool(
+                items,
+                common.callId!,
+                common.status,
+                common.output ?? '',
+              ))
+            }
+          } else if (common?.type === 'error') {
+            setError(common.message)
+          }
+
+          // Pi-only compatibility state remains native. Shared task rendering above
+          // must not inspect Pi's private runtime payload vocabulary.
+          const event = record(wrapper.event)
+          const type = stringValue(event.type)
+          if (type === 'compaction_start') {
             statePatch = { ...statePatch, isCompacting: true }
           } else if (type === 'compaction_end') {
             statePatch = { ...statePatch, isCompacting: false }
           } else if (type === 'model_changed' || type === 'thinking_level_changed') {
             controlsChanged = true
-          } else if (type === 'message_update') {
-            const update = record(event.assistantMessageEvent)
-            const delta = stringValue(update.delta)
-            const contentIndex = typeof update.contentIndex === 'number' ? update.contentIndex : undefined
-            const block = assistantPartialContent(update, contentIndex)
-            const deltaOptions = {
-              messageEpoch: assistantMessageEpochRef.current,
-              ...(contentIndex === undefined ? {} : { contentIndex }),
-            }
-            if (update.type === 'text_start') {
-              presentation.boundary(items => startPiLiveContentBlock(items, 'text', deltaOptions, stringValue(block.text)))
-            } else if (update.type === 'text_delta' && delta) {
-              presentation.push(items => appendPiLiveDelta(items, 'text', delta, deltaOptions))
-            } else if (update.type === 'text_end') {
-              const content = stringValue(update.content) || stringValue(block.text)
-              presentation.boundary(items => finishPiLiveContentBlock(items, 'text', content, deltaOptions))
-            } else if (update.type === 'thinking_start') {
-              presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, stringValue(block.thinking || block.text)))
-            } else if (update.type === 'thinking_delta' && delta) {
-              presentation.push(items => appendPiLiveDelta(items, 'thinking', delta, deltaOptions))
-            } else if (update.type === 'thinking_end') {
-              const content = stringValue(update.content) || stringValue(block.thinking || block.text)
-              presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', content, deltaOptions))
-            } else if (update.type === 'toolcall_start' || update.type === 'toolcall_delta' || update.type === 'toolcall_end') {
-              const completed = record(update.toolCall)
-              const toolCall = Object.keys(completed).length ? completed : block
-              const callId = stringValue(update.id || update.toolCallId || toolCall.id)
-              if (callId) {
-                const args = toolCall.arguments ?? toolCall.args ?? update.arguments ?? update.args
-                const mutation = (items: PiLiveHistoryItem[]) => startPiLiveTool(items, {
-                  callId,
-                  name: stringValue(update.toolName || update.name || toolCall.name) || 'tool',
-                  summary: args === undefined ? '' : brief(args),
-                  ...(contentIndex === undefined ? {} : { contentIndex }),
-                })
-                if (update.type === 'toolcall_delta') presentation.push(mutation)
-                else presentation.boundary(mutation)
-              }
-            }
-          } else if (type === 'message_end') {
-            presentation.flush()
-            // 最终消息由 agent_settled Snapshot 对账；这里不重排或替换已经展示的 block。
-          } else if (type === 'tool_execution_start') {
-            const id = stringValue(event.toolCallId)
-            if (id) presentation.boundary(items => startPiLiveTool(items, {
-              callId: id,
-              name: stringValue(event.toolName) || 'tool',
-              summary: brief(event.args),
-              startedAtMs: Date.now(),
-            }))
-          } else if (type === 'tool_execution_update') {
-            const id = stringValue(event.toolCallId)
-            if (id) presentation.push(items => updatePiLiveTool(items, id, toolOutput(event.partialResult)))
-          } else if (type === 'tool_execution_end') {
-            const id = stringValue(event.toolCallId)
-            if (id) presentation.boundary(items => finishPiLiveTool(
-              items,
-              id,
-              event.isError === true ? 'error' : 'success',
-              toolOutput(event.result),
-            ))
           } else if (type === 'queue_update') {
             const steering = Array.isArray(event.steering) ? event.steering.filter((item): item is string => typeof item === 'string') : []
             const followUp = Array.isArray(event.followUp) ? event.followUp.filter((item): item is string => typeof item === 'string') : []
