@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export interface DirectoryFootprint {
@@ -45,7 +45,7 @@ async function directoryFootprint(path: string): Promise<DirectoryFootprint> {
         }
         if (entry.isFile()) {
           try {
-            const file = await import('node:fs/promises').then(module => module.stat(entryPath))
+            const file = await stat(entryPath)
             bytes += file.size
             files += 1
           } catch (error) {
