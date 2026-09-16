@@ -265,7 +265,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     ? agentOverviewSourceId
     : managedIntegrationItems.find(item => item.tool?.presence === 'present' || item.tool?.presence === 'data-only')?.integrationId
       ?? agentOverviewItems.find(item => item.detected)?.sourceId
-      ?? managedIntegrationItems[0]?.integrationId
       ?? agentOverviewItems[0]?.sourceId
       ?? agents.find(agent => agent.detected)?.sourceId
       ?? agents[0]?.sourceId
