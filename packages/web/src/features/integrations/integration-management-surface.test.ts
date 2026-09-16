@@ -8,6 +8,19 @@ const onboarding = readFileSync(new URL('../IntegrationOnboarding.tsx', import.m
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('../../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const zhAgents = readFileSync(new URL('../../i18n/zh-CN/agents.ts', import.meta.url), 'utf8')
+const integrationCss = readFileSync(new URL('../../integrations.css', import.meta.url), 'utf8')
+
+test('智能体接入使用连续数据面，不恢复重复标题或逐项卡片', () => {
+  assert.match(page, /className="integration-management-surface"/)
+  assert.match(page, /className="integration-management-table-head"/)
+  assert.doesNotMatch(page, /<h1/)
+  assert.match(integrationCss, /\.integration-management-surface\s*\{[\s\S]*?border:\s*1px solid var\(--al-line\);[\s\S]*?background:\s*var\(--al-surface\);/)
+  assert.match(integrationCss, /\.integration-management-summary\s*\{[\s\S]*?background:\s*var\(--al-soft-2\);/)
+  assert.match(integrationCss, /@media \(max-width: 1199\.98px\)/)
+  assert.match(integrationCss, /@media \(max-width: 991\.98px\)/)
+  assert.match(integrationCss, /@media \(max-width: 767\.98px\)/)
+  assert.doesNotMatch(integrationCss, /!important/)
+})
 
 test('智能体接入页面以 Integration Management 为管理清单，不读取 Source Facet', () => {
   assert.match(page, /snapshot\.integrationManagement/)
