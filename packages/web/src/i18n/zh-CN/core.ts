@@ -194,6 +194,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     overview: '概览',
     agentOverview: '智能体概览',
     settings: '设置',
+    agentIntegration: '智能体接入',
     assetBackup: '资产备份',
     openWorkspaceNavigation: '打开工作区导航',
     closeWorkspaceNavigation: '关闭工作区导航',
