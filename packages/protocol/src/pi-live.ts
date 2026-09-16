@@ -118,7 +118,7 @@ export interface PiLiveSnapshotDto {
 }
 
 export interface PiLivePromptRequestDto {
-  message: string
+  message: LiveMessageInputDto
   behavior?: PiLiveStreamingBehaviorDto | undefined
 }
 
