@@ -61,6 +61,14 @@ export interface EnsureReplicationStreamInput {
   now?: string
 }
 
+export interface RolloverReplicationStreamInput {
+  fromStreamId: string
+  toStreamId: string
+  policyRevision: string
+  historyRevision: string
+  now?: string
+}
+
 export interface EnqueueReplicationEntityInput {
   id: string
   streamId: string
@@ -166,6 +174,103 @@ export class SqliteReplicationStateRepository {
         }
       }
       return state
+    })
+  }
+
+  async rolloverStream(input: RolloverReplicationStreamInput): Promise<{
+    previous: ReplicationStreamState
+    next: ReplicationStreamState
+  }> {
+    if (!input.toStreamId || input.toStreamId === input.fromStreamId) {
+      throw new DurableReplicationError(
+        'STREAM_INVALID',
+        'Replication rollover requires a distinct target streamId',
+      )
+    }
+
+    return this.executor.transaction(async () => {
+      const previous = this.requireStreamRow(input.fromStreamId)
+      if (previous.status === 'rollover-required') {
+        throw new DurableReplicationError(
+          'STREAM_INVALID',
+          'Replication stream rollover has already been requested',
+        )
+      }
+      if (this.getStreamRow(input.toStreamId)) {
+        throw new DurableReplicationError(
+          'STREAM_INVALID',
+          'Replication rollover target stream already exists',
+        )
+      }
+
+      const now = input.now ?? new Date().toISOString()
+      this.executor.db.prepare(`
+        UPDATE replication_streams
+        SET status = 'rollover-required',
+            updated_at = ?
+        WHERE stream_id = ?
+      `).run(now, previous.streamId)
+
+      const next: ReplicationStreamState = {
+        relationshipId: previous.relationshipId,
+        hubId: previous.hubId,
+        streamId: input.toStreamId,
+        generationId: previous.generationId,
+        status: 'active',
+        nextSequence: 1,
+        ackSequence: 0,
+        policyRevision: input.policyRevision,
+        historyRevision: input.historyRevision,
+        createdAt: now,
+        updatedAt: now,
+      }
+      assertReplicationStreamState(next)
+      this.executor.db.prepare(`
+        INSERT INTO replication_streams(
+          stream_id, relationship_id, hub_id, generation_id, status,
+          next_sequence, ack_sequence, policy_revision, history_revision,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        next.streamId,
+        next.relationshipId,
+        next.hubId,
+        next.generationId,
+        next.status,
+        next.nextSequence,
+        next.ackSequence,
+        next.policyRevision,
+        next.historyRevision,
+        next.createdAt,
+        next.updatedAt,
+      )
+
+      const captureTable = this.executor.db.prepare(`
+        SELECT 1 AS found
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'replication_capture_watermarks'
+      `).get()
+      if (captureTable) {
+        const registerCapture = this.executor.db.prepare(`
+          INSERT INTO replication_capture_watermarks(
+            stream_id, generation_id, entity_type, captured_revision,
+            dependency_state, updated_at
+          ) VALUES (?, ?, ?, 0, 'dependent', ?)
+          ON CONFLICT(stream_id, generation_id, entity_type) DO NOTHING
+        `)
+        for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
+          registerCapture.run(next.streamId, next.generationId, entityType, now)
+        }
+      }
+
+      return {
+        previous: mapStream({
+          ...previous,
+          status: 'rollover-required',
+          updatedAt: now,
+        }),
+        next,
+      }
     })
   }
 
