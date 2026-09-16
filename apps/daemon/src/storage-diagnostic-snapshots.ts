@@ -26,6 +26,7 @@ function currentSnapshot(health: StorageHealth) {
 export interface StorageDiagnosticSnapshotCaptureResult {
   captured: boolean
   series: StorageDiagnosticSnapshotSeries
+  nextDueInMs: number
 }
 
 export async function captureStorageDiagnosticSnapshot(
@@ -49,8 +50,15 @@ export async function captureStorageDiagnosticSnapshot(
     options.minimumIntervalMs ?? STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS,
   )
   const latest = existing.snapshots.at(-1)
-  if (latest && nowMs - Date.parse(latest.capturedAt) < minimumIntervalMs) {
-    return { captured: false, series: existing }
+  if (latest) {
+    const elapsedMs = Math.max(0, nowMs - Date.parse(latest.capturedAt))
+    if (elapsedMs < minimumIntervalMs) {
+      return {
+        captured: false,
+        series: existing,
+        nextDueInMs: Math.max(1_000, minimumIntervalMs - elapsedMs),
+      }
+    }
   }
 
   const diagnostics = await storage.diagnostics()
@@ -65,5 +73,9 @@ export async function captureStorageDiagnosticSnapshot(
     STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
     merged,
   )
-  return { captured: true, series: merged }
+  return {
+    captured: true,
+    series: merged,
+    nextDueInMs: minimumIntervalMs,
+  }
 }
