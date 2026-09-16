@@ -41,6 +41,13 @@ export type PiNativeFact =
   | (PiNativeFactBase & { kind: 'event'; event: string; label: string; detail: string; payload: unknown })
   | (PiNativeFactBase & { kind: 'unknown'; payload: unknown })
 
+export interface PiNativeImageAttachment {
+  type: 'image'
+  data: string
+  mimeType: string
+  name?: string
+}
+
 export interface NormalizePiSessionEntryOptions {
   nativeEventId?: string
   fallbackId?: string
@@ -89,6 +96,28 @@ function nonTextContent(value: unknown): unknown[] {
   return value.filter(raw => {
     const block = record(raw)
     return block.type !== 'text' && block.type !== 'thinking' && block.type !== 'toolCall'
+  })
+}
+
+export function piNativeImageAttachment(value: unknown): PiNativeImageAttachment | null {
+  const block = record(value)
+  if (block.type !== 'image') return null
+  const data = stringField(block, 'data')?.trim()
+  const mimeType = stringField(block, 'mimeType', 'mime_type')?.trim().toLowerCase()
+  if (!data || !mimeType?.startsWith('image/')) return null
+  const name = stringField(block, 'name', 'fileName', 'filename')?.trim()
+  return {
+    type: 'image',
+    data,
+    mimeType,
+    ...(name ? { name } : {}),
+  }
+}
+
+export function piNativeImageAttachments(values: readonly unknown[]): PiNativeImageAttachment[] {
+  return values.flatMap(value => {
+    const image = piNativeImageAttachment(value)
+    return image ? [image] : []
   })
 }
 
