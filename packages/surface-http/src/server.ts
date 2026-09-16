@@ -405,6 +405,35 @@ export async function startHttpSurface(
         options.eventHub.connect(response)
         return
       }
+      if (url.pathname === '/api/v1/storage/diagnostics') {
+        if (!storage.diagnostics) {
+          writeJson(response, 501, { error: 'storage_diagnostics_unavailable' })
+          return
+        }
+        const diagnostics = await storage.diagnostics()
+        const runtimeHealth = parseDataRuntimeHealth(diagnostics.details?.dataRuntime)
+        const details = diagnostics.details
+          ? Object.fromEntries(Object.entries(diagnostics.details).map(([key, value]) => [key, jsonValue(value)]))
+          : undefined
+        const body: HealthResponseDto = {
+          status: diagnostics.ok ? 'ok' : 'degraded',
+          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          runtime: {
+            owner: currentRuntimeOwner(),
+            mode: currentRuntimeMode(),
+            pid: process.pid,
+            startedAt: RUNTIME_STARTED_AT,
+          },
+          ...(runtimeHealth ? { dataRuntime: runtimeHealth } : {}),
+          storage: {
+            ok: diagnostics.ok,
+            ...(diagnostics.schemaVersion === undefined ? {} : { schemaVersion: diagnostics.schemaVersion }),
+            ...(details ? { details } : {}),
+          },
+        }
+        writeJson(response, diagnostics.ok ? 200 : 503, body)
+        return
+      }
       if (url.pathname === '/api/v1/health') {
         const health = await readStorageHealth()
         const runtimeHealth = parseDataRuntimeHealth(health.details?.dataRuntime)
