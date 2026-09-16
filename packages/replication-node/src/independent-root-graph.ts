@@ -135,7 +135,7 @@ export async function generateIndependentRootReplicaGraph(
     }))
   }
 
-  let rootResult: ReturnType<typeof generateWireEntity>
+  let rootResult: ReturnType<typeof generateWireEntity> | undefined
 
   switch (input.root.entityType) {
     case 'SessionRelationship': {
@@ -275,6 +275,7 @@ export async function generateIndependentRootReplicaGraph(
     }
   }
 
+  if (!rootResult) throw new Error(`Unsupported Independent Root type: ${input.root.entityType}`)
   if (rootResult.kind === 'blocked') return rootResult
   graph.emit(rootResult.entity)
   return { kind: 'graph', entities: graph.entities }
