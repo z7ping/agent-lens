@@ -382,9 +382,6 @@
     white-space: normal;
   }
 
-  .integration-management-order-actions {
-    display: none;
-  }
 
   .integration-management-error {
     grid-row: 5;
