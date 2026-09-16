@@ -756,3 +756,33 @@ test('large Payload profile 区分 Raw / Canonical / Tool Result 的存储字节
     await storage.close()
   }
 })
+
+
+test('large Payload profile 在空库返回零值，不让 diagnostics 失败', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const profile = largePayloadProfile(storage.db)
+    assert.equal(profile.sourceRaw.records, 0)
+    assert.equal(profile.sourceRaw.payloadBytes, 0)
+    assert.equal(profile.canonical.records, 0)
+    assert.equal(profile.canonical.payloadBytes, 0)
+    assert.equal(profile.toolResults.records, 0)
+    assert.equal(profile.toolResults.payloadBytes, 0)
+    assert.equal(
+      profile.sourceRaw.thresholds.every(item =>
+        item.records === 0
+        && item.storedPayloadBytes === 0
+        && item.shareOfPayloadBytes === 0),
+      true,
+    )
+
+    const diagnostics = await storage.diagnostics()
+    const details = diagnostics.details as {
+      largePayloads?: { sourceRaw?: { records?: number } }
+    }
+    assert.equal(details.largePayloads?.sourceRaw?.records, 0)
+  } finally {
+    await storage.close()
+  }
+})
