@@ -108,8 +108,11 @@ function mapSnapshot(
   return {
     entityType,
     originEntityId,
+    firstRevision: requiredRevision(row, '__first_revision'),
+    firstChangedAt: requiredString(row, '__first_changed_at'),
     latestRevision: requiredRevision(row, '__latest_revision'),
-    changedAt: requiredString(row, '__latest_changed_at'),
+    latestChangedAt: requiredString(row, '__latest_changed_at'),
+    historyCapturedAt: requiredString(row, '__first_changed_at'),
     entity,
   } as IndependentReplicationRootSnapshot
 }
@@ -144,6 +147,8 @@ implements IndependentReplicationRootSnapshotSource {
       const rows = this.executor.db.prepare(`
         SELECT t.*,
                h.origin_entity_id AS __origin_entity_id,
+               h.first_revision AS __first_revision,
+               h.first_changed_at AS __first_changed_at,
                h.latest_revision AS __latest_revision,
                h.latest_changed_at AS __latest_changed_at
         FROM replication_entity_heads h
@@ -175,6 +180,8 @@ implements IndependentReplicationRootSnapshotSource {
       const row = this.executor.db.prepare(`
         SELECT t.*,
                h.origin_entity_id AS __origin_entity_id,
+               h.first_revision AS __first_revision,
+               h.first_changed_at AS __first_changed_at,
                h.latest_revision AS __latest_revision,
                h.latest_changed_at AS __latest_changed_at
         FROM replication_entity_heads h
