@@ -23,6 +23,7 @@ import { SqliteReplicationBootstrapLifecycleRepository } from './replication-boo
 import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
 import { SqliteReplicationChangeProgressRepository } from './replication-change-progress'
 import { SqliteReplicationJournalLifecycleRepository } from './replication-journal-lifecycle'
+import { SqliteReplicationIndependentRootSnapshotReader } from './replication-independent-roots'
 import { SqliteCanonicalObservationSnapshotReader } from './replication-observation-snapshot'
 import { SqliteReplicationSnapshotBootstrapProgressRepository } from './replication-snapshot-bootstrap-progress'
 import { SqliteReplicationRuntimeControlRepository } from './replication-runtime-control'
@@ -171,6 +172,7 @@ export class SqliteStorageService implements StorageService {
   readonly replicationCanonicalChanges: SqliteReplicationCanonicalChangeReader
   readonly replicationChangeProgress: SqliteReplicationChangeProgressRepository
   readonly replicationJournalLifecycle: SqliteReplicationJournalLifecycleRepository
+  readonly replicationIndependentRoots: SqliteReplicationIndependentRootSnapshotReader
   readonly replicationObservationSnapshot: SqliteCanonicalObservationSnapshotReader
   readonly replicationSnapshotBootstrapProgress: SqliteReplicationSnapshotBootstrapProgressRepository
   readonly replicationRuntimeControl: SqliteReplicationRuntimeControlRepository
@@ -225,6 +227,7 @@ export class SqliteStorageService implements StorageService {
     this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
     this.replicationChangeProgress = new SqliteReplicationChangeProgressRepository(this.executor)
     this.replicationJournalLifecycle = new SqliteReplicationJournalLifecycleRepository(this.executor)
+    this.replicationIndependentRoots = new SqliteReplicationIndependentRootSnapshotReader(this.executor)
     this.replicationObservationSnapshot = new SqliteCanonicalObservationSnapshotReader(this.executor)
     this.replicationSnapshotBootstrapProgress = new SqliteReplicationSnapshotBootstrapProgressRepository(this.executor)
     this.replicationRuntimeControl = new SqliteReplicationRuntimeControlRepository(this.executor)
