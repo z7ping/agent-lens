@@ -54,3 +54,43 @@ test('only background maintenance writes are excluded from foreground Writer bac
     )
   }
 })
+
+
+test('replication background reads and writes use maintenance Data Runtime budget', () => {
+  const reads = [
+    ['replicationRuntimeControl', 'listRunnableStreams'],
+    ['replicationCanonicalChanges', 'highWaterRevision'],
+    ['replicationCanonicalChanges', 'scan'],
+    ['replicationObservationSnapshot', 'scan'],
+    ['replicationJournalLifecycle', 'safety'],
+  ]
+  for (const path of reads) {
+    assert.equal(
+      dataRuntimeStorageInternals.isReadPath(path),
+      true,
+      `${path.join('.')} must be recognized as a read`,
+    )
+    assert.equal(
+      dataRuntimeStorageInternals.isMaintenanceReadPath(path),
+      true,
+      `${path.join('.')} must use the maintenance Reader`,
+    )
+    assert.equal(dataRuntimeStorageInternals.timeoutFor(path, true), 120_000)
+  }
+
+  const writes = [
+    ['replicationRuntimeControl', 'beginReconciliationCycle'],
+    ['replicationChangeProgress', 'put'],
+    ['replicationJournalLifecycle', 'advance'],
+    ['replicationJournalLifecycle', 'reclaimBatch'],
+    ['replication', 'enqueuePending'],
+  ]
+  for (const path of writes) {
+    assert.equal(
+      dataRuntimeStorageInternals.isMaintenanceOperation(path),
+      true,
+      `${path.join('.')} must use the maintenance Writer queue`,
+    )
+    assert.equal(dataRuntimeStorageInternals.timeoutFor(path, false), 120_000)
+  }
+})
