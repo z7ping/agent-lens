@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES } from '@agent-lens/core/replication'
 import { SqliteStorageService } from './storage'
 
 const T0 = '2026-09-16T00:00:00.000Z'
@@ -21,6 +22,22 @@ function appendObservationChange(db: SqliteStorageService, id: string): void {
     INSERT INTO replication_canonical_changes(entity_type, origin_entity_id)
     VALUES ('CanonicalObservation', ?)
   `).run(id)
+}
+
+async function advanceObservationGraphCapture(
+  db: SqliteStorageService,
+  streamId: string,
+  generationId: string,
+  capturedRevision: number,
+): Promise<void> {
+  for (const entityType of OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES) {
+    await db.replicationJournalLifecycle.advance({
+      streamId,
+      generationId,
+      entityType,
+      capturedRevision,
+    })
+  }
 }
 
 test('journal high-water survives bounded GC and remains monotonic after new writes', async () => {
@@ -61,10 +78,7 @@ test('paused stream blocks GC until explicit retirement and diagnostics explains
       relationshipId: 'rel-1', hubId: 'hub-1', streamId: 'stream-1', generationId: 'gen-1',
       policyRevision: 'policy-1', historyRevision: 'history-1',
     })
-    await db.replicationJournalLifecycle.advance({
-      streamId: 'stream-1', generationId: 'gen-1',
-      entityType: 'CanonicalObservation', capturedRevision: captured,
-    })
+    await advanceObservationGraphCapture(db, 'stream-1', 'gen-1', captured)
     await db.replication.setStreamPolicyState({
       streamId: 'stream-1', status: 'paused',
       policyRevision: 'policy-1', historyRevision: 'history-1',
@@ -114,10 +128,12 @@ test('journal GC does not depend on network ACK and preserves frozen exact-retry
       relationshipId: 'rel-frozen', hubId: 'hub-1', streamId: 'stream-frozen',
       generationId: 'gen-frozen', policyRevision: 'policy-1', historyRevision: 'history-1',
     })
-    await db.replicationJournalLifecycle.advance({
-      streamId: 'stream-frozen', generationId: 'gen-frozen',
-      entityType: 'CanonicalObservation', capturedRevision: highWater,
-    })
+    await advanceObservationGraphCapture(
+      db,
+      'stream-frozen',
+      'gen-frozen',
+      highWater,
+    )
     const pending = await db.replication.enqueuePending({
       id: 'pending-1', streamId: 'stream-frozen', generationId: 'gen-frozen',
       dedupKey: 'CanonicalObservation:observation-1',
@@ -146,16 +162,22 @@ test('journal GC does not depend on network ACK and preserves frozen exact-retry
 })
 
 
-test('GC preserves non-Observation journal rows until their Root/Reconciliation semantics are covered', async () => {
+test('GC preserves journal rows outside the Observation Root Graph coverage contract', async () => {
   const db = await storage()
   try {
-    await putHost(db, 'host-uncovered', T0)
+    db.db.prepare(`
+      INSERT INTO replication_canonical_changes(entity_type, origin_entity_id)
+      VALUES ('Coverage', 'coverage-uncovered')
+    `).run()
     appendObservationChange(db, 'observation-covered')
 
     const safety = await db.replicationJournalLifecycle.safety()
     assert.ok(safety.reclaimableChanges >= 1)
     assert.ok(safety.uncoveredChanges >= 1)
-    assert.deepEqual(safety.gcCoveredEntityTypes, ['CanonicalObservation'])
+    assert.deepEqual(
+      safety.gcCoveredEntityTypes,
+      OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+    )
 
     await db.replicationJournalLifecycle.reclaimBatch({ limit: 1000 })
 
@@ -166,7 +188,7 @@ test('GC preserves non-Observation journal rows until their Root/Reconciliation 
     `).all() as Array<{ entityType: string; originEntityId: string }>
 
     assert.ok(rows.some(row =>
-      row.entityType === 'Host' && row.originEntityId === 'host-uncovered'
+      row.entityType === 'Coverage' && row.originEntityId === 'coverage-uncovered'
     ))
     assert.equal(rows.some(row =>
       row.entityType === 'CanonicalObservation' && row.originEntityId === 'observation-covered'
