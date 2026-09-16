@@ -580,6 +580,8 @@ export function replicationJournalDetails(
       oldestRetainedRevision: null,
       retainedChanges: 0,
       reclaimableChanges: 0,
+      uncoveredChanges: 0,
+      gcCoveredEntityTypes: [],
       dependentRoots: 0,
       blockingStreams: [],
     }
@@ -645,6 +647,8 @@ export function replicationJournalDetails(
     oldestRetainedRevision: safety.oldestRetainedRevision,
     retainedChanges: safety.retainedChanges,
     reclaimableChanges: safety.reclaimableChanges,
+    uncoveredChanges: safety.uncoveredChanges,
+    gcCoveredEntityTypes: safety.gcCoveredEntityTypes,
     dependentRoots: safety.dependentRoots,
     blockingStreams: safety.blockingStreams,
   }
