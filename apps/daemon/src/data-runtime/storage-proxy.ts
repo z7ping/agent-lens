@@ -48,6 +48,7 @@ const READ_PREFIXES = [
   'repairToolUsageFactCursor',
   'scan',
   'highWater',
+  'safety',
 ] as const
 
 function isReadPath(path: readonly string[]): boolean {
