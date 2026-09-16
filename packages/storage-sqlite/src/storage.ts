@@ -27,6 +27,21 @@ import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries-v2'
 import { withSqliteSourceRecordCompression } from './source-record-compression'
+import {
+  capturedActivityDetails,
+  largePayloadProfile,
+  replicationJournalDetails,
+  sourceActivityPayloadBytesBetween,
+  storageBreakdownDetails,
+} from './storage-diagnostics'
+import {
+  STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_RETENTION_DAYS,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+  parseStorageDiagnosticSnapshotSeries,
+  storageGrowthMetricsFromSnapshots,
+  type StorageDiagnosticSnapshot,
+} from './storage-diagnostic-snapshots'
 import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
 import { SqliteUnknownObservationProjection } from './unknown-observation-projection'
 
@@ -248,14 +263,37 @@ export class SqliteStorageService implements StorageService {
     const freelistCount = Number(this.db.pragma('freelist_count', { simple: true }))
     const databaseBytes = fileSize(this.db.name)
     const walBytes = fileSize(`${this.db.name}-wal`)
+    const shmBytes = fileSize(`${this.db.name}-shm`)
     const logicalBytes = pageCount * pageSize
-    const reclaimableBytes = freelistCount * pageSize
+    const freelistBytes = freelistCount * pageSize
+    let sqliteTempAllocatedBytes = 0
+    try {
+      const tempPageCount = Number(this.db.pragma('temp.page_count', { simple: true }))
+      const tempPageSize = Number(this.db.pragma('temp.page_size', { simple: true }))
+      sqliteTempAllocatedBytes = tempPageCount * tempPageSize
+    } catch {
+      // SQLite TEMP schema may not exist until a connection actually uses it.
+    }
+    const hotFootprintBytes = Math.max(databaseBytes, logicalBytes) + walBytes
     return {
       databaseBytes,
       walBytes,
+      shmBytes,
       logicalBytes,
-      reclaimableBytes,
-      capacity: describeStorageCapacity(Math.max(databaseBytes, logicalBytes) + walBytes),
+      databaseAllocatedBytes: logicalBytes,
+      freelistBytes,
+      // Backwards-compatible alias. This means reusable pages inside SQLite,
+      // not bytes that can be subtracted from the database file immediately.
+      reclaimableBytes: freelistBytes,
+      sqliteTempAllocatedBytes,
+      tempScope: 'sqlite-temp-schema',
+      totalDiskBytes: databaseBytes + walBytes + shmBytes,
+      hotFootprintBytes,
+      capacity: {
+        ...describeStorageCapacity(hotFootprintBytes),
+        scope: 'hot-sqlite',
+        longTermTotalLimitBytes: null,
+      },
     }
   }
 
@@ -292,6 +330,10 @@ export class SqliteStorageService implements StorageService {
     const health = await this.health()
     const unknownObservations = await this.unknownObservationProjection.summary()
     const toolUsageFacts = await this.projectionBackfill.toolUsageFactCoverage()
+    const persistedSnapshots = await this.checkpoints.get<unknown>(
+      STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+      STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+    )
     return this.executor.run(() => {
       const coverageItems = this.db.prepare(`
         SELECT subject_type AS subjectType,
@@ -311,19 +353,127 @@ export class SqliteStorageService implements StorageService {
         if (status) coverageSummary[status] += 1
       }
 
-      const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+      const activity = capturedActivityDetails(this.db)
+      const breakdown = storageBreakdownDetails(this.db)
+      const largePayloads = largePayloadProfile(this.db)
+      const replicationJournal = replicationJournalDetails(
+        this.db,
+        activity.cutoffs.last7Days,
+        activity.cutoffs.last30Days,
+      )
+      const baseGrowth = readonlyRecord(health.details?.dataGrowth) ?? this.capacityDetails()
+      const projectionAllocatedBytes = breakdown.categories.projection.allocatedBytes
+      const walBytes = typeof baseGrowth.walBytes === 'number' ? baseGrowth.walBytes : 0
+      const sqliteTempAllocatedBytes = typeof baseGrowth.sqliteTempAllocatedBytes === 'number'
+        ? baseGrowth.sqliteTempAllocatedBytes
+        : 0
+      const freelistBytes = typeof baseGrowth.freelistBytes === 'number'
+        ? baseGrowth.freelistBytes
+        : typeof baseGrowth.reclaimableBytes === 'number'
+          ? baseGrowth.reclaimableBytes
+          : 0
       const count = (tableName: string): number => countRow(this.db.prepare(
         `SELECT COUNT(*) AS count FROM ${tableName}`,
       ).get())
-      const recentCount = (tableName: string, column: string): number => countRow(this.db.prepare(
-        `SELECT COUNT(*) AS count FROM ${tableName} WHERE ${column} >= ?`,
-      ).get(cutoff))
-      const recentSessions = countRow(this.db.prepare(`
-        SELECT COUNT(*) AS count
-        FROM session_summary_projection
-        WHERE ended_at >= ?
-      `).get(cutoff))
-      const baseGrowth = readonlyRecord(health.details?.dataGrowth) ?? this.capacityDetails()
+      const totals = {
+        sourceRecords: count('source_records'),
+        observations: count('observations'),
+        evidence: count('evidence'),
+        sessions: count('logical_sessions'),
+      }
+      const snapshotCapturedAt = new Date().toISOString()
+      const persistedSeries = parseStorageDiagnosticSnapshotSeries(persistedSnapshots)
+      const previousSnapshot = persistedSeries.snapshots.at(-1) ?? null
+      const measuredSourceActivity = previousSnapshot
+        ? sourceActivityPayloadBytesBetween(
+            this.db,
+            previousSnapshot.capturedAt,
+            snapshotCapturedAt,
+          )
+        : null
+      const netNewSourceRecords = previousSnapshot
+        ? totals.sourceRecords - previousSnapshot.counts.sourceRecords
+        : 0
+      const sourceActivityInterval = !previousSnapshot
+        ? {
+            state: 'baseline' as const,
+            basis: 'persisted-source-record-payload-json-before-compression',
+            records: 0,
+            originalPayloadBytes: 0,
+            netNewSourceRecords: 0,
+            unknownEncodingRecords: 0,
+            invalidPayloadRecords: 0,
+            gzipSizeBasis: 'gzip-isize-uint32',
+          }
+        : measuredSourceActivity!.state === 'complete'
+          && netNewSourceRecords >= 0
+          && measuredSourceActivity!.records === netNewSourceRecords
+          ? {
+              ...measuredSourceActivity!,
+              state: 'complete' as const,
+              netNewSourceRecords,
+            }
+          : {
+              ...measuredSourceActivity!,
+              state: 'partial' as const,
+              netNewSourceRecords,
+              reason: measuredSourceActivity!.state !== 'complete'
+                ? 'source-payload-accounting-incomplete'
+                : netNewSourceRecords < 0
+                  ? 'source-record-count-decreased'
+                  : 'recent-source-records-do-not-match-net-new-records',
+            }
+      const sourceActivity = previousSnapshot && sourceActivityInterval.state === 'complete'
+        ? {
+            epochCapturedAt: previousSnapshot.sourceActivity.epochCapturedAt,
+            originalPayloadBytesCumulative:
+              previousSnapshot.sourceActivity.originalPayloadBytesCumulative
+              + sourceActivityInterval.originalPayloadBytes,
+            recordsCumulative:
+              previousSnapshot.sourceActivity.recordsCumulative
+              + sourceActivityInterval.records,
+          }
+        : {
+            epochCapturedAt: snapshotCapturedAt,
+            originalPayloadBytesCumulative: 0,
+            recordsCumulative: 0,
+          }
+      const databaseBytes = typeof baseGrowth.databaseBytes === 'number'
+        ? baseGrowth.databaseBytes
+        : 0
+      const databaseAllocatedBytes = typeof baseGrowth.databaseAllocatedBytes === 'number'
+        ? baseGrowth.databaseAllocatedBytes
+        : databaseBytes
+      const persistentRetainedBytes = Math.max(databaseBytes, databaseAllocatedBytes)
+      const currentSnapshot: StorageDiagnosticSnapshot | null = breakdown.available
+        ? {
+            version: 2,
+            day: snapshotCapturedAt.slice(0, 10),
+            capturedAt: snapshotCapturedAt,
+            hotFootprintBytes: typeof baseGrowth.hotFootprintBytes === 'number'
+              ? baseGrowth.hotFootprintBytes
+              : 0,
+            databaseBytes,
+            persistentRetainedBytes,
+            persistentRetainedScope: 'sqlite-main',
+            walBytes,
+            counts: totals,
+            categoryAllocatedBytes: {
+              canonical: breakdown.categories.canonical.allocatedBytes,
+              evidence: breakdown.categories.evidence.allocatedBytes,
+              sourceRaw: breakdown.categories.sourceRaw.allocatedBytes,
+              projection: breakdown.categories.projection.allocatedBytes,
+              replication: breakdown.categories.replication.allocatedBytes,
+              operational: breakdown.categories.operational.allocatedBytes,
+            },
+            replicationChanges: replicationJournal.totalChanges,
+            sourceActivity,
+          }
+        : null
+      const growthMetrics = storageGrowthMetricsFromSnapshots(
+        currentSnapshot,
+        persistedSnapshots,
+      )
 
       return {
         ...health,
@@ -338,20 +488,59 @@ export class SqliteStorageService implements StorageService {
             summary: coverageSummary,
             items: coverageItems,
           },
+          storageBreakdown: breakdown,
+          largePayloads,
+          spaceRecovery: {
+            freelist: {
+              bytes: freelistBytes,
+              reusableInsideDatabase: true,
+              shrinksDatabaseFileWithoutCompaction: false,
+            },
+            wal: {
+              bytes: walBytes,
+              releaseDependsOnCheckpoint: true,
+            },
+            sqliteTempSchema: {
+              bytes: sqliteTempAllocatedBytes,
+              lifecycle: 'connection-scoped',
+            },
+            projection: {
+              allocatedBytes: projectionAllocatedBytes,
+              rebuildable: true,
+              physicalReleaseRequiresDeleteAndCompaction: true,
+            },
+            sourceRaw: {
+              state: 'not-assessed',
+              reason: 'Phase 2 Source recoverability governance is required before Raw can be counted as safely reclaimable.',
+            },
+          },
+          capturedActivity: activity,
+          replicationJournal,
+          storageSnapshot: {
+            scope: STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+            key: STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+            retentionDays: STORAGE_DIAGNOSTIC_SNAPSHOT_RETENTION_DAYS,
+            current: currentSnapshot,
+            history: growthMetrics.history,
+            sourceActivityInterval,
+          },
+          growthMetrics,
           dataGrowth: {
             ...baseGrowth,
-            sevenDayCutoff: cutoff,
-            totals: {
-              sourceRecords: count('source_records'),
-              observations: count('observations'),
-              evidence: count('evidence'),
-              sessions: count('logical_sessions'),
-            },
+            thirtyDayCutoff: activity.cutoffs.last30Days,
+            sevenDayCutoff: activity.cutoffs.last7Days,
+            totals,
             last7Days: {
-              sourceRecords: recentCount('source_records', 'captured_at'),
-              observations: recentCount('observations', 'captured_at'),
-              evidence: recentCount('evidence', 'captured_at'),
-              sessions: recentSessions,
+              sourceRecords: activity.sourceRaw.last7Days.records,
+              observations: activity.canonical.available ? activity.canonical.last7Days?.records ?? null : null,
+              evidence: activity.evidence.available ? activity.evidence.last7Days?.records ?? null : null,
+              sessions: activity.sessions.available ? activity.sessions.last7Days?.records ?? null : null,
+            },
+            last30Days: {
+              sourceRecords: activity.sourceRaw.last30Days.records,
+              observations: activity.canonical.available ? activity.canonical.last30Days?.records ?? null : null,
+              evidence: activity.evidence.available ? activity.evidence.last30Days?.records ?? null : null,
+              sessions: activity.sessions.available ? activity.sessions.last30Days?.records ?? null : null,
             },
           },
         },

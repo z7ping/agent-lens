@@ -76,6 +76,12 @@ import {
 import { profiledDshSourcePlugin } from './sources/dsh-profiled.js'
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
 import { openLocalPath } from './local-path-opener.js'
+import { readRuntimeStorageFootprint } from './storage-runtime-footprint.js'
+import {
+  captureStorageDiagnosticSnapshot,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_INITIAL_DELAY_MS,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS,
+} from './storage-diagnostic-snapshots.js'
 
 const nodeRuntime = resolveAgentLensNodeRuntime()
 const { dataRoot, profile: runtimeProfile, capabilities } = nodeRuntime
@@ -277,6 +283,9 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
   selectProjectDirectory: () => projectDirectoryPicker.select(),
   ...(capabilities.localCapture ? { openHostPath: openLocalPath } : {}),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
+  diagnosticsDetails: async () => ({
+    runtimeFootprint: await readRuntimeStorageFootprint(dataRoot),
+  }),
   healthDetails: () => ({
     ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
     ...(officialToolDiscovery
@@ -356,6 +365,7 @@ app.use(webPlugin, { staticDir: webRoot })
 
 const runtimeController = new AbortController()
 let syncPromise: Promise<void> | null = null
+let storageSnapshotPromise: Promise<void> | null = null
 let captureHandles: Awaited<ReturnType<typeof startRegisteredSourceCapture>>['results'] = []
 let shuttingDown = false
 let reuseSessionSummaryProjection = false
@@ -412,6 +422,7 @@ async function shutdown(signal: string): Promise<void> {
 
   try {
     if (syncPromise) await syncPromise.catch(() => undefined)
+    if (storageSnapshotPromise) await storageSnapshotPromise.catch(() => undefined)
     await disposeCaptureHandles()
     disposeHttpActivityTracking?.()
     disposeHttpActivityTracking = null
@@ -496,6 +507,40 @@ try {
 
   reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
+
+  storageSnapshotPromise = (async () => {
+    await abortableDelay(
+      STORAGE_DIAGNOSTIC_SNAPSHOT_INITIAL_DELAY_MS,
+      runtimeController.signal,
+    )
+    while (!runtimeController.signal.aborted) {
+      if (!await waitForDataRuntime(runtimeController.signal)) return
+      const gate = foregroundGate
+      if (gate) await gate.wait(runtimeController.signal)
+      if (runtimeController.signal.aborted) return
+
+      let nextSnapshotDelayMs = STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS
+      try {
+        const result = await captureStorageDiagnosticSnapshot(app.context.storage)
+        nextSnapshotDelayMs = result?.nextDueInMs ?? STORAGE_DIAGNOSTIC_SNAPSHOT_INTERVAL_MS
+        const latest = result?.series.snapshots.at(-1)
+        if (result?.captured && latest) {
+          console.info(
+            `[AgentLens] storage diagnostic snapshot persisted: day=${latest.day} history=${result.series.snapshots.length}`,
+          )
+        }
+      } catch (error) {
+        if (!runtimeController.signal.aborted) {
+          console.warn('[AgentLens] storage diagnostic snapshot failed', error)
+        }
+      }
+
+      await abortableDelay(
+        nextSnapshotDelayMs,
+        runtimeController.signal,
+      )
+    }
+  })()
 
   syncPromise = (async () => {
     await abortableDelay(INITIAL_BACKGROUND_SYNC_DELAY_MS, runtimeController.signal)

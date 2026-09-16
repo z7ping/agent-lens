@@ -25,6 +25,7 @@ import {
   type RuntimeModeDto,
   type RuntimeOwnerDto,
   type SourceRecordResponseDto,
+  type StorageDiagnosticsResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { handleAgentFilesRequest } from './agent-files-http'
@@ -403,6 +404,27 @@ export async function startHttpSurface(
           return
         }
         options.eventHub.connect(response)
+        return
+      }
+      if (url.pathname === '/api/v1/storage/diagnostics') {
+        if (!storage.diagnostics) {
+          writeJson(response, 501, { error: 'storage_diagnostics_unavailable' })
+          return
+        }
+        const diagnostics = await storage.diagnostics()
+        const details = diagnostics.details
+          ? Object.fromEntries(Object.entries(diagnostics.details).map(([key, value]) => [key, jsonValue(value)]))
+          : undefined
+        const body: StorageDiagnosticsResponseDto = {
+          protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+          generatedAt: new Date().toISOString(),
+          storage: {
+            ok: diagnostics.ok,
+            ...(diagnostics.schemaVersion === undefined ? {} : { schemaVersion: diagnostics.schemaVersion }),
+            ...(details ? { details } : {}),
+          },
+        }
+        writeJson(response, diagnostics.ok ? 200 : 503, body)
         return
       }
       if (url.pathname === '/api/v1/health') {

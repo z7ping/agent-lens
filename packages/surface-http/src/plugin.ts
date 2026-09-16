@@ -35,6 +35,10 @@ export interface HttpSurfacePluginConfig {
   dataRuntimeHealth?: () => DataRuntimeHealthDto
   /** Additional O(1) runtime diagnostics merged into storage health details. */
   healthDetails?: () => Readonly<Record<string, unknown>>
+  /** Explicit deep-diagnostics contribution; may perform bounded asynchronous I/O. */
+  diagnosticsDetails?: () =>
+    | Readonly<Record<string, unknown>>
+    | Promise<Readonly<Record<string, unknown>>>
   /** Product-level Integration runtime availability. */
   integrationStatus?: (
     productId: string,
@@ -84,8 +88,9 @@ function storageWithRuntimeHealth(
   contributor: HttpSurfacePluginConfig['dataRuntimeHealth'],
   eventLoopHealth?: () => Readonly<Record<string, unknown>>,
   healthDetails?: HttpSurfacePluginConfig['healthDetails'],
+  diagnosticsDetails?: HttpSurfacePluginConfig['diagnosticsDetails'],
 ): StorageService {
-  if (!contributor && !eventLoopHealth && !healthDetails) return storage
+  if (!contributor && !eventLoopHealth && !healthDetails && !diagnosticsDetails) return storage
   return new Proxy(storage, {
     get(target, property, receiver) {
       if (property === 'health') {
@@ -114,6 +119,30 @@ function storageWithRuntimeHealth(
                 ...(eventLoop ? { eventLoop } : {}),
                 storageUnavailable: true,
                 storageError: errorSummary(error),
+              },
+            }
+          }
+        }
+      }
+      if (property === 'diagnostics' && target.diagnostics) {
+        return async () => {
+          const diagnostics = await target.diagnostics!()
+          if (!diagnosticsDetails) return diagnostics
+          try {
+            const extraDetails = await diagnosticsDetails()
+            return {
+              ...diagnostics,
+              details: {
+                ...diagnostics.details,
+                ...extraDetails,
+              },
+            }
+          } catch (error) {
+            return {
+              ...diagnostics,
+              details: {
+                ...diagnostics.details,
+                diagnosticsContributionError: errorSummary(error),
               },
             }
           }
@@ -189,6 +218,7 @@ const applyHttpSurface = Object.assign(
       config.dataRuntimeHealth,
       () => eventLoopSnapshot(eventLoop),
       config.healthDetails,
+      config.diagnosticsDetails,
     )
     const piLive = ctx.get('piLive')
     const surface = await startHttpSurface(healthStorage, {
