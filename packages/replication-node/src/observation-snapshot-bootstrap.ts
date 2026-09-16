@@ -8,10 +8,6 @@ import {
   type CanonicalReplicationReader,
 } from './canonical-graph'
 import {
-  captureReplicationHighWater,
-  type CanonicalChangeSource,
-} from './observation-change-pump'
-import {
   enqueueWireGraph,
   type PendingCandidateSink,
 } from './pending-sink'
@@ -81,7 +77,7 @@ function fromNowBoundary(history: HistoryBoundary): string | undefined {
  * same root page because PendingCandidateSink is content-hash deduplicated.
  */
 export async function pumpObservationSnapshotBootstrapPage(input: {
-  changes: Pick<CanonicalChangeSource, 'highWaterRevision'>
+  changes: { highWaterRevision(): Promise<number> }
   snapshot: CanonicalObservationSnapshotSource
   dependencies: CanonicalReplicationReader
   sink: PendingCandidateSink
@@ -99,11 +95,12 @@ export async function pumpObservationSnapshotBootstrapPage(input: {
     generationId: input.generationId,
     entityType: 'CanonicalObservation' as const,
   }
+  const boundary = fromNowBoundary(input.history)
   let state = await input.progress.get(key)
   let initialized = false
 
   if (!state) {
-    const baselineRevision = await captureReplicationHighWater(input.changes)
+    const baselineRevision = await input.changes.highWaterRevision()
     state = {
       ...key,
       baselineRevision,
@@ -127,7 +124,6 @@ export async function pumpObservationSnapshotBootstrapPage(input: {
     }
   }
 
-  const boundary = fromNowBoundary(input.history)
   const page = await input.snapshot.scan({
     ...(state.cursor === undefined ? {} : { afterId: state.cursor }),
     ...(boundary === undefined ? {} : { capturedAtOnOrAfter: boundary }),
