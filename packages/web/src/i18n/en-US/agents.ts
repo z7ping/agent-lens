@@ -259,6 +259,8 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       add: 'Add',
       enable: 'Enable',
       disable: 'Disable',
+      enabledTitle: 'The Integration is installed and configured as enabled. Local discovery is shown separately.',
+      disabledTitle: 'The Integration is installed but currently configured as disabled. Local discovery is shown separately.',
       authorize: 'Authorize',
       uninstall: 'Uninstall',
       orderAria: 'Agent display order',
