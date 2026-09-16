@@ -520,11 +520,11 @@ try {
       if (runtimeController.signal.aborted) return
 
       try {
-        const snapshots = await captureStorageDiagnosticSnapshot(app.context.storage)
-        const latest = snapshots?.snapshots.at(-1)
-        if (latest) {
+        const result = await captureStorageDiagnosticSnapshot(app.context.storage)
+        const latest = result?.series.snapshots.at(-1)
+        if (result?.captured && latest) {
           console.info(
-            `[AgentLens] storage diagnostic snapshot persisted: day=${latest.day} history=${snapshots.snapshots.length}`,
+            `[AgentLens] storage diagnostic snapshot persisted: day=${latest.day} history=${result.series.snapshots.length}`,
           )
         }
       } catch (error) {
