@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
+import { sourceActivityPayloadBytesBetween } from './storage-diagnostics'
 import {
   STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
   STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
@@ -92,8 +93,17 @@ test('health 保持轻量，diagnostics 区分物理占用、采集活动与真�
       }
       storageSnapshot: {
         retentionDays: number
-        current: { day: string, capturedAt: string }
+        current: {
+          day: string
+          capturedAt: string
+          version: number
+          sourceActivity: {
+            originalPayloadBytesCumulative: number
+            recordsCumulative: number
+          }
+        }
         history: { count: number }
+        sourceActivityInterval: { state: string, records: number, originalPayloadBytes: number }
       }
       growthMetrics: {
         canonicalGrowthRate: { state: string }
@@ -140,11 +150,15 @@ test('health 保持轻量，diagnostics 区分物理占用、采集活动与真�
     assert.equal(details.replicationJournal.totalChanges, 0)
     assert.deepEqual(details.replicationJournal.byEntityType, [])
     assert.equal(details.storageSnapshot.retentionDays, 35)
+    assert.equal(details.storageSnapshot.current.version, 2)
     assert.equal(details.storageSnapshot.current.day.length, 10)
     assert.equal(typeof details.storageSnapshot.current.capturedAt, 'string')
+    assert.equal(details.storageSnapshot.current.sourceActivity.originalPayloadBytesCumulative, 0)
+    assert.equal(details.storageSnapshot.current.sourceActivity.recordsCumulative, 0)
+    assert.equal(details.storageSnapshot.sourceActivityInterval.state, 'baseline')
     assert.equal(details.storageSnapshot.history.count, 0)
     assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'insufficient-history')
-    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'definition-required')
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'insufficient-history')
 
     assert.equal(typeof details.dataGrowth.totals.sourceRecords, 'number')
     assert.equal(typeof details.dataGrowth.last7Days.sessions, 'number')
@@ -301,7 +315,7 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
     assert.ok(details.storageBreakdown.categories.evidence.allocatedBytes > 0)
     assert.ok(details.storageBreakdown.categories.replication.allocatedBytes > 0)
     assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'insufficient-history')
-    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'definition-required')
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'insufficient-history')
   } finally {
     await storage.close()
   }
@@ -330,7 +344,7 @@ test('diagnostics 使用持久快照把 Canonical Growth Rate 从历史不足切
     await storage.checkpoints.set(
       STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
       STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
-      { version: 1, snapshots: [baseline] },
+      { version: 2, snapshots: [baseline] },
     )
 
     const second = await storage.diagnostics()
@@ -355,6 +369,83 @@ test('diagnostics 使用持久快照把 Canonical Growth Rate 从历史不足切
     assert.equal(
       secondDetails.growthMetrics.canonicalGrowthRate.last7Days.canonical?.observationsDelta,
       0,
+    )
+  } finally {
+    await storage.close()
+  }
+})
+
+
+test('source activity 字节统计同时覆盖 plain JSON 与 gzip JSON，且不需要解压', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const capturedAt = '2026-09-16T12:00:00.000Z'
+    storage.db.prepare(`
+      INSERT INTO hosts(id, name, platform, arch, created_at, last_seen_at)
+      VALUES ('host:activity', 'local', 'test', 'test', ?, ?)
+    `).run(capturedAt, capturedAt)
+    storage.db.prepare(`
+      INSERT INTO agent_products(id, name)
+      VALUES ('pi', 'Pi')
+    `).run()
+    storage.db.prepare(`
+      INSERT INTO agent_installations(
+        id, host_id, product_id, first_seen_at, last_seen_at
+      ) VALUES ('pi:activity', 'host:activity', 'pi', ?, ?)
+    `).run(capturedAt, capturedAt)
+
+    const smallPayload = { text: 'small' }
+    const largePayload = { text: 'x'.repeat(8_000) }
+    await storage.repositories.sourceRecords.put({
+      id: 'source-record:small',
+      sourceId: 'pi',
+      installationId: 'pi:activity',
+      nativeType: 'message',
+      nativeId: 'small',
+      capturedAt,
+      locator: { kind: 'file', path: 'small.jsonl' },
+      payload: smallPayload,
+      parserVersion: 'test',
+    })
+    await storage.repositories.sourceRecords.put({
+      id: 'source-record:large',
+      sourceId: 'pi',
+      installationId: 'pi:activity',
+      nativeType: 'message',
+      nativeId: 'large',
+      capturedAt,
+      locator: { kind: 'file', path: 'large.jsonl' },
+      payload: largePayload,
+      parserVersion: 'test',
+    })
+
+    const encodings = storage.db.prepare(`
+      SELECT id, payload_encoding AS payloadEncoding
+      FROM source_records
+      ORDER BY id
+    `).all() as Array<{ id: string, payloadEncoding: string }>
+    assert.deepEqual(
+      encodings.map(item => [item.id, item.payloadEncoding]),
+      [
+        ['source-record:large', 'gzip-json'],
+        ['source-record:small', 'plain-json'],
+      ],
+    )
+
+    const measured = sourceActivityPayloadBytesBetween(
+      storage.db,
+      '2026-09-16T11:59:59.999Z',
+      '2026-09-16T12:00:00.001Z',
+    )
+    assert.equal(measured.state, 'complete')
+    assert.equal(measured.records, 2)
+    assert.equal(measured.unknownEncodingRecords, 0)
+    assert.equal(measured.invalidPayloadRecords, 0)
+    assert.equal(
+      measured.originalPayloadBytes,
+      Buffer.byteLength(JSON.stringify(smallPayload), 'utf8')
+        + Buffer.byteLength(JSON.stringify(largePayload), 'utf8'),
     )
   } finally {
     await storage.close()
