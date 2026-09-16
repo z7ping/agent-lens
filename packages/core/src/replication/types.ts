@@ -35,6 +35,30 @@ export const KNOWN_REPLICATION_ENTITY_TYPES = [
 ] as const
 
 export type KnownReplicationEntityType = typeof KNOWN_REPLICATION_ENTITY_TYPES[number]
+
+/**
+ * Entity types whose current replicated state is fully reconstructed by the
+ * CanonicalObservation root graph. These rows may participate in bounded
+ * journal GC only after every dependent stream has advanced a durable capture
+ * watermark for the same entity type.
+ */
+export const OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES = [
+  'AgentProduct',
+  'Host',
+  'AgentInstallation',
+  'RuntimeProfile',
+  'Project',
+  'Workspace',
+  'LogicalSession',
+  'SourceSession',
+  'AgentActor',
+  'SourceRecord',
+  'Evidence',
+  'CanonicalObservation',
+] as const satisfies readonly KnownReplicationEntityType[]
+
+export type ObservationRootReplicationEntityType =
+  typeof OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES[number]
 export type SharedRootEntityType = 'AgentProduct'
 export type ConditionalSharedEntityType = 'Project' | 'AssetDefinition'
 
