@@ -200,6 +200,8 @@ export class SqliteSessionRelationshipCandidateRepository {
         ON CONFLICT(id) DO UPDATE SET
           evidence_refs_json = excluded.evidence_refs_json,
           confidence = excluded.confidence
+        WHERE session_relationships.evidence_refs_json IS NOT excluded.evidence_refs_json
+           OR session_relationships.confidence IS NOT excluded.confidence
       `).run(
         relationship.id,
         relationship.fromSessionId,
