@@ -6,11 +6,13 @@ const agentsPage = readFileSync(new URL('../AgentsPage.tsx', import.meta.url), '
 const controls = readFileSync(new URL('./IntegrationManagementControls.tsx', import.meta.url), 'utf8')
 const integrationPage = readFileSync(new URL('../IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const agentsCss = readFileSync(new URL('../../agents.css', import.meta.url), 'utf8')
+const agentResponsiveCss = readFileSync(new URL('../../agent-insights-responsive.css', import.meta.url), 'utf8')
 const integrationCss = readFileSync(new URL('../../integrations.css', import.meta.url), 'utf8')
 
 test('managed integrations are observation-only on the Agents surface', () => {
   assert.match(agentsPage, /IntegrationObservationPanel/)
   assert.match(agentsPage, /IntegrationOnlyObservationCard/)
+  assert.match(agentsPage, /agentObservationState\(agent, discovery, discoveryScanning, t, discoveryError\)/)
   assert.doesNotMatch(agentsPage, /model\.installIntegration/)
   assert.doesNotMatch(agentsPage, /model\.removeIntegration/)
   assert.doesNotMatch(agentsPage, /model\.authorizeIntegration/)
@@ -37,6 +39,8 @@ test('integration observation uses flat status summary instead of a second manag
   assert.match(agentsCss, /\.integration-placeholder-body\s*\{/)
   assert.match(integrationCss, /\.integration-management-row\[data-target='true'\]/)
   assert.doesNotMatch(agentsCss, /\.integration-observation\s*\{[^}]*box-shadow\s*:/s)
+  assert.doesNotMatch(agentsCss, /@media\s*\(max-width:\s*767\.98px\)[\s\S]*?integration-observation/)
+  assert.match(agentResponsiveCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.integration-observation/)
 })
 
 test('observation component exposes status, local discovery, availability and capabilities without lifecycle mutation', () => {
