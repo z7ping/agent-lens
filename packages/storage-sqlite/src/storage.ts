@@ -21,6 +21,7 @@ import { SqliteProjectionBackfillMaintenance } from './projection-backfill'
 import { createSqliteRepositories } from './repositories'
 import { SqliteReplicationBootstrapLifecycleRepository } from './replication-bootstrap-lifecycle'
 import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
+import { SqliteReplicationJournalLifecycleRepository } from './replication-journal-lifecycle'
 import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
@@ -164,6 +165,7 @@ export class SqliteStorageService implements StorageService {
   readonly replication: SqliteReplicationStateRepository
   readonly replicationBootstrapLifecycle: SqliteReplicationBootstrapLifecycleRepository
   readonly replicationCanonicalChanges: SqliteReplicationCanonicalChangeReader
+  readonly replicationJournalLifecycle: SqliteReplicationJournalLifecycleRepository
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -213,6 +215,7 @@ export class SqliteStorageService implements StorageService {
     this.replication = new SqliteReplicationStateRepository(this.executor)
     this.replicationBootstrapLifecycle = new SqliteReplicationBootstrapLifecycleRepository(this.executor)
     this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
+    this.replicationJournalLifecycle = new SqliteReplicationJournalLifecycleRepository(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {
