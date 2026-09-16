@@ -206,6 +206,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
     refreshAgents: 'Refresh agents',
     agentSelection: 'Select agent',
     backupScope: 'Asset scope',
+    agentCount: '{{count}} agents',
     sourceCount: '{{count}} sources',
   },
   shell: {
