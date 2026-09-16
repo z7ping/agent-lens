@@ -29,6 +29,7 @@ import { SqliteSessionSummaryReader } from './session-summaries-v2'
 import { withSqliteSourceRecordCompression } from './source-record-compression'
 import {
   capturedActivityDetails,
+  largePayloadProfile,
   replicationJournalDetails,
   sourceActivityPayloadBytesBetween,
   storageBreakdownDetails,
@@ -354,6 +355,7 @@ export class SqliteStorageService implements StorageService {
 
       const activity = capturedActivityDetails(this.db)
       const breakdown = storageBreakdownDetails(this.db)
+      const largePayloads = largePayloadProfile(this.db)
       const replicationJournal = replicationJournalDetails(
         this.db,
         activity.cutoffs.last7Days,
@@ -487,6 +489,7 @@ export class SqliteStorageService implements StorageService {
             items: coverageItems,
           },
           storageBreakdown: breakdown,
+          largePayloads,
           spaceRecovery: {
             freelist: {
               bytes: freelistBytes,
