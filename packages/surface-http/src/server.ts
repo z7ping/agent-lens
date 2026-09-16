@@ -25,6 +25,7 @@ import {
   type RuntimeModeDto,
   type RuntimeOwnerDto,
   type SourceRecordResponseDto,
+  type StorageDiagnosticsResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { handleAgentFilesRequest } from './agent-files-http'
@@ -411,20 +412,12 @@ export async function startHttpSurface(
           return
         }
         const diagnostics = await storage.diagnostics()
-        const runtimeHealth = parseDataRuntimeHealth(diagnostics.details?.dataRuntime)
         const details = diagnostics.details
           ? Object.fromEntries(Object.entries(diagnostics.details).map(([key, value]) => [key, jsonValue(value)]))
           : undefined
-        const body: HealthResponseDto = {
-          status: diagnostics.ok ? 'ok' : 'degraded',
+        const body: StorageDiagnosticsResponseDto = {
           protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
-          runtime: {
-            owner: currentRuntimeOwner(),
-            mode: currentRuntimeMode(),
-            pid: process.pid,
-            startedAt: RUNTIME_STARTED_AT,
-          },
-          ...(runtimeHealth ? { dataRuntime: runtimeHealth } : {}),
+          generatedAt: new Date().toISOString(),
           storage: {
             ok: diagnostics.ok,
             ...(diagnostics.schemaVersion === undefined ? {} : { schemaVersion: diagnostics.schemaVersion }),
