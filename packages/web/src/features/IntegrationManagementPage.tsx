@@ -329,8 +329,9 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || management?.discovery.status === 'scanning'
-  const primaryItems = items.filter(isPrimaryRow)
-  const supportedItems = items.filter(item => !isPrimaryRow(item))
+  const discoveryFailed = Boolean(snapshot.integrationDiscoveryError)
+  const primaryItems = items.filter(item => discoveryFailed || isPrimaryRow(item))
+  const supportedItems = discoveryFailed ? [] : items.filter(item => !isPrimaryRow(item))
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
