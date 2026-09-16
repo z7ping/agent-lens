@@ -137,3 +137,35 @@ test('Raw audit 只读元数据，不解压 gzip Payload', async () => {
     await storage.close()
   }
 })
+
+
+test('Raw audit 分页固定本轮 rowid 上界，不混入审计中途新增记录', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    await seedIdentity(storage)
+    await putRaw(storage, 'raw-a')
+    await putRaw(storage, 'raw-b')
+    await putRaw(storage, 'raw-c')
+
+    const first = await storage.sourceRawAudit.list(undefined, 1)
+    assert.deepEqual(first.items.map(item => item.record.id), ['raw-a'])
+    assert.equal(first.hasMore, true)
+    assert.ok(first.cursor)
+
+    await putRaw(storage, 'raw-new-after-audit-started')
+
+    const second = await storage.sourceRawAudit.list(first.cursor, 10)
+    assert.deepEqual(second.items.map(item => item.record.id), ['raw-b', 'raw-c'])
+    assert.equal(second.hasMore, false)
+    assert.equal(second.cursor, undefined)
+
+    const fresh = await storage.sourceRawAudit.list(undefined, 10)
+    assert.deepEqual(
+      fresh.items.map(item => item.record.id),
+      ['raw-a', 'raw-b', 'raw-c', 'raw-new-after-audit-started'],
+    )
+  } finally {
+    await storage.close()
+  }
+})
