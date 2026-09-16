@@ -35,6 +35,11 @@ export interface ObservationPeriodicReconciliationCycle {
 }
 
 export interface ObservationPeriodicReconciliationCycleStore {
+  getReconciliationCycle(input: {
+    streamId: string
+    generationId: string
+    entityType: KnownReplicationEntityType
+  }): Promise<ObservationPeriodicReconciliationCycle | null>
   beginReconciliationCycle(input: {
     streamId: string
     generationId: string
@@ -107,17 +112,34 @@ export async function pumpObservationPeriodicReconciliationPage(input: {
   now?: string
 }): Promise<ObservationPeriodicReconciliationResult> {
   const now = input.now ?? new Date().toISOString()
-  const highWater = await input.changes.highWaterRevision()
-  const cycleResult = await input.cycles.beginReconciliationCycle({
+  const existingCycle = await input.cycles.getReconciliationCycle({
     streamId: input.streamId,
     generationId: input.generationId,
     entityType: 'CanonicalObservation',
-    throughRevision: highWater,
-    ...(input.now === undefined ? {} : { now }),
   })
-  if (cycleResult.kind === 'not-due') return cycleResult
+  if (
+    existingCycle?.status === 'idle'
+    && existingCycle.nextDueAt
+    && Date.parse(existingCycle.nextDueAt) > Date.parse(now)
+  ) {
+    return { kind: 'not-due', nextDueAt: existingCycle.nextDueAt }
+  }
 
-  const cycle = cycleResult.cycle
+  let cycle: ObservationPeriodicReconciliationCycle
+  if (existingCycle?.status === 'running') {
+    cycle = existingCycle
+  } else {
+    const highWater = await input.changes.highWaterRevision()
+    const cycleResult = await input.cycles.beginReconciliationCycle({
+      streamId: input.streamId,
+      generationId: input.generationId,
+      entityType: 'CanonicalObservation',
+      throughRevision: highWater,
+      ...(input.now === undefined ? {} : { now }),
+    })
+    if (cycleResult.kind === 'not-due') return cycleResult
+    cycle = cycleResult.cycle
+  }
   const source = createObservationReconciliationSource({
     snapshot: input.snapshot,
     dependencies: input.dependencies,
