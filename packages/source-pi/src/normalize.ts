@@ -158,7 +158,7 @@ export async function normalizePiRecord(
         const normalized = normalizedMessageAttachments(fact.nonTextContent)
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
           text: fact.text,
-          ...(fact.content === undefined ? {} : { content: fact.content }),
+          ...(fact.content === undefined || normalized.attachments.length ? {} : { content: fact.content }),
           ...(normalized.attachments.length ? { attachments: normalized.attachments } : {}),
           ...(normalized.remainder.length ? { nonTextContent: normalized.remainder } : {}),
           ...(fact.model ? { model: fact.model } : {}),
