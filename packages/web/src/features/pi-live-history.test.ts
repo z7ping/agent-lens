@@ -21,11 +21,16 @@ test('Pi Live 完成态只保留乐观用户消息并移除分片中的所有重
   const items: PiLiveHistoryItem[] = [
     { id: 'user-1', kind: 'message', role: 'user', text: '执行检查', at: '' },
     { id: 'assistant-1', kind: 'message', role: 'assistant', text: '执行检查', at: '' },
-    { id: 'user-2', kind: 'message', role: 'user', text: ' 执行检查 ', at: '' },
+    { id: 'user-2', kind: 'message', role: 'user', text: ' 执行检查 ', attachments: [{ type: 'image', dataUrl: 'data:image/png;base64,aA==' }], at: '' },
     { id: 'tool-1', kind: 'tool', callId: 'call-1', name: 'bash', summary: '', output: '', status: 'success', at: '' },
   ]
 
-  assert.deepEqual(omitPiLivePromptMessages(items, '执行检查').map(item => item.id), ['assistant-1', 'tool-1'])
+  const visible = omitPiLivePromptMessages(items, '执行检查')
+  assert.deepEqual(visible.map(item => item.id), ['assistant-1', 'user-2', 'tool-1'])
+  const attachmentOnly = visible[1]
+  assert.ok(attachmentOnly?.kind === 'message')
+  assert.equal(attachmentOnly.text, '')
+  assert.equal(attachmentOnly.attachments?.length, 1)
   assert.equal(omitPiLivePromptMessages(items).length, items.length)
 })
 
@@ -199,4 +204,28 @@ test('Pi Live 仍将真实 Pi 错误显示为响应错误且位于已输出内�
   assert.equal(lifecycle.event, 'assistant.error')
   assert.equal(lifecycle.label, 'Pi 响应错误')
   assert.equal(lifecycle.detail, 'error · Provider unavailable')
+})
+
+test('Pi Live persisted history keeps user images as message attachments instead of placeholder text', () => {
+  const items = projectPiLiveHistory(snapshot([
+    {
+      type: 'message',
+      id: 'user-image',
+      timestamp: '2026-09-16T00:00:00.000Z',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },
+        ],
+      },
+    },
+  ]))
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.role, 'user')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.type, 'image')
+  assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
 })

@@ -92,3 +92,33 @@ test('Pi user-triggered bash execution remains explicit activity without being m
   assert.equal(observation.kind, 'unknown')
   assert.equal((observation.payload as { event?: string }).event, 'pi.bash_execution')
 })
+
+test('Pi historical user images enter canonical attachments without duplicating image bytes in nonTextContent', async () => {
+  const normalized = await normalizePiRecord(sourceRecord({
+    type: 'message',
+    id: 'image-message',
+    message: {
+      role: 'user',
+      content: [
+        { type: 'text', text: '看看这张图' },
+        { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },
+        { type: 'custom-block', value: 'keep-me' },
+      ],
+    },
+  }), {} as never)
+
+  const observation = normalized.observations[0]!
+  assert.equal(observation.kind, 'message.user')
+  const payload = observation.payload as {
+    text?: string
+    attachments?: Array<{ type?: string; mimeType?: string; data?: string }>
+    nonTextContent?: unknown[]
+  }
+  assert.equal(payload.text, '看看这张图')
+  assert.deepEqual(payload.attachments, [{
+    type: 'image',
+    mimeType: 'image/png',
+    data: 'aGVsbG8=',
+  }])
+  assert.deepEqual(payload.nonTextContent, [{ type: 'custom-block', value: 'keep-me' }])
+})

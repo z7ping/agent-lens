@@ -4,6 +4,7 @@ import {
   type ReviewEventNodeDto,
   type ReviewInteractionDto,
   type ReviewMessageNodeDto,
+  reviewMessageAttachmentsFromPayload,
   type ReviewNodeDto,
   type ReviewNodeSourceDto,
   type ReviewToolNodeDto,
@@ -101,6 +102,10 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
 
   for (const item of items) {
     if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {
+      const projectedAttachments = reviewMessageAttachmentsFromPayload(item.payload)
+      const hasDisplayableAttachment = projectedAttachments.some(attachment => attachment.type === 'image' && attachment.dataUrl)
+      const attachments = projectedAttachments.map(({ dataUrl: _dataUrl, ...attachment }) => attachment)
+      const text = textFromPayload(item.payload)
       const node: ReviewMessageNodeDto = {
         type: 'message',
         id: item.id,
@@ -114,7 +119,8 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         at: item.effectiveAt,
         sourceId: item.sourceId,
         ...reviewNodeSource(item),
-        text: textFromPayload(item.payload) ?? '（无可显示文本）',
+        text: text ?? (hasDisplayableAttachment ? '' : '（无可显示文本）'),
+        ...(attachments.length ? { attachments } : {}),
         payload: item.payload,
         evidence: item.evidence,
         observationIds: [item.id],

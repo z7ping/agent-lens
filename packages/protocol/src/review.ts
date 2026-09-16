@@ -7,6 +7,132 @@ export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
 export type ReviewSessionActivity = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
 
+export type ReviewMessageAttachmentType = 'image' | 'file'
+
+export interface ReviewMessageAttachmentDto {
+  type: ReviewMessageAttachmentType
+  name?: string
+  mimeType?: string
+  sizeBytes?: number
+  /**
+   * Only inline image data is exposed to Web. Native file paths / arbitrary
+   * external URLs are intentionally not promoted into the public Review contract.
+   */
+  dataUrl?: string
+}
+
+function attachmentRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function attachmentString(record: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+function attachmentSize(record: Readonly<Record<string, unknown>>): number | undefined {
+  for (const key of ['sizeBytes', 'size_bytes', 'size']) {
+    const value = record[key]
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return value
+  }
+  return undefined
+}
+
+function safeAttachmentName(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const name = value.split(/[\\/]/).filter(Boolean).at(-1)?.trim()
+  return name || undefined
+}
+
+function inlineImageDataUrl(record: Readonly<Record<string, unknown>>, mimeType?: string): string | undefined {
+  const dataUrl = attachmentString(record, 'dataUrl', 'data_url')
+  if (dataUrl && /^data:image\/[a-z0-9.+-]+;base64,/i.test(dataUrl)) return dataUrl
+
+  const data = attachmentString(record, 'data', 'base64')
+  if (!data) return undefined
+  if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(data)) return data
+  if (!mimeType?.toLowerCase().startsWith('image/')) return undefined
+
+  const normalized = data.replace(/\s+/g, '')
+  if (!normalized || !/^[A-Za-z0-9+/=_-]+$/.test(normalized)) return undefined
+  return `data:${mimeType};base64,${normalized}`
+}
+
+function attachmentFromValue(value: unknown, wrapperKind: string | undefined, includeDataUrl: boolean): ReviewMessageAttachmentDto | null {
+  if (typeof value === 'string') {
+    if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(value)) {
+      const mimeType = value.slice(5, value.indexOf(';')).toLowerCase()
+      return includeDataUrl ? { type: 'image', mimeType, dataUrl: value } : { type: 'image', mimeType }
+    }
+    return wrapperKind === 'images' || wrapperKind === 'local_images'
+      ? { type: 'image' }
+      : null
+  }
+
+  const record = attachmentRecord(value)
+  if (!Object.keys(record).length) return null
+  const explicitType = attachmentString(record, 'type', 'kind')
+  const mimeType = attachmentString(record, 'mimeType', 'mime_type', 'mediaType', 'media_type')?.toLowerCase()
+  const image = explicitType === 'image'
+    || Boolean(mimeType?.startsWith('image/'))
+    || wrapperKind === 'images'
+    || wrapperKind === 'local_images'
+  const file = explicitType === 'file' || wrapperKind === 'attachments'
+  if (!image && !file) return null
+
+  const name = safeAttachmentName(attachmentString(record, 'name', 'fileName', 'file_name', 'filename', 'path'))
+  const sizeBytes = attachmentSize(record)
+  const dataUrl = image && includeDataUrl ? inlineImageDataUrl(record, mimeType) : undefined
+  return {
+    type: image ? 'image' : 'file',
+    ...(name ? { name } : {}),
+    ...(mimeType ? { mimeType } : {}),
+    ...(sizeBytes !== undefined ? { sizeBytes } : {}),
+    ...(dataUrl ? { dataUrl } : {}),
+  }
+}
+
+/**
+ * Projects source-normalized historical message payloads into the public Review
+ * attachment contract. The helper understands the canonical `attachments`
+ * field plus the legacy `nonTextContent` compatibility field so existing
+ * databases do not require a destructive replay just to render attachments.
+ */
+export function reviewMessageAttachmentsFromPayload(
+  value: JsonValue | unknown,
+  options: { includeDataUrl?: boolean } = {},
+): ReviewMessageAttachmentDto[] {
+  const payload = attachmentRecord(value)
+  const candidates: Array<{ value: unknown; wrapperKind?: string }> = []
+
+  const attachments = payload.attachments
+  if (Array.isArray(attachments)) {
+    for (const raw of attachments) {
+      const wrapper = attachmentRecord(raw)
+      const wrapperKind = attachmentString(wrapper, 'kind')
+      if (wrapperKind && Object.prototype.hasOwnProperty.call(wrapper, 'value')) {
+        candidates.push({ value: wrapper.value, wrapperKind })
+      } else {
+        candidates.push({ value: raw })
+      }
+    }
+  }
+
+  const legacy = payload.nonTextContent
+  if (Array.isArray(legacy)) {
+    for (const raw of legacy) candidates.push({ value: raw })
+  }
+
+  return candidates
+    .map(candidate => attachmentFromValue(candidate.value, candidate.wrapperKind, options.includeDataUrl !== false))
+    .filter((attachment): attachment is ReviewMessageAttachmentDto => attachment !== null)
+}
+
 export interface ReviewNodeSourceDto {
   nativeEventId?: string
   nativeParentEventId?: string
@@ -53,6 +179,7 @@ export interface ReviewMessageNodeDto extends ReviewNodeSourceDto {
   at: string
   sourceId: string
   text: string
+  attachments?: ReviewMessageAttachmentDto[]
   payload: JsonValue
   evidence: TimelineEvidenceDto[]
   observationIds: string[]

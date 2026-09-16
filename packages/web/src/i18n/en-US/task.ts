@@ -32,6 +32,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       returnRendered: 'Back to rendered view',
       source: 'Source',
       rendered: 'Rendered',
+      imageAttachment: 'Image attachment',
     },
     surface: {
       turnRail: 'Turn rail',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { reviewMessageAttachmentsFromPayload } from '@agent-lens/protocol'
 import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
@@ -704,6 +705,7 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
+    attachments={reviewMessageAttachmentsFromPayload(node.payload)}
     author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
