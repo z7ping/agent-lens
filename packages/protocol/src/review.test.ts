@@ -46,7 +46,6 @@ test('Review historical attachments do not promote arbitrary local or remote pat
   assert.ok(attachments.every(item => item.dataUrl === undefined))
 })
 
-
 test('Review attachment metadata projection can omit inline data without losing attachment semantics', () => {
   const attachments = reviewMessageAttachmentsFromPayload({
     attachments: [{
