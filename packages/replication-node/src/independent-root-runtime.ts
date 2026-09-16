@@ -689,7 +689,14 @@ async function pumpPeriodicReconciliationPage(input: {
     ...(input.now === undefined ? {} : { now: input.now }),
   })
 
-  const dueAt = new Date(Date.parse(now) + input.intervalMs).toISOString()
+  const nowTimestamp = Date.parse(now)
+  if (!Number.isFinite(nowTimestamp)) {
+    throw new Error('Independent Root periodic Reconciliation now must be a valid timestamp')
+  }
+  if (!Number.isFinite(input.intervalMs) || input.intervalMs <= 0) {
+    throw new TypeError('Independent Root periodic Reconciliation intervalMs must be positive')
+  }
+  const dueAt = new Date(nowTimestamp + input.intervalMs).toISOString()
   await input.cycles.completeReconciliationCycle({
     streamId: input.streamId,
     generationId: input.generationId,
@@ -743,7 +750,7 @@ export async function pumpIndependentRootRuntimeStep(input: {
 }): Promise<IndependentRootRuntimeStepResult> {
   const bootstrap = await pumpBootstrapStep({
     ...input,
-    limit: input.pageLimit,
+    ...(input.pageLimit === undefined ? {} : { limit: input.pageLimit }),
   })
   if (!bootstrap.active) {
     return { kind: 'bootstrap', stage: bootstrap.stage }
