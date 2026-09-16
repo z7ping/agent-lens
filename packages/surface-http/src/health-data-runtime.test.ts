@@ -120,8 +120,8 @@ test('/storage/diagnostics 使用独立响应契约返回深度存储诊断', as
             },
           },
           growthMetrics: {
-            canonicalGrowthRate: { state: 'snapshot-required' },
-            storageAmplificationRate: { state: 'snapshot-required' },
+            canonicalGrowthRate: { state: 'insufficient-history' },
+            storageAmplificationRate: { state: 'definition-required' },
           },
         },
       }
@@ -150,7 +150,7 @@ test('/storage/diagnostics 使用独立响应契约返回深度存储诊断', as
       (body.storage.details?.growthMetrics as {
         canonicalGrowthRate?: { state?: string }
       })?.canonicalGrowthRate?.state,
-      'snapshot-required',
+      'insufficient-history',
     )
     assert.equal('status' in body, false)
     assert.equal('runtime' in body, false)
