@@ -1,5 +1,4 @@
 import {
-  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
   reconcileReplicationPage,
   type HistoryBoundary,
   type KnownReplicationEntityType,
@@ -169,15 +168,13 @@ export async function pumpObservationPeriodicReconciliationPage(input: {
   // later watermark update fails, the global minimum remains conservative.
   await input.incrementalProgress.put(next)
 
-  for (const entityType of OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES) {
-    await input.captureProgress.advance({
-      streamId: input.streamId,
-      generationId: input.generationId,
-      entityType,
-      capturedRevision: cycle.throughRevision,
-      ...(input.now === undefined ? {} : { now }),
-    })
-  }
+  await input.captureProgress.advance({
+    streamId: input.streamId,
+    generationId: input.generationId,
+    entityType: 'CanonicalObservation',
+    capturedRevision: cycle.throughRevision,
+    ...(input.now === undefined ? {} : { now }),
+  })
 
   const dueAt = nextDueAt(now, input.intervalMs)
   await input.cycles.completeReconciliationCycle({
