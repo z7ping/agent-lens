@@ -1,7 +1,11 @@
 import {
   canonicalReplicationReaderFromRepositories,
+  pumpIndependentRootRuntimeStep,
   pumpObservationReplicationRuntimeStep,
 } from '@agent-lens/replication-node'
+import {
+  INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES,
+} from '@agent-lens/core/replication'
 import {
   SqliteReplicationReconciliationSink,
 } from '@agent-lens/storage-sqlite'
@@ -106,6 +110,33 @@ export async function runReplicationMaintenanceLoop(
           pageLimit,
           reconciliationIntervalMs,
         })
+
+        for (const entityType of INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES) {
+          if (signal.aborted) return
+          await options.cooperate?.()
+          if (signal.aborted) return
+          await pumpIndependentRootRuntimeStep({
+            entityType,
+            changes: storage.replicationCanonicalChanges,
+            roots: storage.replicationIndependentRoots,
+            dependencies,
+            pendingSink: storage.replication,
+            reconciliationSink,
+            snapshotProgress: storage.replicationSnapshotBootstrapProgress,
+            deltaProgress: storage.replicationChangeProgress,
+            incrementalProgress: storage.replicationChangeProgress,
+            captureProgress: storage.replicationJournalLifecycle,
+            lifecycle: storage.replicationBootstrapLifecycle,
+            cycles: storage.replicationRuntimeControl,
+            nodeId,
+            streamId: item.stream.streamId,
+            generationId: item.stream.generationId,
+            policy: item.authorization.policy,
+            history: item.authorization.history,
+            pageLimit,
+            reconciliationIntervalMs,
+          })
+        }
         didWork = true
 
         if (journalGcEnabled && result.kind === 'active') {
