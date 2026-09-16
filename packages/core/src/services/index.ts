@@ -64,6 +64,7 @@ import type {
   SourceDefinition,
   SourceDetectionContext,
 } from '../contracts/source'
+import type { SourceRawAuditReader } from './source-raw-retention'
 import type { MaintenanceJobStore } from './maintenance'
 import type { ToolUsageObservationReader } from './tool-usage'
 
@@ -362,23 +363,6 @@ export interface SourceRecordReplayCursor {
   parserVersion?: string
   capturedAt: string
   id: SourceRecordId
-}
-
-export interface SourceRawAuditCandidate {
-  record: SourceRecord
-  canonicalStable: boolean
-  evidenceStable: boolean
-  pinned: boolean | 'unknown'
-}
-
-export interface SourceRawAuditPage {
-  items: SourceRawAuditCandidate[]
-  cursor?: SourceRecordId
-  hasMore: boolean
-}
-
-export interface SourceRawAuditReader {
-  list(afterId?: SourceRecordId, limit?: number): Promise<SourceRawAuditPage>
 }
 
 export interface SourceRecordRepository {
