@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { replicationJournalSafetyDetails } from './replication-journal-lifecycle'
 
 type StorageRow = Record<string, unknown>
 
@@ -573,6 +574,14 @@ export function replicationJournalDetails(
       last7Days: 0,
       last30Days: 0,
       byEntityType: [],
+      gcAvailable: false,
+      highWaterRevision: 0,
+      safeJournalRevision: 0,
+      oldestRetainedRevision: null,
+      retainedChanges: 0,
+      reclaimableChanges: 0,
+      dependentRoots: 0,
+      blockingStreams: [],
     }
   }
 
@@ -612,6 +621,7 @@ export function replicationJournalDetails(
     FROM replication_canonical_changes
   `).get({ cutoff7, cutoff30 }))
 
+  const safety = replicationJournalSafetyDetails(db)
   const totalChanges = rows.reduce((sum, row) => sum + row.changes, 0)
   const distinctEntities = rows.reduce((sum, row) => sum + row.distinctEntities, 0)
   const extraChangesBeyondFirst = Math.max(0, totalChanges - distinctEntities)
@@ -629,5 +639,13 @@ export function replicationJournalDetails(
     last7Days: requiredNumber(timeRow, 'last7Changes'),
     last30Days: requiredNumber(timeRow, 'last30Changes'),
     byEntityType: rows,
+    gcAvailable: safety.available,
+    highWaterRevision: safety.highWaterRevision,
+    safeJournalRevision: safety.safeJournalRevision,
+    oldestRetainedRevision: safety.oldestRetainedRevision,
+    retainedChanges: safety.retainedChanges,
+    reclaimableChanges: safety.reclaimableChanges,
+    dependentRoots: safety.dependentRoots,
+    blockingStreams: safety.blockingStreams,
   }
 }
