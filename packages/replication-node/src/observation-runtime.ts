@@ -29,15 +29,6 @@ import type {
 } from './observation-snapshot-bootstrap'
 import type { PendingCandidateSink } from './pending-sink'
 
-export interface ObservationJournalGc {
-  reclaimBatch(input?: { limit?: number }): Promise<{
-    deletedChanges: number
-    deletedThroughRevision: number | null
-    highWaterRevision: number
-    safeJournalRevision: number
-  }>
-}
-
 export type ObservationReplicationRuntimeStepResult =
   | {
       kind: 'bootstrap'
@@ -54,8 +45,6 @@ export type ObservationReplicationRuntimeStepResult =
       kind: 'active'
       incrementalThroughRevision: number
       reconciliation: ObservationPeriodicReconciliationResult
-      reclaimedChanges: number
-      safeJournalRevision: number
     }
 
 /**
@@ -78,14 +67,12 @@ export async function pumpObservationReplicationRuntimeStep(input: {
   captureProgress: ObservationCaptureProgressStore
   lifecycle: ObservationBootstrapLifecycleStore
   cycles: ObservationPeriodicReconciliationCycleStore
-  journalGc: ObservationJournalGc
   nodeId: string
   streamId: string
   generationId: string
   policy: ReplicationPolicy
   history: HistoryBoundary
   pageLimit?: number
-  gcLimit?: number
   reconciliationIntervalMs: number
   now?: string
 }): Promise<ObservationReplicationRuntimeStepResult> {
@@ -169,15 +156,9 @@ export async function pumpObservationReplicationRuntimeStep(input: {
     ...(input.now === undefined ? {} : { now: input.now }),
   })
 
-  const reclaimed = await input.journalGc.reclaimBatch({
-    ...(input.gcLimit === undefined ? {} : { limit: input.gcLimit }),
-  })
-
   return {
     kind: 'active',
     incrementalThroughRevision: incremental.throughRevision,
     reconciliation,
-    reclaimedChanges: reclaimed.deletedChanges,
-    safeJournalRevision: reclaimed.safeJournalRevision,
   }
 }
