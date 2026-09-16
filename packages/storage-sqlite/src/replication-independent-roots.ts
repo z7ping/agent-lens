@@ -108,9 +108,9 @@ function mapSnapshot(
 }
 
 /**
- * Current-state reader for R1 entities that are not reconstructed through the
- * CanonicalObservation Root Graph. Entity Head only provides bounded revision /
- * changedAt metadata; the entity body is always read from the Canonical table.
+ * Current-State Root reader for every replicated R1 entity except
+ * CanonicalObservation. Entity Head only provides bounded revision/changedAt
+ * metadata; the entity body is always read from the Canonical table.
  */
 export class SqliteReplicationIndependentRootSnapshotReader
 implements IndependentReplicationRootSnapshotSource {
