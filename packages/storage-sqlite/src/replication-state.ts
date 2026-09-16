@@ -1,7 +1,7 @@
 import type { JsonValue } from '@agent-lens/core'
 import {
   DurableReplicationError,
-  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+  JOURNAL_REPLICATION_ENTITY_TYPES,
   assertAckAdvance,
   assertFreezeSequence,
   assertReplicationStreamState,
@@ -148,7 +148,7 @@ export class SqliteReplicationStateRepository {
           ) VALUES (?, ?, ?, 0, 'dependent', ?)
           ON CONFLICT(stream_id, generation_id, entity_type) DO NOTHING
         `)
-        for (const entityType of OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES) {
+        for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
           registerCapture.run(state.streamId, state.generationId, entityType, state.updatedAt)
         }
       }
