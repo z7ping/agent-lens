@@ -384,7 +384,6 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
     const streamed = new TextDecoder().decode((await reader.read()).value)
     assert.match(streamed, /event: pi-live/)
     assert.match(streamed, /agent_start/)
-    assert.match(streamed, /"normalizedEvent":\{"type":"status","status":"running"\}/)
     controller.abort()
     await reader.cancel().catch(() => undefined)
     await new Promise(resolve => setTimeout(resolve, 20))
@@ -399,6 +398,43 @@ test('Pi Live HTTP control surface preserves runtime ownership and validates com
   }
 })
 
+
+
+
+test('Pi Live SSE prefers the registered Live Adapter normalized event stream', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const piLive = new FakePiLiveService()
+  const adapter = {
+    subscribe(runtimeSessionId: string, listener: PiLiveRuntimeListener) {
+      return piLive.subscribe(runtimeSessionId, value => listener({
+        ...value,
+        normalizedEvent: { type: 'status', status: 'running' },
+      }))
+    },
+  }
+  const lives = {
+    get: (liveId: string) => liveId === 'pi' ? adapter : null,
+  } as unknown as LiveService
+  const surface = await startHttpSurface(storage, { port: 0, piLive, lives })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const controller = new AbortController()
+    const events = await fetch(`${base}/api/v1/pi-live/${piLive.runtimeSessionId}/events`, { signal: controller.signal })
+    assert.equal(events.status, 200)
+    const reader = events.body!.getReader()
+    await reader.read()
+    piLive.emit({ type: 'agent_start' })
+    const streamed = new TextDecoder().decode((await reader.read()).value)
+    assert.match(streamed, /"normalizedEvent":\{"type":"status","status":"running"\}/)
+    controller.abort()
+    await reader.cancel().catch(() => undefined)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
 
 test('Pi Live HTTP forwards structured image messages to the registered Live Adapter', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
