@@ -66,6 +66,18 @@ function maintenanceItem(job: MaintenanceJob): BackgroundActivityItemDto {
   }
 }
 
+function startupAuditItem(summary: Awaited<ReturnType<NonNullable<StorageService['sessionSummaries']>['query']>>['items'][number]): BackgroundActivityItemDto {
+  return {
+    id: `startup-audit:${summary.logicalSessionId}`,
+    kind: 'runtime-startup-audit',
+    state: 'completed',
+    ...(summary.sourceIds[0] ? { sourceId: summary.sourceIds[0] } : {}),
+    startedAt: summary.startedAt,
+    updatedAt: summary.endedAt,
+    completedAt: summary.endedAt,
+  }
+}
+
 function timestamp(item: BackgroundActivityItemDto): number {
   const value = Date.parse(item.updatedAt)
   return Number.isFinite(value) ? value : 0
@@ -79,9 +91,14 @@ function activeRank(item: BackgroundActivityItemDto): number {
 
 export async function readBackgroundActivity(storage: StorageService): Promise<BackgroundActivityResponseDto> {
   const generatedAt = new Date().toISOString()
-  const [jobs, sourceStatuses] = await Promise.all([
+  const [jobs, sourceStatuses, startupAudits] = await Promise.all([
     storage.maintenanceJobs?.list() ?? Promise.resolve([]),
     storage.sourceRuntimeStatus?.list() ?? Promise.resolve([]),
+    storage.sessionSummaries?.query({
+      limit: RECENT_LIMIT,
+      sessionActivities: ['system-activity'],
+      leadingObservationKinds: ['runtime.startup'],
+    }).then(page => page.items.map(startupAuditItem)) ?? Promise.resolve([]),
   ])
 
   const sourceItems = sourceStatuses
@@ -94,7 +111,7 @@ export async function readBackgroundActivity(storage: StorageService): Promise<B
     .sort((left, right) => activeRank(left) - activeRank(right) || timestamp(left) - timestamp(right) || left.id.localeCompare(right.id))
     .slice(0, ACTIVE_LIMIT)
 
-  const recent = [...sourceItems, ...maintenanceItems]
+  const recent = [...sourceItems, ...maintenanceItems, ...startupAudits]
     .filter(item => item.state === 'completed' || item.state === 'failed' || item.state === 'degraded' || item.state === 'paused')
     .sort((left, right) => timestamp(right) - timestamp(left) || left.id.localeCompare(right.id))
     .slice(0, RECENT_LIMIT)

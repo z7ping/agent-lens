@@ -114,6 +114,7 @@ function mapSummary(value: unknown): SessionSummaryRecord {
   const workspacePath = optionalString(row, 'workspace_path')
   const activitySourceLabel = optionalString(row, 'activity_source_label')
   const parentSessionId = optionalString(row, 'parent_session_id')
+  const leadingObservationKind = optionalString(row, 'leading_kind')
   const userTurnCount = row.user_turn_count == null
     ? numericField(row, 'user_message_count', 0)
     : numericField(row, 'user_turn_count')
@@ -138,6 +139,7 @@ function mapSummary(value: unknown): SessionSummaryRecord {
     otherEventCount: numericField(row, 'other_event_count', 0),
     toolCount: numericField(row, 'tool_count'),
     errorCount: numericField(row, 'error_count'),
+    ...(leadingObservationKind === undefined ? {} : { leadingObservationKind }),
     sessionActivity: sessionActivity(row),
     ...(activitySourceLabel === undefined ? {} : { activitySourceLabel }),
     ...(parentSessionId === undefined ? {} : { parentSessionId }),
@@ -229,7 +231,16 @@ function sessionActivitySql(sessionIdSql: string): string {
     CASE
       WHEN ${attributedActivity} IS NOT NULL AND ${attributedActivity} <> 'user-task'
         THEN ${attributedActivity}
-      WHEN aggregate.user_turn_count = 0 AND aggregate.system_context_count > 0 THEN 'system-activity'
+      WHEN aggregate.user_turn_count = 0 AND (
+        aggregate.system_context_count > 0
+        OR EXISTS (
+          SELECT 1
+          FROM observations AS startup_audit
+          WHERE startup_audit.logical_session_id = ${sessionIdSql}
+            AND startup_audit.kind = 'runtime.startup'
+            AND json_extract(startup_audit.payload_json, '$.event') = 'runtime.startup.audit'
+        )
+      ) THEN 'system-activity'
       ELSE COALESCE(${attributedActivity}, 'user-task')
     END
   )`
@@ -532,6 +543,22 @@ function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: u
   } else if (input.sourceId) {
     conditions.push("EXISTS (SELECT 1 FROM json_each(COALESCE(summary.source_ids_json, '[]')) AS source WHERE source.value = ?)")
     params.push(input.sourceId)
+  }
+  if (input.sessionActivities !== undefined) {
+    if (!input.sessionActivities.length) {
+      conditions.push('1 = 0')
+      return { sql: conditions.join(' AND '), params }
+    }
+    conditions.push(`summary.session_activity IN (${input.sessionActivities.map(() => '?').join(', ')})`)
+    params.push(...input.sessionActivities)
+  }
+  if (input.leadingObservationKinds !== undefined) {
+    if (!input.leadingObservationKinds.length) {
+      conditions.push('1 = 0')
+      return { sql: conditions.join(' AND '), params }
+    }
+    conditions.push(`summary.leading_kind IN (${input.leadingObservationKinds.map(() => '?').join(', ')})`)
+    params.push(...input.leadingObservationKinds)
   }
   if (input.projectId) {
     conditions.push('summary.project_id = ?')

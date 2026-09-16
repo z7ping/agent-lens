@@ -162,6 +162,10 @@ export function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
   const search = optionalParam(params, 'search')
   const limit = parseLimit(params, 500)
   const status = parseReviewStatus(optionalParam(params, 'status'))
+  const includeSystemActivity = optionalParam(params, 'includeSystemActivity')
+  if (includeSystemActivity && includeSystemActivity !== 'true' && includeSystemActivity !== 'false') {
+    throw badRequest('includeSystemActivity must be true or false')
+  }
   return {
     ...(cursor ? { cursor } : {}),
     ...(projectId ? { projectId } : {}),
@@ -170,6 +174,7 @@ export function parseReviewQuery(params: URLSearchParams): ReviewQueryDto {
     ...(status ? { status } : {}),
     ...(search ? { search } : {}),
     ...(limit === undefined ? {} : { limit }),
+    ...(includeSystemActivity === 'true' ? { includeSystemActivity: true } : {}),
   }
 }
 

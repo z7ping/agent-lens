@@ -29,6 +29,11 @@ test('Review query exposes only the current protocol fields', () => {
   })
 })
 
+test('Review 默认隐藏系统活动，但允许后台 Surface 显式读取', () => {
+  assert.deepEqual(parseReviewQuery(params('includeSystemActivity=true')), { includeSystemActivity: true })
+  assert.throws(() => parseReviewQuery(params('includeSystemActivity=yes')), /includeSystemActivity must be true or false/)
+})
+
 test('Review detail accepts only the formal direction and filters', () => {
   assert.deepEqual(
     parseReviewDetailQuery(params('ordinal=3&direction=backward&filter=latest&limit=1')),

@@ -63,6 +63,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
       projectionSessionDone: '会话索引整理',
       projectionDefaultActive: '正在更新数据视图',
       projectionDefaultDone: '数据视图更新',
+      runtimeStartupAudit: '{{source}} 运行时启动审计',
       genericAgent: '智能体',
       sourceDetectActive: '正在检测 {{source}}',
       sourceDetectDone: '{{source}} 检测',

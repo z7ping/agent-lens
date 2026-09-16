@@ -211,6 +211,8 @@ export interface SessionSummaryRecord {
   otherEventCount?: number
   toolCount: number
   errorCount: number
+  /** 首个有效内容观察的 Canonical kind，用于将后台活动送往正确的 Surface。 */
+  leadingObservationKind?: string
   sessionActivity?: SessionActivityKind
   activitySourceLabel?: string
   parentSessionId?: LogicalSessionId
@@ -233,6 +235,10 @@ export interface SessionSummaryQuery {
   to?: string
   hasErrors?: boolean
   search?: string
+  /** 只读取指定的结构化会话活动类型。 */
+  sessionActivities?: SessionActivityKind[]
+  /** 只读取首个有效内容属于指定 Canonical kind 的会话。 */
+  leadingObservationKinds?: string[]
   after?: SessionSummaryCursor
 }
 

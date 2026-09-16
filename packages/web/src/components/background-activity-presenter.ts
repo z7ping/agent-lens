@@ -18,6 +18,7 @@ export function backgroundActivityLabel(
   if (item.kind === 'source-detect') return translateProduct(active ? 'common:backgroundActivity.sourceDetectActive' : 'common:backgroundActivity.sourceDetectDone', { source: sourceName })
   if (item.kind === 'source-history') return translateProduct(active ? 'common:backgroundActivity.sourceHistoryActive' : 'common:backgroundActivity.sourceHistoryDone', { source: sourceName })
   if (item.kind === 'source-runtime') return translateProduct(active ? 'common:backgroundActivity.sourceRuntimeActive' : 'common:backgroundActivity.sourceRuntimeDone', { source: sourceName })
+  if (item.kind === 'runtime-startup-audit') return translateProduct('common:backgroundActivity.runtimeStartupAudit', { source: sourceName })
   if (item.kind === 'source-assets') return translateProduct(active ? 'common:backgroundActivity.sourceAssetsActive' : 'common:backgroundActivity.sourceAssetsDone', { source: sourceName })
   if (item.kind === 'deferred-indexes') return translateProduct(active ? 'common:backgroundActivity.deferredIndexesActive' : 'common:backgroundActivity.deferredIndexesDone')
   if (item.kind === 'projection-rebuild') return projectionLabel(item.scope, active)

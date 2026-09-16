@@ -2,6 +2,7 @@ export type BackgroundActivityKindDto =
   | 'source-detect'
   | 'source-history'
   | 'source-runtime'
+  | 'runtime-startup-audit'
   | 'source-assets'
   | 'deferred-indexes'
   | 'projection-rebuild'
