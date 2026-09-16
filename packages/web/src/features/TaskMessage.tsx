@@ -9,7 +9,7 @@ export type TaskMessageRole = 'user' | 'assistant'
 export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
-  attachments?: readonly ReviewMessageAttachmentDto[]
+  attachments?: readonly ReviewMessageAttachmentDto[] | undefined
   author?: string
   time?: string | undefined
   meta?: ReactNode
