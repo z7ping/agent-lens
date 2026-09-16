@@ -76,15 +76,9 @@ test('/health keeps degraded Data Runtime explicit at protocol boundary', async 
   }
 })
 
-
 test('/storage/diagnostics 通过独立深度诊断入口返回存储基线', async () => {
   let diagnosticsCalls = 0
   const storage = {
-    repositories: {},
-    checkpoints: {},
-    async transaction<T>(fn: (tx: never) => Promise<T>) {
-      return fn({} as never)
-    },
     async health() {
       return {
         ok: true,
