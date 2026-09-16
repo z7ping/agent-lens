@@ -167,7 +167,13 @@ function storageRootAllowed(path: readonly string[]): boolean {
     'sourceRawAudit',
     'sessionRelationshipCandidates',
     'replication',
+    'replicationBootstrapLifecycle',
     'replicationCanonicalChanges',
+    'replicationChangeProgress',
+    'replicationJournalLifecycle',
+    'replicationObservationSnapshot',
+    'replicationSnapshotBootstrapProgress',
+    'replicationRuntimeControl',
     'health',
     'diagnostics',
   ].includes(path[0]!)
