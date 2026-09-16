@@ -356,6 +356,8 @@ export function storageGrowthMetricsFromSnapshots(
   const amplification30 = amplificationWindow(current, baseline30)
   const hasCanonicalWindow = last7Days.state === 'ready' || last30Days.state === 'ready'
   const hasAmplificationWindow = amplification7.state === 'ready' || amplification30.state === 'ready'
+  const hasNoSourceActivityWindow = amplification7.state === 'no-source-activity'
+    || amplification30.state === 'no-source-activity'
 
   return {
     basis: 'persisted-daily-storage-snapshot-delta',
@@ -376,9 +378,13 @@ export function storageGrowthMetricsFromSnapshots(
       last30Days,
     },
     storageAmplificationRate: {
-      state: hasAmplificationWindow ? 'ready' : 'insufficient-history',
+      state: hasAmplificationWindow
+        ? 'ready'
+        : hasNoSourceActivityWindow
+          ? 'no-source-activity'
+          : 'insufficient-history',
       definition: 'delta-persistent-retained-bytes/delta-original-source-activity-bytes',
-      denominatorBasis: 'source-record-payload-json-before-agentlens-compression',
+      denominatorBasis: 'persisted-source-record-payload-json-before-compression',
       numeratorScope: current.persistentRetainedScope,
       last7Days: amplification7,
       last30Days: amplification30,
