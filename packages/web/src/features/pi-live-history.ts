@@ -58,7 +58,9 @@ function messagePresentation(fact: Extract<PiNativeFact, { kind: 'message' }>): 
 } {
   const attachments = reviewMessageAttachmentsFromPayload({ nonTextContent: fact.nonTextContent })
   if (fact.text.trim()) return { text: fact.text, attachments }
-  if (attachments.length) return { text: '', attachments }
+  if (attachments.some(attachment => attachment.type === 'image' && attachment.dataUrl)) {
+    return { text: '', attachments }
+  }
   if (fact.nonTextContent.length) {
     return {
       text: translateProduct('piLive:history.nonTextContent', { count: fact.nonTextContent.length }),
