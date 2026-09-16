@@ -197,16 +197,18 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
         id, source_id, installation_id, native_session_id, logical_session_id
       ) VALUES ('source-session:1', 'pi', 'pi:local', 'native:1', 'session:1')
     `).run()
-    storage.db.prepare(`
-      INSERT INTO source_records(
-        id, source_id, installation_id, source_session_native_id, native_type,
-        native_id, captured_at, locator_json, payload_json, parser_version
-      ) VALUES (
-        'source-record:1', 'pi', 'pi:local', 'native:1', 'message',
-        'native-message:1', ?, '{"path":"session.jsonl"}',
-        '{"role":"assistant","content":"raw payload"}', 'test'
-      )
-    `).run(now)
+    await storage.repositories.sourceRecords.put({
+      id: 'source-record:1',
+      sourceId: 'pi',
+      installationId: 'pi:local',
+      sourceSessionNativeId: 'native:1',
+      nativeType: 'message',
+      nativeId: 'native-message:1',
+      capturedAt: now,
+      locator: { kind: 'file', path: 'session.jsonl' },
+      payload: { role: 'assistant', content: 'raw payload' },
+      parserVersion: 'test',
+    })
     storage.db.prepare(`
       INSERT INTO observations(
         id, host_id, installation_id, logical_session_id, source_session_id,
