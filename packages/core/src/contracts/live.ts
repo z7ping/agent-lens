@@ -132,11 +132,117 @@ export interface LiveSnapshot {
   leafId?: string | null
 }
 
+export type LiveEventStatus =
+  | 'initializing'
+  | 'ready'
+  | 'running'
+  | 'idle'
+  | 'compacting'
+  | 'failed'
+  | 'terminating'
+  | 'terminated'
+
+export type LiveCompletionStatus = 'completed' | 'cancelled' | 'interrupted' | 'failed'
+
+export interface LiveStatusEvent {
+  type: 'status'
+  status: LiveEventStatus
+  message?: string | undefined
+}
+
+export interface LiveMessageBoundaryEvent {
+  type: 'message.start' | 'message.end'
+  role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
+  messageId?: string | undefined
+}
+
+export interface LiveContentEvent {
+  type:
+    | 'text.start'
+    | 'text.delta'
+    | 'text.end'
+    | 'reasoning.start'
+    | 'reasoning.delta'
+    | 'reasoning.end'
+  text?: string | undefined
+  delta?: string | undefined
+  messageId?: string | undefined
+  contentIndex?: number | undefined
+}
+
+export interface LiveToolStartEvent {
+  type: 'tool.start'
+  callId?: string | undefined
+  name: string
+  inputPreview?: string | undefined
+  contentIndex?: number | undefined
+}
+
+export interface LiveToolOutputEvent {
+  type: 'tool.output'
+  callId?: string | undefined
+  name?: string | undefined
+  output: string
+}
+
+export interface LiveToolEndEvent {
+  type: 'tool.end'
+  callId?: string | undefined
+  name?: string | undefined
+  status: 'success' | 'error'
+  output?: string | undefined
+  durationMs?: number | undefined
+}
+
+export interface LiveSubagentStartEvent {
+  type: 'subagent.start'
+  subagentId?: string | undefined
+  childSessionId?: string | undefined
+  delegationId?: string | undefined
+  summary?: string | undefined
+}
+
+export interface LiveSubagentEndEvent {
+  type: 'subagent.end'
+  subagentId?: string | undefined
+  childSessionId?: string | undefined
+  delegationId?: string | undefined
+  status?: string | undefined
+  summary?: string | undefined
+  durationMs?: number | undefined
+}
+
+export interface LiveErrorEvent {
+  type: 'error'
+  message: string
+}
+
+export interface LiveCompletedEvent {
+  type: 'completed'
+  status: LiveCompletionStatus
+  message?: string | undefined
+}
+
+export type LiveEvent =
+  | LiveStatusEvent
+  | LiveMessageBoundaryEvent
+  | LiveContentEvent
+  | LiveToolStartEvent
+  | LiveToolOutputEvent
+  | LiveToolEndEvent
+  | LiveSubagentStartEvent
+  | LiveSubagentEndEvent
+  | LiveErrorEvent
+  | LiveCompletedEvent
+
 export interface LiveRuntimeEvent {
   runtimeSessionId: string
   sequence: number
   receivedAt: string
+  /** Native event retained for diagnostics and Agent-specific compatibility UI. */
   event: Readonly<Record<string, unknown>>
+  /** Agent-neutral event consumed by the shared Live renderer when this native event has stable common semantics. */
+  normalizedEvent?: Readonly<LiveEvent> | undefined
 }
 
 export interface LiveSendOptions {
