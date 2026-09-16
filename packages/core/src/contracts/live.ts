@@ -194,24 +194,6 @@ export interface LiveToolEndEvent {
   durationMs?: number | undefined
 }
 
-export interface LiveSubagentStartEvent {
-  type: 'subagent.start'
-  subagentId?: string | undefined
-  childSessionId?: string | undefined
-  delegationId?: string | undefined
-  summary?: string | undefined
-}
-
-export interface LiveSubagentEndEvent {
-  type: 'subagent.end'
-  subagentId?: string | undefined
-  childSessionId?: string | undefined
-  delegationId?: string | undefined
-  status?: string | undefined
-  summary?: string | undefined
-  durationMs?: number | undefined
-}
-
 export interface LiveErrorEvent {
   type: 'error'
   message: string
@@ -230,8 +212,6 @@ export type LiveEvent =
   | LiveToolStartEvent
   | LiveToolOutputEvent
   | LiveToolEndEvent
-  | LiveSubagentStartEvent
-  | LiveSubagentEndEvent
   | LiveErrorEvent
   | LiveCompletedEvent
 
