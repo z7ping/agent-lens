@@ -34,17 +34,20 @@ export type ObservationReplicationRuntimeStepResult =
       kind: 'bootstrap'
       stage: string
       active: false
+      didWork: true
     }
   | {
       kind: 'incremental'
       throughRevision: number
       nextRevision: number
       done: false
+      didWork: true
     }
   | {
       kind: 'active'
       incrementalThroughRevision: number
       reconciliation: ObservationPeriodicReconciliationResult
+      didWork: boolean
     }
 
 /**
@@ -100,6 +103,7 @@ export async function pumpObservationReplicationRuntimeStep(input: {
       kind: 'bootstrap',
       stage: bootstrap.stage,
       active: false,
+      didWork: true,
     }
   }
 
@@ -135,6 +139,7 @@ export async function pumpObservationReplicationRuntimeStep(input: {
       throughRevision: incremental.throughRevision,
       nextRevision: incremental.nextRevision,
       done: false,
+      didWork: true,
     }
   }
 
@@ -160,5 +165,9 @@ export async function pumpObservationReplicationRuntimeStep(input: {
     kind: 'active',
     incrementalThroughRevision: incremental.throughRevision,
     reconciliation,
+    didWork:
+      incremental.initialized
+      || incremental.changeCount > 0
+      || reconciliation.kind !== 'not-due',
   }
 }
