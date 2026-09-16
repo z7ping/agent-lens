@@ -2,7 +2,9 @@ import type {
   AgentActor,
   AgentInstallation,
   AgentProduct,
+  AssetBinding,
   AssetDefinition,
+  AssetStateObservation,
   CanonicalObservation,
   Evidence,
   Host,
@@ -51,7 +53,9 @@ const OBSERVATION_KIND = [
 const CAPTURE_METHOD = ['runtime-hook', 'native-log', 'native-db', 'static-scan', 'external-import'] as const
 const DERIVATION = ['observed', 'reported', 'derived', 'estimated', 'inferred'] as const
 const COVERAGE_STATUS = ['complete', 'partial', 'unavailable', 'unknown'] as const
-const ASSET_TYPE = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'rule', 'builtin', 'unknown'] as const
+const ASSET_TYPE = ['skill', 'mcp', 'plugin', 'extension', 'hook', 'memory', 'model', 'prompt', 'theme', 'context', 'rule', 'builtin', 'unknown'] as const
+const ASSET_SCOPE = ['installation', 'user', 'project', 'workspace'] as const
+const ASSET_STATE = ['installed', 'configured', 'enabled', 'discoverable', 'exposed', 'invoked'] as const
 const TOOL_SOURCE_TYPE = ['builtin', 'mcp', 'plugin', 'extension', 'skill-runtime', 'unknown'] as const
 const LOCATOR_KIND = ['file', 'database', 'runtime-hook', 'external'] as const
 
@@ -402,6 +406,53 @@ export function mapAssetDefinition(value: unknown): AssetDefinition {
     canonicalName: requiredString(row, 'canonical_name'),
     ...(displayName === undefined ? {} : { displayName }),
     ...(upstreamIdentity === undefined ? {} : { upstreamIdentity }),
+  }
+}
+
+export function mapAssetBinding(value: unknown): AssetBinding {
+  const row = rowRecord(value)
+  const runtimeProfileId = optionalString(row, 'runtime_profile_id')
+  const scope = optionalString(row, 'scope')
+  if (scope !== undefined && !(ASSET_SCOPE as readonly string[]).includes(scope)) {
+    throw new TypeError(`SQLite row field scope has unsupported value: ${scope}`)
+  }
+  const scopeRoot = optionalString(row, 'scope_root')
+  const path = optionalString(row, 'path')
+  const source = optionalString(row, 'source')
+  const version = optionalString(row, 'version')
+  return {
+    id: requiredString(row, 'id'),
+    assetId: requiredString(row, 'asset_id'),
+    installationId: requiredString(row, 'installation_id'),
+    ...(runtimeProfileId === undefined ? {} : { runtimeProfileId }),
+    ...(scope === undefined ? {} : { scope: scope as AssetBinding['scope'] }),
+    ...(scopeRoot === undefined ? {} : { scopeRoot }),
+    ...(path === undefined ? {} : { path }),
+    ...(source === undefined ? {} : { source }),
+    ...(version === undefined ? {} : { version }),
+  }
+}
+
+export function mapAssetStateObservation(value: unknown): AssetStateObservation {
+  const row = rowRecord(value)
+  const rawValue = requiredString(row, 'value')
+  const stateValue = rawValue === 'true'
+    ? true
+    : rawValue === 'false'
+      ? false
+      : rawValue === 'unknown'
+        ? 'unknown'
+        : null
+  if (stateValue === null) {
+    throw new TypeError(`SQLite row field value has unsupported value: ${rawValue}`)
+  }
+  return {
+    id: requiredString(row, 'id'),
+    assetBindingId: requiredString(row, 'asset_binding_id'),
+    state: enumString(row, 'state', ASSET_STATE),
+    value: stateValue,
+    observedAt: requiredString(row, 'observed_at'),
+    evidenceRefs: stringArrayJson(row, 'evidence_refs_json'),
   }
 }
 
