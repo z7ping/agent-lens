@@ -232,6 +232,7 @@ if (options.storageDiagnosticsBurst > 0) {
       capturedActivity: details.capturedActivity ?? null,
       replicationJournal: details.replicationJournal ?? null,
       spaceRecovery: details.spaceRecovery ?? null,
+      runtimeFootprint: details.runtimeFootprint ?? null,
       growthMetrics: details.growthMetrics ?? null,
     } : null,
   }
