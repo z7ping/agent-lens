@@ -4,6 +4,8 @@ import { sha256Hex } from './hash'
 import {
   agentProductSharedRootAssertion,
   assetDefinitionSharedGroupMembership,
+  JOURNAL_REPLICATION_ENTITY_TYPES,
+  KNOWN_REPLICATION_ENTITY_TYPES,
   assetUpstreamPortableIdentity,
   buildSharedIdentityState,
   createOriginEntityRef,
@@ -193,5 +195,16 @@ test('one Conditional Shared origin cannot silently belong to two groups', () =>
   assert.throws(
     () => buildSharedIdentityState({ memberships: [first, second] }),
     /assigned to multiple groups/,
+  )
+})
+
+
+test('bounded journal Root set exactly covers every replicated R1 entity type', () => {
+  const replicated = KNOWN_REPLICATION_ENTITY_TYPES
+    .filter(entityType => isReplicatedEntityType(entityType))
+    .sort()
+  assert.deepEqual(
+    [...JOURNAL_REPLICATION_ENTITY_TYPES].sort(),
+    replicated,
   )
 })
