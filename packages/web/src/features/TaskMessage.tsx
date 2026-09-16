@@ -83,7 +83,7 @@ export function TaskMessage({
       window.cancelAnimationFrame(frame)
       observer?.disconnect()
     }
-  }, [measure, streaming, user, view])
+  }, [measure, streaming, text, user, view])
 
   const roleClass = user ? 'task-message-user' : 'task-message-assistant'
   const bubbleClass = user ? 'task-message-bubble-user' : 'task-message-bubble-assistant'
