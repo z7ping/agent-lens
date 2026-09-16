@@ -75,3 +75,74 @@ test('/health keeps degraded Data Runtime explicit at protocol boundary', async 
     await surface.dispose()
   }
 })
+
+
+test('/storage/diagnostics 通过独立深度诊断入口返回存储基线', async () => {
+  let diagnosticsCalls = 0
+  const storage = {
+    repositories: {},
+    checkpoints: {},
+    async transaction<T>(fn: (tx: never) => Promise<T>) {
+      return fn({} as never)
+    },
+    async health() {
+      return {
+        ok: true,
+        schemaVersion: 22,
+        details: { dataGrowth: { capacity: { scope: 'hot-sqlite' } } },
+      }
+    },
+    async diagnostics() {
+      diagnosticsCalls += 1
+      return {
+        ok: true,
+        schemaVersion: 22,
+        details: {
+          dataGrowth: {
+            capacity: {
+              scope: 'hot-sqlite',
+              softLimitBytes: 512 * 1024 * 1024,
+              longTermTotalLimitBytes: null,
+            },
+            trend: {
+              last7Days: [],
+              last30Days: [],
+            },
+          },
+          storageBreakdown: {
+            available: true,
+            categories: {
+              canonical: { payloadBytes: 12, allocatedBytes: 4096 },
+              sourceRaw: { payloadBytes: 20, allocatedBytes: 4096 },
+            },
+          },
+          reclaimableSpace: {
+            estimateOnly: true,
+            estimatedBytes: 4096,
+          },
+        },
+      }
+    },
+  } as unknown as StorageService
+  const surface = await startHttpSurface(storage, { port: 0 })
+
+  try {
+    const response = await fetch(
+      `http://${surface.host}:${surface.port}/api/v1/storage/diagnostics`,
+    )
+    assert.equal(response.status, 200)
+    const body = await response.json() as HealthResponseDto
+    assert.equal(diagnosticsCalls, 1)
+    assert.equal(body.storage.schemaVersion, 22)
+    assert.equal(
+      (body.storage.details?.dataGrowth as { capacity?: { scope?: string } })?.capacity?.scope,
+      'hot-sqlite',
+    )
+    assert.equal(
+      (body.storage.details?.reclaimableSpace as { estimatedBytes?: number })?.estimatedBytes,
+      4096,
+    )
+  } finally {
+    await surface.dispose()
+  }
+})
