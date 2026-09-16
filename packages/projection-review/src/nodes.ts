@@ -102,7 +102,7 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
 
   for (const item of items) {
     if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {
-      const attachments = reviewMessageAttachmentsFromPayload(item.payload)
+      const attachments = reviewMessageAttachmentsFromPayload(item.payload, { includeDataUrl: false })
       const text = textFromPayload(item.payload)
       const node: ReviewMessageNodeDto = {
         type: 'message',
