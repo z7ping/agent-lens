@@ -182,6 +182,35 @@ test('ReviewProjection omits preview when the first user message has no displaya
   }
 })
 
+test('ReviewProjection 默认不把独立运行时启动审计列为任务', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-runtime-startup-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'pi' })
+    const audit = await observations.commit({
+      sourceId: 'pi', host, installation,
+      candidate: {
+        kind: 'runtime.startup', nativeEventId: 'review-runtime-startup',
+        occurredAt: '2026-09-17T00:00:00.000Z', capturedAt: '2026-09-17T00:00:00.000Z',
+        payload: { event: 'runtime.startup.audit' },
+        identityHints: { nativeSessionId: 'review-runtime-startup' },
+        dedupHints: { nativeEventId: 'review-runtime-startup' },
+      },
+      evidenceCandidates: [],
+    })
+
+    const projection = new ReviewProjection(storage)
+    assert.deepEqual((await projection.query()).items, [])
+    const included = await projection.query({ includeSystemActivity: true })
+    assert.deepEqual(included.items.map(item => [item.id, item.sessionActivity]), [[audit.observation.logicalSessionId, 'system-activity']])
+  } finally {
+    storage.close()
+  }
+})
+
 test('ReviewProjection summary list uses the optimized session summary reader', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

@@ -63,6 +63,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
       projectionSessionDone: 'Session index organized',
       projectionDefaultActive: 'Updating data views',
       projectionDefaultDone: 'Data views updated',
+      runtimeStartupAudit: '{{source}} runtime startup audit',
       genericAgent: 'Agent',
       sourceDetectActive: 'Detecting {{source}}',
       sourceDetectDone: '{{source}} detection',

@@ -112,3 +112,28 @@ test('healthy long-lived runtime capture is not reported as a recently completed
   assert.deepEqual(result.active, [])
   assert.deepEqual(result.recent, [])
 })
+
+test('独立运行时启动审计展示在后台活动，不再伪装成任务', async () => {
+  const storage = {
+    maintenanceJobs: { list: async () => [] },
+    sourceRuntimeStatus: { list: async () => [] },
+    sessionSummaries: {
+      query: async (input: { sessionActivities?: string[]; leadingObservationKinds?: string[] }) => {
+        assert.deepEqual(input.sessionActivities, ['system-activity'])
+        assert.deepEqual(input.leadingObservationKinds, ['runtime.startup'])
+        return {
+          items: [{
+            logicalSessionId: 'pi-startup-audit', installationId: 'pi-local', productId: 'pi', sourceIds: ['pi'],
+            startedAt: '2026-09-17T00:00:00.000Z', endedAt: '2026-09-17T00:00:01.000Z',
+            observationCount: 1, interactionCount: 0, toolCount: 0, errorCount: 0,
+            sessionActivity: 'system-activity', leadingObservationKind: 'runtime.startup',
+          }],
+          hasMore: false,
+        }
+      },
+    },
+  } as unknown as StorageService
+
+  const result = await readBackgroundActivity(storage)
+  assert.deepEqual(result.recent.map(item => [item.kind, item.sourceId]), [['runtime-startup-audit', 'pi']])
+})

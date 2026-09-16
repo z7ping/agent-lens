@@ -43,6 +43,7 @@ import {
 const MAX_SESSIONS = 500
 const DEFAULT_LIMIT = 100
 const SLOW_REVIEW_PHASE_MS = 500
+const TASK_SESSION_ACTIVITIES = ['user-task', 'branch-task', 'subagent', 'internal-review'] as const
 
 function logSlowReviewPhase(phase: string, startedAt: number, details: Record<string, number | string | boolean> = {}): void {
   const elapsedMs = performance.now() - startedAt
@@ -90,6 +91,8 @@ export class ReviewProjection {
     const preview = firstUser ? textFromPayload(firstUser.payload) : undefined
     const userTurnCount = observations.filter(isRealUser).length
     const systemContextCount = observations.filter(item => item.kind === 'context.injected').length
+    const hasStartupAudit = observations.some(item =>
+      item.kind === 'runtime.startup' && asRecord(item.payload).event === 'runtime.startup.audit')
     const lifecycleActivity = observations
       .filter(item => item.kind === 'session.lifecycle')
       .map(item => asRecord(item.payload))
@@ -97,7 +100,7 @@ export class ReviewProjection {
     const attributedActivity = structuredSessionActivity(lifecycleActivity?.sessionActivity)
     const sessionActivity = attributedActivity && attributedActivity !== 'user-task'
       ? attributedActivity
-      : userTurnCount === 0 && systemContextCount > 0
+      : userTurnCount === 0 && (systemContextCount > 0 || hasStartupAudit)
         ? 'system-activity'
         : attributedActivity
     const activitySourceLabel = typeof lifecycleActivity?.activitySourceLabel === 'string'
@@ -188,6 +191,7 @@ export class ReviewProjection {
         ...(query.status === 'with-errors' ? { hasErrors: true } : {}),
         ...(query.status === 'clean' ? { hasErrors: false } : {}),
         ...(search ? { search } : {}),
+        ...(query.includeSystemActivity ? {} : { sessionActivities: [...TASK_SESSION_ACTIVITIES] }),
         ...(cursor ? { after: cursor } : {}),
       })
       const items = page.items.map(item => this.summaryFromRecord(item))
@@ -217,6 +221,7 @@ export class ReviewProjection {
       if (query.to && item.endedAt > query.to) return false
       if (query.status === 'with-errors' && !item.hasErrors) return false
       if (query.status === 'clean' && item.hasErrors) return false
+      if (!query.includeSystemActivity && item.sessionActivity === 'system-activity') return false
       if (normalizedSearch) {
         const haystack = [item.title, item.preview, item.projectName, item.workspacePath, ...item.sourceIds].filter(Boolean).join('\n').toLowerCase()
         if (!haystack.includes(normalizedSearch)) return false

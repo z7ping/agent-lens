@@ -197,3 +197,71 @@ test('non-Codex legacy user messages without provenance remain compatible', asyn
     await storage.close()
   }
 })
+
+test('独立运行时启动审计归为系统活动，而带真实用户请求的会话仍是任务', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'runtime-startup-audit-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'pi' })
+    const audit = await observations.commit({
+      sourceId: 'pi', host, installation,
+      candidate: {
+        kind: 'runtime.startup',
+        nativeEventId: 'startup-audit-only',
+        occurredAt: '2026-09-17T00:00:00.000Z',
+        capturedAt: '2026-09-17T00:00:00.000Z',
+        payload: { event: 'runtime.startup.audit' },
+        identityHints: { nativeSessionId: 'startup-audit-only' },
+        dedupHints: { nativeEventId: 'startup-audit-only' },
+      },
+      evidenceCandidates: [],
+    })
+    await observations.commit({
+      sourceId: 'pi', host, installation,
+      candidate: {
+        kind: 'runtime.startup',
+        nativeEventId: 'startup-audit-with-user',
+        occurredAt: '2026-09-17T00:01:00.000Z',
+        capturedAt: '2026-09-17T00:01:00.000Z',
+        payload: { event: 'runtime.startup.audit' },
+        identityHints: { nativeSessionId: 'startup-audit-with-user' },
+        dedupHints: { nativeEventId: 'startup-audit-with-user' },
+      },
+      evidenceCandidates: [],
+    })
+    const userTask = await observations.commit({
+      sourceId: 'pi', host, installation,
+      candidate: {
+        kind: 'message.user',
+        nativeEventId: 'startup-audit-user-message',
+        occurredAt: '2026-09-17T00:01:01.000Z',
+        capturedAt: '2026-09-17T00:01:01.000Z',
+        payload: { text: '这是一项真实任务', provenance: { actualAuthor: 'human-user', contentRole: 'user-request' } },
+        identityHints: { nativeSessionId: 'startup-audit-with-user' },
+        dedupHints: { nativeEventId: 'startup-audit-user-message' },
+      },
+      evidenceCandidates: [],
+    })
+
+    for (const materialized of [false, true]) {
+      if (materialized) await storage.sessionSummaryProjection.rebuild()
+      const auditSummary = await storage.sessionSummaries.query({ logicalSessionId: audit.observation.logicalSessionId, limit: 1 })
+      assert.equal(auditSummary.items[0]?.sessionActivity, 'system-activity')
+      assert.equal(auditSummary.items[0]?.leadingObservationKind, 'runtime.startup')
+      const userSummary = await storage.sessionSummaries.query({ logicalSessionId: userTask.observation.logicalSessionId, limit: 1 })
+      assert.equal(userSummary.items[0]?.sessionActivity, 'user-task')
+      const background = await storage.sessionSummaries.query({
+        limit: 10,
+        sessionActivities: ['system-activity'],
+        leadingObservationKinds: ['runtime.startup'],
+      })
+      assert.deepEqual(background.items.map(item => item.logicalSessionId), [audit.observation.logicalSessionId])
+    }
+  } finally {
+    await storage.close()
+  }
+})

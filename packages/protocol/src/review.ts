@@ -277,6 +277,8 @@ export interface ReviewQueryDto {
   status?: ReviewStatusFilter
   search?: string
   limit?: number
+  /** 默认隐藏独立后台活动；运维 Surface 可显式要求包含。 */
+  includeSystemActivity?: boolean
 }
 
 export interface ReviewResponseDto {
