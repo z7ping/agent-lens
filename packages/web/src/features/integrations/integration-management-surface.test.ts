@@ -99,7 +99,7 @@ test('接入页把本机发现状态与接入启停状态分开表达', () => {
   assert.match(page, /const discoveredStatus = integrationLifecycleState/)
   assert.match(page, /managementPage\.enabledTitle/)
   assert.match(page, /managementPage\.disabledTitle/)
-  assert.match(page, /initialNewIdsRef/)
+  assert.match(page, /visibleNewIds/)
   assert.match(page, /model\.updateIntegrationPreferences\(\{ acknowledgedIntegrationIds \}\)/)
 })
 
