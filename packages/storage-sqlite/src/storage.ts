@@ -382,21 +382,45 @@ export class SqliteStorageService implements StorageService {
       const snapshotCapturedAt = new Date().toISOString()
       const persistedSeries = parseStorageDiagnosticSnapshotSeries(persistedSnapshots)
       const previousSnapshot = persistedSeries.snapshots.at(-1) ?? null
-      const sourceActivityInterval = previousSnapshot
+      const measuredSourceActivity = previousSnapshot
         ? sourceActivityPayloadBytesBetween(
             this.db,
             previousSnapshot.capturedAt,
             snapshotCapturedAt,
           )
-        : {
+        : null
+      const netNewSourceRecords = previousSnapshot
+        ? totals.sourceRecords - previousSnapshot.counts.sourceRecords
+        : 0
+      const sourceActivityInterval = !previousSnapshot
+        ? {
             state: 'baseline' as const,
             basis: 'source-record-payload-json-before-agentlens-compression',
             records: 0,
             originalPayloadBytes: 0,
+            netNewSourceRecords: 0,
             unknownEncodingRecords: 0,
             invalidPayloadRecords: 0,
             gzipSizeBasis: 'gzip-isize-uint32',
           }
+        : measuredSourceActivity!.state === 'complete'
+          && netNewSourceRecords >= 0
+          && measuredSourceActivity!.records === netNewSourceRecords
+          ? {
+              ...measuredSourceActivity!,
+              state: 'complete' as const,
+              netNewSourceRecords,
+            }
+          : {
+              ...measuredSourceActivity!,
+              state: 'partial' as const,
+              netNewSourceRecords,
+              reason: measuredSourceActivity!.state !== 'complete'
+                ? 'source-payload-accounting-incomplete'
+                : netNewSourceRecords < 0
+                  ? 'source-record-count-decreased'
+                  : 'recent-source-records-do-not-match-net-new-records',
+            }
       const sourceActivity = previousSnapshot && sourceActivityInterval.state === 'complete'
         ? {
             epochCapturedAt: previousSnapshot.sourceActivity.epochCapturedAt,
