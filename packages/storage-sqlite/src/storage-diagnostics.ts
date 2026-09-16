@@ -466,7 +466,7 @@ export function sourceActivityPayloadBytesBetween(
     state: unknownEncodingRecords === 0 && invalidPayloadRecords === 0
       ? 'complete' as const
       : 'partial' as const,
-    basis: 'source-record-payload-json-before-agentlens-compression',
+    basis: 'persisted-source-record-payload-json-before-compression',
     records,
     originalPayloadBytes,
     unknownEncodingRecords,
