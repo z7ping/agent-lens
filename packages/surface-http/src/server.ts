@@ -411,12 +411,12 @@ export async function startHttpSurface(
           writeJson(response, 501, { error: 'source_raw_recovery_audit_unavailable' })
           return
         }
-        const afterId = url.searchParams.get('after')?.trim() || undefined
+        const cursor = url.searchParams.get('cursor')?.trim() || url.searchParams.get('after')?.trim() || undefined
         const limit = parseLimit(url.searchParams, 500) ?? 100
         writeJson(response, 200, await auditSourceRawRecoveryBatch({
           sources: options.sources,
           storage,
-          ...(afterId ? { afterId } : {}),
+          ...(cursor ? { cursor } : {}),
           limit,
         }))
         return
