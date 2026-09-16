@@ -364,6 +364,23 @@ export interface SourceRecordReplayCursor {
   id: SourceRecordId
 }
 
+export interface SourceRawAuditCandidate {
+  record: SourceRecord
+  canonicalStable: boolean
+  evidenceStable: boolean
+  pinned: boolean | 'unknown'
+}
+
+export interface SourceRawAuditPage {
+  items: SourceRawAuditCandidate[]
+  cursor?: SourceRecordId
+  hasMore: boolean
+}
+
+export interface SourceRawAuditReader {
+  list(afterId?: SourceRecordId, limit?: number): Promise<SourceRawAuditPage>
+}
+
 export interface SourceRecordRepository {
   get(id: SourceRecordId): Promise<SourceRecord | null>
   getMany?(ids: SourceRecordId[]): Promise<SourceRecord[]>
@@ -550,6 +567,7 @@ export interface StorageService {
   readonly projectionBackfill?: ProjectionBackfillMaintenance
   readonly runtimeProfiles?: RuntimeProfileRepository
   readonly sourceRuntimeStatus?: SourceRuntimeStatusRepository
+  readonly sourceRawAudit?: SourceRawAuditReader
   readonly sessionRelationshipCandidates?: SessionRelationshipCandidateRepository
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T>
   /** Fast liveness/readiness path. Implementations should avoid whole-dataset aggregation here. */
