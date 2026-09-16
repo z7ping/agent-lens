@@ -135,13 +135,22 @@ test('snapshot delta 计算 Canonical / hot SQLite / Replication 真正净增长
   })
 
   assert.equal(metrics.canonicalGrowthRate.state, 'ready')
-  assert.equal(metrics.canonicalGrowthRate.last7Days.state, 'ready')
-  assert.equal(metrics.canonicalGrowthRate.last7Days.canonical.observationsDelta, 70)
-  assert.equal(metrics.canonicalGrowthRate.last7Days.canonical.allocatedBytesDelta, 350)
-  assert.equal(metrics.canonicalGrowthRate.last7Days.canonical.observationsPerDay, 10)
-  assert.equal(metrics.hotSqliteGrowthRate.last7Days.hotSqlite.footprintBytesDelta, 700)
-  assert.equal(metrics.replicationGrowthRate.last7Days.replication.changesDelta, 700)
-  assert.equal(metrics.canonicalGrowthRate.last30Days.canonical.observationsDelta, 130)
+  if (!('last7Days' in metrics.canonicalGrowthRate)) {
+    assert.fail('Canonical growth windows should be available')
+  }
+  const last7Days = metrics.canonicalGrowthRate.last7Days
+  const last30Days = metrics.canonicalGrowthRate.last30Days
+  assert.equal(last7Days.state, 'ready')
+  assert.equal(last30Days.state, 'ready')
+  if (last7Days.state !== 'ready' || last30Days.state !== 'ready') {
+    assert.fail('Expected ready 7/30 day snapshot deltas')
+  }
+  assert.equal(last7Days.canonical.observationsDelta, 70)
+  assert.equal(last7Days.canonical.allocatedBytesDelta, 350)
+  assert.equal(last7Days.canonical.observationsPerDay, 10)
+  assert.equal(last7Days.hotSqlite.footprintBytesDelta, 700)
+  assert.equal(last7Days.replication.changesDelta, 700)
+  assert.equal(last30Days.canonical.observationsDelta, 130)
   assert.equal(metrics.storageAmplificationRate.state, 'definition-required')
 })
 
@@ -150,6 +159,9 @@ test('没有足够历史时不伪造增长率', () => {
   const metrics = storageGrowthMetricsFromSnapshots(current, null)
 
   assert.equal(metrics.canonicalGrowthRate.state, 'insufficient-history')
+  if (!('last7Days' in metrics.canonicalGrowthRate)) {
+    assert.fail('Insufficient-history metrics should still expose requested windows')
+  }
   assert.equal(metrics.canonicalGrowthRate.last7Days.state, 'insufficient-history')
   assert.equal(metrics.canonicalGrowthRate.last30Days.state, 'insufficient-history')
   assert.equal(metrics.storageAmplificationRate.state, 'definition-required')
