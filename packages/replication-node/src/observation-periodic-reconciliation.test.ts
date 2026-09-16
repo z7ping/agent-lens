@@ -37,7 +37,7 @@ class MemoryCycles implements ObservationPeriodicReconciliationCycleStore {
   async beginReconciliationCycle(input: {
     streamId: string
     generationId: string
-    entityType: 'CanonicalObservation'
+    entityType: import('@agent-lens/core/replication').KnownReplicationEntityType
     throughRevision: number
     now?: string
   }) {
@@ -61,7 +61,7 @@ class MemoryCycles implements ObservationPeriodicReconciliationCycleStore {
   async completeReconciliationCycle(input: {
     streamId: string
     generationId: string
-    entityType: 'CanonicalObservation'
+    entityType: import('@agent-lens/core/replication').KnownReplicationEntityType
     nextDueAt: string
     now?: string
   }) {
