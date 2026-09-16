@@ -27,9 +27,9 @@ const options = {
   maxPages: positiveInt('max-pages', DEFAULT_MAX_PAGES),
 }
 
-async function requestPage(after) {
+async function requestPage(cursor) {
   const params = new URLSearchParams({ limit: String(options.batchSize) })
-  if (after) params.set('after', after)
+  if (cursor) params.set('cursor', cursor)
 
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), options.timeoutMs)
@@ -67,14 +67,14 @@ const totals = {
   reasons: new Map(),
 }
 const samples = []
-let after
+let cursor
 let pages = 0
 
 console.log('AgentLens Source Raw recovery dry-run acceptance')
 console.log(JSON.stringify({ options }, null, 2))
 
 while (pages < options.maxPages) {
-  const page = await requestPage(after)
+  const page = await requestPage(cursor)
   pages += 1
   const items = Array.isArray(page?.items) ? page.items : []
 
@@ -101,7 +101,7 @@ while (pages < options.maxPages) {
     }
   }
 
-  const cursor = typeof page?.cursor === 'string' && page.cursor
+  const nextCursor = typeof page?.cursor === 'string' && page.cursor
     ? page.cursor
     : undefined
   console.log(
@@ -129,10 +129,10 @@ while (pages < options.maxPages) {
     process.exit(0)
   }
 
-  if (!cursor || cursor === after) {
+  if (!nextCursor || nextCursor === cursor) {
     throw new Error('Raw recovery audit pagination did not advance')
   }
-  after = cursor
+  cursor = nextCursor
 }
 
 throw new Error(`Raw recovery audit exceeded max-pages=${options.maxPages}`)
