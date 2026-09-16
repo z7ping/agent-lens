@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
-  OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+  JOURNAL_REPLICATION_ENTITY_TYPES,
 } from '@agent-lens/core/replication'
 import { SqliteStorageService } from './storage'
 
@@ -24,7 +24,7 @@ async function createStream(storage: SqliteStorageService, status: 'active' | 'p
   })
 }
 
-test('new stream conservatively registers every Observation Root Graph capture dependency', async () => {
+test('new stream conservatively registers every journal-producing R1 Root capture dependency', async () => {
   const storage = await createStorage()
   try {
     await createStream(storage)
@@ -43,7 +43,7 @@ test('new stream conservatively registers every Observation Root Graph capture d
 
     assert.deepEqual(
       rows.map(row => row.entityType),
-      [...OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES].sort(),
+      [...JOURNAL_REPLICATION_ENTITY_TYPES].sort(),
     )
     assert.ok(rows.every(row => row.capturedRevision === 0))
     assert.ok(rows.every(row => row.dependencyState === 'dependent'))
