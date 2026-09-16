@@ -24,6 +24,7 @@ import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
 import { SqliteSourceRuntimeStatusRepository } from './runtime-status'
+import { SqliteSourceRawAuditReader } from './source-raw-audit'
 import { withSqliteSessionRuntimeProfiles } from './session-runtime-profile'
 import { SqliteSessionSummaryReader } from './session-summaries-v2'
 import { withSqliteSourceRecordCompression } from './source-record-compression'
@@ -142,6 +143,7 @@ export class SqliteStorageService implements StorageService {
   readonly projectionBackfill: SqliteProjectionBackfillMaintenance
   readonly runtimeProfiles: SqliteRuntimeProfileRepository
   readonly sourceRuntimeStatus: SqliteSourceRuntimeStatusRepository
+  readonly sourceRawAudit: SqliteSourceRawAuditReader
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
   readonly replication: SqliteReplicationStateRepository
   readonly replicationCanonicalChanges: SqliteReplicationCanonicalChangeReader
@@ -189,6 +191,7 @@ export class SqliteStorageService implements StorageService {
     this.projectionBackfill = new SqliteProjectionBackfillMaintenance(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
+    this.sourceRawAudit = new SqliteSourceRawAuditReader(this.executor, this.repositories.sourceRecords)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
     this.replication = new SqliteReplicationStateRepository(this.executor)
     this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
