@@ -20,6 +20,55 @@ export function integrationPackageReady(
     && state.compatibility === 'compatible'
 }
 
+export function agentObservationState(
+  agent: Pick<AgentOverviewDto, 'supported' | 'detected'> | undefined,
+  discovery: IntegrationToolDiscoveryItemDto | undefined,
+  discoveryScanning: boolean,
+  t: TFunction,
+  discoveryError = '',
+): IntegrationLifecyclePresentation {
+  if (!agent?.supported && agent) {
+    return {
+      label: t('status.unsupported'),
+      title: t('status.unsupportedTitle'),
+      className: 'is-unsupported',
+    }
+  }
+  if (discoveryError || discovery?.presence === 'error') {
+    return {
+      label: t('status.scanFailed'),
+      title: discoveryError || discovery?.reason || t('status.scanFailedTitle'),
+      className: 'is-error',
+    }
+  }
+  if (agent?.detected || discovery?.presence === 'present') {
+    return {
+      label: t('status.discovered'),
+      title: t('status.discoveredTitle'),
+      className: 'is-discovered',
+    }
+  }
+  if (discovery?.presence === 'data-only') {
+    return {
+      label: t('status.historyData'),
+      title: t('status.historyDataTitle'),
+      className: 'is-history',
+    }
+  }
+  if (discoveryScanning) {
+    return {
+      label: t('status.scanning'),
+      title: t('status.scanningTitle'),
+      className: 'is-scanning',
+    }
+  }
+  return {
+    label: t('status.notDetected'),
+    title: t('status.notDetectedTitle'),
+    className: 'is-missing',
+  }
+}
+
 export function integrationManagementLifecycleState(
   management: IntegrationManagementItemDto,
   t: TFunction,
