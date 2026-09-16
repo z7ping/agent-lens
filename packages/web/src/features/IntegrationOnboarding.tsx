@@ -35,7 +35,8 @@ export function IntegrationOnboarding({
   const management = snapshot.integrationManagement
   const items = management?.items ?? []
   const detected = useMemo(() => items.filter(selectable), [items])
-  const missing = useMemo(() => items.filter(item => !selectable(item)), [items])
+  const failed = useMemo(() => items.filter(item => item.tool?.presence === 'error'), [items])
+  const missing = useMemo(() => items.filter(item => item.tool?.presence === 'absent'), [items])
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [progress, setProgress] = useState<Record<string, InstallProgress>>({})
   const [running, setRunning] = useState(false)
@@ -198,9 +199,13 @@ export function IntegrationOnboarding({
       </div>
 
       {!detected.length && !scanning && <div className="integration-onboarding-empty">
-        <b>{t('onboarding.noneFound')}</b>
-        <span>{t('onboarding.noneFoundDescription')}</span>
+        <b>{failed.length ? t('onboarding.noneConfirmed') : t('onboarding.noneFound')}</b>
+        <span>{failed.length ? t('onboarding.noneConfirmedDescription') : t('onboarding.noneFoundDescription')}</span>
       </div>}
+
+      {!scanning && failed.length > 0 && <p className="integration-onboarding-missing">
+        {t('onboarding.scanFailedAgents', { agents: failed.map(item => item.displayName).join('、') })}
+      </p>}
 
       {!scanning && missing.length > 0 && <p className="integration-onboarding-missing">
         {t('onboarding.notFound', { agents: missing.map(item => item.displayName).join('、') })}
