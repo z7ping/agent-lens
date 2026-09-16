@@ -160,6 +160,11 @@ function HistoryEntries({ items, showAllEvents = false }: { items: PiLiveHistory
         key={entry.id}
         role={entry.role}
         text={entry.text}
+        attachments={entry.attachments?.map(attachment => ({
+          type: 'image',
+          src: `data:${attachment.mimeType};base64,${attachment.data}`,
+          ...(attachment.name ? { name: attachment.name } : {}),
+        }))}
         author={entry.role === 'user' ? t('piLive:history.user') : 'Pi'}
         time={entry.at ? formatClock(entry.at, locale) : undefined}
         streaming={entry.role === 'assistant' && entry.state === 'running'}
