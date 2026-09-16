@@ -279,6 +279,12 @@ test('Data Runtime exposes replication orchestration namespaces through maintena
     const safety = await runtime.storage.replicationJournalLifecycle.safety()
     assert.equal(safety.available, true)
     assert.equal(typeof safety.highWaterRevision, 'number')
+    const independent = await runtime.storage.replicationIndependentRoots.scan({
+      entityType: 'Coverage',
+      limit: 10,
+    })
+    assert.deepEqual(independent.items, [])
+    assert.equal(independent.done, true)
     assert.equal(runtime.maintenanceReader.state(), 'ready')
   } finally {
     await runtime.dispose()
