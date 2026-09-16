@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveAttachmentService } from '@agent-lens/core'
-import { PiLiveAdapter } from './adapter'
+import { normalizePiLiveEvent, PiLiveAdapter } from './adapter'
 import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
 
 function attachmentService(overrides: Partial<LiveAttachmentService> = {}): LiveAttachmentService {
@@ -167,4 +167,56 @@ test('Pi Live Adapter keeps image attachments when native Pi send fails', async 
     /Pi rejected prompt/,
   )
   assert.deepEqual(removed, [])
+})
+
+
+test('Pi Live Adapter maps native streaming events into the shared Live event vocabulary', () => {
+  assert.deepEqual(normalizePiLiveEvent({ type: 'agent_start' }), {
+    type: 'status',
+    status: 'running',
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'hello', contentIndex: 0 },
+  }), {
+    type: 'text.delta',
+    delta: 'hello',
+    contentIndex: 0,
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'thinking_delta', delta: 'reason', contentIndex: 1 },
+  }), {
+    type: 'reasoning.delta',
+    delta: 'reason',
+    contentIndex: 1,
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'tool_execution_start',
+    toolCallId: 'call-1',
+    toolName: 'read',
+    args: { path: 'README.md' },
+  }), {
+    type: 'tool.start',
+    callId: 'call-1',
+    name: 'read',
+    inputPreview: '{"path":"README.md"}',
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'tool_execution_end',
+    toolCallId: 'call-1',
+    toolName: 'read',
+    result: 'done',
+    isError: false,
+  }), {
+    type: 'tool.end',
+    callId: 'call-1',
+    name: 'read',
+    status: 'success',
+    output: 'done',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'agent_settled' }), {
+    type: 'completed',
+    status: 'completed',
+  })
 })
