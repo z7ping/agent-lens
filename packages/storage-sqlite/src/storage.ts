@@ -191,7 +191,7 @@ export class SqliteStorageService implements StorageService {
     this.projectionBackfill = new SqliteProjectionBackfillMaintenance(this.executor)
     this.runtimeProfiles = new SqliteRuntimeProfileRepository(this.executor)
     this.sourceRuntimeStatus = new SqliteSourceRuntimeStatusRepository(this.executor)
-    this.sourceRawAudit = new SqliteSourceRawAuditReader(this.executor, this.repositories.sourceRecords)
+    this.sourceRawAudit = new SqliteSourceRawAuditReader(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
     this.replication = new SqliteReplicationStateRepository(this.executor)
     this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
