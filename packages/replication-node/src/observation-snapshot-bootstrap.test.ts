@@ -11,9 +11,12 @@ import type {
 import type { CanonicalReplicationReader } from './canonical-graph'
 import {
   pumpObservationSnapshotBootstrapPage,
+  pumpObservationSnapshotDeltaPage,
   type CanonicalObservationSnapshotSource,
   type ObservationSnapshotBootstrapProgress,
   type ObservationSnapshotBootstrapProgressStore,
+  type ObservationSnapshotDeltaProgress,
+  type ObservationSnapshotDeltaProgressStore,
 } from './observation-snapshot-bootstrap'
 import type { PendingCandidateSink } from './pending-sink'
 
@@ -84,6 +87,20 @@ class MemoryProgress implements ObservationSnapshotBootstrapProgressStore {
 
   async put(progress: ObservationSnapshotBootstrapProgress): Promise<void> {
     this.events.push(`progress:${progress.snapshotComplete ? 'complete' : progress.cursor ?? 'baseline'}`)
+    this.value = { ...progress }
+    this.puts.push({ ...progress })
+  }
+}
+
+class MemoryDeltaProgress implements ObservationSnapshotDeltaProgressStore {
+  value: ObservationSnapshotDeltaProgress | null = null
+  puts: ObservationSnapshotDeltaProgress[] = []
+
+  async get(): Promise<ObservationSnapshotDeltaProgress | null> {
+    return this.value
+  }
+
+  async put(progress: ObservationSnapshotDeltaProgress): Promise<void> {
     this.value = { ...progress }
     this.puts.push({ ...progress })
   }
@@ -240,4 +257,134 @@ test('from-now Snapshot Bootstrap 缺少有效 boundary 时拒绝扫描', async 
   )
   assert.equal(scanned, false)
   assert.equal(progress.value, null)
+})
+
+
+test('Snapshot 完成后固定 catch-up high-water，Pending 失败不推进 delta revision', async () => {
+  const snapshotProgress = new MemoryProgress()
+  snapshotProgress.value = {
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    entityType: 'CanonicalObservation',
+    baselineRevision: 10,
+    policyRevision: 'policy-1',
+    historyRevision: 'history-1',
+    cursor: observation.id,
+    snapshotComplete: true,
+    updatedAt: '2026-09-16T00:20:00.000Z',
+  }
+  const deltaProgress = new MemoryDeltaProgress()
+  let highWaterCalls = 0
+  const changes = {
+    highWaterRevision: async () => {
+      highWaterCalls += 1
+      return highWaterCalls === 1 ? 20 : 30
+    },
+    scan: async ({ afterRevision = 0, throughRevision }: {
+      afterRevision?: number
+      throughRevision: number
+    }) => ({
+      items: afterRevision < 15 && throughRevision >= 15
+        ? [{
+            revision: 15,
+            entityType: 'CanonicalObservation' as const,
+            originEntityId: observation.id,
+            changedAt: '2026-09-16T00:30:00.000Z',
+          }]
+        : [],
+      nextRevision: throughRevision,
+      done: true,
+    }),
+  }
+
+  await assert.rejects(
+    pumpObservationSnapshotDeltaPage({
+      changes,
+      observations: { get: async () => observation },
+      dependencies: dependencies(),
+      sink: { enqueuePending: async () => { throw new Error('disk full') } },
+      snapshotProgress,
+      deltaProgress,
+      nodeId: 'node-1',
+      streamId: 'stream-1',
+      generationId: 'generation-1',
+      policy: { mode: 'full', revision: 'policy-1' },
+      history: { mode: 'include-existing', revision: 'history-1' },
+      now: '2026-09-16T00:31:00.000Z',
+    }),
+    /disk full/,
+  )
+
+  assert.equal(deltaProgress.value?.revision, 10)
+  assert.equal(deltaProgress.value?.throughRevision, 20)
+
+  const result = await pumpObservationSnapshotDeltaPage({
+    changes,
+    observations: { get: async () => observation },
+    dependencies: dependencies(),
+    sink: { enqueuePending: async () => ({ created: true, replaced: false }) },
+    snapshotProgress,
+    deltaProgress,
+    nodeId: 'node-1',
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    policy: { mode: 'full', revision: 'policy-1' },
+    history: { mode: 'include-existing', revision: 'history-1' },
+    now: '2026-09-16T00:32:00.000Z',
+  })
+
+  assert.equal(highWaterCalls, 1)
+  assert.equal(result.baselineRevision, 10)
+  assert.equal(result.throughRevision, 20)
+  assert.equal(result.nextRevision, 20)
+  assert.equal(result.done, true)
+  assert.equal(deltaProgress.value?.revision, 20)
+})
+
+test('Snapshot 未完成或授权 revision 变化时拒绝 delta catch-up', async () => {
+  const snapshotProgress = new MemoryProgress()
+  snapshotProgress.value = {
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    entityType: 'CanonicalObservation',
+    baselineRevision: 10,
+    policyRevision: 'policy-1',
+    historyRevision: 'history-1',
+    snapshotComplete: false,
+    updatedAt: '2026-09-16T00:20:00.000Z',
+  }
+  const deltaProgress = new MemoryDeltaProgress()
+  const common = {
+    changes: {
+      highWaterRevision: async () => 20,
+      scan: async () => ({ items: [], nextRevision: 20, done: true }),
+    },
+    observations: { get: async () => observation },
+    dependencies: dependencies(),
+    sink: { enqueuePending: async () => ({ created: true, replaced: false }) },
+    snapshotProgress,
+    deltaProgress,
+    nodeId: 'node-1',
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    policy: { mode: 'full' as const, revision: 'policy-1' },
+    history: { mode: 'include-existing' as const, revision: 'history-1' },
+  }
+
+  await assert.rejects(
+    pumpObservationSnapshotDeltaPage(common),
+    /Snapshot Bootstrap must complete/,
+  )
+
+  snapshotProgress.value = {
+    ...snapshotProgress.value,
+    snapshotComplete: true,
+  }
+  await assert.rejects(
+    pumpObservationSnapshotDeltaPage({
+      ...common,
+      policy: { mode: 'full', revision: 'policy-2' },
+    }),
+    /re-bootstrap is required/,
+  )
 })
