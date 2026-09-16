@@ -6,6 +6,8 @@ export interface ReplicationSnapshotBootstrapProgress {
   generationId: string
   entityType: KnownReplicationEntityType
   baselineRevision: number
+  policyRevision: string
+  historyRevision: string
   cursor?: string
   snapshotComplete: boolean
   updatedAt: string
@@ -53,6 +55,8 @@ function mapProgress(value: unknown): ReplicationSnapshotBootstrapProgress {
     generationId: requiredString(row, 'generationId'),
     entityType: requiredString(row, 'entityType') as KnownReplicationEntityType,
     baselineRevision: requiredNumber(row, 'baselineRevision'),
+    policyRevision: requiredString(row, 'policyRevision'),
+    historyRevision: requiredString(row, 'historyRevision'),
     ...(cursor === undefined ? {} : { cursor }),
     snapshotComplete: requiredNumber(row, 'snapshotComplete') === 1,
     updatedAt: requiredString(row, 'updatedAt'),
@@ -73,6 +77,8 @@ export class SqliteReplicationSnapshotBootstrapProgressRepository {
                generation_id AS generationId,
                entity_type AS entityType,
                baseline_revision AS baselineRevision,
+               policy_revision AS policyRevision,
+               history_revision AS historyRevision,
                cursor,
                snapshot_complete AS snapshotComplete,
                updated_at AS updatedAt
@@ -91,10 +97,12 @@ export class SqliteReplicationSnapshotBootstrapProgressRepository {
       this.executor.db.prepare(`
         INSERT INTO replication_snapshot_bootstrap_progress(
           stream_id, generation_id, entity_type, baseline_revision,
-          cursor, snapshot_complete, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          policy_revision, history_revision, cursor, snapshot_complete, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(stream_id, generation_id, entity_type) DO UPDATE SET
           baseline_revision = excluded.baseline_revision,
+          policy_revision = excluded.policy_revision,
+          history_revision = excluded.history_revision,
           cursor = excluded.cursor,
           snapshot_complete = excluded.snapshot_complete,
           updated_at = excluded.updated_at
@@ -103,6 +111,8 @@ export class SqliteReplicationSnapshotBootstrapProgressRepository {
         progress.generationId,
         progress.entityType,
         progress.baselineRevision,
+        progress.policyRevision,
+        progress.historyRevision,
         progress.cursor ?? null,
         progress.snapshotComplete ? 1 : 0,
         progress.updatedAt,
