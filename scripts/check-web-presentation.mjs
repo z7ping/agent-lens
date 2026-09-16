@@ -168,15 +168,16 @@ if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
   || !css.backup.includes('.backup-topbar-controls')
   || !css.backup.includes('.backup-assets-surface')
   || !css.backup.includes('.backup-asset-overview')
-  || !css.backup.includes('.backup-agent-row')
+  || !css.backup.includes('.backup-agent-list')
+  || !css.backup.includes('.backup-agent-group')
   || !css.backup.includes('.backup-snapshot-list')
   || !css.backup.includes('.snapshot-builder')
   || !css.backup.includes('.preview-summary')) throw new Error('资产备份关键能力样式缺失')
 for (const breakpoint of ['991.98px', '767.98px', '575.98px']) {
   if (!css.backupResponsive.includes(breakpoint)) throw new Error(`资产备份响应式缺少正式断点：${breakpoint}`)
 }
-if (!css.backupResponsive.includes('.backup-agent-row') || !css.backupResponsive.includes('.backup-snapshot-row')) {
-  throw new Error('资产备份响应式必须覆盖连续资产行与快照行')
+if (!css.backupResponsive.includes('.backup-agent-group') || !css.backupResponsive.includes('.backup-snapshot-row')) {
+  throw new Error('资产备份响应式必须覆盖智能体分组与快照行')
 }
 const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
 for (const required of [
@@ -211,10 +212,12 @@ if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(css.backup)) {
 if (!/\.backup-assets-surface\s*\{[\s\S]*?background:\s*var\(--al-surface\);/m.test(css.backup)) {
   throw new Error('当前资产必须由单一 Surface 承载，不能让主信息直接裸露在 Canvas 上')
 }
-if (!/\.backup-asset-overview\s*\{[\s\S]*?background:\s*var\(--al-soft-2\);/m.test(css.backup)
-  || !/\.backup-asset-overview-primary strong\s*\{[\s\S]*?font-size:\s*22px;/m.test(css.backup)
-  || !css.backup.includes('.backup-agent-table-head')) {
-  throw new Error('当前资产必须保留明确视觉焦点和固定列阅读轴，不能退化为空散文本列表')
+if (!/\.backup-asset-overview\s*\{[\s\S]*?display:\s*flex;[\s\S]*?background:\s*var\(--al-soft-2\);/m.test(css.backup)
+  || !/\.backup-asset-overview-primary strong\s*\{[\s\S]*?font-size:\s*18px;/m.test(css.backup)
+  || !/\.backup-agent-group\s*\{[\s\S]*?grid-template-columns:\s*76px minmax\(0, 1fr\);/m.test(css.backup)
+  || !/\.backup-agent-stats\s*\{[\s\S]*?flex-wrap:\s*wrap;/m.test(css.backup)
+  || !css.backup.includes('.backup-agent-list')) {
+  throw new Error('当前资产必须保留轻量摘要与“智能体 → 核心资产 / 数据”分组阅读轴，不能退化为空散文本列表')
 }
 if (!appShell.includes('topbarHost={workspaceTopbarHost}')) {
   throw new Error('资产备份页面控件必须通过统一 Workspace Topbar Host 注入，不得恢复第二条横向控制栏')
