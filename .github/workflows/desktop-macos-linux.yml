@@ -10,6 +10,7 @@ on:
       - 'scripts/prepare-macos-icon.sh'
       - 'scripts/check-brand-assets.mjs'
       - 'scripts/check-release-signing.mjs'
+      - 'scripts/check-desktop-contract.mjs'
       - 'scripts/smoke-desktop-runtime.mjs'
       - 'package.json'
       - 'package-lock.json'
@@ -39,7 +40,19 @@ permissions:
 jobs:
   macos:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'macos' || inputs.target == 'all' }}
-    runs-on: macos-15-intel
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            build_script: desktop:mac:arm64
+            release_script: desktop:mac:arm64:release
+          - arch: x64
+            runner: macos-15-intel
+            build_script: desktop:mac:x64
+            release_script: desktop:mac:x64:release
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -114,13 +127,13 @@ jobs:
 
       - name: Build unsigned macOS desktop
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.release_tag == '' || steps.manual_release.outputs.prerelease == 'true')) || (github.event_name == 'release' && github.event.release.prerelease == true)
-        run: npm run desktop:mac
+        run: npm run ${{ matrix.build_script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Build signed and notarized macOS desktop
         if: (github.event_name == 'release' && github.event.release.prerelease == false) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '' && steps.manual_release.outputs.prerelease == 'false')
-        run: npm run desktop:mac:release
+        run: npm run ${{ matrix.release_script }}
         env:
           CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
@@ -158,21 +171,21 @@ jobs:
         run: |
           cd release/macos
           shopt -s nullglob
-          files=(AgentLens-*-macOS-x64.dmg AgentLens-*-macOS-x64.zip)
+          files=(AgentLens-*-macOS-${{ matrix.arch }}.dmg AgentLens-*-macOS-${{ matrix.arch }}.zip)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "没有找到 macOS x64 发布产物" >&2
+            echo "没有找到 macOS ${{ matrix.arch }} 发布产物" >&2
             exit 1
           fi
-          shasum -a 256 "${files[@]}" > SHA256SUMS-macos-x64.txt
+          shasum -a 256 "${files[@]}" > SHA256SUMS-macos-${{ matrix.arch }}.txt
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v6
         with:
-          name: agent-lens-macos-x64-${{ github.run_id }}
+          name: agent-lens-macos-${{ matrix.arch }}-${{ github.run_id }}
           path: |
-            release/macos/AgentLens-*-macOS-x64.dmg
-            release/macos/AgentLens-*-macOS-x64.zip
-            release/macos/SHA256SUMS-macos-x64.txt
+            release/macos/AgentLens-*-macOS-${{ matrix.arch }}.dmg
+            release/macos/AgentLens-*-macOS-${{ matrix.arch }}.zip
+            release/macos/SHA256SUMS-macos-${{ matrix.arch }}.txt
           if-no-files-found: error
 
       - name: Attach macOS artifacts to GitHub Release
@@ -181,7 +194,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: gh release upload "$RELEASE_TAG" release/macos/AgentLens-*-macOS-x64.dmg release/macos/AgentLens-*-macOS-x64.zip release/macos/SHA256SUMS-macos-x64.txt --clobber
+        run: gh release upload "$RELEASE_TAG" release/macos/AgentLens-*-macOS-${{ matrix.arch }}.dmg release/macos/AgentLens-*-macOS-${{ matrix.arch }}.zip release/macos/SHA256SUMS-macos-${{ matrix.arch }}.txt --clobber
 
   linux:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'linux' || inputs.target == 'all' }}
