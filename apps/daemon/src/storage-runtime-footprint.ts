@@ -24,14 +24,18 @@ async function directoryFootprint(path: string): Promise<DirectoryFootprint> {
       try {
         entries = await readdir(current, { withFileTypes: true })
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT' && current === path) {
-          return {
-            state: 'not-created',
-            bytes: 0,
-            files: 0,
-            directories: 0,
-            ignoredEntries: 0,
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          if (current === path) {
+            return {
+              state: 'not-created',
+              bytes: 0,
+              files: 0,
+              directories: 0,
+              ignoredEntries: 0,
+            }
           }
+          // Inbox producers/consumers may remove a directory while diagnostics walks it.
+          continue
         }
         throw error
       }
