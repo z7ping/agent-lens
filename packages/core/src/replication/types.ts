@@ -37,31 +37,11 @@ export const KNOWN_REPLICATION_ENTITY_TYPES = [
 export type KnownReplicationEntityType = typeof KNOWN_REPLICATION_ENTITY_TYPES[number]
 
 /**
- * Entity types whose current replicated state is fully reconstructed by the
- * CanonicalObservation root graph. These rows may participate in bounded
- * journal GC only after every dependent stream has advanced a durable capture
- * watermark for the same entity type.
+ * Every replicated R1 entity other than CanonicalObservation has its own
+ * Current-State Root. Each root is independently snapshotted/reconciled so
+ * orphan entities cannot be incorrectly covered by an Observation graph.
  */
-export const OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES = [
-  'AgentProduct',
-  'Host',
-  'AgentInstallation',
-  'RuntimeProfile',
-  'Project',
-  'Workspace',
-  'LogicalSession',
-  'SourceSession',
-  'AgentActor',
-  'SourceRecord',
-  'Evidence',
-  'CanonicalObservation',
-] as const satisfies readonly KnownReplicationEntityType[]
-
-export type ObservationRootReplicationEntityType =
-  typeof OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES[number]
-
-
-export const INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES = [
+export const CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES = [
   'AgentProduct',
   'Host',
   'AgentInstallation',
@@ -81,11 +61,18 @@ export const INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES = [
   'ToolDefinition',
 ] as const satisfies readonly KnownReplicationEntityType[]
 
+export type CurrentStateReplicationRootEntityType =
+  typeof CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES[number]
+
+/** @deprecated Internal compatibility alias; use Current-State Root terminology. */
+export const INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES =
+  CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES
+/** @deprecated Internal compatibility alias; use CurrentStateReplicationRootEntityType. */
 export type IndependentReplicationRootEntityType =
-  typeof INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES[number]
+  CurrentStateReplicationRootEntityType
 
 export const JOURNAL_REPLICATION_ENTITY_TYPES = [
-  ...INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES,
+  ...CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES,
   'CanonicalObservation',
 ] as const satisfies readonly KnownReplicationEntityType[]
 export type SharedRootEntityType = 'AgentProduct'
