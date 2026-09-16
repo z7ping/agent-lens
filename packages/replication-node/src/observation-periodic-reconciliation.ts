@@ -149,6 +149,26 @@ export async function pumpObservationPeriodicReconciliationPage(input: {
     }
   }
 
+  const progressKey = {
+    streamId: input.streamId,
+    generationId: input.generationId,
+    phase: 'incremental' as const,
+    entityType: 'CanonicalObservation' as const,
+  }
+  const existing = await input.incrementalProgress.get(progressKey)
+  if (!existing) {
+    throw new Error('Periodic Reconciliation requires initialized incremental progress')
+  }
+  const next: ObservationIncrementalProgress = {
+    ...existing,
+    revision: Math.max(existing.revision, cycle.throughRevision),
+    throughRevision: Math.max(existing.throughRevision, cycle.throughRevision),
+    updatedAt: now,
+  }
+  // Persist the replay boundary before releasing any journal dependency. If a
+  // later watermark update fails, the global minimum remains conservative.
+  await input.incrementalProgress.put(next)
+
   for (const entityType of OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES) {
     await input.captureProgress.advance({
       streamId: input.streamId,
@@ -157,23 +177,6 @@ export async function pumpObservationPeriodicReconciliationPage(input: {
       capturedRevision: cycle.throughRevision,
       ...(input.now === undefined ? {} : { now }),
     })
-  }
-
-  const progressKey = {
-    streamId: input.streamId,
-    generationId: input.generationId,
-    phase: 'incremental' as const,
-    entityType: 'CanonicalObservation' as const,
-  }
-  const existing = await input.incrementalProgress.get(progressKey)
-  if (existing) {
-    const next: ObservationIncrementalProgress = {
-      ...existing,
-      revision: Math.max(existing.revision, cycle.throughRevision),
-      throughRevision: Math.max(existing.throughRevision, cycle.throughRevision),
-      updatedAt: now,
-    }
-    await input.incrementalProgress.put(next)
   }
 
   const dueAt = nextDueAt(now, input.intervalMs)
