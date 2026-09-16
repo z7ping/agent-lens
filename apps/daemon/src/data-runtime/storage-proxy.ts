@@ -504,6 +504,7 @@ export class DataRuntimeStorageService implements StorageService {
   readonly replicationCanonicalChanges: SqliteStorageService['replicationCanonicalChanges']
   readonly replicationChangeProgress: SqliteStorageService['replicationChangeProgress']
   readonly replicationJournalLifecycle: SqliteStorageService['replicationJournalLifecycle']
+  readonly replicationIndependentRoots: SqliteStorageService['replicationIndependentRoots']
   readonly replicationObservationSnapshot: SqliteStorageService['replicationObservationSnapshot']
   readonly replicationSnapshotBootstrapProgress: SqliteStorageService['replicationSnapshotBootstrapProgress']
   readonly replicationRuntimeControl: SqliteStorageService['replicationRuntimeControl']
@@ -540,6 +541,7 @@ export class DataRuntimeStorageService implements StorageService {
     this.replicationCanonicalChanges = namespaceProxy(executor, ['replicationCanonicalChanges'])
     this.replicationChangeProgress = namespaceProxy(executor, ['replicationChangeProgress'])
     this.replicationJournalLifecycle = namespaceProxy(executor, ['replicationJournalLifecycle'])
+    this.replicationIndependentRoots = namespaceProxy(executor, ['replicationIndependentRoots'])
     this.replicationObservationSnapshot = namespaceProxy(executor, ['replicationObservationSnapshot'])
     this.replicationSnapshotBootstrapProgress = namespaceProxy(executor, ['replicationSnapshotBootstrapProgress'])
     this.replicationRuntimeControl = namespaceProxy(executor, ['replicationRuntimeControl'])
