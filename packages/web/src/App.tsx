@@ -227,7 +227,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
-  const agentSelectionMap = new Map<string, AgentFacetDto>(agents.map(agent => [agent.sourceId, agent]))
+  const agentSelectionMap = new Map<string, AgentFacetDto>(agents.map(agent => [agent.sourceId, agent] as const))
   for (const agent of agentOverviewItems) {
     agentSelectionMap.set(agent.sourceId, {
       sourceId: agent.sourceId,
