@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
 import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } from './client/preferences'
 import { useReviewUrlSync } from './client/useReviewUrlSync'
@@ -18,6 +19,7 @@ import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './component
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
 const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
+const IntegrationManagementPage = lazy(() => import('./features/IntegrationManagementPage').then(module => ({ default: module.IntegrationManagementPage })))
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
@@ -92,6 +94,34 @@ function AgentRescanAction({
   </>
 }
 
+function IntegrationRescanAction({
+  model,
+  snapshot,
+}: {
+  model: AgentLensClientModel
+  snapshot: ClientSnapshot
+}) {
+  const { t } = useTranslation('agents')
+  const scanBusy = snapshot.integrationDiscoveryLoading
+    || snapshot.integrationDiscoveryRescanning
+    || snapshot.integrationManagement?.discovery.status === 'scanning'
+  const scanError = snapshot.integrationDiscoveryError
+
+  return <>
+    {scanError && <StatusBadge tone="danger" title={scanError}>{t('status.scanFailed')}</StatusBadge>}
+    <Button
+      size="small"
+      loading={Boolean(scanBusy)}
+      disabled={Boolean(scanBusy)}
+      title={t('onboarding.rescan')}
+      onClick={() => void model.rescanIntegrationDiscovery().catch(() => undefined)}
+    >
+      <UiIcon name="refresh" size={14}/>
+      {scanBusy ? t('status.scanning') : t('onboarding.rescan')}
+    </Button>
+  </>
+}
+
 function WorkspaceTopBar({
   pathname,
   snapshot,
@@ -133,6 +163,8 @@ function WorkspaceTopBar({
       item.integrationId === selectedAgentId || item.productId === selectedAgentId
     )
     items = [{ label: t('agents') }, { label: selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
+  } else if (pathname.startsWith('/integrations')) {
+    items = [{ label: t('settings') }, { label: t('agentIntegration') }]
   } else if (pathname.startsWith('/backup')) {
     items = [{ label: t('settings') }, { label: t('assetBackup') }]
   } else {
@@ -189,11 +221,43 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onTools = location.pathname.startsWith('/tools')
   const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
+  const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
   const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
+  const agentSelectionMap = new Map<string, AgentFacetDto>(agents.map(agent => [agent.sourceId, agent] as const))
+  for (const agent of agentOverviewItems) {
+    agentSelectionMap.set(agent.sourceId, {
+      sourceId: agent.sourceId,
+      productId: agent.productId,
+      displayName: agent.displayName,
+      supported: agent.supported,
+      enabled: agent.enabled,
+      detected: agent.detected,
+      installationIds: agent.installations.map(item => item.id),
+    })
+  }
+  for (const management of managedIntegrationItems) {
+    const discoveryDetected = management.tool?.presence === 'present' || management.tool?.presence === 'data-only'
+    const overview = agentOverviewItems.find(item =>
+      item.productId === management.productId || item.sourceId === management.integrationId
+    )
+    if (!overview && !discoveryDetected) continue
+    const sourceId = overview?.sourceId ?? management.integrationId
+    const current = agentSelectionMap.get(sourceId)
+    agentSelectionMap.set(sourceId, {
+      sourceId,
+      productId: management.productId,
+      displayName: overview?.displayName ?? management.displayName,
+      supported: true,
+      enabled: management.enabled.configured,
+      detected: Boolean(current?.detected || overview?.detected || discoveryDetected),
+      installationIds: overview?.installations.map(item => item.id) ?? current?.installationIds ?? [],
+    })
+  }
+  const agentSelectionItems = [...agentSelectionMap.values()]
   const selectedIntegrationExists = managedIntegrationItems.some(item =>
     item.integrationId === agentOverviewSourceId || item.productId === agentOverviewSourceId
   )
@@ -201,7 +265,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     ? agentOverviewSourceId
     : managedIntegrationItems.find(item => item.tool?.presence === 'present' || item.tool?.presence === 'data-only')?.integrationId
       ?? agentOverviewItems.find(item => item.detected)?.sourceId
-      ?? managedIntegrationItems[0]?.integrationId
       ?? agentOverviewItems[0]?.sourceId
       ?? agents.find(agent => agent.detected)?.sourceId
       ?? agents[0]?.sourceId
@@ -265,6 +328,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
+        agentSelectionAgents={agentSelectionItems}
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
         onRefreshAgents={() => { void model.refreshFacetsAndAgents() }}
@@ -291,7 +355,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           onPageToolsHost={setWorkspaceTopbarHost}
           actions={onAgents
             ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
-            : undefined}
+            : onIntegrations
+              ? <IntegrationRescanAction model={model} snapshot={snapshot}/>
+              : undefined}
         />
         {hasSseBanner && <div className="sse-banner" role="status" aria-live="polite">
           <span className="sse-banner-icon" aria-hidden="true"><UiIcon name="exclamation" size={14}/></span>
@@ -312,6 +378,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} />} />
+          <Route path="/integrations" element={<IntegrationManagementPage model={model} topbarHost={workspaceTopbarHost} />} />
           <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>

@@ -100,6 +100,7 @@
 
 .workspace-settings-menu-item,
 .workspace-settings-release .header-link {
+  position: relative;
   display: flex;
   width: 100%;
   min-height: 36px;
@@ -135,6 +136,15 @@
 .workspace-settings-menu-item:hover > svg,
 .workspace-settings-menu-item.is-active > svg {
   color: currentColor;
+}
+
+.workspace-settings-menu-item .workspace-nav-dot {
+  position: static;
+  margin-left: auto;
+}
+
+.workspace-settings-menu-item .workspace-nav-dot + .workspace-settings-menu-tail {
+  margin-left: 0;
 }
 
 .workspace-settings-menu-tail {
