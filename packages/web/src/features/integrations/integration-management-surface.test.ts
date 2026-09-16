@@ -21,7 +21,7 @@ test('设置菜单持有稳定的智能体接入入口与独立路由', () => {
 })
 
 test('接入控制面覆盖扫描、添加、启停、授权、卸载与排序', () => {
-  assert.match(page, /rescanIntegrationDiscovery|IntegrationRescanAction/)
+  assert.match(app, /model\.rescanIntegrationDiscovery\(\)/)
   assert.match(page, /model\.installIntegration/)
   assert.match(page, /model\.setIntegrationEnabled/)
   assert.match(page, /model\.authorizeIntegration/)
