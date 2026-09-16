@@ -30,6 +30,7 @@ const migrations: readonly Migration[] = [
   { version: 20, name: 'checkpoint-revision', fileName: '020-checkpoint-revision.sql' },
   { version: 21, name: 'maintenance-jobs', fileName: '021-maintenance-jobs.sql' },
   { version: 22, name: 'asset-binding-scope', fileName: '022-asset-binding-scope.sql' },
+  { version: 23, name: 'replication-snapshot-bootstrap-progress', fileName: '023-replication-snapshot-bootstrap-progress.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
