@@ -31,9 +31,10 @@ CREATE TABLE IF NOT EXISTS replication_reconciliation_cycles (
 CREATE INDEX IF NOT EXISTS idx_replication_reconciliation_cycles_due
   ON replication_reconciliation_cycles(status, next_due_at, stream_id);
 
--- Existing streams become conservatively dependent on every entity type that
--- the CanonicalObservation root graph can reconstruct. They remain at revision
--- zero until a full periodic reconciliation proves current-state coverage.
+-- v26 introduced conservative watermarks for the first Current-State coverage
+-- set plus CanonicalObservation. v27 completes this to all 18 R1 replicated
+-- entity types. Every row remains at revision zero until its own Root proves
+-- current-state coverage.
 INSERT INTO replication_capture_watermarks(
   stream_id, generation_id, entity_type, captured_revision, dependency_state, updated_at
 )
