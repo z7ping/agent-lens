@@ -85,9 +85,14 @@ test('health 保持轻量，diagnostics 区分物理占用、采集活动与真�
         totalChanges: number
         byEntityType: unknown[]
       }
+      storageSnapshot: {
+        retentionDays: number
+        current: { day: string, capturedAt: string }
+        history: { count: number }
+      }
       growthMetrics: {
-        canonicalGrowthRate: { state: string, basis: string }
-        storageAmplificationRate: { state: string, basis: string }
+        canonicalGrowthRate: { state: string }
+        storageAmplificationRate: { state: string }
       }
       dataGrowth: {
         totals: { sourceRecords: number }
@@ -129,8 +134,12 @@ test('health 保持轻量，diagnostics 区分物理占用、采集活动与真�
     assert.equal(details.replicationJournal.available, true)
     assert.equal(details.replicationJournal.totalChanges, 0)
     assert.deepEqual(details.replicationJournal.byEntityType, [])
-    assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'snapshot-required')
-    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'snapshot-required')
+    assert.equal(details.storageSnapshot.retentionDays, 35)
+    assert.equal(details.storageSnapshot.current.day.length, 10)
+    assert.equal(typeof details.storageSnapshot.current.capturedAt, 'string')
+    assert.equal(details.storageSnapshot.history.count, 0)
+    assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'insufficient-history')
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'definition-required')
 
     assert.equal(typeof details.dataGrowth.totals.sourceRecords, 'number')
     assert.equal(typeof details.dataGrowth.last7Days.sessions, 'number')
@@ -286,8 +295,8 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
     assert.ok(details.storageBreakdown.categories.canonical.allocatedBytes > 0)
     assert.ok(details.storageBreakdown.categories.evidence.allocatedBytes > 0)
     assert.ok(details.storageBreakdown.categories.replication.allocatedBytes > 0)
-    assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'snapshot-required')
-    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'snapshot-required')
+    assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'insufficient-history')
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'definition-required')
   } finally {
     await storage.close()
   }
