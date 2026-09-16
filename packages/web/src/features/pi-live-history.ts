@@ -20,7 +20,14 @@ export type PiLiveHistoryItem =
 export function omitPiLivePromptMessages(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
   if (!promptText) return items
   const normalized = promptText.trim()
-  return items.filter(item => !(item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized))
+  return items.flatMap(item => {
+    const duplicatePrompt = item.kind === 'message'
+      && item.role === 'user'
+      && item.text.trim() === normalized
+    if (!duplicatePrompt) return [item]
+    if (item.attachments?.length) return [{ ...item, text: '' }]
+    return []
+  })
 }
 
 function elapsedMs(start: string, end: string): number | undefined {
