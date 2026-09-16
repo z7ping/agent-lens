@@ -92,22 +92,6 @@ export type LiveEventDto =
       output?: string | undefined
       durationMs?: number | undefined
     }
-  | {
-      type: 'subagent.start'
-      subagentId?: string | undefined
-      childSessionId?: string | undefined
-      delegationId?: string | undefined
-      summary?: string | undefined
-    }
-  | {
-      type: 'subagent.end'
-      subagentId?: string | undefined
-      childSessionId?: string | undefined
-      delegationId?: string | undefined
-      status?: string | undefined
-      summary?: string | undefined
-      durationMs?: number | undefined
-    }
   | { type: 'error'; message: string }
   | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
 
@@ -304,18 +288,6 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(eventText(event.output) !== undefined ? { output: eventText(event.output) } : {}),
       ...(durationMs !== undefined ? { durationMs } : {}),
     }
-  }
-  if (type === 'subagent.start' || type === 'subagent.end') {
-    const durationMs = eventCount(event.durationMs)
-    return {
-      type,
-      ...(eventText(event.subagentId) !== undefined ? { subagentId: eventText(event.subagentId) } : {}),
-      ...(eventText(event.childSessionId) !== undefined ? { childSessionId: eventText(event.childSessionId) } : {}),
-      ...(eventText(event.delegationId) !== undefined ? { delegationId: eventText(event.delegationId) } : {}),
-      ...(eventText(event.status) !== undefined ? { status: eventText(event.status) } : {}),
-      ...(eventText(event.summary) !== undefined ? { summary: eventText(event.summary) } : {}),
-      ...(durationMs !== undefined ? { durationMs } : {}),
-    } as LiveEventDto
   }
   if (type === 'error') {
     return typeof event.message === 'string' && event.message ? { type, message: event.message } : null
