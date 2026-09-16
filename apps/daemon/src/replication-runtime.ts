@@ -4,7 +4,7 @@ import {
   pumpObservationReplicationRuntimeStep,
 } from '@agent-lens/replication-node'
 import {
-  INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES,
+  CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES,
 } from '@agent-lens/core/replication'
 import {
   SqliteReplicationReconciliationSink,
@@ -113,7 +113,7 @@ export async function runReplicationMaintenanceLoop(
 
         let allRootsActive = result.kind === 'active'
         let streamDidWork = result.didWork
-        for (const entityType of INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES) {
+        for (const entityType of CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES) {
           if (signal.aborted) return
           await options.cooperate?.()
           if (signal.aborted) return
