@@ -1,10 +1,18 @@
-import { normalizePiSessionEntry, type PiLiveSnapshotDto, type PiNativeFact, type PiNativeUsage } from '@agent-lens/protocol'
+import {
+  normalizePiSessionEntry,
+  piNativeImageAttachment,
+  piNativeImageAttachments,
+  type PiLiveSnapshotDto,
+  type PiNativeFact,
+  type PiNativeImageAttachment,
+  type PiNativeUsage,
+} from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
 
 export type PiLiveItemState = 'running' | 'settled'
 
 export type PiLiveHistoryItem =
-  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
+  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: PiNativeImageAttachment[] | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'thinking'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; at: string; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
@@ -13,7 +21,12 @@ export type PiLiveHistoryItem =
 export function omitPiLivePromptMessages(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
   if (!promptText) return items
   const normalized = promptText.trim()
-  return items.filter(item => !(item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized))
+  return items.flatMap(item => {
+    const duplicate = item.kind === 'message' && item.role === 'user' && item.text.trim() === normalized
+    if (!duplicate) return [item]
+    if (item.attachments?.length) return [{ ...item, text: '' }]
+    return []
+  })
 }
 
 function elapsedMs(start: string, end: string): number | undefined {
@@ -40,7 +53,8 @@ function resultOutput(fact: Extract<PiNativeFact, { kind: 'tool-result' }>): str
 
 function messageText(fact: Extract<PiNativeFact, { kind: 'message' }>): string {
   if (fact.text.trim()) return fact.text
-  if (fact.nonTextContent.length) return translateProduct('piLive:history.nonTextContent', { count: fact.nonTextContent.length })
+  const unrenderedCount = fact.nonTextContent.filter(value => !piNativeImageAttachment(value)).length
+  if (unrenderedCount) return translateProduct('piLive:history.nonTextContent', { count: unrenderedCount })
   return ''
 }
 
@@ -56,11 +70,13 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
     if (fact.kind === 'message') {
       if (fact.role === 'user' || fact.role === 'assistant') {
         const text = messageText(fact)
-        if (text) items.push({
+        const attachments = piNativeImageAttachments(fact.nonTextContent)
+        if (text || attachments.length) items.push({
           id: fact.id,
           kind: 'message',
           role: fact.role,
           text,
+          ...(attachments.length ? { attachments } : {}),
           at: fact.at,
           ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
         })
