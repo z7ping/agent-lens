@@ -32,6 +32,13 @@ import {
   replicationJournalDetails,
   storageBreakdownDetails,
 } from './storage-diagnostics'
+import {
+  STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_RETENTION_DAYS,
+  STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+  storageGrowthMetricsFromSnapshots,
+  type StorageDiagnosticSnapshot,
+} from './storage-diagnostic-snapshots'
 import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
 import { SqliteUnknownObservationProjection } from './unknown-observation-projection'
 
@@ -320,6 +327,10 @@ export class SqliteStorageService implements StorageService {
     const health = await this.health()
     const unknownObservations = await this.unknownObservationProjection.summary()
     const toolUsageFacts = await this.projectionBackfill.toolUsageFactCoverage()
+    const persistedSnapshots = await this.checkpoints.get<unknown>(
+      STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+      STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+    )
     return this.executor.run(() => {
       const coverageItems = this.db.prepare(`
         SELECT subject_type AS subjectType,
@@ -360,6 +371,38 @@ export class SqliteStorageService implements StorageService {
       const count = (tableName: string): number => countRow(this.db.prepare(
         `SELECT COUNT(*) AS count FROM ${tableName}`,
       ).get())
+      const totals = {
+        sourceRecords: count('source_records'),
+        observations: count('observations'),
+        evidence: count('evidence'),
+        sessions: count('logical_sessions'),
+      }
+      const currentSnapshot: StorageDiagnosticSnapshot = {
+        version: 1,
+        day: new Date().toISOString().slice(0, 10),
+        capturedAt: new Date().toISOString(),
+        hotFootprintBytes: typeof baseGrowth.hotFootprintBytes === 'number'
+          ? baseGrowth.hotFootprintBytes
+          : 0,
+        databaseBytes: typeof baseGrowth.databaseBytes === 'number'
+          ? baseGrowth.databaseBytes
+          : 0,
+        walBytes,
+        counts: totals,
+        categoryAllocatedBytes: {
+          canonical: breakdown.categories.canonical.allocatedBytes,
+          evidence: breakdown.categories.evidence.allocatedBytes,
+          sourceRaw: breakdown.categories.sourceRaw.allocatedBytes,
+          projection: breakdown.categories.projection.allocatedBytes,
+          replication: breakdown.categories.replication.allocatedBytes,
+          operational: breakdown.categories.operational.allocatedBytes,
+        },
+        replicationChanges: replicationJournal.totalChanges,
+      }
+      const growthMetrics = storageGrowthMetricsFromSnapshots(
+        currentSnapshot,
+        persistedSnapshots,
+      )
 
       return {
         ...health,
@@ -401,28 +444,19 @@ export class SqliteStorageService implements StorageService {
           },
           capturedActivity: activity,
           replicationJournal,
-          growthMetrics: {
-            canonicalGrowthRate: {
-              state: 'snapshot-required',
-              basis: 'storage-snapshot-delta',
-              reason: 'captured_at describes activity time, not net storage growth; compare persisted storage snapshots instead.',
-            },
-            storageAmplificationRate: {
-              state: 'snapshot-required',
-              basis: 'storage-snapshot-delta/original-agent-activity',
-              reason: 'compressed SourceRecord bytes are not a stable denominator for original Agent activity.',
-            },
+          storageSnapshot: {
+            scope: STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+            key: STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+            retentionDays: STORAGE_DIAGNOSTIC_SNAPSHOT_RETENTION_DAYS,
+            current: currentSnapshot,
+            history: growthMetrics.history,
           },
+          growthMetrics,
           dataGrowth: {
             ...baseGrowth,
             thirtyDayCutoff: activity.cutoffs.last30Days,
             sevenDayCutoff: activity.cutoffs.last7Days,
-            totals: {
-              sourceRecords: count('source_records'),
-              observations: count('observations'),
-              evidence: count('evidence'),
-              sessions: count('logical_sessions'),
-            },
+            totals,
             last7Days: {
               sourceRecords: activity.sourceRaw.last7Days.records,
               observations: activity.canonical.available ? activity.canonical.last7Days?.records ?? null : null,
