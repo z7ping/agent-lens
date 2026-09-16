@@ -415,6 +415,81 @@ function gzipOriginalSize(blob: unknown): number | null {
   ) >>> 0
 }
 
+const LARGE_PAYLOAD_THRESHOLDS = [
+  { id: '64KiB', bytes: 64 * 1024 },
+  { id: '256KiB', bytes: 256 * 1024 },
+  { id: '1MiB', bytes: 1024 * 1024 },
+] as const
+
+function payloadSizeProfile(
+  db: Database.Database,
+  input: {
+    table: 'source_records' | 'observations'
+    bytesExpression: string
+    where?: string
+  },
+) {
+  const where = input.where ? `WHERE ${input.where}` : ''
+  const bucketColumns = LARGE_PAYLOAD_THRESHOLDS.flatMap((threshold, index) => [
+    `SUM(CASE WHEN ${input.bytesExpression} >= ${threshold.bytes} THEN 1 ELSE 0 END) AS count_${index}`,
+    `COALESCE(SUM(CASE WHEN ${input.bytesExpression} >= ${threshold.bytes} THEN ${input.bytesExpression} ELSE 0 END), 0) AS bytes_${index}`,
+  ]).join(',\n       ')
+  const row = rowRecord(db.prepare(`
+    SELECT COUNT(*) AS records,
+           COALESCE(SUM(${input.bytesExpression}), 0) AS payloadBytes,
+           ${bucketColumns}
+    FROM ${input.table}
+    ${where}
+  `).get())
+  const payloadBytes = requiredNumber(row, 'payloadBytes')
+  return {
+    records: requiredNumber(row, 'records'),
+    payloadBytes,
+    thresholds: LARGE_PAYLOAD_THRESHOLDS.map((threshold, index) => {
+      const bytes = requiredNumber(row, `bytes_${index}`)
+      return {
+        threshold: threshold.id,
+        thresholdBytes: threshold.bytes,
+        records: requiredNumber(row, `count_${index}`),
+        storedPayloadBytes: bytes,
+        shareOfPayloadBytes: payloadBytes > 0 ? bytes / payloadBytes : 0,
+      }
+    }),
+  }
+}
+
+/**
+ * Expensive, explicit diagnostic used only to decide whether a Content Store
+ * is justified. It measures stored payload bytes, not total SQLite row/index
+ * allocation. Physical category allocation stays in storageBreakdownDetails().
+ */
+export function largePayloadProfile(db: Database.Database) {
+  const sourceRaw = payloadSizeProfile(db, {
+    table: 'source_records',
+    bytesExpression: `CASE
+      WHEN payload_encoding = 'gzip-json' THEN COALESCE(length(payload_blob), 0)
+      ELSE length(CAST(payload_json AS BLOB))
+    END`,
+  })
+  const canonical = payloadSizeProfile(db, {
+    table: 'observations',
+    bytesExpression: 'length(CAST(payload_json AS BLOB))',
+  })
+  const toolResults = payloadSizeProfile(db, {
+    table: 'observations',
+    bytesExpression: 'length(CAST(payload_json AS BLOB))',
+    where: `kind = 'tool.result'`,
+  })
+
+  return {
+    basis: 'stored-payload-bytes-not-total-row-or-index-allocation',
+    thresholds: LARGE_PAYLOAD_THRESHOLDS,
+    sourceRaw,
+    canonical,
+    toolResults,
+  }
+}
+
 export function sourceActivityPayloadBytesBetween(
   db: Database.Database,
   afterExclusive: string,
