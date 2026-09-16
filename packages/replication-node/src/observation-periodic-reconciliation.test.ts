@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   OBSERVATION_ROOT_REPLICATION_ENTITY_TYPES,
+  type KnownReplicationEntityType,
   type ReplicationReconciliationSink,
 } from '@agent-lens/core/replication'
 import type { CanonicalReplicationReader } from './canonical-graph'
@@ -37,7 +38,7 @@ class MemoryCycles implements ObservationPeriodicReconciliationCycleStore {
   async beginReconciliationCycle(input: {
     streamId: string
     generationId: string
-    entityType: import('@agent-lens/core/replication').KnownReplicationEntityType
+    entityType: KnownReplicationEntityType
     throughRevision: number
     now?: string
   }) {
@@ -61,7 +62,7 @@ class MemoryCycles implements ObservationPeriodicReconciliationCycleStore {
   async completeReconciliationCycle(input: {
     streamId: string
     generationId: string
-    entityType: import('@agent-lens/core/replication').KnownReplicationEntityType
+    entityType: KnownReplicationEntityType
     nextDueAt: string
     now?: string
   }) {
