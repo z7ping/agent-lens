@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { IndependentReplicationRootEntityType } from '@agent-lens/core/replication'
 import {
   canonicalReplicationReaderFromRepositories,
   pumpIndependentRootRuntimeStep,
@@ -25,9 +26,12 @@ async function createStorage() {
   return storage
 }
 
-async function step(storage: SqliteStorageService) {
+async function step(
+  storage: SqliteStorageService,
+  entityType: IndependentReplicationRootEntityType = 'Coverage',
+) {
   return pumpIndependentRootRuntimeStep({
-    entityType: 'Coverage',
+    entityType,
     changes: storage.replicationCanonicalChanges,
     roots: storage.replicationIndependentRoots,
     dependencies: canonicalReplicationReaderFromRepositories(
@@ -114,6 +118,49 @@ test('Independent Root Runtime reaches active and keeps capturedRevision current
       updatedHighWater,
     )
     assert.equal((await storage.replication.listPending('stream-1')).length, 1)
+  } finally {
+    await storage.close()
+  }
+})
+
+
+test('orphan Host without any Observation is still covered by its own Current-State Root', async () => {
+  const storage = await createStorage()
+  try {
+    await storage.repositories.hosts.put({
+      id: 'host-orphan',
+      name: 'orphan host',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: '2026-09-17T00:00:00.000Z',
+      lastSeenAt: '2026-09-17T00:00:00.000Z',
+    })
+    const baseline = await storage.replicationCanonicalChanges.highWaterRevision()
+
+    assert.deepEqual(await step(storage, 'Host'), { kind: 'bootstrap', stage: 'delta' })
+    assert.deepEqual(await step(storage, 'Host'), { kind: 'bootstrap', stage: 'reconcile' })
+    const active = await step(storage, 'Host')
+    assert.equal(active.kind, 'active')
+
+    const pending = await storage.replication.listPending('stream-1')
+    assert.ok(pending.some(item =>
+      item.entityType === 'Host' && item.originEntityId === 'host-orphan'
+    ))
+    assert.equal(
+      (await storage.replicationJournalLifecycle.get({
+        streamId: 'stream-1',
+        generationId: 'generation-1',
+        entityType: 'Host',
+      }))?.capturedRevision,
+      baseline,
+    )
+
+    const observationCapture = await storage.replicationJournalLifecycle.get({
+      streamId: 'stream-1',
+      generationId: 'generation-1',
+      entityType: 'CanonicalObservation',
+    })
+    assert.equal(observationCapture?.capturedRevision, 0)
   } finally {
     await storage.close()
   }
