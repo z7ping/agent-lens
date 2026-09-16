@@ -43,21 +43,21 @@ function isPrimaryRow(item: IntegrationManagementItemDto): boolean {
 
 function IntegrationManagementRow({
   item,
-  index,
-  total,
+  moveUpTargetId,
+  moveDownTargetId,
   model,
   discoveryScanning,
   discoveryError,
 }: {
   item: IntegrationManagementItemDto
-  index: number
-  total: number
+  moveUpTargetId?: string | undefined
+  moveDownTargetId?: string | undefined
   model: AgentLensClientModel
   discoveryScanning: boolean
   discoveryError: string
 }) {
   const { t } = useTranslation('agents')
-  const { moveBy } = useIntegrationOrder()
+  const { move } = useIntegrationOrder()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [removeOpen, setRemoveOpen] = useState(false)
@@ -237,14 +237,14 @@ function IntegrationManagementRow({
         <IconButton
           size="small"
           aria-label={t('managementPage.moveUp', { agent: item.displayName })}
-          disabled={index === 0}
-          onClick={() => moveBy(item.integrationId, -1)}
+          disabled={!moveUpTargetId}
+          onClick={() => { if (moveUpTargetId) move(item.integrationId, moveUpTargetId) }}
         ><UiIcon name="sort-up" size={14}/></IconButton>
         <IconButton
           size="small"
           aria-label={t('managementPage.moveDown', { agent: item.displayName })}
-          disabled={index === total - 1}
-          onClick={() => moveBy(item.integrationId, 1)}
+          disabled={!moveDownTargetId}
+          onClick={() => { if (moveDownTargetId) move(item.integrationId, moveDownTargetId) }}
         ><UiIcon name="sort-down" size={14}/></IconButton>
       </span>
     </div>
@@ -323,11 +323,11 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
           <span>{t('managementPage.readOnlyDiscovery')}</span>
         </div>
         <div className="integration-management-list">
-          {primaryItems.map(item => <IntegrationManagementRow
+          {primaryItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
             item={item}
-            index={items.indexOf(item)}
-            total={items.length}
+            moveUpTargetId={primaryItems[index - 1]?.integrationId}
+            moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
@@ -342,11 +342,11 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
           <span>{t('managementPage.otherSupportedHint')}</span>
         </div>
         <div className="integration-management-list">
-          {supportedItems.map(item => <IntegrationManagementRow
+          {supportedItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
             item={item}
-            index={items.indexOf(item)}
-            total={items.length}
+            moveUpTargetId={supportedItems[index - 1]?.integrationId}
+            moveDownTargetId={supportedItems[index + 1]?.integrationId}
             model={model}
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
