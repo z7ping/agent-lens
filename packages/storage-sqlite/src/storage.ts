@@ -395,7 +395,7 @@ export class SqliteStorageService implements StorageService {
       const sourceActivityInterval = !previousSnapshot
         ? {
             state: 'baseline' as const,
-            basis: 'source-record-payload-json-before-agentlens-compression',
+            basis: 'persisted-source-record-payload-json-before-compression',
             records: 0,
             originalPayloadBytes: 0,
             netNewSourceRecords: 0,
