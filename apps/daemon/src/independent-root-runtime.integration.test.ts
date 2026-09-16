@@ -118,6 +118,13 @@ test('Independent Root Runtime reaches active and keeps capturedRevision current
       updatedHighWater,
     )
     assert.equal((await storage.replication.listPending('stream-1')).length, 1)
+
+    const idle = await step(storage)
+    assert.equal(idle.kind, 'active')
+    if (idle.kind === 'active') {
+      assert.equal(idle.reconciliation.kind, 'not-due')
+      assert.equal(idle.didWork, false)
+    }
   } finally {
     await storage.close()
   }
