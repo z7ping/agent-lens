@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
   IntegrationAuthorizationCapabilityDto,
@@ -25,7 +26,7 @@ const capabilityLabelKey: Record<string, string> = {
   assets: 'integrationCapability.assets',
 }
 
-function capabilityLabel(capability: string, t: (key: string) => string): string {
+function capabilityLabel(capability: string, t: TFunction): string {
   const key = capabilityLabelKey[capability]
   return key ? t(key) : capability
 }
@@ -322,7 +323,7 @@ export function IntegrationManagementPage({ model }: { model: AgentLensClientMod
           <span>{t('managementPage.readOnlyDiscovery')}</span>
         </div>
         <div className="integration-management-list">
-          {primaryItems.map((item, index) => <IntegrationManagementRow
+          {primaryItems.map(item => <IntegrationManagementRow
             key={item.integrationId}
             item={item}
             index={items.indexOf(item)}
