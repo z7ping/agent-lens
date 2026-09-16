@@ -1,13 +1,13 @@
 import type {
-  SourceRawAuditCandidate,
-  SourceService,
-  StorageService,
-} from './index'
-import type {
+  SourceDefinition,
   SourceRawRecoveryCapability,
   SourceRawRecoveryCheck,
 } from '../contracts/source'
-import type { SourceRawRetentionDecision } from './source-raw-retention'
+import type {
+  SourceRawAuditCandidate,
+  SourceRawAuditReader,
+  SourceRawRetentionDecision,
+} from './source-raw-retention'
 import { evaluateSourceRawRetention } from './source-raw-retention'
 
 export interface SourceRawRecoveryAuditItem {
@@ -67,8 +67,8 @@ function preservedCheck(
 }
 
 export async function auditSourceRawRecoveryBatch(input: {
-  sources: Pick<SourceService, 'list'>
-  storage: Pick<StorageService, 'sourceRawAudit'>
+  sources: { list(): SourceDefinition[] }
+  storage: { sourceRawAudit?: SourceRawAuditReader }
   afterId?: string
   limit?: number
   signal?: AbortSignal
