@@ -125,7 +125,7 @@
   margin-top: 3px;
   overflow: hidden;
   color: var(--al-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -147,7 +147,7 @@
   border-radius: 999px;
   background: var(--al-surface);
   color: var(--al-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
