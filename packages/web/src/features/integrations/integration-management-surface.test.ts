@@ -102,7 +102,7 @@ test('首次扫描失败不得落入“未发现”分组', () => {
 })
 
 test('接入页把本机发现状态与接入启停状态分开表达', () => {
-  assert.match(page, /const discoveredStatus = integrationLifecycleState/)
+  assert.match(page, /integrationManagementLifecycleState\(item, t\)/)
   assert.match(page, /!packageState\.installed/)
   assert.match(page, /managementPage\.notAddedTitle/)
   assert.match(page, /managementPage\.enabledTitle/)
