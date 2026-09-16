@@ -431,7 +431,7 @@ function payloadSizeProfile(
 ) {
   const where = input.where ? `WHERE ${input.where}` : ''
   const bucketColumns = LARGE_PAYLOAD_THRESHOLDS.flatMap((threshold, index) => [
-    `SUM(CASE WHEN ${input.bytesExpression} >= ${threshold.bytes} THEN 1 ELSE 0 END) AS count_${index}`,
+    `COALESCE(SUM(CASE WHEN ${input.bytesExpression} >= ${threshold.bytes} THEN 1 ELSE 0 END), 0) AS count_${index}`,
     `COALESCE(SUM(CASE WHEN ${input.bytesExpression} >= ${threshold.bytes} THEN ${input.bytesExpression} ELSE 0 END), 0) AS bytes_${index}`,
   ]).join(',\n       ')
   const row = rowRecord(db.prepare(`
