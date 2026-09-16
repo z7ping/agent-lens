@@ -25,6 +25,7 @@ import { SqliteReplicationChangeProgressRepository } from './replication-change-
 import { SqliteReplicationJournalLifecycleRepository } from './replication-journal-lifecycle'
 import { SqliteCanonicalObservationSnapshotReader } from './replication-observation-snapshot'
 import { SqliteReplicationSnapshotBootstrapProgressRepository } from './replication-snapshot-bootstrap-progress'
+import { SqliteReplicationRuntimeControlRepository } from './replication-runtime-control'
 import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
@@ -172,6 +173,7 @@ export class SqliteStorageService implements StorageService {
   readonly replicationJournalLifecycle: SqliteReplicationJournalLifecycleRepository
   readonly replicationObservationSnapshot: SqliteCanonicalObservationSnapshotReader
   readonly replicationSnapshotBootstrapProgress: SqliteReplicationSnapshotBootstrapProgressRepository
+  readonly replicationRuntimeControl: SqliteReplicationRuntimeControlRepository
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -225,6 +227,7 @@ export class SqliteStorageService implements StorageService {
     this.replicationJournalLifecycle = new SqliteReplicationJournalLifecycleRepository(this.executor)
     this.replicationObservationSnapshot = new SqliteCanonicalObservationSnapshotReader(this.executor)
     this.replicationSnapshotBootstrapProgress = new SqliteReplicationSnapshotBootstrapProgressRepository(this.executor)
+    this.replicationRuntimeControl = new SqliteReplicationRuntimeControlRepository(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {
