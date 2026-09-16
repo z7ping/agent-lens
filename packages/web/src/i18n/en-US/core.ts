@@ -194,6 +194,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
     overview: 'Overview',
     agentOverview: 'Agent Overview',
     settings: 'Settings',
+    agentIntegration: 'Agent Integration',
     assetBackup: 'Asset Backup',
     openWorkspaceNavigation: 'Open workspace navigation',
     closeWorkspaceNavigation: 'Close workspace navigation',
