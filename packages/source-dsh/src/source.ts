@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
 import { access, readFile, readdir, stat } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, join } from 'node:path'
 import * as zlib from 'node:zlib'
+import { resolveDshHome } from '@agent-lens/integration-catalog'
 import type {
   DetectedSource,
   DiscoveredAsset,
@@ -145,9 +145,7 @@ function normalizeTimestamp(value: unknown, fallback?: string): string | undefin
 }
 
 function dshHome(env: Readonly<Record<string, string | undefined>>): string {
-  if (env.DSH_HOME?.trim()) return resolve(env.DSH_HOME.trim())
-  if (env.XDG_DATA_HOME?.trim()) return join(resolve(env.XDG_DATA_HOME.trim()), 'dsh')
-  return join(homedir(), '.local', 'share', 'dsh')
+  return resolveDshHome(env)
 }
 
 async function profileRoots(env: Readonly<Record<string, string | undefined>>): Promise<Array<{ profile: string; root: string }>> {
