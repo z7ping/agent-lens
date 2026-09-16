@@ -16,11 +16,18 @@ async function putHost(db: SqliteStorageService, id: string, seenAt: string) {
   })
 }
 
+function appendObservationChange(db: SqliteStorageService, id: string): void {
+  db.db.prepare(`
+    INSERT INTO replication_canonical_changes(entity_type, origin_entity_id)
+    VALUES ('CanonicalObservation', ?)
+  `).run(id)
+}
+
 test('journal high-water survives bounded GC and remains monotonic after new writes', async () => {
   const db = await storage()
   try {
-    await putHost(db, 'host-1', T0)
-    await putHost(db, 'host-2', T0)
+    appendObservationChange(db, 'observation-1')
+    appendObservationChange(db, 'observation-2')
     const highWater = await db.replicationJournalLifecycle.highWaterRevision()
     assert.ok(highWater >= 2)
 
@@ -38,7 +45,7 @@ test('journal high-water survives bounded GC and remains monotonic after new wri
     }
     assert.equal(await db.replicationJournalLifecycle.highWaterRevision(), highWater)
 
-    await putHost(db, 'host-3', T1)
+    appendObservationChange(db, 'observation-3')
     assert.ok((await db.replicationJournalLifecycle.highWaterRevision()) > highWater)
   } finally {
     db.close()
@@ -48,7 +55,7 @@ test('journal high-water survives bounded GC and remains monotonic after new wri
 test('paused stream blocks GC until explicit retirement and diagnostics explains the blocker', async () => {
   const db = await storage()
   try {
-    await putHost(db, 'host-before', T0)
+    appendObservationChange(db, 'observation-before')
     const captured = await db.replicationJournalLifecycle.highWaterRevision()
     await db.replication.ensureStream({
       relationshipId: 'rel-1', hubId: 'hub-1', streamId: 'stream-1', generationId: 'gen-1',
@@ -62,7 +69,7 @@ test('paused stream blocks GC until explicit retirement and diagnostics explains
       streamId: 'stream-1', status: 'paused',
       policyRevision: 'policy-1', historyRevision: 'history-1',
     })
-    await putHost(db, 'host-after', T1)
+    appendObservationChange(db, 'observation-after')
     const highWater = await db.replicationJournalLifecycle.highWaterRevision()
     assert.ok(highWater > captured)
 
@@ -101,7 +108,7 @@ test('paused stream blocks GC until explicit retirement and diagnostics explains
 test('journal GC does not depend on network ACK and preserves frozen exact-retry payload', async () => {
   const db = await storage()
   try {
-    await putHost(db, 'host-1', T0)
+    appendObservationChange(db, 'observation-1')
     const highWater = await db.replicationJournalLifecycle.highWaterRevision()
     await db.replication.ensureStream({
       relationshipId: 'rel-frozen', hubId: 'hub-1', streamId: 'stream-frozen',
@@ -133,6 +140,37 @@ test('journal GC does not depend on network ACK and preserves frozen exact-retry
     assert.ok(reclaimed.deletedChanges > 0)
     assert.deepEqual(await db.replication.getFrozenBatch('stream-frozen', 1), before)
     assert.equal((await db.replication.getStream('stream-frozen'))?.ackSequence, 0)
+  } finally {
+    db.close()
+  }
+})
+
+
+test('GC preserves non-Observation journal rows until their Root/Reconciliation semantics are covered', async () => {
+  const db = await storage()
+  try {
+    await putHost(db, 'host-uncovered', T0)
+    appendObservationChange(db, 'observation-covered')
+
+    const safety = await db.replicationJournalLifecycle.safety()
+    assert.ok(safety.reclaimableChanges >= 1)
+    assert.ok(safety.uncoveredChanges >= 1)
+    assert.deepEqual(safety.gcCoveredEntityTypes, ['CanonicalObservation'])
+
+    await db.replicationJournalLifecycle.reclaimBatch({ limit: 1000 })
+
+    const rows = db.db.prepare(`
+      SELECT entity_type AS entityType, origin_entity_id AS originEntityId
+      FROM replication_canonical_changes
+      ORDER BY revision
+    `).all() as Array<{ entityType: string; originEntityId: string }>
+
+    assert.ok(rows.some(row =>
+      row.entityType === 'Host' && row.originEntityId === 'host-uncovered'
+    ))
+    assert.equal(rows.some(row =>
+      row.entityType === 'CanonicalObservation' && row.originEntityId === 'observation-covered'
+    ), false)
   } finally {
     db.close()
   }
