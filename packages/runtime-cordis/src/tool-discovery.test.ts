@@ -125,6 +125,29 @@ test('OpenCode database marker is required before a data directory becomes produ
   }
 })
 
+test('DSH discovery reports data-only from the profiles root without inventing a CLI executable', async () => {
+  const root = join(tmpdir(), `agent-lens-dsh-discovery-${process.pid}-${Date.now()}`)
+  const dshHome = join(root, 'dsh')
+  await mkdir(join(dshHome, 'profiles', 'default'), { recursive: true })
+  try {
+    const items = await discoverOfficialTools({
+      env: { DSH_HOME: dshHome, PATH: '' },
+      homeDir: join(root, 'home'),
+      platform: process.platform,
+      timeoutMs: 1_000,
+      shellPathResolver: async () => undefined,
+      executableResolver: async () => undefined,
+    })
+    const dsh = items.find(item => item.integrationId === 'dsh')
+    assert.equal(dsh?.presence, 'data-only')
+    assert.equal(dsh?.configRoot, dshHome)
+    assert.equal(dsh?.dataRoot, dshHome)
+    assert.equal(dsh?.executable, undefined)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('discovery service exposes scanning state and coalesces concurrent rescans', async () => {
   const service = new OfficialToolDiscoveryService({
     env: { PATH: '' },
