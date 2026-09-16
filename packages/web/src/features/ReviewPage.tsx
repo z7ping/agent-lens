@@ -704,6 +704,7 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
+    attachments={node.attachments}
     author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
