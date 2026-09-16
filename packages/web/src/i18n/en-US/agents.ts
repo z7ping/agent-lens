@@ -244,10 +244,8 @@ export const englishAgentsMessages: LocaleMessagesDto = {
     observation: {
       integrationStatus: 'Integration',
       manageIntegration: 'Manage integration',
-      manageAuthorization: 'Review authorization',
       noOverviewTitle: 'No observable data yet',
-      noOverviewDescription: 'The local tool is supported or detected, but there is no asset or usage data to show yet.',
-      legacySourceTitle: '{{agent}} still uses the legacy source switch',
+      dataCapture: 'Data capture',
     },
     managementPage: {
       title: 'Agent Integration',
