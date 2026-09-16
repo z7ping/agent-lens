@@ -91,3 +91,49 @@ test('Raw audit reader 区分 Evidence-only 与 Canonical+Evidence', async () =>
     await storage.close()
   }
 })
+
+
+test('Raw audit 只读元数据，不解压 gzip Payload', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    await seedIdentity(storage)
+    await storage.repositories.sourceRecords.put({
+      id: 'raw-compressed',
+      sourceId: 'pi',
+      installationId: 'installation-1',
+      sourceSessionNativeId: 'native-session',
+      nativeType: 'history/message',
+      capturedAt: NOW,
+      locator: { kind: 'file', path: '/tmp/session.jsonl', offset: 42 },
+      fingerprint: 'raw-compressed-fingerprint',
+      payload: { text: 'x'.repeat(16_000) },
+      parserVersion: '1',
+    })
+
+    const encoding = storage.db.prepare(`
+      SELECT payload_encoding AS encoding
+      FROM source_records
+      WHERE id = 'raw-compressed'
+    `).get() as { encoding: string }
+    assert.equal(encoding.encoding, 'gzip-json')
+
+    // Corrupt the blob deliberately. A normal SourceRecord get() would fail to
+    // gunzip this payload, while Raw audit must remain metadata-only.
+    storage.db.prepare(`
+      UPDATE source_records
+      SET payload_blob = ?, payload_json = 'null'
+      WHERE id = 'raw-compressed'
+    `).run(Buffer.from([0, 1, 2, 3]))
+
+    const page = await storage.sourceRawAudit.list(undefined, 10)
+    const item = page.items.find(value => value.record.id === 'raw-compressed')
+    assert.ok(item)
+    assert.equal(item.record.payload, null)
+    assert.equal(item.record.locator.path, '/tmp/session.jsonl')
+    assert.equal(item.record.locator.offset, 42)
+    assert.equal(item.record.fingerprint, 'raw-compressed-fingerprint')
+  } finally {
+    await storage.close()
+  }
+})
