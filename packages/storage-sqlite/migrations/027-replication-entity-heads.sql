@@ -1,7 +1,9 @@
 CREATE TABLE IF NOT EXISTS replication_entity_heads (
   entity_type TEXT NOT NULL,
   origin_entity_id TEXT NOT NULL,
-  latest_revision INTEGER NOT NULL CHECK (latest_revision >= 0),
+  first_revision INTEGER NOT NULL CHECK (first_revision >= 0),
+  first_changed_at TEXT NOT NULL,
+  latest_revision INTEGER NOT NULL CHECK (latest_revision >= first_revision),
   latest_changed_at TEXT NOT NULL,
   PRIMARY KEY(entity_type, origin_entity_id)
 );
@@ -16,21 +18,31 @@ CREATE INDEX IF NOT EXISTS idx_replication_entity_heads_changed_at
 -- every current canonical row seeded by v8 is still represented in the journal.
 -- Collapse that history to one bounded head row per replicated entity.
 INSERT INTO replication_entity_heads(
-  entity_type, origin_entity_id, latest_revision, latest_changed_at
+  entity_type, origin_entity_id,
+  first_revision, first_changed_at,
+  latest_revision, latest_changed_at
 )
-SELECT c.entity_type,
-       c.origin_entity_id,
-       c.revision,
-       c.changed_at
-FROM replication_canonical_changes c
-JOIN (
-  SELECT entity_type, origin_entity_id, MAX(revision) AS latest_revision
+SELECT latest_row.entity_type,
+       latest_row.origin_entity_id,
+       first_row.revision,
+       first_row.changed_at,
+       latest_row.revision,
+       latest_row.changed_at
+FROM (
+  SELECT entity_type, origin_entity_id,
+         MIN(revision) AS first_revision,
+         MAX(revision) AS latest_revision
   FROM replication_canonical_changes
   GROUP BY entity_type, origin_entity_id
-) latest
-  ON latest.entity_type = c.entity_type
- AND latest.origin_entity_id = c.origin_entity_id
- AND latest.latest_revision = c.revision
+) bounds
+JOIN replication_canonical_changes first_row
+  ON first_row.entity_type = bounds.entity_type
+ AND first_row.origin_entity_id = bounds.origin_entity_id
+ AND first_row.revision = bounds.first_revision
+JOIN replication_canonical_changes latest_row
+  ON latest_row.entity_type = bounds.entity_type
+ AND latest_row.origin_entity_id = bounds.origin_entity_id
+ AND latest_row.revision = bounds.latest_revision
 WHERE 1
 ON CONFLICT(entity_type, origin_entity_id) DO UPDATE SET
   latest_revision = excluded.latest_revision,
@@ -41,9 +53,13 @@ CREATE TRIGGER IF NOT EXISTS trg_replication_entity_head_after_change
 AFTER INSERT ON replication_canonical_changes
 BEGIN
   INSERT INTO replication_entity_heads(
-    entity_type, origin_entity_id, latest_revision, latest_changed_at
+    entity_type, origin_entity_id,
+    first_revision, first_changed_at,
+    latest_revision, latest_changed_at
   ) VALUES (
-    NEW.entity_type, NEW.origin_entity_id, NEW.revision, NEW.changed_at
+    NEW.entity_type, NEW.origin_entity_id,
+    NEW.revision, NEW.changed_at,
+    NEW.revision, NEW.changed_at
   )
   ON CONFLICT(entity_type, origin_entity_id) DO UPDATE SET
     latest_revision = excluded.latest_revision,
