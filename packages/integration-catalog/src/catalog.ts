@@ -7,6 +7,7 @@ export type OfficialIntegrationId =
   | 'claude-code'
   | 'hermes'
   | 'opencode'
+  | 'dsh'
 
 export const HERMES_STATE_DB_NAME = 'state.db'
 export const OPENCODE_DB_NAME = 'opencode.db'
@@ -237,6 +238,27 @@ export const OFFICIAL_INTEGRATION_CATALOG: readonly OfficialIntegrationCatalogEn
             { path: '~/AppData/Roaming/opencode', platforms: ['win32'] },
             { envVar: 'XDG_DATA_HOME', append: ['opencode'], platforms: ['linux', 'darwin', 'freebsd', 'openbsd', 'aix', 'sunos'], expandHome: false },
             { path: '~/.local/share/opencode' },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    integrationId: 'dsh',
+    productId: 'dsh',
+    displayName: 'DeepSeek Harness',
+    defaultOrder: 60,
+    package: { packageName: '@agent-lens/integration-dsh' },
+    discovery: {
+      roots: [
+        {
+          id: 'data',
+          role: 'data',
+          marker: 'profiles',
+          candidates: [
+            { envVar: 'DSH_HOME', expandHome: false, exclusiveWhenSet: true },
+            { envVar: 'XDG_DATA_HOME', append: ['dsh'], expandHome: false },
+            { path: '~/.local/share/dsh' },
           ],
         },
       ],
