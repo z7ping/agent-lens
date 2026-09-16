@@ -34,6 +34,10 @@ function emptyDependencies(): CanonicalReplicationReader {
 class MemoryCycles implements ObservationPeriodicReconciliationCycleStore {
   state: ObservationPeriodicReconciliationCycle | null = null
 
+  async getReconciliationCycle() {
+    return this.state
+  }
+
   async beginReconciliationCycle(input: {
     streamId: string
     generationId: string
