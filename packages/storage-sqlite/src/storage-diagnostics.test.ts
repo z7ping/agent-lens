@@ -273,12 +273,16 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
         available: boolean
         totalChanges: number
         distinctEntities: number
+        extraChangesBeyondFirst: number
         changesPerDistinctEntity: number | null
+        extraChangesPerDistinctEntity: number | null
         byEntityType: Array<{
           entityType: string
           changes: number
           distinctEntities: number
+          extraChangesBeyondFirst: number
           changesPerDistinctEntity: number | null
+          extraChangesPerDistinctEntity: number | null
         }>
       }
       growthMetrics: {
@@ -306,6 +310,14 @@ test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 R
     assert.ok(details.replicationJournal.totalChanges >= 7)
     assert.ok(details.replicationJournal.distinctEntities >= 7)
     assert.ok((details.replicationJournal.changesPerDistinctEntity ?? 0) >= 1)
+    assert.ok(details.replicationJournal.extraChangesBeyondFirst >= 0)
+    assert.ok((details.replicationJournal.extraChangesPerDistinctEntity ?? 0) >= 0)
+    const sourceRecordJournal = details.replicationJournal.byEntityType.find(
+      item => item.entityType === 'SourceRecord',
+    )
+    assert.ok(sourceRecordJournal)
+    assert.ok((sourceRecordJournal?.extraChangesBeyondFirst ?? 0) >= 1)
+    assert.ok((sourceRecordJournal?.extraChangesPerDistinctEntity ?? 0) >= 1)
     assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'SourceRecord'))
     assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'CanonicalObservation'))
     assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'Evidence'))
