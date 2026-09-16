@@ -102,7 +102,6 @@ function readonlyRecord(value: unknown): Readonly<Record<string, unknown>> | und
     : undefined
 }
 
-
 type StorageCategoryName =
   | 'canonical'
   | 'evidence'
@@ -312,6 +311,7 @@ export class SqliteStorageService implements StorageService {
       walBytes,
       shmBytes,
       tempAllocatedBytes,
+      tempScope: 'sqlite-temp-schema',
       logicalBytes,
       databaseAllocatedBytes: logicalBytes,
       reclaimableBytes,
