@@ -78,6 +78,73 @@ export interface SourceRecordEmitter {
   emit(record: SourceRecord): void | Promise<void>
 }
 
+export type SourceRawAuthority =
+  | 'native-store'
+  | 'agent-lens-only'
+  | 'unknown'
+
+export type SourceRawMutability =
+  | 'append-oriented'
+  | 'mutable'
+  | 'ephemeral'
+  | 'unknown'
+
+export type SourceRawLocatorStability =
+  | 'stable'
+  | 'best-effort'
+  | 'none'
+  | 'unknown'
+
+export type SourceRawVerification =
+  | 'fingerprint'
+  | 'identity-only'
+  | 'none'
+  | 'unknown'
+
+export type SourceRawPersistencePreference =
+  | 'reference'
+  | 'inline'
+  | 'blob'
+  | 'preserve'
+
+export interface SourceRawRecoveryCapability {
+  authority: SourceRawAuthority
+  locatorStability: SourceRawLocatorStability
+  mutability: SourceRawMutability
+  verification: SourceRawVerification
+  canReread: boolean
+  canReparse: boolean
+  replayable: boolean
+  persistencePreference: SourceRawPersistencePreference
+  reason?: string
+}
+
+export type SourceRawRecoveryState =
+  | 'verified'
+  | 'preserved'
+  | 'unavailable'
+  | 'drifted'
+  | 'unsupported'
+  | 'unknown'
+
+export interface SourceRawRecoveryCheck {
+  state: SourceRawRecoveryState
+  checkedAt: string
+  currentFingerprint?: string
+  reason?: string
+}
+
+export interface SourceRawRecoveryContext extends SourceExecutionContext {}
+
+export interface SourceRawRecoveryPolicy {
+  describe(record: SourceRecord): SourceRawRecoveryCapability
+  verify?(
+    record: SourceRecord,
+    ctx: SourceRawRecoveryContext,
+  ): Promise<SourceRawRecoveryCheck>
+}
+
+
 export interface DiscoveredAssetBindingHint {
   runtimeProfileId?: string
   scope?: AssetScope
@@ -107,5 +174,6 @@ export interface SourceDefinition {
   discoverAssets?(ctx: SourceExecutionContext): AsyncIterable<DiscoveredAsset>
   ingestHistory?(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord>
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
+  rawRecovery?: SourceRawRecoveryPolicy
   normalize(record: SourceRecord, ctx: SourceNormalizationContext): Promise<NormalizedSourceOutput>
 }
