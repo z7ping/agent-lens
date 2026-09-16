@@ -93,7 +93,6 @@ test('Pi user-triggered bash execution remains explicit activity without being m
   assert.equal((observation.payload as { event?: string }).event, 'pi.bash_execution')
 })
 
-
 test('Pi historical user images enter canonical attachments without duplicating image bytes in nonTextContent', async () => {
   const normalized = await normalizePiRecord(sourceRecord({
     type: 'message',
