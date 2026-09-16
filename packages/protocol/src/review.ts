@@ -100,8 +100,8 @@ function attachmentFromValue(value: unknown, wrapperKind: string | undefined, in
 /**
  * Projects source-normalized historical message payloads into the public Review
  * attachment contract. The helper understands the canonical `attachments`
- * field plus the legacy Pi `nonTextContent` field so existing databases do
- * not require a destructive replay just to render previously sent images.
+ * field plus the legacy `nonTextContent` compatibility field so existing
+ * databases do not require a destructive replay just to render attachments.
  */
 export function reviewMessageAttachmentsFromPayload(
   value: JsonValue | unknown,
