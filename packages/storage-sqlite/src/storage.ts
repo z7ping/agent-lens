@@ -522,7 +522,7 @@ export class SqliteStorageService implements StorageService {
         }
       }
       const row = rowRecord(this.db.prepare(`
-        SELECT SUM(CASE WHEN ${columnName} >= @cutoff7 THEN 1 ELSE 0 END) AS last7Records,
+        SELECT COALESCE(SUM(CASE WHEN ${columnName} >= @cutoff7 THEN 1 ELSE 0 END), 0) AS last7Records,
                COALESCE(SUM(CASE WHEN ${columnName} >= @cutoff7 THEN ${bytesExpression} ELSE 0 END), 0) AS last7Bytes,
                COUNT(*) AS last30Records,
                COALESCE(SUM(${bytesExpression}), 0) AS last30Bytes
@@ -556,7 +556,7 @@ export class SqliteStorageService implements StorageService {
     )
     const sessionRows = timeIndexes.sessions
       ? rowRecord(this.db.prepare(`
-          SELECT SUM(CASE WHEN ended_at >= @cutoff7 THEN 1 ELSE 0 END) AS last7Records,
+          SELECT COALESCE(SUM(CASE WHEN ended_at >= @cutoff7 THEN 1 ELSE 0 END), 0) AS last7Records,
                  COUNT(*) AS last30Records
           FROM session_summary_projection
           WHERE ended_at >= @cutoff30
