@@ -12,6 +12,7 @@ import type {
   LogicalSession,
   ObservationCoverage,
   Project,
+  RuntimeProfile,
   SessionRelationship,
   SourceLocator,
   SourceRecord,
@@ -182,6 +183,23 @@ export function mapInstallation(value: unknown): AgentInstallation {
     productId: requiredString(row, 'product_id'),
     ...(version === undefined ? {} : { version }),
     ...(executable === undefined ? {} : { executable }),
+    ...(configRoot === undefined ? {} : { configRoot }),
+    ...(dataRoot === undefined ? {} : { dataRoot }),
+    firstSeenAt: requiredString(row, 'first_seen_at'),
+    lastSeenAt: requiredString(row, 'last_seen_at'),
+  }
+}
+
+export function mapRuntimeProfile(value: unknown): RuntimeProfile {
+  const row = rowRecord(value)
+  const name = optionalString(row, 'name')
+  const configRoot = optionalString(row, 'config_root')
+  const dataRoot = optionalString(row, 'data_root')
+  return {
+    id: requiredString(row, 'id'),
+    installationId: requiredString(row, 'installation_id'),
+    nativeProfileId: requiredString(row, 'native_profile_id'),
+    ...(name === undefined ? {} : { name }),
     ...(configRoot === undefined ? {} : { configRoot }),
     ...(dataRoot === undefined ? {} : { dataRoot }),
     firstSeenAt: requiredString(row, 'first_seen_at'),
