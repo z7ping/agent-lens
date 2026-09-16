@@ -149,31 +149,6 @@ export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>
       ...(durationSeconds === undefined ? {} : { durationMs: Math.max(0, durationSeconds * 1_000) }),
     }
   }
-  if (name === 'subagent.start') {
-    return {
-      type: 'subagent.start',
-      ...(hermesText(event.subagent_id) ? { subagentId: hermesText(event.subagent_id) } : {}),
-      ...(hermesText(event.child_session_id) ? { childSessionId: hermesText(event.child_session_id) } : {}),
-      ...(hermesText(event.delegation_id) ? { delegationId: hermesText(event.delegation_id) } : {}),
-      ...(hermesText(event.goal) || hermesText(event.preview)
-        ? { summary: hermesText(event.goal) || hermesText(event.preview) }
-        : {}),
-    }
-  }
-  if (name === 'subagent.complete') {
-    const durationSeconds = hermesNumber(event.duration_seconds)
-    return {
-      type: 'subagent.end',
-      ...(hermesText(event.subagent_id) ? { subagentId: hermesText(event.subagent_id) } : {}),
-      ...(hermesText(event.child_session_id) ? { childSessionId: hermesText(event.child_session_id) } : {}),
-      ...(hermesText(event.delegation_id) ? { delegationId: hermesText(event.delegation_id) } : {}),
-      ...(hermesText(event.status) ? { status: hermesText(event.status) } : {}),
-      ...(hermesText(event.summary) || hermesText(event.preview)
-        ? { summary: hermesText(event.summary) || hermesText(event.preview) }
-        : {}),
-      ...(durationSeconds === undefined ? {} : { durationMs: Math.max(0, durationSeconds * 1_000) }),
-    }
-  }
   if (name === 'run.completed') return { type: 'completed', status: 'completed' }
   if (name === 'run.cancelled') return { type: 'completed', status: 'cancelled' }
   if (name === 'run.interrupted') return { type: 'completed', status: 'interrupted' }
