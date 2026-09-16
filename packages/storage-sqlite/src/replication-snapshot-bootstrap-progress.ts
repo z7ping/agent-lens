@@ -94,15 +94,56 @@ export class SqliteReplicationSnapshotBootstrapProgressRepository {
       throw new TypeError('Replication snapshot bootstrap baselineRevision must be a non-negative integer')
     }
     await this.executor.run(() => {
+      const stream = this.executor.db.prepare(`
+        SELECT generation_id AS generationId
+        FROM replication_streams
+        WHERE stream_id = ?
+      `).get(progress.streamId)
+      if (!stream) throw new Error(`Replication stream not found: ${progress.streamId}`)
+      const streamGeneration = requiredString(rowRecord(stream), 'generationId')
+      if (streamGeneration !== progress.generationId) {
+        throw new Error('Snapshot Bootstrap progress generation does not match stream')
+      }
+
+      const rawExisting = this.executor.db.prepare(`
+        SELECT stream_id AS streamId,
+               generation_id AS generationId,
+               entity_type AS entityType,
+               baseline_revision AS baselineRevision,
+               policy_revision AS policyRevision,
+               history_revision AS historyRevision,
+               cursor,
+               snapshot_complete AS snapshotComplete,
+               updated_at AS updatedAt
+        FROM replication_snapshot_bootstrap_progress
+        WHERE stream_id = ? AND generation_id = ? AND entity_type = ?
+      `).get(progress.streamId, progress.generationId, progress.entityType)
+      const existing = rawExisting ? mapProgress(rawExisting) : null
+      if (existing) {
+        if (
+          existing.baselineRevision !== progress.baselineRevision
+          || existing.policyRevision !== progress.policyRevision
+          || existing.historyRevision !== progress.historyRevision
+        ) {
+          throw new Error('Snapshot Bootstrap baseline/policy/history cannot be rebound in place')
+        }
+        if (existing.snapshotComplete && !progress.snapshotComplete) {
+          throw new Error('Snapshot Bootstrap progress cannot move from complete back to scanning')
+        }
+        if (
+          existing.cursor !== undefined
+          && (progress.cursor === undefined || progress.cursor < existing.cursor)
+        ) {
+          throw new Error('Snapshot Bootstrap cursor cannot move backwards')
+        }
+      }
+
       this.executor.db.prepare(`
         INSERT INTO replication_snapshot_bootstrap_progress(
           stream_id, generation_id, entity_type, baseline_revision,
           policy_revision, history_revision, cursor, snapshot_complete, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(stream_id, generation_id, entity_type) DO UPDATE SET
-          baseline_revision = excluded.baseline_revision,
-          policy_revision = excluded.policy_revision,
-          history_revision = excluded.history_revision,
           cursor = excluded.cursor,
           snapshot_complete = excluded.snapshot_complete,
           updated_at = excluded.updated_at
