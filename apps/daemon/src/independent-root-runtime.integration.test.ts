@@ -115,6 +115,6 @@ test('Independent Root Runtime reaches active and keeps capturedRevision current
     )
     assert.equal((await storage.replication.listPending('stream-1')).length, 1)
   } finally {
-    storage.close()
+    await storage.close()
   }
 })
