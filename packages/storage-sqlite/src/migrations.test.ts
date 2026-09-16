@@ -181,7 +181,7 @@ test('late native parent can repair child relation without losing native parent 
 })
 
 
-test('v27 从已有 v26 journal 回填 Entity Head 并补独立 Root watermark', async () => {
+test('v27 从已有 v26 journal 回填 first/latest Entity Head 并补全 18 Root watermark', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   try {
     await storage.migrate()
@@ -229,6 +229,14 @@ test('v27 从已有 v26 journal 回填 Entity Head 并补独立 Root watermark',
       evidenceRefs: [],
     })
 
+    const firstJournal = storage.db.prepare(`
+      SELECT revision, changed_at AS changedAt
+      FROM replication_canonical_changes
+      WHERE entity_type = 'Coverage'
+        AND origin_entity_id = 'coverage-pre-v27'
+      ORDER BY revision ASC
+      LIMIT 1
+    `).get() as { revision: number; changedAt: string }
     const latestJournal = storage.db.prepare(`
       SELECT revision, changed_at AS changedAt
       FROM replication_canonical_changes
@@ -241,13 +249,22 @@ test('v27 从已有 v26 journal 回填 Entity Head 并补独立 Root watermark',
     assert.equal(await storage.migrate(), 27)
 
     const head = storage.db.prepare(`
-      SELECT latest_revision AS latestRevision,
+      SELECT first_revision AS firstRevision,
+             first_changed_at AS firstChangedAt,
+             latest_revision AS latestRevision,
              latest_changed_at AS latestChangedAt
       FROM replication_entity_heads
       WHERE entity_type = 'Coverage'
         AND origin_entity_id = 'coverage-pre-v27'
-    `).get() as { latestRevision: number; latestChangedAt: string }
+    `).get() as {
+      firstRevision: number
+      firstChangedAt: string
+      latestRevision: number
+      latestChangedAt: string
+    }
     assert.deepEqual(head, {
+      firstRevision: firstJournal.revision,
+      firstChangedAt: firstJournal.changedAt,
       latestRevision: latestJournal.revision,
       latestChangedAt: latestJournal.changedAt,
     })
