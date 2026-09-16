@@ -36,9 +36,9 @@ export interface SourceRawRecoveryAuditBatch {
   }
 }
 
-function preservedCheck(
-  candidate: SourceRawAuditCandidate,
+function initialRecoveryCheck(
   capability: SourceRawRecoveryCapability | undefined,
+  hasVerifier: boolean,
 ): SourceRawRecoveryCheck {
   const checkedAt = new Date().toISOString()
   if (!capability) {
@@ -59,11 +59,17 @@ function preservedCheck(
       reason: capability.reason ?? 'source-raw-must-be-preserved',
     }
   }
-  return {
-    state: 'unsupported',
-    checkedAt,
-    reason: 'source-recovery-verifier-unavailable',
-  }
+  return hasVerifier
+    ? {
+        state: 'unknown',
+        checkedAt,
+        reason: 'verification-not-run',
+      }
+    : {
+        state: 'unsupported',
+        checkedAt,
+        reason: 'source-recovery-verifier-unavailable',
+      }
 }
 
 export async function auditSourceRawRecoveryBatch(input: {
@@ -100,15 +106,18 @@ export async function auditSourceRawRecoveryBatch(input: {
     const definition = definitions.get(candidate.record.sourceId)
     const policy = definition?.rawRecovery
     const capability = policy?.describe(candidate.record)
-    let recovery = preservedCheck(candidate, capability)
+    let recovery = initialRecoveryCheck(capability, Boolean(policy?.verify))
+    let decision = evaluateSourceRawRetention({
+      capability,
+      verification: recovery,
+      canonicalStable: candidate.canonicalStable,
+      evidenceStable: candidate.evidenceStable,
+      pinned: candidate.pinned,
+    })
 
-    if (
-      capability
-      && capability.persistencePreference !== 'preserve'
-      && capability.canReread
-      && capability.replayable
-      && policy?.verify
-    ) {
+    const verificationIsOnlyBlocker = decision.reasons.length === 1
+      && decision.reasons[0] === 'verification-unknown'
+    if (verificationIsOnlyBlocker && policy?.verify) {
       try {
         recovery = await policy.verify(candidate.record)
       } catch (error) {
@@ -118,15 +127,14 @@ export async function auditSourceRawRecoveryBatch(input: {
           reason: error instanceof Error ? error.message : String(error),
         }
       }
+      decision = evaluateSourceRawRetention({
+        capability,
+        verification: recovery,
+        canonicalStable: candidate.canonicalStable,
+        evidenceStable: candidate.evidenceStable,
+        pinned: candidate.pinned,
+      })
     }
-
-    const decision = evaluateSourceRawRetention({
-      capability,
-      verification: recovery,
-      canonicalStable: candidate.canonicalStable,
-      evidenceStable: candidate.evidenceStable,
-      pinned: candidate.pinned,
-    })
     items.push({
       recordId: candidate.record.id,
       sourceId: candidate.record.sourceId,
