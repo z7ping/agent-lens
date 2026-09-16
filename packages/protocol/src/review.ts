@@ -63,11 +63,11 @@ function inlineImageDataUrl(record: Readonly<Record<string, unknown>>, mimeType?
   return `data:${mimeType};base64,${normalized}`
 }
 
-function attachmentFromValue(value: unknown, wrapperKind?: string): ReviewMessageAttachmentDto | null {
+function attachmentFromValue(value: unknown, wrapperKind: string | undefined, includeDataUrl: boolean): ReviewMessageAttachmentDto | null {
   if (typeof value === 'string') {
     if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(value)) {
       const mimeType = value.slice(5, value.indexOf(';')).toLowerCase()
-      return { type: 'image', mimeType, dataUrl: value }
+      return includeDataUrl ? { type: 'image', mimeType, dataUrl: value } : { type: 'image', mimeType }
     }
     return wrapperKind === 'images' || wrapperKind === 'local_images'
       ? { type: 'image' }
@@ -87,7 +87,7 @@ function attachmentFromValue(value: unknown, wrapperKind?: string): ReviewMessag
 
   const name = safeAttachmentName(attachmentString(record, 'name', 'fileName', 'file_name', 'filename', 'path'))
   const sizeBytes = attachmentSize(record)
-  const dataUrl = image ? inlineImageDataUrl(record, mimeType) : undefined
+  const dataUrl = image && includeDataUrl ? inlineImageDataUrl(record, mimeType) : undefined
   return {
     type: image ? 'image' : 'file',
     ...(name ? { name } : {}),
@@ -103,7 +103,10 @@ function attachmentFromValue(value: unknown, wrapperKind?: string): ReviewMessag
  * field plus the legacy Pi `nonTextContent` field so existing databases do
  * not require a destructive replay just to render previously sent images.
  */
-export function reviewMessageAttachmentsFromPayload(value: JsonValue | unknown): ReviewMessageAttachmentDto[] {
+export function reviewMessageAttachmentsFromPayload(
+  value: JsonValue | unknown,
+  options: { includeDataUrl?: boolean } = {},
+): ReviewMessageAttachmentDto[] {
   const payload = attachmentRecord(value)
   const candidates: Array<{ value: unknown; wrapperKind?: string }> = []
 
@@ -126,7 +129,7 @@ export function reviewMessageAttachmentsFromPayload(value: JsonValue | unknown):
   }
 
   return candidates
-    .map(candidate => attachmentFromValue(candidate.value, candidate.wrapperKind))
+    .map(candidate => attachmentFromValue(candidate.value, candidate.wrapperKind, options.includeDataUrl !== false))
     .filter((attachment): attachment is ReviewMessageAttachmentDto => attachment !== null)
 }
 
