@@ -9,6 +9,7 @@ import {
   discoverOpenCodeAssets,
   normalizeOpenCodeRecord,
   openCodeSourceInternals,
+  openCodeSourceDefinition,
 } from './index'
 
 function record(part: Record<string, unknown>, message: Record<string, unknown>, nativeId?: string): SourceRecord {
@@ -262,4 +263,14 @@ test('OpenCode V2 assets parse JSONC and preserve user/project scope', async () 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+
+test('OpenCode Raw recovery 将数据库 rowId 标成 best-effort 而不是稳定引用', () => {
+  const database = record({ type: 'text', text: 'hello' }, { role: 'assistant' }, 'part-1')
+  const capability = openCodeSourceDefinition.rawRecovery?.describe(database)
+  assert.equal(capability?.authority, 'native-store')
+  assert.equal(capability?.locatorStability, 'best-effort')
+  assert.equal(capability?.verification, 'fingerprint')
+  assert.equal(capability?.persistencePreference, 'preserve')
 })
