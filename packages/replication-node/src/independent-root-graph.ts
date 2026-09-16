@@ -38,6 +38,10 @@ export type IndependentRootReplicaGraphResult =
   | { kind: 'blocked'; reason: 'history-boundary' }
   | { kind: 'graph'; entities: readonly WireEntityEnvelope[] }
 
+function unreachableCurrentStateRoot(value: never): never {
+  throw new Error(`Unsupported Current-State Root: ${JSON.stringify(value)}`)
+}
+
 function assetAssertion(
   upstreamIdentity: string | undefined,
 ): SharedIdentityAssertion | undefined {
@@ -491,10 +495,13 @@ export async function generateIndependentRootReplicaGraph(
       })
       break
     }
+
+    default:
+      return unreachableCurrentStateRoot(input.root)
   }
 
   if (!rootResult) {
-    throw new Error(`Unsupported Current-State Root type: ${input.root.entityType}`)
+    throw new Error('Current-State Root generation did not produce a root entity')
   }
   if (rootResult.kind === 'blocked') return rootResult
   graph.emit(rootResult.entity)
