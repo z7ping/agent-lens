@@ -195,7 +195,7 @@ function IntegrationManagementRow({
   return <article
     className="integration-management-row"
     data-integration={item.integrationId}
-    data-new={item.isNew || undefined}
+    data-new={item.isNew ? 'true' : undefined}
   >
     <div className="integration-management-identity">
       <span className={`source-dot ${sourceDot(item.integrationId)}`} aria-hidden="true"/>
