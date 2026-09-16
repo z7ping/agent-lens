@@ -183,3 +183,90 @@ test('Current-State Root restores gzip-compressed SourceRecord payload from cano
     db.close()
   }
 })
+
+
+test('storage-only SourceRecord compression cannot bypass from-now history boundary', async () => {
+  const db = await storage()
+  try {
+    const now = '2026-09-17T03:00:00.000Z'
+    await db.repositories.hosts.put({
+      id: 'host-history-compression',
+      name: 'history-compression-host',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: now,
+      lastSeenAt: now,
+    })
+    await db.repositories.installations.putProduct({
+      id: 'product-history-compression',
+      name: 'History Compression Product',
+    })
+    await db.repositories.installations.put({
+      id: 'install-history-compression',
+      hostId: 'host-history-compression',
+      productId: 'product-history-compression',
+      firstSeenAt: now,
+      lastSeenAt: now,
+    })
+
+    const payload = { text: 'legacy-compressible-record-'.repeat(400) }
+    await db.repositories.sourceRecords.put({
+      id: 'source-record-history-old',
+      sourceId: 'pi',
+      installationId: 'install-history-compression',
+      nativeType: 'legacy',
+      capturedAt: '2026-09-17T00:00:00.000Z',
+      locator: { kind: 'file', path: '/tmp/legacy.jsonl' },
+      payload,
+      parserVersion: 'parser-legacy',
+    })
+
+    // Simulate a pre-compression legacy row. This representation-only rewrite
+    // may create a journal revision, but firstChangedAt remains the History fact.
+    db.db.prepare(`
+      UPDATE source_records
+      SET payload_json = ?,
+          payload_encoding = 'json',
+          payload_blob = NULL
+      WHERE id = 'source-record-history-old'
+    `).run(JSON.stringify(payload))
+    db.db.prepare(`
+      UPDATE replication_entity_heads
+      SET first_changed_at = '2026-09-17T00:00:00.000Z'
+      WHERE entity_type = 'SourceRecord'
+        AND origin_entity_id = 'source-record-history-old'
+    `).run()
+
+    const before = await db.replicationIndependentRoots.get(
+      'SourceRecord',
+      'source-record-history-old',
+    )
+    assert.equal(before?.firstChangedAt, '2026-09-17T00:00:00.000Z')
+
+    const compressed = await db.maintenance.compressSourceRecords(10)
+    assert.ok(compressed.compressed >= 1)
+
+    const after = await db.replicationIndependentRoots.get(
+      'SourceRecord',
+      'source-record-history-old',
+    )
+    assert.equal(after?.firstChangedAt, '2026-09-17T00:00:00.000Z')
+    assert.ok(
+      after?.latestRevision !== undefined
+      && before?.latestRevision !== undefined
+      && after.latestRevision > before.latestRevision,
+    )
+
+    const fromNow = await db.replicationIndependentRoots.scan({
+      entityType: 'SourceRecord',
+      changedAtOnOrAfter: '2026-09-17T01:00:00.000Z',
+      limit: 100,
+    })
+    assert.equal(
+      fromNow.items.some(item => item.originEntityId === 'source-record-history-old'),
+      false,
+    )
+  } finally {
+    db.close()
+  }
+})
