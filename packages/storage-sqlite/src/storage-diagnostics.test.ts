@@ -2,18 +2,22 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 
-test('health 不返回全量聚合，diagnostics 显式提供存储与增长基线', async () => {
+test('health 保持轻量，diagnostics 区分物理占用、采集活动与真实增长', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
+  await storage.maintenance.ensureDeferredIndexes()
   try {
     const health = await storage.health()
     const healthDetails = health.details as {
       unknownObservations?: unknown
       coverage?: unknown
       storageBreakdown?: unknown
+      capturedActivity?: unknown
       dataGrowth: {
         totals?: unknown
         last7Days?: unknown
+        freelistBytes: number
+        sqliteTempAllocatedBytes: number
         capacity: {
           scope: string
           longTermTotalLimitBytes: number | null
@@ -23,10 +27,13 @@ test('health 不返回全量聚合，diagnostics 显式提供存储与增长基�
     assert.equal(healthDetails.unknownObservations, undefined)
     assert.equal(healthDetails.coverage, undefined)
     assert.equal(healthDetails.storageBreakdown, undefined)
+    assert.equal(healthDetails.capturedActivity, undefined)
     assert.equal(healthDetails.dataGrowth.totals, undefined)
     assert.equal(healthDetails.dataGrowth.last7Days, undefined)
     assert.equal(healthDetails.dataGrowth.capacity.scope, 'hot-sqlite')
     assert.equal(healthDetails.dataGrowth.capacity.longTermTotalLimitBytes, null)
+    assert.equal(typeof healthDetails.dataGrowth.freelistBytes, 'number')
+    assert.equal(typeof healthDetails.dataGrowth.sqliteTempAllocatedBytes, 'number')
 
     const diagnostics = await storage.diagnostics()
     const details = diagnostics.details as {
@@ -34,63 +41,109 @@ test('health 不返回全量聚合，diagnostics 显式提供存储与增长基�
       coverage: { summary: unknown }
       storageBreakdown: {
         available: boolean
+        basis: string
+        excludesFreelist: boolean
         categories: {
-          canonical: { payloadBytes: number, allocatedBytes: number }
-          evidence: { payloadBytes: number, allocatedBytes: number }
-          sourceRaw: { payloadBytes: number, allocatedBytes: number }
-          projection: { payloadBytes: number, allocatedBytes: number }
+          canonical: {
+            usefulPayloadBytes: number
+            unusedBytes: number
+            allocatedBytes: number
+            tableAllocatedBytes: number
+            indexAllocatedBytes: number
+          }
+          projection: { allocatedBytes: number }
+          replication: { allocatedBytes: number }
         }
+        objects: unknown[]
       }
-      reclaimableSpace: {
-        estimateOnly: boolean
-        estimatedBytes: number
-        excludesSourceRaw: boolean
+      spaceRecovery: {
+        freelist: {
+          bytes: number
+          reusableInsideDatabase: boolean
+          shrinksDatabaseFileWithoutCompaction: boolean
+        }
+        wal: { bytes: number, releaseDependsOnCheckpoint: boolean }
+        projection: { allocatedBytes: number, rebuildable: boolean }
+        sourceRaw: { state: string }
+        estimatedBytes?: number
       }
-      dataGrowth: {
-        totals: { sourceRecords: number }
-        last7Days: { sessions: number }
-        last30Days: { sessions: number }
+      capturedActivity: {
+        basis: string
+        timeIndexes: {
+          sourceRecords: boolean
+          observations: boolean
+          evidence: boolean
+          sessions: boolean
+        }
         bySource: unknown[]
         byAgent: unknown[]
         trend: { last7Days: unknown[], last30Days: unknown[] }
-        metrics: {
-          canonicalGrowthRate: {
-            last30Days: { observationsPerDay: number, approxBytesPerDay: number }
-          }
-          storageAmplificationRate: {
-            last30Days: number | null
-          }
-        }
+        canonical: { available: boolean }
+      }
+      replicationJournal: {
+        available: boolean
+        totalChanges: number
+        byEntityType: unknown[]
+      }
+      growthMetrics: {
+        canonicalGrowthRate: { state: string, basis: string }
+        storageAmplificationRate: { state: string, basis: string }
+      }
+      dataGrowth: {
+        totals: { sourceRecords: number }
+        last7Days: { sessions: number | null }
+        last30Days: { sessions: number | null }
       }
     }
+
     assert.equal(details.unknownObservations.total, 0)
     assert.deepEqual(details.unknownObservations.groups, [])
     assert.ok(details.coverage.summary)
+    assert.equal(details.storageBreakdown.available, true)
+    assert.equal(details.storageBreakdown.basis, 'sqlite-dbstat-btree-aggregate')
+    assert.equal(details.storageBreakdown.excludesFreelist, true)
+    assert.equal(typeof details.storageBreakdown.categories.canonical.usefulPayloadBytes, 'number')
+    assert.equal(typeof details.storageBreakdown.categories.canonical.indexAllocatedBytes, 'number')
+    assert.equal(typeof details.storageBreakdown.categories.projection.allocatedBytes, 'number')
+    assert.ok(Array.isArray(details.storageBreakdown.objects))
+
+    assert.equal(typeof details.spaceRecovery.freelist.bytes, 'number')
+    assert.equal(details.spaceRecovery.freelist.reusableInsideDatabase, true)
+    assert.equal(details.spaceRecovery.freelist.shrinksDatabaseFileWithoutCompaction, false)
+    assert.equal(details.spaceRecovery.wal.releaseDependsOnCheckpoint, true)
+    assert.equal(details.spaceRecovery.projection.rebuildable, true)
+    assert.equal(details.spaceRecovery.sourceRaw.state, 'not-assessed')
+    assert.equal(details.spaceRecovery.estimatedBytes, undefined)
+
+    assert.equal(details.capturedActivity.basis, 'captured-activity-not-net-storage-growth')
+    assert.equal(details.capturedActivity.timeIndexes.sourceRecords, true)
+    assert.equal(details.capturedActivity.timeIndexes.observations, true)
+    assert.equal(details.capturedActivity.timeIndexes.evidence, true)
+    assert.equal(details.capturedActivity.timeIndexes.sessions, true)
+    assert.equal(details.capturedActivity.canonical.available, true)
+    assert.equal(details.capturedActivity.trend.last7Days.length, 7)
+    assert.equal(details.capturedActivity.trend.last30Days.length, 30)
+    assert.deepEqual(details.capturedActivity.bySource, [])
+    assert.deepEqual(details.capturedActivity.byAgent, [])
+
+    assert.equal(details.replicationJournal.available, true)
+    assert.equal(details.replicationJournal.totalChanges, 0)
+    assert.deepEqual(details.replicationJournal.byEntityType, [])
+    assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'snapshot-required')
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'snapshot-required')
+
     assert.equal(typeof details.dataGrowth.totals.sourceRecords, 'number')
     assert.equal(typeof details.dataGrowth.last7Days.sessions, 'number')
     assert.equal(typeof details.dataGrowth.last30Days.sessions, 'number')
-    assert.equal(details.dataGrowth.trend.last7Days.length, 7)
-    assert.equal(details.dataGrowth.trend.last30Days.length, 30)
-    assert.deepEqual(details.dataGrowth.bySource, [])
-    assert.deepEqual(details.dataGrowth.byAgent, [])
-    assert.equal(typeof details.storageBreakdown.categories.canonical.payloadBytes, 'number')
-    assert.equal(typeof details.storageBreakdown.categories.projection.allocatedBytes, 'number')
-    assert.equal(details.reclaimableSpace.estimateOnly, true)
-    assert.equal(details.reclaimableSpace.excludesSourceRaw, true)
-    assert.equal(typeof details.reclaimableSpace.estimatedBytes, 'number')
-    assert.equal(
-      typeof details.dataGrowth.metrics.canonicalGrowthRate.last30Days.observationsPerDay,
-      'number',
-    )
-    assert.equal(details.dataGrowth.metrics.storageAmplificationRate.last30Days, null)
   } finally {
     await storage.close()
   }
 })
 
-test('diagnostics 按 Source / Agent 统计增长并计算存储放大率', async () => {
+test('diagnostics 按 Source / Agent 展示近 7/30 天 Raw 活动，并暴露 Replication 写放大', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
+  await storage.maintenance.ensureDeferredIndexes()
   try {
     const now = new Date().toISOString()
     storage.db.prepare(`
@@ -153,45 +206,88 @@ test('diagnostics 按 Source / Agent 统计增长并计算存储放大率', asyn
     const details = diagnostics.details as {
       storageBreakdown: {
         categories: {
-          canonical: { payloadBytes: number }
-          evidence: { payloadBytes: number }
-          sourceRaw: { payloadBytes: number }
+          canonical: { allocatedBytes: number }
+          evidence: { allocatedBytes: number }
+          sourceRaw: { allocatedBytes: number }
+          replication: { allocatedBytes: number }
         }
       }
-      dataGrowth: {
+      capturedActivity: {
+        sourceRaw: {
+          last7Days: { records: number, storedPayloadBytesApprox: number }
+          last30Days: { records: number, storedPayloadBytesApprox: number }
+        }
+        canonical: {
+          available: boolean
+          last7Days: { records: number, logicalPayloadBytesApprox: number } | null
+        }
+        evidence: {
+          available: boolean
+          last7Days: { records: number, logicalPayloadBytesApprox: number } | null
+        }
         bySource: Array<{
           sourceId: string
-          last30Days: { records: number, approxBytes: number }
+          last30Days: { records: number, storedPayloadBytesApprox: number }
         }>
         byAgent: Array<{
           productId: string
           productName: string | null
-          last30Days: { records: number, approxBytes: number }
+          last30Days: { records: number, storedPayloadBytesApprox: number }
         }>
-        metrics: {
-          canonicalGrowthRate: {
-            last7Days: { observationsPerDay: number }
-          }
-          storageAmplificationRate: {
-            last7Days: number | null
-            last30Days: number | null
+        rates: {
+          canonicalCaptured: {
+            available: boolean
+            last7Days?: { observationsPerDay: number }
           }
         }
       }
+      replicationJournal: {
+        available: boolean
+        totalChanges: number
+        distinctEntities: number
+        changesPerDistinctEntity: number | null
+        byEntityType: Array<{
+          entityType: string
+          changes: number
+          distinctEntities: number
+          changesPerDistinctEntity: number | null
+        }>
+      }
+      growthMetrics: {
+        canonicalGrowthRate: { state: string }
+        storageAmplificationRate: { state: string }
+      }
     }
 
-    assert.equal(details.dataGrowth.bySource[0]?.sourceId, 'pi')
-    assert.ok((details.dataGrowth.bySource[0]?.last30Days.records ?? 0) >= 3)
-    assert.ok((details.dataGrowth.bySource[0]?.last30Days.approxBytes ?? 0) > 0)
-    assert.equal(details.dataGrowth.byAgent[0]?.productId, 'pi')
-    assert.equal(details.dataGrowth.byAgent[0]?.productName, 'Pi')
-    assert.ok((details.dataGrowth.byAgent[0]?.last30Days.approxBytes ?? 0) > 0)
-    assert.ok(details.dataGrowth.metrics.canonicalGrowthRate.last7Days.observationsPerDay > 0)
-    assert.ok((details.dataGrowth.metrics.storageAmplificationRate.last7Days ?? 0) > 0)
-    assert.ok((details.dataGrowth.metrics.storageAmplificationRate.last30Days ?? 0) > 0)
-    assert.ok(details.storageBreakdown.categories.sourceRaw.payloadBytes > 0)
-    assert.ok(details.storageBreakdown.categories.canonical.payloadBytes > 0)
-    assert.ok(details.storageBreakdown.categories.evidence.payloadBytes > 0)
+    assert.equal(details.capturedActivity.bySource[0]?.sourceId, 'pi')
+    assert.equal(details.capturedActivity.bySource[0]?.last30Days.records, 1)
+    assert.ok((details.capturedActivity.bySource[0]?.last30Days.storedPayloadBytesApprox ?? 0) > 0)
+    assert.equal(details.capturedActivity.byAgent[0]?.productId, 'pi')
+    assert.equal(details.capturedActivity.byAgent[0]?.productName, 'Pi')
+    assert.equal(details.capturedActivity.sourceRaw.last7Days.records, 1)
+    assert.equal(details.capturedActivity.sourceRaw.last30Days.records, 1)
+    assert.ok(details.capturedActivity.sourceRaw.last30Days.storedPayloadBytesApprox > 0)
+    assert.equal(details.capturedActivity.canonical.available, true)
+    assert.equal(details.capturedActivity.canonical.last7Days?.records, 1)
+    assert.equal(details.capturedActivity.evidence.available, true)
+    assert.equal(details.capturedActivity.evidence.last7Days?.records, 1)
+    assert.equal(details.capturedActivity.rates.canonicalCaptured.available, true)
+    assert.ok((details.capturedActivity.rates.canonicalCaptured.last7Days?.observationsPerDay ?? 0) > 0)
+
+    assert.equal(details.replicationJournal.available, true)
+    assert.ok(details.replicationJournal.totalChanges >= 7)
+    assert.ok(details.replicationJournal.distinctEntities >= 7)
+    assert.ok((details.replicationJournal.changesPerDistinctEntity ?? 0) >= 1)
+    assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'SourceRecord'))
+    assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'CanonicalObservation'))
+    assert.ok(details.replicationJournal.byEntityType.some(item => item.entityType === 'Evidence'))
+
+    assert.ok(details.storageBreakdown.categories.sourceRaw.allocatedBytes > 0)
+    assert.ok(details.storageBreakdown.categories.canonical.allocatedBytes > 0)
+    assert.ok(details.storageBreakdown.categories.evidence.allocatedBytes > 0)
+    assert.ok(details.storageBreakdown.categories.replication.allocatedBytes > 0)
+    assert.equal(details.growthMetrics.canonicalGrowthRate.state, 'snapshot-required')
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'snapshot-required')
   } finally {
     await storage.close()
   }
