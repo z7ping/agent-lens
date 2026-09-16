@@ -165,6 +165,7 @@ test('journal GC does not depend on network ACK and preserves frozen exact-retry
 test('GC preserves journal rows outside the Observation Root Graph coverage contract', async () => {
   const db = await storage()
   try {
+    await putHost(db, 'host-covered', T0)
     db.db.prepare(`
       INSERT INTO replication_canonical_changes(entity_type, origin_entity_id)
       VALUES ('Coverage', 'coverage-uncovered')
@@ -190,6 +191,9 @@ test('GC preserves journal rows outside the Observation Root Graph coverage cont
     assert.ok(rows.some(row =>
       row.entityType === 'Coverage' && row.originEntityId === 'coverage-uncovered'
     ))
+    assert.equal(rows.some(row =>
+      row.entityType === 'Host' && row.originEntityId === 'host-covered'
+    ), false)
     assert.equal(rows.some(row =>
       row.entityType === 'CanonicalObservation' && row.originEntityId === 'observation-covered'
     ), false)
