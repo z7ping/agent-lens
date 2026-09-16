@@ -241,3 +241,80 @@ test('6 类独立 Replication Root 的 unchanged UPSERT 不推进 journal / Enti
     await storage.close()
   }
 })
+
+
+test('重复 attach RuntimeProfile 不制造 Session / AssetBinding replication revision', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const now = '2026-09-17T05:00:00.000Z'
+    await storage.repositories.hosts.put({
+      id: 'host-profile',
+      name: 'profile-host',
+      platform: 'linux',
+      arch: 'x64',
+      createdAt: now,
+      lastSeenAt: now,
+    })
+    await storage.repositories.installations.putProduct({
+      id: 'product-profile',
+      name: 'Profile Product',
+    })
+    await storage.repositories.installations.put({
+      id: 'install-profile',
+      hostId: 'host-profile',
+      productId: 'product-profile',
+      firstSeenAt: now,
+      lastSeenAt: now,
+    })
+    await storage.repositories.sessions.putLogicalSession({
+      id: 'logical-profile',
+      installationId: 'install-profile',
+    })
+    await storage.repositories.sessions.putSourceSession({
+      id: 'source-profile',
+      sourceId: 'test',
+      installationId: 'install-profile',
+      nativeSessionId: 'native-profile',
+      logicalSessionId: 'logical-profile',
+    })
+    await storage.repositories.assets.putDefinition({
+      id: 'asset-profile',
+      type: 'skill',
+      canonicalName: 'profile-skill',
+    })
+    await storage.repositories.assets.putBinding({
+      id: 'binding-profile',
+      assetId: 'asset-profile',
+      installationId: 'install-profile',
+    })
+    const profile = await storage.runtimeProfiles.resolve({
+      installationId: 'install-profile',
+      nativeProfileId: 'default',
+    })
+
+    await storage.runtimeProfiles.attachSession(
+      'test',
+      'install-profile',
+      'native-profile',
+      profile.id,
+    )
+    await storage.runtimeProfiles.attachAssetBinding('binding-profile', profile.id)
+    const afterFirstAttach = await storage.replicationCanonicalChanges.highWaterRevision()
+
+    await storage.runtimeProfiles.attachSession(
+      'test',
+      'install-profile',
+      'native-profile',
+      profile.id,
+    )
+    await storage.runtimeProfiles.attachAssetBinding('binding-profile', profile.id)
+
+    assert.equal(
+      await storage.replicationCanonicalChanges.highWaterRevision(),
+      afterFirstAttach,
+    )
+  } finally {
+    await storage.close()
+  }
+})
