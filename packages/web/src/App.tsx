@@ -379,7 +379,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} />} />
-          <Route path="/integrations" element={<IntegrationManagementPage model={model} />} />
+          <Route path="/integrations" element={<IntegrationManagementPage model={model} topbarHost={workspaceTopbarHost} />} />
           <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
