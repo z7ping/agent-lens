@@ -93,6 +93,47 @@ test('prepareRegisteredSources detects each enabled source once and isolates det
   assert.equal(emitted.length, 1)
 })
 
+test('profile-scoped detection resolves one installation instead of one per profile root', async () => {
+  const profiled = sourceDefinition('profiled', async () => [
+    {
+      sourceId: 'profiled',
+      productId: 'test-product',
+      configRoot: '/profiles/a',
+      dataRoot: '/profiles/a',
+      runtimeProfile: { nativeProfileId: 'a', configRoot: '/profiles/a', dataRoot: '/profiles/a' },
+      confidence: 'exact',
+    },
+    {
+      sourceId: 'profiled',
+      productId: 'test-product',
+      configRoot: '/profiles/b',
+      dataRoot: '/profiles/b',
+      runtimeProfile: { nativeProfileId: 'b', configRoot: '/profiles/b', dataRoot: '/profiles/b' },
+      confidence: 'exact',
+    },
+  ])
+  const installationHints: Array<Record<string, unknown>> = []
+  const ctx = {
+    sources: { list: () => [profiled] },
+    capturePolicy: capturePolicy([]),
+    identity: {
+      async resolveHost() { return host },
+      async resolveInstallation(hint: Record<string, unknown>) {
+        installationHints.push(hint)
+        return installation
+      },
+    },
+    emit() {},
+  } as unknown as AgentLensContext
+
+  const prepared = await prepareRegisteredSources(ctx, new AbortController().signal)
+
+  assert.equal(prepared.targets.length, 2)
+  assert.equal(installationHints.length, 2)
+  assert.deepEqual(installationHints[0], { hostId: host.id, productId: 'test-product' })
+  assert.deepEqual(installationHints[1], { hostId: host.id, productId: 'test-product' })
+})
+
 test('disabled sources still participate in read-only detection', async () => {
   let detections = 0
   const disabled = sourceDefinition('disabled', async () => {
