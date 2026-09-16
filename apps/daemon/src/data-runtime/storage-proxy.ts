@@ -59,6 +59,7 @@ function isMaintenanceReadPath(path: readonly string[]): boolean {
   const method = path.at(-1) ?? ''
   return path[0] === 'diagnostics'
     || path[0] === 'sourceRawAudit'
+    || path[0]?.startsWith('replication') === true
     || method === 'listForParserReplay'
     || method === 'toolUsageFactCoverageForMaintenance'
     || method === 'repairToolUsageFactCursor'
