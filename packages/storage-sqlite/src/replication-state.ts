@@ -34,16 +34,16 @@ function stringifyJson(value: JsonValue): string {
 }
 
 function containsDependencyMinimized(value: JsonValue): boolean {
-  if (Array.isArray(value)) return value.some(item => containsDependencyMinimized(item))
-  if (value === null || typeof value !== 'object') return false
-  const record = value as { [key: string]: JsonValue }
-  if (
-    record.state === 'omitted'
-    && record.reason === 'dependency-minimized'
-  ) {
-    return true
-  }
-  return Object.values(record).some(item => containsDependencyMinimized(item))
+  if (value === null || Array.isArray(value) || typeof value !== 'object') return false
+  const envelope = value as { [key: string]: JsonValue }
+  const body = envelope.body
+  if (body === null || Array.isArray(body) || typeof body !== 'object') return false
+  return Object.values(body as { [key: string]: JsonValue }).some(field => {
+    if (field === null || Array.isArray(field) || typeof field !== 'object') return false
+    const availability = field as { [key: string]: JsonValue }
+    return availability.state === 'omitted'
+      && availability.reason === 'dependency-minimized'
+  })
 }
 
 function mapStream(row: StreamRow): ReplicationStreamState {
