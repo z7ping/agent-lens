@@ -2,10 +2,10 @@ import type {
   AssetBinding,
   AssetDefinition,
   AssetStateObservation,
-  ObservationCoverage,
-  SessionRelationship,
   ToolDefinition,
-} from '../index'
+} from '../domain/assets'
+import type { SessionRelationship } from '../domain/identity'
+import type { ObservationCoverage } from '../domain/observation'
 import type { IndependentReplicationRootEntityType } from './types'
 
 export type IndependentReplicationRootEntity =
