@@ -89,6 +89,114 @@
 }
 .agent-discovery-note.is-error { color: var(--al-danger); }
 
+.integration-observation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+
+.integration-observation-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.integration-observation-fact {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--al-ink-2);
+  font-size: 12px;
+}
+
+.integration-observation-fact small {
+  color: var(--al-muted);
+  font-size: 12px;
+}
+
+.integration-observation-fact b {
+  overflow: hidden;
+  max-width: 180px;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.integration-observation-capabilities {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.integration-observation-capabilities .ui-status-badge {
+  font-weight: 560;
+}
+
+.integration-observation-muted {
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.integration-placeholder-body {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
+
+.integration-placeholder-body > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.integration-placeholder-body b {
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.integration-placeholder-body span {
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.source-capture-control-legacy {
+  border-left: 2px solid var(--al-warning);
+}
+
+@media (max-width: 767.98px) {
+  .integration-observation,
+  .integration-placeholder-body {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .integration-observation-main {
+    display: grid;
+    width: 100%;
+    gap: 7px;
+  }
+}
+
 .source-capture-control {
   display: flex;
   align-items: center;
