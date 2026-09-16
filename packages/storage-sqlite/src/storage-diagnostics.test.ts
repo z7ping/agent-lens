@@ -558,3 +558,106 @@ test('重复触碰既有 SourceRecord 时重置活动统计纪元，避免把重
     await storage.close()
   }
 })
+
+
+test('新增 SourceRecord 经滚动快照累计后可得到 Storage Amplification Rate', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  await storage.maintenance.ensureDeferredIndexes()
+  try {
+    const first = await storage.diagnostics()
+    const firstDetails = first.details as {
+      storageSnapshot: { current: StorageDiagnosticSnapshot }
+    }
+    const baselineAt = new Date(Date.parse(firstDetails.storageSnapshot.current.capturedAt) - 8 * 24 * 60 * 60 * 1000)
+    const baseline: StorageDiagnosticSnapshot = {
+      ...firstDetails.storageSnapshot.current,
+      day: baselineAt.toISOString().slice(0, 10),
+      capturedAt: baselineAt.toISOString(),
+      sourceActivity: {
+        epochCapturedAt: baselineAt.toISOString(),
+        originalPayloadBytesCumulative: 0,
+        recordsCumulative: 0,
+      },
+    }
+    await storage.checkpoints.set(
+      STORAGE_DIAGNOSTIC_SNAPSHOT_SCOPE,
+      STORAGE_DIAGNOSTIC_SNAPSHOT_KEY,
+      { version: 2, snapshots: [baseline] },
+    )
+
+    const capturedAt = new Date().toISOString()
+    storage.db.prepare(`
+      INSERT INTO hosts(id, name, platform, arch, created_at, last_seen_at)
+      VALUES ('host:amplification', 'local', 'test', 'test', ?, ?)
+    `).run(capturedAt, capturedAt)
+    storage.db.prepare(`
+      INSERT INTO agent_products(id, name)
+      VALUES ('pi', 'Pi')
+    `).run()
+    storage.db.prepare(`
+      INSERT INTO agent_installations(
+        id, host_id, product_id, first_seen_at, last_seen_at
+      ) VALUES ('pi:amplification', 'host:amplification', 'pi', ?, ?)
+    `).run(capturedAt, capturedAt)
+
+    const payload = { text: 'x'.repeat(2_000) }
+    await storage.repositories.sourceRecords.put({
+      id: 'source-record:amplification',
+      sourceId: 'pi',
+      installationId: 'pi:amplification',
+      nativeType: 'message',
+      nativeId: 'amplification',
+      capturedAt,
+      locator: { kind: 'file', path: 'session.jsonl' },
+      payload,
+      parserVersion: 'test',
+    })
+
+    const second = await storage.diagnostics()
+    const details = second.details as {
+      storageSnapshot: {
+        current: StorageDiagnosticSnapshot
+        sourceActivityInterval: {
+          state: string
+          records: number
+          netNewSourceRecords: number
+          originalPayloadBytes: number
+        }
+      }
+      growthMetrics: {
+        storageAmplificationRate: {
+          state: string
+          last7Days?: {
+            state: string
+            originalActivityBytesDelta?: number
+            persistentBytesPerOriginalActivityByte?: number
+          }
+        }
+      }
+    }
+
+    const expectedBytes = Buffer.byteLength(JSON.stringify(payload), 'utf8')
+    assert.equal(details.storageSnapshot.sourceActivityInterval.state, 'complete')
+    assert.equal(details.storageSnapshot.sourceActivityInterval.records, 1)
+    assert.equal(details.storageSnapshot.sourceActivityInterval.netNewSourceRecords, 1)
+    assert.equal(details.storageSnapshot.sourceActivityInterval.originalPayloadBytes, expectedBytes)
+    assert.equal(
+      details.storageSnapshot.current.sourceActivity.originalPayloadBytesCumulative,
+      expectedBytes,
+    )
+    assert.equal(details.growthMetrics.storageAmplificationRate.state, 'ready')
+    assert.equal(details.growthMetrics.storageAmplificationRate.last7Days?.state, 'ready')
+    assert.equal(
+      details.growthMetrics.storageAmplificationRate.last7Days?.originalActivityBytesDelta,
+      expectedBytes,
+    )
+    // :memory: 没有主数据库文件，分子为 0；这里验证公式链路而不是磁盘大小。
+    assert.equal(
+      details.growthMetrics.storageAmplificationRate.last7Days?.persistentBytesPerOriginalActivityByte,
+      0,
+    )
+  } finally {
+    await storage.close()
+  }
+})
