@@ -235,10 +235,32 @@ function deltaWindow(
 }
 
 export function storageGrowthMetricsFromSnapshots(
-  current: StorageDiagnosticSnapshot,
+  current: StorageDiagnosticSnapshot | null,
   history: unknown,
 ) {
   const parsed = parseStorageDiagnosticSnapshotSeries(history)
+  if (!current) {
+    const unavailable = {
+      state: 'unavailable' as const,
+      reason: 'current-physical-storage-breakdown-unavailable',
+    }
+    return {
+      basis: 'persisted-daily-storage-snapshot-delta',
+      history: {
+        count: parsed.snapshots.length,
+        oldestCapturedAt: parsed.snapshots[0]?.capturedAt ?? null,
+        newestCapturedAt: parsed.snapshots.at(-1)?.capturedAt ?? null,
+      },
+      canonicalGrowthRate: unavailable,
+      hotSqliteGrowthRate: unavailable,
+      replicationGrowthRate: unavailable,
+      storageAmplificationRate: {
+        state: 'definition-required' as const,
+        reason: 'Snapshot deltas provide storage growth, but original Agent activity still needs a stable uncompressed denominator before amplification can be defined.',
+      },
+    }
+  }
+
   const last7Days = deltaWindow(current, closestBaseline(parsed.snapshots, current, 7))
   const last30Days = deltaWindow(current, closestBaseline(parsed.snapshots, current, 30))
   const hasCanonicalWindow = last7Days.state === 'ready' || last30Days.state === 'ready'
