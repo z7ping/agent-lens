@@ -8,6 +8,7 @@ import {
   defaultIntegrationDisplayOrder,
   defaultIntegrationPreferences,
   integrationPreferenceBootstrapUpdate,
+  integrationPreferenceInternals,
 } from './integration-preferences'
 
 test('Integration preferences keep official default order unconfigured until user migration/reorder', () => {
@@ -117,4 +118,23 @@ test('fresh install persists incomplete onboarding while legacy bootstrap comple
     }),
     null,
   )
+})
+
+
+test('pre-DSH persisted order appends DSH without silently acknowledging the newly supported Integration', () => {
+  const parsed = integrationPreferenceInternals.parseIntegrationPreferences({
+    version: 1,
+    onboarding: {
+      completed: true,
+      completedAt: '2026-09-01T00:00:00.000Z',
+    },
+    displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    displayOrderConfigured: true,
+    acknowledgedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  })
+
+  assert.ok(parsed)
+  assert.deepEqual(parsed.displayOrder, ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'])
+  assert.equal(parsed.acknowledgedIntegrationIds.includes('dsh'), false)
 })
