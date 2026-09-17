@@ -1,7 +1,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
-import type { DataRuntimeHealthDto } from '@agent-lens/protocol'
+import type { DataRuntimeHealthDto, PiEcosystemQueryService } from '@agent-lens/protocol'
 import {
   defineAgentLensPlugin,
   SourceRescanService,
@@ -22,6 +22,7 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     http: RunningHttpSurface
     hubReview: HubReviewProjection
+    piEcosystem: PiEcosystemQueryService
   }
 }
 
@@ -221,6 +222,7 @@ const applyHttpSurface = Object.assign(
       config.diagnosticsDetails,
     )
     const piLive = ctx.get('piLive')
+    const piEcosystem = ctx.get('piEcosystem')
     const surface = await startHttpSurface(healthStorage, {
       port: config.port ?? DEFAULT_AGENT_LENS_HTTP_PORT,
       eventHub,
@@ -231,6 +233,7 @@ const applyHttpSurface = Object.assign(
       ...(ctx.lives ? { lives: ctx.lives } : {}),
       ...(ctx.liveAttachments ? { liveAttachments: ctx.liveAttachments } : {}),
       ...(piLive ? { piLive } : {}),
+      ...(piEcosystem ? { piEcosystem } : {}),
       rescanAgents: sourceId => sourceRescan.rescan(sourceId),
       sourceDetection: sourceId => sourceRescan.isSourceDetected(sourceId),
       ...(config.integrationStatus ? { integrationStatus: config.integrationStatus } : {}),
@@ -257,9 +260,3 @@ const applyHttpSurface = Object.assign(
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
-
-export const httpSurfacePluginInternals = {
-  storageWithRuntimeHealth,
-  milliseconds,
-  eventLoopSnapshot,
-}
