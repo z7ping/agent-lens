@@ -1,6 +1,7 @@
 import type {
   LiveAvailabilityDto,
   LiveMessageInputDto,
+  LiveModelControlDto,
   LiveProductDto,
   LiveProductsResponseDto,
   LiveRuntimeEventDto,
@@ -134,6 +135,17 @@ export const liveApi = {
     )
   },
 
+  modelControl(liveId: string, runtimeSessionId: string): Promise<LiveModelControlDto | null> {
+    return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/model-control')))
+  },
+
+  setModelControl(liveId: string, runtimeSessionId: string, value: string): Promise<LiveRuntimeStateDto> {
+    return requestJson(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/model-control')),
+      jsonRequest('POST', { value }),
+    )
+  },
+
   thinkingControl(liveId: string, runtimeSessionId: string): Promise<LiveThinkingControlDto | null> {
     return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/thinking-control')))
   },
@@ -142,6 +154,13 @@ export const liveApi = {
     return requestJson(
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/thinking-control')),
       jsonRequest('POST', { value }),
+    )
+  },
+
+  async respondToExtension(liveId: string, runtimeSessionId: string, requestId: string, response: unknown): Promise<void> {
+    await requestJson(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/extension-response')),
+      jsonRequest('POST', { requestId, response }),
     )
   },
 
@@ -155,6 +174,7 @@ export const liveApi = {
     runtimeSessionId: string,
     listener: (event: LiveRuntimeEventDto) => void,
     onError?: (event: Event) => void,
+    onOpen?: (event: Event) => void,
   ): () => void {
     const source = new EventSource(livePath(liveId, runtimeSuffix(runtimeSessionId, '/events')))
     const onLive = (event: MessageEvent<string>) => {
@@ -166,6 +186,7 @@ export const liveApi = {
     }
     source.addEventListener('live', onLive as EventListener)
     if (onError) source.addEventListener('error', onError)
+    if (onOpen) source.addEventListener('open', onOpen)
     return () => source.close()
   },
 }
