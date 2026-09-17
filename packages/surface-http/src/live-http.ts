@@ -1,10 +1,20 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { LiveAdapter, LiveCapabilityName, LiveService } from '@agent-lens/core'
+import type {
+  LiveAdapter,
+  LiveCapabilityName,
+  LiveService,
+  LiveStartCapabilities,
+  LiveStartInput,
+} from '@agent-lens/core'
 import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const SSE_HEARTBEAT_MS = 15_000
+const DEFAULT_START_CAPABILITIES: Readonly<LiveStartCapabilities> = {
+  workspace: 'unsupported',
+  title: 'unsupported',
+}
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 20) return '[max-depth]'
@@ -46,6 +56,45 @@ function nonEmpty(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function startCapabilities(adapter: LiveAdapter): Readonly<LiveStartCapabilities> {
+  return adapter.startCapabilities ?? DEFAULT_START_CAPABILITIES
+}
+
+function parseStartInput(adapter: LiveAdapter, value: unknown): LiveStartInput {
+  const input = value === undefined ? {} : objectBody(value)
+  for (const key of Object.keys(input)) {
+    if (key !== 'workspacePath' && key !== 'title') {
+      throw httpError(400, `Unsupported Live start field: ${key}`)
+    }
+  }
+
+  const capabilities = startCapabilities(adapter)
+  const hasWorkspace = Object.hasOwn(input, 'workspacePath')
+  const hasTitle = Object.hasOwn(input, 'title')
+  const workspacePath = optionalString(input.workspacePath)
+  const title = optionalString(input.title)
+
+  if (hasWorkspace && !workspacePath) throw httpError(400, 'workspacePath must be a non-empty string')
+  if (hasTitle && !title) throw httpError(400, 'title must be a non-empty string')
+  if (workspacePath && capabilities.workspace === 'unsupported') {
+    throw httpError(409, `${adapter.manifest.displayName} does not support per-task workspace selection`)
+  }
+  if (title && capabilities.title === 'unsupported') {
+    throw httpError(409, `${adapter.manifest.displayName} does not support task titles`)
+  }
+  if (capabilities.workspace === 'required' && !workspacePath) {
+    throw httpError(400, 'workspacePath is required for this Live adapter')
+  }
+  if (capabilities.title === 'required' && !title) {
+    throw httpError(400, 'title is required for this Live adapter')
+  }
+
+  return {
+    ...(workspacePath ? { workspacePath } : {}),
+    ...(title ? { title } : {}),
+  }
 }
 
 function statusForError(error: unknown): number {
@@ -91,6 +140,7 @@ function liveDescriptor(adapter: LiveAdapter, availability: unknown, runtimes: u
     displayName: adapter.manifest.displayName,
     capabilities: [...adapter.capabilities],
     inputCapabilities: adapter.inputCapabilities,
+    startCapabilities: startCapabilities(adapter),
     availability,
     runtimes,
   })
@@ -189,7 +239,7 @@ export async function handleLiveRequest(
       if (action === 'runtimes' && request.method === 'POST') {
         requireCapability(adapter, 'create')
         const body = objectBody(await readJson(request))
-        const input = Object.hasOwn(body, 'input') ? body.input : {}
+        const input = parseStartInput(adapter, Object.hasOwn(body, 'input') ? body.input : {})
         writeJson(response, 201, jsonValue(await adapter.start(input)))
         return true
       }
