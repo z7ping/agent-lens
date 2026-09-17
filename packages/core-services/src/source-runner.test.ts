@@ -339,3 +339,107 @@ test('独立 parser replay 只重放持久化记录且可覆盖全部历史', as
   assert.deepEqual(new Set(persistedVersions), new Set(['2']))
   assert.equal(persistedVersions.length, 51)
 })
+
+
+test('profiled source runners preserve installation root and isolate checkpoints by RuntimeProfile', async () => {
+  const installationHints: Array<Record<string, unknown>> = []
+  const profileHints: Array<Record<string, unknown>> = []
+  const checkpointScopes: string[] = []
+  const profiledDetected: DetectedSource = {
+    sourceId: 'dsh',
+    productId: 'dsh',
+    configRoot: '/dsh',
+    dataRoot: '/dsh',
+    runtimeProfile: {
+      nativeProfileId: 'writer',
+      name: 'writer',
+      configRoot: '/dsh/profiles/writer',
+      dataRoot: '/dsh/profiles/writer',
+    },
+    confidence: 'exact',
+  }
+  const source: SourceDefinition = {
+    manifest: {
+      pluginId: '@agent-lens/source-dsh',
+      pluginVersion: '1.0.0',
+      apiVersion: '1.0',
+      pluginType: 'source',
+      displayName: 'DeepSeek Harness Source',
+      sourceId: 'dsh',
+      productId: 'dsh',
+      parserVersion: '2',
+    },
+    async detect() { return [profiledDetected] },
+    async declareCapabilities() { return [] },
+    async *ingestHistory(ctx) {
+      await ctx.checkpoint.set('probe', true)
+    },
+    async normalize(value) { return normalized(value) },
+  }
+  const profiledInstallation: AgentInstallation = {
+    ...installation,
+    productId: 'dsh',
+    configRoot: '/dsh',
+    dataRoot: '/dsh',
+  }
+  const storage = {
+    repositories: { sourceRecords: { async put() {} } },
+    runtimeProfiles: {
+      async resolve(hint: Record<string, unknown>) {
+        profileHints.push(hint)
+        return {
+          id: 'profile-writer',
+          installationId: profiledInstallation.id,
+          nativeProfileId: 'writer',
+          name: 'writer',
+          configRoot: '/dsh/profiles/writer',
+          dataRoot: '/dsh/profiles/writer',
+          firstSeenAt: '2026-09-17T00:00:00.000Z',
+          lastSeenAt: '2026-09-17T00:00:00.000Z',
+        }
+      },
+    },
+    sourceRuntimeStatus: { async put() {} },
+    async transaction(operation: () => Promise<unknown>) { return operation() },
+    checkpoints: {
+      async get() { return null },
+      async set(scope: string) { checkpointScopes.push(scope) },
+      async clear() {},
+    },
+  } as unknown as StorageService
+  const runner = new SourceHistoryRunner(
+    storage,
+    {
+      async resolveInstallation(hint: Record<string, unknown>) {
+        installationHints.push(hint)
+        return profiledInstallation
+      },
+    } as unknown as IdentityService,
+    { async commit() { throw new Error('No observations expected') } } as unknown as ObservationService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    { async declare() { return {} } } as unknown as CoverageService,
+    capturePolicy,
+  )
+
+  await runner.sync({
+    source,
+    host,
+    detected: profiledDetected,
+    abortSignal: new AbortController().signal,
+  })
+
+  assert.deepEqual(installationHints[0], {
+    hostId: host.id,
+    productId: 'dsh',
+    configRoot: '/dsh',
+    dataRoot: '/dsh',
+  })
+  assert.deepEqual(profileHints[0], {
+    installationId: profiledInstallation.id,
+    nativeProfileId: 'writer',
+    name: 'writer',
+    configRoot: '/dsh/profiles/writer',
+    dataRoot: '/dsh/profiles/writer',
+  })
+  assert.deepEqual(checkpointScopes, ['dsh:installation-1:profile-writer'])
+})

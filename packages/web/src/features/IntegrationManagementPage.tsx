@@ -72,7 +72,6 @@ function IntegrationManagementRow({
   const packageState = item.packageState
   const packageReady = integrationPackageReady(packageState)
   const canInstall = integrationCanInstall(item.tool)
-  const detected = isDetected(item)
   const status = integrationManagementLifecycleState(item, t)
   const statusLabel = item.isNew && !packageState?.installed && canInstall
     ? `${t('status.new')} · ${t('status.notAdded')}`

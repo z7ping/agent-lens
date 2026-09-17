@@ -30,7 +30,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
 
   assert.deepEqual(
     specs.map(item => item.integrationId),
-    ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
   )
   assert.deepEqual(
     specs.map(item => item.entry),
@@ -40,6 +40,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
       join('packages', 'integration-claude', 'src', 'index.ts'),
       join('packages', 'integration-hermes', 'src', 'index.ts'),
       join('packages', 'integration-opencode', 'src', 'index.ts'),
+      join('packages', 'integration-dsh', 'src', 'index.ts'),
     ],
   )
   assert.deepEqual(
@@ -50,6 +51,7 @@ test('Integration bundle specs are derived from the Official Catalog instead of 
       join('packages', 'integration-claude', 'src', 'manifest.ts'),
       join('packages', 'integration-hermes', 'src', 'manifest.ts'),
       join('packages', 'integration-opencode', 'src', 'manifest.ts'),
+      join('packages', 'integration-dsh', 'src', 'manifest.ts'),
     ],
   )
   assert.equal(specs.some(item => 'apiVersion' in item), false)
@@ -164,6 +166,24 @@ test('bundle spec keeps only package identity and workspace location from Catalo
       entry: join('packages', 'integration-example', 'src', 'index.ts'),
       manifestEntry: join('packages', 'integration-example', 'src', 'manifest.ts'),
       packageJson: join('packages', 'integration-example', 'package.json'),
+    },
+  )
+})
+
+
+test('DSH Integration runtime manifest preserves one source/assets component', async () => {
+  const specs = await integrationBundleInternals.integrationBundleSpecs(root)
+  const dsh = specs.find(item => item.integrationId === 'dsh')
+  assert.ok(dsh)
+  assert.deepEqual(
+    await integrationBundleInternals.loadIntegrationRuntimeManifest(root, dsh, '1.0'),
+    {
+      integrationId: 'dsh',
+      productId: 'dsh',
+      displayName: 'DeepSeek Harness',
+      apiVersion: '1.0',
+      capabilities: ['source', 'assets'],
+      componentPluginIds: ['@agent-lens/source-dsh'],
     },
   )
 })

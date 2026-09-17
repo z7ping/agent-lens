@@ -8,6 +8,7 @@ import {
   defaultIntegrationDisplayOrder,
   defaultIntegrationPreferences,
   integrationPreferenceBootstrapUpdate,
+  integrationPreferenceInternals,
 } from './integration-preferences'
 
 test('Integration preferences keep official default order unconfigured until user migration/reorder', () => {
@@ -37,8 +38,8 @@ test('display order is normalized to official Integrations and marks global orde
   try {
     const updated = await service.update({ displayOrder: ['codex', 'dsh', 'pi', 'codex'] })
     assert.equal(updated.displayOrderConfigured, true)
-    assert.deepEqual(updated.displayOrder.slice(0, 2), ['codex', 'pi'])
-    assert.equal(updated.displayOrder.includes('dsh'), false)
+    assert.deepEqual(updated.displayOrder.slice(0, 3), ['codex', 'dsh', 'pi'])
+    assert.equal(updated.displayOrder.includes('dsh'), true)
     assert.equal(new Set(updated.displayOrder).size, updated.displayOrder.length)
   } finally {
     await rm(path, { force: true })
@@ -107,13 +108,73 @@ test('fresh install persists incomplete onboarding while legacy bootstrap comple
     }),
     {
       onboardingCompleted: true,
-      acknowledgedIntegrationIds: ['pi', 'codex'],
+      acknowledgedIntegrationIds: ['pi', 'dsh', 'codex'],
     },
   )
-  assert.equal(
+  assert.deepEqual(
     integrationPreferenceBootstrapUpdate(defaultIntegrationPreferences(), {
       existingInstallation: true,
       selectedIntegrationIds: ['pi'],
+    }),
+    { acknowledgedIntegrationIds: ['pi'] },
+  )
+  assert.equal(
+    integrationPreferenceBootstrapUpdate({
+      ...defaultIntegrationPreferences(),
+      acknowledgedIntegrationIds: ['pi'],
+    }, {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi'],
+    }),
+    null,
+  )
+})
+
+
+test('pre-DSH persisted order appends DSH without silently acknowledging the newly supported Integration', () => {
+  const parsed = integrationPreferenceInternals.parseIntegrationPreferences({
+    version: 1,
+    onboarding: {
+      completed: true,
+      completedAt: '2026-09-01T00:00:00.000Z',
+    },
+    displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    displayOrderConfigured: true,
+    acknowledgedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  })
+
+  assert.ok(parsed)
+  assert.deepEqual(parsed.displayOrder, ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'])
+  assert.equal(parsed.acknowledgedIntegrationIds.includes('dsh'), false)
+})
+
+
+test('Catalog promotion acknowledges only legacy sources the user had already selected', () => {
+  const persisted = integrationPreferenceInternals.parseIntegrationPreferences({
+    version: 1,
+    onboarding: {
+      completed: true,
+      completedAt: '2026-09-01T00:00:00.000Z',
+    },
+    displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    displayOrderConfigured: true,
+    acknowledgedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  })
+  assert.ok(persisted)
+
+  assert.deepEqual(
+    integrationPreferenceBootstrapUpdate(persisted, {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
+    }),
+    { acknowledgedIntegrationIds: ['dsh'] },
+  )
+  assert.equal(
+    integrationPreferenceBootstrapUpdate(persisted, {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
     }),
     null,
   )

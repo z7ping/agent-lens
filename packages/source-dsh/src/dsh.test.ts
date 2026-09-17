@@ -10,7 +10,8 @@ import {
   normalizeDshRecord,
   parseDshJsonl,
   dshSourceInternals,
-} from './dsh'
+  profiledDshSourceInternals,
+} from './index'
 
 function sourceContext(root: string): SourceExecutionContext {
   const values = new Map<string, unknown>()
@@ -85,6 +86,7 @@ test('DSH 归一化把父会话和工作区写入身份提示', async () => {
   assert.equal(output.observations.length, 1)
   assert.deepEqual(output.observations[0]?.identityHints, {
     nativeSessionId: 'child',
+    runtimeProfileNativeId: 'web',
     nativeParentSessionId: 'parent',
     workspacePath: '/repo/demo',
   })
@@ -182,4 +184,66 @@ test('DSH Profile 静态发现区分 Bundle、树外插件和配置覆盖', asyn
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+
+test('DSH profiled detection keeps product root on Installation and profile root on RuntimeProfile', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-dsh-profiled-detect-'))
+  const profileRoot = join(root, 'profiles', 'writer')
+  try {
+    await mkdir(profileRoot, { recursive: true })
+    await writeFile(join(profileRoot, 'package.json'), JSON.stringify({ name: 'writer-profile' }))
+
+    const detected = await profiledDshSourceInternals.detectProfiledDsh({
+      host: {
+        id: 'host-test',
+        name: 'test',
+        platform: process.platform,
+        arch: process.arch,
+        createdAt: '2026-09-17T00:00:00.000Z',
+        lastSeenAt: '2026-09-17T00:00:00.000Z',
+      },
+      env: { DSH_HOME: root },
+    })
+
+    assert.equal(detected.length, 1)
+    assert.equal(detected[0]?.configRoot, root)
+    assert.equal(detected[0]?.dataRoot, root)
+    assert.deepEqual(detected[0]?.runtimeProfile, {
+      nativeProfileId: 'writer',
+      name: 'writer',
+      configRoot: profileRoot,
+      dataRoot: profileRoot,
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+test('DSH normalization carries the native profile id so parser replay can reattach sessions correctly', async () => {
+  const record: SourceRecord = {
+    id: 'dsh-profile-replay-1',
+    sourceId: 'dsh',
+    installationId: 'installation-dsh-test',
+    sourceSessionNativeId: 'session-profile',
+    nativeType: 'assistant/message',
+    nativeId: 'session-profile:1',
+    sourceSequence: 10,
+    occurredAt: '2026-09-17T00:00:01.000Z',
+    capturedAt: '2026-09-17T00:00:02.000Z',
+    locator: { kind: 'file', path: '/tmp/profile/session.jsonl', offset: 1 },
+    payload: {
+      event: { seq: 1, type: 'assistant/message', data: { content: 'ok' } },
+      session: {
+        nativeSessionId: 'session-profile',
+        profile: 'writer',
+      },
+      captureChannel: 'history',
+    },
+    parserVersion: '2',
+  }
+
+  const output = await normalizeDshRecord(record, {} as never)
+  assert.equal(output.observations[0]?.identityHints.runtimeProfileNativeId, 'writer')
 })

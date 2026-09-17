@@ -58,7 +58,7 @@ test('management preference parser rejects reopening completed onboarding', () =
 test('Integration management route exposes physical package state in unified projection', async () => {
   const preferences = {
     onboarding: { completed: false },
-    displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
     displayOrderConfigured: false,
     acknowledgedIntegrationIds: [],
     updatedAt: new Date(0).toISOString(),

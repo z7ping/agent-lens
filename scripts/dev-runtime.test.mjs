@@ -138,6 +138,7 @@ test('开发 Integration 指纹只覆盖实际 workspace 依赖闭包', async ()
     '@agent-lens/integration-claude',
     '@agent-lens/integration-hermes',
     '@agent-lens/integration-opencode',
+    '@agent-lens/integration-dsh',
     '@agent-lens/runtime-cordis',
     '@agent-lens/core',
   ]) {

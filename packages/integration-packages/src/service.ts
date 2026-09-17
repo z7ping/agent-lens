@@ -340,29 +340,53 @@ export class IntegrationPackageService {
   ): Promise<{ migrated: boolean; operations: IntegrationPackageOperation[] }> {
     this.assertInitialized()
     const markerPath = join(this.options.installRoot, 'legacy-physicalization-v1.json')
-    if (existsSync(markerPath)) return { migrated: false, operations: [] }
-
     const ids = [...new Set(integrationIds.map(id => assertOfficialIntegration(id).integrationId))]
-    const operations: IntegrationPackageOperation[] = []
-    for (const id of ids) {
-      // Migration is reconcile-style and failure-isolated. A broken package
-      // must not prevent another legacy-enabled Integration from becoming
-      // usable, and the missing marker makes the failed item retry next start.
-      operations.push(await this.install(id))
+    const completedIds = new Set<string>()
+
+    try {
+      const marker = parseJsonObject(
+        await readFile(markerPath, 'utf8'),
+        'Legacy Integration physicalization marker',
+      )
+      if (Array.isArray(marker.integrationIds)) {
+        for (const value of marker.integrationIds) {
+          if (typeof value !== 'string') continue
+          const entry = officialIntegrationCatalogEntry(value.trim().toLowerCase())
+          if (entry) completedIds.add(entry.integrationId)
+        }
+      }
+    } catch {
+      // Missing/invalid markers are treated as an incomplete migration. Each
+      // requested Integration is reconciled independently below.
     }
 
-    const completed = operations.every(operation => operation.status === 'completed')
-    if (completed) {
-      await writeJsonAtomic(markerPath, {
-        schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
-        completedAt: new Date().toISOString(),
-        integrationIds: ids,
-      })
+    const pendingIds = ids.filter(id => !completedIds.has(id))
+    if (!pendingIds.length) return { migrated: false, operations: [] }
+
+    const operations: IntegrationPackageOperation[] = []
+    for (const id of pendingIds) {
+      // Migration is reconcile-style and failure-isolated. Successful items
+      // are recorded independently so future Catalog additions (for example
+      // DSH becoming a first-class Integration) can be physicalized without
+      // replaying the whole legacy migration.
+      const operation = await this.install(id)
+      operations.push(operation)
+      if (operation.status === 'completed') completedIds.add(id)
     }
+
+    await writeJsonAtomic(markerPath, {
+      schemaVersion: INTEGRATION_PACKAGE_SCHEMA_VERSION,
+      completedAt: new Date().toISOString(),
+      integrationIds: [...completedIds],
+    })
+
     // Successful installs happened before Runtime registration in this same
     // process, so reconcile them immediately even when another item failed.
     await this.reconcile()
-    return { migrated: completed, operations }
+    return {
+      migrated: ids.every(id => completedIds.has(id)),
+      operations,
+    }
   }
 
   catalog(): IntegrationPackageCatalogItem[] {

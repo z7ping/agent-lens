@@ -46,7 +46,7 @@ function normalized(kind: ObservationKind, payload: unknown): NormalizedSourceOu
   }
 }
 
-test('默认启用当前支持的全部本机智能体来源', () => {
+test('历史默认来源保持兼容，新增 DSH Integration 不被静默自动启用', () => {
   assert.deepEqual(capturePolicySettingsFromEnv({}), {
     prompt: 'redacted',
     tool: 'redacted',
@@ -54,6 +54,7 @@ test('默认启用当前支持的全部本机智能体来源', () => {
     environment: 'off',
     enabledSources: ['claude-code', 'codex', 'pi', 'hermes', 'opencode'],
   })
+  assert.equal(capturePolicySettingsFromEnv({}).enabledSources.includes('dsh'), false)
 })
 
 test('source allowlist is explicit, case-insensitive and supports none', () => {
