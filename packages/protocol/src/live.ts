@@ -44,6 +44,81 @@ export interface LiveMessageDto {
 
 export type LiveMessageInputDto = string | LiveMessageDto
 
+export type LiveCapabilityNameDto =
+  | 'create'
+  | 'resume'
+  | 'fork'
+  | 'send'
+  | 'stream'
+  | 'interrupt'
+  | 'queue'
+  | 'steer'
+  | 'model-switching'
+  | 'thinking-control'
+  | 'extension-ui'
+  | 'recovery'
+
+export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
+
+export interface LiveInputCapabilitiesDto {
+  text: LiveInputSupportDto
+  largeText: LiveInputSupportDto
+  image: LiveInputSupportDto
+  file: LiveInputSupportDto
+  multiline: LiveInputSupportDto
+}
+
+export interface LiveAvailabilityDto {
+  available: boolean
+  reason?: string | undefined
+}
+
+export type LiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
+
+export interface LiveRuntimeStateDto {
+  runtimeSessionId: string
+  status: LiveRuntimeStatusDto
+  nativeSessionId?: string | undefined
+  workspacePath?: string | undefined
+  isStreaming: boolean
+  pendingMessageCount: number
+}
+
+export interface LiveSnapshotDto {
+  state: LiveRuntimeStateDto
+  entries: unknown[]
+  leafId?: string | null | undefined
+}
+
+export interface LiveRuntimeEventDto {
+  runtimeSessionId: string
+  sequence: number
+  receivedAt: string
+  event: Readonly<Record<string, unknown>>
+  normalizedEvent?: Readonly<LiveEventDto> | undefined
+}
+
+export interface LiveProductDto {
+  liveId: string
+  productId: string
+  displayName: string
+  capabilities: LiveCapabilityNameDto[]
+  inputCapabilities: LiveInputCapabilitiesDto
+  availability: LiveAvailabilityDto
+  runtimes: LiveRuntimeStateDto[]
+}
+
+export interface LiveProductsResponseDto {
+  items: LiveProductDto[]
+}
+
+export interface LiveRuntimeRefDto {
+  liveId: string
+  productId: string
+  displayName: string
+  state: LiveRuntimeStateDto
+}
+
 export type LiveEventStatusDto =
   | 'initializing'
   | 'ready'
