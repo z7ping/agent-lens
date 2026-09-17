@@ -56,7 +56,7 @@ export interface HttpSurfacePluginConfig {
 
 const manifest = {
   pluginId: '@agent-lens/surface-http',
-  pluginVersion: '1.0.0-alpha.5',
+  pluginVersion: '1.0.0-alpha.6',
   apiVersion: '1.0',
   pluginType: 'surface',
   displayName: 'AgentLens HTTP Surface',

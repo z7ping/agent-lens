@@ -1,6 +1,6 @@
 {
   "name": "@z7ping/agent-lens",
-  "version": "1.0.0-alpha.5",
+  "version": "1.0.0-alpha.6",
   "description": "Local observability and replay for AI coding agents, rebuilt around a canonical evidence model.",
   "private": false,
   "type": "module",
@@ -135,7 +135,7 @@
     "better-sqlite3": "12.11.1"
   },
   "devDependencies": {
-    "@agent-lens/protocol": "1.0.0-alpha.5",
+    "@agent-lens/protocol": "1.0.0-alpha.6",
     "@electron/get": "5.1.0",
     "@types/node": "22.20.0",
     "esbuild": "0.28.2",

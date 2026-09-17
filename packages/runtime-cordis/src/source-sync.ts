@@ -17,6 +17,7 @@ export interface RegisteredSourceTarget {
   source: SourceDefinition
   host: Host
   detected: DetectedSource
+  runtimeProfile?: DetectedSource['runtimeProfile']
 }
 
 export interface RegisteredSourceFailure {
@@ -108,7 +109,12 @@ export async function prepareRegisteredSources(
           )
         }
         await registerDetectedSource(ctx, host, item)
-        targets.push({ source, host, detected: item })
+        targets.push({
+          source,
+          host,
+          detected: item,
+          ...(item.runtimeProfile ? { runtimeProfile: item.runtimeProfile } : {}),
+        })
       }
       return { targets, failures: [] } satisfies RegisteredSourcePreparation
     } catch (error) {

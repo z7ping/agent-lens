@@ -39,7 +39,7 @@ const sourceFiles = [
   'apps/cli/src/entry.ts',
   'apps/cli/src/index.ts',
   'apps/cli/src/hook-execution.ts',
-  'apps/daemon/src/sources/dsh.ts',
+  'packages/source-dsh/src/source.ts',
   'apps/hook-hermes/plugin/agent-lens-observer/plugin.yaml',
   'packages/source-claude/src/index.ts',
   'packages/source-codex/src/index.ts',

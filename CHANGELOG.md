@@ -1,5 +1,12 @@
 # 更新日志
 
+## 1.0.0-alpha.6（2026-09-17）
+
+### 稳定性与修复
+
+- 修复大数据库从旧 schema 升级时，Data Runtime Worker 被短启动探针反复终止、迁移事务持续回滚，最终使 Review 等读接口报 `reader pool queue wait timed out` 的问题。迁移现使用独立启动预算，保证原子迁移能够完成；普通请求、心跳与前台队列的超时边界保持不变。
+- 修复版本同步脚本遗留已删除的 DSH Daemon 源文件路径，alpha.6 及后续版本可以覆盖当前 `packages/source-dsh` 的正式插件版本声明。
+
 ## 1.0.0-alpha.5（2026-09-10）
 
 ### 新增

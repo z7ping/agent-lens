@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/live-support",
-  "version": "1.0.0-alpha.5",
+  "version": "1.0.0-alpha.6",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,6 +11,6 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/core": "1.0.0-alpha.5"
+    "@agent-lens/core": "1.0.0-alpha.6"
   }
 }
