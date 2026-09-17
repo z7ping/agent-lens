@@ -241,6 +241,12 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
         liveAvailabilityFailed: '实时对话可用性检查失败',
       },
     },
+    observation: {
+      integrationStatus: '接入状态',
+      manageIntegration: '管理接入',
+      noOverviewTitle: '暂无可观察数据',
+      dataCapture: '数据采集',
+    },
     managementPage: {
       title: '智能体接入',
       loading: '正在读取智能体接入状态…',

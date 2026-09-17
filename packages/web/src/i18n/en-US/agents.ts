@@ -241,6 +241,12 @@ export const englishAgentsMessages: LocaleMessagesDto = {
         liveAvailabilityFailed: 'Live availability check failed',
       },
     },
+    observation: {
+      integrationStatus: 'Integration',
+      manageIntegration: 'Manage integration',
+      noOverviewTitle: 'No observable data yet',
+      dataCapture: 'Data capture',
+    },
     managementPage: {
       title: 'Agent Integration',
       loading: 'Loading integration state…',

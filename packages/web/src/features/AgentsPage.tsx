@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import type {
   AgentAssetBindingDto,
   AgentAssetInventoryDto,
   AgentOverviewDto,
   CapturePolicyResponseDto,
-  IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
-  IntegrationPackageOperationResponseDto,
   IntegrationToolDiscoveryItemDto,
   ManagedAssetRoot,
 } from '@agent-lens/protocol'
@@ -20,12 +19,12 @@ import { AgentManagedFilesDialog } from '../components/AgentManagedFilesDialog'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
-  IntegrationAdvancedActions,
-  IntegrationControl,
-  IntegrationOnlyCard,
-} from './integrations/IntegrationManagementControls'
+  IntegrationObservationPanel,
+  IntegrationOnlyObservationCard,
+} from './integrations/IntegrationObservation'
+import { LegacySourceCaptureControl } from './integrations/LegacySourceCaptureControl'
 import {
-  integrationLifecycleState,
+  agentObservationState,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
@@ -459,7 +458,7 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
   </section>
 }
 
-function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onInstall, onRemove, onAuthorize }: {
+function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, policy, onCaptureChange, onManageIntegration }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
@@ -468,12 +467,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   discoveryError: string
   policy: CapturePolicyResponseDto | null
   onCaptureChange(sourceId: string, enabled: boolean): Promise<void>
-  onInstall(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
-  onRemove(integrationId: string): Promise<IntegrationPackageOperationResponseDto>
-  onAuthorize(
-    productId: string,
-    capabilities: readonly IntegrationAuthorizationCapabilityDto[],
-  ): Promise<unknown>
+  onManageIntegration(integrationId: string): void
 }) {
   const { t } = useTranslation('agents')
   const [showAllBindings, setShowAllBindings] = useState(false)
@@ -526,7 +520,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, RUNTIME_CONFIG_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
-  const status = integrationLifecycleState(agent, management, discovery, discoveryScanning, t, discoveryError)
+  const status = agentObservationState(agent, discovery, discoveryScanning, t, discoveryError)
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
   const assetsAvailable = agent.integration?.capabilities.some(capability =>
@@ -597,7 +591,15 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       {presencePath && !configPath && <span className="agent-config"><small>{t('toolPresence.location')}</small><code title={presencePath}>{shortPath(presencePath, 52)}</code><LocalPathActions path={presencePath} onOpen={openPath} onError={reportPathError}/></span>}
     </div>
 
-    <IntegrationControl agent={agent} management={management} policy={policy} onChange={onCaptureChange} onInstall={onInstall} onAuthorize={onAuthorize}/>
+    {management
+      ? <IntegrationObservationPanel
+          management={management}
+          discovery={discovery}
+          discoveryScanning={discoveryScanning}
+          discoveryError={discoveryError}
+          onManage={onManageIntegration}
+        />
+      : <LegacySourceCaptureControl agent={agent} policy={policy} onChange={onCaptureChange}/>} 
 
     {isPi ? <>
       <PiUsageGuidance agent={agent}/>
@@ -680,12 +682,6 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
           {agent.capabilities.map(cap => <div key={cap.name} className="capability-row" title={capabilityDetail(cap, t)}><span>{translatedLabel(capabilityLabelKey, cap.name, t)} · {capabilityDetail(cap, t)}</span><b data-status={cap.status}>{translatedLabel(capabilityStatusLabelKey, cap.status, t)}</b></div>)}
         </div>
       </Disclosure>
-      <IntegrationAdvancedActions
-        management={management}
-        label={agentLabel(agent.sourceId, agent.displayName)}
-        onChange={onCaptureChange}
-        onRemove={onRemove}
-      />
     </section>
     {pathError && <div className="agent-path-error" role="alert">{pathError}</div>}
     {managedRoot && installation && managedRootPath && <AgentManagedFilesDialog
@@ -716,6 +712,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
 
 export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; sourceId: string }) {
   const { t } = useTranslation('agents')
+  const navigate = useNavigate()
   const snapshot = useClientSnapshot(model)
   const overviewItems = useOrderedAgents(snapshot.agents?.items ?? [])
   const managementItems = snapshot.integrationManagement?.items ?? []
@@ -775,14 +772,6 @@ export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; s
   const selectedAgent = selectedRow?.agent
   const selectedManagement = selectedRow?.management
   const selectedDiscovery = selectedRow?.discovery
-  const installIntegration = async (integrationId: string) => {
-    const result = await model.installIntegration(integrationId)
-    if (result.operation.status === 'completed' && result.state.installed) {
-      await model.acknowledgeIntegration(integrationId).catch(() => undefined)
-    }
-    return result
-  }
-
   return <main className="workspace-page">
     <div className="page-content agents-content">
       {rows.length ? <div className="agent-detail-pane">
@@ -795,21 +784,15 @@ export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; s
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
             policy={snapshot.capturePolicy}
-            onCaptureChange={(id, enabled) => selectedManagement
-              ? model.setIntegrationEnabled(id, enabled).then(() => undefined)
-              : model.setSourceEnabled(id, enabled)}
-            onInstall={installIntegration}
-            onRemove={id => model.removeIntegration(id)}
-            onAuthorize={(productId, capabilities) => model.authorizeIntegration(productId, capabilities)}
-          /> : selectedManagement ? <IntegrationOnlyCard
+            onCaptureChange={(id, enabled) => model.setSourceEnabled(id, enabled)}
+            onManageIntegration={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
+          /> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
-            onChange={(id, enabled) => model.setIntegrationEnabled(id, enabled).then(() => undefined)}
-            onInstall={installIntegration}
-            onRemove={id => model.removeIntegration(id)}
+            onManage={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
           /> : null}
       </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
     </div>

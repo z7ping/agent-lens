@@ -6,7 +6,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
-import { integrationLifecycleState, integrationManagementLifecycleState } from './integration-lifecycle'
+import { agentObservationState, integrationLifecycleState, integrationManagementLifecycleState } from './integration-lifecycle'
 
 const t = ((key: string) => key) as TFunction
 
@@ -260,5 +260,25 @@ test('management surface reports runtime availability only after package and ena
   assert.equal(
     integrationManagementLifecycleState(management({ availability: 'error' }), t).label,
     'status.abnormal',
+  )
+})
+
+
+test('agent observation state ignores Integration enabled state and reports discovered facts', () => {
+  const agent = { supported: true, detected: true }
+  assert.equal(
+    agentObservationState(agent, discovery('present'), false, t).label,
+    'status.discovered',
+  )
+})
+
+test('agent observation state preserves data-only and scan-failure evidence', () => {
+  assert.equal(
+    agentObservationState(undefined, discovery('data-only'), false, t).label,
+    'status.historyData',
+  )
+  assert.equal(
+    agentObservationState(undefined, discovery('error'), false, t).label,
+    'status.scanFailed',
   )
 })

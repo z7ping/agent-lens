@@ -113,6 +113,18 @@
   .agent-insights-rail { grid-template-columns: 1fr; padding-inline: 18px; }
 }
 @media (max-width: 767.98px) {
+  .integration-observation,
+  .integration-placeholder-body {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .integration-observation-main {
+    display: grid;
+    width: 100%;
+    gap: 7px;
+  }
+
   .agents-responsive-shell .skill-funnel { grid-template-columns: 1fr; }
   .agent-insights-rail { padding-inline: 14px; }
   .agent-diagnostic-summary-grid { grid-template-columns: 1fr; }
