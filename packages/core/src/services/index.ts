@@ -354,6 +354,7 @@ export interface SessionRepository {
     sourceId: string,
     installationId: AgentInstallationId,
     nativeSessionId: string,
+    runtimeProfileId?: RuntimeProfileId,
   ): Promise<SourceSession | null>
   putSourceSession(session: SourceSession): Promise<void>
   putRelationship(relationship: SessionRelationship): Promise<void>
@@ -373,7 +374,7 @@ export interface SourceRecordReplayCursor {
 
 export interface SourceRecordRepository {
   get(id: SourceRecordId): Promise<SourceRecord | null>
-  getMany?(ids: SourceRecordId[]): Promise<SourceRecord[]>
+  getMany?(ids: string[]): Promise<SourceRecord[]>
   listForParserReplay?(
     sourceId: string,
     installationId: AgentInstallationId,
@@ -489,6 +490,7 @@ export interface SessionRelationshipCandidateRepository {
     sourceId: string,
     installationId: AgentInstallationId,
     nativeSessionId: string,
+    runtimeProfileId?: RuntimeProfileId,
   ): Promise<number>
 }
 
