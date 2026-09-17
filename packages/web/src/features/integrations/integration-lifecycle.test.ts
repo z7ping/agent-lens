@@ -6,7 +6,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
-import { integrationLifecycleState } from './integration-lifecycle'
+import { integrationLifecycleState, integrationManagementLifecycleState } from './integration-lifecycle'
 
 const t = ((key: string) => key) as TFunction
 
@@ -203,5 +203,62 @@ test('installed Integration with failed local Tool discovery is not presented as
   assert.equal(
     integrationLifecycleState(undefined, item, item.tool, false, t).label,
     'status.scanFailed',
+  )
+})
+
+
+test('management surface keeps uninstalled Integration as not added regardless of local discovery', () => {
+  const item = management({
+    tool: discovery('absent'),
+    packageState: {
+      integrationId: 'pi',
+      installed: false,
+      availableVersion: '1.0.0-alpha.5',
+      compatibility: 'compatible',
+      integrity: 'unknown',
+      restartRequired: false,
+    },
+  })
+
+  assert.equal(integrationManagementLifecycleState(item, t).label, 'status.notAdded')
+})
+
+test('management surface keeps installed disabled Integration visible even when local discovery is absent', () => {
+  const item = management({
+    tool: discovery('absent'),
+    enabled: {
+      configured: false,
+      effective: false,
+      editable: true,
+      managedBy: 'file',
+      restartRequired: false,
+    },
+  })
+
+  assert.equal(integrationManagementLifecycleState(item, t).label, 'status.disabled')
+})
+
+test('management surface prioritizes pending restart over current configured state', () => {
+  const item = management({
+    enabled: {
+      configured: false,
+      effective: true,
+      editable: true,
+      managedBy: 'file',
+      restartRequired: true,
+    },
+  })
+
+  assert.equal(integrationManagementLifecycleState(item, t).label, 'status.pendingRestart')
+})
+
+test('management surface reports runtime availability only after package and enabled state are satisfied', () => {
+  assert.equal(
+    integrationManagementLifecycleState(management({ availability: 'available' }), t).label,
+    'status.enabled',
+  )
+  assert.equal(
+    integrationManagementLifecycleState(management({ availability: 'error' }), t).label,
+    'status.abnormal',
   )
 })

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -13,7 +13,7 @@ import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { Button, Dialog, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
 import {
   integrationCanInstall,
-  integrationLifecycleState,
+  integrationManagementLifecycleState,
   integrationPackageReady,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
@@ -70,14 +70,7 @@ function IntegrationManagementRow({
   const packageReady = integrationPackageReady(packageState)
   const canInstall = integrationCanInstall(item.tool)
   const detected = isDetected(item)
-  const status = integrationLifecycleState(
-    { supported: true, enabled: item.enabled.effective, detected },
-    item,
-    item.tool,
-    discoveryScanning,
-    t,
-    discoveryError,
-  )
+  const status = integrationManagementLifecycleState(item, t)
   const statusLabel = item.isNew && !packageState?.installed && canInstall
     ? `${t('status.new')} · ${t('status.notAdded')}`
     : status.label
@@ -163,15 +156,16 @@ function IntegrationManagementRow({
   const primaryAction = !packageState
     ? null
     : !packageReady
-      ? <Button
-          size="small"
-          variant={canInstall || packageState.installed ? 'primary' : 'default'}
-          loading={saving}
-          disabled={!packageState.installed && !canInstall}
-          onClick={() => void installOrRepair()}
-        >
-          {packageState.installed ? t('integration.repair') : t('managementPage.add')}
-        </Button>
+      ? packageState.installed || canInstall
+        ? <Button
+            size="small"
+            variant="primary"
+            loading={saving}
+            onClick={() => void installOrRepair()}
+          >
+            {packageState.installed ? t('integration.repair') : t('managementPage.add')}
+          </Button>
+        : null
       : <Button
           size="small"
           loading={saving}
@@ -181,7 +175,11 @@ function IntegrationManagementRow({
           {item.enabled.configured ? t('managementPage.disable') : t('managementPage.enable')}
         </Button>
 
-  return <article className="integration-management-row" data-integration={item.integrationId}>
+  return <article
+    className="integration-management-row"
+    data-integration={item.integrationId}
+    data-new={item.isNew ? 'true' : undefined}
+  >
     <div className="integration-management-identity">
       <span className={`source-dot ${sourceDot(item.integrationId)}`} aria-hidden="true"/>
       <div>
@@ -278,7 +276,31 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
   const snapshot = useClientSnapshot(model)
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
+  const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
+  const acknowledgementInFlightRef = useRef(false)
   const { ordered } = useIntegrationOrder()
+
+  useEffect(() => {
+    if (!management || acknowledgementInFlightRef.current) return
+    const newIds = management.items.filter(item => item.isNew).map(item => item.integrationId)
+    if (!newIds.length) return
+
+    setVisibleNewIds(current => {
+      const next = new Set(current)
+      for (const id of newIds) next.add(id)
+      return next
+    })
+
+    acknowledgementInFlightRef.current = true
+    const acknowledgedIntegrationIds = [...new Set([
+      ...management.preferences.acknowledgedIntegrationIds,
+      ...newIds,
+    ])]
+    void model.updateIntegrationPreferences({ acknowledgedIntegrationIds }).then(
+      () => { acknowledgementInFlightRef.current = false },
+      () => { acknowledgementInFlightRef.current = false },
+    )
+  }, [management, model])
 
   const items = useMemo(() => {
     const rows = [...(management?.items ?? [])]
@@ -294,8 +316,9 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
   const discoveryScanning = snapshot.integrationDiscoveryLoading
     || snapshot.integrationDiscoveryRescanning
     || management?.discovery.status === 'scanning'
-  const primaryItems = items.filter(isPrimaryRow)
-  const supportedItems = items.filter(item => !isPrimaryRow(item))
+  const discoveryFailed = Boolean(snapshot.integrationDiscoveryError)
+  const primaryItems = items.filter(item => discoveryFailed || isPrimaryRow(item))
+  const supportedItems = discoveryFailed ? [] : items.filter(item => !isPrimaryRow(item))
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
@@ -318,26 +341,29 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
       topbarHost,
     ) : null}
     <div className="page-content integration-management-content">
-      <header className="integration-management-heading">
-        <h1>{t('managementPage.title')}</h1>
-      </header>
-
-      <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
-        <span><strong>{items.length}</strong>{t('managementPage.supported')}</span>
-        <span><strong>{detectedCount}</strong>{t('managementPage.detected')}</span>
-        <span><strong>{installedCount}</strong>{t('managementPage.added')}</span>
-        <span><strong>{enabledCount}</strong>{t('managementPage.enabled')}</span>
-      </div>
-
-      <section className="integration-management-section">
-        <div className="integration-management-section-head">
-          <h2>{t('managementPage.localAndAdded')}</h2>
-          <span>{t('managementPage.readOnlyDiscovery')}</span>
+      <div className="integration-management-surface">
+        <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
+          <span><strong>{items.length}</strong>{t('managementPage.supported')}</span>
+          <span><strong>{discoveryFailed ? '—' : detectedCount}</strong>{t('managementPage.detected')}</span>
+          <span><strong>{installedCount}</strong>{t('managementPage.added')}</span>
+          <span><strong>{enabledCount}</strong>{t('managementPage.enabled')}</span>
         </div>
-        <div className="integration-management-list">
+
+        <section className="integration-management-section">
+          <div className="integration-management-section-head">
+            <h2>{t('managementPage.localAndAdded')}</h2>
+          </div>
+          <div className="integration-management-table-head" aria-hidden="true">
+            <span>{t('managementPage.columnAgent')}</span>
+            <span>{t('managementPage.columnLocal')}</span>
+            <span>{t('managementPage.columnStatus')}</span>
+            <span>{t('managementPage.columnCapabilities')}</span>
+            <span>{t('managementPage.columnActions')}</span>
+          </div>
+          <div className="integration-management-list">
           {primaryItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
-            item={item}
+            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
             moveUpTargetId={primaryItems[index - 1]?.integrationId}
             moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
@@ -346,18 +372,17 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
             ordering={ordering}
           />)}
           {!primaryItems.length && <div className="integration-management-empty">{t('managementPage.noLocalOrAdded')}</div>}
-        </div>
-      </section>
+          </div>
+        </section>
 
-      {supportedItems.length > 0 && <section className="integration-management-section">
-        <div className="integration-management-section-head">
-          <h2>{t('managementPage.otherSupported')}</h2>
-          <span>{t('managementPage.otherSupportedHint')}</span>
-        </div>
-        <div className="integration-management-list">
+        {supportedItems.length > 0 && <section className="integration-management-section integration-management-section-secondary">
+          <div className="integration-management-section-head">
+            <h2>{t('managementPage.otherSupported')}</h2>
+          </div>
+          <div className="integration-management-list">
           {supportedItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
-            item={item}
+            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
             moveUpTargetId={supportedItems[index - 1]?.integrationId}
             moveDownTargetId={supportedItems[index + 1]?.integrationId}
             model={model}
@@ -365,8 +390,9 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
             discoveryError={snapshot.integrationDiscoveryError}
             ordering={ordering}
           />)}
-        </div>
-      </section>}
+          </div>
+        </section>}
+      </div>
     </div>
   </main>
 }
