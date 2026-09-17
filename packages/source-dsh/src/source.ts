@@ -499,6 +499,7 @@ function evidenceFor(record: SourceRecord): EvidenceCandidate {
 function identity(_record: SourceRecord, envelope: DshEnvelope): ObservationIdentityHints {
   return {
     nativeSessionId: envelope.session.nativeSessionId,
+    runtimeProfileNativeId: envelope.session.profile,
     ...(envelope.session.parentSessionId ? { nativeParentSessionId: envelope.session.parentSessionId } : {}),
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
   }
