@@ -52,6 +52,19 @@ function notifyLiveStateChanged(liveId: string, runtimeSessionId?: string): void
   }))
 }
 
+async function historyInteraction(
+  liveId: string,
+  logicalSessionId: string,
+  action: 'resume' | 'fork',
+): Promise<LiveRuntimeStateDto> {
+  const state = await requestJson<LiveRuntimeStateDto>(
+    livePath(liveId, `/history/${encodeURIComponent(logicalSessionId)}/${action}`),
+    { method: 'POST' },
+  )
+  notifyLiveStateChanged(liveId, state.runtimeSessionId)
+  return state
+}
+
 export const liveApi = {
   async products(): Promise<LiveProductDto[]> {
     return (await requestJson<LiveProductsResponseDto>(LIVE_ROOT)).items
@@ -75,6 +88,11 @@ export const liveApi = {
     return requestJson(livePath(liveId, '/runtimes'))
   },
 
+  async selectProjectDirectory(): Promise<string | undefined> {
+    const value = await requestJson<{ workspacePath: string | null }>(`${LIVE_ROOT}/project-directory`, { method: 'POST' })
+    return value.workspacePath ?? undefined
+  },
+
   async start(liveId: string, input: LiveStartInputDto = {}): Promise<LiveRuntimeStateDto> {
     const state = await requestJson<LiveRuntimeStateDto>(
       livePath(liveId, '/runtimes'),
@@ -82,6 +100,14 @@ export const liveApi = {
     )
     notifyLiveStateChanged(liveId, state.runtimeSessionId)
     return state
+  },
+
+  resume(liveId: string, logicalSessionId: string): Promise<LiveRuntimeStateDto> {
+    return historyInteraction(liveId, logicalSessionId, 'resume')
+  },
+
+  fork(liveId: string, logicalSessionId: string): Promise<LiveRuntimeStateDto> {
+    return historyInteraction(liveId, logicalSessionId, 'fork')
   },
 
   state(liveId: string, runtimeSessionId: string): Promise<LiveRuntimeStateDto> {
