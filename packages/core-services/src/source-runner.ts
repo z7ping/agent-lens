@@ -414,11 +414,25 @@ async function processSourceRecord(
   })
 
   const explicitRelationships = persistedOutput.sessionRelationshipHints ?? []
+  const observationProfileIds = new Set(
+    persistedOutput.observations
+      .map(observation => observation.identityHints.runtimeProfileNativeId)
+      .filter((value): value is string => Boolean(value)),
+  )
+  const relationshipRuntimeProfileId = runtimeProfile
+    && (
+      observationProfileIds.size === 0
+      || (observationProfileIds.size === 1 && observationProfileIds.has(runtimeProfile.nativeProfileId))
+    )
+    ? runtimeProfile.id
+    : undefined
   const derivedRelationships = deriveParentRelationshipCandidates(
     source.manifest.sourceId,
     installation.id,
     persistedOutput.observations,
-  ).map(candidate => runtimeProfile ? { ...candidate, runtimeProfileId: runtimeProfile.id } : candidate)
+  ).map(candidate => relationshipRuntimeProfileId
+    ? { ...candidate, runtimeProfileId: relationshipRuntimeProfileId }
+    : candidate)
   const relationshipCandidates = explicitRelationships.length ? explicitRelationships : derivedRelationships
   await persistRelationshipCandidates(storage, relationshipCandidates)
 
