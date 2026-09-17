@@ -9,12 +9,10 @@ import type {
 import { searchPiEcosystem } from '../client/pi-ecosystem'
 import {
   Button,
-  Disclosure,
   Input,
   SelectMenu,
   StatusBadge,
-  Toolbar,
-  ToolbarGroup,
+  UiIcon,
 } from '../components/ui'
 
 type TypeFilter = 'all' | PiEcosystemResourceTypeDto
@@ -146,7 +144,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
     { value: 'theme', label: t('type.theme') },
   ]
 
-  return <section className="agent-primary-section">
+  return <section className="agent-primary-section pi-ecosystem-section">
     <div className="section-heading-row">
       <div><h3>{t('title')}</h3></div>
       {response?.stale
@@ -154,35 +152,31 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         : response && <span className="section-total">{response.items.length}</span>}
     </div>
 
-    <form onSubmit={submit}>
-      <Toolbar>
-        <ToolbarGroup>
-          <Input
-            value={queryDraft}
-            onChange={event => setQueryDraft(event.currentTarget.value)}
-            placeholder={t('searchPlaceholder')}
-            aria-label={t('searchPlaceholder')}
-          />
-          <SelectMenu
-            ariaLabel={t('type.all')}
-            value={typeFilter}
-            options={typeOptions}
-            variant="field"
-            menuWidth={190}
-            onChange={value => setTypeFilter(value as TypeFilter)}
-          />
-        </ToolbarGroup>
-        <ToolbarGroup align="end">
-          <Button type="submit" size="small" loading={loading}>{t('search')}</Button>
-        </ToolbarGroup>
-      </Toolbar>
+    <form className="pi-ecosystem-controls" onSubmit={submit}>
+      <Input
+        className="pi-ecosystem-search"
+        value={queryDraft}
+        onChange={event => setQueryDraft(event.currentTarget.value)}
+        placeholder={t('searchPlaceholder')}
+        aria-label={t('searchPlaceholder')}
+      />
+      <SelectMenu
+        ariaLabel={t('type.all')}
+        value={typeFilter}
+        options={typeOptions}
+        variant="toolbar"
+        className="pi-ecosystem-type-filter"
+        menuWidth={190}
+        onChange={value => setTypeFilter(value as TypeFilter)}
+      />
+      <Button type="submit" size="small" loading={loading}>{t('search')}</Button>
     </form>
 
-    {loadError && <div className="agent-path-error" role="alert"><b>{t('loadFailed')}</b> · {loadError}</div>}
-    {actionError && <div className="agent-path-error" role="alert">{actionError}</div>}
-    {!loadError && !loading && response?.items.length === 0 && <div className="muted-empty compact">{t('empty')}</div>}
+    {loadError && <div className="agent-path-error pi-ecosystem-error" role="alert"><b>{t('loadFailed')}</b> · {loadError}</div>}
+    {actionError && <div className="agent-path-error pi-ecosystem-error" role="alert">{actionError}</div>}
+    {!loadError && !loading && response?.items.length === 0 && <div className="muted-empty compact pi-ecosystem-empty">{t('empty')}</div>}
 
-    {response && response.items.length > 0 && <div className="agent-disclosures">
+    {response && response.items.length > 0 && <div className="pi-package-list">
       {response.items.map(pkg => {
         const localPackage = local.get(pkg.packageSource)
         const localState = localPackageState(agent, localPackage)
@@ -191,31 +185,73 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
           : localState === 'not-installed'
             ? t('notInstalled')
             : t('localUnknown')
-        return <Disclosure
-          key={pkg.packageSource}
-          className="disclosure-group"
-          summary={pkg.packageName}
-          summaryMeta={<StatusBadge tone={localState === 'installed' ? 'success' : localState === 'unknown' ? 'warning' : 'neutral'}>{localLabel}</StatusBadge>}
-        >
-          <div className="runtime-config-list">
-            {pkg.description && <div className="runtime-config-row"><span>{t('description')}</span><span>{pkg.description}</span></div>}
-            <div className="runtime-config-row"><span>{t('version')}</span><code>{pkg.version}</code></div>
-            <div className="runtime-config-row"><span>{t('resourceTypes')}</span><span>{pkg.resourceTypes.length ? pkg.resourceTypes.map(type => t(`type.${type}`)).join(' · ') : t('typeUnknown')}</span></div>
-            {localPackage?.versions.length ? <div className="runtime-config-row"><span>{t('localVersion')}</span><code>{localPackage.versions.join(' · ')}</code></div> : null}
-            {localPackage && <div className="runtime-config-row"><span>{t('localAssets')}</span><span>{t('localAssetCount', { count: localPackage.assets.length })}</span></div>}
-            {localPackage?.assets.map(asset => <div className="runtime-config-row" key={asset.id}><span>{asset.displayName ?? asset.canonicalName}</span><span>{t(`type.${localAssetType(asset)}`)}</span></div>)}
-          </div>
-          <Toolbar>
-            <ToolbarGroup>
+        const typeLabels = pkg.resourceTypes.length
+          ? pkg.resourceTypes.map(type => ({ type, label: t(`type.${type}`) }))
+          : [{ type: 'unknown', label: t('typeUnknown') }]
+        return <details className="pi-package-item" key={pkg.packageSource}>
+          <summary className="pi-package-summary">
+            <UiIcon className="pi-package-chevron" name="chevron-down" size={14}/>
+            <div className="pi-package-summary-copy">
+              <div className="pi-package-title-line">
+                <b className="pi-package-name">{pkg.packageName}</b>
+                <div className="pi-package-types" aria-label={t('resourceTypes')}>
+                  {typeLabels.map(item => <span key={item.type}>{item.label}</span>)}
+                </div>
+              </div>
+              {pkg.description && <p>{pkg.description}</p>}
+            </div>
+            <div className="pi-package-summary-meta">
+              <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version}</code></span>
+              {localPackage?.versions.length
+                ? <span className="pi-package-local-version"><small>{t('localVersion')}</small><code>{localPackage.versions.join(' · ')}</code></span>
+                : null}
+              <StatusBadge tone={localState === 'installed' ? 'success' : 'neutral'}>{localLabel}</StatusBadge>
+            </div>
+          </summary>
+
+          <div className="pi-package-detail">
+            <div className="pi-package-detail-grid">
+              {pkg.description && <div className="pi-package-detail-row pi-package-description">
+                <span>{t('description')}</span>
+                <p>{pkg.description}</p>
+              </div>}
+              <div className="pi-package-detail-row">
+                <span>{t('resourceTypes')}</span>
+                <div className="pi-package-detail-types">
+                  {typeLabels.map(item => <span key={item.type}>{item.label}</span>)}
+                </div>
+              </div>
+              <div className="pi-package-detail-row">
+                <span>{t('version')}</span>
+                <code>{pkg.version}</code>
+              </div>
+              {localPackage?.versions.length ? <div className="pi-package-detail-row">
+                <span>{t('localVersion')}</span>
+                <code>{localPackage.versions.join(' · ')}</code>
+              </div> : null}
+              {localPackage && <div className="pi-package-detail-row">
+                <span>{t('localAssets')}</span>
+                <div className="pi-package-local-assets">
+                  {localPackage.assets.map(asset => <span key={asset.id}>
+                    <b>{asset.displayName ?? asset.canonicalName}</b>
+                    <small>{t(`type.${localAssetType(asset)}`)}</small>
+                  </span>)}
+                </div>
+              </div>}
+            </div>
+
+            <div className="pi-package-command">
+              <code>{pkg.installCommand}</code>
               <Button size="small" onClick={() => { void copyInstallCommand(pkg.packageSource, pkg.installCommand) }}>
                 {copiedPackage === pkg.packageSource ? t('copied') : t('copyInstall')}
               </Button>
-            </ToolbarGroup>
-            <ToolbarGroup align="end">
+            </div>
+
+            <div className="pi-package-actions">
               <Button size="small" onClick={() => { window.open(pkg.officialUrl, '_blank', 'noopener,noreferrer') }}>{t('officialDetail')}</Button>
-            </ToolbarGroup>
-          </Toolbar>
-        </Disclosure>
+            </div>
+          </div>
+        </details>
       })}
     </div>}
   </section>
