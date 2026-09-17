@@ -9,9 +9,9 @@ const productSurfaceFiles = [
   './ReviewPage.tsx',
 ].map(path => ({ path, source: readFileSync(new URL(path, import.meta.url), 'utf8') }))
 
-test('统一 Product Surface 不直接依赖 Pi Live 兼容 Client', () => {
+test('统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面', () => {
   for (const file of productSurfaceFiles) {
-    assert.doesNotMatch(file.source, /piLiveApi/, file.path)
+    assert.doesNotMatch(file.source, /piLiveApi|PiLivePage|PiLiveCompatibilityPage/, file.path)
   }
 })
 
