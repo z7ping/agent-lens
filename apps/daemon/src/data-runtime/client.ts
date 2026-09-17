@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Worker } from 'node:worker_threads'
+import type { StorageBudgetPolicy } from '@agent-lens/core'
 import {
   DATA_RUNTIME_DEFAULT_TIMEOUT_MS,
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
@@ -16,6 +17,11 @@ import { logDataRuntimeDebug, logDataRuntimeFailure } from './diagnostics.js'
 const METRIC_SAMPLE_LIMIT = 128
 const HEARTBEAT_INTERVAL_MS = 5_000
 const HEARTBEAT_TIMEOUT_MS = 15_000
+// SQLite schema migrations run before a Worker can answer its first ping. They
+// are deliberately atomic and can outlast a normal foreground request on an
+// established large database. A short liveness timeout would repeatedly kill
+// the Worker mid-migration and restart the same transaction from the beginning.
+const STARTUP_READY_TIMEOUT_MS = 30 * 60 * 1_000
 const MIN_EXPLICIT_HEARTBEAT_MS = 50
 const SLOW_ROUND_TRIP_LOG_MS = 500
 const RECOVERY_WAIT_POLL_MS = 25
@@ -92,6 +98,7 @@ export interface DataRuntimeClientOptions {
   role?: DataRuntimeRole
   dbPath?: string
   nodeId?: string
+  budget?: StorageBudgetPolicy
   heartbeatIntervalMs?: number
   heartbeatTimeoutMs?: number
 }
@@ -137,6 +144,7 @@ export class DataRuntimeClient {
         role: this.role,
         ...(this.options.dbPath ? { dbPath: this.options.dbPath } : {}),
         ...(this.options.nodeId ? { nodeId: this.options.nodeId } : {}),
+        ...(this.options.budget ? { budget: this.options.budget } : {}),
       },
       execArgv: [],
     })
@@ -155,7 +163,12 @@ export class DataRuntimeClient {
     })
 
     try {
-      await this.requestInternal('ping', undefined, Math.max(10_000, this.options.requestTimeoutMs ?? 0), true)
+      await this.requestInternal(
+        'ping',
+        undefined,
+        Math.max(STARTUP_READY_TIMEOUT_MS, this.options.requestTimeoutMs ?? 0),
+        true,
+      )
       this.stateValue = 'ready'
       this.startHeartbeat()
     } catch (error) {

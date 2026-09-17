@@ -3,10 +3,12 @@ import Database from 'better-sqlite3'
 import type {
   CheckpointRepository,
   RepositorySet,
+  StorageBudgetPolicy,
   StorageHealth,
   StorageService,
   StorageTransaction,
 } from '@agent-lens/core'
+import { describeStorageBudgetUsage, storageBudgetPreset } from '@agent-lens/core'
 import { SqliteAssetInventoryReader } from './asset-inventory'
 import { SqliteCheckpointRepository } from './checkpoints'
 import { SqliteExecutor } from './executor'
@@ -53,8 +55,6 @@ import {
 import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
 import { SqliteUnknownObservationProjection } from './unknown-observation-projection'
 
-const STORAGE_SOFT_LIMIT_BYTES = 512 * 1024 * 1024
-const STORAGE_APPROACHING_RATIO = 0.8
 const COVERAGE_STATUSES = ['complete', 'partial', 'unavailable', 'unknown'] as const
 
 type StorageRow = Record<string, unknown>
@@ -125,19 +125,22 @@ function readonlyRecord(value: unknown): Readonly<Record<string, unknown>> | und
     : undefined
 }
 
-export function describeStorageCapacity(footprintBytes: number, softLimitBytes = STORAGE_SOFT_LIMIT_BYTES) {
-  const ratio = softLimitBytes > 0 ? footprintBytes / softLimitBytes : 0
+export function describeStorageCapacity(
+  footprintBytes: number,
+  budget: StorageBudgetPolicy = storageBudgetPreset(),
+) {
+  const usage = describeStorageBudgetUsage(footprintBytes, budget.hot)
   return {
-    softLimitBytes,
-    footprintBytes,
-    ratio,
-    state: ratio >= 1 ? 'exceeded' : ratio >= STORAGE_APPROACHING_RATIO ? 'approaching' : 'healthy',
+    ...usage,
+    softLimitBytes: usage.highWatermarkBytes,
+    preset: budget.preset,
   } as const
 }
 
 export interface SqliteStorageOptions {
   path: string
   readonly?: boolean
+  budget?: StorageBudgetPolicy
 }
 
 function fileSize(path: string): number {
@@ -177,8 +180,10 @@ export class SqliteStorageService implements StorageService {
   readonly replicationSnapshotBootstrapProgress: SqliteReplicationSnapshotBootstrapProgressRepository
   readonly replicationRuntimeControl: SqliteReplicationRuntimeControlRepository
   readonly executor: SqliteExecutor
+  readonly budget: StorageBudgetPolicy
 
   constructor(options: SqliteStorageOptions) {
+    this.budget = options.budget ?? storageBudgetPreset()
     this.db = new Database(options.path, {
       readonly: options.readonly ?? false,
       fileMustExist: options.readonly ?? false,
@@ -314,9 +319,11 @@ export class SqliteStorageService implements StorageService {
       totalDiskBytes: databaseBytes + walBytes + shmBytes,
       hotFootprintBytes,
       capacity: {
-        ...describeStorageCapacity(hotFootprintBytes),
+        ...describeStorageCapacity(hotFootprintBytes, this.budget),
         scope: 'hot-sqlite',
-        longTermTotalLimitBytes: null,
+        longTermTotalLimitBytes: this.budget.total.highBytes,
+        totalLowWatermarkBytes: this.budget.total.lowBytes,
+        totalState: 'unavailable',
       },
     }
   }

@@ -13,6 +13,7 @@ export * from './services/tool-usage'
 export * from './services/backup'
 export * from './services/capture-policy'
 export * from './services/maintenance'
+export * from './services/storage-budget'
 export * from './events/index'
 
 export * from './source-support'

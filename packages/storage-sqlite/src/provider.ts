@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   defineStorageProvider,
+  type StorageBudgetPolicy,
   type StorageProviderManifest,
 } from '@agent-lens/core'
 import { SqliteStorageService } from './storage'
@@ -9,6 +10,7 @@ import { SqliteStorageService } from './storage'
 export interface SqliteStorageProviderConfig {
   path: string
   readonly?: boolean
+  budget?: StorageBudgetPolicy
 }
 
 export const sqliteStorageManifest: StorageProviderManifest = {
@@ -44,6 +46,7 @@ export const sqliteStorageProvider = defineStorageProvider<
     return new SqliteStorageService({
       path: config.path,
       ...(config.readonly === undefined ? {} : { readonly: config.readonly }),
+      ...(config.budget === undefined ? {} : { budget: config.budget }),
     })
   },
 

@@ -2,11 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { describeStorageCapacity, SqliteStorageService } from './storage'
 
-test('存储容量按 512 MiB 软阈值区分正常、接近和超限', () => {
-  const mib = 1024 * 1024
-  assert.equal(describeStorageCapacity(400 * mib).state, 'healthy')
-  assert.equal(describeStorageCapacity(410 * mib).state, 'approaching')
-  assert.equal(describeStorageCapacity(512 * mib).state, 'exceeded')
+test('存储容量按平衡预设的 Hot 高低水位区分正常、接近和超限', () => {
+  const gib = 1024 * 1024 * 1024
+  const healthy = describeStorageCapacity(1.4 * gib)
+  const approaching = describeStorageCapacity(1.7 * gib)
+  const exceeded = describeStorageCapacity(2 * gib)
+
+  assert.equal(healthy.lowWatermarkBytes, 1.5 * gib)
+  assert.equal(healthy.highWatermarkBytes, 2 * gib)
+  assert.equal(healthy.state, 'healthy')
+  assert.equal(approaching.state, 'approaching')
+  assert.equal(exceeded.state, 'exceeded')
 })
 
 async function createStorage() {
@@ -28,7 +34,7 @@ test('SQLite storage migrates to schema version 27 and exposes required tables',
       executor?: { queueDepth?: number, queueWaitMs?: { p95?: number } }
     }
     const growth = details.dataGrowth
-    assert.equal(growth.capacity.softLimitBytes, 512 * 1024 * 1024)
+    assert.equal(growth.capacity.softLimitBytes, 2 * 1024 * 1024 * 1024)
     assert.equal(growth.capacity.state, 'healthy')
     assert.equal(typeof growth.reclaimableBytes, 'number')
     assert.equal(details.unknownObservations, undefined)

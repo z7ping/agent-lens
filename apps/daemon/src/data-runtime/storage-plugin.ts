@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import type { StorageBudgetPolicy } from '@agent-lens/core'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
 import { DataRuntimeClient } from './client.js'
 import {
@@ -16,6 +17,7 @@ declare module '@deepseek-ai/cordis' {
 
 export interface DataRuntimeStoragePluginConfig {
   path: string
+  budget?: StorageBudgetPolicy
 }
 
 const FOREGROUND_READER_COUNT = 2
@@ -36,6 +38,7 @@ const applyDataRuntimeStorage = Object.assign(
     const common = {
       dbPath: config.path,
       nodeId: ctx.node.identity.nodeId,
+      ...(config.budget ? { budget: config.budget } : {}),
     }
     const writer = new DataRuntimeClient({ ...common, role: 'writer' })
     const readers = config.path === ':memory:'

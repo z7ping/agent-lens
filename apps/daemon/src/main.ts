@@ -33,6 +33,7 @@ import {
   readIntegrationPreferencesSync,
   replayRegisteredSourceHistory,
   resolveAgentLensNodeRuntime,
+  resolveStorageBudgetPolicy,
   startRegisteredSourceCapture,
   syncRegisteredSourceHistory,
   writeIntegrationAuthorization,
@@ -92,6 +93,7 @@ const officialToolDiscovery = capabilities.localCapture
   : null
 const dbPath = process.env.AGENT_LENS_DB_PATH
   ?? join(dataRoot, 'agent-lens.db')
+const storageBudget = resolveStorageBudgetPolicy(process.env)
 const vaultPath = process.env.AGENT_LENS_VAULT_PATH
   ?? join(dataRoot, 'vault')
 const localePackDirectory = process.env.AGENT_LENS_LOCALE_PACK_DIR
@@ -236,7 +238,7 @@ function currentIntegrationManagement(): IntegrationManagementService {
 }
 
 app.useRuntime(nodeRuntimePlugin, nodeRuntime)
-app.use(dataRuntimeStoragePlugin, { path: dbPath })
+app.use(dataRuntimeStoragePlugin, { path: dbPath, budget: storageBudget.policy })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
@@ -286,7 +288,7 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
   ...(capabilities.localCapture ? { openHostPath: openLocalPath } : {}),
   dataRuntimeHealth: () => app.context.dataRuntime.snapshot(),
   diagnosticsDetails: async () => ({
-    runtimeFootprint: await readRuntimeStorageFootprint(dataRoot),
+    runtimeFootprint: await readRuntimeStorageFootprint(dataRoot, storageBudget.policy),
   }),
   healthDetails: () => ({
     ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),

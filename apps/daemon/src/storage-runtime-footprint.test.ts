@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { storageBudgetPreset } from '@agent-lens/core'
 import { readRuntimeStorageFootprint } from './storage-runtime-footprint'
 
 test('readRuntimeStorageFootprint 区分 Inbox、Temp 与尚未创建的 Content', async () => {
@@ -13,9 +14,13 @@ test('readRuntimeStorageFootprint 区分 Inbox、Temp 与尚未创建的 Content
     await writeFile(join(root, 'inbox', 'codex', 'event.json'), '12345', 'utf8')
     await writeFile(join(root, 'temp', 'scratch.tmp'), '123', 'utf8')
 
-    const footprint = await readRuntimeStorageFootprint(root)
+    const footprint = await readRuntimeStorageFootprint(root, storageBudgetPreset('space-saver'))
 
     assert.equal(footprint.basis, 'agent-lens-data-root-filesystem')
+    assert.equal(footprint.total.state, 'present')
+    assert.equal(footprint.total.bytes, 8)
+    assert.equal(footprint.total.capacity?.scope, 'total-data-root')
+    assert.equal(footprint.total.capacity?.state, 'healthy')
     assert.equal(footprint.inbox.state, 'present')
     assert.equal(footprint.inbox.files, 1)
     assert.equal(footprint.inbox.bytes, 5)

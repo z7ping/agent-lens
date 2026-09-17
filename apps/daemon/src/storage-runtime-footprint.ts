@@ -1,5 +1,9 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import {
+  describeStorageBudgetUsage,
+  type StorageBudgetPolicy,
+} from '@agent-lens/core'
 
 export interface DirectoryFootprint {
   state: 'present' | 'not-created' | 'unavailable'
@@ -75,14 +79,27 @@ async function directoryFootprint(path: string): Promise<DirectoryFootprint> {
   }
 }
 
-export async function readRuntimeStorageFootprint(dataRoot: string) {
-  const [inbox, temp, content] = await Promise.all([
+export async function readRuntimeStorageFootprint(dataRoot: string, budget?: StorageBudgetPolicy) {
+  const [total, inbox, temp, content] = await Promise.all([
+    directoryFootprint(dataRoot),
     directoryFootprint(join(dataRoot, 'inbox')),
     directoryFootprint(join(dataRoot, 'temp')),
     directoryFootprint(join(dataRoot, 'content')),
   ])
   return {
     basis: 'agent-lens-data-root-filesystem',
+    total: {
+      ...total,
+      ...(budget && total.state !== 'unavailable'
+        ? {
+            capacity: {
+              ...describeStorageBudgetUsage(total.bytes, budget.total),
+              preset: budget.preset,
+              scope: 'total-data-root',
+            },
+          }
+        : {}),
+    },
     inbox,
     temp,
     content,

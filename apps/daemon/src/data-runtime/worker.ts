@@ -7,6 +7,7 @@ import {
   SqliteStorageService,
   sqliteStorageProvider,
 } from '@agent-lens/storage-sqlite'
+import { isStorageBudgetPolicy, type StorageBudgetPolicy } from '@agent-lens/core'
 import {
   DATA_RUNTIME_MAX_MESSAGE_BYTES,
   DATA_RUNTIME_PROTOCOL_VERSION,
@@ -26,6 +27,7 @@ interface DataRuntimeWorkerData {
   role?: DataRuntimeRole
   dbPath?: string
   nodeId?: string
+  budget?: StorageBudgetPolicy
 }
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
@@ -42,6 +44,7 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
   const role = record.role
   const dbPath = record.dbPath
   const nodeId = record.nodeId
+  const budget = record.budget
   if (allowDiagnostics !== undefined && typeof allowDiagnostics !== 'boolean') {
     throw new TypeError('Data Runtime workerData.allowDiagnostics must be a boolean')
   }
@@ -54,11 +57,15 @@ function parseWorkerData(value: unknown): DataRuntimeWorkerData {
   if (nodeId !== undefined && typeof nodeId !== 'string') {
     throw new TypeError('Data Runtime workerData.nodeId must be a string')
   }
+  if (budget !== undefined && !isStorageBudgetPolicy(budget)) {
+    throw new TypeError('Data Runtime workerData.budget must be a valid StorageBudgetPolicy')
+  }
   return {
     ...(allowDiagnostics === undefined ? {} : { allowDiagnostics }),
     ...(role === undefined ? {} : { role }),
     ...(dbPath === undefined ? {} : { dbPath }),
     ...(nodeId === undefined ? {} : { nodeId }),
+    ...(budget === undefined ? {} : { budget }),
   }
 }
 
@@ -78,8 +85,8 @@ let activeTransactionId: string | null = null
 let requestTail: Promise<void> = Promise.resolve()
 
 if (dbPath) {
-  storage = await sqliteStorageProvider.create({ path: dbPath, readonly: role === 'reader' })
-  await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader' })
+  storage = await sqliteStorageProvider.create({ path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
+  await sqliteStorageProvider.initialize?.(storage, { path: dbPath, readonly: role === 'reader', ...(config.budget ? { budget: config.budget } : {}) })
   const remote = new SqliteHubRemoteReadRepository(storage.executor)
   const logicalSessions = new HubUnifiedLogicalSessionReader(
     nodeId,
