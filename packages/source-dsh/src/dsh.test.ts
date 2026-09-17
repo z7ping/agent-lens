@@ -187,7 +187,7 @@ test('DSH Profile 静态发现区分 Bundle、树外插件和配置覆盖', asyn
 })
 
 
-test('DSH profiled detection keeps product root on Installation and profile root on RuntimeProfile', async () => {
+test('DSH profiled detection keeps Installation identity rootless and profile roots on RuntimeProfile', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-dsh-profiled-detect-'))
   const profileRoot = join(root, 'profiles', 'writer')
   try {
@@ -207,8 +207,8 @@ test('DSH profiled detection keeps product root on Installation and profile root
     })
 
     assert.equal(detected.length, 1)
-    assert.equal(detected[0]?.configRoot, root)
-    assert.equal(detected[0]?.dataRoot, root)
+    assert.equal(detected[0]?.configRoot, undefined)
+    assert.equal(detected[0]?.dataRoot, undefined)
     assert.deepEqual(detected[0]?.runtimeProfile, {
       nativeProfileId: 'writer',
       name: 'writer',
