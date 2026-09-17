@@ -56,3 +56,40 @@ test('session repository put persists explicit runtimeProfileId', async () => {
     await storage.close()
   }
 })
+
+test('two RuntimeProfiles may persist the same nativeSessionId without collision', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    const now = '2026-09-17T00:00:00.000Z'
+    await storage.repositories.hosts.put({ id: 'host-1', name: 'local', platform: 'linux', arch: 'x64', createdAt: now, lastSeenAt: now })
+    await storage.repositories.installations.putProduct({ id: 'dsh', name: 'DSH' })
+    await storage.repositories.installations.put({ id: 'install-1', hostId: 'host-1', productId: 'dsh', firstSeenAt: now, lastSeenAt: now })
+    const profileA = await storage.runtimeProfiles.resolve({ installationId: 'install-1', nativeProfileId: 'profile-a' })
+    const profileB = await storage.runtimeProfiles.resolve({ installationId: 'install-1', nativeProfileId: 'profile-b' })
+
+    await storage.repositories.sessions.putLogicalSession({ id: 'logical-a', installationId: 'install-1', runtimeProfileId: profileA.id })
+    await storage.repositories.sessions.putLogicalSession({ id: 'logical-b', installationId: 'install-1', runtimeProfileId: profileB.id })
+    await storage.repositories.sessions.putSourceSession({
+      id: 'source-a', sourceId: 'dsh', installationId: 'install-1', runtimeProfileId: profileA.id,
+      nativeSessionId: 'same-id', logicalSessionId: 'logical-a',
+    })
+    await storage.repositories.sessions.putSourceSession({
+      id: 'source-b', sourceId: 'dsh', installationId: 'install-1', runtimeProfileId: profileB.id,
+      nativeSessionId: 'same-id', logicalSessionId: 'logical-b',
+    })
+
+    const rows = storage.db.prepare(`
+      SELECT id, runtime_profile_id AS runtimeProfileId
+      FROM source_sessions
+      WHERE source_id = 'dsh' AND installation_id = 'install-1' AND native_session_id = 'same-id'
+      ORDER BY id
+    `).all() as Array<{ id: string; runtimeProfileId: string }>
+    assert.deepEqual(rows, [
+      { id: 'source-a', runtimeProfileId: profileA.id },
+      { id: 'source-b', runtimeProfileId: profileB.id },
+    ])
+  } finally {
+    await storage.close()
+  }
+})

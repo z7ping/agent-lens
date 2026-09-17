@@ -162,14 +162,29 @@ export class SqliteSessionRelationshipCandidateRepository {
 
   async tryPromote(candidate: SessionRelationshipCandidate): Promise<SessionRelationship | null> {
     return this.executor.run(() => {
-      const fromSessionId = logicalSessionId(this.executor.db.prepare(`
+      const profileId = candidate.runtimeProfileId ?? null
+      const lookup = this.executor.db.prepare(`
         SELECT logical_session_id FROM source_sessions
         WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-      `).get(candidate.sourceId, candidate.installationId, candidate.fromNativeSessionId))
-      const toSessionId = logicalSessionId(this.executor.db.prepare(`
-        SELECT logical_session_id FROM source_sessions
-        WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-      `).get(candidate.sourceId, candidate.installationId, candidate.toNativeSessionId))
+          AND (
+            (? IS NULL AND runtime_profile_id IS NULL)
+            OR runtime_profile_id = ?
+          )
+      `)
+      const fromSessionId = logicalSessionId(lookup.get(
+        candidate.sourceId,
+        candidate.installationId,
+        candidate.fromNativeSessionId,
+        profileId,
+        profileId,
+      ))
+      const toSessionId = logicalSessionId(lookup.get(
+        candidate.sourceId,
+        candidate.installationId,
+        candidate.toNativeSessionId,
+        profileId,
+        profileId,
+      ))
       if (!fromSessionId || !toSessionId) return null
 
       const type: SessionRelationshipType = candidate.type ?? 'related'
