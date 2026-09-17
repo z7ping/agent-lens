@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
+    ".": "./src/public.ts",
     "./source-runner": "./src/source-runner.ts",
     "./test-support": "./src/test-support.ts"
   },
