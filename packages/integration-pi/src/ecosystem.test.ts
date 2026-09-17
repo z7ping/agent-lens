@@ -28,7 +28,7 @@ test('Pi official package URL preserves scoped package path segments', () => {
   )
 })
 
-test('Pi ecosystem provider queries npm pi-package convention and maps stable package identity', async () => {
+test('Pi ecosystem provider queries npm pi-package convention and enriches the exact search version', async () => {
   const requested: string[] = []
   const fetcher = (async (input: string | URL | Request) => {
     const url = String(input)
@@ -49,7 +49,7 @@ test('Pi ecosystem provider queries npm pi-package convention and maps stable pa
       })
     }
     return jsonResponse({
-      'dist-tags': { latest: '1.2.3' },
+      'dist-tags': { latest: '2.0.0' },
       versions: {
         '1.2.3': {
           name: '@example/pi-tools',
@@ -57,8 +57,16 @@ test('Pi ecosystem provider queries npm pi-package convention and maps stable pa
           repository: { url: 'git+https://github.com/example/pi-tools.git' },
           pi: { extensions: ['./extensions'], skills: ['./skills'] },
         },
+        '2.0.0': {
+          name: '@example/pi-tools',
+          version: '2.0.0',
+          pi: { themes: ['./themes'] },
+        },
       },
-      time: { '1.2.3': '2026-09-01T00:00:00.000Z' },
+      time: {
+        '1.2.3': '2026-09-01T00:00:00.000Z',
+        '2.0.0': '2026-09-10T00:00:00.000Z',
+      },
     })
   }) as typeof fetch
 
@@ -101,7 +109,6 @@ test('Pi ecosystem provider reuses short cache and falls back to bounded last-go
       })
     }
     return jsonResponse({
-      'dist-tags': { latest: '1.0.0' },
       versions: { '1.0.0': { pi: { extensions: ['./index.ts'] } } },
     })
   }) as typeof fetch
