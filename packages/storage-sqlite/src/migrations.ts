@@ -5,6 +5,7 @@ interface Migration {
   version: number
   name: string
   fileName: string
+  requiresForeignKeysOff?: boolean
 }
 
 const migrations: readonly Migration[] = [
@@ -35,7 +36,12 @@ const migrations: readonly Migration[] = [
   { version: 25, name: 'bounded-replication-journal', fileName: '025-bounded-replication-journal.sql' },
   { version: 26, name: 'replication-runtime-orchestration', fileName: '026-replication-runtime-orchestration.sql' },
   { version: 27, name: 'replication-entity-heads', fileName: '027-replication-entity-heads.sql' },
-  { version: 28, name: 'runtime-profile-session-identity', fileName: '028-runtime-profile-session-identity.sql' },
+  {
+    version: 28,
+    name: 'runtime-profile-session-identity',
+    fileName: '028-runtime-profile-session-identity.sql',
+    requiresForeignKeysOff: true,
+  },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
@@ -75,9 +81,19 @@ export async function migrateDatabase(db: Database.Database): Promise<number> {
     if (applied.has(migration.version)) continue
 
     const sql = await readMigrationSql(migration.fileName)
+    const foreignKeysWereEnabled = migration.requiresForeignKeysOff
+      && db.pragma('foreign_keys', { simple: true }) === 1
+    if (foreignKeysWereEnabled) db.pragma('foreign_keys = OFF')
+
     db.exec('BEGIN IMMEDIATE')
     try {
       db.exec(sql)
+      if (migration.requiresForeignKeysOff) {
+        const violations = db.pragma('foreign_key_check') as unknown[]
+        if (violations.length > 0) {
+          throw new Error(`Migration ${migration.version} failed foreign_key_check: ${JSON.stringify(violations)}`)
+        }
+      }
       db.prepare(
         'INSERT INTO schema_migrations(version, name, applied_at) VALUES (?, ?, ?)',
       ).run(migration.version, migration.name, new Date().toISOString())
@@ -85,6 +101,8 @@ export async function migrateDatabase(db: Database.Database): Promise<number> {
     } catch (error) {
       db.exec('ROLLBACK')
       throw error
+    } finally {
+      if (foreignKeysWereEnabled) db.pragma('foreign_keys = ON')
     }
   }
 
