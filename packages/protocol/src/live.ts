@@ -179,6 +179,16 @@ export type LiveEventDto =
       output?: string | undefined
       durationMs?: number | undefined
     }
+  | {
+      type: 'ui.request'
+      requestId: string
+      method: 'select' | 'confirm' | 'input' | 'editor'
+      title?: string | undefined
+      message?: string | undefined
+      options?: string[] | undefined
+      placeholder?: string | undefined
+      prefill?: string | undefined
+    }
   | { type: 'error'; message: string }
   | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
 
@@ -195,6 +205,12 @@ export interface LiveControlOptionDto extends LiveControlDisplayInfoDto {
 export interface LiveThinkingControlDto extends LiveControlDisplayInfoDto {
   capability: 'thinking-control'
   value: string
+  options: LiveControlOptionDto[]
+}
+
+export interface LiveModelControlDto extends LiveControlDisplayInfoDto {
+  capability: 'model-switching'
+  value?: string | undefined
   options: LiveControlOptionDto[]
 }
 
@@ -376,6 +392,25 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(durationMs !== undefined ? { durationMs } : {}),
     }
   }
+  if (type === 'ui.request') {
+    if (typeof event.requestId !== 'string' || !event.requestId) return null
+    if (event.method !== 'select' && event.method !== 'confirm' && event.method !== 'input' && event.method !== 'editor') return null
+    if (event.options !== undefined && (!Array.isArray(event.options) || event.options.some(option => typeof option !== 'string'))) return null
+    const title = eventText(event.title)
+    const message = eventText(event.message)
+    const placeholder = eventText(event.placeholder)
+    const prefill = eventText(event.prefill)
+    return {
+      type,
+      requestId: event.requestId,
+      method: event.method,
+      ...(title !== undefined ? { title } : {}),
+      ...(message !== undefined ? { message } : {}),
+      ...(event.options !== undefined ? { options: [...event.options] as string[] } : {}),
+      ...(placeholder !== undefined ? { placeholder } : {}),
+      ...(prefill !== undefined ? { prefill } : {}),
+    }
+  }
   if (type === 'error') {
     return typeof event.message === 'string' && event.message ? { type, message: event.message } : null
   }
@@ -421,6 +456,43 @@ export function parseLiveThinkingControlDto(value: unknown): LiveThinkingControl
   return {
     capability: 'thinking-control',
     value: control.value,
+    options,
+    ...(label !== undefined ? { label } : {}),
+    ...(description !== undefined ? { description } : {}),
+  }
+}
+
+
+export function parseLiveModelControlDto(value: unknown): LiveModelControlDto | null {
+  const control = record(value)
+  if (!control || control.capability !== 'model-switching') return null
+  if (control.value !== undefined && (typeof control.value !== 'string' || !control.value)) return null
+  if (!Array.isArray(control.options) || control.options.length === 0) return null
+
+  const label = optionalText(control.label)
+  const description = optionalText(control.description)
+  if (label === null || description === null) return null
+
+  const options: LiveControlOptionDto[] = []
+  let hasCurrent = control.value === undefined
+  for (const candidate of control.options) {
+    const option = record(candidate)
+    if (!option || typeof option.value !== 'string' || !option.value) return null
+    const optionLabel = optionalText(option.label)
+    const optionDescription = optionalText(option.description)
+    if (optionLabel === null || optionDescription === null) return null
+    if (option.value === control.value) hasCurrent = true
+    options.push({
+      value: option.value,
+      ...(optionLabel !== undefined ? { label: optionLabel } : {}),
+      ...(optionDescription !== undefined ? { description: optionDescription } : {}),
+    })
+  }
+  if (!hasCurrent) return null
+
+  return {
+    capability: 'model-switching',
+    ...(typeof control.value === 'string' ? { value: control.value } : {}),
     options,
     ...(label !== undefined ? { label } : {}),
     ...(description !== undefined ? { description } : {}),
