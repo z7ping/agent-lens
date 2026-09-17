@@ -9,5 +9,6 @@ export const integrationManifest: AgentIntegrationManifest = {
   componentPluginIds: [
     '@agent-lens/source-pi',
     '@agent-lens/runtime-cordis/pi-live',
+    '@agent-lens/integration-pi/ecosystem',
   ],
 }
