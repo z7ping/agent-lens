@@ -19,6 +19,8 @@ import {
 
 type TypeFilter = 'all' | PiEcosystemResourceTypeDto
 
+type LocalPackageState = 'installed' | 'not-installed' | 'unknown'
+
 interface LocalPackageInfo {
   assets: AgentAssetInventoryDto[]
   versions: string[]
@@ -67,6 +69,18 @@ function localPackages(agent: AgentOverviewDto): Map<string, LocalPackageInfo> {
   }]))
 }
 
+function localPackageState(agent: AgentOverviewDto, localPackage: LocalPackageInfo | undefined): LocalPackageState {
+  if (localPackage) return 'installed'
+  return agent.assetInventoryStatus === 'available' ? 'not-installed' : 'unknown'
+}
+
+function localAssetType(asset: AgentAssetInventoryDto): PiEcosystemResourceTypeDto | 'other' {
+  if (asset.type === 'extension' || asset.type === 'skill' || asset.type === 'prompt' || asset.type === 'theme') {
+    return asset.type
+  }
+  return 'other'
+}
+
 export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
   const { t } = useTranslation('piEcosystem')
   const [queryDraft, setQueryDraft] = useState('')
@@ -105,9 +119,13 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
   }
 
   const copyInstallCommand = async (packageSource: string, command: string) => {
-    await navigator.clipboard.writeText(command)
-    setCopiedPackage(packageSource)
-    window.setTimeout(() => setCopiedPackage(current => current === packageSource ? '' : current), 1_500)
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopiedPackage(packageSource)
+      window.setTimeout(() => setCopiedPackage(current => current === packageSource ? '' : current), 1_500)
+    } catch {
+      setError(t('copyFailed'))
+    }
   }
 
   const typeOptions = [
@@ -156,20 +174,25 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
     {response && response.items.length > 0 && <div className="agent-disclosures">
       {response.items.map(pkg => {
         const localPackage = local.get(pkg.packageSource)
-        const installed = Boolean(localPackage)
+        const localState = localPackageState(agent, localPackage)
+        const localLabel = localState === 'installed'
+          ? t('installed')
+          : localState === 'not-installed'
+            ? t('notInstalled')
+            : t('localUnknown')
         return <Disclosure
           key={pkg.packageSource}
           className="disclosure-group"
           summary={pkg.packageName}
-          summaryMeta={<StatusBadge tone={installed ? 'success' : 'neutral'}>{installed ? t('installed') : t('notInstalled')}</StatusBadge>}
+          summaryMeta={<StatusBadge tone={localState === 'installed' ? 'success' : localState === 'unknown' ? 'warning' : 'neutral'}>{localLabel}</StatusBadge>}
         >
           <div className="runtime-config-list">
-            {pkg.description && <div className="runtime-config-row"><span>{pkg.description}</span></div>}
+            {pkg.description && <div className="runtime-config-row"><span>{t('description')}</span><span>{pkg.description}</span></div>}
             <div className="runtime-config-row"><span>{t('version')}</span><code>{pkg.version}</code></div>
             <div className="runtime-config-row"><span>{t('resourceTypes')}</span><span>{pkg.resourceTypes.length ? pkg.resourceTypes.map(type => t(`type.${type}`)).join(' · ') : t('typeUnknown')}</span></div>
             {localPackage?.versions.length ? <div className="runtime-config-row"><span>{t('localVersion')}</span><code>{localPackage.versions.join(' · ')}</code></div> : null}
             {localPackage && <div className="runtime-config-row"><span>{t('localAssets')}</span><span>{t('localAssetCount', { count: localPackage.assets.length })}</span></div>}
-            {localPackage?.assets.map(asset => <div className="runtime-config-row" key={asset.id}><span>{asset.displayName ?? asset.canonicalName}</span><code>{asset.type}</code></div>)}
+            {localPackage?.assets.map(asset => <div className="runtime-config-row" key={asset.id}><span>{asset.displayName ?? asset.canonicalName}</span><span>{t(`type.${localAssetType(asset)}`)}</span></div>)}
           </div>
           <Toolbar>
             <ToolbarGroup>
@@ -187,4 +210,8 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
   </section>
 }
 
-export const piEcosystemUiInternals = { npmPackageSource, localPackages }
+export const piEcosystemUiInternals = {
+  npmPackageSource,
+  localPackages,
+  localPackageState,
+}
