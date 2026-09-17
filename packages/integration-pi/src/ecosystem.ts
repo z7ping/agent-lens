@@ -22,6 +22,8 @@ const REQUEST_TIMEOUT_MS = 8_000
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 20
 const MAX_TYPED_SEARCH_SIZE = 50
+const MAX_SEARCH_CACHE_ENTRIES = 64
+const MAX_PACKAGE_CACHE_ENTRIES = 256
 
 interface CacheEntry<T> {
   value: T
@@ -115,6 +117,16 @@ function boundedLimit(value: unknown): number {
     : DEFAULT_LIMIT
 }
 
+function setBounded<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
+  map.delete(key)
+  map.set(key, value)
+  while (map.size > maxEntries) {
+    const oldest = map.keys().next().value as K | undefined
+    if (oldest === undefined) return
+    map.delete(oldest)
+  }
+}
+
 async function responseJson(response: Response, context: string): Promise<unknown> {
   if (!response.ok) {
     throw new Error(`${context} failed with HTTP ${response.status}`)
@@ -142,11 +154,11 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
 
     try {
       const value = await this.searchFresh(query, type, limit)
-      this.searchCache.set(cacheKey, {
+      setBounded(this.searchCache, cacheKey, {
         value,
         expiresAt: this.now() + SEARCH_CACHE_TTL_MS,
-      })
-      this.lastGoodSearch.set(cacheKey, value)
+      }, MAX_SEARCH_CACHE_ENTRIES)
+      setBounded(this.lastGoodSearch, cacheKey, value, MAX_SEARCH_CACHE_ENTRIES)
       return value
     } catch (error) {
       const lastGood = this.lastGoodSearch.get(cacheKey)
@@ -208,6 +220,8 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     }))
 
     const items = enriched
+      // Pi also supports conventional resource directories. Without a stable typed Catalog API,
+      // only claim a resource type when the published package metadata explicitly declares it.
       .filter(item => !type || item.resourceTypes.includes(type))
       .slice(0, limit)
 
@@ -245,10 +259,10 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
       ...(resolvedRepositoryUrl ? { repositoryUrl: resolvedRepositoryUrl } : {}),
       ...(publishedAt ? { publishedAt } : {}),
     }
-    this.packageCache.set(packageName, {
+    setBounded(this.packageCache, packageName, {
       value,
       expiresAt: this.now() + PACKAGE_CACHE_TTL_MS,
-    })
+    }, MAX_PACKAGE_CACHE_ENTRIES)
     return value
   }
 }
@@ -268,4 +282,7 @@ export const piEcosystemInternals = {
   repositoryUrl,
   piPackageUrl,
   boundedLimit,
+  setBounded,
+  MAX_SEARCH_CACHE_ENTRIES,
+  MAX_PACKAGE_CACHE_ENTRIES,
 }
