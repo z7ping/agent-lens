@@ -45,6 +45,17 @@ test('v28 rebuild preserves source session ids and enables profile-aware identit
         id TEXT PRIMARY KEY,
         source_session_id TEXT NOT NULL REFERENCES source_sessions(id)
       );
+      CREATE TABLE replication_canonical_changes (
+        revision INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        origin_entity_id TEXT NOT NULL
+      );
+      CREATE TRIGGER trg_rep_change_source_sessions_insert AFTER INSERT ON source_sessions BEGIN
+        INSERT INTO replication_canonical_changes(entity_type, origin_entity_id) VALUES ('SourceSession', NEW.id);
+      END;
+      CREATE TRIGGER trg_rep_change_source_sessions_update AFTER UPDATE ON source_sessions BEGIN
+        INSERT INTO replication_canonical_changes(entity_type, origin_entity_id) VALUES ('SourceSession', NEW.id);
+      END;
 
       INSERT INTO agent_installations(id) VALUES ('install-1');
       INSERT INTO runtime_profiles(id, installation_id, native_profile_id)
@@ -93,6 +104,23 @@ test('v28 rebuild preserves source session ids and enables profile-aware identit
       ) VALUES (?, ?, ?, ?, ?, ?)
     `).run('source-a-duplicate', 'dsh', 'install-1', 'same-id', 'logical-a', 'profile-a'))
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+
+    const triggers = db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'trg_rep_change_source_sessions_%'
+      ORDER BY name
+    `).all() as Array<{ name: string }>
+    assert.deepEqual(triggers.map(row => row.name), [
+      'trg_rep_change_source_sessions_insert',
+      'trg_rep_change_source_sessions_update',
+    ])
+    assert.equal(
+      (db.prepare(`
+        SELECT COUNT(*) AS count FROM replication_canonical_changes
+        WHERE entity_type = 'SourceSession' AND origin_entity_id = 'source-b'
+      `).get() as { count: number }).count,
+      1,
+    )
   } finally {
     db.close()
   }
