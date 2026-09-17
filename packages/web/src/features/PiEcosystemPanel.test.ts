@@ -69,17 +69,32 @@ test('Pi ecosystem local package matching groups assets by exact npm identity', 
   assert.deepEqual(local.versions, ['2.1.0'])
 })
 
-test('Pi ecosystem local status never turns unavailable inventory into not-installed', () => {
-  assert.equal(
-    piEcosystemUiInternals.localPackageState(agent({ assetInventoryStatus: 'available' }), undefined),
-    'not-installed',
-  )
+test('Pi ecosystem only claims not-installed when local asset discovery is complete', () => {
+  const complete = agent({
+    capabilities: [{
+      name: 'asset-discovery',
+      status: 'available',
+      captureModes: ['static-scan'],
+    }],
+  })
+  const partial = agent({
+    capabilities: [{
+      name: 'asset-discovery',
+      status: 'partial',
+      captureModes: ['static-scan'],
+    }],
+  })
+
+  assert.equal(piEcosystemUiInternals.packageInventoryComplete(complete), true)
+  assert.equal(piEcosystemUiInternals.localPackageState(complete, undefined), 'not-installed')
+  assert.equal(piEcosystemUiInternals.packageInventoryComplete(partial), false)
+  assert.equal(piEcosystemUiInternals.localPackageState(partial, undefined), 'unknown')
   assert.equal(
     piEcosystemUiInternals.localPackageState(agent({ assetInventoryStatus: 'unavailable' }), undefined),
     'unknown',
   )
   assert.equal(
-    piEcosystemUiInternals.localPackageState(agent({ assetInventoryStatus: 'unavailable' }), { assets: [], versions: [] }),
+    piEcosystemUiInternals.localPackageState(partial, { assets: [], versions: [] }),
     'installed',
   )
 })
