@@ -6,7 +6,9 @@ import type { PiLiveHistoryAction, PiLiveStartInput } from './types'
 const PI_SESSION_HEADER_BYTES = 64 * 1024
 
 function interactionError(message: string): Error {
-  return new Error(message)
+  const error = new Error(message) as Error & { code?: string }
+  error.code = 'live_interaction_unavailable'
+  return error
 }
 
 function record(value: unknown): Record<string, unknown> {
