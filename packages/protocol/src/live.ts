@@ -395,7 +395,9 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
   if (type === 'ui.request') {
     if (typeof event.requestId !== 'string' || !event.requestId) return null
     if (event.method !== 'select' && event.method !== 'confirm' && event.method !== 'input' && event.method !== 'editor') return null
-    if (event.options !== undefined && (!Array.isArray(event.options) || event.options.some(option => typeof option !== 'string'))) return null
+    const rawOptions = event.options
+    if (rawOptions !== undefined && (!Array.isArray(rawOptions) || rawOptions.some(option => typeof option !== 'string'))) return null
+    const options = Array.isArray(rawOptions) ? rawOptions as string[] : undefined
     const title = eventText(event.title)
     const message = eventText(event.message)
     const placeholder = eventText(event.placeholder)
@@ -406,7 +408,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       method: event.method,
       ...(title !== undefined ? { title } : {}),
       ...(message !== undefined ? { message } : {}),
-      ...(event.options !== undefined ? { options: [...event.options] as string[] } : {}),
+      ...(options !== undefined ? { options: [...options] } : {}),
       ...(placeholder !== undefined ? { placeholder } : {}),
       ...(prefill !== undefined ? { prefill } : {}),
     }
