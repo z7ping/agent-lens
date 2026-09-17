@@ -297,6 +297,10 @@ export interface LiveAdapter {
   availability(): Promise<LiveAvailability>
   list(): Promise<LiveRuntimeState[]>
   start(input: unknown): Promise<LiveRuntimeState>
+  /** Present only when the adapter declares resume. Logical session ids stay AgentLens-owned. */
+  resume?(logicalSessionId: string): Promise<LiveRuntimeState>
+  /** Present only when the adapter declares fork. Logical session ids stay AgentLens-owned. */
+  fork?(logicalSessionId: string): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<LiveSnapshot>
   /** Present only when the adapter declares thinking-control. */
