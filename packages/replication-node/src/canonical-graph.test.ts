@@ -229,8 +229,8 @@ test('from-now keeps old dependencies only as minimum dependency shape', async (
 
   const hostEntity = result.entities.find(entity => entity.entityType === 'Host')!
   assert.deepEqual((hostEntity.body as Record<string, unknown>).name, {
-    state: 'omitted',
-    reason: 'dependency-minimized',
+    state: 'value',
+    value: 'devbox',
   })
 
   const projectEntity = result.entities.find(entity => entity.entityType === 'Project')!

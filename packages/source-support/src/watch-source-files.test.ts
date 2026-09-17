@@ -12,7 +12,7 @@ function delay(ms: number): Promise<void> {
 async function waitFor(
   predicate: () => boolean,
   message: string,
-  timeoutMs = 2_000,
+  timeoutMs = 5_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {

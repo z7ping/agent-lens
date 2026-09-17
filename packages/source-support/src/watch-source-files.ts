@@ -61,6 +61,10 @@ export async function watchSourceFiles(
     ignoreInitial: true,
     persistent: true,
     atomic: true,
+    // Windows native directory notifications can drop a newly created file immediately
+    // after the initial scan. Chokidar's polling backend provides the same event contract
+    // without relying on that lossy notification boundary.
+    usePolling: process.platform === 'win32',
   })
   watcher.on('add', path => schedule(path, 'add'))
   watcher.on('change', path => schedule(path, 'change'))

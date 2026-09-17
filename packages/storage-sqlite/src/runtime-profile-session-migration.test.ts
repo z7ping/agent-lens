@@ -45,6 +45,15 @@ test('v28 rebuild preserves source session ids and enables profile-aware identit
         id TEXT PRIMARY KEY,
         source_session_id TEXT NOT NULL REFERENCES source_sessions(id)
       );
+      CREATE TABLE source_session_reference_audit (
+        observation_id TEXT PRIMARY KEY,
+        source_session_id TEXT NOT NULL
+      );
+      CREATE TRIGGER trg_observation_source_session_reference
+      AFTER INSERT ON observations BEGIN
+        INSERT INTO source_session_reference_audit(observation_id, source_session_id)
+        SELECT NEW.id, id FROM source_sessions WHERE id = NEW.source_session_id;
+      END;
       CREATE TABLE replication_canonical_changes (
         revision INTEGER PRIMARY KEY AUTOINCREMENT,
         entity_type TEXT NOT NULL,
@@ -104,6 +113,13 @@ test('v28 rebuild preserves source session ids and enables profile-aware identit
       ) VALUES (?, ?, ?, ?, ?, ?)
     `).run('source-a-duplicate', 'dsh', 'install-1', 'same-id', 'logical-a', 'profile-a'))
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+    db.prepare('INSERT INTO observations(id, source_session_id) VALUES (?, ?)')
+      .run('observation-after-v28', 'source-b')
+    assert.deepEqual(
+      db.prepare('SELECT observation_id, source_session_id FROM source_session_reference_audit WHERE observation_id = ?')
+        .get('observation-after-v28'),
+      { observation_id: 'observation-after-v28', source_session_id: 'source-b' },
+    )
 
     const triggers = db.prepare(`
       SELECT name FROM sqlite_master

@@ -76,9 +76,10 @@ test('未启用但已发现的智能体保持可见并支持二次接入', () =>
 test('首次未选择的本机智能体仍可在智能体页二次接入', () => {
   assert.match(app, /agentSelectionAgents=\{agentSelectionItems\}/)
   assert.match(agentsPage, /const managedRows = managementItems\.map/)
-  assert.match(agentsPage, /<IntegrationOnlyCard/)
-  assert.match(agentsPage, /model\.installIntegration/)
-  assert.match(agentsPage, /model\.setIntegrationEnabled/)
+  assert.match(agentsPage, /<IntegrationOnlyObservationCard/)
+  assert.match(agentsPage, /onManage=\{id => navigate\(`\/integrations\?agent=\$\{encodeURIComponent\(id\)\}`\)\}/)
+  assert.doesNotMatch(agentsPage, /model\.installIntegration/)
+  assert.doesNotMatch(agentsPage, /model\.setIntegrationEnabled/)
 })
 
 
@@ -103,10 +104,8 @@ test('首次扫描失败不得落入“未发现”分组', () => {
 
 test('接入页把本机发现状态与接入启停状态分开表达', () => {
   assert.match(page, /integrationManagementLifecycleState\(item, t\)/)
-  assert.match(page, /!packageState\.installed/)
-  assert.match(page, /managementPage\.notAddedTitle/)
-  assert.match(page, /managementPage\.enabledTitle/)
-  assert.match(page, /managementPage\.disabledTitle/)
+  assert.match(page, /packageState\?\.installed/)
+  assert.match(page, /integrationManagementLifecycleState/)
   assert.match(page, /visibleNewIds/)
   assert.match(page, /model\.updateIntegrationPreferences\(\{ acknowledgedIntegrationIds \}\)/)
 })

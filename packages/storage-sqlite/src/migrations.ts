@@ -6,6 +6,7 @@ interface Migration {
   name: string
   fileName: string
   requiresForeignKeysOff?: boolean
+  requiresLegacyAlterTable?: boolean
 }
 
 const migrations: readonly Migration[] = [
@@ -41,6 +42,7 @@ const migrations: readonly Migration[] = [
     name: 'runtime-profile-session-identity',
     fileName: '028-runtime-profile-session-identity.sql',
     requiresForeignKeysOff: true,
+    requiresLegacyAlterTable: true,
   },
 ]
 
@@ -84,6 +86,11 @@ export async function migrateDatabase(db: Database.Database): Promise<number> {
     const foreignKeysWereEnabled = migration.requiresForeignKeysOff
       && db.pragma('foreign_keys', { simple: true }) === 1
     if (foreignKeysWereEnabled) db.pragma('foreign_keys = OFF')
+    const legacyAlterTableWasEnabled = migration.requiresLegacyAlterTable
+      && db.pragma('legacy_alter_table', { simple: true }) === 1
+    if (migration.requiresLegacyAlterTable && !legacyAlterTableWasEnabled) {
+      db.pragma('legacy_alter_table = ON')
+    }
 
     db.exec('BEGIN IMMEDIATE')
     try {
@@ -102,6 +109,9 @@ export async function migrateDatabase(db: Database.Database): Promise<number> {
       db.exec('ROLLBACK')
       throw error
     } finally {
+      if (migration.requiresLegacyAlterTable && !legacyAlterTableWasEnabled) {
+        db.pragma('legacy_alter_table = OFF')
+      }
       if (foreignKeysWereEnabled) db.pragma('foreign_keys = ON')
     }
   }
