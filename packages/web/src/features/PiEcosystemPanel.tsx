@@ -9,10 +9,10 @@ import type {
 import { searchPiEcosystem } from '../client/pi-ecosystem'
 import {
   Button,
+  Disclosure,
   Input,
   SelectMenu,
   StatusBadge,
-  UiIcon,
 } from '../components/ui'
 
 type TypeFilter = 'all' | PiEcosystemResourceTypeDto
@@ -121,6 +121,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    setActionError('')
     setQuery(queryDraft.trim())
     setRequestNonce(value => value + 1)
   }
@@ -167,7 +168,10 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         variant="toolbar"
         className="pi-ecosystem-type-filter"
         menuWidth={190}
-        onChange={value => setTypeFilter(value as TypeFilter)}
+        onChange={value => {
+          setActionError('')
+          setTypeFilter(value as TypeFilter)
+        }}
       />
       <Button type="submit" size="small" loading={loading}>{t('search')}</Button>
     </form>
@@ -188,27 +192,26 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         const typeLabels = pkg.resourceTypes.length
           ? pkg.resourceTypes.map(type => ({ type, label: t(`type.${type}`) }))
           : [{ type: 'unknown', label: t('typeUnknown') }]
-        return <details className="pi-package-item" key={pkg.packageSource}>
-          <summary className="pi-package-summary">
-            <UiIcon className="pi-package-chevron" name="chevron-down" size={14}/>
-            <div className="pi-package-summary-copy">
-              <div className="pi-package-title-line">
-                <b className="pi-package-name">{pkg.packageName}</b>
-                <div className="pi-package-types" aria-label={t('resourceTypes')}>
-                  {typeLabels.map(item => <span key={item.type}>{item.label}</span>)}
-                </div>
+        return <Disclosure
+          key={pkg.packageSource}
+          className="pi-package-item"
+          summary={<div className="pi-package-summary-copy">
+            <div className="pi-package-title-line">
+              <b className="pi-package-name">{pkg.packageName}</b>
+              <div className="pi-package-types" aria-label={t('resourceTypes')}>
+                {typeLabels.map(item => <span key={item.type}>{item.label}</span>)}
               </div>
-              {pkg.description && <p>{pkg.description}</p>}
             </div>
-            <div className="pi-package-summary-meta">
-              <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version}</code></span>
-              {localPackage?.versions.length
-                ? <span className="pi-package-local-version"><small>{t('localVersion')}</small><code>{localPackage.versions.join(' · ')}</code></span>
-                : null}
-              <StatusBadge tone={localState === 'installed' ? 'success' : 'neutral'}>{localLabel}</StatusBadge>
-            </div>
-          </summary>
-
+            {pkg.description && <p>{pkg.description}</p>}
+          </div>}
+          summaryMeta={<div className="pi-package-summary-meta">
+            <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version}</code></span>
+            {localPackage?.versions.length
+              ? <span className="pi-package-local-version"><small>{t('localVersion')}</small><code>{localPackage.versions.join(' · ')}</code></span>
+              : null}
+            <StatusBadge tone={localState === 'installed' ? 'success' : 'neutral'}>{localLabel}</StatusBadge>
+          </div>}
+        >
           <div className="pi-package-detail">
             <div className="pi-package-detail-grid">
               {pkg.description && <div className="pi-package-detail-row pi-package-description">
@@ -251,7 +254,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
               <Button size="small" onClick={() => { window.open(pkg.officialUrl, '_blank', 'noopener,noreferrer') }}>{t('officialDetail')}</Button>
             </div>
           </div>
-        </details>
+        </Disclosure>
       })}
     </div>}
   </section>
