@@ -21,6 +21,7 @@ const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ 
 const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
 const IntegrationManagementPage = lazy(() => import('./features/IntegrationManagementPage').then(module => ({ default: module.IntegrationManagementPage })))
 const LiveTaskPage = lazy(() => import('./features/LiveTaskPage').then(module => ({ default: module.LiveTaskPage })))
+const LegacyLiveTaskRedirect = lazy(() => import('./features/LegacyLiveTaskRedirect').then(module => ({ default: module.LegacyLiveTaskRedirect })))
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
@@ -374,7 +375,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
           <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
           <Route path="/review/live/:liveId/:runtimeSessionId" element={<LiveTaskPage />} />
-          <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/live/:runtimeSessionId" element={<LegacyLiveTaskRedirect />} />
           <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" sidebarHost={sidebarHost}/>} />
           <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
