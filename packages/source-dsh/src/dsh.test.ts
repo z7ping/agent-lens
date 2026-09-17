@@ -10,6 +10,7 @@ import {
   normalizeDshRecord,
   parseDshJsonl,
   dshSourceInternals,
+  profiledDshSourceInternals,
 } from './index'
 
 function sourceContext(root: string): SourceExecutionContext {
@@ -179,6 +180,40 @@ test('DSH Profile 静态发现区分 Bundle、树外插件和配置覆盖', asyn
     assert.equal(plugin?.definition.canonicalName, '@demo/plugin')
     assert.equal(plugin?.binding?.version, '4.5.6')
     assert.equal(config?.definition.type, 'rule')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+
+test('DSH profiled detection keeps product root on Installation and profile root on RuntimeProfile', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-dsh-profiled-detect-'))
+  const profileRoot = join(root, 'profiles', 'writer')
+  try {
+    await mkdir(profileRoot, { recursive: true })
+    await writeFile(join(profileRoot, 'package.json'), JSON.stringify({ name: 'writer-profile' }))
+
+    const detected = await profiledDshSourceInternals.detectProfiledDsh({
+      host: {
+        id: 'host-test',
+        name: 'test',
+        platform: process.platform,
+        arch: process.arch,
+        createdAt: '2026-09-17T00:00:00.000Z',
+        lastSeenAt: '2026-09-17T00:00:00.000Z',
+      },
+      env: { DSH_HOME: root },
+    })
+
+    assert.equal(detected.length, 1)
+    assert.equal(detected[0]?.configRoot, root)
+    assert.equal(detected[0]?.dataRoot, root)
+    assert.deepEqual(detected[0]?.runtimeProfile, {
+      nativeProfileId: 'writer',
+      name: 'writer',
+      configRoot: profileRoot,
+      dataRoot: profileRoot,
+    })
   } finally {
     await rm(root, { recursive: true, force: true })
   }
