@@ -22,6 +22,7 @@ const REQUEST_TIMEOUT_MS = 8_000
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 20
 const MAX_TYPED_SEARCH_SIZE = 50
+const PACKAGE_DETAIL_CONCURRENCY = 6
 const MAX_SEARCH_CACHE_ENTRIES = 64
 const MAX_PACKAGE_CACHE_ENTRIES = 256
 
@@ -127,6 +128,28 @@ function setBounded<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number):
   }
 }
 
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (!values.length) return []
+  const results = new Array<R>(values.length)
+  let nextIndex = 0
+  const worker = async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(values[index]!, index)
+    }
+  }
+  await Promise.all(Array.from(
+    { length: Math.min(Math.max(1, concurrency), values.length) },
+    () => worker(),
+  ))
+  return results
+}
+
 async function responseJson(response: Response, context: string): Promise<unknown> {
   if (!response.ok) {
     throw new Error(`${context} failed with HTTP ${response.status}`)
@@ -196,28 +219,32 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
       return [{ pkg, packageName, version }]
     })
 
-    const enriched = await Promise.all(candidates.map(async ({ pkg, packageName, version }) => {
-      const details = await this.packageDetails(packageName)
-        .catch((): NpmPackageDetails => ({ resourceTypes: [] }))
-      const links = packageLinks(pkg.links)
-      const repository = details.repositoryUrl ?? stringValue(links?.repository)
-      const description = stringValue(pkg.description)
-      const publishedAt = stringValue(pkg.date) ?? details.publishedAt
-      const item: PiEcosystemPackageDto = {
-        packageSource: `npm:${packageName}`,
-        packageName,
-        version,
-        ...(description ? { description } : {}),
-        keywords: stringArray(pkg.keywords),
-        resourceTypes: details.resourceTypes,
-        npmUrl: stringValue(links?.npm) ?? `https://www.npmjs.com/package/${packageName}`,
-        officialUrl: piPackageUrl(packageName),
-        ...(repository ? { repositoryUrl: repositoryUrl(repository) ?? repository } : {}),
-        installCommand: `pi install npm:${packageName}`,
-        ...(publishedAt ? { publishedAt } : {}),
-      }
-      return item
-    }))
+    const enriched = await mapWithConcurrency(
+      candidates,
+      PACKAGE_DETAIL_CONCURRENCY,
+      async ({ pkg, packageName, version }) => {
+        const details = await this.packageDetails(packageName)
+          .catch((): NpmPackageDetails => ({ resourceTypes: [] }))
+        const links = packageLinks(pkg.links)
+        const repository = details.repositoryUrl ?? stringValue(links?.repository)
+        const description = stringValue(pkg.description)
+        const publishedAt = stringValue(pkg.date) ?? details.publishedAt
+        const item: PiEcosystemPackageDto = {
+          packageSource: `npm:${packageName}`,
+          packageName,
+          version,
+          ...(description ? { description } : {}),
+          keywords: stringArray(pkg.keywords),
+          resourceTypes: details.resourceTypes,
+          npmUrl: stringValue(links?.npm) ?? `https://www.npmjs.com/package/${packageName}`,
+          officialUrl: piPackageUrl(packageName),
+          ...(repository ? { repositoryUrl: repositoryUrl(repository) ?? repository } : {}),
+          installCommand: `pi install npm:${packageName}`,
+          ...(publishedAt ? { publishedAt } : {}),
+        }
+        return item
+      },
+    )
 
     const items = enriched
       // Pi also supports conventional resource directories. Without a stable typed Catalog API,
@@ -283,6 +310,8 @@ export const piEcosystemInternals = {
   piPackageUrl,
   boundedLimit,
   setBounded,
+  mapWithConcurrency,
+  PACKAGE_DETAIL_CONCURRENCY,
   MAX_SEARCH_CACHE_ENTRIES,
   MAX_PACKAGE_CACHE_ENTRIES,
 }
