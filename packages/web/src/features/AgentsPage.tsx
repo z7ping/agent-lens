@@ -26,6 +26,7 @@ import {
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
+import { PiEcosystemPanel } from './PiEcosystemPanel'
 
 const capabilityLabelKey: Record<string, string> = {
   session: 'capability.session',
@@ -598,6 +599,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     {isPi ? <>
       <PiUsageGuidance agent={agent}/>
       <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
+      <PiEcosystemPanel agent={agent}/>
     </> : <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
