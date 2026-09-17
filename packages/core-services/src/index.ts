@@ -226,11 +226,15 @@ export class DefaultIdentityService implements IdentityService {
 
   async resolveLogicalSession(hint: LogicalSessionIdentityHint): Promise<LogicalSession> {
     const repository = this.storage.repositories.sessions
-    const id = stableId('session', [hint.installationId, hint.nativeSessionId])
+    const id = stableId('session', hint.runtimeProfileId
+      ? [hint.installationId, hint.runtimeProfileId, hint.nativeSessionId]
+      : [hint.installationId, hint.nativeSessionId])
     const existing = await repository.getLogicalSession(id)
+    const runtimeProfileId = hint.runtimeProfileId ?? existing?.runtimeProfileId
     const session: LogicalSession = {
       id,
       installationId: hint.installationId,
+      ...(runtimeProfileId ? { runtimeProfileId } : {}),
       ...(hint.projectId ?? existing?.projectId ? { projectId: hint.projectId ?? existing!.projectId } : {}),
       ...(hint.workspaceId ?? existing?.workspaceId ? { workspaceId: hint.workspaceId ?? existing!.workspaceId } : {}),
       ...(hint.title ?? existing?.title ? { title: hint.title ?? existing!.title } : {}),
@@ -247,15 +251,20 @@ export class DefaultIdentityService implements IdentityService {
       hint.sourceId,
       hint.installationId,
       hint.nativeSessionId,
+      hint.runtimeProfileId,
     )
     const session: SourceSession = existing ?? {
-      id: stableId('source-session', [hint.sourceId, hint.installationId, hint.nativeSessionId]),
+      id: stableId('source-session', hint.runtimeProfileId
+        ? [hint.sourceId, hint.installationId, hint.runtimeProfileId, hint.nativeSessionId]
+        : [hint.sourceId, hint.installationId, hint.nativeSessionId]),
       sourceId: hint.sourceId,
       installationId: hint.installationId,
+      ...(hint.runtimeProfileId ? { runtimeProfileId: hint.runtimeProfileId } : {}),
       nativeSessionId: hint.nativeSessionId,
     }
     const resolved: SourceSession = {
       ...session,
+      ...(hint.runtimeProfileId ? { runtimeProfileId: hint.runtimeProfileId } : {}),
       ...(hint.logicalSessionId ? { logicalSessionId: hint.logicalSessionId } : {}),
       ...(hint.nativeParentSessionId ? { nativeParentSessionId: hint.nativeParentSessionId } : {}),
     }
@@ -370,8 +379,15 @@ export class DefaultObservationService implements ObservationService {
         ...(hints.repositoryRoot ? { repositoryRoot: hints.repositoryRoot } : {}),
       })
       : null
+    const runtimeProfile = hints.runtimeProfileNativeId && this.storage.runtimeProfiles
+      ? await this.storage.runtimeProfiles.resolve({
+        installationId: input.installation.id,
+        nativeProfileId: hints.runtimeProfileNativeId,
+      })
+      : undefined
     const logicalSession = await this.identity.resolveLogicalSession({
       installationId: input.installation.id,
+      ...(runtimeProfile ? { runtimeProfileId: runtimeProfile.id } : {}),
       nativeSessionId: hints.nativeSessionId,
       ...(workspace?.projectId ? { projectId: workspace.projectId } : {}),
       ...(workspace ? { workspaceId: workspace.id } : {}),
@@ -380,10 +396,17 @@ export class DefaultObservationService implements ObservationService {
     const sourceSession = await this.identity.resolveSourceSession({
       sourceId: input.sourceId,
       installationId: input.installation.id,
+      ...(runtimeProfile ? { runtimeProfileId: runtimeProfile.id } : {}),
       nativeSessionId: hints.nativeSessionId,
       logicalSessionId: logicalSession.id,
       ...(hints.nativeParentSessionId ? { nativeParentSessionId: hints.nativeParentSessionId } : {}),
     })
+    await this.storage.sessionRelationshipCandidates?.tryPromoteForSession(
+      input.sourceId,
+      input.installation.id,
+      hints.nativeSessionId,
+      runtimeProfile?.id,
+    )
     const actor = await this.identity.resolveActor({
       installationId: input.installation.id,
       logicalSessionId: logicalSession.id,
@@ -522,7 +545,7 @@ export class DefaultCapabilityService implements CapabilityService {
   registerSourceCapabilities(sourceId: string, capabilities: ObservationCapability[]): Disposable {
     const next = new Map(capabilities.map(item => [item.name, item]))
     this.values.set(sourceId, next)
-    return { dispose: () => { if (this.values.get(sourceId) === next) this.values.delete(sourceId) } }
+    return { dispose: () => { if (this.values.get(sourceId) === next) this.values.delete(id) } }
   }
 
   listForSource(sourceId: string): ObservationCapability[] {
@@ -629,4 +652,3 @@ export class DefaultProjectionService implements ProjectionService {
 }
 
 export * from './live-attachments'
-
