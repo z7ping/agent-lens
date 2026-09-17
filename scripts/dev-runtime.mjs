@@ -21,6 +21,7 @@ const OFFICIAL_INTEGRATION_WORKSPACES = [
   '@agent-lens/integration-claude',
   '@agent-lens/integration-hermes',
   '@agent-lens/integration-opencode',
+  '@agent-lens/integration-dsh',
 ]
 
 function devLog(message, ...details) {
