@@ -1,0 +1,30 @@
+import type { LocaleMessagesDto } from '@agent-lens/protocol'
+
+export const chinesePiEcosystemMessages: LocaleMessagesDto = {
+  piEcosystem: {
+    title: '生态发现',
+    searchPlaceholder: '搜索 Pi Package',
+    search: '搜索',
+    type: {
+      all: '全部类型',
+      extension: '扩展',
+      skill: '技能',
+      prompt: '提示词模板',
+      theme: '主题',
+    },
+    installed: '已安装',
+    notInstalled: '未安装',
+    version: '最新版本',
+    localVersion: '本机版本',
+    resourceTypes: '包含类型',
+    typeUnknown: '未声明',
+    localAssets: '本机资产',
+    localAssetCount: '{{count}} 项',
+    empty: '没有找到符合条件的 Pi Package',
+    stale: '显示上次成功结果',
+    copyInstall: '复制安装命令',
+    copied: '已复制',
+    officialDetail: '官方详情',
+    loadFailed: '生态数据加载失败',
+  },
+}
