@@ -88,10 +88,6 @@ export const liveApi = {
     return requestJson(livePath(liveId, '/runtimes'))
   },
 
-  async selectProjectDirectory(): Promise<string | undefined> {
-    const value = await requestJson<{ workspacePath: string | null }>(`${LIVE_ROOT}/project-directory`, { method: 'POST' })
-    return value.workspacePath ?? undefined
-  },
 
   async start(liveId: string, input: LiveStartInputDto = {}): Promise<LiveRuntimeStateDto> {
     const state = await requestJson<LiveRuntimeStateDto>(
