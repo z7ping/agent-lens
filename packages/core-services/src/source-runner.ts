@@ -320,14 +320,13 @@ async function resolveInstallation(
   host: Host,
   detected: DetectedSource,
 ): Promise<AgentInstallation> {
-  const profileScoped = Boolean(detected.runtimeProfile)
   return identity.resolveInstallation({
     hostId: host.id,
     productId: detected.productId,
     ...(detected.executable ? { executable: detected.executable } : {}),
     ...(detected.version ? { version: detected.version } : {}),
-    ...(!profileScoped && detected.configRoot ? { configRoot: detected.configRoot } : {}),
-    ...(!profileScoped && detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
+    ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
+    ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
   })
 }
 
