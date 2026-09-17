@@ -72,11 +72,22 @@ export function integrationPreferenceBootstrapUpdate(
     selectedIntegrationIds: readonly string[]
   },
 ): IntegrationPreferenceUpdate | null {
-  if (persisted) return null
+  const selected = normalizedOfficialIds(options.selectedIntegrationIds)
+  if (persisted) {
+    // Catalog migrations can promote a previously managed Source into an
+    // official Integration (DSH is the first case). If the user had already
+    // selected that Source before the Catalog knew about it, preserve that
+    // intent without presenting the migrated Integration as newly discovered.
+    const acknowledged = new Set(persisted.acknowledgedIntegrationIds)
+    const migratedSelections = selected.filter(id => !acknowledged.has(id))
+    return migratedSelections.length
+      ? { acknowledgedIntegrationIds: migratedSelections }
+      : null
+  }
   if (!options.existingInstallation) return {}
   return {
     onboardingCompleted: true,
-    acknowledgedIntegrationIds: normalizedOfficialIds(options.selectedIntegrationIds),
+    acknowledgedIntegrationIds: selected,
   }
 }
 
