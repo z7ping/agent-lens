@@ -69,9 +69,16 @@ function localPackages(agent: AgentOverviewDto): Map<string, LocalPackageInfo> {
   }]))
 }
 
+function packageInventoryComplete(agent: AgentOverviewDto): boolean {
+  if (agent.assetInventoryStatus !== 'available') return false
+  return agent.capabilities.some(capability =>
+    capability.name === 'asset-discovery' && capability.status === 'available'
+  )
+}
+
 function localPackageState(agent: AgentOverviewDto, localPackage: LocalPackageInfo | undefined): LocalPackageState {
   if (localPackage) return 'installed'
-  return agent.assetInventoryStatus === 'available' ? 'not-installed' : 'unknown'
+  return packageInventoryComplete(agent) ? 'not-installed' : 'unknown'
 }
 
 function localAssetType(asset: AgentAssetInventoryDto): PiEcosystemResourceTypeDto | 'other' {
@@ -213,5 +220,6 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
 export const piEcosystemUiInternals = {
   npmPackageSource,
   localPackages,
+  packageInventoryComplete,
   localPackageState,
 }
