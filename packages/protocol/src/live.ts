@@ -59,6 +59,7 @@ export type LiveCapabilityNameDto =
   | 'recovery'
 
 export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
+export type LiveStartFieldSupportDto = 'required' | 'optional' | 'unsupported'
 
 export interface LiveInputCapabilitiesDto {
   text: LiveInputSupportDto
@@ -66,6 +67,16 @@ export interface LiveInputCapabilitiesDto {
   image: LiveInputSupportDto
   file: LiveInputSupportDto
   multiline: LiveInputSupportDto
+}
+
+export interface LiveStartInputDto {
+  workspacePath?: string | undefined
+  title?: string | undefined
+}
+
+export interface LiveStartCapabilitiesDto {
+  workspace: LiveStartFieldSupportDto
+  title: LiveStartFieldSupportDto
 }
 
 export interface LiveAvailabilityDto {
@@ -104,6 +115,7 @@ export interface LiveProductDto {
   displayName: string
   capabilities: LiveCapabilityNameDto[]
   inputCapabilities: LiveInputCapabilitiesDto
+  startCapabilities: LiveStartCapabilitiesDto
   availability: LiveAvailabilityDto
   runtimes: LiveRuntimeStateDto[]
 }
