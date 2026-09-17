@@ -77,21 +77,42 @@ export class SqliteRuntimeProfileRepository {
     runtimeProfileId: string,
   ): Promise<void> {
     await this.executor.run(() => {
-      this.executor.db.prepare(`
-        UPDATE source_sessions
-        SET runtime_profile_id = ?
+      const existingProfiled = this.executor.db.prepare(`
+        SELECT id, logical_session_id AS logicalSessionId
+        FROM source_sessions
         WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-          AND runtime_profile_id IS NOT ?
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
-      this.executor.db.prepare(`
-        UPDATE logical_sessions
-        SET runtime_profile_id = ?
-        WHERE id IN (
-          SELECT logical_session_id FROM source_sessions
+          AND runtime_profile_id = ?
+        LIMIT 1
+      `).get(sourceId, installationId, nativeSessionId, runtimeProfileId) as
+        | { id: string; logicalSessionId: string | null }
+        | undefined
+
+      let logicalSessionId = existingProfiled?.logicalSessionId ?? null
+      if (!existingProfiled) {
+        const legacy = this.executor.db.prepare(`
+          SELECT id, logical_session_id AS logicalSessionId
+          FROM source_sessions
           WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-        )
-          AND runtime_profile_id IS NOT ?
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
+            AND runtime_profile_id IS NULL
+          ORDER BY id
+          LIMIT 1
+        `).get(sourceId, installationId, nativeSessionId) as
+          | { id: string; logicalSessionId: string | null }
+          | undefined
+        if (!legacy) return
+        logicalSessionId = legacy.logicalSessionId
+        this.executor.db.prepare(`
+          UPDATE source_sessions SET runtime_profile_id = ? WHERE id = ?
+        `).run(runtimeProfileId, legacy.id)
+      }
+
+      if (logicalSessionId) {
+        this.executor.db.prepare(`
+          UPDATE logical_sessions
+          SET runtime_profile_id = ?
+          WHERE id = ? AND (runtime_profile_id IS NULL OR runtime_profile_id = ?)
+        `).run(runtimeProfileId, logicalSessionId, runtimeProfileId)
+      }
     })
   }
 
