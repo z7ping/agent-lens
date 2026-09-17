@@ -35,6 +35,7 @@ const migrations: readonly Migration[] = [
   { version: 25, name: 'bounded-replication-journal', fileName: '025-bounded-replication-journal.sql' },
   { version: 26, name: 'replication-runtime-orchestration', fileName: '026-replication-runtime-orchestration.sql' },
   { version: 27, name: 'replication-entity-heads', fileName: '027-replication-entity-heads.sql' },
+  { version: 28, name: 'runtime-profile-session-identity', fileName: '028-runtime-profile-session-identity.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
