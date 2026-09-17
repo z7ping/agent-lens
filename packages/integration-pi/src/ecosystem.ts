@@ -180,23 +180,24 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     })
 
     const enriched = await Promise.all(candidates.map(async ({ pkg, packageName, version }) => {
-      const details = await this.packageDetails(packageName).catch(() => ({ resourceTypes: [] }))
+      const details = await this.packageDetails(packageName)
+        .catch((): NpmPackageDetails => ({ resourceTypes: [] }))
       const links = packageLinks(pkg.links)
       const repository = details.repositoryUrl ?? stringValue(links?.repository)
+      const description = stringValue(pkg.description)
+      const publishedAt = stringValue(pkg.date) ?? details.publishedAt
       const item: PiEcosystemPackageDto = {
         packageSource: `npm:${packageName}`,
         packageName,
         version,
-        ...(stringValue(pkg.description) ? { description: stringValue(pkg.description) } : {}),
+        ...(description ? { description } : {}),
         keywords: stringArray(pkg.keywords),
         resourceTypes: details.resourceTypes,
         npmUrl: stringValue(links?.npm) ?? `https://www.npmjs.com/package/${packageName}`,
         officialUrl: `https://pi.dev/packages?name=${encodeURIComponent(packageName)}`,
         ...(repository ? { repositoryUrl: repositoryUrl(repository) ?? repository } : {}),
         installCommand: `pi install npm:${packageName}`,
-        ...(stringValue(pkg.date) ?? details.publishedAt
-          ? { publishedAt: stringValue(pkg.date) ?? details.publishedAt }
-          : {}),
+        ...(publishedAt ? { publishedAt } : {}),
       }
       return item
     }))
@@ -232,12 +233,12 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     const versions = objectValue(packument?.versions)
     const manifest = latest ? objectValue(versions?.[latest]) : undefined
     const time = objectValue(packument?.time)
+    const resolvedRepositoryUrl = repositoryUrl(manifest?.repository ?? packument?.repository)
+    const publishedAt = latest ? stringValue(time?.[latest]) : undefined
     const value: NpmPackageDetails = {
       resourceTypes: resourceTypesFromManifest(manifest),
-      ...(repositoryUrl(manifest?.repository ?? packument?.repository)
-        ? { repositoryUrl: repositoryUrl(manifest?.repository ?? packument?.repository) }
-        : {}),
-      ...(latest && stringValue(time?.[latest]) ? { publishedAt: stringValue(time?.[latest]) } : {}),
+      ...(resolvedRepositoryUrl ? { repositoryUrl: resolvedRepositoryUrl } : {}),
+      ...(publishedAt ? { publishedAt } : {}),
     }
     this.packageCache.set(packageName, {
       value,
