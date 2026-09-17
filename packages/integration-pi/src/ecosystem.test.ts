@@ -119,6 +119,26 @@ test('Pi ecosystem provider reuses short cache and falls back to bounded last-go
   assert.equal(stale.fetchedAt, first.fetchedAt)
 })
 
+test('Pi ecosystem detail enrichment preserves order while bounding concurrency', async () => {
+  let active = 0
+  let maxActive = 0
+  const values = Array.from({ length: 20 }, (_, index) => index)
+  const result = await piEcosystemInternals.mapWithConcurrency(
+    values,
+    piEcosystemInternals.PACKAGE_DETAIL_CONCURRENCY,
+    async value => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise(resolve => setTimeout(resolve, 1))
+      active -= 1
+      return value * 2
+    },
+  )
+
+  assert.deepEqual(result, values.map(value => value * 2))
+  assert.ok(maxActive <= piEcosystemInternals.PACKAGE_DETAIL_CONCURRENCY)
+})
+
 test('bounded cache helper evicts the oldest entry', () => {
   const cache = new Map<string, number>()
   piEcosystemInternals.setBounded(cache, 'a', 1, 2)
