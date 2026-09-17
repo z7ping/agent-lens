@@ -7,6 +7,7 @@ import type {
   LiveRuntimeRefDto,
   LiveRuntimeStateDto,
   LiveSnapshotDto,
+  LiveStartInputDto,
   LiveThinkingControlDto,
 } from '@agent-lens/protocol'
 
@@ -74,7 +75,7 @@ export const liveApi = {
     return requestJson(livePath(liveId, '/runtimes'))
   },
 
-  async start(liveId: string, input: unknown = {}): Promise<LiveRuntimeStateDto> {
+  async start(liveId: string, input: LiveStartInputDto = {}): Promise<LiveRuntimeStateDto> {
     const state = await requestJson<LiveRuntimeStateDto>(
       livePath(liveId, '/runtimes'),
       jsonRequest('POST', { input }),
