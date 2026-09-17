@@ -81,7 +81,7 @@ export class SqliteRuntimeProfileRepository {
         UPDATE source_sessions
         SET runtime_profile_id = ?
         WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-          AND runtime_profile_id IS NOT ?
+          AND (runtime_profile_id IS NULL OR runtime_profile_id = ?)
       `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
       this.executor.db.prepare(`
         UPDATE logical_sessions
@@ -89,9 +89,17 @@ export class SqliteRuntimeProfileRepository {
         WHERE id IN (
           SELECT logical_session_id FROM source_sessions
           WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+            AND runtime_profile_id = ?
         )
-          AND runtime_profile_id IS NOT ?
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
+          AND (runtime_profile_id IS NULL OR runtime_profile_id = ?)
+      `).run(
+        runtimeProfileId,
+        sourceId,
+        installationId,
+        nativeSessionId,
+        runtimeProfileId,
+        runtimeProfileId,
+      )
     })
   }
 
