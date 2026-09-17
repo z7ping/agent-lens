@@ -34,6 +34,10 @@ class FakeLiveAdapter implements LiveAdapter {
     file: 'unsupported' as const,
     multiline: 'native' as const,
   }
+  readonly startCapabilities = {
+    workspace: 'optional',
+    title: 'optional',
+  } as const
   readonly sent: Array<{ runtimeSessionId: string; message: LiveMessageInput; options?: LiveSendOptions | undefined }> = []
   readonly runtimes = new Map<string, LiveRuntimeState>()
   private sequence = 0
@@ -136,15 +140,26 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
           file: 'unsupported',
           multiline: 'native',
         },
+        startCapabilities: {
+          workspace: 'optional',
+          title: 'optional',
+        },
         availability: { available: true },
         runtimes: [],
       }],
     })
 
+    const rejectedNativeField = await fetch(`${base}/api/v1/live/test/runtimes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ input: { cwd: '/tmp/native' } }),
+    })
+    assert.equal(rejectedNativeField.status, 400)
+
     const started = await fetch(`${base}/api/v1/live/test/runtimes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: { workspacePath: '/tmp/project' } }),
+      body: JSON.stringify({ input: { workspacePath: '/tmp/project', title: 'Test task' } }),
     })
     assert.equal(started.status, 201)
     const startedState = await started.json() as LiveRuntimeState
