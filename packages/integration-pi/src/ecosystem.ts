@@ -74,6 +74,11 @@ function repositoryUrl(value: unknown): string | undefined {
     .replace(/\.git$/, '')
 }
 
+function piPackageUrl(packageName: string): string {
+  const path = packageName.split('/').map(segment => encodeURIComponent(segment)).join('/')
+  return `https://pi.dev/packages/${path}`
+}
+
 function resourceTypesFromManifest(manifest: Record<string, unknown> | undefined): PiEcosystemResourceTypeDto[] {
   const pi = objectValue(manifest?.pi)
   if (!pi) return []
@@ -194,7 +199,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
         keywords: stringArray(pkg.keywords),
         resourceTypes: details.resourceTypes,
         npmUrl: stringValue(links?.npm) ?? `https://www.npmjs.com/package/${packageName}`,
-        officialUrl: `https://pi.dev/packages?name=${encodeURIComponent(packageName)}`,
+        officialUrl: piPackageUrl(packageName),
         ...(repository ? { repositoryUrl: repositoryUrl(repository) ?? repository } : {}),
         installCommand: `pi install npm:${packageName}`,
         ...(publishedAt ? { publishedAt } : {}),
@@ -261,5 +266,6 @@ export const piEcosystemPlugin = applyPiEcosystem
 export const piEcosystemInternals = {
   resourceTypesFromManifest,
   repositoryUrl,
+  piPackageUrl,
   boundedLimit,
 }
