@@ -260,3 +260,9 @@ const applyHttpSurface = Object.assign(
 )
 
 export const httpSurfacePlugin = defineAgentLensPlugin(manifest, applyHttpSurface)
+
+export const httpSurfacePluginInternals = {
+  storageWithRuntimeHealth,
+  milliseconds,
+  eventLoopSnapshot,
+}
