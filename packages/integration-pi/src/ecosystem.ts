@@ -223,7 +223,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
       candidates,
       PACKAGE_DETAIL_CONCURRENCY,
       async ({ pkg, packageName, version }) => {
-        const details = await this.packageDetails(packageName)
+        const details = await this.packageDetails(packageName, version)
           .catch((): NpmPackageDetails => ({ resourceTypes: [] }))
         const links = packageLinks(pkg.links)
         const repository = details.repositoryUrl ?? stringValue(links?.repository)
@@ -264,29 +264,28 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     }
   }
 
-  private async packageDetails(packageName: string): Promise<NpmPackageDetails> {
-    const cached = this.packageCache.get(packageName)
+  private async packageDetails(packageName: string, version: string): Promise<NpmPackageDetails> {
+    const cacheKey = `${packageName}\u0000${version}`
+    const cached = this.packageCache.get(cacheKey)
     if (cached && cached.expiresAt > this.now()) return cached.value
 
     const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     const raw = await responseJson(await this.fetcher(`${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}`, {
       headers: { accept: 'application/json' },
       signal,
-    }), `npm package metadata ${packageName}`)
+    }), `npm package metadata ${packageName}@${version}`)
     const packument = objectValue(raw)
-    const distTags = objectValue(packument?.['dist-tags'])
-    const latest = stringValue(distTags?.latest)
     const versions = objectValue(packument?.versions)
-    const manifest = latest ? objectValue(versions?.[latest]) : undefined
+    const manifest = objectValue(versions?.[version])
     const time = objectValue(packument?.time)
     const resolvedRepositoryUrl = repositoryUrl(manifest?.repository ?? packument?.repository)
-    const publishedAt = latest ? stringValue(time?.[latest]) : undefined
+    const publishedAt = stringValue(time?.[version])
     const value: NpmPackageDetails = {
       resourceTypes: resourceTypesFromManifest(manifest),
       ...(resolvedRepositoryUrl ? { repositoryUrl: resolvedRepositoryUrl } : {}),
       ...(publishedAt ? { publishedAt } : {}),
     }
-    setBounded(this.packageCache, packageName, {
+    setBounded(this.packageCache, cacheKey, {
       value,
       expiresAt: this.now() + PACKAGE_CACHE_TTL_MS,
     }, MAX_PACKAGE_CACHE_ENTRIES)
