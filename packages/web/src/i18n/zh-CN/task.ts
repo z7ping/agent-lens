@@ -66,6 +66,26 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       hours: '{{value}} 小时',
       days: '{{value}} 天',
     },
+    live: {
+      invalidRuntime: '实时任务地址无效。',
+      productUnavailable: '当前实时智能体不可用。',
+      runtimeId: '运行时 ID',
+      interrupt: '中断',
+      terminate: '结束任务',
+      empty: '等待输入任务。',
+      composerPlaceholder: '输入任务或补充说明…',
+      composerAria: '实时任务输入',
+      connected: '实时连接已建立',
+      connecting: '正在连接实时任务',
+      thinking: '思考强度',
+      send: '发送',
+      unsupportedInput: '当前智能体不支持{{type}}输入。',
+      input: {
+        largeText: '大段文本',
+        image: '图片',
+        file: '文件',
+      },
+    },
     center: {
       presentation: {
         unnamedProject: '未命名项目',
