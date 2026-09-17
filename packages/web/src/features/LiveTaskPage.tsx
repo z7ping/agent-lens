@@ -274,7 +274,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setConnected(true)
         setItems(previous => reduceLiveTaskEvent(previous, envelope))
         setState(previous => runtimeStateFromEvent(previous, envelope))
-        if (envelope.normalizedEvent?.type === 'ui.request') setExtension(envelope.normalizedEvent)
+        if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
+          setExtension(envelope.normalizedEvent)
+        }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
       () => setConnected(false),
