@@ -66,6 +66,8 @@ const applyProfiledDshSource = Object.assign(
 
 export const profiledDshSourcePlugin = defineAgentLensPlugin(dshManifest, applyProfiledDshSource)
 
+export const profiledDshSourceInternals = { detectProfiledDsh }
+
 
 export {
   dshManifest,
