@@ -17,6 +17,7 @@ on:
       - 'docs/design/brand/agentlens-icon-master.svg'
       - '.github/workflows/desktop-macos-linux.yml'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     branches: [main]
     paths:
       - 'apps/desktop/**'
