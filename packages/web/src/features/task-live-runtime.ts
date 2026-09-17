@@ -6,10 +6,7 @@ export interface TaskLiveRuntimeLocation {
 }
 
 export function taskLiveRuntimeHref(runtime: Pick<LiveRuntimeRefDto, 'liveId' | 'state'>): string {
-  const runtimeSessionId = encodeURIComponent(runtime.state.runtimeSessionId)
-  return runtime.liveId === 'pi'
-    ? `/review/live/${runtimeSessionId}`
-    : `/review/live/${encodeURIComponent(runtime.liveId)}/${runtimeSessionId}`
+  return `/review/live/${encodeURIComponent(runtime.liveId)}/${encodeURIComponent(runtime.state.runtimeSessionId)}`
 }
 
 export function parseTaskLiveRuntimeLocation(pathname: string): TaskLiveRuntimeLocation | null {
@@ -20,11 +17,11 @@ export function parseTaskLiveRuntimeLocation(pathname: string): TaskLiveRuntimeL
       runtimeSessionId: decodeURIComponent(generic[2]!),
     }
   }
-  const piCompatibility = pathname.match(/^\/review\/live\/([^/]+)$/)
-  if (piCompatibility) {
+  const compatibility = pathname.match(/^\/review\/live\/([^/]+)$/)
+  if (compatibility) {
     return {
       liveId: 'pi',
-      runtimeSessionId: decodeURIComponent(piCompatibility[1]!),
+      runtimeSessionId: decodeURIComponent(compatibility[1]!),
     }
   }
   return null
