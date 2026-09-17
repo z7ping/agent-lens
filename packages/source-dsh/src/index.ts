@@ -1,16 +1,22 @@
 import { basename } from 'node:path'
 import type { DetectedSource, SourceDefinition, SourceExecutionContext } from '@agent-lens/core'
 import { defineAgentLensPlugin, type AgentLensContext } from '@agent-lens/runtime-cordis'
-import { dshManifest, dshSourceDefinition } from './source.js'
+import { dshManifest, dshSourceDefinition, dshSourceInternals } from './source.js'
 
 async function detectProfiledDsh(ctx: Parameters<SourceDefinition['detect']>[0]): Promise<DetectedSource[]> {
   const detected = await dshSourceDefinition.detect(ctx)
+  const installationRoot = dshSourceInternals.dshHome(ctx.env ?? process.env)
   return detected.map(item => {
     const profileRoot = item.dataRoot ?? item.configRoot
     if (!profileRoot) return item
     const nativeProfileId = basename(profileRoot) || 'default'
     return {
       ...item,
+      // Installation identity belongs to the DSH product root. Profile roots
+      // remain on RuntimeProfile so multiple profiles never produce multiple
+      // AgentInstallation identities.
+      configRoot: installationRoot,
+      dataRoot: installationRoot,
       runtimeProfile: {
         nativeProfileId,
         name: nativeProfileId,
