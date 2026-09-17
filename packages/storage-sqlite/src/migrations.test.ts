@@ -248,7 +248,7 @@ test('v27 从已有 v26 journal 回填 first/latest Entity Head 并补全 18 Roo
 
     await storage.migrate()
     assert.equal(
-      storage.db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get()?.version,
+      (storage.db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get() as { version: number }).version,
       27,
     )
 
