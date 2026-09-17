@@ -1454,8 +1454,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {historyInteractionError && <div className="page-error" role="alert">{historyInteractionError}</div>}
 
-            {review.relationships?.items.length ? <details className="pi-session-tree">
-              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
+            {review.relationships?.items.length ? <details className="session-relationship-tree">
+              <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
             </details> : null}
 
