@@ -41,7 +41,7 @@ test('Pi ecosystem HTTP surface forwards validated read-only search requests', a
     assert.equal(writeAttempt.status, 405)
   } finally {
     await surface.dispose()
-    storage.close()
+    await storage.close()
   }
 })
 
@@ -58,6 +58,6 @@ test('Pi ecosystem HTTP surface keeps provider absence explicit', async () => {
     assert.equal(body.error, 'pi_ecosystem_unavailable')
   } finally {
     await surface.dispose()
-    storage.close()
+    await storage.close()
   }
 })
