@@ -96,14 +96,16 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
   const [requestNonce, setRequestNonce] = useState(0)
   const [response, setResponse] = useState<PiEcosystemSearchResponseDto | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [copiedPackage, setCopiedPackage] = useState('')
   const local = useMemo(() => localPackages(agent), [agent])
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
-    setError('')
+    setLoadError('')
+    setResponse(null)
     void searchPiEcosystem({
       query,
       ...(typeFilter === 'all' ? {} : { type: typeFilter }),
@@ -112,7 +114,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
       setResponse(result)
     }).catch(cause => {
       if (cause instanceof DOMException && cause.name === 'AbortError') return
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setLoadError(cause instanceof Error ? cause.message : String(cause))
     }).finally(() => {
       if (!controller.signal.aborted) setLoading(false)
     })
@@ -126,12 +128,13 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
   }
 
   const copyInstallCommand = async (packageSource: string, command: string) => {
+    setActionError('')
     try {
       await navigator.clipboard.writeText(command)
       setCopiedPackage(packageSource)
       window.setTimeout(() => setCopiedPackage(current => current === packageSource ? '' : current), 1_500)
     } catch {
-      setError(t('copyFailed'))
+      setActionError(t('copyFailed'))
     }
   }
 
@@ -175,8 +178,9 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
       </Toolbar>
     </form>
 
-    {error && <div className="agent-path-error" role="alert"><b>{t('loadFailed')}</b> · {error}</div>}
-    {!error && !loading && response?.items.length === 0 && <div className="muted-empty compact">{t('empty')}</div>}
+    {loadError && <div className="agent-path-error" role="alert"><b>{t('loadFailed')}</b> · {loadError}</div>}
+    {actionError && <div className="agent-path-error" role="alert">{actionError}</div>}
+    {!loadError && !loading && response?.items.length === 0 && <div className="muted-empty compact">{t('empty')}</div>}
 
     {response && response.items.length > 0 && <div className="agent-disclosures">
       {response.items.map(pkg => {
