@@ -266,14 +266,14 @@ test('独立 parser replay 不触发原生历史读取并透传重放窗口与�
   assert.deepEqual(replayStates, ['started', 'completed'])
 })
 
-test('profiled source detection resolves one installation identity and keeps profile roots out of installation', async () => {
+test('profiled source detection preserves one installation root while keeping profile roots on RuntimeProfile', async () => {
   const seenHints: Array<Record<string, unknown>> = []
   const profiled = sourceDefinition('dsh', async () => [
     {
       sourceId: 'dsh',
       productId: 'dsh',
-      configRoot: '/dsh/profiles/a',
-      dataRoot: '/dsh/profiles/a',
+      configRoot: '/dsh',
+      dataRoot: '/dsh',
       runtimeProfile: {
         nativeProfileId: 'a',
         name: 'a',
@@ -285,8 +285,8 @@ test('profiled source detection resolves one installation identity and keeps pro
     {
       sourceId: 'dsh',
       productId: 'dsh',
-      configRoot: '/dsh/profiles/b',
-      dataRoot: '/dsh/profiles/b',
+      configRoot: '/dsh',
+      dataRoot: '/dsh',
       runtimeProfile: {
         nativeProfileId: 'b',
         name: 'b',
@@ -314,8 +314,16 @@ test('profiled source detection resolves one installation identity and keeps pro
   assert.equal(prepared.targets.length, 2)
   assert.equal(seenHints.length, 2)
   assert.deepEqual(seenHints.map(hint => ({ configRoot: hint.configRoot, dataRoot: hint.dataRoot })), [
-    { configRoot: undefined, dataRoot: undefined },
-    { configRoot: undefined, dataRoot: undefined },
+    { configRoot: '/dsh', dataRoot: '/dsh' },
+    { configRoot: '/dsh', dataRoot: '/dsh' },
+  ])
+  assert.deepEqual(prepared.targets.map(target => ({
+    nativeProfileId: target.runtimeProfile?.nativeProfileId,
+    configRoot: target.runtimeProfile?.configRoot,
+    dataRoot: target.runtimeProfile?.dataRoot,
+  })), [
+    { nativeProfileId: 'a', configRoot: '/dsh/profiles/a', dataRoot: '/dsh/profiles/a' },
+    { nativeProfileId: 'b', configRoot: '/dsh/profiles/b', dataRoot: '/dsh/profiles/b' },
   ])
 })
 
