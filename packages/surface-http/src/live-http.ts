@@ -8,6 +8,7 @@ import type {
 } from '@agent-lens/core'
 import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
+import { readHostProjectDirectory } from './project-directory-host'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const SSE_HEARTBEAT_MS = 15_000
@@ -102,6 +103,8 @@ function statusForError(error: unknown): number {
     const status = Number((error as { statusCode?: unknown }).statusCode)
     if (Number.isInteger(status) && status >= 400 && status <= 599) return status
   }
+  if (error && typeof error === 'object' && 'code' in error
+    && (error as { code?: unknown }).code === 'live_interaction_unavailable') return 409
   const message = error instanceof Error ? error.message : String(error)
   if (/unknown .*runtime|runtime .*not found|unknown .*session|session .*not found/i.test(message)) return 404
   return 500
@@ -199,15 +202,33 @@ export async function handleLiveRequest(
   response: ServerResponse,
   url: URL,
   service: LiveService | undefined,
+  selectProjectDirectory?: () => Promise<string | undefined>,
 ): Promise<boolean> {
   if (url.pathname !== '/api/v1/live' && !url.pathname.startsWith('/api/v1/live/')) return false
   if (url.pathname === '/api/v1/live/attachments' || url.pathname.startsWith('/api/v1/live/attachments/')) return false
-  if (!service) {
-    writeJson(response, 503, { error: 'live_unavailable' })
-    return true
-  }
 
   try {
+    if (url.pathname === '/api/v1/live/project-directory') {
+      if (request.method !== 'POST') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const hostSelection = readHostProjectDirectory(request)
+      if (hostSelection.handled) {
+        writeJson(response, 200, { workspacePath: hostSelection.cwd ?? null })
+        return true
+      }
+      if (!selectProjectDirectory) throw httpError(501, '当前运行时不支持选择项目目录')
+      const workspacePath = await selectProjectDirectory()
+      writeJson(response, 200, { workspacePath: workspacePath ?? null })
+      return true
+    }
+
+    if (!service) {
+      writeJson(response, 503, { error: 'live_unavailable' })
+      return true
+    }
+
     if (url.pathname === '/api/v1/live') {
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'method_not_allowed' })
@@ -215,6 +236,23 @@ export async function handleLiveRequest(
       }
       const items = await Promise.all(service.list().map(describeAdapter))
       writeJson(response, 200, { items })
+      return true
+    }
+
+    const historyMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/history\/([^/]+)\/(resume|fork)$/)
+    if (historyMatch) {
+      if (request.method !== 'POST') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const liveId = decodeURIComponent(historyMatch[1]!)
+      const logicalSessionId = decodeURIComponent(historyMatch[2]!)
+      const action = historyMatch[3] as 'resume' | 'fork'
+      const adapter = adapterFor(service, liveId)
+      requireCapability(adapter, action)
+      const handler = action === 'resume' ? adapter.resume : adapter.fork
+      if (!handler) throw httpError(409, `${adapter.manifest.displayName} does not expose Live ${action}`)
+      writeJson(response, 201, jsonValue(await handler.call(adapter, logicalSessionId)))
       return true
     }
 
