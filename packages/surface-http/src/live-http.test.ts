@@ -6,6 +6,7 @@ import type {
   LiveAdapterManifest,
   LiveCapabilityName,
   LiveMessageInput,
+  LiveModelControl,
   LiveRuntimeEvent,
   LiveRuntimeState,
   LiveSendOptions,
@@ -24,9 +25,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'send', 'stream', 'interrupt'],
+    capabilities: ['create', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'send', 'stream', 'interrupt'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -40,6 +41,8 @@ class FakeLiveAdapter implements LiveAdapter {
   } as const
   readonly sent: Array<{ runtimeSessionId: string; message: LiveMessageInput; options?: LiveSendOptions | undefined }> = []
   readonly runtimes = new Map<string, LiveRuntimeState>()
+  readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
+  private modelValue = 'model-a'
   private sequence = 0
 
   async availability() {
@@ -74,6 +77,30 @@ class FakeLiveAdapter implements LiveAdapter {
 
   async snapshot(runtimeSessionId: string): Promise<LiveSnapshot> {
     return { state: await this.state(runtimeSessionId), entries: [{ kind: 'snapshot' }] }
+  }
+
+  async modelControl(runtimeSessionId: string): Promise<LiveModelControl> {
+    await this.state(runtimeSessionId)
+    return {
+      capability: 'model-switching',
+      value: this.modelValue,
+      options: [
+        { value: 'model-a', label: 'Model A' },
+        { value: 'model-b', label: 'Model B' },
+      ],
+    }
+  }
+
+  async setModelControl(runtimeSessionId: string, value: string) {
+    const control = await this.modelControl(runtimeSessionId)
+    if (!control.options.some(option => option.value === value)) throw new Error('Unsupported model')
+    this.modelValue = value
+    return this.state(runtimeSessionId)
+  }
+
+  async respondToExtension(runtimeSessionId: string, requestId: string, response: unknown) {
+    await this.state(runtimeSessionId)
+    this.extensionResponses.push({ runtimeSessionId, requestId, response })
   }
 
   async send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions) {
@@ -132,7 +159,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'send', 'stream', 'interrupt'],
+        capabilities: ['create', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -189,6 +216,30 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       body: JSON.stringify({ message: 'change course', behavior: 'steer' }),
     })
     assert.equal(unsupportedSteer.status, 409)
+
+    const modelControl = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/model-control`)
+    assert.equal(modelControl.status, 200)
+    assert.equal((await modelControl.json() as LiveModelControl).value, 'model-a')
+
+    const switchedModel = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/model-control`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: 'model-b' }),
+    })
+    assert.equal(switchedModel.status, 200)
+    assert.equal((await adapter.modelControl('runtime-1')).value, 'model-b')
+
+    const extensionResponse = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/extension-response`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requestId: 'request-1', response: { confirmed: true } }),
+    })
+    assert.equal(extensionResponse.status, 202)
+    assert.deepEqual(adapter.extensionResponses, [{
+      runtimeSessionId: 'runtime-1',
+      requestId: 'request-1',
+      response: { confirmed: true },
+    }])
 
     const interrupted = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/interrupt`, { method: 'POST' })
     assert.equal(interrupted.status, 200)
