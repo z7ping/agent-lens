@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { fetchLaunchableProjects } from '../client/launchable-projects'
@@ -14,8 +14,7 @@ import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sessionListTitle, type TaskProjectOption } from './task-center'
-import { piLiveSessionTitle } from './pi-live-task-projection'
-import { workspaceDisplayName } from './task-detail-model'
+import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -352,7 +351,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
-  const [runtimes, setRuntimes] = useState<PiLiveStateDto[]>([])
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>([])
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(null)
@@ -374,22 +372,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       ? t('center.history.selectedAgents', { count: review.filters.sourceIds.length })
       : t('center.history.noneSelected')
   const projects = snapshot.facets?.projects ?? []
-
-  const refreshRuntimes = useCallback(() => {
-    void piLiveApi.knownRuntimes().then(setRuntimes, () => setRuntimes([]))
-  }, [])
-
-  useEffect(() => {
-    refreshRuntimes()
-    const onVisibility = () => { if (!document.hidden) refreshRuntimes() }
-    const onPiLiveStateChanged = () => refreshRuntimes()
-    document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('agent-lens:pi-live-state-changed', onPiLiveStateChanged)
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('agent-lens:pi-live-state-changed', onPiLiveStateChanged)
-    }
-  }, [location.pathname, refreshRuntimes])
 
   useEffect(() => {
     let cancelled = false
@@ -544,9 +526,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     }
   }, [navigate])
 
-  const selectedRuntimeId = location.pathname.startsWith('/review/live/')
-    ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
-    : ''
   const historyCount = localSessions.length + visibleHub.length
   const projectFilterOptions = [
     { value: '', label: t('center.history.allProjects') },
@@ -604,13 +583,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
-        <div className="task-center-group-title"><span>{t('center.history.running')}</span><span>{runtimes.length}</span></div>
-        {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), t('center.history.piTask'), ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
-          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || t('center.history.unlinkedProject')}</span>{item.startedAt && <time>{formatTime(item.startedAt, t, locale)}</time>}</div>
-        </button>)}
-      </section>}
+      <TaskLiveRuntimeList/>
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
@@ -655,20 +628,4 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       </section>
     </div>
   </>
-}
-
-function runtimeStatusBadge(
-  state: PiLiveStateDto,
-  t: TFunction,
-): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
-  if (state.status === 'failed') return { label: t('center.runtimeStatus.failed'), tone: 'danger' }
-  if (state.status === 'initializing') return { label: t('center.runtimeStatus.initializing'), tone: 'warning', dot: true }
-  if (state.isStreaming) return { label: t('center.runtimeStatus.streaming'), tone: 'accent', dot: true }
-  return { label: t('center.runtimeStatus.idle'), tone: 'warning' }
-}
-
-function PiLiveRuntimeStatusBadge({ state }: { state: PiLiveStateDto }) {
-  const { t } = useTranslation('task')
-  const badge = runtimeStatusBadge(state, t)
-  return <StatusBadge tone={badge.tone} dot={badge.dot}>{badge.label}</StatusBadge>
 }
