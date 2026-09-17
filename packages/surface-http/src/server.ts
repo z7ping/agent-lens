@@ -23,6 +23,7 @@ import {
   type AgentRescanSummaryDto,
   type HealthResponseDto,
   type JsonValue,
+  type PiEcosystemQueryService,
   type RuntimeModeDto,
   type RuntimeOwnerDto,
   type SourceRecordResponseDto,
@@ -56,6 +57,7 @@ import { handleLiveAttachmentRequest } from './live-attachments-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { readLaunchableProjects } from './launchable-projects'
 import { discoverLocalePacks } from './locale-packs'
+import { handlePiEcosystemRequest } from './pi-ecosystem-http'
 import { handlePiLiveRequest } from './pi-live'
 import {
   parseInsightsQuery,
@@ -88,6 +90,7 @@ export interface HttpSurfaceOptions {
   lives?: LiveService
   liveAttachments?: LiveAttachmentService
   piLive?: PiLiveService
+  piEcosystem?: PiEcosystemQueryService
   rescanAgents?: (sourceId?: string) => Promise<AgentRescanSummaryDto>
   sourceDetection?: (sourceId: string) => boolean | undefined
   integrationStatus?: (
@@ -264,6 +267,12 @@ export async function startHttpSurface(
         response,
         url,
         options.integrationPackages,
+      )) return
+      if (await handlePiEcosystemRequest(
+        request,
+        response,
+        url,
+        options.piEcosystem,
       )) return
       if (await handleManagedAssetFilesRequest(
         request,
