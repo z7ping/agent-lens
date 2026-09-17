@@ -7,6 +7,7 @@ import { englishAgentsMessages } from './en-US/agents'
 import { englishBackupMessages } from './en-US/backup'
 import { englishCoreMessages } from './en-US/core'
 import { englishInsightsToolsMessages } from './en-US/insights-tools'
+import { englishPiEcosystemMessages } from './en-US/pi-ecosystem'
 import { englishPiLiveMessages } from './en-US/pi-live'
 import { englishReleaseErrorsMessages } from './en-US/release-errors'
 import { englishReviewMessages } from './en-US/review'
@@ -23,6 +24,7 @@ export const officialEnglishLocalePack: LocalePackDto = {
     ...englishInsightsToolsMessages,
     ...englishTaskMessages,
     ...englishPiLiveMessages,
+    ...englishPiEcosystemMessages,
     ...englishBackupMessages,
     ...englishReviewMessages,
     ...englishReleaseErrorsMessages,

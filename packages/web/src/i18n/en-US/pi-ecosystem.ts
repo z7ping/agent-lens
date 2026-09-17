@@ -1,0 +1,34 @@
+import type { LocaleMessagesDto } from '@agent-lens/protocol'
+
+export const englishPiEcosystemMessages: LocaleMessagesDto = {
+  piEcosystem: {
+    title: 'Ecosystem Discovery',
+    searchPlaceholder: 'Search Pi Packages',
+    search: 'Search',
+    description: 'Description',
+    type: {
+      all: 'All types',
+      extension: 'Extension',
+      skill: 'Skill',
+      prompt: 'Prompt template',
+      theme: 'Theme',
+      other: 'Other',
+    },
+    installed: 'Installed',
+    notInstalled: 'Not installed',
+    localUnknown: 'Local status unknown',
+    version: 'Latest version',
+    localVersion: 'Local version',
+    resourceTypes: 'Resource types',
+    typeUnknown: 'Unconfirmed',
+    localAssets: 'Local assets',
+    localAssetCount: '{{count}} items',
+    empty: 'No matching Pi Packages found',
+    stale: 'Showing the last successful result',
+    copyInstall: 'Copy install command',
+    copied: 'Copied',
+    officialDetail: 'Official details',
+    loadFailed: 'Failed to load ecosystem data',
+    copyFailed: 'Failed to copy install command',
+  },
+}

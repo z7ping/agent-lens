@@ -7,6 +7,7 @@ import { chineseAgentsMessages } from './zh-CN/agents'
 import { chineseBackupMessages } from './zh-CN/backup'
 import { chineseCoreMessages } from './zh-CN/core'
 import { chineseInsightsToolsMessages } from './zh-CN/insights-tools'
+import { chinesePiEcosystemMessages } from './zh-CN/pi-ecosystem'
 import { chinesePiLiveMessages } from './zh-CN/pi-live'
 import { chineseReleaseErrorsMessages } from './zh-CN/release-errors'
 import { chineseReviewMessages } from './zh-CN/review'
@@ -23,6 +24,7 @@ export const officialChineseLocalePack: LocalePackDto = {
     ...chineseInsightsToolsMessages,
     ...chineseTaskMessages,
     ...chinesePiLiveMessages,
+    ...chinesePiEcosystemMessages,
     ...chineseBackupMessages,
     ...chineseReviewMessages,
     ...chineseReleaseErrorsMessages,
