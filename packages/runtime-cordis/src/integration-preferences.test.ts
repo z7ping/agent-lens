@@ -111,8 +111,18 @@ test('fresh install persists incomplete onboarding while legacy bootstrap comple
       acknowledgedIntegrationIds: ['pi', 'dsh', 'codex'],
     },
   )
-  assert.equal(
+  assert.deepEqual(
     integrationPreferenceBootstrapUpdate(defaultIntegrationPreferences(), {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi'],
+    }),
+    { acknowledgedIntegrationIds: ['pi'] },
+  )
+  assert.equal(
+    integrationPreferenceBootstrapUpdate({
+      ...defaultIntegrationPreferences(),
+      acknowledgedIntegrationIds: ['pi'],
+    }, {
       existingInstallation: true,
       selectedIntegrationIds: ['pi'],
     }),
@@ -137,4 +147,35 @@ test('pre-DSH persisted order appends DSH without silently acknowledging the new
   assert.ok(parsed)
   assert.deepEqual(parsed.displayOrder, ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'])
   assert.equal(parsed.acknowledgedIntegrationIds.includes('dsh'), false)
+})
+
+
+test('Catalog promotion acknowledges only legacy sources the user had already selected', () => {
+  const persisted = integrationPreferenceInternals.parseIntegrationPreferences({
+    version: 1,
+    onboarding: {
+      completed: true,
+      completedAt: '2026-09-01T00:00:00.000Z',
+    },
+    displayOrder: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    displayOrderConfigured: true,
+    acknowledgedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  })
+  assert.ok(persisted)
+
+  assert.deepEqual(
+    integrationPreferenceBootstrapUpdate(persisted, {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode', 'dsh'],
+    }),
+    { acknowledgedIntegrationIds: ['dsh'] },
+  )
+  assert.equal(
+    integrationPreferenceBootstrapUpdate(persisted, {
+      existingInstallation: true,
+      selectedIntegrationIds: ['pi', 'codex', 'claude-code', 'hermes', 'opencode'],
+    }),
+    null,
+  )
 })
