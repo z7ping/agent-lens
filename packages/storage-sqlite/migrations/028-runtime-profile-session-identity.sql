@@ -41,3 +41,12 @@ CREATE UNIQUE INDEX idx_source_sessions_profile_identity
     native_session_id,
     IFNULL(runtime_profile_id, '')
   );
+
+-- Table rebuild drops table-owned triggers. Restore the canonical-change journal
+-- hooks introduced by v8 so SourceSession replication remains observable.
+CREATE TRIGGER trg_rep_change_source_sessions_insert AFTER INSERT ON source_sessions BEGIN
+  INSERT INTO replication_canonical_changes(entity_type, origin_entity_id) VALUES ('SourceSession', NEW.id);
+END;
+CREATE TRIGGER trg_rep_change_source_sessions_update AFTER UPDATE ON source_sessions BEGIN
+  INSERT INTO replication_canonical_changes(entity_type, origin_entity_id) VALUES ('SourceSession', NEW.id);
+END;
