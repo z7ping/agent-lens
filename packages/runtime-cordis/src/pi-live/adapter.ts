@@ -328,17 +328,19 @@ export class PiLiveAdapter implements LiveAdapter {
     const current = liveRecord(state.model)
     const currentProvider = liveText(current.provider)
     const currentId = liveText(current.id) || liveText(current.modelId)
+    const options = controls.models.map(model => ({
+      value: JSON.stringify([model.provider, model.id]),
+      label: model.name || model.id,
+      description: model.name && model.name !== model.id
+        ? `${model.provider} · ${model.id}`
+        : model.provider,
+    }))
+    const currentValue = currentProvider && currentId ? JSON.stringify([currentProvider, currentId]) : undefined
     const control: LiveModelControl = {
       capability: 'model-switching',
       label: 'Model',
-      ...(currentProvider && currentId ? { value: JSON.stringify([currentProvider, currentId]) } : {}),
-      options: controls.models.map(model => ({
-        value: JSON.stringify([model.provider, model.id]),
-        label: model.name || model.id,
-        description: model.name && model.name !== model.id
-          ? `${model.provider} · ${model.id}`
-          : model.provider,
-      })),
+      ...(currentValue && options.some(option => option.value === currentValue) ? { value: currentValue } : {}),
+      options,
     }
     return isLiveModelControl(control) ? control : null
   }
