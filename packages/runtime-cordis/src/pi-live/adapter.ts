@@ -10,6 +10,7 @@ import type {
   LiveMessageInput,
   LiveRuntimeEvent,
   LiveSendOptions,
+  StorageService,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet,
@@ -17,6 +18,7 @@ import {
   dispatchLiveSend,
   requireLiveMessageSupport,
 } from '@agent-lens/live-support'
+import { resolvePiLiveHistoryInput } from './history-interaction'
 import type {
   PiLiveImageInput,
   PiLiveRuntimeState,
@@ -260,7 +262,11 @@ export class PiLiveAdapter implements LiveAdapter {
     title: 'optional',
   } as const
 
-  constructor(readonly service: PiLiveService, private readonly attachments: LiveAttachmentService) {}
+  constructor(
+    readonly service: PiLiveService,
+    private readonly attachments: LiveAttachmentService,
+    private readonly storage?: StorageService,
+  ) {}
 
   availability() {
     return this.service.availability()
@@ -272,6 +278,16 @@ export class PiLiveAdapter implements LiveAdapter {
 
   start(input: unknown): Promise<PiLiveRuntimeState> {
     return this.service.start(piStartInput(input))
+  }
+
+  async resume(logicalSessionId: string): Promise<PiLiveRuntimeState> {
+    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
+    return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'continue'))
+  }
+
+  async fork(logicalSessionId: string): Promise<PiLiveRuntimeState> {
+    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
+    return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork'))
   }
 
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState> {
