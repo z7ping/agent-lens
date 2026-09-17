@@ -6,6 +6,7 @@ import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
   JsonValue,
+  LiveProductDto,
   ReviewDetailFilter,
   ReviewEventNodeDto,
   ReviewInteractionDto,
@@ -18,7 +19,7 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
-import { piLiveApi } from '../client/pi-live'
+import { liveApi } from '../client/live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -29,6 +30,9 @@ import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
 import { projectReviewInteractionPresentation, type ReviewProcessPresentationItem } from './review-interaction-presentation'
+import { reviewEventLabel } from './review-event-presentation'
+import { projectReviewLiveInteraction } from './review-live-interaction'
+import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
@@ -310,37 +314,6 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
   </span>
 }
 
-function sourceEventLabel(node: ReviewEventNodeDto): string {
-  if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupInfo')
-  const payload = payloadRecord(node.payload)
-  const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
-  if (node.sourceId === 'codex') {
-    if (node.kind === 'session.lifecycle' && action === 'turn.context') return agentLensI18n.t('review:local.event.codexTurnContext')
-    if (node.kind === 'session.lifecycle' && action === 'turn.started') return agentLensI18n.t('review:local.event.codexTurnStarted')
-    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return agentLensI18n.t('review:local.event.codexTurnCompleted')
-    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return agentLensI18n.t('review:local.event.codexTurnAborted')
-    if (node.kind === 'session.lifecycle' && action === 'turn.error') return agentLensI18n.t('review:local.event.codexTurnError')
-    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-    if (node.kind === 'context.injected') return agentLensI18n.t('review:local.event.injectedContext')
-    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
-    if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
-    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
-    if (node.kind === 'session.lifecycle' && action.includes('stop')) return agentLensI18n.t('review:local.event.turnStop')
-  }
-  if (node.sourceId === 'claude-code') {
-    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
-    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
-    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
-    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-  }
-  if (node.sourceId === 'pi') {
-    if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
-    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.branchSummary')
-  }
-  return node.label
-}
-
 function sourceEventSummary(node: ReviewEventNodeDto): string {
   const payload = payloadRecord(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status')
@@ -580,7 +553,7 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     return () => { active = false }
   }, [loadSourceRecord, node.id, sourceRecordIds, tab])
 
-  const title = node.type === 'tool' ? node.name : node.type === 'event' ? sourceEventLabel(node) : roleLabel(node.role)
+  const title = node.type === 'tool' ? node.name : node.type === 'event' ? reviewEventLabel(node) : roleLabel(node.role)
   const detailSummary = node.type === 'event'
     ? sourceEventSummary(node)
     : node.type === 'message'
@@ -798,7 +771,7 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
   return <TaskEvent
     model={{
       id: event.id,
-      label: sourceEventLabel(event),
+      label: reviewEventLabel(event),
       category: event.category,
       summary: sourceEventSummary(event),
       sourceLabel: agentLabel(event.sourceId),
@@ -932,19 +905,7 @@ function highLatencyThreshold(interactions: ReviewInteractionDto[]): number | nu
   return Math.max(upperQuartile, median * 1.75)
 }
 
-export function ReviewPage({
-  model,
-  embedded = false,
-  onResumePiSession,
-  resumingPiSession = false,
-  piResumeError = '',
-}: {
-  model: AgentLensClientModel
-  embedded?: boolean
-  onResumePiSession?(logicalSessionId: string): void | Promise<void>
-  resumingPiSession?: boolean
-  piResumeError?: string
-}) {
+export function ReviewPage({ model, embedded = false }: { model: AgentLensClientModel; embedded?: boolean }) {
   const { t } = useTranslation('review')
   const snapshot = useClientSnapshot(model)
   const { sessionId } = useParams()
@@ -956,8 +917,9 @@ export function ReviewPage({
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
-  const [forkingPiSessionId, setForkingPiSessionId] = useState('')
-  const [piForkError, setPiForkError] = useState<{ sessionId: string; message: string } | null>(null)
+  const [liveProducts, setLiveProducts] = useState<LiveProductDto[]>([])
+  const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork'>('')
+  const [historyInteractionError, setHistoryInteractionError] = useState('')
   const [pathError, setPathError] = useState('')
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
@@ -972,6 +934,7 @@ export function ReviewPage({
   const agents = snapshot.facets?.agents ?? []
   const projects = snapshot.facets?.projects ?? []
   const detail = review.detail
+  const detailLiveInteraction = useMemo(() => projectReviewLiveInteraction(detail, liveProducts), [detail?.productId, liveProducts])
   const visibleHubSessions = useMemo(() => hubSessions.filter(item => hubSessionVisibility(item, review)), [hubSessions, review.filters, t])
   const sessionGroups = useMemo(() => {
     const groups = new Map<ReviewDayGroup, UnifiedReviewSessionListEntry[]>()
@@ -1001,6 +964,15 @@ export function ReviewPage({
   }, [review.response?.items, visibleHubSessions, t])
 
   useEffect(() => {
+    let cancelled = false
+    void liveApi.products().then(
+      products => { if (!cancelled) setLiveProducts(products) },
+      () => { if (!cancelled) setLiveProducts([]) },
+    )
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
     if (embedded) {
       setHubSessions([])
       return
@@ -1026,7 +998,8 @@ export function ReviewPage({
     setRoundExpansionRevision(0)
     setShowAllEvents(true)
     setInspect(null)
-    setPiForkError(null)
+    setHistoryInteractionPending('')
+    setHistoryInteractionError('')
     followingTailRef.current = false
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
   }, [detail?.id])
@@ -1123,11 +1096,6 @@ export function ReviewPage({
 
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
-    // backward 方向仍只允许显式加载，避免顶部插入内容时抢滚动。
-    // forward 方向既监听交叉，也监听真实滚动：用户意图保存在 ref 中，
-    // 如果 sentinel 已经位于 rootMargin 内，仅修改 ref 不会让 IntersectionObserver
-    // 再触发；滚动监听负责补上这条缺失信号，同时 baseline 继续阻止程序性跳转
-    // 自动把整场会话一次性拉完。
     if (!sentinel || !detail?.page.hasMore || detail.page.direction !== 'forward' || review.detailLoadingMore || review.error) return
     const root = sentinel.closest('.review-reader-pane') as HTMLElement | null
     if (!root) return
@@ -1354,17 +1322,21 @@ export function ReviewPage({
     pendingReaderAnchorRef.current = null
   }
 
-  const forkPiSession = async (logicalSessionId: string) => {
-    if (forkingPiSessionId || resumingPiSession) return
-    setForkingPiSessionId(logicalSessionId)
-    setPiForkError(null)
+  const runHistoryInteraction = async (action: 'resume' | 'fork') => {
+    if (!detail || !detailLiveInteraction || historyInteractionPending) return
+    if (action === 'resume' && !detailLiveInteraction.canResume) return
+    if (action === 'fork' && !detailLiveInteraction.canFork) return
+    setHistoryInteractionPending(action)
+    setHistoryInteractionError('')
     try {
-      const state = await piLiveApi.fork(logicalSessionId)
-      navigate(`/review/live/${encodeURIComponent(state.runtimeSessionId)}`)
+      const state = action === 'resume'
+        ? await liveApi.resume(detailLiveInteraction.liveId, detail.id)
+        : await liveApi.fork(detailLiveInteraction.liveId, detail.id)
+      navigate(taskLiveRuntimeHref({ liveId: detailLiveInteraction.liveId, state }))
     } catch (reason) {
-      setPiForkError({ sessionId: logicalSessionId, message: reason instanceof Error ? reason.message : String(reason) })
+      setHistoryInteractionError(reason instanceof Error ? reason.message : String(reason))
     } finally {
-      setForkingPiSessionId('')
+      setHistoryInteractionPending('')
     }
   }
 
@@ -1401,8 +1373,9 @@ export function ReviewPage({
                   ? t('local.session.projectSession', { project: item.projectName })
                   : t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }),
               )
+              const liveInteraction = projectReviewLiveInteraction(item, liveProducts)
               return <button key={`local:${item.id}`} className={`session-item ${review.selectedId === item.id ? 'session-item-active' : ''}`} onClick={() => select(item.id)}>
-                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }), item.sourceIds)}</div>{item.sourceIds.includes('pi') ? <StatusBadge tone="success">{t('local.session.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+                <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, t('local.session.agentSession', { agent: agentLabel(item.sourceIds[0] ?? '', item.productId) }), item.sourceIds)}</div>{liveInteraction?.canResume ? <StatusBadge tone="success">{t('local.session.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
                 <div className="session-item-meta"><span className={`source-dot ${sourceDot(item.sourceIds[0] ?? '')}`}/><span>{agentLabel(item.sourceIds[0] ?? '', item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).pop() ?? t('local.session.noProject')}</span><time title={t('local.list.recentActivity', { time: formatTime(entry.activityAt) })}>{sessionRelativeTime(entry.activityAt)}</time></div>
               </button>
             })() : (() => {
@@ -1459,12 +1432,10 @@ export function ReviewPage({
             ...taskDetailModel.metrics.filter(metric => metric.label !== t('local.interaction.metricSpan')).map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
           ] : []}
           actions={<>
-            {onResumePiSession && detail.sourceIds.includes('pi') ? <>
-              <Button size="small" loading={resumingPiSession} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void onResumePiSession(detail.id)}><UiIcon name="arrow-right" size={14}/>{resumingPiSession ? t('local.header.openingPi') : t('local.header.continueSession')}</Button>
-              <Button size="small" loading={forkingPiSessionId === detail.id} disabled={resumingPiSession || Boolean(forkingPiSessionId)} onClick={() => void forkPiSession(detail.id)}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>
-              {resumingPiSession && <StatusBadge tone="accent" dot role="status">{t('local.header.preparingHistory')}</StatusBadge>}
-              {piResumeError && <StatusBadge tone="danger" title={piResumeError}>{t('local.header.continueFailed', { error: piResumeError })}</StatusBadge>}
-            </> : null}
+            {detailLiveInteraction?.canResume && <Button size="small" loading={historyInteractionPending === 'resume'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('resume')}><UiIcon name="arrow-right" size={14}/>{t('local.header.continueSession')}</Button>}
+            {detailLiveInteraction?.canFork && <Button size="small" loading={historyInteractionPending === 'fork'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('fork')}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>}
+            {historyInteractionPending && <StatusBadge tone="accent" dot role="status">{t('local.header.preparingHistory')}</StatusBadge>}
+            {historyInteractionError && <StatusBadge tone="danger" title={historyInteractionError}>{t('local.header.continueFailed', { error: historyInteractionError })}</StatusBadge>}
             <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? t('local.header.viewAll') : t('local.header.viewCore')}</button>
           </>}
         />}
@@ -1481,10 +1452,10 @@ export function ReviewPage({
           {review.error && <div className="page-error">{review.error}</div>}
           {pathError && <div className="page-error" role="alert">{pathError}</div>}
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
-            {(piResumeError || (piForkError?.sessionId === detail.id ? piForkError.message : '')) && <div className="page-error" role="alert">{piResumeError || piForkError?.message}</div>}
+            {historyInteractionError && <div className="page-error" role="alert">{historyInteractionError}</div>}
 
-            {detail.sourceIds.includes('pi') && review.relationships?.items.length ? <details className="pi-session-tree">
-              <summary><UiIcon className="pi-session-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.piTree', { count: review.relationships.items.length })}</span></summary>
+            {review.relationships?.items.length ? <details className="session-relationship-tree">
+              <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
             </details> : null}
 

@@ -10,6 +10,7 @@ import type {
   LiveMessageInput,
   LiveRuntimeEvent,
   LiveSendOptions,
+  StorageService,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet,
@@ -17,6 +18,7 @@ import {
   dispatchLiveSend,
   requireLiveMessageSupport,
 } from '@agent-lens/live-support'
+import { resolvePiLiveHistoryInput } from './history-interaction'
 import type {
   PiLiveImageInput,
   PiLiveRuntimeState,
@@ -63,11 +65,33 @@ function piStartInput(value: unknown): PiLiveStartInput {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('Pi Live start input must be an object')
   }
-  const input = value as Partial<PiLiveStartInput>
-  if (typeof input.cwd !== 'string' || !input.cwd.trim()) {
-    throw new TypeError('Pi Live start input requires cwd')
+  const input = value as Partial<PiLiveStartInput> & {
+    workspacePath?: unknown
+    title?: unknown
   }
-  return input as PiLiveStartInput
+  const cwd = typeof input.workspacePath === 'string' && input.workspacePath.trim()
+    ? input.workspacePath.trim()
+    : typeof input.cwd === 'string' && input.cwd.trim()
+      ? input.cwd.trim()
+      : ''
+  if (!cwd) throw new TypeError('Pi Live start input requires workspacePath')
+  const title = typeof input.title === 'string' && input.title.trim()
+    ? input.title.trim()
+    : typeof input.name === 'string' && input.name.trim()
+      ? input.name.trim()
+      : undefined
+  return {
+    cwd,
+    ...(typeof input.executable === 'string' ? { executable: input.executable } : {}),
+    ...(typeof input.provider === 'string' ? { provider: input.provider } : {}),
+    ...(typeof input.model === 'string' ? { model: input.model } : {}),
+    ...(title ? { name: title } : {}),
+    ...(typeof input.sessionDir === 'string' ? { sessionDir: input.sessionDir } : {}),
+    ...(typeof input.sessionPath === 'string' ? { sessionPath: input.sessionPath } : {}),
+    ...(input.historyAction === 'continue' || input.historyAction === 'fork'
+      ? { historyAction: input.historyAction }
+      : {}),
+  }
 }
 
 function liveRecord(value: unknown): Record<string, unknown> {
@@ -233,8 +257,16 @@ export class PiLiveAdapter implements LiveAdapter {
   readonly manifest = piLiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
   readonly inputCapabilities = INPUT_CAPABILITIES
+  readonly startCapabilities = {
+    workspace: 'required',
+    title: 'optional',
+  } as const
 
-  constructor(readonly service: PiLiveService, private readonly attachments: LiveAttachmentService) {}
+  constructor(
+    readonly service: PiLiveService,
+    private readonly attachments: LiveAttachmentService,
+    private readonly storage?: StorageService,
+  ) {}
 
   availability() {
     return this.service.availability()
@@ -246,6 +278,16 @@ export class PiLiveAdapter implements LiveAdapter {
 
   start(input: unknown): Promise<PiLiveRuntimeState> {
     return this.service.start(piStartInput(input))
+  }
+
+  async resume(logicalSessionId: string): Promise<PiLiveRuntimeState> {
+    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
+    return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'continue'))
+  }
+
+  async fork(logicalSessionId: string): Promise<PiLiveRuntimeState> {
+    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
+    return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork'))
   }
 
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState> {

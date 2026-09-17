@@ -3,24 +3,23 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, PiLiveStateDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { fetchLaunchableProjects } from '../client/launchable-projects'
-import { piLiveApi } from '../client/pi-live'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sessionListTitle, type TaskProjectOption } from './task-center'
-import { piLiveSessionTitle } from './pi-live-task-projection'
-import { workspaceDisplayName } from './task-detail-model'
+import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle } from './task-center'
+import { LiveNewTaskPanel } from './LiveNewTaskPanel'
+import { taskLiveRuntimeHref } from './task-live-runtime'
+import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
 
-export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
+export type TaskCenterMode = 'history' | 'new' | 'hub'
 
 const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
-const PiLivePage = lazy(() => import('./PiLivePage').then(module => ({ default: module.PiLivePage })))
 const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
 type TaskDayGroup = 'today' | 'yesterday' | 'earlier'
 type HistoryTaskEntry =
@@ -122,205 +121,6 @@ function remoteVisible(
   return at >= now - days * 86_400_000
 }
 
-function NewTaskPanel({
-  options,
-  preferredProjectId,
-  nativeDirectoryPicker,
-  projectLoading,
-  projectHasMore,
-  projectLoadingMore,
-  projectDiscoveryError,
-  projectSearchActive,
-  onProjectSearch,
-  onProjectLoadMore,
-  onStarted,
-}: {
-  options: TaskProjectOption[]
-  preferredProjectId?: string | undefined
-  nativeDirectoryPicker: boolean
-  projectLoading: boolean
-  projectHasMore: boolean
-  projectLoadingMore: boolean
-  projectDiscoveryError: string
-  projectSearchActive: boolean
-  onProjectSearch(value: string): void
-  onProjectLoadMore(): void
-  onStarted(runtimeSessionId: string): void | Promise<void>
-}) {
-  const { t } = useTranslation('task')
-  const [selectedKey, setSelectedKey] = useState('')
-  const [availability, setAvailability] = useState<{ checked: boolean; available: boolean; label: string }>({ checked: false, available: false, label: t('center.newTask.checkingPi') })
-  const [starting, setStarting] = useState(false)
-  const [selectingDirectory, setSelectingDirectory] = useState(false)
-  const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
-  const [manualDirectory, setManualDirectory] = useState('')
-  const [taskTitle, setTaskTitle] = useState('')
-  const [launchMode, setLaunchMode] = useState<'existing' | 'directory'>('existing')
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    const preferred = pickTaskProject(options, preferredProjectId)
-    setSelectedKey(current => current || preferred?.key || '')
-  }, [options, preferredProjectId])
-
-  useEffect(() => {
-    let cancelled = false
-    void piLiveApi.availability().then(value => {
-      if (cancelled) return
-      setAvailability({
-        checked: true,
-        available: value.available,
-        label: value.available
-          ? t('center.newTask.piReady')
-          : t('center.newTask.piUnavailable', { reason: value.reason ? ` · ${value.reason}` : '' }),
-      })
-    }, reason => {
-      if (!cancelled) setAvailability({ checked: true, available: false, label: reason instanceof Error ? reason.message : String(reason) })
-    })
-    return () => { cancelled = true }
-  }, [t])
-
-  const selected = options.find(option => option.key === selectedKey)
-  const projectOptions = useMemo(() => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })), [options])
-  const agentStateLabel = !availability.checked
-    ? t('center.newTask.checking')
-    : availability.available
-      ? t('center.newTask.ready')
-      : t('center.newTask.unavailable')
-  const availabilityState = !availability.checked ? 'checking' : availability.available ? 'ready' : 'unavailable'
-  const manualDirectoryVisible = !nativeDirectoryPicker || manualDirectoryOpen
-  const start = async (project: { cwd: string; label: string }) => {
-    if (starting || !availability.available) return
-    setStarting(true)
-    setError('')
-    try {
-      const state = await piLiveApi.start({
-        cwd: project.cwd,
-        name: taskTitle.trim() || project.label,
-      })
-      await onStarted(state.runtimeSessionId)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setStarting(false)
-    }
-  }
-
-  const selectDirectoryAndStart = async () => {
-    if (starting || selectingDirectory || !availability.available) return
-    setSelectingDirectory(true)
-    setError('')
-    try {
-      const cwd = await piLiveApi.selectProjectDirectory()
-      if (!cwd) return
-      const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean)
-      const label = parts.at(-1) ?? cwd
-      await start({ cwd, label })
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
-    } finally {
-      setSelectingDirectory(false)
-    }
-  }
-
-  const startManualDirectory = async () => {
-    const cwd = manualDirectory.trim()
-    if (!cwd) {
-      setError(t('center.newTask.directoryRequired'))
-      return
-    }
-    const parts = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean)
-    const label = parts.at(-1) ?? cwd
-    await start({ cwd, label })
-  }
-
-  const selectLaunchMode = (mode: 'existing' | 'directory') => {
-    setLaunchMode(mode)
-    setError('')
-    if (mode === 'directory' && !nativeDirectoryPicker) setManualDirectoryOpen(true)
-  }
-
-  return <div className="task-center-new">
-    <section className="task-center-new-card">
-      <header className="task-center-new-head">
-        <div className="task-center-new-agent-mark" aria-hidden="true">Pi</div>
-        <div>
-          <div className="task-center-new-kicker">{t('center.newTask.kicker')}</div>
-          <h1>{t('center.newTask.title')}</h1>
-        </div>
-        <span className="task-center-new-readiness" data-state={availabilityState}><i/>{agentStateLabel}</span>
-      </header>
-
-      <div className="task-center-new-fields">
-        <label className="task-center-new-task-title">
-          <span>{t('center.newTask.taskTitle')}</span>
-          <Input value={taskTitle} onChange={event => setTaskTitle(event.target.value)} placeholder={t('center.newTask.taskTitlePlaceholder')} disabled={starting} aria-label={t('center.newTask.taskTitleAria')}/>
-        </label>
-        <div className="task-center-launch-modes" role="radiogroup" aria-label={t('center.newTask.launchModeAria')}>
-          <Button className="task-center-launch-choice" role="radio" aria-checked={launchMode === 'existing'} onClick={() => selectLaunchMode('existing')}>
-            <UiIcon name="folder-open" size={16}/>
-            <span><b>{t('center.newTask.existingProject')}</b><small>{t('center.newTask.existingDescription')}</small></span>
-          </Button>
-          <Button className="task-center-launch-choice" role="radio" aria-checked={launchMode === 'directory'} onClick={() => selectLaunchMode('directory')}>
-            <UiIcon name="plus" size={16}/>
-            <span><b>{t('center.newTask.newProject')}</b><small>{t('center.newTask.newDescription')}</small></span>
-          </Button>
-        </div>
-
-        {launchMode === 'existing'
-          ? <section className="task-center-launch-panel" aria-label={t('center.newTask.existingProject')}>
-              <SelectMenu
-                value={selectedKey}
-                options={projectOptions}
-                onChange={setSelectedKey}
-                ariaLabel={t('center.newTask.selectProjectAria')}
-                placeholder={options.length ? t('center.newTask.selectProject') : t('center.newTask.noProject')}
-                variant="field"
-                className="task-center-new-project-select"
-                menuWidth={420}
-                searchable
-                searchPlaceholder={t('center.newTask.searchProject')}
-                onSearchChange={onProjectSearch}
-                loading={projectLoading}
-                hasMore={projectHasMore}
-                onLoadMore={onProjectLoadMore}
-                loadingMore={projectLoadingMore}
-                loadMoreLabel={t('center.newTask.loadMoreProjects')}
-                disabled={!options.length && !projectHasMore && !projectLoading}
-              />
-              <div className="task-center-launch-panel-actions">
-                <Button variant="primary" loading={starting} disabled={!selected || !availability.available} onClick={() => selected && void start(selected)}>{t('center.newTask.openExisting')} <UiIcon name="arrow-right" size={14}/></Button>
-              </div>
-            </section>
-          : <section className="task-center-launch-panel" aria-label={t('center.newTask.newProject')}>
-              {nativeDirectoryPicker && <div className="task-center-new-directory-actions">
-                <Button variant="primary" loading={selectingDirectory} disabled={!availability.available || starting} onClick={() => void selectDirectoryAndStart()}>{t('center.newTask.selectDirectory')} <UiIcon name="arrow-right" size={14}/></Button>
-                <Button size="small" disabled={!availability.available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>{t('center.newTask.inputPath')}</Button>
-              </div>}
-              {manualDirectoryVisible && <div className="task-center-new-manual-directory">
-                <Input
-                  value={manualDirectory}
-                  onChange={event => setManualDirectory(event.target.value)}
-                  placeholder={t('center.newTask.pathPlaceholder')}
-                  aria-label={t('center.newTask.pathAria')}
-                  disabled={starting}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter') void startManualDirectory()
-                  }}
-                />
-                <Button variant="primary" loading={starting} disabled={!availability.available} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
-                {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
-              </div>}
-            </section>}
-      </div>
-
-      {error && <div className="pi-live-error" role="alert">{error}</div>}
-      {projectDiscoveryError && <div className="task-center-project-hint" role="alert">{projectDiscoveryError}</div>}
-      {!options.length && availability.checked && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
-    </section>
-  </div>
-}
-
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -330,7 +130,10 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-title-row"><div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>{sourceId === 'pi' ? <StatusBadge tone="success">{t('center.history.resumable')}</StatusBadge> : presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}</div>
+    <div className="session-item-title-row">
+      <div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>
+      {presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}
+    </div>
     <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')}</span><time>{formatTime(localTime(item), t, locale)}</time></div>
   </button>
 }
@@ -352,7 +155,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
   const navigate = useNavigate()
-  const [runtimes, setRuntimes] = useState<PiLiveStateDto[]>([])
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>([])
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(null)
@@ -362,11 +164,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
   const projectRequestGenerationRef = useRef(0)
   const historyScrollTargetRef = useRef('')
-  const resumeRequestRef = useRef('')
   const review = snapshot.review
   const [searchOpen, setSearchOpen] = useState(Boolean(review.filters.search))
-  const [resumingSessionId, setResumingSessionId] = useState('')
-  const [piResumeError, setPiResumeError] = useState<{ sessionId: string; message: string } | null>(null)
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const agentSelectionSummary = review.filters.sourceIds === null
     ? t('center.history.allAgents')
@@ -374,22 +173,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       ? t('center.history.selectedAgents', { count: review.filters.sourceIds.length })
       : t('center.history.noneSelected')
   const projects = snapshot.facets?.projects ?? []
-
-  const refreshRuntimes = useCallback(() => {
-    void piLiveApi.knownRuntimes().then(setRuntimes, () => setRuntimes([]))
-  }, [])
-
-  useEffect(() => {
-    refreshRuntimes()
-    const onVisibility = () => { if (!document.hidden) refreshRuntimes() }
-    const onPiLiveStateChanged = () => refreshRuntimes()
-    document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('agent-lens:pi-live-state-changed', onPiLiveStateChanged)
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('agent-lens:pi-live-state-changed', onPiLiveStateChanged)
-    }
-  }, [location.pathname, refreshRuntimes])
 
   useEffect(() => {
     let cancelled = false
@@ -525,28 +308,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     window.requestAnimationFrame(settle)
   }, [model, navigate])
 
-  const resumePiSession = useCallback(async (logicalSessionId: string) => {
-    if (resumeRequestRef.current) return
-    resumeRequestRef.current = logicalSessionId
-    setResumingSessionId(logicalSessionId)
-    setPiResumeError(null)
-    try {
-      const state = await piLiveApi.resume(logicalSessionId)
-      navigate(`/review/live/${encodeURIComponent(state.runtimeSessionId)}`)
-    } catch (reason) {
-      setPiResumeError({
-        sessionId: logicalSessionId,
-        message: reason instanceof Error ? reason.message : String(reason),
-      })
-    } finally {
-      resumeRequestRef.current = ''
-      setResumingSessionId('')
-    }
-  }, [navigate])
-
-  const selectedRuntimeId = location.pathname.startsWith('/review/live/')
-    ? decodeURIComponent(location.pathname.slice('/review/live/'.length))
-    : ''
   const historyCount = localSessions.length + visibleHub.length
   const projectFilterOptions = [
     { value: '', label: t('center.history.allProjects') },
@@ -604,13 +365,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      {runtimes.length > 0 && <section className="task-center-group task-center-live-group">
-        <div className="task-center-group-title"><span>{t('center.history.running')}</span><span>{runtimes.length}</span></div>
-        {runtimes.map(item => <button key={item.runtimeSessionId} className={`session-item task-live-item ${selectedRuntimeId === item.runtimeSessionId ? 'session-item-active' : ''}`} onClick={() => navigate(`/review/live/${encodeURIComponent(item.runtimeSessionId)}`)}>
-          <div className="session-item-title-row"><div className="session-item-title" title={piLiveSessionTitle(item)}>{sessionListTitle(piLiveSessionTitle(item), t('center.history.piTask'), ['pi'])}</div><PiLiveRuntimeStatusBadge state={item}/></div>
-          <div className="session-item-meta"><span className={item.isStreaming || item.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/><span>Pi</span><span className="session-item-project">{item.projectName || workspaceDisplayName(item.workspacePath) || t('center.history.unlinkedProject')}</span>{item.startedAt && <time>{formatTime(item.startedAt, t, locale)}</time>}</div>
-        </button>)}
-      </section>}
+      <TaskLiveRuntimeList/>
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
@@ -629,16 +384,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
         <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
-          {mode === 'history' && <ReviewPage
-            model={model}
-            embedded
-            onResumePiSession={resumePiSession}
-            resumingPiSession={resumingSessionId === review.detail?.id}
-            piResumeError={piResumeError && piResumeError.sessionId === review.detail?.id ? piResumeError.message : ''}
-          />}
-          {mode === 'live' && <PiLivePage embedded/>}
+          {mode === 'history' && <ReviewPage model={model} embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
-          {mode === 'new' && <NewTaskPanel
+          {mode === 'new' && <LiveNewTaskPanel
             options={projectOptions}
             preferredProjectId={preferredProjectId}
             nativeDirectoryPicker={snapshot.health?.runtime?.owner === 'desktop'}
@@ -649,26 +397,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
             projectSearchActive={Boolean(projectSearch.trim())}
             onProjectSearch={setProjectSearch}
             onProjectLoadMore={() => void loadMoreProjects()}
-            onStarted={runtimeSessionId => navigate(`/review/live/${encodeURIComponent(runtimeSessionId)}`)}
+            onStarted={(liveId, state) => navigate(taskLiveRuntimeHref({ liveId, state }))}
           />}
         </Suspense>
       </section>
     </div>
   </>
-}
-
-function runtimeStatusBadge(
-  state: PiLiveStateDto,
-  t: TFunction,
-): { label: string; tone: 'neutral' | 'accent' | 'warning' | 'danger'; dot?: boolean } {
-  if (state.status === 'failed') return { label: t('center.runtimeStatus.failed'), tone: 'danger' }
-  if (state.status === 'initializing') return { label: t('center.runtimeStatus.initializing'), tone: 'warning', dot: true }
-  if (state.isStreaming) return { label: t('center.runtimeStatus.streaming'), tone: 'accent', dot: true }
-  return { label: t('center.runtimeStatus.idle'), tone: 'warning' }
-}
-
-function PiLiveRuntimeStatusBadge({ state }: { state: PiLiveStateDto }) {
-  const { t } = useTranslation('task')
-  const badge = runtimeStatusBadge(state, t)
-  return <StatusBadge tone={badge.tone} dot={badge.dot}>{badge.label}</StatusBadge>
 }

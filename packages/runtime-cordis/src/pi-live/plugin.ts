@@ -16,7 +16,7 @@ const applyPiLiveRuntime: Plugin.Function<void> = (ctx: AgentLensContext) => {
   const recoveryStore = new CheckpointPiLiveRecoveryStore(ctx.storage.checkpoints)
   const startupAudit = createPiLiveStartupAuditSink(ctx)
   const service = new DefaultPiLiveService(undefined, recoveryStore, startupAudit)
-  const adapter = new PiLiveAdapter(service, ctx.liveAttachments)
+  const adapter = new PiLiveAdapter(service, ctx.liveAttachments, ctx.storage)
   const liveRegistration = ctx.lives.register(adapter)
   const unprovide = ctx.provide('piLive', service)
   void service.preload().catch(error => {

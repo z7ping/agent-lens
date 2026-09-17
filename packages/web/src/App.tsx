@@ -20,6 +20,8 @@ const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage'
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
 const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
 const IntegrationManagementPage = lazy(() => import('./features/IntegrationManagementPage').then(module => ({ default: module.IntegrationManagementPage })))
+const LiveTaskPage = lazy(() => import('./features/LiveTaskPage').then(module => ({ default: module.LiveTaskPage })))
+const LegacyLiveTaskRedirect = lazy(() => import('./features/LegacyLiveTaskRedirect').then(module => ({ default: module.LegacyLiveTaskRedirect })))
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
@@ -146,7 +148,7 @@ function WorkspaceTopBar({
   if (pathname === '/review/new') {
     items = [{ label: t('taskCenter'), to: '/review' }, { label: t('newTask') }]
   } else if (pathname.startsWith('/review/live/')) {
-    items = [{ label: t('taskCenter'), to: '/review' }, { label: t('piLiveTask') }]
+    items = [{ label: t('taskCenter'), to: '/review' }, { label: t('sessionDetail') }]
   } else if (pathname.startsWith('/review/hub/')) {
     items = [{ label: t('taskCenter'), to: '/review' }, { label: t('remoteTask') }]
   } else if (pathname.startsWith('/review/')) {
@@ -215,16 +217,16 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   const onReview = location.pathname.startsWith('/review')
   const onHubReview = location.pathname.startsWith('/review/hub/')
-  const onPiLive = location.pathname === '/review/live' || location.pathname.startsWith('/review/live/')
+  const onLiveTask = location.pathname === '/review/live' || location.pathname.startsWith('/review/live/')
   const onNewTask = location.pathname === '/review/new'
-  const onLocalReview = onReview && !onHubReview && !onPiLive && !onNewTask
+  const onLocalReview = onReview && !onHubReview && !onLiveTask && !onNewTask
   const onTools = location.pathname.startsWith('/tools')
   const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
   const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
   const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
-  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onPiLive)
+  const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onLiveTask)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
   const agentSelectionMap = new Map<string, AgentFacetDto>(agents.map(agent => [agent.sourceId, agent] as const))
@@ -372,7 +374,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/review" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/review/new" element={<TaskCenterPage model={model} mode="new" sidebarHost={sidebarHost}/>} />
           <Route path="/review/live" element={<Navigate to="/review/new" replace />} />
-          <Route path="/review/live/:runtimeSessionId" element={<TaskCenterPage model={model} mode="live" sidebarHost={sidebarHost}/>} />
+          <Route path="/review/live/:liveId/:runtimeSessionId" element={<LiveTaskPage />} />
+          <Route path="/review/live/:runtimeSessionId" element={<LegacyLiveTaskRedirect />} />
           <Route path="/review/hub/:sessionId" element={<TaskCenterPage model={model} mode="hub" sidebarHost={sidebarHost}/>} />
           <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />

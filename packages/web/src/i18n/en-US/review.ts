@@ -240,7 +240,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         selectSession: 'Select a session to start reviewing',
       },
       relationship: {
-        piTree: 'Pi session tree · {{count}} relationships',
+        sessionTree: 'Session relationships · {{count}}',
       },
       roundNav: {
         aria: 'Quick round navigation',
