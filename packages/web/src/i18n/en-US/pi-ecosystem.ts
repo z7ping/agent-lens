@@ -20,7 +20,7 @@ export const englishPiEcosystemMessages: LocaleMessagesDto = {
     version: 'Latest version',
     localVersion: 'Local version',
     resourceTypes: 'Resource types',
-    typeUnknown: 'Not declared',
+    typeUnknown: 'Unconfirmed',
     localAssets: 'Local assets',
     localAssetCount: '{{count}} items',
     empty: 'No matching Pi Packages found',
