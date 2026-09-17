@@ -14,10 +14,17 @@ function runtimeProfileIdFromRow(value: unknown): string | undefined {
   return runtimeProfileId
 }
 
+function idFromRow(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const id = (value as Record<string, unknown>).id
+  return typeof id === 'string' ? id : undefined
+}
+
 /**
  * Completes the runtime_profile_id mapping introduced by schema v4 without
- * duplicating the rest of SessionRepository SQL. This applies to every caller,
- * not only replication.
+ * duplicating the rest of SessionRepository SQL. Profile identity is part of
+ * source-session lookup from schema v28 onward; callers that omit a profile are
+ * deliberately restricted to legacy NULL-profile rows.
  */
 export function withSqliteSessionRuntimeProfiles(
   executor: SqliteExecutor,
@@ -64,8 +71,22 @@ export function withSqliteSessionRuntimeProfiles(
     async getSourceSession(id) {
       return enrichSource(await base.getSourceSession(id))
     },
-    async findSourceSession(sourceId, installationId, nativeSessionId) {
-      return enrichSource(await base.findSourceSession(sourceId, installationId, nativeSessionId))
+    async findSourceSession(sourceId, installationId, nativeSessionId, runtimeProfileId) {
+      const row = await executor.run(() => runtimeProfileId
+        ? executor.db.prepare(`
+            SELECT id FROM source_sessions
+            WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+              AND runtime_profile_id = ?
+            LIMIT 1
+          `).get(sourceId, installationId, nativeSessionId, runtimeProfileId)
+        : executor.db.prepare(`
+            SELECT id FROM source_sessions
+            WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+              AND runtime_profile_id IS NULL
+            LIMIT 1
+          `).get(sourceId, installationId, nativeSessionId))
+      const id = idFromRow(row)
+      return id ? enrichSource(await base.getSourceSession(id)) : null
     },
     async putSourceSession(session) {
       await base.putSourceSession(session)
