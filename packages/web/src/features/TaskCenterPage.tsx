@@ -17,11 +17,9 @@ import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
 
-export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
+export type TaskCenterMode = 'history' | 'new' | 'hub'
 
 const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
-// Kept only for the one-segment legacy route while /api/v1/pi-live remains compatible.
-const PiLiveCompatibilityPage = lazy(() => import('./PiLivePage').then(module => ({ default: module.PiLivePage })))
 const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
 type TaskDayGroup = 'today' | 'yesterday' | 'earlier'
 type HistoryTaskEntry =
@@ -387,7 +385,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       <section className="task-center-main">
         <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage model={model} embedded/>}
-          {mode === 'live' && <PiLiveCompatibilityPage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <LiveNewTaskPanel
             options={projectOptions}
