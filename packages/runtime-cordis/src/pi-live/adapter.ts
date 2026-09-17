@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { isLiveThinkingControl } from '@agent-lens/core'
+import { isLiveModelControl, isLiveThinkingControl } from '@agent-lens/core'
 import type {
   LiveAdapter,
   LiveAdapterManifest,
@@ -8,6 +8,7 @@ import type {
   LiveEvent,
   LiveMessage,
   LiveMessageInput,
+  LiveModelControl,
   LiveRuntimeEvent,
   LiveSendOptions,
   StorageService,
@@ -235,6 +236,26 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       }
     }
   }
+  if (type === 'extension_ui_request') {
+    const requestId = liveText(event.id)
+    const method = liveText(event.method)
+    if (!requestId || (method !== 'select' && method !== 'confirm' && method !== 'input' && method !== 'editor')) {
+      return undefined
+    }
+    const options = Array.isArray(event.options)
+      ? event.options.filter((item): item is string => typeof item === 'string')
+      : undefined
+    return {
+      type: 'ui.request',
+      requestId,
+      method,
+      ...(liveText(event.title) ? { title: liveText(event.title) } : {}),
+      ...(liveText(event.message) ? { message: liveText(event.message) } : {}),
+      ...(options ? { options } : {}),
+      ...(liveText(event.placeholder) ? { placeholder: liveText(event.placeholder) } : {}),
+      ...(liveText(event.prefill) ? { prefill: liveText(event.prefill) } : {}),
+    }
+  }
   if (type === 'runtime_exit' || type === 'extension_error') {
     const message = liveText(event.errorMessage) || liveText(event.error)
     return { type: 'error', message: message || 'Pi Live runtime failed' }
@@ -298,6 +319,45 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.snapshot(runtimeSessionId, since)
   }
 
+  async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {
+    const [controls, state] = await Promise.all([
+      this.service.controls(runtimeSessionId),
+      this.service.state(runtimeSessionId),
+    ])
+    if (!controls.models.length) return null
+    const current = liveRecord(state.model)
+    const currentProvider = liveText(current.provider)
+    const currentId = liveText(current.id) || liveText(current.modelId)
+    const control: LiveModelControl = {
+      capability: 'model-switching',
+      label: 'Model',
+      ...(currentProvider && currentId ? { value: JSON.stringify([currentProvider, currentId]) } : {}),
+      options: controls.models.map(model => ({
+        value: JSON.stringify([model.provider, model.id]),
+        label: model.name || model.id,
+        description: model.name && model.name !== model.id
+          ? `${model.provider} · ${model.id}`
+          : model.provider,
+      })),
+    }
+    return isLiveModelControl(control) ? control : null
+  }
+
+  async setModelControl(runtimeSessionId: string, value: string): Promise<PiLiveRuntimeState> {
+    const control = await this.modelControl(runtimeSessionId)
+    if (!control || !control.options.some(option => option.value === value)) {
+      throw new Error(`Pi Live model control does not offer value: ${value}`)
+    }
+    let parsed: unknown
+    try { parsed = JSON.parse(value) } catch { parsed = null }
+    if (!Array.isArray(parsed) || parsed.length !== 2
+      || typeof parsed[0] !== 'string' || !parsed[0]
+      || typeof parsed[1] !== 'string' || !parsed[1]) {
+      throw new Error('Pi Live model control value is invalid')
+    }
+    return this.service.setModel(runtimeSessionId, parsed[0], parsed[1])
+  }
+
   async thinkingControl(runtimeSessionId: string) {
     const control = (await this.service.controls(runtimeSessionId)).thinking
     return isLiveThinkingControl(control) ? control : null
@@ -309,6 +369,10 @@ export class PiLiveAdapter implements LiveAdapter {
       throw new Error(`Pi Live thinking control does not offer value: ${value}`)
     }
     return this.service.setThinkingLevel(runtimeSessionId, value)
+  }
+
+  respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void> {
+    return this.service.respondToExtension(runtimeSessionId, requestId, response)
   }
 
   private async resolveMessage(message: LiveMessage): Promise<{
