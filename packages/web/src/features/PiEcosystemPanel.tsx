@@ -195,22 +195,22 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         return <Disclosure
           key={pkg.packageSource}
           className="pi-package-item"
-          summary={<div className="pi-package-summary-copy">
-            <div className="pi-package-title-line">
+          summary={<span className="pi-package-summary-copy">
+            <span className="pi-package-title-line">
               <b className="pi-package-name">{pkg.packageName}</b>
-              <div className="pi-package-types" aria-label={t('resourceTypes')}>
+              <span className="pi-package-types" aria-label={t('resourceTypes')}>
                 {typeLabels.map(item => <span key={item.type}>{item.label}</span>)}
-              </div>
-            </div>
-            {pkg.description && <p>{pkg.description}</p>}
-          </div>}
-          summaryMeta={<div className="pi-package-summary-meta">
+              </span>
+            </span>
+            {pkg.description && <span className="pi-package-summary-description">{pkg.description}</span>}
+          </span>}
+          summaryMeta={<span className="pi-package-summary-meta">
             <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version}</code></span>
             {localPackage?.versions.length
               ? <span className="pi-package-local-version"><small>{t('localVersion')}</small><code>{localPackage.versions.join(' · ')}</code></span>
               : null}
             <StatusBadge tone={localState === 'installed' ? 'success' : 'neutral'}>{localLabel}</StatusBadge>
-          </div>}
+          </span>}
         >
           <div className="pi-package-detail">
             <div className="pi-package-detail-grid">
