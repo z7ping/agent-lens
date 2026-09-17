@@ -46,6 +46,9 @@ const READ_PREFIXES = [
   'toolUsageFactCoverage',
   'toolUsageFactCoverageForMaintenance',
   'repairToolUsageFactCursor',
+  'scan',
+  'highWater',
+  'safety',
 ] as const
 
 function isReadPath(path: readonly string[]): boolean {
@@ -57,6 +60,7 @@ function isMaintenanceReadPath(path: readonly string[]): boolean {
   const method = path.at(-1) ?? ''
   return path[0] === 'diagnostics'
     || path[0] === 'sourceRawAudit'
+    || path[0]?.startsWith('replication') === true
     || method === 'listForParserReplay'
     || method === 'toolUsageFactCoverageForMaintenance'
     || method === 'repairToolUsageFactCursor'
@@ -67,6 +71,8 @@ function isMaintenanceOperation(path: readonly string[]): boolean {
   const method = path.at(-1) ?? ''
   return path.includes('maintenance')
     || path.includes('maintenanceJobs')
+    || path[0] === 'replication'
+    || path[0]?.startsWith('replication') === true
     || isMaintenanceReadPath(path)
     || (path.includes('projectionBackfill') && method.startsWith('backfill'))
     || (path.includes('sessionSummaryProjection') && method === 'rebuild')
@@ -494,7 +500,14 @@ export class DataRuntimeStorageService implements StorageService {
   readonly sourceRawAudit: SqliteStorageService['sourceRawAudit']
   readonly sessionRelationshipCandidates: SqliteStorageService['sessionRelationshipCandidates']
   readonly replication: SqliteStorageService['replication']
+  readonly replicationBootstrapLifecycle: SqliteStorageService['replicationBootstrapLifecycle']
   readonly replicationCanonicalChanges: SqliteStorageService['replicationCanonicalChanges']
+  readonly replicationChangeProgress: SqliteStorageService['replicationChangeProgress']
+  readonly replicationJournalLifecycle: SqliteStorageService['replicationJournalLifecycle']
+  readonly replicationIndependentRoots: SqliteStorageService['replicationIndependentRoots']
+  readonly replicationObservationSnapshot: SqliteStorageService['replicationObservationSnapshot']
+  readonly replicationSnapshotBootstrapProgress: SqliteStorageService['replicationSnapshotBootstrapProgress']
+  readonly replicationRuntimeControl: SqliteStorageService['replicationRuntimeControl']
 
   constructor(private readonly executor: RemoteStorageExecutor) {
     this.repositories = {
@@ -524,7 +537,14 @@ export class DataRuntimeStorageService implements StorageService {
     this.sourceRawAudit = namespaceProxy(executor, ['sourceRawAudit'])
     this.sessionRelationshipCandidates = namespaceProxy(executor, ['sessionRelationshipCandidates'])
     this.replication = namespaceProxy(executor, ['replication'])
+    this.replicationBootstrapLifecycle = namespaceProxy(executor, ['replicationBootstrapLifecycle'])
     this.replicationCanonicalChanges = namespaceProxy(executor, ['replicationCanonicalChanges'])
+    this.replicationChangeProgress = namespaceProxy(executor, ['replicationChangeProgress'])
+    this.replicationJournalLifecycle = namespaceProxy(executor, ['replicationJournalLifecycle'])
+    this.replicationIndependentRoots = namespaceProxy(executor, ['replicationIndependentRoots'])
+    this.replicationObservationSnapshot = namespaceProxy(executor, ['replicationObservationSnapshot'])
+    this.replicationSnapshotBootstrapProgress = namespaceProxy(executor, ['replicationSnapshotBootstrapProgress'])
+    this.replicationRuntimeControl = namespaceProxy(executor, ['replicationRuntimeControl'])
   }
 
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {

@@ -12,15 +12,26 @@ export interface ReplicationChangeProgress {
   updatedAt: string
 }
 
+export type ReplicationChangeProgressFor<
+  TPhase extends ReplicationChangeProgress['phase'],
+  TEntityType extends KnownReplicationEntityType,
+> = Omit<ReplicationChangeProgress, 'phase' | 'entityType'> & {
+  phase: TPhase
+  entityType: TEntityType
+}
+
 export class SqliteReplicationChangeProgressRepository {
   constructor(private readonly executor: SqliteExecutor) {}
 
-  async get(input: {
+  async get<
+    TPhase extends ReplicationChangeProgress['phase'],
+    TEntityType extends KnownReplicationEntityType,
+  >(input: {
     streamId: string
     generationId: string
-    phase: ReplicationChangeProgress['phase']
-    entityType: KnownReplicationEntityType
-  }): Promise<ReplicationChangeProgress | null> {
+    phase: TPhase
+    entityType: TEntityType
+  }): Promise<ReplicationChangeProgressFor<TPhase, TEntityType> | null> {
     return this.executor.run(() => {
       const row = this.executor.db.prepare(`
         SELECT stream_id AS streamId,
@@ -33,7 +44,12 @@ export class SqliteReplicationChangeProgressRepository {
         FROM replication_change_progress
         WHERE stream_id = ? AND generation_id = ? AND phase = ? AND entity_type = ?
       `).get(input.streamId, input.generationId, input.phase, input.entityType)
-      return row ? changeProgressRow(row) : null
+      if (!row) return null
+      return {
+        ...changeProgressRow(row),
+        phase: input.phase,
+        entityType: input.entityType,
+      }
     })
   }
 

@@ -23,10 +23,25 @@ export class SqliteReplicationCanonicalChangeReader {
   constructor(private readonly executor: SqliteExecutor) {}
 
   async highWaterRevision(): Promise<number> {
-    return this.executor.run(() => revisionRow(this.executor.db.prepare(`
-      SELECT COALESCE(MAX(revision), 0) AS revision
-      FROM replication_canonical_changes
-    `).get()))
+    return this.executor.run(() => {
+      const stateTable = this.executor.db.prepare(`
+        SELECT 1 AS found
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'replication_journal_state'
+      `).get()
+      if (stateTable) {
+        const state = this.executor.db.prepare(`
+          SELECT high_water_revision AS revision
+          FROM replication_journal_state
+          WHERE singleton = 1
+        `).get()
+        if (state) return revisionRow(state)
+      }
+      return revisionRow(this.executor.db.prepare(`
+        SELECT COALESCE(MAX(revision), 0) AS revision
+        FROM replication_canonical_changes
+      `).get())
+    })
   }
 
   async scan(input: {

@@ -13,6 +13,12 @@ export interface ReplicationSnapshotBootstrapProgress {
   updatedAt: string
 }
 
+export type ReplicationSnapshotBootstrapProgressFor<
+  TEntityType extends KnownReplicationEntityType,
+> = Omit<ReplicationSnapshotBootstrapProgress, 'entityType'> & {
+  entityType: TEntityType
+}
+
 type Row = Record<string, unknown>
 
 function rowRecord(value: unknown): Row {
@@ -66,11 +72,11 @@ function mapProgress(value: unknown): ReplicationSnapshotBootstrapProgress {
 export class SqliteReplicationSnapshotBootstrapProgressRepository {
   constructor(private readonly executor: SqliteExecutor) {}
 
-  async get(input: {
+  async get<TEntityType extends KnownReplicationEntityType>(input: {
     streamId: string
     generationId: string
-    entityType: KnownReplicationEntityType
-  }): Promise<ReplicationSnapshotBootstrapProgress | null> {
+    entityType: TEntityType
+  }): Promise<ReplicationSnapshotBootstrapProgressFor<TEntityType> | null> {
     return this.executor.run(() => {
       const row = this.executor.db.prepare(`
         SELECT stream_id AS streamId,
@@ -85,7 +91,11 @@ export class SqliteReplicationSnapshotBootstrapProgressRepository {
         FROM replication_snapshot_bootstrap_progress
         WHERE stream_id = ? AND generation_id = ? AND entity_type = ?
       `).get(input.streamId, input.generationId, input.entityType)
-      return row ? mapProgress(row) : null
+      if (!row) return null
+      return {
+        ...mapProgress(row),
+        entityType: input.entityType,
+      }
     })
   }
 

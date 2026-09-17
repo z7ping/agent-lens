@@ -19,7 +19,14 @@ import { withSqliteObservationPagination } from './observation-pagination'
 import { withSqliteParserReplayReplacement } from './parser-replay-replacement'
 import { SqliteProjectionBackfillMaintenance } from './projection-backfill'
 import { createSqliteRepositories } from './repositories'
+import { SqliteReplicationBootstrapLifecycleRepository } from './replication-bootstrap-lifecycle'
 import { SqliteReplicationCanonicalChangeReader } from './replication-canonical-changes'
+import { SqliteReplicationChangeProgressRepository } from './replication-change-progress'
+import { SqliteReplicationJournalLifecycleRepository } from './replication-journal-lifecycle'
+import { SqliteReplicationIndependentRootSnapshotReader } from './replication-independent-roots'
+import { SqliteCanonicalObservationSnapshotReader } from './replication-observation-snapshot'
+import { SqliteReplicationSnapshotBootstrapProgressRepository } from './replication-snapshot-bootstrap-progress'
+import { SqliteReplicationRuntimeControlRepository } from './replication-runtime-control'
 import { SqliteReplicationStateRepository } from './replication-state'
 import { SqliteSessionRelationshipCandidateRepository } from './relationship-candidates'
 import { SqliteRuntimeProfileRepository } from './runtime-profiles'
@@ -161,7 +168,14 @@ export class SqliteStorageService implements StorageService {
   readonly sourceRawAudit: SqliteSourceRawAuditReader
   readonly sessionRelationshipCandidates: SqliteSessionRelationshipCandidateRepository
   readonly replication: SqliteReplicationStateRepository
+  readonly replicationBootstrapLifecycle: SqliteReplicationBootstrapLifecycleRepository
   readonly replicationCanonicalChanges: SqliteReplicationCanonicalChangeReader
+  readonly replicationChangeProgress: SqliteReplicationChangeProgressRepository
+  readonly replicationJournalLifecycle: SqliteReplicationJournalLifecycleRepository
+  readonly replicationIndependentRoots: SqliteReplicationIndependentRootSnapshotReader
+  readonly replicationObservationSnapshot: SqliteCanonicalObservationSnapshotReader
+  readonly replicationSnapshotBootstrapProgress: SqliteReplicationSnapshotBootstrapProgressRepository
+  readonly replicationRuntimeControl: SqliteReplicationRuntimeControlRepository
   readonly executor: SqliteExecutor
 
   constructor(options: SqliteStorageOptions) {
@@ -209,7 +223,14 @@ export class SqliteStorageService implements StorageService {
     this.sourceRawAudit = new SqliteSourceRawAuditReader(this.executor)
     this.sessionRelationshipCandidates = new SqliteSessionRelationshipCandidateRepository(this.executor)
     this.replication = new SqliteReplicationStateRepository(this.executor)
+    this.replicationBootstrapLifecycle = new SqliteReplicationBootstrapLifecycleRepository(this.executor)
     this.replicationCanonicalChanges = new SqliteReplicationCanonicalChangeReader(this.executor)
+    this.replicationChangeProgress = new SqliteReplicationChangeProgressRepository(this.executor)
+    this.replicationJournalLifecycle = new SqliteReplicationJournalLifecycleRepository(this.executor)
+    this.replicationIndependentRoots = new SqliteReplicationIndependentRootSnapshotReader(this.executor)
+    this.replicationObservationSnapshot = new SqliteCanonicalObservationSnapshotReader(this.executor)
+    this.replicationSnapshotBootstrapProgress = new SqliteReplicationSnapshotBootstrapProgressRepository(this.executor)
+    this.replicationRuntimeControl = new SqliteReplicationRuntimeControlRepository(this.executor)
   }
 
   async transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {

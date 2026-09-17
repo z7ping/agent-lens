@@ -35,6 +35,46 @@ export const KNOWN_REPLICATION_ENTITY_TYPES = [
 ] as const
 
 export type KnownReplicationEntityType = typeof KNOWN_REPLICATION_ENTITY_TYPES[number]
+
+/**
+ * Every replicated R1 entity other than CanonicalObservation has its own
+ * Current-State Root. Each root is independently snapshotted/reconciled so
+ * orphan entities cannot be incorrectly covered by an Observation graph.
+ */
+export const CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES = [
+  'AgentProduct',
+  'Host',
+  'AgentInstallation',
+  'RuntimeProfile',
+  'Project',
+  'Workspace',
+  'LogicalSession',
+  'SourceSession',
+  'SessionRelationship',
+  'AgentActor',
+  'SourceRecord',
+  'Evidence',
+  'Coverage',
+  'AssetDefinition',
+  'AssetBinding',
+  'AssetStateObservation',
+  'ToolDefinition',
+] as const satisfies readonly KnownReplicationEntityType[]
+
+export type CurrentStateReplicationRootEntityType =
+  typeof CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES[number]
+
+/** @deprecated Internal compatibility alias; use Current-State Root terminology. */
+export const INDEPENDENT_REPLICATION_ROOT_ENTITY_TYPES =
+  CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES
+/** @deprecated Internal compatibility alias; use CurrentStateReplicationRootEntityType. */
+export type IndependentReplicationRootEntityType =
+  CurrentStateReplicationRootEntityType
+
+export const JOURNAL_REPLICATION_ENTITY_TYPES = [
+  ...CURRENT_STATE_REPLICATION_ROOT_ENTITY_TYPES,
+  'CanonicalObservation',
+] as const satisfies readonly KnownReplicationEntityType[]
 export type SharedRootEntityType = 'AgentProduct'
 export type ConditionalSharedEntityType = 'Project' | 'AssetDefinition'
 

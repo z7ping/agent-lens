@@ -267,3 +267,26 @@ test('Data Runtime 暴露 Raw recovery audit，并通过维护 Reader 执行', a
     await runtime.dispose()
   }
 })
+
+
+test('Data Runtime exposes replication orchestration namespaces through maintenance paths', async () => {
+  const runtime = await fixture()
+  try {
+    assert.deepEqual(
+      await runtime.storage.replicationRuntimeControl.listRunnableStreams(),
+      [],
+    )
+    const safety = await runtime.storage.replicationJournalLifecycle.safety()
+    assert.equal(safety.available, true)
+    assert.equal(typeof safety.highWaterRevision, 'number')
+    const independent = await runtime.storage.replicationIndependentRoots.scan({
+      entityType: 'Coverage',
+      limit: 10,
+    })
+    assert.deepEqual(independent.items, [])
+    assert.equal(independent.done, true)
+    assert.equal(runtime.maintenanceReader.state(), 'ready')
+  } finally {
+    await runtime.dispose()
+  }
+})

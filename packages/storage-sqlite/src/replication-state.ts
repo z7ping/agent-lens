@@ -1,6 +1,7 @@
 import type { JsonValue } from '@agent-lens/core'
 import {
   DurableReplicationError,
+  JOURNAL_REPLICATION_ENTITY_TYPES,
   assertAckAdvance,
   assertFreezeSequence,
   assertReplicationStreamState,
@@ -32,6 +33,19 @@ function stringifyJson(value: JsonValue): string {
   return JSON.stringify(value)
 }
 
+function containsDependencyMinimized(value: JsonValue): boolean {
+  if (value === null || Array.isArray(value) || typeof value !== 'object') return false
+  const envelope = value as { [key: string]: JsonValue }
+  const body = envelope.body
+  if (body === null || Array.isArray(body) || typeof body !== 'object') return false
+  return Object.values(body as { [key: string]: JsonValue }).some(field => {
+    if (field === null || Array.isArray(field) || typeof field !== 'object') return false
+    const availability = field as { [key: string]: JsonValue }
+    return availability.state === 'omitted'
+      && availability.reason === 'dependency-minimized'
+  })
+}
+
 function mapStream(row: StreamRow): ReplicationStreamState {
   return { ...row }
 }
@@ -44,6 +58,14 @@ export interface EnsureReplicationStreamInput {
   policyRevision: string
   historyRevision: string
   status?: ReplicationStreamStatus
+  now?: string
+}
+
+export interface RolloverReplicationStreamInput {
+  fromStreamId: string
+  toStreamId: string
+  policyRevision: string
+  historyRevision: string
   now?: string
 }
 
@@ -133,7 +155,134 @@ export class SqliteReplicationStateRepository {
         state.createdAt,
         state.updatedAt,
       )
+
+      const captureTable = this.executor.db.prepare(`
+        SELECT 1 AS found
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'replication_capture_watermarks'
+      `).get()
+      if (captureTable) {
+        const registerCapture = this.executor.db.prepare(`
+          INSERT INTO replication_capture_watermarks(
+            stream_id, generation_id, entity_type, captured_revision,
+            dependency_state, updated_at
+          ) VALUES (?, ?, ?, 0, 'dependent', ?)
+          ON CONFLICT(stream_id, generation_id, entity_type) DO NOTHING
+        `)
+        for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
+          registerCapture.run(state.streamId, state.generationId, entityType, state.updatedAt)
+        }
+      }
       return state
+    })
+  }
+
+  async rolloverStream(input: RolloverReplicationStreamInput): Promise<{
+    previous: ReplicationStreamState
+    next: ReplicationStreamState
+  }> {
+    if (!input.toStreamId || input.toStreamId === input.fromStreamId) {
+      throw new DurableReplicationError(
+        'STREAM_INVALID',
+        'Replication rollover requires a distinct target streamId',
+      )
+    }
+
+    return this.executor.transaction(async () => {
+      const previous = this.requireStreamRow(input.fromStreamId)
+      if (previous.status === 'rollover-required') {
+        throw new DurableReplicationError(
+          'STREAM_INVALID',
+          'Replication stream rollover has already been requested',
+        )
+      }
+      if (this.getStreamRow(input.toStreamId)) {
+        throw new DurableReplicationError(
+          'STREAM_INVALID',
+          'Replication rollover target stream already exists',
+        )
+      }
+
+      const now = input.now ?? new Date().toISOString()
+      this.executor.db.prepare(`
+        UPDATE replication_streams
+        SET status = 'rollover-required',
+            updated_at = ?
+        WHERE stream_id = ?
+      `).run(now, previous.streamId)
+
+      const next: ReplicationStreamState = {
+        relationshipId: previous.relationshipId,
+        hubId: previous.hubId,
+        streamId: input.toStreamId,
+        generationId: previous.generationId,
+        status: 'active',
+        nextSequence: 1,
+        ackSequence: 0,
+        policyRevision: input.policyRevision,
+        historyRevision: input.historyRevision,
+        createdAt: now,
+        updatedAt: now,
+      }
+      assertReplicationStreamState(next)
+      this.executor.db.prepare(`
+        INSERT INTO replication_streams(
+          stream_id, relationship_id, hub_id, generation_id, status,
+          next_sequence, ack_sequence, policy_revision, history_revision,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        next.streamId,
+        next.relationshipId,
+        next.hubId,
+        next.generationId,
+        next.status,
+        next.nextSequence,
+        next.ackSequence,
+        next.policyRevision,
+        next.historyRevision,
+        next.createdAt,
+        next.updatedAt,
+      )
+
+      const captureTable = this.executor.db.prepare(`
+        SELECT 1 AS found
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'replication_capture_watermarks'
+      `).get()
+      if (captureTable) {
+        const registerCapture = this.executor.db.prepare(`
+          INSERT INTO replication_capture_watermarks(
+            stream_id, generation_id, entity_type, captured_revision,
+            dependency_state, updated_at
+          ) VALUES (?, ?, ?, 0, 'dependent', ?)
+          ON CONFLICT(stream_id, generation_id, entity_type) DO NOTHING
+        `)
+        for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
+          registerCapture.run(next.streamId, next.generationId, entityType, now)
+        }
+        // The new stream starts at revision 0 and therefore becomes the
+        // conservative journal blocker. The old stream no longer needs
+        // canonical change history; Frozen exact retries keep their immutable
+        // body independently of the journal.
+        this.executor.db.prepare(`
+          UPDATE replication_capture_watermarks
+          SET dependency_state = 'retired',
+              updated_at = ?
+          WHERE stream_id = ?
+            AND generation_id = ?
+            AND dependency_state <> 'retired'
+        `).run(now, previous.streamId, previous.generationId)
+      }
+
+      return {
+        previous: mapStream({
+          ...previous,
+          status: 'rollover-required',
+          updatedAt: now,
+        }),
+        next,
+      }
     })
   }
 
@@ -183,10 +332,24 @@ export class SqliteReplicationStateRepository {
         WHERE stream_id = ? AND generation_id = ? AND dedup_key = ?
       `).get(input.streamId, input.generationId, input.dedupKey)
       const state = rawState ? candidateStateRow(rawState) : undefined
+      const previous = state?.lastPendingId
+        ? this.getPendingRow(state.lastPendingId)
+        : undefined
 
-      if (state?.lastCandidateHash === input.candidateHash && state.lastPendingId) {
-        const existing = this.getPendingRow(state.lastPendingId)
-        if (existing) return { item: mapPendingReplication(existing), created: false, replaced: false }
+      if (state?.lastCandidateHash === input.candidateHash && previous) {
+        return { item: mapPendingReplication(previous), created: false, replaced: false }
+      }
+
+      // A dependency-minimized candidate is a lossy representation of the same
+      // entity. Once a full/root candidate has been durably observed, a later
+      // dependency graph must never downgrade or re-queue that entity merely
+      // because traversal order changed.
+      if (
+        previous
+        && containsDependencyMinimized(input.payload)
+        && !containsDependencyMinimized(parseReplicationJson(previous.payloadJson))
+      ) {
+        return { item: mapPendingReplication(previous), created: false, replaced: false }
       }
 
       const rawOpen = this.executor.db.prepare(`
@@ -323,6 +486,14 @@ export class SqliteReplicationStateRepository {
       }
 
       const existing = this.getFrozenBatchRow(input.streamId, input.sequence)
+      // Rollover freezes creation of new old-policy batches. Already Frozen
+      // sequence/body remains immutable and may still be exact-retried.
+      if (!existing && streamRowValue.status !== 'active') {
+        throw new DurableReplicationError(
+          'STREAM_INVALID',
+          `Cannot freeze a new batch on replication stream status ${streamRowValue.status}`,
+        )
+      }
       const decision = assertFreezeSequence({
         stream: mapStream(streamRowValue),
         incomingSequence: input.sequence,

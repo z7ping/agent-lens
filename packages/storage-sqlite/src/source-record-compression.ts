@@ -77,6 +77,18 @@ function decodeCompressedSourceRecordPayload(blob: unknown): unknown {
   return JSON.parse(gunzipSync(Buffer.from(blob)).toString('utf8'))
 }
 
+export function restoreSourceRecordPayloadFromStorageRow(
+  record: SourceRecord,
+  rawRow: unknown,
+): SourceRecord {
+  const row = compressionRow(rawRow)
+  if (row.payloadEncoding !== 'gzip-json') return record
+  return {
+    ...record,
+    payload: decodeCompressedSourceRecordPayload(row.payloadBlob),
+  }
+}
+
 async function restoreCompressedPayload(
   executor: SqliteExecutor,
   record: SourceRecord | null,
@@ -86,9 +98,7 @@ async function restoreCompressedPayload(
     SELECT payload_encoding, payload_blob FROM source_records WHERE id = ?
   `).get(record.id))
   if (!rawRow) return record
-  const row = compressionRow(rawRow)
-  if (row.payloadEncoding !== 'gzip-json') return record
-  return { ...record, payload: decodeCompressedSourceRecordPayload(row.payloadBlob) }
+  return restoreSourceRecordPayloadFromStorageRow(record, rawRow)
 }
 
 export function withSqliteSourceRecordCompression(

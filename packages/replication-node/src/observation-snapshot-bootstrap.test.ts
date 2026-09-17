@@ -394,3 +394,80 @@ test('Snapshot 未完成或授权 revision 变化时拒绝 delta catch-up', asyn
     /re-bootstrap is required/,
   )
 })
+
+
+test('capturedRevision is registered at Snapshot baseline and advances only after Durable Pending succeeds', async () => {
+  const snapshotProgress = new MemoryProgress()
+  const captures: number[] = []
+  const captureProgress = {
+    advance: async (input: { capturedRevision: number }) => {
+      captures.push(input.capturedRevision)
+      return input
+    },
+  }
+  const snapshotResult = await pumpObservationSnapshotBootstrapPage({
+    changes: { highWaterRevision: async () => 10 },
+    snapshot: { scan: async () => ({ items: [], done: true }) },
+    dependencies: dependencies(),
+    sink: { enqueuePending: async () => ({ created: true, replaced: false }) },
+    progress: snapshotProgress,
+    captureProgress,
+    nodeId: 'node-1',
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    policy: { mode: 'full', revision: 'policy-1' },
+    history: { mode: 'include-existing', revision: 'history-1' },
+  })
+  assert.equal(snapshotResult.baselineRevision, 10)
+  assert.deepEqual(captures, [10])
+
+  const deltaProgress = new MemoryDeltaProgress()
+  const changeSource = {
+    highWaterRevision: async () => 12,
+    scan: async () => ({
+      items: [{
+        revision: 11,
+        entityType: 'CanonicalObservation' as const,
+        originEntityId: observation.id,
+        changedAt: '2026-09-16T01:00:00.000Z',
+      }],
+      nextRevision: 12,
+      done: true,
+    }),
+  }
+
+  await assert.rejects(
+    pumpObservationSnapshotDeltaPage({
+      changes: changeSource,
+      observations: { get: async () => observation },
+      dependencies: dependencies(),
+      sink: { enqueuePending: async () => { throw new Error('disk full') } },
+      snapshotProgress,
+      deltaProgress,
+      captureProgress,
+      nodeId: 'node-1',
+      streamId: 'stream-1',
+      generationId: 'generation-1',
+      policy: { mode: 'full', revision: 'policy-1' },
+      history: { mode: 'include-existing', revision: 'history-1' },
+    }),
+    /disk full/,
+  )
+  assert.deepEqual(captures, [10])
+
+  await pumpObservationSnapshotDeltaPage({
+    changes: changeSource,
+    observations: { get: async () => observation },
+    dependencies: dependencies(),
+    sink: { enqueuePending: async () => ({ created: true, replaced: false }) },
+    snapshotProgress,
+    deltaProgress,
+    captureProgress,
+    nodeId: 'node-1',
+    streamId: 'stream-1',
+    generationId: 'generation-1',
+    policy: { mode: 'full', revision: 'policy-1' },
+    history: { mode: 'include-existing', revision: 'history-1' },
+  })
+  assert.deepEqual(captures, [10, 12])
+})

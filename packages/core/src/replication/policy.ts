@@ -38,8 +38,8 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   AgentProduct: {
     entityType: 'AgentProduct',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'name', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'name', class: 'metadata', minimumDependency: true },
       { field: 'vendor', class: 'metadata' },
       { field: 'homepage', class: 'metadata' },
     ],
@@ -47,10 +47,10 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   Host: {
     entityType: 'Host',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'name', class: 'metadata' },
-      { field: 'platform', class: 'metadata' },
-      { field: 'arch', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'name', class: 'metadata', minimumDependency: true },
+      { field: 'platform', class: 'metadata', minimumDependency: true },
+      { field: 'arch', class: 'metadata', minimumDependency: true },
       { field: 'createdAt', class: 'metadata' },
       { field: 'lastSeenAt', class: 'metadata' },
     ],
@@ -58,9 +58,9 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   AgentInstallation: {
     entityType: 'AgentInstallation',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'hostId', class: 'metadata' },
-      { field: 'productId', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'hostId', class: 'metadata', minimumDependency: true },
+      { field: 'productId', class: 'metadata', minimumDependency: true },
       { field: 'version', class: 'metadata' },
       { field: 'executable', class: 'path' },
       { field: 'configRoot', class: 'path' },
@@ -72,9 +72,9 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   RuntimeProfile: {
     entityType: 'RuntimeProfile',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'installationId', class: 'metadata' },
-      { field: 'nativeProfileId', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'installationId', class: 'metadata', minimumDependency: true },
+      { field: 'nativeProfileId', class: 'metadata', minimumDependency: true },
       { field: 'name', class: 'content' },
       { field: 'configRoot', class: 'path' },
       { field: 'dataRoot', class: 'path' },
@@ -119,12 +119,12 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   SourceSession: {
     entityType: 'SourceSession',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'sourceId', class: 'metadata' },
-      { field: 'installationId', class: 'metadata' },
-      { field: 'runtimeProfileId', class: 'metadata' },
-      { field: 'nativeSessionId', class: 'metadata' },
-      { field: 'logicalSessionId', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'sourceId', class: 'metadata', minimumDependency: true },
+      { field: 'installationId', class: 'metadata', minimumDependency: true },
+      { field: 'runtimeProfileId', class: 'metadata', minimumDependency: true },
+      { field: 'nativeSessionId', class: 'metadata', minimumDependency: true },
+      { field: 'logicalSessionId', class: 'metadata', minimumDependency: true },
       { field: 'nativeParentSessionId', class: 'metadata' },
     ],
   },
@@ -142,11 +142,11 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   AgentActor: {
     entityType: 'AgentActor',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'installationId', class: 'metadata' },
-      { field: 'logicalSessionId', class: 'metadata' },
-      { field: 'parentActorId', class: 'metadata' },
-      { field: 'role', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'installationId', class: 'metadata', minimumDependency: true },
+      { field: 'logicalSessionId', class: 'metadata', minimumDependency: true },
+      { field: 'parentActorId', class: 'metadata', minimumDependency: true },
+      { field: 'role', class: 'metadata', minimumDependency: true },
       { field: 'nativeActorId', class: 'metadata' },
       { field: 'evidenceRefs', class: 'metadata' },
     ],
@@ -154,12 +154,12 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   SourceRecord: {
     entityType: 'SourceRecord',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'sourceId', class: 'metadata' },
-      { field: 'installationId', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'sourceId', class: 'metadata', minimumDependency: true },
+      { field: 'installationId', class: 'metadata', minimumDependency: true },
       { field: 'sourceSessionNativeId', class: 'metadata' },
-      { field: 'nativeType', class: 'metadata' },
-      { field: 'nativeId', class: 'metadata' },
+      { field: 'nativeType', class: 'metadata', minimumDependency: true },
+      { field: 'nativeId', class: 'metadata', minimumDependency: true },
       { field: 'sourceSequence', class: 'metadata' },
       { field: 'occurredAt', class: 'metadata' },
       { field: 'capturedAt', class: 'metadata' },
@@ -172,11 +172,11 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   Evidence: {
     entityType: 'Evidence',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'captureMethod', class: 'metadata' },
-      { field: 'derivation', class: 'metadata' },
-      { field: 'confidence', class: 'metadata' },
-      { field: 'sourceRecordId', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'captureMethod', class: 'metadata', minimumDependency: true },
+      { field: 'derivation', class: 'metadata', minimumDependency: true },
+      { field: 'confidence', class: 'metadata', minimumDependency: true },
+      { field: 'sourceRecordId', class: 'metadata', minimumDependency: true },
       { field: 'sourceLocator', class: 'path' },
       { field: 'parserVersion', class: 'metadata' },
       { field: 'eventTime', class: 'metadata' },
@@ -232,10 +232,10 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
   AssetBinding: {
     entityType: 'AssetBinding',
     fields: [
-      { field: 'id', class: 'metadata' },
-      { field: 'assetId', class: 'metadata' },
-      { field: 'installationId', class: 'metadata' },
-      { field: 'runtimeProfileId', class: 'metadata' },
+      { field: 'id', class: 'metadata', minimumDependency: true },
+      { field: 'assetId', class: 'metadata', minimumDependency: true },
+      { field: 'installationId', class: 'metadata', minimumDependency: true },
+      { field: 'runtimeProfileId', class: 'metadata', minimumDependency: true },
       { field: 'scope', class: 'metadata' },
       { field: 'scopeRoot', class: 'path' },
       { field: 'path', class: 'path' },

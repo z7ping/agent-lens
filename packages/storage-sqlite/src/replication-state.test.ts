@@ -250,3 +250,274 @@ test('ACK advances contiguously and stream/batch state survives restart', async 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test('dependency-minimized candidate cannot downgrade an existing full pending candidate', async () => {
+  const storage = await createStorage(':memory:')
+  try {
+    await storage.replication.ensureStream({
+      relationshipId: 'rel-quality',
+      hubId: 'hub-quality',
+      streamId: 'stream-quality',
+      generationId: 'gen-quality',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      now: T0,
+    })
+
+    const full = await storage.replication.enqueuePending({
+      id: 'pending-full',
+      streamId: 'stream-quality',
+      generationId: 'gen-quality',
+      dedupKey: 'entity-r1-quality',
+      entityType: 'Project',
+      originEntityId: 'project-1',
+      candidateHash: 'hash-full',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          id: { state: 'value', value: 'project-1' },
+          name: { state: 'value', value: 'Full Project' },
+        },
+      },
+      now: T0,
+    })
+    assert.equal(full.created, true)
+
+    const minimized = await storage.replication.enqueuePending({
+      id: 'pending-minimized',
+      streamId: 'stream-quality',
+      generationId: 'gen-quality',
+      dedupKey: 'entity-r1-quality',
+      entityType: 'Project',
+      originEntityId: 'project-1',
+      candidateHash: 'hash-minimized',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          id: { state: 'value', value: 'project-1' },
+          name: { state: 'omitted', reason: 'dependency-minimized' },
+        },
+      },
+      now: T1,
+    })
+
+    assert.equal(minimized.created, false)
+    assert.equal(minimized.replaced, false)
+    assert.equal(minimized.item.candidateHash, 'hash-full')
+    assert.deepEqual(minimized.item.payload, full.item.payload)
+  } finally {
+    storage.close()
+  }
+})
+
+test('full root candidate upgrades an existing dependency-minimized candidate', async () => {
+  const storage = await createStorage(':memory:')
+  try {
+    await storage.replication.ensureStream({
+      relationshipId: 'rel-quality-upgrade',
+      hubId: 'hub-quality',
+      streamId: 'stream-quality-upgrade',
+      generationId: 'gen-quality-upgrade',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      now: T0,
+    })
+
+    const minimized = await storage.replication.enqueuePending({
+      id: 'pending-minimized',
+      streamId: 'stream-quality-upgrade',
+      generationId: 'gen-quality-upgrade',
+      dedupKey: 'entity-r1-quality',
+      entityType: 'Project',
+      originEntityId: 'project-1',
+      candidateHash: 'hash-minimized',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          id: { state: 'value', value: 'project-1' },
+          name: { state: 'omitted', reason: 'dependency-minimized' },
+        },
+      },
+      now: T0,
+    })
+    assert.equal(minimized.created, true)
+
+    const full = await storage.replication.enqueuePending({
+      id: 'pending-full',
+      streamId: 'stream-quality-upgrade',
+      generationId: 'gen-quality-upgrade',
+      dedupKey: 'entity-r1-quality',
+      entityType: 'Project',
+      originEntityId: 'project-1',
+      candidateHash: 'hash-full',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          id: { state: 'value', value: 'project-1' },
+          name: { state: 'value', value: 'Full Project' },
+        },
+      },
+      now: T1,
+    })
+
+    assert.equal(full.created, false)
+    assert.equal(full.replaced, true)
+    assert.equal(full.item.candidateHash, 'hash-full')
+  } finally {
+    storage.close()
+  }
+})
+
+test('dependency-minimized candidate does not requeue after full candidate is frozen', async () => {
+  const storage = await createStorage(':memory:')
+  try {
+    await storage.replication.ensureStream({
+      relationshipId: 'rel-quality-frozen',
+      hubId: 'hub-quality',
+      streamId: 'stream-quality-frozen',
+      generationId: 'gen-quality-frozen',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      now: T0,
+    })
+    const full = await storage.replication.enqueuePending({
+      id: 'pending-full-frozen',
+      streamId: 'stream-quality-frozen',
+      generationId: 'gen-quality-frozen',
+      dedupKey: 'entity-r1-quality-frozen',
+      entityType: 'Project',
+      originEntityId: 'project-1',
+      candidateHash: 'hash-full-frozen',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          id: { state: 'value', value: 'project-1' },
+          name: { state: 'value', value: 'Full Project' },
+        },
+      },
+      now: T0,
+    })
+    await storage.replication.freezeBatch({
+      streamId: 'stream-quality-frozen',
+      generationId: 'gen-quality-frozen',
+      sequence: 1,
+      batchId: 'batch-quality-frozen',
+      contentHash: 'batch-quality-frozen',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: { entities: [full.item.payload] },
+      pendingItemIds: [full.item.id],
+      now: T1,
+    })
+
+    const minimized = await storage.replication.enqueuePending({
+      id: 'pending-minimized-after-freeze',
+      streamId: 'stream-quality-frozen',
+      generationId: 'gen-quality-frozen',
+      dedupKey: 'entity-r1-quality-frozen',
+      entityType: 'Project',
+      originEntityId: 'project-1',
+      candidateHash: 'hash-minimized-after-freeze',
+      phase: 'bootstrap',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          id: { state: 'value', value: 'project-1' },
+          name: { state: 'omitted', reason: 'dependency-minimized' },
+        },
+      },
+      now: T2,
+    })
+
+    assert.equal(minimized.created, false)
+    assert.equal(minimized.replaced, false)
+    assert.equal(minimized.item.id, 'pending-full-frozen')
+    assert.equal((await storage.replication.listPending('stream-quality-frozen')).length, 0)
+  } finally {
+    storage.close()
+  }
+})
+
+
+test('user content that resembles availability metadata is not mistaken for dependency minimization', async () => {
+  const storage = await createStorage(':memory:')
+  try {
+    await storage.replication.ensureStream({
+      relationshipId: 'rel-quality-user-content',
+      hubId: 'hub-quality',
+      streamId: 'stream-quality-user-content',
+      generationId: 'gen-quality-user-content',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      now: T0,
+    })
+    await storage.replication.enqueuePending({
+      id: 'pending-content-a',
+      streamId: 'stream-quality-user-content',
+      generationId: 'gen-quality-user-content',
+      dedupKey: 'entity-r1-user-content',
+      entityType: 'CanonicalObservation',
+      originEntityId: 'observation-1',
+      candidateHash: 'hash-content-a',
+      phase: 'incremental',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          payload: {
+            state: 'value',
+            value: {
+              state: 'omitted',
+              reason: 'dependency-minimized',
+            },
+          },
+        },
+      },
+      now: T0,
+    })
+
+    const replacement = await storage.replication.enqueuePending({
+      id: 'pending-content-b',
+      streamId: 'stream-quality-user-content',
+      generationId: 'gen-quality-user-content',
+      dedupKey: 'entity-r1-user-content',
+      entityType: 'CanonicalObservation',
+      originEntityId: 'observation-1',
+      candidateHash: 'hash-content-b',
+      phase: 'incremental',
+      policyRevision: 'policy-1',
+      historyRevision: 'history-1',
+      payload: {
+        body: {
+          payload: {
+            state: 'value',
+            value: {
+              state: 'omitted',
+              reason: 'dependency-minimized',
+              changed: true,
+            },
+          },
+        },
+      },
+      now: T1,
+    })
+
+    assert.equal(replacement.replaced, true)
+    assert.equal(replacement.item.candidateHash, 'hash-content-b')
+  } finally {
+    storage.close()
+  }
+})

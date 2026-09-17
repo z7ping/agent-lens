@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { RuntimeProfile, RuntimeProfileIdentityHint } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
+import { mapRuntimeProfile } from './repository-row-mappers'
 
 type RuntimeProfileRow = Record<string, unknown>
 
@@ -13,35 +14,6 @@ function rowRecord(value: unknown): RuntimeProfileRow | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as RuntimeProfileRow
     : null
-}
-
-function requiredString(row: RuntimeProfileRow, key: string): string {
-  const value = row[key]
-  if (typeof value !== 'string') throw new TypeError(`SQLite runtime profile field ${key} must be a string`)
-  return value
-}
-
-function optionalString(row: RuntimeProfileRow, key: string): string | undefined {
-  const value = row[key]
-  if (value == null) return undefined
-  if (typeof value !== 'string') throw new TypeError(`SQLite runtime profile field ${key} must be a string or null`)
-  return value
-}
-
-function mapRuntimeProfile(row: RuntimeProfileRow): RuntimeProfile {
-  const name = optionalString(row, 'name')
-  const configRoot = optionalString(row, 'config_root')
-  const dataRoot = optionalString(row, 'data_root')
-  return {
-    id: requiredString(row, 'id'),
-    installationId: requiredString(row, 'installation_id'),
-    nativeProfileId: requiredString(row, 'native_profile_id'),
-    ...(name === undefined ? {} : { name }),
-    ...(configRoot === undefined ? {} : { configRoot }),
-    ...(dataRoot === undefined ? {} : { dataRoot }),
-    firstSeenAt: requiredString(row, 'first_seen_at'),
-    lastSeenAt: requiredString(row, 'last_seen_at'),
-  }
 }
 
 export class SqliteRuntimeProfileRepository {
@@ -109,7 +81,8 @@ export class SqliteRuntimeProfileRepository {
         UPDATE source_sessions
         SET runtime_profile_id = ?
         WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
+          AND runtime_profile_id IS NOT ?
+      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
       this.executor.db.prepare(`
         UPDATE logical_sessions
         SET runtime_profile_id = ?
@@ -117,7 +90,8 @@ export class SqliteRuntimeProfileRepository {
           SELECT logical_session_id FROM source_sessions
           WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
         )
-      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId)
+          AND runtime_profile_id IS NOT ?
+      `).run(runtimeProfileId, sourceId, installationId, nativeSessionId, runtimeProfileId)
     })
   }
 
@@ -127,7 +101,8 @@ export class SqliteRuntimeProfileRepository {
         UPDATE asset_bindings
         SET runtime_profile_id = ?
         WHERE id = ?
-      `).run(runtimeProfileId, assetBindingId)
+          AND runtime_profile_id IS NOT ?
+      `).run(runtimeProfileId, assetBindingId, runtimeProfileId)
     })
   }
 }
