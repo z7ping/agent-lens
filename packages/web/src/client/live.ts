@@ -1,79 +1,14 @@
-import type { LiveMessageInputDto, LiveThinkingControlDto } from '@agent-lens/protocol'
-
-export type LiveCapabilityNameDto =
-  | 'create'
-  | 'resume'
-  | 'fork'
-  | 'send'
-  | 'stream'
-  | 'interrupt'
-  | 'queue'
-  | 'steer'
-  | 'model-switching'
-  | 'thinking-control'
-  | 'extension-ui'
-  | 'recovery'
-
-export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
-
-export interface LiveInputCapabilitiesDto {
-  text: LiveInputSupportDto
-  largeText: LiveInputSupportDto
-  image: LiveInputSupportDto
-  file: LiveInputSupportDto
-  multiline: LiveInputSupportDto
-}
-
-export interface LiveAvailabilityDto {
-  available: boolean
-  reason?: string | undefined
-}
-
-export type LiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
-
-export interface LiveRuntimeStateDto {
-  runtimeSessionId: string
-  status: LiveRuntimeStatusDto
-  nativeSessionId?: string | undefined
-  workspacePath?: string | undefined
-  isStreaming: boolean
-  pendingMessageCount: number
-}
-
-export interface LiveSnapshotDto {
-  state: LiveRuntimeStateDto
-  entries: unknown[]
-  leafId?: string | null | undefined
-}
-
-export interface LiveRuntimeEventDto {
-  runtimeSessionId: string
-  sequence: number
-  receivedAt: string
-  event: Readonly<Record<string, unknown>>
-  normalizedEvent?: Readonly<Record<string, unknown>> | undefined
-}
-
-export interface LiveProductDto {
-  liveId: string
-  productId: string
-  displayName: string
-  capabilities: LiveCapabilityNameDto[]
-  inputCapabilities: LiveInputCapabilitiesDto
-  availability: LiveAvailabilityDto
-  runtimes: LiveRuntimeStateDto[]
-}
-
-export interface LiveRuntimeRefDto {
-  liveId: string
-  productId: string
-  displayName: string
-  state: LiveRuntimeStateDto
-}
-
-interface LiveProductsResponseDto {
-  items: LiveProductDto[]
-}
+import type {
+  LiveAvailabilityDto,
+  LiveMessageInputDto,
+  LiveProductDto,
+  LiveProductsResponseDto,
+  LiveRuntimeEventDto,
+  LiveRuntimeRefDto,
+  LiveRuntimeStateDto,
+  LiveSnapshotDto,
+  LiveThinkingControlDto,
+} from '@agent-lens/protocol'
 
 const LIVE_ROOT = '/api/v1/live'
 
