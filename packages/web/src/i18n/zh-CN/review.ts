@@ -240,7 +240,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         selectSession: '选择一个会话开始复盘',
       },
       relationship: {
-        piTree: 'Pi 会话树 · {{count}} 条关系',
+        sessionTree: '会话关系 · {{count}} 条',
       },
       roundNav: {
         aria: '轮次快速导航',
