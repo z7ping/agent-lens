@@ -77,7 +77,18 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       composerAria: '实时任务输入',
       connected: '实时连接已建立',
       connecting: '正在连接实时任务',
+      model: '模型',
       thinking: '思考强度',
+      streamingMode: '流式消息方式',
+      steer: '立即调整',
+      followUp: '排队继续',
+      extension: {
+        title: '需要确认',
+        reject: '拒绝',
+        allow: '允许',
+        cancel: '取消',
+        submit: '提交',
+      },
       send: '发送',
       unsupportedInput: '当前智能体不支持{{type}}输入。',
       input: {
