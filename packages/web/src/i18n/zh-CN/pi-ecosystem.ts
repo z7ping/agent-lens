@@ -20,7 +20,7 @@ export const chinesePiEcosystemMessages: LocaleMessagesDto = {
     version: '最新版本',
     localVersion: '本机版本',
     resourceTypes: '包含类型',
-    typeUnknown: '未声明',
+    typeUnknown: '未确认',
     localAssets: '本机资产',
     localAssetCount: '{{count}} 项',
     empty: '没有找到符合条件的 Pi Package',
