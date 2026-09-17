@@ -64,13 +64,17 @@ export function resolveDetectedSourceInstallation(
   host: Host,
   detected: DetectedSource,
 ): Promise<AgentInstallation> {
+  const profileScoped = Boolean(detected.runtimeProfile)
   return ctx.identity.resolveInstallation({
     hostId: host.id,
     productId: detected.productId,
     ...(detected.executable ? { executable: detected.executable } : {}),
     ...(detected.version ? { version: detected.version } : {}),
-    ...(detected.configRoot ? { configRoot: detected.configRoot } : {}),
-    ...(detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
+    // Profile roots belong to RuntimeProfile. Keeping them out of the
+    // installation identity preserves the pre-Integration DSH installation id
+    // and prevents one Installation per profile.
+    ...(!profileScoped && detected.configRoot ? { configRoot: detected.configRoot } : {}),
+    ...(!profileScoped && detected.dataRoot ? { dataRoot: detected.dataRoot } : {}),
   })
 }
 
