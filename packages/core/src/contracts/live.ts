@@ -16,6 +16,7 @@ export type LiveCapabilityName =
   | 'recovery'
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
+export type LiveStartFieldSupport = 'required' | 'optional' | 'unsupported'
 
 export const LIVE_ATTACHMENT_MAX_ITEM_BYTES = 12 * 1024 * 1024
 
@@ -25,6 +26,17 @@ export interface LiveInputCapabilities {
   image: LiveInputSupport
   file: LiveInputSupport
   multiline: LiveInputSupport
+}
+
+/** Agent-neutral task creation input. Adapters translate this into native start arguments. */
+export interface LiveStartInput {
+  workspacePath?: string | undefined
+  title?: string | undefined
+}
+
+export interface LiveStartCapabilities {
+  workspace: LiveStartFieldSupport
+  title: LiveStartFieldSupport
 }
 
 export interface LiveTextPart {
@@ -279,6 +291,8 @@ export interface LiveAdapter {
   readonly manifest: LiveAdapterManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName>
   readonly inputCapabilities: Readonly<LiveInputCapabilities>
+  /** Optional during migration; omitted means no structured Product-Surface start fields are advertised. */
+  readonly startCapabilities?: Readonly<LiveStartCapabilities>
 
   availability(): Promise<LiveAvailability>
   list(): Promise<LiveRuntimeState[]>
