@@ -53,6 +53,7 @@ import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
+import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { readLaunchableProjects } from './launchable-projects'
 import { discoverLocalePacks } from './locale-packs'
@@ -237,6 +238,7 @@ export async function startHttpSurface(
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
+      if (await handleLiveRequest(request, response, url, options.lives)) return
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
       if (await handleBackupRequest(request, response, url, options.backup)) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
