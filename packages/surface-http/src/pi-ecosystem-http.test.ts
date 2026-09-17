@@ -9,7 +9,7 @@ test('Pi ecosystem HTTP surface forwards validated read-only search requests', a
   await storage.migrate()
   const received: unknown[] = []
   const service: PiEcosystemQueryService = {
-    async search(request) {
+    async search(request = {}) {
       received.push(request)
       return {
         query: request.query ?? '',
