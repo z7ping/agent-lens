@@ -66,6 +66,26 @@ export const englishTaskMessages: LocaleMessagesDto = {
       hours: '{{value}} h',
       days: '{{value}} days',
     },
+    live: {
+      invalidRuntime: 'The live task address is invalid.',
+      productUnavailable: 'This live agent is unavailable.',
+      runtimeId: 'Runtime ID',
+      interrupt: 'Interrupt',
+      terminate: 'End task',
+      empty: 'Waiting for task input.',
+      composerPlaceholder: 'Enter a task or follow-up…',
+      composerAria: 'Live task input',
+      connected: 'Live connection established',
+      connecting: 'Connecting to live task',
+      thinking: 'Thinking level',
+      send: 'Send',
+      unsupportedInput: 'This agent does not support {{type}} input.',
+      input: {
+        largeText: 'large text',
+        image: 'image',
+        file: 'file',
+      },
+    },
     center: {
       presentation: {
         unnamedProject: 'Unnamed project',
