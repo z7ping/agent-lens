@@ -95,6 +95,32 @@ function logicalSessionId(value: unknown): string | undefined {
   return optionalString(row, 'logical_session_id')
 }
 
+function sourceSessionLogicalId(
+  executor: SqliteExecutor,
+  candidate: SessionRelationshipCandidate,
+  nativeSessionId: string,
+): string | undefined {
+  if (candidate.runtimeProfileId) {
+    return logicalSessionId(executor.db.prepare(`
+      SELECT logical_session_id FROM source_sessions
+      WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+        AND runtime_profile_id = ?
+      LIMIT 1
+    `).get(
+      candidate.sourceId,
+      candidate.installationId,
+      nativeSessionId,
+      candidate.runtimeProfileId,
+    ))
+  }
+  return logicalSessionId(executor.db.prepare(`
+    SELECT logical_session_id FROM source_sessions
+    WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
+      AND runtime_profile_id IS NULL
+    LIMIT 1
+  `).get(candidate.sourceId, candidate.installationId, nativeSessionId))
+}
+
 export class SqliteSessionRelationshipCandidateRepository {
   constructor(private readonly executor: SqliteExecutor) {}
 
@@ -162,14 +188,8 @@ export class SqliteSessionRelationshipCandidateRepository {
 
   async tryPromote(candidate: SessionRelationshipCandidate): Promise<SessionRelationship | null> {
     return this.executor.run(() => {
-      const fromSessionId = logicalSessionId(this.executor.db.prepare(`
-        SELECT logical_session_id FROM source_sessions
-        WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-      `).get(candidate.sourceId, candidate.installationId, candidate.fromNativeSessionId))
-      const toSessionId = logicalSessionId(this.executor.db.prepare(`
-        SELECT logical_session_id FROM source_sessions
-        WHERE source_id = ? AND installation_id = ? AND native_session_id = ?
-      `).get(candidate.sourceId, candidate.installationId, candidate.toNativeSessionId))
+      const fromSessionId = sourceSessionLogicalId(this.executor, candidate, candidate.fromNativeSessionId)
+      const toSessionId = sourceSessionLogicalId(this.executor, candidate, candidate.toNativeSessionId)
       if (!fromSessionId || !toSessionId) return null
 
       const type: SessionRelationshipType = candidate.type ?? 'related'
@@ -218,16 +238,27 @@ export class SqliteSessionRelationshipCandidateRepository {
     sourceId: string,
     installationId: string,
     nativeSessionId: string,
+    runtimeProfileId?: string,
   ): Promise<number> {
-    const candidates = await this.executor.run(() => this.executor.db.prepare(`
-      SELECT source_id, installation_id, runtime_profile_id, source_record_id,
-             from_native_session_id, to_native_session_id, native_parent_event_id,
-             relation_type, native_relation, confidence, evidence_refs_json
-      FROM session_relationship_candidates
-      WHERE source_id = ? AND installation_id = ?
-        AND (from_native_session_id = ? OR to_native_session_id = ?)
-      ORDER BY observed_at, id
-    `).all(sourceId, installationId, nativeSessionId, nativeSessionId).map(mapCandidate))
+    const candidates = await this.executor.run(() => runtimeProfileId
+      ? this.executor.db.prepare(`
+          SELECT source_id, installation_id, runtime_profile_id, source_record_id,
+                 from_native_session_id, to_native_session_id, native_parent_event_id,
+                 relation_type, native_relation, confidence, evidence_refs_json
+          FROM session_relationship_candidates
+          WHERE source_id = ? AND installation_id = ? AND runtime_profile_id = ?
+            AND (from_native_session_id = ? OR to_native_session_id = ?)
+          ORDER BY observed_at, id
+        `).all(sourceId, installationId, runtimeProfileId, nativeSessionId, nativeSessionId).map(mapCandidate)
+      : this.executor.db.prepare(`
+          SELECT source_id, installation_id, runtime_profile_id, source_record_id,
+                 from_native_session_id, to_native_session_id, native_parent_event_id,
+                 relation_type, native_relation, confidence, evidence_refs_json
+          FROM session_relationship_candidates
+          WHERE source_id = ? AND installation_id = ? AND runtime_profile_id IS NULL
+            AND (from_native_session_id = ? OR to_native_session_id = ?)
+          ORDER BY observed_at, id
+        `).all(sourceId, installationId, nativeSessionId, nativeSessionId).map(mapCandidate))
 
     let promoted = 0
     for (const candidate of candidates) {
