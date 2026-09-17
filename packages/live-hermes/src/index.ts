@@ -172,6 +172,10 @@ export class HermesLiveAdapter implements LiveAdapter {
   readonly manifest = hermesLiveManifest
   readonly capabilities: ReadonlySet<LiveCapabilityName> = createLiveCapabilitySet(CAPABILITIES)
   readonly inputCapabilities = INPUT_CAPABILITIES
+  readonly startCapabilities = {
+    workspace: 'unsupported',
+    title: 'optional',
+  } as const
 
   constructor(readonly service: DefaultHermesLiveService) {}
 
