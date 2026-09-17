@@ -77,7 +77,18 @@ export const englishTaskMessages: LocaleMessagesDto = {
       composerAria: 'Live task input',
       connected: 'Live connection established',
       connecting: 'Connecting to live task',
+      model: 'Model',
       thinking: 'Thinking level',
+      streamingMode: 'Streaming message mode',
+      steer: 'Steer now',
+      followUp: 'Queue follow-up',
+      extension: {
+        title: 'Confirmation required',
+        reject: 'Reject',
+        allow: 'Allow',
+        cancel: 'Cancel',
+        submit: 'Submit',
+      },
       send: 'Send',
       unsupportedInput: 'This agent does not support {{type}} input.',
       input: {

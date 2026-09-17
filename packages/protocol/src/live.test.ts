@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { liveMessagePlainTextDto, parseLiveEventDto, parseLiveMessageInputDto, parseLiveThinkingControlDto } from './live'
+import { liveMessagePlainTextDto, parseLiveEventDto, parseLiveMessageInputDto, parseLiveModelControlDto, parseLiveThinkingControlDto } from './live'
 
 test('Live protocol preserves Runtime thinking values, order, and duplicates without normalization', () => {
   const parsed = parseLiveThinkingControlDto({
@@ -94,4 +94,37 @@ test('Live protocol validates normalized streaming events without vendor payload
     status: 'interrupted',
   })
   assert.equal(parseLiveEventDto({ type: 'completed', status: 'unknown' }), null)
+})
+
+
+test('Live protocol preserves opaque model values without vendor fields', () => {
+  const parsed = parseLiveModelControlDto({
+    capability: 'model-switching',
+    value: 'opaque:model-a',
+    options: [
+      { value: 'opaque:model-a', label: 'Model A', description: 'Provider A' },
+      { value: 'opaque:model-b', label: 'Model B' },
+    ],
+  })
+  assert.ok(parsed)
+  assert.equal(parsed.value, 'opaque:model-a')
+  assert.deepEqual(parsed.options.map(option => option.value), ['opaque:model-a', 'opaque:model-b'])
+})
+
+test('Live protocol validates normalized extension UI requests', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'ui.request',
+    requestId: 'request-1',
+    method: 'select',
+    title: 'Choose',
+    options: ['A', 'B'],
+  }), {
+    type: 'ui.request',
+    requestId: 'request-1',
+    method: 'select',
+    title: 'Choose',
+    options: ['A', 'B'],
+  })
+  assert.equal(parseLiveEventDto({ type: 'ui.request', requestId: '', method: 'confirm' }), null)
+  assert.equal(parseLiveEventDto({ type: 'ui.request', requestId: 'x', method: 'unknown' }), null)
 })

@@ -285,7 +285,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|interrupt|thinking-control))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -340,6 +340,19 @@ export async function handleLiveRequest(
       writeJson(response, 200, jsonValue(await adapter.interrupt(runtimeSessionId)))
       return true
     }
+    if (action === 'model-control' && request.method === 'GET') {
+      requireCapability(adapter, 'model-switching')
+      if (!adapter.modelControl) throw httpError(409, `${adapter.manifest.displayName} does not expose model control`)
+      writeJson(response, 200, jsonValue(await adapter.modelControl(runtimeSessionId)))
+      return true
+    }
+    if (action === 'model-control' && request.method === 'POST') {
+      requireCapability(adapter, 'model-switching')
+      if (!adapter.setModelControl) throw httpError(409, `${adapter.manifest.displayName} does not expose model control`)
+      const body = objectBody(await readJson(request))
+      writeJson(response, 200, jsonValue(await adapter.setModelControl(runtimeSessionId, nonEmpty(body.value, 'value'))))
+      return true
+    }
     if (action === 'thinking-control' && request.method === 'GET') {
       requireCapability(adapter, 'thinking-control')
       if (!adapter.thinkingControl) throw httpError(409, `${adapter.manifest.displayName} does not expose thinking control`)
@@ -351,6 +364,15 @@ export async function handleLiveRequest(
       if (!adapter.setThinkingControl) throw httpError(409, `${adapter.manifest.displayName} does not expose thinking control`)
       const body = objectBody(await readJson(request))
       writeJson(response, 200, jsonValue(await adapter.setThinkingControl(runtimeSessionId, nonEmpty(body.value, 'value'))))
+      return true
+    }
+    if (action === 'extension-response' && request.method === 'POST') {
+      requireCapability(adapter, 'extension-ui')
+      if (!adapter.respondToExtension) throw httpError(409, `${adapter.manifest.displayName} does not expose extension UI responses`)
+      const body = objectBody(await readJson(request))
+      if (!Object.hasOwn(body, 'response')) throw httpError(400, 'response is required')
+      await adapter.respondToExtension(runtimeSessionId, nonEmpty(body.requestId, 'requestId'), body.response)
+      writeJson(response, 202, { ok: true })
       return true
     }
 

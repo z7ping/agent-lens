@@ -217,6 +217,19 @@ export interface LiveCompletedEvent {
   message?: string | undefined
 }
 
+export type LiveUiRequestMethod = 'select' | 'confirm' | 'input' | 'editor'
+
+export interface LiveUiRequestEvent {
+  type: 'ui.request'
+  requestId: string
+  method: LiveUiRequestMethod
+  title?: string | undefined
+  message?: string | undefined
+  options?: readonly string[] | undefined
+  placeholder?: string | undefined
+  prefill?: string | undefined
+}
+
 export type LiveEvent =
   | LiveStatusEvent
   | LiveMessageBoundaryEvent
@@ -224,6 +237,7 @@ export type LiveEvent =
   | LiveToolStartEvent
   | LiveToolOutputEvent
   | LiveToolEndEvent
+  | LiveUiRequestEvent
   | LiveErrorEvent
   | LiveCompletedEvent
 
@@ -262,10 +276,29 @@ export interface LiveThinkingControl extends LiveControlDisplayInfo {
   options: readonly LiveControlOption[]
 }
 
+export interface LiveModelControl extends LiveControlDisplayInfo {
+  capability: 'model-switching'
+  /** Current Runtime-owned opaque value when known. */
+  value?: string | undefined
+  /** Runtime-provided model options in Runtime order. */
+  options: readonly LiveControlOption[]
+}
+
 function liveControlRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null
+}
+
+function validLiveControlOptions(value: unknown): value is readonly LiveControlOption[] {
+  if (!Array.isArray(value) || value.length === 0) return false
+  for (const candidate of value) {
+    const option = liveControlRecord(candidate)
+    if (!option || typeof option.value !== 'string' || !option.value) return false
+    if (option.label !== undefined && typeof option.label !== 'string') return false
+    if (option.description !== undefined && typeof option.description !== 'string') return false
+  }
+  return true
 }
 
 export function isLiveThinkingControl(value: unknown): value is LiveThinkingControl {
@@ -274,17 +307,18 @@ export function isLiveThinkingControl(value: unknown): value is LiveThinkingCont
   if (typeof control.value !== 'string' || !control.value) return false
   if (control.label !== undefined && typeof control.label !== 'string') return false
   if (control.description !== undefined && typeof control.description !== 'string') return false
-  if (!Array.isArray(control.options) || control.options.length === 0) return false
+  if (!validLiveControlOptions(control.options)) return false
+  return control.options.some(option => option.value === control.value)
+}
 
-  let hasCurrent = false
-  for (const candidate of control.options) {
-    const option = liveControlRecord(candidate)
-    if (!option || typeof option.value !== 'string' || !option.value) return false
-    if (option.label !== undefined && typeof option.label !== 'string') return false
-    if (option.description !== undefined && typeof option.description !== 'string') return false
-    if (option.value === control.value) hasCurrent = true
-  }
-  return hasCurrent
+export function isLiveModelControl(value: unknown): value is LiveModelControl {
+  const control = liveControlRecord(value)
+  if (!control || control.capability !== 'model-switching') return false
+  if (control.value !== undefined && (typeof control.value !== 'string' || !control.value)) return false
+  if (control.label !== undefined && typeof control.label !== 'string') return false
+  if (control.description !== undefined && typeof control.description !== 'string') return false
+  if (!validLiveControlOptions(control.options)) return false
+  return control.value === undefined || control.options.some(option => option.value === control.value)
 }
 
 export interface LiveAdapter {
@@ -303,10 +337,16 @@ export interface LiveAdapter {
   fork?(logicalSessionId: string): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<LiveSnapshot>
+  /** Present only when the adapter declares model-switching. */
+  modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
+  /** Runtime-owned setter; value must be one returned by modelControl(). */
+  setModelControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
   /** Present only when the adapter declares thinking-control. */
   thinkingControl?(runtimeSessionId: string): Promise<LiveThinkingControl | null>
   /** Runtime-owned setter; value must be one returned by thinkingControl(). */
   setThinkingControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
+  /** Present only when the adapter declares extension-ui. */
+  respondToExtension?(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   interrupt?(runtimeSessionId: string): Promise<unknown>

@@ -39,3 +39,15 @@ test('具体 Agent 的 Review 事件解释只能留在 Product Presentation 投�
   const review = productSurfaceFiles.find(file => file.path === './ReviewPage.tsx')!.source
   assert.doesNotMatch(review, /node\.sourceId\s*===\s*['"](?:pi|hermes|claude-code|codex)['"]/)
 })
+
+
+test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi 原生字段', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  for (const capability of ['model-switching', 'thinking-control', 'extension-ui', 'recovery', 'steer', 'queue']) {
+    assert.match(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), capability)
+  }
+  assert.match(liveTask, /liveApi\.modelControl/)
+  assert.match(liveTask, /liveApi\.respondToExtension/)
+  assert.match(liveTask, /liveApi\.snapshot\([^\n]+leafIdRef\.current/)
+  assert.doesNotMatch(liveTask, /extension_ui_request|modelId|provider/)
+})
