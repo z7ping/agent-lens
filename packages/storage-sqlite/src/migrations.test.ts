@@ -246,7 +246,11 @@ test('v27 从已有 v26 journal 回填 first/latest Entity Head 并补全 18 Roo
       LIMIT 1
     `).get() as { revision: number; changedAt: string }
 
-    assert.equal(await storage.migrate(), 27)
+    await storage.migrate()
+    assert.equal(
+      storage.db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get()?.version,
+      27,
+    )
 
     const head = storage.db.prepare(`
       SELECT first_revision AS firstRevision,

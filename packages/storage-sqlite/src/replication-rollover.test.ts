@@ -56,12 +56,13 @@ test('Policy Stream Rollover keeps Generation, freezes old Stream and transfers 
       now: '2026-09-17T00:00:02.500Z',
     })
 
+    const highWaterRevision = await storage.replicationJournalLifecycle.highWaterRevision()
     for (const entityType of JOURNAL_REPLICATION_ENTITY_TYPES) {
       await storage.replicationJournalLifecycle.advance({
         streamId: 'stream-old',
         generationId: 'gen-active',
         entityType,
-        capturedRevision: 10,
+        capturedRevision: highWaterRevision,
         now: '2026-09-17T00:00:03.000Z',
       })
     }

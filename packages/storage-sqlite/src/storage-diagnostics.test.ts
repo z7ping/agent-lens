@@ -37,7 +37,7 @@ test('health 保持轻量，diagnostics 区分物理占用、采集活动与真�
     assert.equal(healthDetails.dataGrowth.totals, undefined)
     assert.equal(healthDetails.dataGrowth.last7Days, undefined)
     assert.equal(healthDetails.dataGrowth.capacity.scope, 'hot-sqlite')
-    assert.equal(healthDetails.dataGrowth.capacity.longTermTotalLimitBytes, null)
+    assert.equal(healthDetails.dataGrowth.capacity.longTermTotalLimitBytes, 4 * 1024 * 1024 * 1024)
     assert.equal(typeof healthDetails.dataGrowth.freelistBytes, 'number')
     assert.equal(typeof healthDetails.dataGrowth.sqliteTempAllocatedBytes, 'number')
 
