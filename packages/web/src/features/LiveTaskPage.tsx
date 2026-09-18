@@ -95,7 +95,13 @@ function runtimeStateFromEvent(
   if (event.type === 'status') {
     if (event.status === 'initializing' || event.status === 'ready' || event.status === 'failed'
       || event.status === 'terminating' || event.status === 'terminated') {
-      return { ...current, status: event.status }
+      return {
+        ...current,
+        status: event.status,
+        ...((event.status === 'failed' || event.status === 'terminating' || event.status === 'terminated')
+          ? { isStreaming: false }
+          : {}),
+      }
     }
     if (event.status === 'running') return { ...current, isStreaming: true }
     if (event.status === 'idle') return { ...current, isStreaming: false }
