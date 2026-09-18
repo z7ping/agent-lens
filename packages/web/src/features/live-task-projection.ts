@@ -314,6 +314,20 @@ function settle(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionIte
   })
 }
 
+export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined): boolean {
+  if (!event) return false
+  return event.type === 'text.start'
+    || event.type === 'text.delta'
+    || event.type === 'text.end'
+    || event.type === 'reasoning.start'
+    || event.type === 'reasoning.delta'
+    || event.type === 'reasoning.end'
+    || event.type === 'tool.start'
+    || event.type === 'tool.output'
+    || event.type === 'tool.end'
+    || event.type === 'completed'
+}
+
 export function reduceLiveTaskEvent(
   items: readonly LiveTaskProjectionItem[],
   envelope: Pick<LiveRuntimeEventDto, 'sequence' | 'receivedAt' | 'normalizedEvent'>,
