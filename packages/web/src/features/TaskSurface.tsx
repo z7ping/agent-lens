@@ -369,6 +369,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const rootRef = useRef<HTMLElement>(null)
   const railItemsRef = useRef<TaskTurnRailItem[]>([])
   const railElementBySemanticIdRef = useRef(new Map<string, HTMLElement>())
+  const providedTurnRailItemsRef = useRef(providedTurnRailItems)
+  providedTurnRailItemsRef.current = providedTurnRailItems
   const railViewportRef = useRef<HTMLElement | null>(null)
   const frameRef = useRef<number | null>(null)
   const [railItems, setRailItems] = useState<TaskTurnRailItem[]>([])
@@ -460,8 +462,9 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
 
   const syncProvidedRailItems = useCallback(() => {
     const root = rootRef.current
-    if (!root || !providedTurnRailItems) return
-    const next: TaskTurnRailItem[] = providedTurnRailItems.map(item => {
+    const provided = providedTurnRailItemsRef.current
+    if (!root || !provided) return
+    const next: TaskTurnRailItem[] = provided.map(item => {
       const semanticId = item.semanticId?.trim() || item.id
       return {
         id: item.id,
@@ -480,7 +483,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       : root.querySelector<HTMLElement>('.task-session-reader')
     setRailItems(current => sameTurnRailItems(current, next) ? current : next)
     scheduleRailViewport()
-  }, [providedTurnRailItems, scheduleRailViewport])
+  }, [scheduleRailViewport])
 
   useEffect(() => {
     if (!providedTurnRailItems) return
@@ -501,7 +504,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       syncProvidedRailItems()
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [providedRailIdentity, providedTurnRailItems, syncProvidedRailItems])
+  }, [providedRailIdentity, syncProvidedRailItems])
 
   useEffect(() => {
     if (providedTurnRailItems) return
