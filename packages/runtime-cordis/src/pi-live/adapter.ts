@@ -129,7 +129,11 @@ function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undef
   const partial = liveRecord(update.partial)
   const content = Array.isArray(partial.content) ? partial.content : []
   const block = contentIndex === undefined ? {} : liveRecord(content[contentIndex])
-  const common = contentIndex === undefined ? {} : { contentIndex }
+  const messageId = liveText(event.messageId)
+  const common = {
+    ...(contentIndex === undefined ? {} : { contentIndex }),
+    ...(messageId ? { messageId } : {}),
+  }
 
   if (type === 'text_start') {
     return { type: 'text.start', text: liveText(block.text), ...common }
