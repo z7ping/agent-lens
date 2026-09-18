@@ -902,14 +902,15 @@ export class DefaultPiLiveService implements PiLiveService {
   async executeMessageAction(id: string, actionId: string, targetEntryId: string) {
     if (!targetEntryId) throw new Error('Pi message action target entry id is required')
     const runtime = await this.readyRuntime(id)
-    const snapshot = await runtime.handle!.snapshot()
-    if (snapshot.state.isStreaming) {
+    const state = await runtime.handle!.state()
+    if (state.isStreaming) {
       throw this.conflict('Pi message actions require an idle session')
     }
-    const target = piUserMessageEntry(snapshot.entries, targetEntryId)
+    const targetEntry = await runtime.handle!.entry(targetEntryId)
+    const target = piUserMessageEntry(targetEntry ? [targetEntry] : [], targetEntryId)
 
     if (actionId === 'pi.edit-from-here') {
-      if (snapshot.state.capabilities?.treeNavigation !== true || !runtime.handle?.navigateTree) {
+      if (state.capabilities?.treeNavigation !== true || !runtime.handle?.navigateTree) {
         throw this.conflict('Installed Pi SDK does not support Edit from here')
       }
       const result = await runtime.handle.navigateTree(target.entryId)
@@ -925,7 +926,6 @@ export class DefaultPiLiveService implements PiLiveService {
     }
 
     if (actionId === 'pi.new-session-from-here') {
-      const state = snapshot.state
       if (state.capabilities?.messageFork !== true) {
         throw this.conflict('Installed Pi SDK does not support message-level session fork')
       }

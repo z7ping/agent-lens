@@ -740,6 +740,10 @@ async function command(name, value = {}) {
     if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
     return nextSnapshotChunk(value.transferId)
   }
+  if (name === 'entry') {
+    if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi Runtime entry id is required')
+    return session.sessionManager.getEntries().find(entry => entryId(entry) === value.entryId) ?? null
+  }
   if (name === 'commands') return slashCommands()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')

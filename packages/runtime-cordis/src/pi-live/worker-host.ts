@@ -25,7 +25,7 @@ const MAX_STARTUP_OUTPUT_LINES = 80
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'entry' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
   | 'navigateTree'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
@@ -59,6 +59,7 @@ export interface PiRuntimeHandle {
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
+  entry(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   controls(): Promise<PiLiveControls>
@@ -326,6 +327,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     return collectSnapshotTransfer((command, payload) => this.request(command, payload), since, window)
   }
+  entry(entryId: string): Promise<unknown | null> { return this.request('entry', { entryId }) }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
     return this.request('navigateTree', { entryId })

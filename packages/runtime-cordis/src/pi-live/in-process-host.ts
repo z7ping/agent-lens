@@ -220,6 +220,9 @@ class InProcessHandle implements PiRuntimeHandle {
       },
     }
   }
+  async entry(entryId: string): Promise<unknown | null> {
+    return this.session.sessionManager.getEntries().find(entry => record(entry).id === entryId) ?? null
+  }
   private modelSnapshot(provider?: string): readonly PiSdkModel[] { const snapshot = [...this.session.modelRuntime.getAvailableSnapshot()]; const selected = this.session.model; const catalog = selected && !snapshot.some(model => model.provider === selected.provider && model.id === selected.id) ? [...snapshot, selected] : snapshot; return provider ? catalog.filter(model => model.provider === provider) : catalog }
   private async modelsForSelection(provider?: string): Promise<readonly PiSdkModel[]> { const snapshot = this.modelSnapshot(provider); return snapshot.length ? snapshot : await this.session.modelRuntime.getAvailable(provider) }
   private thinkingControl(): PiLiveControls['thinking'] {
