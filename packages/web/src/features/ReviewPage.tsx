@@ -972,11 +972,19 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       void liveApi.products().then(
         products => {
           if (cancelled) return
+          if (retryTimer !== undefined) {
+            window.clearTimeout(retryTimer)
+            retryTimer = undefined
+          }
           setLiveProducts(products)
         },
         () => {
           if (cancelled || !allowRetry) return
-          retryTimer = window.setTimeout(() => refreshLiveProducts(false), 800)
+          if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+          retryTimer = window.setTimeout(() => {
+            retryTimer = undefined
+            refreshLiveProducts(false)
+          }, 800)
         },
       )
     }
@@ -990,7 +998,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       window.removeEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
       window.removeEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
     }
-  }, [detail?.productId])
+  }, [detail?.id])
 
   useEffect(() => {
     if (embedded) {
