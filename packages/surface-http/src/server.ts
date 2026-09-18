@@ -80,6 +80,20 @@ const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
 const SLOW_HTTP_REQUEST_LOG_MS = 500
 
+type ForegroundReadPriority = 'critical' | 'supporting' | 'opportunistic'
+type PriorityAwareStorage = StorageService & {
+  withReadPriority?<T>(priority: ForegroundReadPriority, operation: () => Promise<T>): Promise<T>
+}
+
+function withReadPriority<T>(
+  storage: StorageService,
+  priority: ForegroundReadPriority,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const scoped = (storage as PriorityAwareStorage).withReadPriority
+  return scoped ? scoped.call(storage, priority, operation) : operation()
+}
+
 export interface HttpSurfaceOptions {
   port?: number
   staticDir?: string
@@ -391,7 +405,7 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/background-activity') {
-        writeJson(response, 200, await readBackgroundActivity(storage))
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => readBackgroundActivity(storage)))
         return
       }
       if (url.pathname === '/api/v1/locales') {
@@ -482,11 +496,11 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/facets') {
-        writeJson(response, 200, await facets.query())
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => facets.query()))
         return
       }
       if (url.pathname === '/api/v1/projects/launchable') {
-        writeJson(response, 200, await readLaunchableProjects(storage, url.searchParams))
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => readLaunchableProjects(storage, url.searchParams)))
         return
       }
       if (url.pathname === '/api/v1/agents/summary') {
@@ -501,7 +515,7 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/agents') {
-        writeJson(response, 200, await agents.query())
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => agents.query()))
         return
       }
       if (url.pathname === '/api/v1/hub/review') {
@@ -510,7 +524,7 @@ export async function startHttpSurface(
           return
         }
         const limit = parseLimit(url.searchParams, 500) ?? 100
-        writeJson(response, 200, await options.hubReview.query(limit))
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => options.hubReview!.query(limit)))
         return
       }
       if (url.pathname.startsWith('/api/v1/hub/review/')) {
@@ -524,14 +538,14 @@ export async function startHttpSurface(
           return
         }
         const limit = parseLimit(url.searchParams, 500) ?? 500
-        const detail = await options.hubReview.get(id, limit)
+        const detail = await withReadPriority(storage, 'supporting', () => options.hubReview!.get(id, limit))
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
         return
       }
       if (url.pathname.startsWith('/api/v1/source-records/')) {
         const id = decodeURIComponent(url.pathname.slice('/api/v1/source-records/'.length))
         if (!id) throw badRequest('sourceRecordId is required')
-        const record = await storage.repositories.sourceRecords.get(id)
+        const record = await withReadPriority(storage, 'opportunistic', () => storage.repositories.sourceRecords.get(id))
         if (!record) {
           writeJson(response, 404, { error: 'not_found' })
           return
@@ -598,7 +612,7 @@ export async function startHttpSurface(
       if (url.pathname === '/api/v1/relationships') {
         const logicalSessionId = url.searchParams.get('logicalSessionId')
         if (!logicalSessionId) throw badRequest('logicalSessionId is required')
-        writeJson(response, 200, await relationships.query(logicalSessionId))
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => relationships.query(logicalSessionId)))
         return
       }
 
