@@ -641,11 +641,11 @@ function WorkspaceReferenceMenuPlugin({
 
   useEffect(() => {
     setActiveIndex(0)
+    const requestId = ++requestIdRef.current
     if (!search || !query) {
       setMatches([])
       return
     }
-    const requestId = ++requestIdRef.current
     const timer = window.setTimeout(() => {
       void search(query.query).then(
         items => {
