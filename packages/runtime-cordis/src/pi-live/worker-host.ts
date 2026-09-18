@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
+  PiLiveCommand,
   PiLiveControls,
   PiLiveImageInput,
   PiLiveInitializationTiming,
@@ -23,7 +24,7 @@ const MAX_STARTUP_OUTPUT_LINES = 80
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
 
@@ -56,6 +57,7 @@ export interface PiRuntimeHandle {
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string): Promise<PiLiveSnapshot>
+  commands(): Promise<PiLiveCommand[]>
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState>
@@ -317,6 +319,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   snapshot(since?: string): Promise<PiLiveSnapshot> {
     return collectSnapshotTransfer((command, payload) => this.request(command, payload), since)
   }
+  commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
   controls(): Promise<PiLiveControls> { return this.request('controls') }
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { return this.request('setModel', { provider, modelId }) }
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState> { return this.request('setThinkingLevel', { level }) }
