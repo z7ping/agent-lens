@@ -216,7 +216,8 @@ class InProcessHandle implements PiRuntimeHandle {
     return rows
   }
 
-  private roundPage(all: unknown[], start: number, end: number) {
+  private roundPage(all: readonly unknown[], start: number, end: number) {
+    if (!this.roundIndexCache) return undefined
     const rows = this.roundIndex(all)
     let first: PiRoundIndexRow | undefined
     let last: PiRoundIndexRow | undefined
@@ -283,6 +284,7 @@ class InProcessHandle implements PiRuntimeHandle {
     const last = entries.length ? record(entries.at(-1)).id : undefined
     const before = start > 0 ? first : undefined
     const after = end < all.length ? last : undefined
+    const rounds = this.roundPage(all, start, end)
     return {
       state: await this.state(),
       entries,
@@ -292,7 +294,7 @@ class InProcessHandle implements PiRuntimeHandle {
         ...(start > 0 && typeof before === 'string' ? { before } : {}),
         ...(typeof first === 'string' ? { first } : {}),
         ...(typeof last === 'string' ? { last } : {}),
-        rounds: this.roundPage(all, start, end),
+        ...(rounds ? { rounds } : {}),
         ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
       },
     }
