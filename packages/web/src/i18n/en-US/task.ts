@@ -75,6 +75,9 @@ export const englishTaskMessages: LocaleMessagesDto = {
       empty: 'Waiting for task input.',
       composerPlaceholder: 'Enter a task or follow-up…',
       composerAria: 'Live task input',
+      commandMenu: {
+        aria: 'Available commands',
+      },
       connected: 'Live connection established',
       connecting: 'Connecting to live task',
       model: 'Model',
