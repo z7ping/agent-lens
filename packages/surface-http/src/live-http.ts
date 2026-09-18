@@ -1,6 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type {
-  LiveAdapter,
+import {
+  LIVE_SNAPSHOT_DEFAULT_LIMIT,
+  LIVE_SNAPSHOT_MAX_LIMIT,
+  type LiveAdapter,
   LiveCapabilityName,
   LiveContributionText,
   LiveContributionValue,
@@ -15,6 +17,7 @@ import type {
   LiveService,
   LiveStartCapabilities,
   LiveStartInput,
+  type LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
@@ -732,10 +735,22 @@ export async function handleLiveRequest(
     }
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
+      const before = optionalString(url.searchParams.get('before'))
+      if (since && before) throw httpError(400, 'Live snapshot cannot combine since and before cursors')
+      const rawLimit = url.searchParams.get('limit')
+      const requestedLimit = rawLimit === null ? LIVE_SNAPSHOT_DEFAULT_LIMIT : Number(rawLimit)
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+        throw httpError(400, 'Live snapshot limit must be a positive integer')
+      }
+      const limit = Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit)
+      const window: LiveSnapshotWindow = {
+        ...(before ? { before } : {}),
+        limit,
+      }
       const snapshot = normalizePublicSnapshot(await shareAdapterRead(
         adapter,
-        `snapshot:${runtimeSessionId}:${since ?? ''}`,
-        () => adapter.snapshot(runtimeSessionId, since),
+        `snapshot:${runtimeSessionId}:${since ?? ''}:${before ?? ''}:${limit}`,
+        () => adapter.snapshot(runtimeSessionId, since, window),
       ))
       markRuntimeValidated(adapter, runtimeSessionId)
       writeJson(response, 200, jsonValue(snapshot))

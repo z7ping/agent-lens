@@ -234,6 +234,11 @@ async function historyInteraction(
   return state
 }
 
+export interface LiveSnapshotWindowRequest {
+  before?: string | undefined
+  limit?: number | undefined
+}
+
 export type LiveProductMetadata = Pick<
   LiveProductDto,
   'liveId' | 'productId' | 'displayName' | 'capabilities' | 'inputCapabilities' | 'startCapabilities'
@@ -297,8 +302,17 @@ export const liveApi = {
     return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/state')))
   },
 
-  snapshot(liveId: string, runtimeSessionId: string, since?: string): Promise<LiveSnapshotDto> {
-    const search = since ? `?since=${encodeURIComponent(since)}` : ''
+  snapshot(
+    liveId: string,
+    runtimeSessionId: string,
+    since?: string,
+    window?: LiveSnapshotWindowRequest,
+  ): Promise<LiveSnapshotDto> {
+    const params = new URLSearchParams()
+    if (since) params.set('since', since)
+    if (window?.before) params.set('before', window.before)
+    if (window?.limit !== undefined) params.set('limit', String(window.limit))
+    const search = params.size ? `?${params}` : ''
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
   },
 
