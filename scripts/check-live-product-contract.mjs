@@ -180,6 +180,7 @@ requireText(liveClient, /class LiveEventScheduler/, '通用 Live Client 必须�
 requireText(liveClient, /LIVE_VISIBLE_FLUSH_MS\s*=\s*48/, '前台 Live delta 必须保持小批次合并，不能逐 token 触发 React')
 requireText(liveClient, /LIVE_HIDDEN_FLUSH_MS\s*=\s*250/, '后台 Live 必须降频，不能按前台频率持续渲染')
 requireText(liveClient, /scheduler\.push\(JSON\.parse\(event\.data\) as LiveRuntimeEventDto\)/, 'EventSource 必须先进入通用 Live 调度器再交给页面')
+requireText(liveClient, /existing === this\.queue\.length - 1/, 'Live 展示背压只能合并相邻事件，不能跨 Tool/Status 边界重排事实')
 requireText(liveClient, /visibilitychange/, 'Live 调度器必须响应 Page Visibility')
 requireText(liveClient, /scheduler\.dispose\(\)/, 'Live 页面离开时必须释放调度队列')
 requireText(liveClient, /async products\(\): Promise<LiveProductDto\[]>/, '通用 Live Client 必须提供 products')
