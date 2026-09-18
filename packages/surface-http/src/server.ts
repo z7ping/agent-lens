@@ -557,6 +557,14 @@ export async function startHttpSurface(
         writeJson(response, 200, result)
         return
       }
+      const reviewSummaryMatch = url.pathname.match(/^\/api\/v1\/review\/([^/]+)\/summary$/)
+      if (reviewSummaryMatch) {
+        const id = decodeURIComponent(reviewSummaryMatch[1] ?? '')
+        if (!id) throw badRequest('logicalSessionId is required')
+        const summary = await review.getSummary(id)
+        writeJson(response, summary ? 200 : 404, summary ?? { error: 'not_found' })
+        return
+      }
       if (url.pathname.startsWith('/api/v1/review/')) {
         const id = decodeURIComponent(url.pathname.slice('/api/v1/review/'.length))
         if (!id) throw badRequest('logicalSessionId is required')
