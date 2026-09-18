@@ -235,7 +235,9 @@ function downloadCount(value: unknown): number | undefined {
 export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
   private readonly searchCache = new Map<string, CacheEntry<PiEcosystemSearchResponseDto>>()
   private readonly lastGoodSearch = new Map<string, PiEcosystemSearchResponseDto>()
+  private readonly searchInFlight = new Map<string, Promise<PiEcosystemSearchResponseDto>>()
   private readonly packageCache = new Map<string, CacheEntry<NpmPackageDetails>>()
+  private readonly packageInFlight = new Map<string, Promise<NpmPackageDetails>>()
   private readonly downloadCache = new Map<string, CacheEntry<number | undefined>>()
 
   constructor(
@@ -252,19 +254,29 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     const cached = this.searchCache.get(cacheKey)
     if (cached && cached.expiresAt > this.now()) return cached.value
 
-    try {
-      const value = await this.searchFresh(query, type, sort, limit)
-      setBounded(this.searchCache, cacheKey, {
-        value,
-        expiresAt: this.now() + SEARCH_CACHE_TTL_MS,
-      }, MAX_SEARCH_CACHE_ENTRIES)
-      setBounded(this.lastGoodSearch, cacheKey, value, MAX_SEARCH_CACHE_ENTRIES)
-      return value
-    } catch (error) {
-      const lastGood = this.lastGoodSearch.get(cacheKey)
-      if (lastGood) return { ...lastGood, stale: true }
-      throw error
-    }
+    const existing = this.searchInFlight.get(cacheKey)
+    if (existing) return existing
+
+    let pending!: Promise<PiEcosystemSearchResponseDto>
+    pending = (async () => {
+      try {
+        const value = await this.searchFresh(query, type, sort, limit)
+        setBounded(this.searchCache, cacheKey, {
+          value,
+          expiresAt: this.now() + SEARCH_CACHE_TTL_MS,
+        }, MAX_SEARCH_CACHE_ENTRIES)
+        setBounded(this.lastGoodSearch, cacheKey, value, MAX_SEARCH_CACHE_ENTRIES)
+        return value
+      } catch (error) {
+        const lastGood = this.lastGoodSearch.get(cacheKey)
+        if (lastGood) return { ...lastGood, stale: true }
+        throw error
+      }
+    })().finally(() => {
+      if (this.searchInFlight.get(cacheKey) === pending) this.searchInFlight.delete(cacheKey)
+    })
+    this.searchInFlight.set(cacheKey, pending)
+    return pending
   }
 
   async packageDetails(request: PiEcosystemPackageDetailsRequestDto): Promise<PiEcosystemPackageDetailsResponseDto> {
@@ -433,25 +445,35 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     const cached = this.packageCache.get(cacheKey)
     if (cached && cached.expiresAt > this.now()) return cached.value
 
-    const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-    const raw = await responseJson(await this.fetcher(
-      `${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`,
-      {
-        headers: { accept: 'application/json' },
-        signal,
-      },
-    ), `npm package metadata ${packageName}@${version}`)
-    const manifest = objectValue(raw)
-    const resolvedRepositoryUrl = repositoryUrl(manifest?.repository)
-    const value: NpmPackageDetails = {
-      resourceTypes: resourceTypesFromManifest(manifest),
-      ...(resolvedRepositoryUrl ? { repositoryUrl: resolvedRepositoryUrl } : {}),
-    }
-    setBounded(this.packageCache, cacheKey, {
-      value,
-      expiresAt: this.now() + PACKAGE_CACHE_TTL_MS,
-    }, MAX_PACKAGE_CACHE_ENTRIES)
-    return value
+    const existing = this.packageInFlight.get(cacheKey)
+    if (existing) return existing
+
+    let pending!: Promise<NpmPackageDetails>
+    pending = (async () => {
+      const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      const raw = await responseJson(await this.fetcher(
+        `${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`,
+        {
+          headers: { accept: 'application/json' },
+          signal,
+        },
+      ), `npm package metadata ${packageName}@${version}`)
+      const manifest = objectValue(raw)
+      const resolvedRepositoryUrl = repositoryUrl(manifest?.repository)
+      const value: NpmPackageDetails = {
+        resourceTypes: resourceTypesFromManifest(manifest),
+        ...(resolvedRepositoryUrl ? { repositoryUrl: resolvedRepositoryUrl } : {}),
+      }
+      setBounded(this.packageCache, cacheKey, {
+        value,
+        expiresAt: this.now() + PACKAGE_CACHE_TTL_MS,
+      }, MAX_PACKAGE_CACHE_ENTRIES)
+      return value
+    })().finally(() => {
+      if (this.packageInFlight.get(cacheKey) === pending) this.packageInFlight.delete(cacheKey)
+    })
+    this.packageInFlight.set(cacheKey, pending)
+    return pending
   }
 }
 

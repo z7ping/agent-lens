@@ -200,6 +200,61 @@ test('Pi ecosystem package details use exact version endpoint and reuse detail c
   assert.equal(detailCalls, 1)
 })
 
+test('Pi ecosystem provider coalesces concurrent identical search before cache is populated', async () => {
+  let searchCalls = 0
+  let downloadCalls = 0
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes('/-/v1/search')) {
+      searchCalls += 1
+      await new Promise(resolve => setTimeout(resolve, 10))
+      return jsonResponse({
+        total: 1,
+        objects: [searchObject('pi-demo', '1.0.0', '2026-09-01T00:00:00.000Z')],
+      })
+    }
+    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
+      downloadCalls += 1
+      return jsonResponse({ downloads: 42, package: 'pi-demo' })
+    }
+    throw new Error(`unexpected request: ${url}`)
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const [first, second] = await Promise.all([
+    provider.search({ sort: 'downloads', limit: 20 }),
+    provider.search({ sort: 'downloads', limit: 20 }),
+  ])
+
+  assert.deepEqual(second, first)
+  assert.equal(searchCalls, 1)
+  assert.equal(downloadCalls, 1)
+})
+
+test('Pi ecosystem provider coalesces concurrent exact-version package details', async () => {
+  let calls = 0
+  const fetcher = (async (input: string | URL | Request) => {
+    calls += 1
+    const url = String(input)
+    assert.ok(url.endsWith('/pi-demo/1.0.0'))
+    await new Promise(resolve => setTimeout(resolve, 10))
+    return jsonResponse({
+      name: 'pi-demo',
+      version: '1.0.0',
+      pi: { skills: ['./skills'] },
+    })
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const [first, second] = await Promise.all([
+    provider.packageDetails({ packageName: 'pi-demo', version: '1.0.0' }),
+    provider.packageDetails({ packageName: 'pi-demo', version: '1.0.0' }),
+  ])
+
+  assert.deepEqual(second, first)
+  assert.equal(calls, 1)
+})
+
 test('Pi ecosystem provider reuses short search cache and falls back to bounded last-good result', async () => {
   let now = 0
   let searchCalls = 0
