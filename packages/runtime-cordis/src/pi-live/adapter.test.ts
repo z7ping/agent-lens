@@ -264,3 +264,22 @@ test('Pi Live Adapter exposes queue control and restores queued messages on inte
   })
   assert.deepEqual(calls, ['clear', 'abort'])
 })
+
+
+test('Pi Live Adapter exposes Runtime commands through generic command-discovery', async () => {
+  const service = {
+    commands: async () => [
+      { name: 'review', description: 'Review changes', source: 'extension' as const },
+      { name: 'explain', description: 'Explain code', source: 'prompt' as const },
+      { name: 'skill:repo-review', description: 'Review repository', source: 'skill' as const },
+    ],
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.equal(adapter.capabilities.has('command-discovery'), true)
+  assert.deepEqual(await adapter.commands('runtime-1'), [
+    { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
+    { value: '/explain', label: '/explain', description: 'Explain code', group: 'prompt' },
+    { value: '/skill:repo-review', label: '/skill:repo-review', description: 'Review repository', group: 'skill' },
+  ])
+})
