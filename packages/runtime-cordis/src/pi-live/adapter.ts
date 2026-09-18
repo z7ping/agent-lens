@@ -42,6 +42,7 @@ const CAPABILITIES = [
   'thinking-control',
   'extension-ui',
   'command-discovery',
+  'workspace-file-reference',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
@@ -395,6 +396,10 @@ export class PiLiveAdapter implements LiveAdapter {
       ...(command.description ? { description: command.description } : {}),
       group: command.source,
     }))
+  }
+
+  workspaceFileReferences(runtimeSessionId: string, query: string, limit?: number) {
+    return this.service.workspaceFileReferences(runtimeSessionId, query, limit)
   }
 
   private async resolveMessage(message: LiveMessage): Promise<{
