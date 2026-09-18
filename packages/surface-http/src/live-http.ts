@@ -426,7 +426,8 @@ function normalizeHistoryIndex(value: unknown) {
     }
     const item = raw as Record<string, unknown>
     if (typeof item.cursor !== 'string' || !item.cursor
-      || !Number.isSafeInteger(item.ordinal) || Number(item.ordinal) < 1) {
+      || !Number.isSafeInteger(item.ordinal) || Number(item.ordinal) < 1
+      || Number(item.ordinal) > Number(row.total)) {
       throw httpError(500, 'Live adapter history index cursor is invalid')
     }
     if (item.preview !== undefined && typeof item.preview !== 'string') {
