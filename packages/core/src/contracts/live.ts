@@ -365,6 +365,8 @@ export interface LiveAdapter {
   respondToExtension?(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
+  /** Present only when the adapter declares queue. Returns the current queued messages without mutation. */
+  queueState?(runtimeSessionId: string): Promise<LiveQueueState>
   /** Present only when the adapter declares queue. Clears and returns the current queued messages. */
   clearQueue?(runtimeSessionId: string): Promise<LiveQueueState>
   interrupt?(runtimeSessionId: string): Promise<LiveInterruptResult>
