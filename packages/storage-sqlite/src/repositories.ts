@@ -430,6 +430,19 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceRecord(row) : null
       })
     },
+    async findBySourceSession(sourceId, installationId, nativeSessionId) {
+      return executor.run(() => {
+        const row = db.prepare(`
+          SELECT * FROM source_records
+          WHERE source_id = ?
+            AND installation_id = ?
+            AND source_session_native_id = ?
+          ORDER BY captured_at DESC, id DESC
+          LIMIT 1
+        `).get(sourceId, installationId, nativeSessionId)
+        return row ? mapSourceRecord(row) : null
+      })
+    },
     async put(record) {
       const serializedPayload = encodeJson(record.payload)
       const encodedPayload = encodeSourceRecordPayloadJson(serializedPayload)

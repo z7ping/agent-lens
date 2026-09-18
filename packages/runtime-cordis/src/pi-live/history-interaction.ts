@@ -1,6 +1,6 @@
 import { open, stat } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
-import type { SourceRecord, StorageService } from '@agent-lens/core'
+import type { SourceRecord, SourceSession, StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveStartInput } from './types'
 
 const PI_SESSION_HEADER_BYTES = 64 * 1024
@@ -24,27 +24,30 @@ function sourceRecordCwd(value: SourceRecord): string | undefined {
 
 async function resumablePiRecord(
   storage: StorageService,
-  evidenceIds: readonly string[],
-  nativeSessionIds: ReadonlySet<string>,
+  sourceSessions: readonly SourceSession[],
 ): Promise<SourceRecord | null> {
-  const evidence = storage.repositories.evidence.getMany
-    ? await storage.repositories.evidence.getMany([...evidenceIds])
-    : await Promise.all(evidenceIds.map(id => storage.repositories.evidence.get(id)))
-  const sourceRecordIds = [...new Set(evidence.flatMap(item => item?.sourceRecordId ? [item.sourceRecordId] : []))]
-  const sourceRecords = storage.repositories.sourceRecords.getMany
-    ? await storage.repositories.sourceRecords.getMany(sourceRecordIds)
-    : await Promise.all(sourceRecordIds.map(id => storage.repositories.sourceRecords.get(id)))
+  const findBySourceSession = storage.repositories.sourceRecords.findBySourceSession
+  if (!findBySourceSession) {
+    throw interactionError('当前存储不支持有界历史定位，无法继续会话')
+  }
 
-  return sourceRecords.find((item): item is SourceRecord => Boolean(
-    item
-    && item.sourceId === 'pi'
-    && item.sourceSessionNativeId
-    && nativeSessionIds.has(item.sourceSessionNativeId)
-    && item.locator.kind === 'file'
-    && typeof item.locator.path === 'string'
-    && isAbsolute(item.locator.path)
-    && extname(item.locator.path).toLowerCase() === '.jsonl',
-  )) ?? null
+  for (const sourceSession of sourceSessions) {
+    const item = await findBySourceSession(
+      'pi',
+      sourceSession.installationId,
+      sourceSession.nativeSessionId,
+    )
+    if (
+      item
+      && item.sourceId === 'pi'
+      && item.sourceSessionNativeId === sourceSession.nativeSessionId
+      && item.locator.kind === 'file'
+      && typeof item.locator.path === 'string'
+      && isAbsolute(item.locator.path)
+      && extname(item.locator.path).toLowerCase() === '.jsonl'
+    ) return item
+  }
+  return null
 }
 
 async function isMatchingPiSessionFile(
@@ -81,18 +84,16 @@ export async function resolvePiLiveHistoryInput(
   const logicalSession = await storage.repositories.sessions.getLogicalSession(logicalSessionId)
   if (!logicalSession) throw interactionError('历史会话不存在或已被移除')
 
-  const observations = await storage.repositories.observations.query({ logicalSessionId, limit: 5_000 })
-  const sourceSessionIds = [...new Set(observations.map(item => item.sourceSessionId))]
-  const sourceSessions = await Promise.all(sourceSessionIds.map(id => storage.repositories.sessions.getSourceSession(id)))
-  const sourceSessionsForProduct = sourceSessions.filter(item => item?.sourceId === 'pi')
+  const listSourceSessions = storage.repositories.sessions.listSourceSessionsByLogicalSession
+  if (!listSourceSessions) {
+    throw interactionError('当前存储不支持有界历史定位，无法继续会话')
+  }
+  const sourceSessionsForProduct = (await listSourceSessions(logicalSessionId))
+    .filter(item => item.sourceId === 'pi')
   if (!sourceSessionsForProduct.length) throw interactionError('该历史会话不支持继续')
 
-  const sourceSessionIdSet = new Set(sourceSessionsForProduct.map(item => item!.id))
-  const nativeSessionIds = new Set(sourceSessionsForProduct.map(item => item!.nativeSessionId))
-  const evidenceIds = [...new Set(observations
-    .filter(item => sourceSessionIdSet.has(item.sourceSessionId))
-    .flatMap(item => item.evidenceRefs))]
-  const sourceRecord = await resumablePiRecord(storage, evidenceIds, nativeSessionIds)
+  const nativeSessionIds = new Set(sourceSessionsForProduct.map(item => item.nativeSessionId))
+  const sourceRecord = await resumablePiRecord(storage, sourceSessionsForProduct)
   const sessionPath = sourceRecord?.locator.path
   if (!sessionPath) throw interactionError('找不到该会话的原生历史文件，无法继续会话')
 
