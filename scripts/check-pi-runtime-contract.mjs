@@ -15,7 +15,8 @@ const [
   coreObservation,
   timelineProtocol,
   piLiveProtocol,
-  resumeResolver,
+  resumeWrapper,
+  historyInteraction,
   piAdapter,
 ] = await Promise.all([
   readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
@@ -33,6 +34,7 @@ const [
   readFile(new URL('../packages/protocol/src/timeline.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/pi-live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/history-interaction.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/adapter.ts', import.meta.url), 'utf8'),
 ])
 
@@ -84,11 +86,14 @@ requireText(piLiveProtocol, /interface PiLiveResumeRequestDto[\s\S]{0,120}logica
 requireText(piClient, /'\/api\/v1\/pi-live\/resume'[\s\S]{0,220}logicalSessionId/, 'Pi compatibility client 缺少历史恢复端点')
 requireText(piHttp, /url\.pathname === '\/api\/v1\/pi-live'[\s\S]*request\.method === 'GET'[\s\S]*service\.list\(\)/, 'Pi compatibility HTTP 必须支持列举活跃 Runtime')
 requireText(piHttp, /url\.pathname === '\/api\/v1\/pi-live\/resume'[\s\S]{0,600}resolvePiLiveResumeInput[\s\S]{0,220}service\.start\(input\)/, 'Pi compatibility HTTP 恢复必须走安全解析')
-requireText(resumeResolver, /item\.sourceId === 'pi'[\s\S]{0,480}isAbsolute\(item\.locator\.path\)[\s\S]{0,260}\.jsonl/, 'Pi 恢复解析器只能接受 Pi 的绝对 JSONL 证据')
-requireText(resumeResolver, /sourceRecords\.getMany[\s\S]{0,220}getMany\(sourceRecordIds\)/, 'Pi 恢复解析器必须批量读取原始记录')
-requireText(resumeResolver, /await stat\(sessionPath\)/, 'Pi 恢复解析器必须验证原生文件存在')
-requireText(resumeResolver, /await isMatchingPiSessionFile\(sessionPath, nativeSessionIds\)/, 'Pi 恢复解析器必须验证原生 JSONL 身份')
-requireText(resumeResolver, /workspace\?\.path\?\.trim\(\)\s*\|\|\s*sourceRecordCwd\(sourceRecord\)/, 'Pi 恢复解析器必须恢复原工作目录')
+requireText(resumeWrapper, /return resolvePiLiveHistoryInput\(storage, logicalSessionId, historyAction\)/, 'Pi HTTP 兼容 wrapper 必须委托 Pi Integration 的历史恢复 Owner')
+requireText(historyInteraction, /item\.sourceId === 'pi'/, 'Pi 历史恢复只能选择 Pi SourceRecord')
+requireText(historyInteraction, /isAbsolute\(item\.locator\.path\)/, 'Pi 历史恢复只接受绝对原生路径')
+requireText(historyInteraction, /extname\(item\.locator\.path\)\.toLowerCase\(\) === '\.jsonl'/, 'Pi 历史恢复只接受 JSONL 原生会话文件')
+requireText(historyInteraction, /sourceRecords\.getMany[\s\S]{0,220}getMany\(sourceRecordIds\)/, 'Pi 恢复解析器必须批量读取原始记录')
+requireText(historyInteraction, /await stat\(sessionPath\)/, 'Pi 恢复解析器必须验证原生文件存在')
+requireText(historyInteraction, /await isMatchingPiSessionFile\(sessionPath, nativeSessionIds\)/, 'Pi 恢复解析器必须验证原生 JSONL 身份')
+requireText(historyInteraction, /workspace\?\.path\?\.trim\(\) \|\| sourceRecordCwd\(sourceRecord\)/, 'Pi 恢复解析器必须恢复原工作目录')
 requireText(piHttp, /request\.once\('close', cleanup\)/, 'Pi SSE 断开必须释放订阅')
 requireText(piHttp, /service\.terminate\(runtimeSessionId\)/, 'Pi Runtime 只能显式 DELETE 终止')
 
