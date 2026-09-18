@@ -26,9 +26,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -121,6 +121,18 @@ class FakeLiveAdapter implements LiveAdapter {
       state: await this.state(runtimeSessionId),
       entries: [{ kind: 'snapshot' }],
       page: { hasEarlier: true, before: 'entry-0', first: 'entry-0', last: 'entry-9', hasLater: true, after: 'entry-9' },
+    }
+  }
+
+  async historyIndex(runtimeSessionId: string, limit = 80) {
+    await this.state(runtimeSessionId)
+    return {
+      total: 3,
+      items: [
+        { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
+        { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
+        { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
+      ].slice(0, limit),
     }
   }
 
@@ -438,8 +450,27 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     await latestSnapshot.json()
     assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { edge: 'latest', limit: 40 })
 
+    const aroundSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?around=entry-user-2&limit=50`)
+    assert.equal(aroundSnapshot.status, 200)
+    await aroundSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { around: 'entry-user-2', limit: 50 })
+
     const mixedSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?before=entry-0&after=entry-9`)
     assert.equal(mixedSnapshot.status, 400)
+
+    const mixedAroundSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?around=entry-user-2&edge=latest`)
+    assert.equal(mixedAroundSnapshot.status, 400)
+
+    const historyIndex = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?limit=80`)
+    assert.equal(historyIndex.status, 200)
+    assert.deepEqual(await historyIndex.json(), {
+      total: 3,
+      items: [
+        { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
+        { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
+        { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
+      ],
+    })
 
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',
