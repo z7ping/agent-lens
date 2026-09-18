@@ -365,7 +365,17 @@ export class AgentLensClientModel {
     }
     if (!this.visibilityListener && typeof document !== 'undefined') {
       this.visibilityListener = () => {
-        if (!document.hidden && this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+        if (document.hidden) {
+          if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
+          this.integrationDiscoveryTimer = null
+          return
+        }
+        if (this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+        const discoveryStatus = this.snapshot.integrationDiscovery?.status
+        if (
+          this.integrationDiscoveryActive
+          && (discoveryStatus === 'idle' || discoveryStatus === 'scanning')
+        ) this.scheduleIntegrationDiscoveryRefresh()
       }
       document.addEventListener('visibilitychange', this.visibilityListener)
     }
@@ -581,7 +591,12 @@ export class AgentLensClientModel {
   }
 
   private scheduleIntegrationDiscoveryRefresh(): void {
-    if (!this.integrationDiscoveryActive || this.integrationDiscoveryTimer || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS) return
+    if (
+      !this.integrationDiscoveryActive
+      || (typeof document !== 'undefined' && document.hidden)
+      || this.integrationDiscoveryTimer
+      || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS
+    ) return
     this.integrationDiscoveryTimer = setTimeout(() => {
       this.integrationDiscoveryTimer = null
       this.integrationDiscoveryPolls += 1
