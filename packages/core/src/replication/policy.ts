@@ -240,6 +240,7 @@ const CONTRACTS: Partial<Record<KnownReplicationEntityType, ReplicationEntityCon
       { field: 'scopeRoot', class: 'path' },
       { field: 'path', class: 'path' },
       { field: 'source', class: 'content' },
+      { field: 'packageIdentity', class: 'metadata' },
       { field: 'version', class: 'metadata' },
     ],
   },
