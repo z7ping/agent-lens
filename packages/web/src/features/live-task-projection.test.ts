@@ -43,6 +43,22 @@ test('optimistic projection keeps image-only user messages', () => {
   assert.equal(item.attachments?.[0]?.previewUrl, 'blob:agent-lens-preview')
 })
 
+test('optimistic projection keeps file-only user messages', () => {
+  const items = appendOptimisticLiveUserMessage([], '', 'user:file-only', [{
+    type: 'file',
+    name: 'report.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 42,
+  }])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.type, 'file')
+  assert.equal(item.attachments?.[0]?.name, 'report.pdf')
+})
+
 test('snapshot projection keeps generic inline image attachments', () => {
   const items = projectLiveSnapshotEntries([
     {
