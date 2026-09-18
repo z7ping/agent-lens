@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import {
+  LIVE_HISTORY_INDEX_MAX_LIMIT,
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
   type LiveContributionText,
@@ -829,7 +830,7 @@ export class DefaultPiLiveService implements PiLiveService {
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
-    const selectors = [since, window?.before, window?.after, window?.edge].filter(Boolean)
+    const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
     const requestedLimit = window?.limit
     const limit = Number.isInteger(requestedLimit)
@@ -839,6 +840,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(window?.before ? { before: window.before } : {}),
       ...(window?.after ? { after: window.after } : {}),
       ...(window?.edge ? { edge: window.edge } : {}),
+      ...(window?.around ? { around: window.around } : {}),
       limit,
     }
     const snapshot = await runtime.handle.snapshot(since, boundedWindow)
@@ -847,6 +849,15 @@ export class DefaultPiLiveService implements PiLiveService {
     this.persistStartupAuditBestEffort(runtime, snapshot.state)
     this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
+  }
+
+  async historyIndex(id: string, limit = LIVE_HISTORY_INDEX_MAX_LIMIT) {
+    const runtime = await this.readyRuntime(id)
+    const requested = Number.isInteger(limit) ? limit : LIVE_HISTORY_INDEX_MAX_LIMIT
+    const boundedLimit = Math.max(2, Math.min(LIVE_HISTORY_INDEX_MAX_LIMIT, requested))
+    return runtime.handle?.historyIndex
+      ? runtime.handle.historyIndex(boundedLimit)
+      : { total: 0, items: [] }
   }
 
   async commands(id: string): Promise<PiLiveCommand[]> {

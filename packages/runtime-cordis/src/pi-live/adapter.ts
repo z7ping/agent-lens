@@ -44,6 +44,7 @@ const CAPABILITIES = [
   'extension-ui',
   'command-discovery',
   'workspace-file-reference',
+  'history-index',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
@@ -351,6 +352,10 @@ export class PiLiveAdapter implements LiveAdapter {
 
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     return this.service.snapshot(runtimeSessionId, since, window)
+  }
+
+  historyIndex(runtimeSessionId: string, limit?: number) {
+    return this.service.historyIndex(runtimeSessionId, limit)
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {

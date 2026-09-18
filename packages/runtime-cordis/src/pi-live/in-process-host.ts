@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveSnapshotWindow } from '@agent-lens/core'
+import { LIVE_HISTORY_INDEX_MAX_LIMIT, LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveHistoryIndex, type LiveSnapshotWindow } from '@agent-lens/core'
 import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
@@ -179,7 +179,7 @@ class InProcessHandle implements PiRuntimeHandle {
       ...(this.packageUpdateState.updates.length ? { packageUpdates: [...this.packageUpdateState.updates] } : {}) }
   }
   async snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
-    const selectors = [since, window?.before, window?.after, window?.edge].filter(Boolean)
+    const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
     const all = this.session.sessionManager.getEntries()
     const requested = window?.limit
@@ -198,6 +198,12 @@ class InProcessHandle implements PiRuntimeHandle {
     } else if (window?.edge === 'earliest') {
       start = 0
       end = Math.min(all.length, limit)
+    } else if (window?.around) {
+      const aroundIndex = all.findIndex(entry => record(entry).id === window.around)
+      if (aroundIndex < 0) throw new Error('Live snapshot around cursor was not found')
+      start = Math.max(0, aroundIndex - Math.floor(limit * .3))
+      end = Math.min(all.length, start + limit)
+      start = Math.max(0, end - limit)
     } else {
       if (window?.before) {
         const beforeIndex = all.findIndex(entry => record(entry).id === window.before)
@@ -225,6 +231,39 @@ class InProcessHandle implements PiRuntimeHandle {
       },
     }
   }
+  async historyIndex(limit = LIVE_HISTORY_INDEX_MAX_LIMIT): Promise<LiveHistoryIndex> {
+    const boundedLimit = Math.max(2, Math.min(
+      LIVE_HISTORY_INDEX_MAX_LIMIT,
+      Number.isInteger(limit) ? limit : LIVE_HISTORY_INDEX_MAX_LIMIT,
+    ))
+    const rounds: Array<{ cursor: string; ordinal: number; preview?: string }> = []
+    for (const raw of this.session.sessionManager.getEntries()) {
+      const entry = record(raw)
+      const message = record(entry.message)
+      if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
+      const content = message.content ?? entry.content
+      const preview = Array.isArray(content)
+        ? content.map(part => typeof part === 'string'
+          ? part
+          : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
+        : typeof content === 'string' ? content : ''
+      rounds.push({
+        cursor: entry.id,
+        ordinal: rounds.length + 1,
+        ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+      })
+    }
+    if (rounds.length <= boundedLimit) return { total: rounds.length, items: rounds }
+    const indexes = new Set<number>()
+    for (let slot = 0; slot < boundedLimit; slot += 1) {
+      indexes.add(Math.round(slot * (rounds.length - 1) / (boundedLimit - 1)))
+    }
+    return {
+      total: rounds.length,
+      items: [...indexes].sort((a, b) => a - b).map(index => rounds[index]!),
+    }
+  }
+
   async entry(entryId: string): Promise<unknown | null> {
     return this.session.sessionManager.getEntries().find(entry => record(entry).id === entryId) ?? null
   }
