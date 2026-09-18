@@ -7,6 +7,7 @@ import { join } from 'node:path'
 const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const selectSource = readFileSync(new URL('./SelectMenu.tsx', import.meta.url), 'utf8')
 const taskCenterSource = readFileSync(new URL('../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
+const liveNewTaskSource = readFileSync(new URL('../features/LiveNewTaskPanel.tsx', import.meta.url), 'utf8')
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -18,7 +19,7 @@ function sourceFiles(directory: string): string[] {
 test('Web 下拉入口统一使用 SelectMenu，而不是页面级原生 select', () => {
   const nativeSelectOwners = sourceFiles(sourceRoot).filter(path => /<select(?:\s|>)/.test(readFileSync(path, 'utf8')))
   assert.deepEqual(nativeSelectOwners, [])
-  assert.match(taskCenterSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
+  assert.match(liveNewTaskSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
 })
 
 test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => {
@@ -52,15 +53,15 @@ test('路径型项目选项第一行收敛为项目名，第二行保留路径�
 })
 
 test('新建 Pi 任务使用聚焦启动卡片并提供已有项目与目录启动入口', () => {
-  assert.match(taskCenterSource, /className="task-center-new-card"/)
-  assert.match(taskCenterSource, /t\('center\.newTask\.title'\)/)
-  assert.match(taskCenterSource, /const \[launchMode, setLaunchMode\] = useState<'existing' \| 'directory'>\('existing'\)/)
-  assert.match(taskCenterSource, /role="radiogroup" aria-label=\{t\('center\.newTask\.launchModeAria'\)\}/)
-  assert.match(taskCenterSource, /aria-checked=\{launchMode === 'existing'\}/)
-  assert.match(taskCenterSource, /aria-checked=\{launchMode === 'directory'\}/)
-  assert.match(taskCenterSource, /launchMode === 'existing'/)
-  assert.match(taskCenterSource, /t\('center\.newTask\.selectDirectory'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
-  assert.match(taskCenterSource, /t\('center\.newTask\.openExisting'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
+  assert.match(liveNewTaskSource, /className="task-center-new-card"/)
+  assert.match(liveNewTaskSource, /t\('center\.newTask\.title'\)/)
+  assert.match(liveNewTaskSource, /const \[launchMode, setLaunchMode\] = useState<'existing' \| 'directory'>\('existing'\)/)
+  assert.match(liveNewTaskSource, /role="radiogroup" aria-label=\{t\('center\.newTask\.launchModeAria'\)\}/)
+  assert.match(liveNewTaskSource, /aria-checked=\{launchMode === 'existing'\}/)
+  assert.match(liveNewTaskSource, /aria-checked=\{launchMode === 'directory'\}/)
+  assert.match(liveNewTaskSource, /launchMode === 'existing'/)
+  assert.match(liveNewTaskSource, /t\('center\.newTask\.selectDirectory'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
+  assert.match(liveNewTaskSource, /t\('center\.newTask\.openExisting'\)[\s\S]*?<UiIcon name="arrow-right" size=\{14\}/)
   assert.match(taskCenterSource, /mode === 'new' \? 'is-new-task' : ''/)
   assert.doesNotMatch(taskCenterSource, /task-center-agent-fixed/)
 })
@@ -70,7 +71,7 @@ test('已有项目下拉支持服务端搜索和继续加载，同时 SelectMenu
   assert.match(selectSource, /onSearchChange\?: \(value: string\) => void/)
   assert.match(selectSource, /onLoadMore\?: \(\) => void/)
   assert.match(selectSource, /className="select-menu-footer"/)
-  assert.match(taskCenterSource, /onSearchChange=\{onProjectSearch\}/)
-  assert.match(taskCenterSource, /onLoadMore=\{onProjectLoadMore\}/)
-  assert.match(taskCenterSource, /loadMoreLabel=\{t\('center\.newTask\.loadMoreProjects'\)\}/)
+  assert.match(liveNewTaskSource, /onSearchChange=\{onProjectSearch\}/)
+  assert.match(liveNewTaskSource, /onLoadMore=\{onProjectLoadMore\}/)
+  assert.match(liveNewTaskSource, /loadMoreLabel=\{t\('center\.newTask\.loadMoreProjects'\)\}/)
 })
