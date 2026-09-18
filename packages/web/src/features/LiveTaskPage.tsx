@@ -252,8 +252,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const clearComposer = useCallback(() => {
-    composerRef.current?.clear()
-    setComposerValue('')
+    if (composerRef.current) composerRef.current.clear()
+    else setComposerValue('')
   }, [setComposerValue])
 
   useEffect(() => {
