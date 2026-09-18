@@ -1,10 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   buildDevEnvironment,
   devRuntimePaths,
+  devInstalledIntegrationIds,
   findAvailableDevPort,
   integrationBundleDevFingerprint,
   integrationBundleWorkspaceClosure,
@@ -64,6 +67,7 @@ test('buildDevEnvironment 隔离开发态 Integration 实体与 bundle', () => {
   const env = buildDevEnvironment({
     AGENT_LENS_PORT: '56789',
     AGENT_LENS_INTEGRATIONS_DIR: join('home', '.agent-lens', '1.0', 'integrations'),
+    AGENT_LENS_DEV_REINSTALL_INTEGRATIONS: 'stale-value',
   }, repoRoot, 56790)
   const paths = devRuntimePaths(repoRoot, 56790)
 
@@ -75,6 +79,30 @@ test('buildDevEnvironment 隔离开发态 Integration 实体与 bundle', () => {
   assert.equal(env.AGENT_LENS_INTEGRATION_BUNDLE_DIR, paths.integrationBundleDir)
   assert.equal(env.AGENT_LENS_DAEMON_MODE, 'foreground')
   assert.equal(env.AGENT_LENS_RUNTIME_OWNER, 'cli')
+  assert.equal('AGENT_LENS_DEV_REINSTALL_INTEGRATIONS' in env, false)
+})
+
+test('开发 bundle 重建前只快照真实已安装的 Integration identity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-dev-integration-state-'))
+  const integrations = join(root, 'integrations')
+  try {
+    await mkdir(join(integrations, 'pi'), { recursive: true })
+    await writeFile(join(integrations, 'pi', 'current.json'), JSON.stringify({
+      schemaVersion: 1,
+      integrationId: 'pi',
+      version: '1.0.0',
+      installedAt: new Date().toISOString(),
+    }))
+
+    await mkdir(join(integrations, 'codex'), { recursive: true })
+    await mkdir(join(integrations, '.staging', 'partial'), { recursive: true })
+    await mkdir(join(integrations, 'broken'), { recursive: true })
+    await writeFile(join(integrations, 'broken', 'current.json'), '{not-json')
+
+    assert.deepEqual(await devInstalledIntegrationIds(integrations), ['pi'])
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('npmInvocation 优先通过当前 Node 复用 npm_execpath', () => {
