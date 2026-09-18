@@ -150,10 +150,19 @@ function liveDescriptor(adapter: LiveAdapter, availability: unknown, runtimes: u
 }
 
 async function describeAdapter(adapter: LiveAdapter): Promise<JsonValue> {
-  const [availability, runtimes] = await Promise.all([
+  const [availabilityResult, runtimesResult] = await Promise.allSettled([
     adapter.availability(),
     adapter.list(),
   ])
+  const availability = availabilityResult.status === 'fulfilled'
+    ? availabilityResult.value
+    : {
+        available: false,
+        reason: availabilityResult.reason instanceof Error
+          ? availabilityResult.reason.message
+          : String(availabilityResult.reason),
+      }
+  const runtimes = runtimesResult.status === 'fulfilled' ? runtimesResult.value : []
   return liveDescriptor(adapter, availability, runtimes)
 }
 
