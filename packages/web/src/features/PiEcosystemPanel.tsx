@@ -145,7 +145,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
     { value: 'theme', label: t('type.theme') },
   ]
 
-  return <section className="agent-primary-section pi-ecosystem-section">
+  return <section className="pi-ecosystem-section">
     <div className="section-heading-row">
       <div><h3>{t('title')}</h3></div>
       {response?.stale
