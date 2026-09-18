@@ -350,7 +350,7 @@ export interface SessionRepository {
   getLogicalSession(id: LogicalSessionId): Promise<LogicalSession | null>
   putLogicalSession(session: LogicalSession): Promise<void>
   getSourceSession(id: SourceSessionId): Promise<SourceSession | null>
-  /** Fast path for bounded native-session lookups already attached to one logical Session. */
+  /** Native sessions attached to one logical Session; callers may opt into an explicit bounded limit. */
   listSourceSessionsByLogicalSession?(
     logicalSessionId: LogicalSessionId,
     options?: { sourceId?: string | undefined; limit?: number | undefined },
