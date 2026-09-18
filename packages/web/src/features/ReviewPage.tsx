@@ -18,6 +18,7 @@ import type {
   TimelineEvidenceDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
+import { LIVE_RECONNECTED_EVENT } from '../client/api'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi } from '../client/live'
 import { useClientSnapshot } from '../App'
@@ -965,12 +966,31 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
 
   useEffect(() => {
     let cancelled = false
-    void liveApi.products().then(
-      products => { if (!cancelled) setLiveProducts(products) },
-      () => { if (!cancelled) setLiveProducts([]) },
-    )
-    return () => { cancelled = true }
-  }, [])
+    let retryTimer: number | undefined
+
+    const refreshLiveProducts = (allowRetry = true) => {
+      void liveApi.products().then(
+        products => {
+          if (cancelled) return
+          setLiveProducts(products)
+        },
+        () => {
+          if (cancelled || !allowRetry) return
+          retryTimer = window.setTimeout(() => refreshLiveProducts(false), 800)
+        },
+      )
+    }
+    const handleLiveStateChanged = () => refreshLiveProducts()
+    refreshLiveProducts()
+    window.addEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
+    window.addEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
+    return () => {
+      cancelled = true
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer)
+      window.removeEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
+      window.removeEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
+    }
+  }, [detail?.productId])
 
   useEffect(() => {
     if (embedded) {
