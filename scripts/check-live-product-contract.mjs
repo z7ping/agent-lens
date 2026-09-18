@@ -119,6 +119,9 @@ requireText(liveTask, /liveApi\.terminate\(current\.liveId, current\.runtimeSess
 requireText(liveTask, /liveApi\.respondToExtension\(current\.liveId, current\.runtimeSessionId, extension\.requestId, value\)/, 'Extension UI 回应必须走通用 Live API')
 requireText(liveTask, /<TaskSurface\s+mode="live"/, 'LiveTaskPage 必须复用唯一 TaskSurface')
 forbidText(liveTask, /\bpiLiveApi\b|\bPiLivePage\b|current\.liveId\s*={2,3}\s*['"]pi['"]/, 'LiveTaskPage 不得恢复 Pi 专属产品层判断')
+requireText(liveTask, /liveApi\.messageActions\(current\.liveId, current\.runtimeSessionId\)/, 'LiveTaskPage 必须通过通用 Contribution 读取消息动作')
+requireText(liveTask, /liveApi\.executeMessageAction\(/, 'LiveTaskPage 必须通过通用 Contribution 执行消息动作')
+forbidText(liveTask, /pi\.edit-from-here|pi\.new-session-from-here|navigateTree|createBranchedSession/, 'LiveTaskPage 不得理解 Pi 私有消息分支语义')
 
 requireText(liveStyles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/, 'Live 页面桌面壳层必须保留会话栏 + 主区两列')
 requireText(liveTask, /<aside className="pi-live-sessions"/, 'LiveTaskPage 两列壳层必须实际渲染通用会话栏')
@@ -145,12 +148,16 @@ requireText(liveClient, /resume\(liveId: string, logicalSessionId: string\)/, 'L
 requireText(liveClient, /fork\(liveId: string, logicalSessionId: string\)/, 'Live Client fork 必须显式接收 liveId')
 requireText(liveClient, /queueState\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue state')
 requireText(liveClient, /async commands\(liveId: string, runtimeSessionId: string\): Promise<LiveCommandDto\[]>/, 'Live Client 必须提供通用 command discovery')
+requireText(liveClient, /async messageActions\([\s\S]{0,180}LiveMessageActionContributionDto\[]>/, 'Live Client 必须提供受控消息动作 Contribution 读取')
+requireText(liveClient, /executeMessageAction\([\s\S]{0,260}actionId: string[\s\S]{0,260}targetEntryId: string/, 'Live Client 必须用 opaque actionId + stable targetEntryId 执行消息动作')
 requireText(liveClient, /clearQueue\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue control')
 
 for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'steer', 'model-switching', 'thinking-control', 'extension-ui', 'command-discovery', 'recovery', 'resume', 'fork']) {
   requireText(liveProtocol, new RegExp(`\\| '${capability}'`), `Live protocol capability 缺少：${capability}`)
 }
 requireText(liveProtocol, /export interface LiveCommandDto[\s\S]{0,220}value:\s*string[\s\S]{0,220}group\?:\s*string/, 'LiveCommandDto 必须保持 Runtime-owned value 与可选 group')
+requireText(liveProtocol, /export interface LiveMessageActionContributionDto[\s\S]{0,420}actionId:\s*string[\s\S]{0,420}roles:\s*Array<['"]user['"] \| ['"]assistant['"]>/, '受控消息动作必须保持 opaque actionId + role 声明')
+requireText(liveProtocol, /export interface LiveMessageActionResultDto[\s\S]{0,300}outcome:\s*['"]refresh-current['"] \| ['"]open-runtime['"]/, '消息动作结果只能返回受控导航结果')
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
 
 /* Live input/composer behavior is product-level, not Pi-specific. */
@@ -212,6 +219,8 @@ requireText(architectureTest, /统一 Product Surface 不直接依赖 Pi Live �
 requireText(architectureTest, /LiveTask 高级交互只消费通用 capability 与 control/, '缺少 LiveTask capability 架构回归测试')
 
 /* Slash command discovery crosses generic HTTP/adapter boundaries only. */
+requireText(liveHttp, /action === 'message-actions' && request\.method === 'GET'/, 'Live HTTP 缺少声明式 message-actions GET')
+requireText(liveHttp, /action === 'message-actions' && request\.method === 'POST'/, 'Live HTTP 缺少受控 message-actions POST')
 requireText(liveHttp, /action === 'commands' && request\.method === 'GET'/, 'Live HTTP 缺少通用 commands GET')
 requireText(liveHttp, /requireCapability\(adapter, 'command-discovery'\)/, 'Live commands HTTP 必须由 command-discovery capability 驱动')
 requireText(piLiveAdapter, /'command-discovery'/, 'Pi Live Adapter 必须显式声明 command-discovery')

@@ -25,6 +25,7 @@ type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
   | 'state' | SnapshotTransferCommand | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'navigateTree'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
 
@@ -58,6 +59,7 @@ export interface PiRuntimeHandle {
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string): Promise<PiLiveSnapshot>
   commands?(): Promise<PiLiveCommand[]>
+  navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState>
@@ -320,6 +322,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
     return collectSnapshotTransfer((command, payload) => this.request(command, payload), since)
   }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
+  navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
+    return this.request('navigateTree', { entryId })
+  }
   controls(): Promise<PiLiveControls> { return this.request('controls') }
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { return this.request('setModel', { provider, modelId }) }
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState> { return this.request('setThinkingLevel', { level }) }

@@ -57,6 +57,42 @@ function taskSummary(message: string): string | undefined {
   return normalized ? normalized.slice(0, 240) : undefined
 }
 
+interface PiUserMessageEntryTarget {
+  entryId: string
+  parentId: string | null
+  text: string
+}
+
+function messageContentText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (!Array.isArray(value)) return ''
+  return value
+    .flatMap(part => {
+      const row = record(part)
+      return row.type === 'text' && typeof row.text === 'string' ? [row.text] : []
+    })
+    .join('')
+    .trim()
+}
+
+function piUserMessageEntry(entries: readonly unknown[], entryId: string): PiUserMessageEntryTarget {
+  const value = entries.find(entry => record(entry).id === entryId)
+  const row = record(value)
+  const message = record(row.message)
+  if (row.type !== 'message' || message.role !== 'user') {
+    throw new Error('Pi message action requires a persisted user message entry')
+  }
+  const parentId = row.parentId
+  if (parentId !== null && typeof parentId !== 'string') {
+    throw new Error('Pi user message entry has an invalid parentId')
+  }
+  return {
+    entryId,
+    parentId,
+    text: messageContentText(message.content),
+  }
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -192,6 +228,8 @@ function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefi
     modelSwitching: capabilities.modelSwitching,
     thinkingLevelControl: capabilities.thinkingLevelControl,
     extensionUi: capabilities.extensionUi,
+    ...(typeof capabilities.treeNavigation === 'boolean' ? { treeNavigation: capabilities.treeNavigation } : {}),
+    ...(typeof capabilities.messageFork === 'boolean' ? { messageFork: capabilities.messageFork } : {}),
   }
 }
 
@@ -585,6 +623,98 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtime = await this.runtime(id)
     return this.workspaceFiles.search(runtime.workspacePath, query, limit)
   }
+  async messageActions(id: string) {
+    const runtime = await this.readyRuntime(id)
+    const state = await this.runtimeState(runtime)
+
+    const actions = []
+    if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation === true) {
+      actions.push({
+        actionId: 'pi.edit-from-here',
+        label: {
+          default: 'Edit from here',
+          localizations: { 'zh-CN': '从这里编辑', 'en-US': 'Edit from here' },
+        },
+        description: {
+          default: 'Move this session back before this message and restore its text to the composer.',
+          localizations: {
+            'zh-CN': '当前会话回到这条消息之前，并把原消息恢复到输入框。',
+            'en-US': 'Move this session back before this message and restore its text to the composer.',
+          },
+        },
+        roles: ['user'] as const,
+        requiresIdle: true,
+      })
+    }
+    if (state.sessionFile && state.capabilities?.messageFork === true) {
+      actions.push({
+        actionId: 'pi.new-session-from-here',
+        label: {
+          default: 'New session',
+          localizations: { 'zh-CN': '从这里新建会话', 'en-US': 'New session' },
+        },
+        description: {
+          default: 'Create an independent session from before this message.',
+          localizations: {
+            'zh-CN': '从这条消息之前创建一个独立会话，并把原消息放回输入框。',
+            'en-US': 'Create an independent session from before this message.',
+          },
+        },
+        roles: ['user'] as const,
+        requiresIdle: true,
+      })
+    }
+    return actions
+  }
+
+  async executeMessageAction(id: string, actionId: string, targetEntryId: string) {
+    if (!targetEntryId) throw new Error('Pi message action target entry id is required')
+    const runtime = await this.readyRuntime(id)
+    const snapshot = await runtime.handle!.snapshot()
+    if (snapshot.state.isStreaming) {
+      throw this.conflict('Pi message actions require an idle session')
+    }
+    const target = piUserMessageEntry(snapshot.entries, targetEntryId)
+
+    if (actionId === 'pi.edit-from-here') {
+      if (snapshot.state.capabilities?.treeNavigation !== true || !runtime.handle?.navigateTree) {
+        throw this.conflict('Installed Pi SDK does not support Edit from here')
+      }
+      const result = await runtime.handle.navigateTree(target.entryId)
+      if (result.cancelled) return { outcome: 'refresh-current' as const }
+      return {
+        outcome: 'refresh-current' as const,
+        ...(typeof result.editorText === 'string'
+          ? { draftText: result.editorText }
+          : target.text
+            ? { draftText: target.text }
+            : {}),
+      }
+    }
+
+    if (actionId === 'pi.new-session-from-here') {
+      const state = snapshot.state
+      if (state.capabilities?.messageFork !== true) {
+        throw this.conflict('Installed Pi SDK does not support message-level session fork')
+      }
+      if (!state.sessionFile) throw this.conflict('Pi session must be persisted before creating a new session from a message')
+      const nextInput: PiLiveStartInput = {
+        cwd: runtime.input.cwd,
+        sessionPath: state.sessionFile,
+        historyAction: 'fork',
+        branchFromEntryId: target.parentId,
+      }
+      const next = await this.start(nextInput)
+      return {
+        outcome: 'open-runtime' as const,
+        runtime: next,
+        ...(target.text ? { draftText: target.text } : {}),
+      }
+    }
+
+    throw new Error(`Unknown Pi message action: ${actionId}`)
+  }
+
   async controls(id: string): Promise<PiLiveControls> { return (await this.readyRuntime(id)).handle!.controls() }
   async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
     const runtime = await this.readyRuntime(id)

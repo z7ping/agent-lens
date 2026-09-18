@@ -42,6 +42,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly sent: Array<{ runtimeSessionId: string; message: LiveMessageInput; options?: LiveSendOptions | undefined }> = []
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
+  readonly messageActionExecutions: Array<{ runtimeSessionId: string; actionId: string; targetEntryId: string }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
   readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0 }
@@ -158,6 +159,41 @@ class FakeLiveAdapter implements LiveAdapter {
       { path: 'src/index.ts', value: '@src/index.ts' },
       { path: 'docs/user guide.md', value: '@"docs/user guide.md"' },
     ].filter(item => item.path.includes(query)).slice(0, limit)
+  }
+
+  async messageActions(runtimeSessionId: string) {
+    await this.state(runtimeSessionId)
+    return [
+      {
+        actionId: 'test.rewind',
+        label: { default: 'Rewind', localizations: { 'zh-CN': '回到这里', 'en-US': 'Rewind' } },
+        roles: ['user'] as const,
+        requiresIdle: true,
+      },
+      {
+        actionId: 'test.open',
+        label: { default: 'Open', localizations: { 'zh-CN': '打开', 'en-US': 'Open' } },
+        roles: ['user'] as const,
+        requiresIdle: true,
+      },
+    ]
+  }
+
+  async executeMessageAction(runtimeSessionId: string, actionId: string, targetEntryId: string) {
+    await this.state(runtimeSessionId)
+    this.messageActionExecutions.push({ runtimeSessionId, actionId, targetEntryId })
+    if (actionId === 'test.open') {
+      const state = await this.state(runtimeSessionId)
+      return {
+        outcome: 'open-runtime' as const,
+        runtime: { ...state, privateDiagnostic: 'must-not-cross-generic-http' },
+        draftText: 'new draft',
+      }
+    }
+    return {
+      outcome: 'refresh-current' as const,
+      draftText: 'restored draft',
+    }
   }
 
   async queueState(runtimeSessionId: string) {
@@ -341,6 +377,74 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     assert.deepEqual(await workspaceReferences.json(), {
       items: [{ path: 'src/index.ts', value: '@src/index.ts' }],
     })
+
+    const messageActions = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`)
+    assert.equal(messageActions.status, 200)
+    assert.deepEqual(await messageActions.json(), {
+      items: [
+        {
+          actionId: 'test.rewind',
+          label: { default: 'Rewind', localizations: { 'zh-CN': '回到这里', 'en-US': 'Rewind' } },
+          roles: ['user'],
+          requiresIdle: true,
+        },
+        {
+          actionId: 'test.open',
+          label: { default: 'Open', localizations: { 'zh-CN': '打开', 'en-US': 'Open' } },
+          roles: ['user'],
+          requiresIdle: true,
+        },
+      ],
+    })
+
+    const executedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.rewind', targetEntryId: 'entry-1' }),
+    })
+    assert.equal(executedMessageAction.status, 200)
+    assert.deepEqual(await executedMessageAction.json(), {
+      outcome: 'refresh-current',
+      draftText: 'restored draft',
+    })
+    assert.deepEqual(adapter.messageActionExecutions, [{
+      runtimeSessionId: 'runtime-1',
+      actionId: 'test.rewind',
+      targetEntryId: 'entry-1',
+    }])
+
+    const openedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.open', targetEntryId: 'entry-1' }),
+    })
+    assert.equal(openedMessageAction.status, 200)
+    assert.deepEqual(await openedMessageAction.json(), {
+      outcome: 'open-runtime',
+      runtime: {
+        runtimeSessionId: 'runtime-1',
+        status: 'ready',
+        workspacePath: '/tmp/project',
+        isStreaming: false,
+        pendingMessageCount: 0,
+      },
+      draftText: 'new draft',
+    })
+
+    const rejectedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.rewind' }),
+    })
+    assert.equal(rejectedMessageAction.status, 400)
+
+    const hiddenMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.hidden', targetEntryId: 'entry-1' }),
+    })
+    assert.equal(hiddenMessageAction.status, 409)
+    assert.equal(adapter.messageActionExecutions.length, 2, 'undeclared action must never reach adapter execution')
 
     const queueState = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`)
     assert.equal(queueState.status, 200)
