@@ -29,10 +29,10 @@ test('Pi Live Snapshot 在 Service 与 Worker 双边都保持固定上限', () =
 
 
 test('Pi Live 全会话轮次索引有界且 around 直接定位目标窗口', () => {
-  assert.match(coreLive, /LIVE_HISTORY_INDEX_MAX_LIMIT\s*=\s*80/)
-  assert.match(workerEntry, /LIVE_HISTORY_INDEX_MAX_LIMIT\s*=\s*80/)
-  assert.match(workerEntry, /function historyIndex\(limitValue\)/)
-  assert.match(workerEntry, /Math\.round\(slot \* \(rounds\.length - 1\) \/ \(limit - 1\)\)/)
-  assert.match(workerEntry, /aroundIndex - Math\.floor\(limit \* \.3\)/)
-  assert.doesNotMatch(workerEntry, /historyIndex[\s\S]{0,1200}serialize\(rounds\)/)
+  assert.match(serviceSource, /LIVE_HISTORY_INDEX_MAX_LIMIT/)
+  assert.match(workerSource, /LIVE_HISTORY_INDEX_MAX_LIMIT\s*=\s*80/)
+  assert.match(workerSource, /function historyIndex\(limitValue\)/)
+  assert.match(workerSource, /Math\.round\(slot \* \(rounds\.length - 1\) \/ \(limit - 1\)\)/)
+  assert.match(workerSource, /aroundIndex - Math\.floor\(limit \* \.3\)/)
+  assert.doesNotMatch(workerSource, /historyIndex[\s\S]{0,1200}serialize\(rounds\)/)
 })
