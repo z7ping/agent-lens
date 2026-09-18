@@ -1,5 +1,7 @@
 import type {
   LiveAvailabilityDto,
+  LiveCommandsResponseDto,
+  LiveCommandDto,
   LiveInterruptResultDto,
   LiveMessageInputDto,
   LiveModelControlDto,
@@ -136,6 +138,12 @@ export const liveApi = {
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/messages')),
       jsonRequest('POST', { message, ...(behavior ? { behavior } : {}) }),
     )
+  },
+
+  async commands(liveId: string, runtimeSessionId: string): Promise<LiveCommandDto[]> {
+    return (await requestJson<LiveCommandsResponseDto>(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/commands')),
+    )).items
   },
 
   queueState(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {
