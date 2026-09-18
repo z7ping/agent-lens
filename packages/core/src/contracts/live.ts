@@ -294,8 +294,8 @@ export interface LiveCommand extends LiveControlDisplayInfo {
 
 export interface LiveContributionText {
   default: string
-  zhCN?: string | undefined
-  enUS?: string | undefined
+  /** Optional BCP-47 locale -> display text. Product Surface owns locale selection. */
+  localizations?: Readonly<Record<string, string>> | undefined
 }
 
 export interface LiveMessageActionContribution {
