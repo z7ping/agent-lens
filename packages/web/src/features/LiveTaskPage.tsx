@@ -28,6 +28,7 @@ import {
   liveComposerDraftKey,
   readLiveComposerDraft,
 } from '../components/live-composer-session-state'
+import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import {
@@ -896,6 +897,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onPointerDown={markReaderUserIntent}
       >
         <div className="pi-live-document live-task-document">
+          {!state && !error && <div className="pi-live-startup-spotlight">
+            <OperationProgress
+              statusLabel={t('live.loadingStatus')}
+              title={t('live.loadingTitle')}
+              description={t('live.loadingDescription')}
+            />
+          </div>}
           {rounds.map((round, index) => <GenericLiveRound
             key={round.model.id}
             projection={round}
