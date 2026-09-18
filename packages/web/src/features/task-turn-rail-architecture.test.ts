@@ -36,3 +36,19 @@ test('Live 历史导航使用直接边界窗口与滚轮双向分页', () => {
   assert.match(liveTask, /onStart: jumpEarliest/)
   assert.match(liveTask, /onEnd: jumpLatest/)
 })
+
+
+test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
+  assert.match(liveTask, /LIVE_TASK_HISTORY_WINDOW_MAX_PAGES\s*=\s*5/)
+  assert.match(liveTask, /compactHistoryBlocks/)
+  assert.match(liveTask, /removedIds/)
+  assert.match(liveTask, /historyBlocksRef/)
+})
+
+test('未加载轮次通过有界 history index 与 around cursor 直接定位', () => {
+  assert.match(liveTask, /liveApi\.historyIndex\(current\.liveId, current\.runtimeSessionId, 80\)/)
+  assert.match(liveTask, /around: item\.cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
+  assert.match(liveTask, /onTurnRailSelect=\{jumpToIndexedRound\}/)
+  assert.match(taskSurface, /pendingTurnRailTargetRef/)
+  assert.match(taskSurface, /item\.loaded === true/)
+})
