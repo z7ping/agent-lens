@@ -178,7 +178,10 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     fields.push({
       label: contributionText('Package updates', '可用包更新'),
       kind: 'list' as const,
-      values: state.packageUpdates.map(item => `${item.displayName} · ${item.scope} · ${item.type}`),
+      values: state.packageUpdates.map(item => contributionText(
+        `${item.displayName} · ${item.scope} · ${item.type}`,
+        `${item.displayName} · ${item.scope === 'project' ? '项目' : '用户'} · ${item.type}`,
+      )),
     })
   }
   if (state.packageUpdateCheck === 'failed') {
