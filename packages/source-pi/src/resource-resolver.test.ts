@@ -221,6 +221,36 @@ test('Pi context resources keep AGENTS loading separate from project trust and g
 })
 
 
+test('Pi package identity normalizes exact npm package source without leaking version range', () => {
+  const identity = piResourceResolverInternals.npmPackageIdentity
+  assert.equal(identity('npm:pi-demo@^1.2.3'), 'npm:pi-demo')
+  assert.equal(identity('npm:@example/pi-tools@~2.0.0'), 'npm:@example/pi-tools')
+  assert.equal(identity('npm:@example/pi-tools'), 'npm:@example/pi-tools')
+  assert.equal(identity('git:https://example.com/pi-tools.git'), undefined)
+})
+
+test('Pi resource package identity is only declared for verified package-origin resources', () => {
+  const packageIdentity = piResourceResolverInternals.resourcePackageIdentity
+  assert.equal(packageIdentity({
+    path: '/tmp/package/skills/reviewer/SKILL.md',
+    enabled: true,
+    metadata: {
+      source: 'npm:@example/pi-tools@^2',
+      scope: 'user',
+      origin: 'package',
+    },
+  } as any), 'npm:@example/pi-tools')
+  assert.equal(packageIdentity({
+    path: '/tmp/skills/reviewer/SKILL.md',
+    enabled: true,
+    metadata: {
+      source: 'auto',
+      scope: 'user',
+      origin: 'top-level',
+    },
+  } as any), undefined)
+})
+
 test('Pi package resource version comes from the installed package manifest', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-package-version-'))
   const packageRoot = join(root, 'package')
