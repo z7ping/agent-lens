@@ -75,6 +75,9 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       empty: '等待输入任务。',
       composerPlaceholder: '输入任务或补充说明…',
       composerAria: '实时任务输入',
+      commandMenu: {
+        aria: '可用命令',
+      },
       connected: '实时连接已建立',
       connecting: '正在连接实时任务',
       model: '模型',
