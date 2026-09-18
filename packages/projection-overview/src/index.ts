@@ -16,6 +16,7 @@ import {
   type AgentAssetInventoryDto,
   type AgentAssetStateDto,
   type AgentDetailResponseDto,
+  type AgentEnrichmentResponseDto,
   type AgentOverviewDto,
   type AgentOverviewResponseDto,
   type AgentSummaryResponseDto,
@@ -313,6 +314,48 @@ export class AgentOverviewProjection {
     return pending
   }
 
+  async getEnrichment(sourceId: string): Promise<AgentEnrichmentResponseDto | null> {
+    const definition = (this.sources?.list() ?? []).find(item => item.manifest.sourceId === sourceId)
+    if (!definition) return null
+    const [assets, integration] = await Promise.all([
+      this.usage.queryAssets({ sourceId }),
+      this.integrationStatus ? this.integrationStatus(definition.manifest.productId) : Promise.resolve(null),
+    ])
+    return {
+      sourceId,
+      ...(integration ? {
+        integration: {
+          availability: integration.availability,
+          capabilities: integration.capabilities.map(item => ({
+            capability: item.capability,
+            availability: item.availability,
+            ...(item.authorization ? { authorization: item.authorization } : {}),
+            ...(item.reasonCode ? { reasonCode: item.reasonCode } : {}),
+            ...(item.reason ? { reason: item.reason } : {}),
+          })),
+        },
+      } : {}),
+      capabilities: (this.capabilities?.listForSource(sourceId) ?? []).map(item => ({
+        name: item.name,
+        status: item.status,
+        captureModes: item.captureModes,
+        ...(item.reason ? { reason: item.reason } : {}),
+      })),
+      usedAssets: assets.map(asset => ({
+        type: asset.type,
+        canonicalName: asset.canonicalName,
+        callCount: asset.callCount,
+        firstUsedAt: asset.firstUsedAt,
+        lastUsedAt: asset.lastUsedAt,
+        confidence: 'confidence' in asset
+          && (asset.confidence === 'high' || asset.confidence === 'medium' || asset.confidence === 'low')
+          ? asset.confidence
+          : 'high',
+      })).sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
+      meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
+    }
+  }
+
   private async buildSummary(): Promise<AgentSummaryResponseDto> {
     const startedAt = performance.now()
     const definitions = this.sources?.list() ?? []
@@ -337,7 +380,7 @@ export class AgentOverviewProjection {
   private async buildDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
     const definition = (this.sources?.list() ?? []).find(item => item.manifest.sourceId === sourceId)
     if (!definition) return null
-    const item = await this.buildItem(definition)
+    const item = await this.buildItem(definition, undefined, false)
     return {
       item,
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
@@ -347,16 +390,19 @@ export class AgentOverviewProjection {
   private async buildItem(
     definition: ReturnType<SourceService['list']>[number],
     prefetchedAssets?: Awaited<ReturnType<ToolAssetUsageProjection['queryAssets']>>,
+    includeEnrichment = true,
   ): Promise<AgentOverviewDto> {
     const sourceStartedAt = performance.now()
     const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
-    const integration = this.integrationStatus
+    const integration = includeEnrichment && this.integrationStatus
       ? await this.integrationStatus(definition.manifest.productId)
       : null
     const usedAssets = new Map<string, AgentOverviewDto['usedAssets'][number]>()
     const inventory = new Map<string, AgentAssetInventoryDto>()
 
-    const assets = prefetchedAssets ?? await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
+    const assets = includeEnrichment
+      ? (prefetchedAssets ?? await this.usage.queryAssets({ sourceId: definition.manifest.sourceId }))
+      : []
     for (const asset of assets) {
       const key = `${asset.type}\u0000${asset.canonicalName}`
       usedAssets.set(key, {
@@ -439,12 +485,14 @@ export class AgentOverviewProjection {
         firstSeenAt: item.firstSeenAt,
         lastSeenAt: item.lastSeenAt,
       })),
-      capabilities: (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
-        name: item.name,
-        status: item.status,
-        captureModes: item.captureModes,
-        ...(item.reason ? { reason: item.reason } : {}),
-      })),
+      capabilities: includeEnrichment
+        ? (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
+            name: item.name,
+            status: item.status,
+            captureModes: item.captureModes,
+            ...(item.reason ? { reason: item.reason } : {}),
+          }))
+        : [],
       assetInventory,
       usedAssets: [...usedAssets.values()].sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
       assetInventoryStatus: this.storage.assetInventory ? 'available' : 'unavailable',
