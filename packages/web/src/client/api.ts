@@ -1,5 +1,6 @@
 import {
   parseLiveUpdateEvent,
+  type AgentCoverageResponseDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
@@ -173,6 +174,14 @@ export class AgentLensApi {
       aggregateReadInFlight,
       'agent-summaries',
       () => requestJson('/api/v1/agents/summary'),
+    )
+  }
+
+  agentCoverage(): Promise<AgentCoverageResponseDto> {
+    return shareInFlight(
+      aggregateReadInFlight,
+      'agent-coverage',
+      () => requestJson('/api/v1/agents/coverage'),
     )
   }
   agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
