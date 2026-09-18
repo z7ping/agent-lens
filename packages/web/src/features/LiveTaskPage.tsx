@@ -359,7 +359,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [product, setProduct] = useState<LiveProductDto | null>(null)
   const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
-  const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
+  const [projection, setProjection] = useState<{
+    stable: LiveTaskProjectionItem[]
+    active: LiveTaskProjectionItem[]
+  }>({ stable: [], active: [] })
   const [messageActions, setMessageActions] = useState<LiveMessageActionContributionDto[]>([])
   const [messageActionPending, setMessageActionPending] = useState<string | null>(null)
   const [runtimeDisclosures, setRuntimeDisclosures] = useState<LiveRuntimeDisclosureContributionDto[]>([])
@@ -396,8 +399,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const followReleaseFrameRef = useRef<number | null>(null)
   const startupSendingRef = useRef(false)
   const leafIdRef = useRef<string | undefined>(undefined)
-  const stableProjectionCountRef = useRef(0)
-  const projectionStableCountRef = useRef(0)
+  const snapshotBaseActiveCountRef = useRef(0)
   const roundProjectorRef = useRef(new LiveTaskRoundProjector())
   const queueRevisionRef = useRef(0)
 
@@ -420,7 +422,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setProduct(null)
     setRuntimes([])
     setState(null)
-    setItems([])
+    setProjection({ stable: [], active: [] })
     setMessageActions([])
     setMessageActionPending(null)
     setRuntimeDisclosures([])
@@ -435,8 +437,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setQueueMutationPending(false)
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
-    stableProjectionCountRef.current = 0
-    projectionStableCountRef.current = 0
+    snapshotBaseActiveCountRef.current = 0
     roundProjectorRef.current.reset()
     setConnected(false)
     setActivityStatus(null)
