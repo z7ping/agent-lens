@@ -848,6 +848,16 @@ export class SourceRuntimeRunner {
   }
 }
 
+function packageIdentityCoverageFromCapabilities(
+  capabilities: readonly ObservationCapability[],
+): SourceRuntimeStatus['packageIdentityCoverage'] | undefined {
+  const capability = capabilities.find(item => item.name === 'asset-package-identity')
+  if (!capability) return undefined
+  if (capability.status === 'available') return 'complete'
+  if (capability.status === 'partial' || capability.status === 'experimental') return 'partial'
+  return 'unavailable'
+}
+
 export class SourceAssetRunner {
   constructor(
     private readonly storage: StorageService,
@@ -921,6 +931,9 @@ export class SourceAssetRunner {
           ...(safeDiscovered.binding?.scopeRoot ? { scopeRoot: safeDiscovered.binding.scopeRoot } : {}),
           ...(safeDiscovered.binding?.path ? { path: safeDiscovered.binding.path } : {}),
           ...(safeDiscovered.binding?.source ? { source: safeDiscovered.binding.source } : {}),
+          ...(safeDiscovered.binding?.packageIdentity
+            ? { packageIdentity: safeDiscovered.binding.packageIdentity }
+            : {}),
           ...(safeDiscovered.binding?.version ? { version: safeDiscovered.binding.version } : {}),
         })
         result.assetsDiscovered += 1
@@ -990,6 +1003,7 @@ export class SourceAssetRunner {
           }
         }
         await checkpoint.set(ASSET_DISCOVERY_SNAPSHOT_KEY, currentSnapshot)
+        runtimeStatus.packageIdentityCoverage = packageIdentityCoverageFromCapabilities(declaredCapabilities)
       }
 
       await markHealthy(this.storage, runtimeStatus)
@@ -1013,4 +1027,5 @@ export const sourceRunnerInternals = {
   ASSET_DISCOVERY_SNAPSHOT_KEY,
   ASSET_INVENTORY_STATES,
   ASSET_PRESENCE_STATES,
+  packageIdentityCoverageFromCapabilities,
 }
