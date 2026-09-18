@@ -268,6 +268,81 @@ test('session.updated 在摘要物化后只精准读取对应摘要', async () =
   model.stop()
 })
 
+test('session.updated 排序变化后先重新对齐分页，再按 cursor 加载且不重不漏', async () => {
+  let reviewCalls = 0
+  const cursors: Array<string | undefined> = []
+
+  class PaginationPatchApi extends AgentLensApi {
+    override review(_filters: ReviewFilters, limit = 40, cursor?: string): Promise<ReviewResponseDto> {
+      reviewCalls += 1
+      cursors.push(cursor)
+      if (cursor) {
+        return Promise.resolve({
+          items: Array.from({ length: 20 }, (_, index) => summary(index + 21)),
+          meta: {
+            protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+            count: 20,
+            hasMore: false,
+            generatedAt: new Date().toISOString(),
+          },
+        })
+      }
+      const first = response(limit)
+      return Promise.resolve({
+        ...first,
+        items: first.items.map(item => item.id === 'session-2'
+          ? { ...item, title: reviewCalls > 1 ? '会话 2 已更新' : item.title }
+          : item),
+      })
+    }
+
+    override reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+      const newest = new Date(Date.now() + 60_000).toISOString()
+      return Promise.resolve({ ...summary(2), id, title: '会话 2 已更新', startedAt: newest, endedAt: newest })
+    }
+
+    override reviewDetail(): Promise<ReviewSessionDetailDto> {
+      return Promise.resolve({
+        ...summary(1),
+        interactions: [],
+        page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+      })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({
+        items: [],
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
+      })
+    }
+  }
+
+  const model = new AgentLensClientModel(new PaginationPatchApi())
+  await model.refreshReview()
+  model.setReviewActive(true)
+
+  ;(model as unknown as { onLiveEvent(event: LiveUpdateEventDto): void }).onLiveEvent({
+    type: 'session.updated',
+    logicalSessionId: 'session-2',
+    affected: ['review', 'sessions'],
+    emittedAt: new Date().toISOString(),
+  })
+  await new Promise(resolve => setTimeout(resolve, 180))
+
+  const patched = model.getSnapshot().review.response?.items ?? []
+  assert.equal(patched[0]?.id, 'session-2')
+  assert.equal(new Set(patched.map(item => item.id)).size, 20)
+
+  await model.loadMoreReview()
+
+  const loaded = model.getSnapshot().review.response?.items ?? []
+  assert.equal(reviewCalls, 3)
+  assert.deepEqual(cursors, [undefined, undefined, 'cursor-20'])
+  assert.equal(loaded.length, 40)
+  assert.equal(new Set(loaded.map(item => item.id)).size, 40)
+  model.stop()
+})
+
 test('session.updated 的精准摘要更新不会被后续 Observation 兜底覆盖', async () => {
   let reviewCalls = 0
 
