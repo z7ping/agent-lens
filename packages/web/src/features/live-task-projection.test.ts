@@ -21,6 +21,23 @@ function event(sequence: number, normalizedEvent: NonNullable<LiveRuntimeEventDt
   }
 }
 
+test('snapshot projection keeps generic inline image attachments', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      id: 'u-image',
+      role: 'user',
+      content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+    },
+  ])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.type, 'image')
+  assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
+})
+
 test('snapshot projection consumes message-shaped native rows without Agent-specific branches', () => {
   assert.deepEqual(projectLiveSnapshotEntries([
     { id: 'u1', role: 'user', content: 'hello' },
