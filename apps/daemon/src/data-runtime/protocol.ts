@@ -30,6 +30,8 @@ export interface DataRuntimeRequest {
   type: 'request'
   requestId: string
   method: DataRuntimeMethod
+  /** Wall-clock deadline used by the worker to discard a request that expired while queued. */
+  deadlineAt?: number
   params?: Record<string, unknown>
 }
 
