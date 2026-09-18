@@ -24,6 +24,25 @@ const readyState: PiLiveRuntimeState = {
   pendingMessageCount: 0,
 }
 
+test('Pi Live Adapter maps native control and compaction changes into generic events', () => {
+  assert.deepEqual(normalizePiLiveEvent({ type: 'model_changed' }), {
+    type: 'control.changed',
+    control: 'model',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'thinking_level_changed' }), {
+    type: 'control.changed',
+    control: 'thinking',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_start' }), {
+    type: 'status',
+    status: 'compacting',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_end' }), {
+    type: 'status',
+    status: 'ready',
+  })
+})
+
 test('Pi Live Adapter maps task summary into generic title.update', () => {
   assert.deepEqual(normalizePiLiveEvent({
     type: 'task_summary',
