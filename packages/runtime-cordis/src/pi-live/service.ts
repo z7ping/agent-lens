@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import {
-  LIVE_HISTORY_INDEX_MAX_LIMIT,
+  LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT,
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
   type LiveContributionText,
+  type LiveHistoryIndexQuery,
   type LiveRuntimeContributionField,
   type LiveRuntimeDisclosureContribution,
   type LiveSnapshotWindow,
@@ -851,12 +852,21 @@ export class DefaultPiLiveService implements PiLiveService {
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
 
-  async historyIndex(id: string, limit = LIVE_HISTORY_INDEX_MAX_LIMIT) {
+  async historyIndex(id: string, query: LiveHistoryIndexQuery = {}) {
     const runtime = await this.readyRuntime(id)
-    const requested = Number.isInteger(limit) ? limit : LIVE_HISTORY_INDEX_MAX_LIMIT
-    const boundedLimit = Math.max(2, Math.min(LIVE_HISTORY_INDEX_MAX_LIMIT, requested))
+    const requestedLimit = Number.isInteger(query.limit) ? query.limit! : 0
+    const boundedQuery: LiveHistoryIndexQuery = {
+      ...(Number.isInteger(query.fromOrdinal) && query.fromOrdinal! > 0
+        ? { fromOrdinal: query.fromOrdinal }
+        : {}),
+      ...(query.cursor?.trim() ? { cursor: query.cursor.trim() } : {}),
+      limit: Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, requestedLimit)),
+    }
+    if (boundedQuery.cursor && boundedQuery.fromOrdinal !== undefined) {
+      throw new Error('Live history index accepts cursor or fromOrdinal, not both')
+    }
     return runtime.handle?.historyIndex
-      ? runtime.handle.historyIndex(boundedLimit)
+      ? runtime.handle.historyIndex(boundedQuery)
       : { total: 0, items: [] }
   }
 

@@ -2,7 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
-import type { LiveHistoryIndex, LiveSnapshotWindow } from '@agent-lens/core'
+import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSnapshotWindow } from '@agent-lens/core'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
@@ -59,7 +59,7 @@ export interface PiRuntimeHandle {
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
-  historyIndex?(limit?: number): Promise<LiveHistoryIndex>
+  historyIndex?(query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
   entry?(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
@@ -328,7 +328,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     return collectSnapshotTransfer((command, payload) => this.request(command, payload), since, window)
   }
-  historyIndex(limit = 80): Promise<LiveHistoryIndex> { return this.request('historyIndex', { limit }) }
+  historyIndex(query: LiveHistoryIndexQuery = {}): Promise<LiveHistoryIndex> { return this.request('historyIndex', query) }
   entry(entryId: string): Promise<unknown | null> { return this.request('entry', { entryId }) }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {

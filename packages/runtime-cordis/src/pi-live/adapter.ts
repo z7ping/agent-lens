@@ -7,6 +7,7 @@ import type {
   LiveCapabilityName,
   LiveCommand,
   LiveEvent,
+  LiveHistoryIndexQuery,
   LiveMessage,
   LiveMessageInput,
   LiveModelControl,
@@ -354,8 +355,8 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.snapshot(runtimeSessionId, since, window)
   }
 
-  historyIndex(runtimeSessionId: string, limit?: number) {
-    return this.service.historyIndex(runtimeSessionId, limit)
+  historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery) {
+    return this.service.historyIndex(runtimeSessionId, query)
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {
