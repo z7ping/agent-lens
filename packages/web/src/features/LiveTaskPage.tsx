@@ -145,9 +145,10 @@ function contributionText(
   value: LiveMessageActionContributionDto['label'],
   language: string,
 ): string {
-  if (language.toLowerCase().startsWith('zh')) return value.zhCN ?? value.default
-  if (language.toLowerCase().startsWith('en')) return value.enUS ?? value.default
-  return value.default
+  const normalized = language.replace(/_/g, '-').toLowerCase()
+  const localized = Object.entries(value.localizations ?? {})
+    .find(([locale]) => locale.toLowerCase() === normalized)?.[1]
+  return localized || value.default
 }
 
 function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
