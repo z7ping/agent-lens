@@ -217,6 +217,16 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(calls.includes('steer:change direction'), true)
   assert.equal(calls.includes('follow:afterwards'), true)
 
+  emit(agentListener, {
+    type: 'queue_update',
+    steering: ['change direction'],
+    followUp: ['afterwards'],
+  })
+  assert.deepEqual(await service.queueState(state.runtimeSessionId), {
+    steering: ['change direction'],
+    followUp: ['afterwards'],
+  })
+
   const ui = bindings?.uiContext as unknown as Record<string, unknown> | undefined
   assert.ok(ui)
   const confirm = ui.confirm as ((title: string, message: string) => Promise<boolean>) | undefined
@@ -230,6 +240,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   const queue = await service.abort(state.runtimeSessionId)
   assert.ok(calls.includes('abort-bash'))
   assert.deepEqual(queue, { steering: ['queued-steer'], followUp: ['queued-follow'] })
+  assert.deepEqual(await service.queueState(state.runtimeSessionId), { steering: [], followUp: [] })
 
   unsubscribe()
   await service.terminate(state.runtimeSessionId)
