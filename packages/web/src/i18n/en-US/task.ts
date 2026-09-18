@@ -250,6 +250,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         failed: 'Needs attention',
         initializing: 'Starting',
         streaming: 'Running',
+        compacting: 'Compacting context',
         idle: 'Waiting for input',
       },
     },
