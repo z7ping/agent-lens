@@ -77,8 +77,12 @@ class FakeLiveAdapter implements LiveAdapter {
     const workspacePath = input && typeof input === 'object' && typeof (input as Record<string, unknown>).workspacePath === 'string'
       ? (input as Record<string, string>).workspacePath
       : undefined
+    const title = input && typeof input === 'object' && typeof (input as Record<string, unknown>).title === 'string'
+      ? (input as Record<string, string>).title
+      : undefined
     const state: LiveRuntimeState = {
       runtimeSessionId: id,
+      ...(title ? { title } : {}),
       status: 'ready',
       ...(workspacePath ? { workspacePath } : {}),
       isStreaming: false,
@@ -377,12 +381,14 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     assert.equal(started.status, 201)
     const startedState = await started.json() as LiveRuntimeState
     assert.equal(startedState.runtimeSessionId, 'runtime-1')
+    assert.equal(startedState.title, 'Test task')
     assert.equal(startedState.workspacePath, '/tmp/project')
 
     const state = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/state`)
     assert.equal(state.status, 200)
     assert.deepEqual(await state.json(), {
       runtimeSessionId: 'runtime-1',
+      title: 'Test task',
       status: 'ready',
       workspacePath: '/tmp/project',
       isStreaming: false,
@@ -394,6 +400,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     assert.deepEqual(await snapshot.json(), {
       state: {
         runtimeSessionId: 'runtime-1',
+        title: 'Test task',
         status: 'ready',
         workspacePath: '/tmp/project',
         isStreaming: false,
@@ -445,6 +452,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     assert.deepEqual(await runtimeAction.json(), {
       runtime: {
         runtimeSessionId: 'runtime-1',
+        title: 'Test task',
         status: 'ready',
         workspacePath: '/tmp/project',
         isStreaming: false,
@@ -526,6 +534,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       outcome: 'open-runtime',
       runtime: {
         runtimeSessionId: 'runtime-1',
+        title: 'Test task',
         status: 'ready',
         workspacePath: '/tmp/project',
         isStreaming: false,
