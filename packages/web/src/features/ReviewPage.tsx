@@ -532,7 +532,7 @@ function RawInspectorContent({
   </section>
 }
 
-function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; onClose(): void; loadSourceRecord(id: string): Promise<SourceRecordResponseDto> }) {
+function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNodeDto; onClose(): void; loadSourceRecords(ids: readonly string[]): Promise<SourceRecordResponseDto[]> }) {
   const { t } = useTranslation('review')
   const [tab, setTab] = useState<InspectorTab>('detail')
   const sourceRecordIds = useMemo(() => [...new Set(node.evidence.map(item => item.sourceRecordId).filter((id): id is string => Boolean(id)))], [node.evidence])
@@ -547,12 +547,12 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     setRawError('')
     if (!sourceRecordIds.length) return () => { active = false }
     setRawLoading(true)
-    void Promise.all(sourceRecordIds.map(id => loadSourceRecord(id))).then(
+    void loadSourceRecords(sourceRecordIds).then(
       records => { if (active) { setRawRecords(records); setRawLoading(false) } },
       reason => { if (active) { setRawError(reason instanceof Error ? reason.message : String(reason)); setRawLoading(false) } },
     )
     return () => { active = false }
-  }, [loadSourceRecord, node.id, sourceRecordIds, tab])
+  }, [loadSourceRecords, node.id, sourceRecordIds, tab])
 
   const title = node.type === 'tool' ? node.name : node.type === 'event' ? reviewEventLabel(node) : roleLabel(node.role)
   const detailSummary = node.type === 'event'
@@ -1572,6 +1572,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>
       </TaskSurface>
     </div>
-    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>} 
+    {inspect && <Inspector node={inspect} loadSourceRecords={model.sourceRecords} onClose={() => setInspect(null)}/>} 
   </main>
 }
