@@ -535,7 +535,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       || bootstrapTarget.runtimeSessionId !== current.runtimeSessionId
       || !product?.capabilities.includes('stream')) return
     let recoveryGeneration = 0
-    const recover = async () => {
+    const recover = async (mode: 'live' | 'settle' = 'live') => {
       if (!product.capabilities.includes('recovery')) return
       const generation = ++recoveryGeneration
       try {
@@ -553,7 +553,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setState(snapshot.state)
         setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
-        if (!recoveryLeafId) {
+        if (mode === 'settle' && snapshot.state.isStreaming) {
+          // A new turn started before the previous completion reconciliation returned.
+          // Keep the local active tail intact and do not advance leaf; the next settled
+          // recovery will reconcile every persisted entry since the original leaf.
+        } else if (!recoveryLeafId) {
           const nextProjection = splitLiveProjectionItems(recovered, snapshot.state.isStreaming)
           setProjection(nextProjection)
           setInputHistory(projectLiveInputHistory(recovered))
@@ -671,7 +675,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (envelope.normalizedEvent?.type === 'completed') {
           setActivityStatus('idle')
           void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
-          void recover()
+          void recover('settle')
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
@@ -829,12 +833,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setError('')
     if (behavior === 'normal' && optimisticText && optimisticId) {
       setProjection(previous => ({
-        stable: previous.active.length
-          ? [...previous.stable, ...previous.active]
-          : previous.stable,
-        active: appendOptimisticLiveUserMessage([], optimisticText, optimisticId),
+        ...previous,
+        active: appendOptimisticLiveUserMessage(previous.active, optimisticText, optimisticId),
       }))
-      snapshotBaseActiveCountRef.current = 0
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
@@ -874,12 +875,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setStartupQueued(currentMessage => currentMessage === message ? null : currentMessage)
     if (optimisticText && optimisticId) {
       setProjection(previous => ({
-        stable: previous.active.length
-          ? [...previous.stable, ...previous.active]
-          : previous.stable,
-        active: appendOptimisticLiveUserMessage([], optimisticText, optimisticId),
+        ...previous,
+        active: appendOptimisticLiveUserMessage(previous.active, optimisticText, optimisticId),
       }))
-      snapshotBaseActiveCountRef.current = 0
     }
 
     void liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal').then(() => {
