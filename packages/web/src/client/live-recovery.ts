@@ -15,11 +15,18 @@ export function installLiveRecovery(model: AgentLensClientModel): () => void {
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null
-      void Promise.allSettled([
-        model.refreshReview({ preserveDetail: true }),
-        model.refreshFacetsAndAgents(),
-        model.refreshUsage(),
-      ])
+      const pathname = window.location.pathname
+      if (pathname === '/review' || /^\/review\/[^/]+$/.test(pathname)) {
+        void model.refreshReview({ preserveDetail: true })
+        return
+      }
+      if (pathname.startsWith('/agents')) {
+        void model.refreshAgents()
+        return
+      }
+      if (pathname.startsWith('/tools')) {
+        void model.refreshUsage()
+      }
     }, RECOVERY_DEBOUNCE_MS)
   }
 
