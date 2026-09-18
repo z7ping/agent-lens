@@ -36,6 +36,23 @@ const DEFAULT_START_CAPABILITIES: Readonly<LiveStartCapabilities> = {
   title: 'unsupported',
 }
 const adapterReadInFlight = new WeakMap<LiveAdapter, Map<string, Promise<unknown>>>()
+const LIVE_RUNTIME_VALIDATION_TTL_MS = 2_000
+const validatedRuntimeAt = new WeakMap<LiveAdapter, Map<string, number>>()
+
+function markRuntimeValidated(adapter: LiveAdapter, runtimeSessionId: string): void {
+  let values = validatedRuntimeAt.get(adapter)
+  if (!values) {
+    values = new Map()
+    validatedRuntimeAt.set(adapter, values)
+  }
+  values.set(runtimeSessionId, Date.now())
+}
+
+function runtimeRecentlyValidated(adapter: LiveAdapter, runtimeSessionId: string): boolean {
+  const at = validatedRuntimeAt.get(adapter)?.get(runtimeSessionId)
+  return at !== undefined && Date.now() - at < LIVE_RUNTIME_VALIDATION_TTL_MS
+}
+
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 20) return '[max-depth]'
@@ -522,7 +539,10 @@ async function connectEvents(
   runtimeSessionId: string,
 ): Promise<void> {
   requireCapability(adapter, 'stream')
-  await shareAdapterRead(adapter, `state:${runtimeSessionId}`, () => adapter.state(runtimeSessionId))
+  if (!runtimeRecentlyValidated(adapter, runtimeSessionId)) {
+    await shareAdapterRead(adapter, `state:${runtimeSessionId}`, () => adapter.state(runtimeSessionId))
+    markRuntimeValidated(adapter, runtimeSessionId)
+  }
   response.statusCode = 200
   response.setHeader('content-type', 'text/event-stream; charset=utf-8')
   response.setHeader('cache-control', 'no-cache, no-transform')
@@ -687,20 +707,24 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'state' && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(normalizePublicRuntimeState(await shareAdapterRead(
+      const state = normalizePublicRuntimeState(await shareAdapterRead(
         adapter,
         `state:${runtimeSessionId}`,
         () => adapter.state(runtimeSessionId),
-      ))))
+      ))
+      markRuntimeValidated(adapter, runtimeSessionId)
+      writeJson(response, 200, jsonValue(state))
       return true
     }
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
-      writeJson(response, 200, jsonValue(normalizePublicSnapshot(await shareAdapterRead(
+      const snapshot = normalizePublicSnapshot(await shareAdapterRead(
         adapter,
         `snapshot:${runtimeSessionId}:${since ?? ''}`,
         () => adapter.snapshot(runtimeSessionId, since),
-      ))))
+      ))
+      markRuntimeValidated(adapter, runtimeSessionId)
+      writeJson(response, 200, jsonValue(snapshot))
       return true
     }
     if (action === 'events' && request.method === 'GET') {
