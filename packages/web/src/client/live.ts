@@ -3,6 +3,9 @@ import type {
   LiveCommandsResponseDto,
   LiveCommandDto,
   LiveInterruptResultDto,
+  LiveMessageActionContributionDto,
+  LiveMessageActionResultDto,
+  LiveMessageActionsResponseDto,
   LiveMessageInputDto,
   LiveModelControlDto,
   LiveProductDto,
@@ -146,6 +149,29 @@ export const liveApi = {
     return (await requestJson<LiveCommandsResponseDto>(
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/commands')),
     )).items
+  },
+  async messageActions(
+    liveId: string,
+    runtimeSessionId: string,
+  ): Promise<LiveMessageActionContributionDto[]> {
+    return (await requestJson<LiveMessageActionsResponseDto>(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/message-actions')),
+    )).items
+  },
+  executeMessageAction(
+    liveId: string,
+    runtimeSessionId: string,
+    actionId: string,
+    targetEntryId: string,
+  ): Promise<LiveMessageActionResultDto> {
+    return requestJson(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/message-actions')),
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ actionId, targetEntryId }),
+      },
+    )
   },
 
   async workspaceFileReferences(
