@@ -12,6 +12,7 @@ import { verifyJsonlLineSha256 } from '@agent-lens/source-support'
 import { discoverPiAssets, piAssetInternals } from './assets'
 import { PI_PARSER_VERSION, PI_SOURCE_ID } from './constants'
 import { normalizePiRecord } from './normalize'
+import { describePiAssetDiscoveryCoverage } from './resource-resolver'
 import {
   detectPi,
   ingestPiHistory,
@@ -107,6 +108,7 @@ export const piSourceDefinition: SourceDefinition = {
   declareCapabilities: declarePiCapabilities,
   rawRecovery: jsonlRawRecovery,
   discoverAssets: discoverPiAssets,
+  describeAssetDiscoveryCoverage: describePiAssetDiscoveryCoverage,
   ingestHistory: ingestPiHistory,
   startCapture: startPiRuntimeCapture,
   normalize: normalizePiRecord,
