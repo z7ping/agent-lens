@@ -75,6 +75,13 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       empty: '等待输入任务。',
       composerPlaceholder: '输入任务或补充说明…',
       composerAria: '实时任务输入',
+      composerToolbarAria: '输入区工具栏',
+      composerExpand: '展开输入区',
+      composerShrink: '收起输入区',
+      startupWaitingReady: '任务启动后自动发送',
+      startupAttachmentRequiresReady: '图片或文件需要等待智能体就绪后再发送。',
+      interruptedTitle: '已中断',
+      interruptedDescription: '当前执行已停止，可继续输入新的任务。',
       commandMenu: {
         aria: '可用命令',
       },
