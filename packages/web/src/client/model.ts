@@ -361,65 +361,74 @@ export class AgentLensClientModel {
     this.patch({
       agentsLoading: true,
       agentsError: '',
-      integrationManagementLoading: true,
-      integrationManagementError: '',
-      integrationDiscoveryLoading: true,
     })
+
+    let agents: AgentOverviewResponseDto
     try {
-      const [agents, capturePolicy, management] = await Promise.all([
-        this.api.agents().then(
-          value => ({ value, error: '' }),
-          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
-        ),
-        this.api.capturePolicy().catch(() => null),
-        this.api.integrations().then(
-          value => ({ value, error: '' }),
-          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
-        ),
-      ])
-      if (generation !== this.agentsGeneration) return
-
-      let discovery = this.snapshot.integrationDiscovery
-      let discoveryError = ''
-      if (management.value) {
-        discovery = discoveryFromManagement(management.value)
-      } else {
-        const fallback = await this.api.integrationDiscovery().then(
-          value => ({ value, error: '' }),
-          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
-        )
-        discovery = fallback.value ?? discovery
-        discoveryError = fallback.error
-      }
-
-      this.patch({
-        agents: agents.value ?? this.snapshot.agents,
-        capturePolicy,
-        agentsLoading: false,
-        agentsError: agents.error ? translateProduct('errors:agentsOverviewFailed') : '',
-        agentsHasNewData: this.agentsInvalidation !== invalidation,
-        integrationManagement: management.value ?? this.snapshot.integrationManagement,
-        integrationManagementLoading: false,
-        integrationManagementError: management.error,
-        integrationDiscovery: discovery,
-        integrationDiscoveryLoading: false,
-        integrationDiscoveryError: discoveryError,
-      })
-
-      if (discovery?.status === 'idle' || discovery?.status === 'scanning') {
-        this.scheduleIntegrationDiscoveryRefresh()
-      } else if (discovery?.status === 'complete') {
-        this.integrationDiscoveryPolls = 0
-      }
+      agents = await this.api.agents()
     } catch {
-      // Existing data remains visible on refresh failure.
       if (generation !== this.agentsGeneration) return
       this.patch({
         agentsLoading: false,
         agentsError: translateProduct('errors:agentsOverviewFailed'),
-        integrationManagementLoading: false,
-        integrationDiscoveryLoading: false,
       })
+      return
+    }
+    if (generation !== this.agentsGeneration) return
+
+    // The Agent overview is the page-critical read. Publish it before secondary
+    // management/capture data starts so those reads cannot hold the first render.
+    this.patch({
+      agents,
+      agentsLoading: false,
+      agentsError: '',
+      agentsHasNewData: this.agentsInvalidation !== invalidation,
+    })
+
+    this.patch({
+      integrationManagementLoading: true,
+      integrationManagementError: '',
+      integrationDiscoveryLoading: true,
+    })
+    const [capturePolicy, management] = await Promise.all([
+      this.api.capturePolicy().catch(() => null),
+      this.api.integrations().then(
+        value => ({ value, error: '' }),
+        error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+      ),
+    ])
+    if (generation !== this.agentsGeneration) return
+
+    let discovery = this.snapshot.integrationDiscovery
+    let discoveryError = ''
+    if (management.value) {
+      discovery = discoveryFromManagement(management.value)
+    } else {
+      const fallback = await this.api.integrationDiscovery().then(
+        value => ({ value, error: '' }),
+        error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+      )
+      discovery = fallback.value ?? discovery
+      discoveryError = fallback.error
+    }
+
+    this.patch({
+      capturePolicy,
+      integrationManagement: management.value ?? this.snapshot.integrationManagement,
+      ...(management.value
+        ? { integrationPreferences: { preferences: management.value.preferences, meta: management.value.meta } }
+        : {}),
+      integrationManagementLoading: false,
+      integrationManagementError: management.error,
+      integrationDiscovery: discovery,
+      integrationDiscoveryLoading: false,
+      integrationDiscoveryError: discoveryError,
+    })
+
+    if (discovery?.status === 'idle' || discovery?.status === 'scanning') {
+      this.scheduleIntegrationDiscoveryRefresh()
+    } else if (discovery?.status === 'complete') {
+      this.integrationDiscoveryPolls = 0
     }
   }
 
