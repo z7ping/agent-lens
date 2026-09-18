@@ -48,6 +48,7 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   }
   assert.match(liveTask, /liveApi\.modelControl/)
   assert.match(liveTask, /liveApi\.respondToExtension/)
+  assert.match(liveTask, /liveApi\.queueState/)
   assert.match(liveTask, /liveApi\.clearQueue/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /liveApi\.snapshot\([^\n]+leafIdRef\.current/)
