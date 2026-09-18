@@ -465,6 +465,11 @@ export interface LiveTaskRoundProjection {
   items: LiveTaskProjectionItem[]
 }
 
+export interface LiveTaskRoundSegments {
+  stable: LiveTaskRoundProjection[]
+  active: LiveTaskRoundProjection[]
+}
+
 export const LIVE_TASK_ROUND_FACT_LIMIT = 8
 
 function compactRoundPreview(value: string, max = 120): string {
@@ -597,10 +602,10 @@ export class LiveTaskRoundProjector {
   private stableRounds: LiveTaskRoundProjection[] = []
   private stableOrdinal = 0
 
-  projectSegments(
+  projectSegmented(
     stableItems: readonly LiveTaskProjectionItem[],
     activeItems: readonly LiveTaskProjectionItem[],
-  ): LiveTaskRoundProjection[] {
+  ): LiveTaskRoundSegments {
     const stableCount = stableItems.length
     const stableTail = stableCount > 0 ? stableItems[stableCount - 1] : undefined
     if (this.stableCount !== stableCount || this.stableTail !== stableTail) {
@@ -613,11 +618,22 @@ export class LiveTaskRoundProjector {
       )
     }
 
-    if (!activeItems.length) return this.stableRounds
-    return [
-      ...this.stableRounds,
-      ...projectLiveTaskRounds(activeItems, this.stableOrdinal),
-    ]
+    return {
+      stable: this.stableRounds,
+      active: activeItems.length
+        ? projectLiveTaskRounds(activeItems, this.stableOrdinal)
+        : [],
+    }
+  }
+
+  projectSegments(
+    stableItems: readonly LiveTaskProjectionItem[],
+    activeItems: readonly LiveTaskProjectionItem[],
+  ): LiveTaskRoundProjection[] {
+    const segments = this.projectSegmented(stableItems, activeItems)
+    return segments.active.length
+      ? [...segments.stable, ...segments.active]
+      : segments.stable
   }
 
   project(
