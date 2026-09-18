@@ -511,16 +511,23 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             return !accepted.includes(item.text)
           }))
         }
+        if (envelope.normalizedEvent?.type === 'status' && envelope.normalizedEvent.status === 'ready') {
+          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+        }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
-        if (envelope.normalizedEvent?.type === 'completed' && messageActions.length) {
-          void liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
-            const projected = projectLiveSnapshotEntries(snapshot.entries)
-            setState(snapshot.state)
-            setItems(projected)
-            setInputHistory(projectLiveInputHistory(projected))
-            leafIdRef.current = snapshot.leafId ?? undefined
+        if (envelope.normalizedEvent?.type === 'completed') {
+          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(actions => {
+            setMessageActions(actions)
+            if (!actions.length) return
+            return liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
+              const projected = projectLiveSnapshotEntries(snapshot.entries)
+              setState(snapshot.state)
+              setItems(projected)
+              setInputHistory(projectLiveInputHistory(projected))
+              leafIdRef.current = snapshot.leafId ?? undefined
+            })
           }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
@@ -536,7 +543,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       recoveryGeneration += 1
       unsubscribe()
     }
-  }, [current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities, messageActions.length])
+  }, [current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities])
 
 
   useEffect(() => {
