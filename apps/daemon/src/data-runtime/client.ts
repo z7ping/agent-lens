@@ -287,6 +287,7 @@ export class DataRuntimeClient {
       type: 'request',
       requestId,
       method,
+      deadlineAt: Date.now() + Math.max(1, timeoutMs),
       ...(params ? { params } : {}),
     }
     if (encodedMessageBytes(request) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
@@ -309,7 +310,8 @@ export class DataRuntimeClient {
         this.timeouts += 1
         const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
         this.lastError = error.message
-        // 超时不会取消 Worker 中已经开始的 SQLite 任务；记录发起端事实，和 Worker 完成日志配对。
+        // Worker 会在真正执行前检查 deadlineAt，因此排队中的过期任务会被跳过。
+        // 已经开始的同步 SQLite 无法安全抢占，继续通过慢操作日志观察。
         logDataRuntimeFailure('[AgentLens] Data Runtime request timeout', {
           ...pending.context,
           timeoutMs,
