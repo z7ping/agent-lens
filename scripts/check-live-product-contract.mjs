@@ -167,6 +167,8 @@ requireText(liveTask, /normalizedEvent\?\.type === ['"]runtime-disclosure\.chang
 requireText(liveClient, /event\.type === ['"]runtime-disclosure\.changed['"][\s\S]{0,120}return ['"]runtime-disclosure\.changed['"]/, 'Runtime Disclosure 失效通知必须在调度器中合并')
 
 requireText(liveTask, /setActivityStatus\(envelope\.normalizedEvent\.status\)/, 'LiveTaskPage 必须消费 compacting 等通用活动状态')
+requireText(liveTask, /event\.status === ['"]failed['"] \|\| event\.status === ['"]terminating['"] \|\| event\.status === ['"]terminated['"]/, 'Live 终止/失败状态必须清理 isStreaming，不能继续显示可中断')
+
 requireText(liveTaskProjection, /semanticId:\s*round\.id/, 'Live 分块必须共享语义轮次 ID，不能把渲染分片伪装成新轮次')
 requireText(liveTaskProjection, /type === 'thinking' \|\| type === 'reasoning'/, 'Live Snapshot 投影不得在刷新后丢失 Thinking')
 requireText(liveTaskProjection, /type === 'toolCall' \|\| type === 'tool_call'/, 'Live Snapshot 投影不得在刷新后丢失 Tool')
