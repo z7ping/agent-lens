@@ -13,8 +13,10 @@ import type {
   LiveRuntimeStateDto,
   LiveThinkingControlDto,
 } from '@agent-lens/protocol'
+import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
+import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import {
   LiveMarkdownComposer,
@@ -262,6 +264,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation('task')
   const location = useLocation()
   const navigate = useNavigate()
+  const hostApi = useMemo(() => new AgentLensApi(), [])
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
@@ -285,6 +288,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [newRecords, setNewRecords] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [pathError, setPathError] = useState('')
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [composerAttachmentPending, setComposerAttachmentPending] = useState(false)
   const [inputHistory, setInputHistory] = useState<string[]>([])
@@ -331,6 +335,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setNewRecords(false)
     followControllerRef.current = new LiveFollowController()
     setError('')
+    setPathError('')
     setInputHistory([])
 
     if (!current) {
@@ -779,7 +784,20 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         metrics={[]}
         infoItems={[
           { label: t('live.runtimeId'), value: current.runtimeSessionId },
-          ...(state?.workspacePath ? [{ label: t('header.workspace'), value: state.workspacePath }] : []),
+          ...(state?.workspacePath ? [{
+            label: t('header.workspace'),
+            value: <span className="local-path-value">
+              <code title={state.workspacePath}>{state.workspacePath}</code>
+              <LocalPathActions
+                path={state.workspacePath}
+                onOpen={path => {
+                  setPathError('')
+                  return hostApi.openHostPath(path)
+                }}
+                onError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
+              />
+            </span>,
+          }] : []),
         ]}
         actions={<>
           {canInterrupt && <Button size="small" variant="danger" disabled={busy} onClick={() => void interrupt()}>{t('live.interrupt')}</Button>}
@@ -804,6 +822,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           />)}
           {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
+          {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
         </div>
       </div>
 
