@@ -9,6 +9,19 @@ function jsonResponse(value: unknown, status = 200): Response {
   })
 }
 
+function searchObject(name: string, version: string, date: string, description = name) {
+  return {
+    package: {
+      name,
+      version,
+      description,
+      keywords: ['pi-package'],
+      date,
+      links: { npm: `https://www.npmjs.com/package/${name}` },
+    },
+  }
+}
+
 test('Pi ecosystem manifest parsing only claims explicitly declared resource types', () => {
   assert.deepEqual(piEcosystemInternals.resourceTypesFromManifest({
     pi: {
@@ -28,74 +41,166 @@ test('Pi official package URL preserves scoped package path segments', () => {
   )
 })
 
-test('Pi ecosystem provider queries npm pi-package convention and enriches the exact search version', async () => {
+test('Pi ecosystem catalog defaults to objective monthly-download ordering without blocking on manifests', async () => {
   const requested: string[] = []
   const fetcher = (async (input: string | URL | Request) => {
     const url = String(input)
     requested.push(url)
     if (url.includes('/-/v1/search')) {
       return jsonResponse({
-        total: 1,
-        objects: [{
-          package: {
-            name: '@example/pi-tools',
-            version: '1.2.3',
-            description: 'Example Pi tools',
-            keywords: ['pi-package'],
-            date: '2026-09-01T00:00:00.000Z',
-            links: { npm: 'https://www.npmjs.com/package/@example/pi-tools' },
-          },
-        }],
+        total: 3,
+        objects: [
+          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
+          searchObject('pi-b', '2.0.0', '2026-09-10T00:00:00.000Z'),
+          searchObject('pi-c', '3.0.0', '2026-09-17T00:00:00.000Z'),
+        ],
+      })
+    }
+    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
+      return jsonResponse({
+        'pi-a': { downloads: 120, package: 'pi-a' },
+        'pi-b': { downloads: 980, package: 'pi-b' },
+        'pi-c': { downloads: 450, package: 'pi-c' },
+      })
+    }
+    throw new Error(`unexpected request: ${url}`)
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher, () => Date.parse('2026-09-18T00:00:00.000Z'))
+  const response = await provider.search()
+
+  assert.equal(response.sort, 'downloads')
+  assert.equal(response.upstreamTotal, 3)
+  assert.deepEqual(response.items.map(item => item.packageName), ['pi-b', 'pi-c', 'pi-a'])
+  assert.deepEqual(response.items.map(item => item.monthlyDownloads), [980, 450, 120])
+  assert.deepEqual(response.items.map(item => item.resourceTypes), [[], [], []])
+  assert.equal(requested.some(url => url.includes('registry.npmjs.org/pi-a/1.0.0')), false)
+
+  const search = new URL(requested[0]!)
+  assert.equal(search.searchParams.get('text'), 'keywords:pi-package')
+  assert.equal(search.searchParams.get('size'), '250')
+  assert.equal(search.searchParams.get('from'), '0')
+})
+
+test('Pi ecosystem catalog can sort by most recently published while retaining download counts', async () => {
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes('/-/v1/search')) {
+      return jsonResponse({
+        total: 3,
+        objects: [
+          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
+          searchObject('pi-b', '2.0.0', '2026-09-10T00:00:00.000Z'),
+          searchObject('pi-c', '3.0.0', '2026-09-17T00:00:00.000Z'),
+        ],
       })
     }
     return jsonResponse({
-      'dist-tags': { latest: '2.0.0' },
-      versions: {
-        '1.2.3': {
-          name: '@example/pi-tools',
-          version: '1.2.3',
-          repository: { url: 'git+https://github.com/example/pi-tools.git' },
-          pi: { extensions: ['./extensions'], skills: ['./skills'] },
-        },
-        '2.0.0': {
-          name: '@example/pi-tools',
-          version: '2.0.0',
-          pi: { themes: ['./themes'] },
-        },
-      },
-      time: {
-        '1.2.3': '2026-09-01T00:00:00.000Z',
-        '2.0.0': '2026-09-10T00:00:00.000Z',
-      },
+      'pi-a': { downloads: 120, package: 'pi-a' },
+      'pi-b': { downloads: 980, package: 'pi-b' },
+      'pi-c': { downloads: 450, package: 'pi-c' },
     })
   }) as typeof fetch
 
-  const provider = new NpmPiEcosystemProvider(fetcher, () => Date.parse('2026-09-17T00:00:00.000Z'))
-  const response = await provider.search({ query: 'tools', type: 'skill', limit: 10 })
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const response = await provider.search({ sort: 'recent' })
+  assert.equal(response.sort, 'recent')
+  assert.deepEqual(response.items.map(item => item.packageName), ['pi-c', 'pi-a', 'pi-b'])
+})
 
-  assert.equal(response.source, 'npm-registry')
-  assert.equal(response.stale, false)
+test('Pi ecosystem typed filtering walks ranked candidates and fetches exact-version manifests only as needed', async () => {
+  const requested: string[] = []
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input)
+    requested.push(url)
+    if (url.includes('/-/v1/search')) {
+      return jsonResponse({
+        total: 3,
+        objects: [
+          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
+          searchObject('@example/pi-tools', '1.2.3', '2026-09-10T00:00:00.000Z'),
+          searchObject('pi-c', '3.0.0', '2026-09-17T00:00:00.000Z'),
+        ],
+      })
+    }
+    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
+      return jsonResponse({
+        'pi-a': { downloads: 1_000, package: 'pi-a' },
+        '@example/pi-tools': { downloads: 800, package: '@example/pi-tools' },
+        'pi-c': { downloads: 100, package: 'pi-c' },
+      })
+    }
+    if (url.endsWith('/pi-a/1.0.0')) {
+      return jsonResponse({ name: 'pi-a', version: '1.0.0', pi: { extensions: ['./extension.ts'] } })
+    }
+    if (url.includes('%40example%2Fpi-tools/1.2.3')) {
+      return jsonResponse({
+        name: '@example/pi-tools',
+        version: '1.2.3',
+        repository: { url: 'git+https://github.com/example/pi-tools.git' },
+        pi: { extensions: ['./extensions'], skills: ['./skills'] },
+      })
+    }
+    if (url.endsWith('/pi-c/3.0.0')) {
+      return jsonResponse({ name: 'pi-c', version: '3.0.0', pi: { themes: ['./themes'] } })
+    }
+    throw new Error(`unexpected request: ${url}`)
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const response = await provider.search({ query: 'tools', type: 'skill', sort: 'downloads', limit: 10 })
+
   assert.equal(response.items.length, 1)
   assert.deepEqual(response.items[0], {
     packageSource: 'npm:@example/pi-tools',
     packageName: '@example/pi-tools',
     version: '1.2.3',
-    description: 'Example Pi tools',
+    description: '@example/pi-tools',
     keywords: ['pi-package'],
     resourceTypes: ['extension', 'skill'],
+    monthlyDownloads: 800,
     npmUrl: 'https://www.npmjs.com/package/@example/pi-tools',
     officialUrl: 'https://pi.dev/packages/%40example/pi-tools',
     repositoryUrl: 'https://github.com/example/pi-tools',
     installCommand: 'pi install npm:@example/pi-tools',
-    publishedAt: '2026-09-01T00:00:00.000Z',
+    publishedAt: '2026-09-10T00:00:00.000Z',
   })
 
   const search = new URL(requested[0]!)
   assert.equal(search.searchParams.get('text'), 'keywords:pi-package tools')
-  assert.equal(search.searchParams.get('size'), '30')
+  assert.ok(requested.some(url => url.includes('%40example%2Fpi-tools/1.2.3')))
 })
 
-test('Pi ecosystem provider reuses short cache and falls back to bounded last-good result', async () => {
+test('Pi ecosystem package details use exact version endpoint and reuse detail cache', async () => {
+  let detailCalls = 0
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input)
+    detailCalls += 1
+    assert.ok(url.endsWith('/pi-demo/1.2.3'))
+    return jsonResponse({
+      name: 'pi-demo',
+      version: '1.2.3',
+      repository: 'https://github.com/example/pi-demo.git',
+      pi: { prompts: './prompts' },
+    })
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const first = await provider.packageDetails({ packageName: 'pi-demo', version: '1.2.3' })
+  const second = await provider.packageDetails({ packageName: 'pi-demo', version: '1.2.3' })
+
+  assert.deepEqual(first, {
+    packageSource: 'npm:pi-demo',
+    packageName: 'pi-demo',
+    version: '1.2.3',
+    resourceTypes: ['prompt'],
+    repositoryUrl: 'https://github.com/example/pi-demo',
+  })
+  assert.deepEqual(second, first)
+  assert.equal(detailCalls, 1)
+})
+
+test('Pi ecosystem provider reuses short search cache and falls back to bounded last-good result', async () => {
   let now = 0
   let searchCalls = 0
   const fetcher = (async (input: string | URL | Request) => {
@@ -105,12 +210,13 @@ test('Pi ecosystem provider reuses short cache and falls back to bounded last-go
       if (searchCalls > 1) throw new Error('offline')
       return jsonResponse({
         total: 1,
-        objects: [{ package: { name: 'pi-demo', version: '1.0.0', keywords: ['pi-package'] } }],
+        objects: [searchObject('pi-demo', '1.0.0', '2026-09-01T00:00:00.000Z')],
       })
     }
-    return jsonResponse({
-      versions: { '1.0.0': { pi: { extensions: ['./index.ts'] } } },
-    })
+    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
+      return jsonResponse({ downloads: 42, package: 'pi-demo' })
+    }
+    throw new Error(`unexpected request: ${url}`)
   }) as typeof fetch
 
   const provider = new NpmPiEcosystemProvider(fetcher, () => now)

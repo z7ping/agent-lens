@@ -69,32 +69,37 @@ test('Pi ecosystem local package matching groups assets by exact npm identity', 
   assert.deepEqual(local.versions, ['2.1.0'])
 })
 
-test('Pi ecosystem only claims not-installed when local asset discovery is complete', () => {
-  const complete = agent({
+test('Pi ecosystem never infers not-installed from generic asset discovery coverage', () => {
+  const genericComplete = agent({
     capabilities: [{
       name: 'asset-discovery',
       status: 'available',
       captureModes: ['static-scan'],
     }],
   })
-  const partial = agent({
+  const packageIdentityComplete = agent({
     capabilities: [{
-      name: 'asset-discovery',
-      status: 'partial',
+      name: 'package-identity-discovery',
+      status: 'available',
       captureModes: ['static-scan'],
     }],
   })
 
-  assert.equal(piEcosystemUiInternals.packageInventoryComplete(complete), true)
-  assert.equal(piEcosystemUiInternals.localPackageState(complete, undefined), 'not-installed')
-  assert.equal(piEcosystemUiInternals.packageInventoryComplete(partial), false)
-  assert.equal(piEcosystemUiInternals.localPackageState(partial, undefined), 'unknown')
+  assert.equal(piEcosystemUiInternals.packageInventoryComplete(genericComplete), false)
+  assert.equal(piEcosystemUiInternals.localPackageState(genericComplete, undefined), 'unknown')
+  assert.equal(piEcosystemUiInternals.packageInventoryComplete(packageIdentityComplete), true)
+  assert.equal(piEcosystemUiInternals.localPackageState(packageIdentityComplete, undefined), 'not-installed')
   assert.equal(
     piEcosystemUiInternals.localPackageState(agent({ assetInventoryStatus: 'unavailable' }), undefined),
     'unknown',
   )
   assert.equal(
-    piEcosystemUiInternals.localPackageState(partial, { assets: [], versions: [] }),
+    piEcosystemUiInternals.localPackageState(genericComplete, { assets: [], versions: [] }),
     'installed',
   )
+})
+
+test('Pi ecosystem monthly download formatter uses compact locale-aware numbers', () => {
+  assert.match(piEcosystemUiInternals.formatMonthlyDownloads(939_700, 'zh-CN'), /93\.9万|94万/)
+  assert.match(piEcosystemUiInternals.formatMonthlyDownloads(939_700, 'en-US'), /939\.7K|940K/)
 })
