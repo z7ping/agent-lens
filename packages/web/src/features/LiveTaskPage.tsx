@@ -1665,16 +1665,18 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         { around: item.cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
       const projected = projectLiveSnapshotEntries(snapshot.entries)
-      const nextProjection = splitLiveProjectionItems(projected, false)
+      const atLatest = snapshot.page?.hasLater !== true
+      const nextProjection = splitLiveProjectionItems(projected, atLatest && snapshot.state.isStreaming)
       roundProjectorRef.current.reset()
       setProjection(nextProjection)
       historyBlocksRef.current = [historyPageBlock(snapshot, projected)]
       setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
-      historyAtLatestRef.current = snapshot.page?.hasLater !== true
+      historyAtLatestRef.current = atLatest
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setInputHistory(projectLiveInputHistory(projected))
-      snapshotBaseActiveCountRef.current = 0
+      snapshotBaseActiveCountRef.current = nextProjection.active.length
+      if (atLatest) leafIdRef.current = snapshot.leafId ?? leafIdRef.current
       followControllerRef.current.markUserIntent()
       setSyncError('')
     } catch (reason) {
