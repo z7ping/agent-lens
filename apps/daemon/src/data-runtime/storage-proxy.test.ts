@@ -92,6 +92,30 @@ test('foreground reader pool prefers the least-loaded ready reader', async () =>
   }
 })
 
+test('supporting reads cannot occupy the reader reserved for critical work', async () => {
+  const reserved = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
+  const supporting = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
+  await reserved.start()
+  await supporting.start()
+  const pool = new DataRuntimeReaderPool([reserved, supporting])
+  try {
+    const background = pool.request('diagnostic.block', { durationMs: 180 }, 1_000, 'supporting')
+    await new Promise(resolve => setTimeout(resolve, 15))
+
+    assert.equal(reserved.snapshot().pending, 0)
+    assert.ok(supporting.snapshot().pending > 0)
+
+    const startedAt = performance.now()
+    await pool.request('ping', {}, 1_000, 'critical')
+    assert.ok(performance.now() - startedAt < 100)
+
+    await background
+  } finally {
+    await reserved.shutdown()
+    await supporting.shutdown()
+  }
+})
+
 test('foreground reader pool applies bounded backpressure at saturation without recycling readers', async () => {
   const left = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
   const right = new DataRuntimeClient({ role: 'reader', allowDiagnostics: true, heartbeatIntervalMs: 60_000 })
