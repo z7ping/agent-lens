@@ -28,6 +28,54 @@ function policy(enabled: boolean): CapturePolicyService {
   } as unknown as CapturePolicyService
 }
 
+test('Agent Summary 只读取轻量安装状态，不触发资产清单和 Usage 聚合', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const host = await identity.resolveHost({ name: 'summary-light-host' })
+    await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+
+    let inventoryReads = 0
+    const originalInventory = storage.assetInventory!.listByInstallation.bind(storage.assetInventory)
+    storage.assetInventory!.listByInstallation = async installationId => {
+      inventoryReads += 1
+      return originalInventory(installationId)
+    }
+
+    let usageReads = 0
+    const originalUsage = storage.toolUsageObservations!.aggregateAssetsBySource!.bind(storage.toolUsageObservations)
+    storage.toolUsageObservations!.aggregateAssetsBySource = async input => {
+      usageReads += 1
+      return originalUsage(input)
+    }
+
+    const projection = new AgentOverviewProjection(storage, sources)
+    const summary = await projection.querySummary()
+
+    assert.equal(summary.items.length, 1)
+    assert.equal(summary.items[0]?.sourceId, 'codex')
+    assert.equal(summary.items[0]?.installationCount, 1)
+    assert.equal(inventoryReads, 0)
+    assert.equal(usageReads, 0)
+  } finally {
+    storage.close()
+  }
+})
+
+test('Agent Detail 只按 sourceId 构造当前智能体详情', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const projection = new AgentOverviewProjection(storage, sources)
+    const detail = await projection.get('codex')
+    assert.equal(detail?.item.sourceId, 'codex')
+    assert.equal(await projection.get('missing'), null)
+  } finally {
+    storage.close()
+  }
+})
+
 test('AgentOverviewProjection keeps inventory state separate from observed usage', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
