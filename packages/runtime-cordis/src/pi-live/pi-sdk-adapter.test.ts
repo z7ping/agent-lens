@@ -6,6 +6,7 @@ import {
   assertPiSdkModule,
   assertPiSdkSession,
   inspectPiSdkCompatibility,
+  piSdkCommands,
   resolvePiSdkPackageUpdateApi,
   resolvePiSdkResourceApi,
 } from './pi-sdk-adapter'
@@ -111,4 +112,29 @@ test('Session 缺少 AgentLens 实际依赖能力时拒绝启动', () => {
     () => assertPiSdkSession(session, '/pi/dist/index.js', '0.84.4'),
     /followUp/,
   )
+})
+
+
+test('0.84.4 Runtime 命令按官方 get_commands 语义组合 Extension / Prompt / Skill', () => {
+  const session = {
+    extensionRunner: {
+      getRegisteredCommands: () => [
+        { invocationName: 'review', description: 'Review changes' },
+      ],
+    },
+    promptTemplates: [
+      { name: 'explain', description: 'Explain code' },
+    ],
+    resourceLoader: {
+      getSkills: () => ({
+        skills: [{ name: 'repo-review', description: 'Review repository' }],
+      }),
+    },
+  } as unknown as import('./pi-sdk-adapter').PiSdkSession
+
+  assert.deepEqual(piSdkCommands(session), [
+    { name: 'review', description: 'Review changes', source: 'extension' },
+    { name: 'explain', description: 'Explain code', source: 'prompt' },
+    { name: 'skill:repo-review', description: 'Review repository', source: 'skill' },
+  ])
 })
