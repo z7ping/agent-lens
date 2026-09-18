@@ -207,7 +207,7 @@ export function BackupPage({
 
     const poll = async () => {
       try {
-        const next = await api.backupOverview()
+        const next = await api.pollBackupOverview()
         if (disposed) return
         applyOverview(next)
         if (next.index?.refreshing !== false) {
