@@ -15,7 +15,10 @@ import {
   AGENT_LENS_PROTOCOL_VERSION,
   type AgentAssetInventoryDto,
   type AgentAssetStateDto,
+  type AgentDetailResponseDto,
+  type AgentOverviewDto,
   type AgentOverviewResponseDto,
+  type AgentSummaryResponseDto,
   type FacetResponseDto,
   type SessionRelationshipDto,
   type SessionRelationshipResponseDto,
@@ -233,7 +236,12 @@ export class AgentOverviewProjection {
   private readonly usage: ToolAssetUsageProjection
   private cachedResponse: AgentOverviewResponseDto | null = null
   private cachedResponseAt = 0
+  private cachedSummary: AgentSummaryResponseDto | null = null
+  private cachedSummaryAt = 0
   private queryInFlight: Promise<AgentOverviewResponseDto> | null = null
+  private summaryInFlight: Promise<AgentSummaryResponseDto> | null = null
+  private readonly detailCache = new Map<string, { at: number; item: AgentOverviewDto }>()
+  private readonly detailInFlight = new Map<string, Promise<AgentDetailResponseDto | null>>()
 
   constructor(
     private readonly storage: StorageService,
@@ -249,6 +257,9 @@ export class AgentOverviewProjection {
   invalidate(): void {
     this.cachedResponse = null
     this.cachedResponseAt = 0
+    this.cachedSummary = null
+    this.cachedSummaryAt = 0
+    this.detailCache.clear()
   }
 
   query(): Promise<AgentOverviewResponseDto> {
@@ -266,13 +277,194 @@ export class AgentOverviewProjection {
     return this.queryInFlight
   }
 
+  querySummary(): Promise<AgentSummaryResponseDto> {
+    if (this.cachedSummary && Date.now() - this.cachedSummaryAt < AGENT_OVERVIEW_CACHE_MS) {
+      return Promise.resolve(this.cachedSummary)
+    }
+    if (this.summaryInFlight) return this.summaryInFlight
+    this.summaryInFlight = this.buildSummary()
+      .then(response => {
+        this.cachedSummary = response
+        this.cachedSummaryAt = Date.now()
+        return response
+      })
+      .finally(() => { this.summaryInFlight = null })
+    return this.summaryInFlight
+  }
+
+  get(sourceId: string): Promise<AgentDetailResponseDto | null> {
+    const cached = this.detailCache.get(sourceId)
+    if (cached && Date.now() - cached.at < AGENT_OVERVIEW_CACHE_MS) {
+      return Promise.resolve({
+        item: cached.item,
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date(cached.at).toISOString() },
+      })
+    }
+    const existing = this.detailInFlight.get(sourceId)
+    if (existing) return existing
+
+    const pending = this.buildDetail(sourceId)
+      .then(response => {
+        if (response) this.detailCache.set(sourceId, { at: Date.now(), item: response.item })
+        return response
+      })
+      .finally(() => { this.detailInFlight.delete(sourceId) })
+    this.detailInFlight.set(sourceId, pending)
+    return pending
+  }
+
+  private async buildSummary(): Promise<AgentSummaryResponseDto> {
+    const startedAt = performance.now()
+    const definitions = this.sources?.list() ?? []
+    const items = await Promise.all(definitions.map(async definition => {
+      const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
+      return {
+        sourceId: definition.manifest.sourceId,
+        productId: definition.manifest.productId,
+        displayName: definition.manifest.displayName,
+        supported: true,
+        enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
+        detected: sourceDetected(this.sourceDetection, definition.manifest.sourceId, installations.length > 0),
+        installationIds: installations.map(item => item.id),
+        installationCount: installations.length,
+      }
+    }))
+    items.sort((a, b) => a.displayName.localeCompare(b.displayName))
+    logSlowOverviewPhase('agent-summary-total', startedAt, { sources: definitions.length, items: items.length })
+    return { items, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
+  }
+
+  private async buildDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
+    const definition = (this.sources?.list() ?? []).find(item => item.manifest.sourceId === sourceId)
+    if (!definition) return null
+    const item = await this.buildItem(definition)
+    return {
+      item,
+      meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
+    }
+  }
+
+  private async buildItem(
+    definition: ReturnType<SourceService['list']>[number],
+    prefetchedAssets?: Awaited<ReturnType<ToolAssetUsageProjection['queryAssets']>>,
+  ): Promise<AgentOverviewDto> {
+    const sourceStartedAt = performance.now()
+    const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
+    const integration = this.integrationStatus
+      ? await this.integrationStatus(definition.manifest.productId)
+      : null
+    const usedAssets = new Map<string, AgentOverviewDto['usedAssets'][number]>()
+    const inventory = new Map<string, AgentAssetInventoryDto>()
+
+    const assets = prefetchedAssets ?? await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
+    for (const asset of assets) {
+      const key = `${asset.type}\u0000${asset.canonicalName}`
+      usedAssets.set(key, {
+        type: asset.type,
+        canonicalName: asset.canonicalName,
+        callCount: asset.callCount,
+        firstUsedAt: asset.firstUsedAt,
+        lastUsedAt: asset.lastUsedAt,
+        confidence: 'confidence' in asset
+          && (asset.confidence === 'high' || asset.confidence === 'medium' || asset.confidence === 'low')
+          ? asset.confidence
+          : 'high',
+      })
+    }
+
+    const inventoryPages = this.storage.assetInventory
+      ? await Promise.all(installations.map(installation => this.storage.assetInventory!.listByInstallation(installation.id)))
+      : []
+    for (const entries of inventoryPages) {
+      for (const entry of entries) {
+        const states = latestStates(entry)
+        if (!bindingIsCurrent(states)) continue
+        let asset = inventory.get(entry.definition.id)
+        if (!asset) {
+          asset = {
+            id: entry.definition.id,
+            type: entry.definition.type,
+            canonicalName: entry.definition.canonicalName,
+            ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
+            ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
+            bindings: [],
+          }
+          inventory.set(entry.definition.id, asset)
+        }
+        asset.bindings.push({
+          id: entry.binding.id,
+          installationId: entry.binding.installationId,
+          ...(entry.binding.scope ? { scope: entry.binding.scope } : {}),
+          ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
+          ...(entry.binding.path ? { path: entry.binding.path } : {}),
+          ...(entry.binding.source ? { source: entry.binding.source } : {}),
+          ...(entry.binding.version ? { version: entry.binding.version } : {}),
+          states,
+        })
+      }
+    }
+
+    const assetInventory = [...inventory.values()]
+    for (const asset of assetInventory) {
+      asset.bindings.sort((a, b) => (a.path ?? a.source ?? a.id).localeCompare(b.path ?? b.source ?? b.id))
+    }
+    assetInventory.sort((a, b) => a.type.localeCompare(b.type)
+      || (a.displayName ?? a.canonicalName).localeCompare(b.displayName ?? b.canonicalName))
+
+    const item: AgentOverviewDto = {
+      sourceId: definition.manifest.sourceId,
+      productId: definition.manifest.productId,
+      displayName: definition.manifest.displayName,
+      supported: true,
+      enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
+      detected: sourceDetected(this.sourceDetection, definition.manifest.sourceId, installations.length > 0),
+      ...(integration ? {
+        integration: {
+          availability: integration.availability,
+          capabilities: integration.capabilities.map(item => ({
+            capability: item.capability,
+            availability: item.availability,
+            ...(item.authorization ? { authorization: item.authorization } : {}),
+            ...(item.reasonCode ? { reasonCode: item.reasonCode } : {}),
+            ...(item.reason ? { reason: item.reason } : {}),
+          })),
+        },
+      } : {}),
+      installations: installations.map(item => ({
+        id: item.id,
+        ...(item.version ? { version: item.version } : {}),
+        ...(item.executable ? { executable: item.executable } : {}),
+        ...(item.configRoot ? { configRoot: item.configRoot } : {}),
+        ...(item.dataRoot ? { dataRoot: item.dataRoot } : {}),
+        firstSeenAt: item.firstSeenAt,
+        lastSeenAt: item.lastSeenAt,
+      })),
+      capabilities: (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
+        name: item.name,
+        status: item.status,
+        captureModes: item.captureModes,
+        ...(item.reason ? { reason: item.reason } : {}),
+      })),
+      assetInventory,
+      usedAssets: [...usedAssets.values()].sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
+      assetInventoryStatus: this.storage.assetInventory ? 'available' : 'unavailable',
+    }
+    logSlowOverviewPhase('agent-source', sourceStartedAt, {
+      sourceId: definition.manifest.sourceId,
+      installations: installations.length,
+      usedAssets: usedAssets.size,
+      inventoryAssets: assetInventory.length,
+    })
+    return item
+  }
+
   private async buildResponse(): Promise<AgentOverviewResponseDto> {
     const startedAt = performance.now()
     const definitions = this.sources?.list() ?? []
     const sourceAssets = this.storage.toolUsageObservations?.aggregateAssetsBySource
       ? await this.storage.toolUsageObservations.aggregateAssetsBySource({ detailLimit: 0 })
       : null
-    const assetsBySource = new Map<string, typeof sourceAssets>()
+    const assetsBySource = new Map<string, NonNullable<typeof sourceAssets>>()
     if (sourceAssets) {
       for (const asset of sourceAssets) {
         const sourceId = asset.sourceIds[0]
@@ -282,118 +474,10 @@ export class AgentOverviewProjection {
         assetsBySource.set(sourceId, items)
       }
     }
-    const items = await Promise.all(definitions.map(async definition => {
-      const sourceStartedAt = performance.now()
-      const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
-      const integration = this.integrationStatus
-        ? await this.integrationStatus(definition.manifest.productId)
-        : null
-      const usedAssets = new Map<string, AgentOverviewResponseDto['items'][number]['usedAssets'][number]>()
-      const inventory = new Map<string, AgentAssetInventoryDto>()
 
-      const assets = sourceAssets
-        ? assetsBySource.get(definition.manifest.sourceId) ?? []
-        : await this.usage.queryAssets({ sourceId: definition.manifest.sourceId })
-      for (const asset of assets) {
-        const key = `${asset.type}\u0000${asset.canonicalName}`
-        usedAssets.set(key, {
-          type: asset.type,
-          canonicalName: asset.canonicalName,
-          callCount: asset.callCount,
-          firstUsedAt: asset.firstUsedAt,
-          lastUsedAt: asset.lastUsedAt,
-          confidence: 'confidence' in asset
-            && (asset.confidence === 'high' || asset.confidence === 'medium' || asset.confidence === 'low')
-            ? asset.confidence
-            : 'high',
-        })
-      }
-
-      const inventoryPages = this.storage.assetInventory
-        ? await Promise.all(installations.map(installation => this.storage.assetInventory!.listByInstallation(installation.id)))
-        : []
-      for (const entries of inventoryPages) {
-        for (const entry of entries) {
-          const states = latestStates(entry)
-          if (!bindingIsCurrent(states)) continue
-          let asset = inventory.get(entry.definition.id)
-          if (!asset) {
-            asset = {
-              id: entry.definition.id,
-              type: entry.definition.type,
-              canonicalName: entry.definition.canonicalName,
-              ...(entry.definition.displayName ? { displayName: entry.definition.displayName } : {}),
-              ...(entry.definition.upstreamIdentity ? { upstreamIdentity: entry.definition.upstreamIdentity } : {}),
-              bindings: [],
-            }
-            inventory.set(entry.definition.id, asset)
-          }
-          asset.bindings.push({
-            id: entry.binding.id,
-            installationId: entry.binding.installationId,
-            ...(entry.binding.scope ? { scope: entry.binding.scope } : {}),
-            ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
-            ...(entry.binding.path ? { path: entry.binding.path } : {}),
-            ...(entry.binding.source ? { source: entry.binding.source } : {}),
-            ...(entry.binding.version ? { version: entry.binding.version } : {}),
-            states,
-          })
-        }
-      }
-
-      const assetInventory = [...inventory.values()]
-      for (const asset of assetInventory) {
-        asset.bindings.sort((a, b) => (a.path ?? a.source ?? a.id).localeCompare(b.path ?? b.source ?? b.id))
-      }
-      assetInventory.sort((a, b) => a.type.localeCompare(b.type)
-        || (a.displayName ?? a.canonicalName).localeCompare(b.displayName ?? b.canonicalName))
-
-      const item = {
-        sourceId: definition.manifest.sourceId,
-        productId: definition.manifest.productId,
-        displayName: definition.manifest.displayName,
-        supported: true,
-        enabled: sourceEnabled(this.capturePolicy, definition.manifest.sourceId),
-        detected: sourceDetected(this.sourceDetection, definition.manifest.sourceId, installations.length > 0),
-        ...(integration ? {
-          integration: {
-            availability: integration.availability,
-            capabilities: integration.capabilities.map(item => ({
-              capability: item.capability,
-              availability: item.availability,
-              ...(item.authorization ? { authorization: item.authorization } : {}),
-              ...(item.reasonCode ? { reasonCode: item.reasonCode } : {}),
-              ...(item.reason ? { reason: item.reason } : {}),
-            })),
-          },
-        } : {}),
-        installations: installations.map(item => ({
-          id: item.id,
-          ...(item.version ? { version: item.version } : {}),
-          ...(item.executable ? { executable: item.executable } : {}),
-          ...(item.configRoot ? { configRoot: item.configRoot } : {}),
-          ...(item.dataRoot ? { dataRoot: item.dataRoot } : {}),
-          firstSeenAt: item.firstSeenAt,
-          lastSeenAt: item.lastSeenAt,
-        })),
-        capabilities: (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
-          name: item.name,
-          status: item.status,
-          captureModes: item.captureModes,
-          ...(item.reason ? { reason: item.reason } : {}),
-        })),
-        assetInventory,
-        usedAssets: [...usedAssets.values()].sort((a, b) => b.callCount - a.callCount || a.canonicalName.localeCompare(b.canonicalName)),
-        assetInventoryStatus: this.storage.assetInventory ? 'available' as const : 'unavailable' as const,
-      }
-      logSlowOverviewPhase('agent-source', sourceStartedAt, {
-        sourceId: definition.manifest.sourceId,
-        installations: installations.length,
-        usedAssets: usedAssets.size,
-        inventoryAssets: assetInventory.length,
-      })
-      return item
-    }))
+    const items = await Promise.all(definitions.map(definition =>
+      this.buildItem(definition, sourceAssets ? (assetsBySource.get(definition.manifest.sourceId) ?? []) : undefined)
+    ))
     logSlowOverviewPhase('agent-overview-total', startedAt, { sources: definitions.length, items: items.length })
     return { items, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
   }
