@@ -333,7 +333,8 @@ export const liveApi = {
     if (query.fromOrdinal !== undefined) params.set('from', String(query.fromOrdinal))
     if (query.cursor) params.set('cursor', query.cursor)
     if (query.limit !== undefined) params.set('limit', String(query.limit))
-    const suffix = params.size ? `?${params}` : ''
+    const queryString = params.toString()
+    const suffix = queryString ? `?${queryString}` : ''
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}${suffix}`)
   },
 
