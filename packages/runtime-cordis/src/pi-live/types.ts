@@ -40,6 +40,9 @@ export interface PiLiveRuntimeCapabilities {
   modelSwitching: boolean
   thinkingLevelControl: boolean
   extensionUi: boolean
+  /** Pi-private support flags used only to decide whether controlled message actions are offered. */
+  treeNavigation?: boolean | undefined
+  messageFork?: boolean | undefined
 }
 
 export interface PiLiveStartInput {
