@@ -2,6 +2,7 @@ import type {
   AgentSession,
   PromptOptions,
   SessionManager,
+  SlashCommandInfo,
 } from '@earendil-works/pi-coding-agent'
 
 export const PI_SDK_PACKAGE_NAME = '@earendil-works/pi-coding-agent'
@@ -17,6 +18,7 @@ export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'rea
 export type PiSdkImage = NonNullable<PromptOptions['images']>[number]
 export type PiSdkPromptOptions = Pick<PromptOptions, 'images' | 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
+export type PiSdkSlashCommandInfo = Pick<SlashCommandInfo, 'name' | 'description' | 'source'>
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
 
@@ -56,6 +58,8 @@ export interface PiSdkSession {
   readonly modelRuntime: PiSdkModelRuntime
   readonly settingsManager?: AgentSession['settingsManager']
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
+  readonly extensionRunner?: Pick<AgentSession['extensionRunner'], 'getRegisteredCommands'>
+  readonly promptTemplates?: AgentSession['promptTemplates']
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
   setSessionName(name: Parameters<AgentSession['setSessionName']>[0]): ReturnType<AgentSession['setSessionName']>
@@ -70,6 +74,51 @@ export interface PiSdkSession {
   abort(): ReturnType<AgentSession['abort']>
   waitForIdle(): ReturnType<AgentSession['waitForIdle']>
   dispose(): ReturnType<AgentSession['dispose']>
+}
+
+export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
+  const commands: PiSdkSlashCommandInfo[] = []
+
+  for (const command of session.extensionRunner?.getRegisteredCommands() ?? []) {
+    const name = typeof command.invocationName === 'string' ? command.invocationName.trim() : ''
+    if (!name) continue
+    commands.push({
+      name,
+      ...(typeof command.description === 'string' && command.description.trim()
+        ? { description: command.description.trim() }
+        : {}),
+      source: 'extension',
+    })
+  }
+
+  for (const template of session.promptTemplates ?? []) {
+    const name = typeof template.name === 'string' ? template.name.trim() : ''
+    if (!name) continue
+    commands.push({
+      name,
+      ...(typeof template.description === 'string' && template.description.trim()
+        ? { description: template.description.trim() }
+        : {}),
+      source: 'prompt',
+    })
+  }
+
+  const skillsResult = record(session.resourceLoader?.getSkills?.())
+  const skills = Array.isArray(skillsResult.skills) ? skillsResult.skills : []
+  for (const item of skills) {
+    const skill = record(item)
+    const rawName = typeof skill.name === 'string' ? skill.name.trim() : ''
+    if (!rawName) continue
+    commands.push({
+      name: `skill:${rawName}`,
+      ...(typeof skill.description === 'string' && skill.description.trim()
+        ? { description: skill.description.trim() }
+        : {}),
+      source: 'skill',
+    })
+  }
+
+  return commands
 }
 
 export interface PiSdkModule {

@@ -610,6 +610,57 @@ async function selectModel(provider, modelId) {
   await session.setModel(model)
 }
 
+function slashCommands() {
+  const commands = []
+
+  const registered = session?.extensionRunner?.getRegisteredCommands?.()
+  if (Array.isArray(registered)) {
+    for (const item of registered) {
+      const command = record(item)
+      const name = typeof command.invocationName === 'string' ? command.invocationName.trim() : ''
+      if (!name) continue
+      commands.push({
+        name,
+        ...(typeof command.description === 'string' && command.description.trim()
+          ? { description: command.description.trim() }
+          : {}),
+        source: 'extension',
+      })
+    }
+  }
+
+  const templates = Array.isArray(session?.promptTemplates) ? session.promptTemplates : []
+  for (const item of templates) {
+    const template = record(item)
+    const name = typeof template.name === 'string' ? template.name.trim() : ''
+    if (!name) continue
+    commands.push({
+      name,
+      ...(typeof template.description === 'string' && template.description.trim()
+        ? { description: template.description.trim() }
+        : {}),
+      source: 'prompt',
+    })
+  }
+
+  const skillsResult = session?.resourceLoader?.getSkills?.()
+  const skills = Array.isArray(record(skillsResult).skills) ? record(skillsResult).skills : []
+  for (const item of skills) {
+    const skill = record(item)
+    const rawName = typeof skill.name === 'string' ? skill.name.trim() : ''
+    if (!rawName) continue
+    commands.push({
+      name: `skill:${rawName}`,
+      ...(typeof skill.description === 'string' && skill.description.trim()
+        ? { description: skill.description.trim() }
+        : {}),
+      source: 'skill',
+    })
+  }
+
+  return commands
+}
+
 function thinkingControl() {
   if (!capabilities?.thinkingLevelControl) return undefined
   const current = session?.thinkingLevel
@@ -629,6 +680,7 @@ async function command(name, value = {}) {
     if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
     return nextSnapshotChunk(value.transferId)
   }
+  if (name === 'commands') return slashCommands()
   if (name === 'controls') {
     const thinking = thinkingControl()
     return {

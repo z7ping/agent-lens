@@ -117,6 +117,14 @@ export interface PiLiveSnapshot extends LiveSnapshot {
   leafId: string | null
 }
 
+export type PiLiveCommandSource = 'extension' | 'prompt' | 'skill'
+
+export interface PiLiveCommand {
+  name: string
+  description?: string | undefined
+  source: PiLiveCommandSource
+}
+
 export interface PiLiveQueueState {
   steering: string[]
   followUp: string[]
@@ -134,6 +142,7 @@ export interface PiLiveService {
   retry(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot>
+  commands(runtimeSessionId: string): Promise<PiLiveCommand[]>
   controls(runtimeSessionId: string): Promise<PiLiveControls>
   setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState>

@@ -17,6 +17,10 @@ const [
   liveImageNode,
   liveAttachmentClient,
   liveAttachmentHttp,
+  liveHttp,
+  piLiveAdapter,
+  zhTaskLocale,
+  enTaskLocale,
 ] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
@@ -34,6 +38,10 @@ const [
   readFile(new URL('../packages/web/src/components/LiveImageNode.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live-attachments.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/live-attachments-http.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/surface-http/src/live-http.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/adapter.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/i18n/zh-CN/task.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/i18n/en-US/task.ts', import.meta.url), 'utf8'),
 ])
 
 const failures = []
@@ -86,7 +94,7 @@ forbidText(liveNewTask, /\bpiLiveApi\b|\bliveId\s*===\s*['"]pi['"]|\bproductId\s
 /* Live Task controls are capability-driven. */
 requireText(liveTask, /void liveApi\.products\(\)/, 'LiveTaskPage 必须读取通用 Live Product catalog')
 requireText(liveTask, /products\.find\(item => item\.liveId === current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 匹配产品')
-for (const capability of ['stream', 'recovery', 'extension-ui', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
+for (const capability of ['stream', 'recovery', 'extension-ui', 'command-discovery', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
   requireText(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), `LiveTaskPage 缺少 capability 驱动：${capability}`)
 }
 requireText(liveTask, /unsupportedInput\(message, product\.inputCapabilities\)/, 'Live 输入必须由 inputCapabilities 拒绝不支持的输入类型')
@@ -94,6 +102,8 @@ requireText(liveTask, /liveApi\.send\(current\.liveId, current\.runtimeSessionId
 requireText(liveTask, /onSubmit=\{\(message, mode\)[\s\S]{0,160}mode === ['"]followUp['"][\s\S]{0,80}['"]follow-up['"]/, 'Live Composer Alt+Enter 必须保持 Follow-up 发送语义')
 requireText(liveTask, /liveApi\.interrupt\(current\.liveId, current\.runtimeSessionId\)/, 'Live interrupt 必须携带 liveId/runtimeSessionId')
 requireText(liveTask, /liveApi\.queueState\(current\.liveId, current\.runtimeSessionId\)/, 'Live queue 恢复必须走通用 Live API')
+requireText(liveTask, /liveApi\.commands\(current\.liveId, current\.runtimeSessionId\)/, 'Live command discovery 必须走通用 Live API')
+requireText(liveTask, /commands=\{commands\}/, 'LiveTaskPage 必须把通用命令目录交给 Composer')
 requireText(liveTask, /liveApi\.clearQueue\(current\.liveId, current\.runtimeSessionId\)/, 'Live queue 控制必须走通用 Live API')
 requireText(liveTask, /normalizedEvent\?\.type === ['"]queue\.update['"]/, 'Live Queue 状态必须消费通用 queue.update 事件')
 forbidText(liveTask, /\bqueue_update\b/, 'LiveTaskPage 不得解析 Pi 原生 queue_update')
@@ -110,11 +120,13 @@ requireText(liveClient, /start\(liveId: string, input: LiveStartInputDto = \{\}\
 requireText(liveClient, /resume\(liveId: string, logicalSessionId: string\)/, 'Live Client resume 必须显式接收 liveId')
 requireText(liveClient, /fork\(liveId: string, logicalSessionId: string\)/, 'Live Client fork 必须显式接收 liveId')
 requireText(liveClient, /queueState\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue state')
+requireText(liveClient, /async commands\(liveId: string, runtimeSessionId: string\): Promise<LiveCommandDto\[]>/, 'Live Client 必须提供通用 command discovery')
 requireText(liveClient, /clearQueue\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue control')
 
-for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'steer', 'model-switching', 'thinking-control', 'extension-ui', 'recovery', 'resume', 'fork']) {
+for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'steer', 'model-switching', 'thinking-control', 'extension-ui', 'command-discovery', 'recovery', 'resume', 'fork']) {
   requireText(liveProtocol, new RegExp(`\\| '${capability}'`), `Live protocol capability 缺少：${capability}`)
 }
+requireText(liveProtocol, /export interface LiveCommandDto[\s\S]{0,220}value:\s*string[\s\S]{0,220}group\?:\s*string/, 'LiveCommandDto 必须保持 Runtime-owned value 与可选 group')
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
 
 /* Live input/composer behavior is product-level, not Pi-specific. */
@@ -132,6 +144,11 @@ requireText(liveComposer, /keyCode === 229/, 'Live Composer 缺少 IME 229 兼�
 requireText(liveComposer, /function ExternalDraftPlugin/, 'Live Composer 缺少外部 Draft revision 边界')
 requireText(liveComposer, /editor\.isComposing\(\)/, '外部 Draft 同步不得打断 IME')
 requireText(liveComposer, /function DraftPresencePlugin/, 'Live Composer 本地编辑必须只向父级传播轻量 presence')
+requireText(liveComposer, /function CommandMenuPlugin/, 'Live Composer 缺少 Slash 命令面板')
+requireText(liveComposer, /COMMAND_PRIORITY_CRITICAL/, 'Slash 命令面板必须优先于历史导航与发送快捷键')
+requireText(liveComposer, /replacePlainTextDocument\(editor, `\$\{command\.value\} `\)/, 'Slash 命令必须原样插入 Runtime-owned value')
+requireText(liveComposer, /className="select-menu-popover live-command-menu"/, 'Slash 命令面板必须复用 SelectMenu 视觉规范')
+forbidText(liveComposer, /BUILTIN_SLASH_COMMANDS|get_commands|Pi Live/, 'Live Composer 不得硬编码 Pi / Built-in 命令语义')
 requireText(liveComposer, /function DraftPersistencePlugin/, 'Live Composer 必须在内部处理 Session 草稿持久化')
 requireText(liveComposer, /writeLiveComposerDraft\(pending\.key, draftTextFromEditor\(pending\.state\)\)/, 'Live Composer 草稿持久化不得依赖父页面全文状态')
 requireText(liveComposer, /KEY_ARROW_UP_COMMAND/, 'Live Composer 输入历史缺少 ArrowUp')
@@ -169,6 +186,18 @@ requireText(reviewLiveInteraction, /product\.capabilities\.includes\('fork'\)/, 
 /* Keep the architecture anti-regression test itself alive. */
 requireText(architectureTest, /统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面/, '缺少 Product Surface 去 Pi 专属依赖回归测试')
 requireText(architectureTest, /LiveTask 高级交互只消费通用 capability 与 control/, '缺少 LiveTask capability 架构回归测试')
+
+/* Slash command discovery crosses generic HTTP/adapter boundaries only. */
+requireText(liveHttp, /action === 'commands' && request\.method === 'GET'/, 'Live HTTP 缺少通用 commands GET')
+requireText(liveHttp, /requireCapability\(adapter, 'command-discovery'\)/, 'Live commands HTTP 必须由 command-discovery capability 驱动')
+requireText(piLiveAdapter, /'command-discovery'/, 'Pi Live Adapter 必须显式声明 command-discovery')
+requireText(piLiveAdapter, /async commands\(runtimeSessionId: string\)/, 'Pi Live Adapter 必须把 Runtime 命令投影为通用 LiveCommand')
+requireText(piLiveAdapter, /value: `\/\$\{command\.name\}`/, 'Pi Live Adapter 必须在 Adapter 边界生成可发送 Slash value')
+forbidText(liveTask, /get_commands|BUILTIN_SLASH_COMMANDS/, 'Product Surface 不得依赖 Pi get_commands / Built-in 命令')
+
+/* AgentLens-owned command menu copy must exist in both official locales. */
+requireText(zhTaskLocale, /commandMenu:[\s\S]{0,100}aria:\s*'可用命令'/, '缺少 Slash 命令中文文案')
+requireText(enTaskLocale, /commandMenu:[\s\S]{0,100}aria:\s*'Available commands'/, '缺少 Slash 命令英文文案')
 
 if (failures.length) {
   console.error('Live Product 表现层契约检查失败：')
