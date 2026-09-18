@@ -30,6 +30,7 @@ test('Review message node exposes canonical historical image attachments', () =>
   assert.equal(node.text, '看看图片')
   assert.equal(node.attachments?.[0]?.type, 'image')
   assert.equal(node.attachments?.[0]?.dataUrl, undefined)
+  assert.doesNotMatch(JSON.stringify(node.payload), /aGVsbG8=/)
 })
 
 test('Review pure-image legacy Pi messages do not fall back to no-displayable-text copy', () => {
@@ -40,4 +41,5 @@ test('Review pure-image legacy Pi messages do not fall back to no-displayable-te
   assert.ok(node?.type === 'message')
   assert.equal(node.text, '')
   assert.equal(node.attachments?.[0]?.dataUrl, undefined)
+  assert.doesNotMatch(JSON.stringify(node.payload), /ZmFrZQ==/)
 })
