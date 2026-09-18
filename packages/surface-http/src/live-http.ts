@@ -6,7 +6,9 @@ import type {
   LiveContributionValue,
   LiveMessageActionContribution,
   LiveMessageActionResult,
+  LiveRuntimeActionContribution,
   LiveRuntimeActionResult,
+  LiveRuntimeContributionField,
   LiveRuntimeDisclosureContribution,
   LiveRuntimeState,
   LiveSnapshot,
@@ -136,7 +138,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
       && tone !== 'danger') continue
     if (row.defaultExpanded !== undefined && typeof row.defaultExpanded !== 'boolean') continue
 
-    const fields = []
+    const fields: LiveRuntimeContributionField[] = []
     for (const fieldCandidate of row.fields) {
       if (!fieldCandidate || typeof fieldCandidate !== 'object' || Array.isArray(fieldCandidate)) continue
       const field = fieldCandidate as Record<string, unknown>
@@ -162,7 +164,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
       if (fields.length >= MAX_LIVE_RUNTIME_FIELDS) break
     }
 
-    const actions = []
+    const actions: LiveRuntimeActionContribution[] = []
     if (Array.isArray(row.actions)) {
       for (const actionCandidate of row.actions) {
         if (actionCount >= MAX_LIVE_RUNTIME_ACTIONS) break
