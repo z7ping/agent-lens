@@ -271,7 +271,7 @@ test('Pi Live Adapter exposes private message semantics only through controlled 
   const service = {
     messageActions: async () => [{
       actionId: 'pi.private-action',
-      label: { default: 'Private action', zhCN: '私有动作', enUS: 'Private action' },
+      label: { default: 'Private action', localizations: { 'zh-CN': '私有动作', 'en-US': 'Private action' } },
       roles: ['user'] as const,
       requiresIdle: true,
     }],
@@ -284,7 +284,7 @@ test('Pi Live Adapter exposes private message semantics only through controlled 
   const adapter = new PiLiveAdapter(service, attachmentService())
   assert.deepEqual(await adapter.messageActions('runtime-1'), [{
     actionId: 'pi.private-action',
-    label: { default: 'Private action', zhCN: '私有动作', enUS: 'Private action' },
+    label: { default: 'Private action', localizations: { 'zh-CN': '私有动作', 'en-US': 'Private action' } },
     roles: ['user'],
     requiresIdle: true,
   }])
