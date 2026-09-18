@@ -723,7 +723,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         controller.endProgrammaticScroll()
       })
     })
-  }, [items])
+  }, [projection.stable, projection.active])
 
   useEffect(() => () => {
     if (followFrameRef.current !== null) window.cancelAnimationFrame(followFrameRef.current)
@@ -827,7 +827,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setBusy(true)
     setError('')
     if (behavior === 'normal' && optimisticText && optimisticId) {
-      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
+      setProjection(previous => ({
+        stable: previous.active.length
+          ? [...previous.stable, ...previous.active]
+          : previous.stable,
+        active: appendOptimisticLiveUserMessage([], optimisticText, optimisticId),
+      }))
+      snapshotBaseActiveCountRef.current = 0
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
@@ -839,7 +845,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
-      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
+      if (optimisticId) {
+        setProjection(previous => ({
+          ...previous,
+          active: previous.active.filter(item => item.id !== optimisticId),
+        }))
+      }
       composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -861,7 +872,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setError('')
     setStartupQueued(currentMessage => currentMessage === message ? null : currentMessage)
     if (optimisticText && optimisticId) {
-      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
+      setProjection(previous => ({
+        stable: previous.active.length
+          ? [...previous.stable, ...previous.active]
+          : previous.stable,
+        active: appendOptimisticLiveUserMessage([], optimisticText, optimisticId),
+      }))
+      snapshotBaseActiveCountRef.current = 0
     }
 
     void liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal').then(() => {
@@ -869,7 +886,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setState(previous => previous ? { ...previous, isStreaming: true } : previous)
       composerRef.current?.focus({ preventScroll: true })
     }, reason => {
-      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
+      if (optimisticId) {
+        setProjection(previous => ({
+          ...previous,
+          active: previous.active.filter(item => item.id !== optimisticId),
+        }))
+      }
       composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
@@ -1029,14 +1051,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
       const snapshot = await liveApi.snapshot(current.liveId, current.runtimeSessionId)
       const projected = projectLiveSnapshotEntries(snapshot.entries)
+      const nextProjection = splitLiveProjectionItems(projected, snapshot.state.isStreaming)
       setState(snapshot.state)
-      setItems(projected)
+      setProjection(nextProjection)
       setInputHistory(projectLiveInputHistory(projected))
-      stableProjectionCountRef.current = projected.length
-      projectionStableCountRef.current = liveTaskStableRoundPrefixLength(
-        projected,
-        snapshot.state.isStreaming,
-      )
+      snapshotBaseActiveCountRef.current = nextProjection.active.length
       leafIdRef.current = snapshot.leafId ?? undefined
       if (typeof result.draftText === 'string') setComposerValue(result.draftText)
       composerRef.current?.focus({ preventScroll: true })
@@ -1087,11 +1106,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [busy, current, thinking])
 
-  const projectionStableCount = Math.min(projectionStableCountRef.current, items.length)
   const rounds = useMemo(
-    () => roundProjectorRef.current.project(items, projectionStableCount),
-    [items, projectionStableCount],
+    () => roundProjectorRef.current.projectSegments(projection.stable, projection.active),
+    [projection.stable, projection.active],
   )
+  const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
     return <main className="pi-live-page pi-live-page-embedded">
@@ -1237,7 +1256,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             runtimeStreaming={state?.isStreaming ?? false}
             onMessageAction={runMessageAction}
           />)}
-          {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
+          {!itemCount && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
           {syncError && <div className="pi-live-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
           {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
