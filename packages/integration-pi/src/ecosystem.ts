@@ -24,10 +24,14 @@ const SEARCH_CACHE_TTL_MS = 60_000
 const PACKAGE_CACHE_TTL_MS = 5 * 60_000
 const DOWNLOAD_CACHE_TTL_MS = 5 * 60_000
 const REQUEST_TIMEOUT_MS = 8_000
+const SEARCH_REQUEST_TIMEOUT_MS = 10_000
+const SEARCH_RETRY_TIMEOUT_MS = 12_000
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 20
-const SEARCH_PAGE_SIZE = 250
-const MAX_CATALOG_CANDIDATES = 1_000
+const SEARCH_PAGE_SIZE = 100
+const SEARCH_RETRY_PAGE_SIZE = 50
+const DEFAULT_CATALOG_CANDIDATES = 100
+const FILTERED_CATALOG_CANDIDATES = 300
 const TYPE_FILTER_BATCH_SIZE = 20
 const PACKAGE_DETAIL_CONCURRENCY = 6
 const DOWNLOAD_BATCH_SIZE = 128
@@ -135,6 +139,24 @@ function boundedLimit(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value)
     ? Math.max(1, Math.min(MAX_LIMIT, value))
     : DEFAULT_LIMIT
+}
+
+function catalogCandidateBudget(
+  type: PiEcosystemResourceTypeDto | undefined,
+  limit: number,
+): number {
+  if (!type) return Math.max(DEFAULT_CATALOG_CANDIDATES, limit * 5)
+  return Math.max(DEFAULT_CATALOG_CANDIDATES, Math.min(FILTERED_CATALOG_CANDIDATES, limit * 15))
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isTimeoutError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'TimeoutError') return true
+  if (error && typeof error === 'object' && 'name' in error && Reflect.get(error, 'name') === 'TimeoutError') return true
+  return /aborted due to timeout|timed out|timeout/i.test(errorMessage(error))
 }
 
 function setBounded<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
@@ -299,7 +321,10 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     sort: PiEcosystemSortDto,
     limit: number,
   ): Promise<PiEcosystemSearchResponseDto> {
-    const { candidates, upstreamTotal } = await this.searchCandidates(query)
+    const { candidates, upstreamTotal } = await this.searchCandidates(
+      query,
+      catalogCandidateBudget(type, limit),
+    )
     const downloads = await this.monthlyDownloads(candidates.map(candidate => candidate.packageName))
     const ranked = sortCandidates(candidates, downloads, sort)
 
@@ -337,25 +362,64 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     }
   }
 
-  private async searchCandidates(query: string): Promise<{
+  private async searchPage(
+    query: string,
+    from: number,
+    size: number,
+    timeoutMs: number,
+  ): Promise<NpmSearchResult | undefined> {
+    const url = new URL(NPM_SEARCH_ENDPOINT)
+    url.searchParams.set('text', ['keywords:pi-package', query].filter(Boolean).join(' '))
+    url.searchParams.set('size', String(size))
+    url.searchParams.set('from', String(from))
+    try {
+      const raw = await responseJson(await this.fetcher(url, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(timeoutMs),
+      }), `npm package search (from=${from}, size=${size})`)
+      return objectValue(raw) as NpmSearchResult | undefined
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        throw new Error(
+          `npm package search timed out (from=${from}, size=${size}, timeout=${timeoutMs}ms)`,
+        )
+      }
+      throw error
+    }
+  }
+
+  private async searchCandidates(
+    query: string,
+    maxCandidates: number,
+  ): Promise<{
     candidates: NpmPackageCandidate[]
     upstreamTotal: number
   }> {
     const candidates = new Map<string, NpmPackageCandidate>()
     let upstreamTotal = 0
+    let from = 0
 
-    for (let from = 0; from < MAX_CATALOG_CANDIDATES; from += SEARCH_PAGE_SIZE) {
-      const url = new URL(NPM_SEARCH_ENDPOINT)
-      url.searchParams.set('text', ['keywords:pi-package', query].filter(Boolean).join(' '))
-      url.searchParams.set('size', String(Math.min(SEARCH_PAGE_SIZE, MAX_CATALOG_CANDIDATES - from)))
-      url.searchParams.set('from', String(from))
+    while (from < maxCandidates) {
+      const size = Math.min(SEARCH_PAGE_SIZE, maxCandidates - from)
+      let result: NpmSearchResult | undefined
+      try {
+        result = await this.searchPage(query, from, size, SEARCH_REQUEST_TIMEOUT_MS)
+      } catch (error) {
+        if (candidates.size > 0) {
+          // Extra pages improve ranking/filter coverage but must never make an already
+          // usable Catalog disappear because npm had a transient slow page.
+          break
+        }
+        const retrySize = Math.min(SEARCH_RETRY_PAGE_SIZE, size)
+        try {
+          result = await this.searchPage(query, from, retrySize, SEARCH_RETRY_TIMEOUT_MS)
+        } catch (retryError) {
+          throw new Error(
+            `Pi ecosystem npm search unavailable: ${errorMessage(retryError)}`,
+          )
+        }
+      }
 
-      const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      const raw = await responseJson(await this.fetcher(url, {
-        headers: { accept: 'application/json' },
-        signal,
-      }), 'npm package search')
-      const result = objectValue(raw) as NpmSearchResult | undefined
       const objects = Array.isArray(result?.objects) ? result.objects : []
       if (from === 0) {
         upstreamTotal = typeof result?.total === 'number' && Number.isFinite(result.total)
@@ -377,6 +441,8 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
       }
 
       if (!objects.length || from + objects.length >= upstreamTotal) break
+      from += objects.length
+      if (objects.length < size) break
     }
 
     return {
@@ -493,6 +559,8 @@ export const piEcosystemInternals = {
   piPackageUrl,
   boundedLimit,
   validSort,
+  catalogCandidateBudget,
+  isTimeoutError,
   setBounded,
   mapWithConcurrency,
   sortCandidates,
@@ -500,6 +568,10 @@ export const piEcosystemInternals = {
   PACKAGE_DETAIL_CONCURRENCY,
   TYPE_FILTER_BATCH_SIZE,
   DOWNLOAD_BATCH_SIZE,
+  SEARCH_PAGE_SIZE,
+  SEARCH_RETRY_PAGE_SIZE,
+  SEARCH_REQUEST_TIMEOUT_MS,
+  SEARCH_RETRY_TIMEOUT_MS,
   MAX_SEARCH_CACHE_ENTRIES,
   MAX_PACKAGE_CACHE_ENTRIES,
   MAX_DOWNLOAD_CACHE_ENTRIES,
