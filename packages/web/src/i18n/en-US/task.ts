@@ -126,7 +126,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       send: 'Send',
       messageActionPending: 'Working…',
-      syncWarning: 'Session content sync is temporarily unavailable; the live task can keep running: {{message}}',
+      syncWarning: 'Live state sync is temporarily unavailable; the task can keep running: {{message}}',
+      controlsSyncFailed: 'Model or thinking controls could not be refreshed',
       unsupportedInput: 'This agent does not support {{type}} input.',
       input: {
         largeText: 'large text',
