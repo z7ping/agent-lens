@@ -42,6 +42,8 @@ test('Pi Live keeps the compatibility task route while other Live adapters use a
 test('generic task runtime status follows shared Live state', () => {
   assert.equal(taskLiveRuntimeStatus(state({ status: 'failed' })), 'failed')
   assert.equal(taskLiveRuntimeStatus(state({ status: 'initializing' })), 'initializing')
+  assert.equal(taskLiveRuntimeStatus(state({ status: 'terminating', isStreaming: true })), 'terminating')
+  assert.equal(taskLiveRuntimeStatus(state({ status: 'terminated', isStreaming: true })), 'terminated')
   assert.equal(taskLiveRuntimeStatus(state({ isStreaming: true })), 'streaming')
   assert.equal(taskLiveRuntimeStatus(state()), 'idle')
 })
