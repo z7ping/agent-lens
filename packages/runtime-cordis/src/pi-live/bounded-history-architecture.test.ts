@@ -8,6 +8,8 @@ const workerSource = readFileSync(new URL('./worker-entry.mjs', import.meta.url)
 
 test('Pi 历史继续只按原生 Session 身份定位，不扫描 Observation / Evidence 时间线', () => {
   assert.match(historySource, /listSourceSessionsByLogicalSession/)
+  assert.match(historySource, /MAX_RESUME_SOURCE_SESSIONS\s*=\s*8/)
+  assert.match(historySource, /sourceId:\s*'pi',[\s\S]{0,80}limit:\s*MAX_RESUME_SOURCE_SESSIONS/)
   assert.match(historySource, /findByNativeId/)
   assert.doesNotMatch(historySource, /observations\.query/)
   assert.doesNotMatch(historySource, /repositories\.evidence/)

@@ -4,6 +4,7 @@ import type { SourceRecord, SourceSession, StorageService } from '@agent-lens/co
 import type { PiLiveHistoryAction, PiLiveStartInput } from './types'
 
 const PI_SESSION_HEADER_BYTES = 64 * 1024
+const MAX_RESUME_SOURCE_SESSIONS = 8
 
 function interactionError(message: string): Error {
   const error = new Error(message) as Error & { code?: string }
@@ -86,8 +87,10 @@ export async function resolvePiLiveHistoryInput(
   if (!listSourceSessions) {
     throw interactionError('当前存储不支持有界历史定位，无法继续会话')
   }
-  const sourceSessionsForProduct = (await listSourceSessions(logicalSessionId))
-    .filter(item => item.sourceId === 'pi')
+  const sourceSessionsForProduct = await listSourceSessions(logicalSessionId, {
+    sourceId: 'pi',
+    limit: MAX_RESUME_SOURCE_SESSIONS,
+  })
   if (!sourceSessionsForProduct.length) throw interactionError('该历史会话不支持继续')
 
   const nativeSessionIds = new Set(sourceSessionsForProduct.map(item => item.nativeSessionId))
