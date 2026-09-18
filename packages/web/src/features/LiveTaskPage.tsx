@@ -1734,7 +1734,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       } satisfies TaskTurnRailData
     })
   }, [historyPage?.rounds?.firstOrdinal, roundSegments, t])
-  const turnRailTotal = historyPage?.rounds?.total ?? historyIndex?.total
+  const loadedRoundMax = turnRailItems.reduce((max, item) => Math.max(max, item.ordinal ?? 0), 0)
+  const turnRailTotal = Math.max(
+    historyPage?.rounds?.total ?? 0,
+    historyIndex?.total ?? 0,
+    loadedRoundMax,
+  ) || undefined
   const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
