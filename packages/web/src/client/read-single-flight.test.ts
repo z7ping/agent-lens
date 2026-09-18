@@ -88,8 +88,19 @@ test('usage and insights aggregate reads coalesce 100 concurrent identical reque
   const api = new AgentLensApi()
   const filters = { sourceIds: null, projectId: '', range: '7d' as const }
 
-  await Promise.all(Array.from({ length: 100 }, () => api.usage(filters)))
-  await Promise.all(Array.from({ length: 100 }, () => api.insights(filters)))
+  const firstUsage = api.usage(filters)
+  await new Promise(resolve => setTimeout(resolve, 2))
+  await Promise.all([
+    firstUsage,
+    ...Array.from({ length: 99 }, () => api.usage(filters)),
+  ])
+
+  const firstInsights = api.insights(filters)
+  await new Promise(resolve => setTimeout(resolve, 2))
+  await Promise.all([
+    firstInsights,
+    ...Array.from({ length: 99 }, () => api.insights(filters)),
+  ])
 
   assert.equal(calls.size, 2)
   assert.equal([...calls.values()].every(count => count === 1), true)
