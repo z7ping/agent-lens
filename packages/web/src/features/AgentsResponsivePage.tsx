@@ -33,7 +33,7 @@ export function AgentsResponsivePage({
     if (!hasSelectedOverview) return
     const timer = window.setTimeout(() => {
       void model.refreshAgentCoverage().catch(() => undefined)
-    }, 250)
+    }, 1_000)
     return () => window.clearTimeout(timer)
   }, [hasSelectedOverview, model, sourceId])
   const isPi = sourceId === 'pi'
