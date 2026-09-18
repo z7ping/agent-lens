@@ -58,6 +58,10 @@ function messageText(message: LiveMessageDto): string {
     .trim()
 }
 
+function messageHasAttachments(message: LiveMessageDto): boolean {
+  return message.parts.some(part => part.type === 'image' || part.type === 'file')
+}
+
 function unsupportedInput(
   message: LiveMessageDto,
   capabilities: LiveInputCapabilitiesDto,
@@ -286,6 +290,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
   const [newRecords, setNewRecords] = useState(false)
+  const [composerExpanded, setComposerExpanded] = useState(false)
+  const [startupQueued, setStartupQueued] = useState<LiveMessageDto | null>(null)
+  const [interruptNotice, setInterruptNotice] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [pathError, setPathError] = useState('')
@@ -298,6 +305,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const followControllerRef = useRef(new LiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
+  const startupSendingRef = useRef(false)
   const leafIdRef = useRef<string | undefined>(undefined)
   const queueRevisionRef = useRef(0)
 
@@ -333,6 +341,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     leafIdRef.current = undefined
     setConnected(false)
     setNewRecords(false)
+    setComposerExpanded(false)
+    setStartupQueued(null)
+    setInterruptNotice(false)
+    startupSendingRef.current = false
     followControllerRef.current = new LiveFollowController()
     setError('')
     setPathError('')
@@ -452,6 +464,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
 
   useEffect(() => {
+    if (!interruptNotice) return
+    const timeout = window.setTimeout(() => setInterruptNotice(false), 2800)
+    return () => window.clearTimeout(timeout)
+  }, [interruptNotice])
+
+  useEffect(() => {
     if (!state) return
     setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, state))
   }, [state])
@@ -510,11 +528,26 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const canQueueWhileStreaming = Boolean(
     product?.capabilities.includes('steer') || product?.capabilities.includes('queue'),
   )
+  const canStageStartup = Boolean(
+    current
+    && product?.capabilities.includes('send')
+    && state?.status === 'initializing'
+    && !startupQueued
+    && !busy
+    && !queueMutationPending
+    && !composerAttachmentPending,
+  )
   const canSubmit = Boolean(
     current
     && product?.capabilities.includes('send')
-    && state?.status === 'ready'
-    && (!state.isStreaming || canQueueWhileStreaming)
+    && (
+      canStageStartup
+      || (
+        state?.status === 'ready'
+        && (!state.isStreaming || canQueueWhileStreaming)
+      )
+    )
+    && !startupQueued
     && !busy
     && !queueMutationPending
     && !composerAttachmentPending,
@@ -532,6 +565,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {
       setError(t('live.unsupportedInput', { type: t(`live.input.${unsupported}`) }))
+      return
+    }
+    if (state.status === 'initializing') {
+      if (messageHasAttachments(message)) {
+        setError(t('live.startupAttachmentRequiresReady'))
+        return
+      }
+      setStartupQueued(message)
+      clearComposer()
+      composerRef.current?.focus({ preventScroll: true })
       return
     }
     const preferredBehavior = requestedBehavior ?? streamingBehavior
@@ -572,7 +615,45 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (pending) setPendingQueue(previous => previous.filter(item => item.id !== pending.id))
       setBusy(false)
     }
-  }, [canSubmit, clearComposer, current, product, setComposerValue, state, streamingBehavior, t])
+  }, [canSubmit, clearComposer, current, product, state, streamingBehavior, t])
+
+  useEffect(() => {
+    if (!current || !product || state?.status !== 'ready' || !startupQueued || startupSendingRef.current) return
+    const message = startupQueued
+    const optimisticText = messageText(message)
+    const optimisticId = optimisticText
+      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
+      : null
+
+    startupSendingRef.current = true
+    setBusy(true)
+    setError('')
+    setStartupQueued(currentMessage => currentMessage === message ? null : currentMessage)
+    if (optimisticText && optimisticId) {
+      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
+    }
+
+    void liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal').then(() => {
+      if (optimisticText) setInputHistory(previous => appendLiveInputHistory(previous, optimisticText))
+      setState(previous => previous ? { ...previous, isStreaming: true } : previous)
+      composerRef.current?.focus({ preventScroll: true })
+    }, reason => {
+      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
+      composerRef.current?.restoreMessage(message)
+      setError(reason instanceof Error ? reason.message : String(reason))
+    }).finally(() => {
+      startupSendingRef.current = false
+      setBusy(false)
+    })
+  }, [current, product, startupQueued, state?.status])
+
+  const editStartupQueued = useCallback(() => {
+    if (!startupQueued) return
+    const message = startupQueued
+    setStartupQueued(null)
+    composerRef.current?.restoreMessage(message)
+    composerRef.current?.focus({ preventScroll: true })
+  }, [startupQueued])
 
   const interrupt = useCallback(async () => {
     if (!current || !canInterrupt) return
@@ -585,6 +666,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setQueue(emptyLiveQueue())
       setPendingQueue([])
       setState(previous => previous ? { ...previous, isStreaming: false, pendingMessageCount: 0 } : previous)
+      setInterruptNotice(true)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -829,6 +911,19 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       <div className="pi-live-compose-wrap live-task-compose-wrap">
         <div className="pi-live-float-stack">
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('live.newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
+          {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite">
+            <UiIcon name="check" size={14}/>
+            <b>{t('live.interruptedTitle')}</b>
+            <span>{t('live.interruptedDescription')}</span>
+          </div>}
+          {startupQueued && <div className="pi-live-startup-queue" role="status">
+            <span>{t('live.startupWaitingReady')}</span>
+            <b>{messageText(startupQueued)}</b>
+            <div>
+              <Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('live.queue.edit')}</Button>
+              <Button size="small" className="pi-live-queue-action" onClick={() => setStartupQueued(null)}>{t('live.queue.withdraw')}</Button>
+            </div>
+          </div>}
           {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">
             {queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
               <span>{item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
@@ -853,8 +948,18 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           </div>}
           {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
         </div>
-        <div className="pi-live-composer">
+        <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
           <div className="pi-live-editor">
+            <div className="pi-live-editor-toolbar" aria-label={t('live.composerToolbarAria')}>
+              <IconButton
+                className="pi-live-editor-action"
+                title={composerExpanded ? t('live.composerShrink') : t('live.composerExpand')}
+                aria-label={composerExpanded ? t('live.composerShrink') : t('live.composerExpand')}
+                onClick={() => setComposerExpanded(value => !value)}
+              >
+                <UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/>
+              </IconButton>
+            </div>
             <LiveMarkdownComposer
               ref={composerRef}
               draft={draft}
