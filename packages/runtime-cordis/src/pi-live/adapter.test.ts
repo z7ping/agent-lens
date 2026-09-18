@@ -431,3 +431,28 @@ test('Pi Live Adapter exposes Runtime commands through generic command-discovery
     { value: '/skill:repo-review', label: '/skill:repo-review', description: 'Review repository', group: 'skill' },
   ])
 })
+
+
+test('Pi Live Adapter exposes bounded history index generically', async () => {
+  const calls: Array<{ runtimeSessionId: string; limit?: number }> = []
+  const service = {
+    historyIndex: async (runtimeSessionId: string, limit?: number) => {
+      calls.push({ runtimeSessionId, limit })
+      return { total: 2, items: [
+        { cursor: 'user-1', ordinal: 1, preview: 'one' },
+        { cursor: 'user-2', ordinal: 2, preview: 'two' },
+      ] }
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.equal(adapter.capabilities.has('history-index'), true)
+  assert.deepEqual(await adapter.historyIndex('runtime-1', 80), {
+    total: 2,
+    items: [
+      { cursor: 'user-1', ordinal: 1, preview: 'one' },
+      { cursor: 'user-2', ordinal: 2, preview: 'two' },
+    ],
+  })
+  assert.deepEqual(calls, [{ runtimeSessionId: 'runtime-1', limit: 80 }])
+})
