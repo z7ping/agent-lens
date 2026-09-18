@@ -119,11 +119,6 @@ test('review 后台刷新保持已加载窗口且不重新进入首屏 loading',
       return Promise.resolve(response(limit))
     }
 
-    override reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
-      summaryCalls += 1
-      return Promise.resolve({ ...summary(2), id, title: '会话 2 已更新' })
-    }
-
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
       return Promise.resolve({
         ...summary(1),
@@ -232,6 +227,11 @@ test('session.updated 在摘要物化后只精准读取对应摘要', async () =
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
       reviewCalls += 1
       return Promise.resolve(response(limit))
+    }
+
+    override reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+      summaryCalls += 1
+      return Promise.resolve({ ...summary(2), id, title: '会话 2 已更新' })
     }
 
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
