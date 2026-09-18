@@ -144,7 +144,8 @@ requireText(liveTask, /active:\s*reduceLiveTaskEvent\(previous\.active, envelope
 requireText(liveTask, /active:\s*appendOptimisticLiveUserMessage\([\s\S]{0,160}previous\.active,[\s\S]{0,120}optimisticText,[\s\S]{0,120}optimisticId,[\s\S]{0,120}optimisticAttachments/, '新一轮发送必须把文本与乐观附件一起追加到活动尾部，避免未完成对账时错误推进稳定边界')
 requireText(liveTask, /mode === ['"]settle['"] && snapshot\.state\.isStreaming/, '上一轮完成对账返回时若下一轮已开始，必须丢弃旧投影结果并保留原 leaf')
 requireText(liveTask, /const liveTurnRevisionRef = useRef\(0\)/, 'Live 必须记录活动轮修订号，防止旧 Snapshot 覆盖下一轮')
-requireText(liveTask, /const recoveryTurnRevision = liveTurnRevisionRef\.current[\s\S]{0,500}liveTurnRevisionRef\.current !== recoveryTurnRevision/, 'Recovery 返回前若活动轮已变化，必须整体丢弃陈旧结果')
+requireText(liveTask, /const recoveryTurnRevision = liveTurnRevisionRef\.current/, 'Recovery 发起时必须记录活动轮修订号')
+requireText(liveTask, /if \(liveTurnRevisionRef\.current !== recoveryTurnRevision\) return/, 'Recovery 返回前若活动轮已变化，必须整体丢弃陈旧结果')
 requireText(liveTask, /normalizedEvent\.status === ['"]running['"][\s\S]{0,120}liveTurnRevisionRef\.current \+= 1/, 'Runtime 开始新一轮时必须推进活动轮修订号')
 
 requireText(liveTask, /let recoveryTask: Promise<void> \| null = null/, 'Live recovery 必须单飞，避免 ready/reconnect/completed 并发打 Snapshot')
