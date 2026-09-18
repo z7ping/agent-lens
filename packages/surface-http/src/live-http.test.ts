@@ -158,13 +158,13 @@ class FakeLiveAdapter implements LiveAdapter {
     return [
       {
         actionId: 'test.rewind',
-        label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
+        label: { default: 'Rewind', localizations: { 'zh-CN': '回到这里', 'en-US': 'Rewind' } },
         roles: ['user'] as const,
         requiresIdle: true,
       },
       {
         actionId: 'test.open',
-        label: { default: 'Open', zhCN: '打开', enUS: 'Open' },
+        label: { default: 'Open', localizations: { 'zh-CN': '打开', 'en-US': 'Open' } },
         roles: ['user'] as const,
         requiresIdle: true,
       },
@@ -368,13 +368,13 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       items: [
         {
           actionId: 'test.rewind',
-          label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
+          label: { default: 'Rewind', localizations: { 'zh-CN': '回到这里', 'en-US': 'Rewind' } },
           roles: ['user'],
           requiresIdle: true,
         },
         {
           actionId: 'test.open',
-          label: { default: 'Open', zhCN: '打开', enUS: 'Open' },
+          label: { default: 'Open', localizations: { 'zh-CN': '打开', 'en-US': 'Open' } },
           roles: ['user'],
           requiresIdle: true,
         },
