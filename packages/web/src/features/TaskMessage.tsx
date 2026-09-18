@@ -113,13 +113,18 @@ export function TaskMessage({
         <span aria-hidden="true"/>
         <span aria-hidden="true"/>
       </div> : <>
-        {attachments.some(attachment => attachment.type === 'image') && <div className="task-message-attachments">
+        {attachments.length > 0 && <div className="task-message-attachments">
           {attachments.map((attachment, index) => {
-            if (attachment.type !== 'image') return null
+            const key = `${attachment.type}:${attachment.name ?? index}:${index}`
+            if (attachment.type === 'file') {
+              return <span key={key} className="task-message-file-attachment">
+                {attachment.name ?? t('message.fileAttachment')}
+              </span>
+            }
             const source = attachment.previewUrl || attachment.dataUrl
             return source
               ? <img
-                  key={`${attachment.type}:${attachment.name ?? index}:${index}`}
+                  key={key}
                   className="task-message-attachment-image"
                   src={source}
                   alt={attachment.name ?? t('message.imageAttachment')}
@@ -127,7 +132,7 @@ export function TaskMessage({
                   decoding="async"
                 />
               : <span
-                  key={`${attachment.type}:${attachment.name ?? index}:${index}`}
+                  key={key}
                   className="task-message-attachment-placeholder"
                 >{attachment.name ?? t('message.imageAttachment')}</span>
           })}
