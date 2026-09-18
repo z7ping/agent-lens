@@ -16,6 +16,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentManagedFilesDialog } from '../components/AgentManagedFilesDialog'
 import { LocalPathActions } from '../components/LocalPathActions'
+import { WorkspaceSkeleton } from '../components/StateViews'
 import { Button, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   IntegrationObservationPanel,
@@ -722,7 +723,8 @@ export function AgentsPage({
   const { t } = useTranslation('agents')
   const navigate = useNavigate()
   const snapshot = useClientSnapshot(model)
-  const overviewItems = useOrderedAgents(snapshot.agents?.items ?? [])
+  const summaryItems = useOrderedAgents(snapshot.agentSummaries?.items ?? [])
+  const detailItems = snapshot.agents?.items ?? []
   const managementItems = snapshot.integrationManagement?.items ?? []
   const discovery = snapshot.integrationDiscovery
   const discoveryScanning = snapshot.integrationDiscoveryLoading
@@ -733,16 +735,23 @@ export function AgentsPage({
   const discoveryItems = discovery?.items ?? []
   const claimedSourceIds = new Set<string>()
   const managedRows = managementItems.map(management => {
-    const agent = overviewItems.find(item =>
+    const summary = summaryItems.find(item =>
       item.productId === management.productId || item.sourceId === management.integrationId
     )
-    if (agent) claimedSourceIds.add(agent.sourceId)
+    if (summary) claimedSourceIds.add(summary.sourceId)
+    const agent = detailItems.find(item =>
+      item.sourceId === summary?.sourceId
+      || item.productId === management.productId
+      || item.sourceId === management.integrationId
+    )
     const tool = management.tool ?? discoveryItems.find(item =>
       item.productId === management.productId || item.integrationId === management.integrationId
     )
     return {
       id: management.integrationId,
-      displayName: management.displayName,
+      sourceId: summary?.sourceId ?? agent?.sourceId ?? management.integrationId,
+      displayName: summary?.displayName ?? agent?.displayName ?? management.displayName,
+      summary,
       agent,
       management,
       discovery: tool,
@@ -750,36 +759,47 @@ export function AgentsPage({
   })
   const orderIndex = new Map(ordered.map((id, index) => [id, index]))
   managedRows.sort((left, right) =>
-    (orderIndex.get(left.id) ?? Number.MAX_SAFE_INTEGER)
-      - (orderIndex.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    (orderIndex.get(left.id) ?? orderIndex.get(left.sourceId) ?? Number.MAX_SAFE_INTEGER)
+      - (orderIndex.get(right.id) ?? orderIndex.get(right.sourceId) ?? Number.MAX_SAFE_INTEGER)
     || left.management.displayOrder - right.management.displayOrder
     || left.id.localeCompare(right.id)
   )
   const rows = [
     ...managedRows,
-    ...overviewItems
-      .filter(agent => !claimedSourceIds.has(agent.sourceId))
-      .map(agent => ({
-        id: agent.sourceId,
-        displayName: agent.displayName,
-        agent,
+    ...summaryItems
+      .filter(summary => !claimedSourceIds.has(summary.sourceId))
+      .map(summary => ({
+        id: summary.sourceId,
+        sourceId: summary.sourceId,
+        displayName: summary.displayName,
+        summary,
+        agent: detailItems.find(item => item.sourceId === summary.sourceId),
         management: undefined,
         discovery: discoveryItems.find(item =>
-          item.productId === agent.productId || item.integrationId === agent.sourceId
+          item.productId === summary.productId || item.integrationId === summary.sourceId
         ),
       })),
   ]
 
   const fallbackRow = rows.find(row =>
-    row.agent?.detected
+    row.summary?.detected
+    || row.agent?.detected
     || row.discovery?.presence === 'present'
     || row.discovery?.presence === 'data-only'
   ) ?? rows[0]
-  const selectedSourceId = rows.some(row => row.id === sourceId) ? sourceId : fallbackRow?.id ?? ''
-  const selectedRow = rows.find(row => row.id === selectedSourceId)
+  const selectedSourceId = rows.some(row => row.sourceId === sourceId || row.id === sourceId)
+    ? sourceId
+    : fallbackRow?.sourceId ?? ''
+  const selectedRow = rows.find(row => row.sourceId === selectedSourceId || row.id === selectedSourceId)
   const selectedAgent = selectedRow?.agent
   const selectedManagement = selectedRow?.management
   const selectedDiscovery = selectedRow?.discovery
+  const detailPending = Boolean(
+    selectedRow?.summary
+    && !selectedAgent
+    && snapshot.agentDetailLoadingSourceId === selectedRow.sourceId
+  )
+
   return <main className="workspace-page">
     <div className="page-content agents-content">
       {rows.length ? <div className="agent-detail-pane">
@@ -793,7 +813,7 @@ export function AgentsPage({
             discoveryError={snapshot.integrationDiscoveryError}
             piView={piView}
             onManageIntegration={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
-          /> : selectedManagement ? <IntegrationOnlyObservationCard
+          /> : detailPending || selectedRow?.summary ? <WorkspaceSkeleton kind="cards"/> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}
