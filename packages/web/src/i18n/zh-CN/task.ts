@@ -250,6 +250,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         failed: '需要处理',
         initializing: '启动中',
         streaming: '执行中',
+        compacting: '压缩上下文',
         idle: '等待输入',
       },
     },
