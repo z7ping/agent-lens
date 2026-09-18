@@ -318,7 +318,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -378,6 +378,12 @@ export async function handleLiveRequest(
       }
       await adapter.send(runtimeSessionId, message, behavior ? { behavior } : undefined)
       writeJson(response, 202, { ok: true })
+      return true
+    }
+    if (action === 'queue' && request.method === 'DELETE') {
+      requireCapability(adapter, 'queue')
+      if (!adapter.clearQueue) throw httpError(409, `${adapter.manifest.displayName} does not expose Live queue control`)
+      writeJson(response, 200, jsonValue(await adapter.clearQueue(runtimeSessionId)))
       return true
     }
     if (action === 'interrupt' && request.method === 'POST') {
