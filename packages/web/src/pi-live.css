@@ -65,6 +65,14 @@
 .pi-live-review-link:hover { color: var(--al-accent); }
 
 .pi-live-disconnected { color: var(--al-warning); }
+.pi-live-compose-runtime:not(.pi-live-disconnected) .pi-live-idle-dot {
+  border-color: var(--al-success);
+  background: var(--al-success);
+}
+.pi-live-compose-runtime.pi-live-disconnected .pi-live-idle-dot {
+  border-color: var(--al-warning);
+  background: var(--al-warning);
+}
 .pi-live-header-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-header-branch { max-width: 220px; color: var(--al-muted); font: 12px/1.4 var(--font-mono); }
 .pi-live-header-branch::before { content: "·"; margin-right: 6px; color: var(--al-line-strong); }
@@ -344,6 +352,10 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   width: min(var(--al-content-task), calc(100% - (var(--al-safe-inline) * 2)));
   margin: 8px auto 0;
   gap: 6px;
+}
+.task-session-document > .live-runtime-disclosures {
+  width: 100%;
+  margin: 2px 0 10px;
 }
 .live-runtime-disclosure {
   border: 1px solid var(--al-line);
