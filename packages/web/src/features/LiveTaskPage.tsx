@@ -252,6 +252,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const clearComposer = useCallback(() => {
+    composerRef.current?.clear()
     setComposerValue('')
   }, [setComposerValue])
 
@@ -434,9 +435,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
-      if (optimisticText && message.parts.every(part => part.type === 'text' || part.type === 'large-text')) {
-        setComposerValue(optimisticText)
-      }
+      composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       if (pending) setPendingQueue(previous => previous.filter(item => item.id !== pending.id))
