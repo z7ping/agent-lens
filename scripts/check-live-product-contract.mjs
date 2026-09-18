@@ -12,6 +12,7 @@ const [
   liveStyles,
   liveClient,
   liveProtocol,
+  liveCore,
   architectureTest,
   reviewPage,
   reviewLiveInteraction,
@@ -35,6 +36,7 @@ const [
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/live.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/core/src/contracts/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/live-product-surface-architecture.test.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/review-live-interaction.ts', import.meta.url), 'utf8'),
@@ -131,6 +133,9 @@ requireText(liveTask, /liveApi\.executeRuntimeAction\(/, 'LiveTaskPage 必须通
 requireText(liveTask, /<LiveRuntimeDisclosures/, 'LiveTaskPage 必须使用 AgentLens-owned Runtime Disclosure renderer')
 requireText(liveTask, /<div className="pi-live-document live-task-document">[\s\S]{0,500}<LiveRuntimeDisclosures/, 'Runtime Disclosure 必须位于 Session Document 内，不得创建 TaskSurface 第四结构槽')
 requireText(liveTask, /useMemo\(\(\) => projectLiveTaskRounds\(items\), \[items\]\)/, 'Live 语义 Round 投影必须按 items memo，不能由无关状态更新反复全量计算')
+requireText(liveTask, /const GenericLiveRound = memo\(/, 'Live 历史轮次必须 memo，不能在当前流式 delta 时重绘全部历史')
+requireText(liveTask, /stableProjectionCountRef/, 'Live 完成态必须保留稳定投影边界，避免每轮全量历史重建')
+requireText(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须优先使用稳定 leaf 增量快照')
 forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
 requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')
@@ -138,6 +143,8 @@ requireText(liveRuntimeDisclosures, /<Disclosure/, 'Runtime diagnostics 必须�
 forbidText(liveRuntimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/, 'Runtime Disclosure renderer 不得识别 Pi 私有语义')
 
 requireText(liveStyles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/, 'Live 页面桌面壳层必须保留会话栏 + 主区两列')
+forbidText(liveStyles, /max-width:\s*720px/, 'Live 样式不得引入脱离统一断点体系的 720px 私有断点')
+requireText(liveStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.pi-live-compose-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
 requireText(liveTask, /<aside className="pi-live-sessions"/, 'LiveTaskPage 两列壳层必须实际渲染通用会话栏')
 requireText(liveTask, /setRuntimes\(matched\.runtimes\)/, 'Live 会话栏必须来自当前 Live Product runtimes')
 requireText(liveTask, /projectLiveTaskRounds\(items\)/, 'LiveTaskPage 必须恢复语义 Round 投影')
@@ -183,6 +190,11 @@ requireText(liveProtocol, /export interface LiveCommandDto[\s\S]{0,220}value:\s*
 requireText(liveProtocol, /export interface LiveMessageActionContributionDto[\s\S]{0,420}actionId:\s*string[\s\S]{0,420}roles:\s*Array<['"]user['"] \| ['"]assistant['"]>/, '受控消息动作必须保持 opaque actionId + role 声明')
 requireText(liveProtocol, /export interface LiveMessageActionResultDto[\s\S]{0,300}outcome:\s*['"]refresh-current['"] \| ['"]open-runtime['"]/, '消息动作结果只能返回受控导航结果')
 requireText(liveProtocol, /export interface LiveRuntimeDisclosureContributionDto[\s\S]{0,520}contributionId:\s*string[\s\S]{0,520}fields:\s*LiveRuntimeContributionFieldDto\[]/, 'Runtime Disclosure 必须保持声明式字段契约')
+requireText(liveCore, /export interface LiveRuntimeState[\s\S]{0,180}title\?:\s*string/, 'Core LiveRuntimeState 必须保留 Agent-neutral 任务标题')
+requireText(liveProtocol, /export interface LiveRuntimeStateDto[\s\S]{0,180}title\?:\s*string/, 'Protocol LiveRuntimeStateDto 必须暴露通用任务标题')
+requireText(liveHttp, /const title = typeof row\.title === ['"]string['"]/, 'Live HTTP 必须安全投影通用 Runtime title')
+requireText(liveTask, /runtime\.title\?\.trim\(\) \|\| workspaceDisplayName/, 'Live 会话栏必须优先展示通用任务标题')
+requireText(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/, 'Live 页头必须优先展示通用任务标题')
 requireText(liveProtocol, /export interface LiveRuntimeActionResultDto[\s\S]{0,180}runtime:\s*LiveRuntimeStateDto/, 'Runtime action 只能返回通用 Runtime state')
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
 
