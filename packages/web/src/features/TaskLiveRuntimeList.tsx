@@ -19,11 +19,13 @@ function runtimeTitle(item: LiveRuntimeRefDto, fallback: string): string {
 
 function runtimeStatusBadge(
   state: LiveRuntimeStateDto,
-  labels: Record<'failed' | 'initializing' | 'streaming' | 'idle', string>,
+  labels: Record<'failed' | 'initializing' | 'terminating' | 'terminated' | 'streaming' | 'idle', string>,
 ): { label: string; tone: 'accent' | 'warning' | 'danger'; dot?: boolean } {
   const status = taskLiveRuntimeStatus(state)
   if (status === 'failed') return { label: labels.failed, tone: 'danger' }
   if (status === 'initializing') return { label: labels.initializing, tone: 'warning', dot: true }
+  if (status === 'terminating') return { label: labels.terminating, tone: 'warning', dot: true }
+  if (status === 'terminated') return { label: labels.terminated, tone: 'warning' }
   if (status === 'streaming') return { label: labels.streaming, tone: 'accent', dot: true }
   return { label: labels.idle, tone: 'warning' }
 }
@@ -59,6 +61,8 @@ export function TaskLiveRuntimeList() {
   const labels = {
     failed: t('center.runtimeStatus.failed'),
     initializing: t('center.runtimeStatus.initializing'),
+    terminating: t('center.runtimeStatus.terminating'),
+    terminated: t('center.runtimeStatus.terminated'),
     streaming: t('center.runtimeStatus.streaming'),
     idle: t('center.runtimeStatus.idle'),
   }
