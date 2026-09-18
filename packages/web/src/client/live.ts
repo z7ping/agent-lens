@@ -47,12 +47,13 @@ function mergeLiveCoalesced(previous: LiveRuntimeEventDto, next: LiveRuntimeEven
   const before = previous.normalizedEvent
   const after = next.normalizedEvent
   if (!before || !after || before.type !== after.type
+    || (before.type !== 'text.delta' && before.type !== 'reasoning.delta')
     || (after.type !== 'text.delta' && after.type !== 'reasoning.delta')) return next
   return {
     ...next,
     normalizedEvent: {
       ...after,
-      delta: `${before.delta ?? ''}${after.delta ?? ''}`,
+      delta: `${before.delta}${after.delta}`,
     },
   }
 }
