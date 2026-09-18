@@ -215,8 +215,52 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
     status: 'success',
     output: 'done',
   })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'queue_update',
+    steering: ['先检查测试'],
+    followUp: ['完成后总结'],
+  }), {
+    type: 'queue.update',
+    steering: ['先检查测试'],
+    followUp: ['完成后总结'],
+  })
   assert.deepEqual(normalizePiLiveEvent({ type: 'agent_settled' }), {
     type: 'completed',
     status: 'completed',
   })
+})
+
+test('Pi Live Adapter exposes queue control and restores queued messages on interrupt', async () => {
+  const calls: string[] = []
+  const service = {
+    queueState: async () => ({
+      steering: ['current steer'],
+      followUp: ['current follow-up'],
+    }),
+    clearQueue: async () => {
+      calls.push('clear')
+      return { steering: ['queued steer'], followUp: ['queued follow-up'] }
+    },
+    abort: async () => {
+      calls.push('abort')
+      return { steering: ['restored steer'], followUp: ['restored follow-up'] }
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.deepEqual(await adapter.queueState('runtime-1'), {
+    steering: ['current steer'],
+    followUp: ['current follow-up'],
+  })
+  assert.deepEqual(await adapter.clearQueue('runtime-1'), {
+    steering: ['queued steer'],
+    followUp: ['queued follow-up'],
+  })
+  assert.deepEqual(await adapter.interrupt('runtime-1'), {
+    restoredQueue: {
+      steering: ['restored steer'],
+      followUp: ['restored follow-up'],
+    },
+  })
+  assert.deepEqual(calls, ['clear', 'abort'])
 })

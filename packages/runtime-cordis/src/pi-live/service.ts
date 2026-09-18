@@ -37,6 +37,7 @@ interface OwnedRuntime {
   projectName: string
   gitBranch?: string | undefined
   taskSummary?: string | undefined
+  queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
   recoveryCheckpointTask?: Promise<void> | undefined
@@ -111,6 +112,12 @@ async function resolveWorkspaceContext(cwd: string): Promise<ResolvedWorkspaceCo
     projectName: basename(projectRoot) || projectRoot,
     ...(git?.branch ? { gitBranch: git.branch } : {}),
   }
+}
+
+function queueMessages(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
 }
 
 function textList(value: unknown, limit = 240): string[] {
@@ -334,6 +341,7 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationTimings: [],
       startupOutput: [],
       packageUpdates: [],
+      queue: { steering: [], followUp: [] },
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -601,8 +609,25 @@ export class DefaultPiLiveService implements PiLiveService {
     await runtime.handle!.followUp(message, images)
     if (message.trim()) this.captureTaskSummary(runtime, message)
   }
-  async clearQueue(id: string): Promise<PiLiveQueueState> { return (await this.readyRuntime(id)).handle!.clearQueue() }
-  async abort(id: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> { return (await this.readyRuntime(id)).handle!.abort(options.restoreQueue !== false) }
+  async queueState(id: string): Promise<PiLiveQueueState> {
+    const runtime = await this.readyRuntime(id)
+    return {
+      steering: [...runtime.queue.steering],
+      followUp: [...runtime.queue.followUp],
+    }
+  }
+  async clearQueue(id: string): Promise<PiLiveQueueState> {
+    const runtime = await this.readyRuntime(id)
+    const queue = await runtime.handle!.clearQueue()
+    runtime.queue = { steering: [], followUp: [] }
+    return queue
+  }
+  async abort(id: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> {
+    const runtime = await this.readyRuntime(id)
+    const queue = await runtime.handle!.abort(options.restoreQueue !== false)
+    runtime.queue = { steering: [], followUp: [] }
+    return queue
+  }
   async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> { if (!requestId) throw new Error('Pi extension request id is required'); await (await this.readyRuntime(id)).handle!.respondToExtension(requestId, response) }
 
   /** HTTP events calls state() before subscribe(), so lazy recovery is complete before this synchronous registration. */
@@ -894,6 +919,12 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {
+    if (event.type === 'queue_update') {
+      runtime.queue = {
+        steering: queueMessages(event.steering),
+        followUp: queueMessages(event.followUp),
+      }
+    }
     runtime.events.publish(event)
   }
 }

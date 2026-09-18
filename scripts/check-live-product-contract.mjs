@@ -91,7 +91,12 @@ for (const capability of ['stream', 'recovery', 'extension-ui', 'model-switching
 }
 requireText(liveTask, /unsupportedInput\(message, product\.inputCapabilities\)/, 'Live 输入必须由 inputCapabilities 拒绝不支持的输入类型')
 requireText(liveTask, /liveApi\.send\(current\.liveId, current\.runtimeSessionId, message, behavior\)/, 'Live send 必须携带 liveId/runtimeSessionId')
+requireText(liveTask, /onSubmit=\{\(message, mode\)[\s\S]{0,160}mode === ['"]followUp['"][\s\S]{0,80}['"]follow-up['"]/, 'Live Composer Alt+Enter 必须保持 Follow-up 发送语义')
 requireText(liveTask, /liveApi\.interrupt\(current\.liveId, current\.runtimeSessionId\)/, 'Live interrupt 必须携带 liveId/runtimeSessionId')
+requireText(liveTask, /liveApi\.queueState\(current\.liveId, current\.runtimeSessionId\)/, 'Live queue 恢复必须走通用 Live API')
+requireText(liveTask, /liveApi\.clearQueue\(current\.liveId, current\.runtimeSessionId\)/, 'Live queue 控制必须走通用 Live API')
+requireText(liveTask, /normalizedEvent\?\.type === ['"]queue\.update['"]/, 'Live Queue 状态必须消费通用 queue.update 事件')
+forbidText(liveTask, /\bqueue_update\b/, 'LiveTaskPage 不得解析 Pi 原生 queue_update')
 requireText(liveTask, /liveApi\.terminate\(current\.liveId, current\.runtimeSessionId\)/, 'Live terminate 必须携带 liveId/runtimeSessionId')
 requireText(liveTask, /liveApi\.respondToExtension\(current\.liveId, current\.runtimeSessionId, extension\.requestId, value\)/, 'Extension UI 回应必须走通用 Live API')
 requireText(liveTask, /<TaskSurface\s+mode="live"/, 'LiveTaskPage 必须复用唯一 TaskSurface')
@@ -104,6 +109,8 @@ requireText(liveClient, /async knownRuntimes\(\): Promise<LiveRuntimeRefDto\[]>/
 requireText(liveClient, /start\(liveId: string, input: LiveStartInputDto = \{\}\)/, 'Live Client start 必须显式接收 liveId')
 requireText(liveClient, /resume\(liveId: string, logicalSessionId: string\)/, 'Live Client resume 必须显式接收 liveId')
 requireText(liveClient, /fork\(liveId: string, logicalSessionId: string\)/, 'Live Client fork 必须显式接收 liveId')
+requireText(liveClient, /queueState\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue state')
+requireText(liveClient, /clearQueue\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue control')
 
 for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'steer', 'model-switching', 'thinking-control', 'extension-ui', 'recovery', 'resume', 'fork']) {
   requireText(liveProtocol, new RegExp(`\\| '${capability}'`), `Live protocol capability 缺少：${capability}`)

@@ -101,6 +101,15 @@ export interface LiveSnapshotDto {
   leafId?: string | null | undefined
 }
 
+export interface LiveQueueStateDto {
+  steering: string[]
+  followUp: string[]
+}
+
+export interface LiveInterruptResultDto {
+  restoredQueue?: LiveQueueStateDto | undefined
+}
+
 export interface LiveRuntimeEventDto {
   runtimeSessionId: string
   sequence: number
@@ -178,6 +187,11 @@ export type LiveEventDto =
       status: 'success' | 'error'
       output?: string | undefined
       durationMs?: number | undefined
+    }
+  | {
+      type: 'queue.update'
+      steering: string[]
+      followUp: string[]
     }
   | {
       type: 'ui.request'
@@ -391,6 +405,15 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(eventText(event.output) !== undefined ? { output: eventText(event.output) } : {}),
       ...(durationMs !== undefined ? { durationMs } : {}),
     }
+  }
+  if (type === 'queue.update') {
+    const rawSteering = event.steering
+    const rawFollowUp = event.followUp
+    if (!Array.isArray(rawSteering) || !Array.isArray(rawFollowUp)) return null
+    const steering = rawSteering.filter((item): item is string => typeof item === 'string')
+    const followUp = rawFollowUp.filter((item): item is string => typeof item === 'string')
+    if (steering.length !== rawSteering.length || followUp.length !== rawFollowUp.length) return null
+    return { type, steering, followUp }
   }
   if (type === 'ui.request') {
     if (typeof event.requestId !== 'string' || !event.requestId) return null
