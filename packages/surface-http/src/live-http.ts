@@ -5,6 +5,7 @@ import type {
   LiveContributionText,
   LiveMessageActionContribution,
   LiveMessageActionResult,
+  LiveRuntimeState,
   LiveService,
   LiveStartCapabilities,
   LiveStartInput,
@@ -113,6 +114,43 @@ function normalizeMessageActions(value: unknown): LiveMessageActionContribution[
   return result
 }
 
+function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(500, 'Live message action returned an invalid runtime')
+  }
+  const row = value as Record<string, unknown>
+  const runtimeSessionId = typeof row.runtimeSessionId === 'string' ? row.runtimeSessionId.trim() : ''
+  const status = row.status
+  const allowedStatus = status === 'initializing'
+    || status === 'ready'
+    || status === 'failed'
+    || status === 'terminating'
+    || status === 'terminated'
+  if (!runtimeSessionId || runtimeSessionId.length > 512 || !allowedStatus) {
+    throw httpError(500, 'Live message action returned an invalid runtime identity')
+  }
+  if (typeof row.isStreaming !== 'boolean'
+    || typeof row.pendingMessageCount !== 'number'
+    || !Number.isSafeInteger(row.pendingMessageCount)
+    || row.pendingMessageCount < 0) {
+    throw httpError(500, 'Live message action returned an invalid runtime state')
+  }
+  const nativeSessionId = typeof row.nativeSessionId === 'string' && row.nativeSessionId.trim()
+    ? row.nativeSessionId.trim().slice(0, 512)
+    : undefined
+  const workspacePath = typeof row.workspacePath === 'string' && row.workspacePath.trim()
+    ? row.workspacePath.trim().slice(0, 4096)
+    : undefined
+  return {
+    runtimeSessionId,
+    status,
+    ...(nativeSessionId ? { nativeSessionId } : {}),
+    ...(workspacePath ? { workspacePath } : {}),
+    isStreaming: row.isStreaming,
+    pendingMessageCount: row.pendingMessageCount,
+  }
+}
+
 function normalizeMessageActionResult(value: unknown): LiveMessageActionResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw httpError(500, 'Live message action returned an invalid result')
@@ -121,17 +159,15 @@ function normalizeMessageActionResult(value: unknown): LiveMessageActionResult {
   if (row.outcome !== 'refresh-current' && row.outcome !== 'open-runtime') {
     throw httpError(500, 'Live message action returned an invalid outcome')
   }
-  if (row.outcome === 'open-runtime' && (!row.runtime || typeof row.runtime !== 'object' || Array.isArray(row.runtime))) {
-    throw httpError(500, 'Live message action open-runtime result requires runtime')
-  }
+  const runtime = row.outcome === 'open-runtime'
+    ? normalizePublicRuntimeState(row.runtime)
+    : undefined
   if (row.draftText !== undefined && typeof row.draftText !== 'string') {
     throw httpError(500, 'Live message action returned invalid draftText')
   }
   return {
     outcome: row.outcome,
-    ...(row.runtime && typeof row.runtime === 'object' && !Array.isArray(row.runtime)
-      ? { runtime: row.runtime as LiveMessageActionResult['runtime'] }
-      : {}),
+    ...(runtime ? { runtime } : {}),
     ...(typeof row.draftText === 'string' ? { draftText: row.draftText } : {}),
   }
 }
