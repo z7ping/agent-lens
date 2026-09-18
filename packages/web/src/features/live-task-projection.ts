@@ -1,4 +1,4 @@
-import type { LiveEventDto, LiveRuntimeEventDto } from '@agent-lens/protocol'
+import { reviewMessageAttachmentsFromPayload, type LiveEventDto, type LiveRuntimeEventDto, type ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { agentLensI18n } from '../i18n/runtime'
 import type { TaskRoundModel } from './task-detail-model'
 
@@ -8,6 +8,7 @@ export type LiveTaskProjectionItem =
       kind: 'message'
       role: 'user' | 'assistant'
       text: string
+      attachments?: ReviewMessageAttachmentDto[] | undefined
       streaming: boolean
       at?: string | undefined
     }
@@ -58,6 +59,35 @@ function messageRole(value: unknown): 'user' | 'assistant' | null {
   return value === 'user' || value === 'assistant' ? value : null
 }
 
+function messageAttachments(
+  item: Record<string, unknown>,
+  nested: Record<string, unknown>,
+): ReviewMessageAttachmentDto[] {
+  const attachments: ReviewMessageAttachmentDto[] = []
+  const append = (values: readonly ReviewMessageAttachmentDto[]) => {
+    for (const value of values) {
+      const key = JSON.stringify(value)
+      if (!attachments.some(existing => JSON.stringify(existing) === key)) attachments.push(value)
+    }
+  }
+
+  append(reviewMessageAttachmentsFromPayload(item))
+  append(reviewMessageAttachmentsFromPayload(nested))
+
+  for (const content of [item.content, nested.content]) {
+    if (!Array.isArray(content)) continue
+    const nonTextContent = content.filter(value => {
+      const part = record(value)
+      const type = text(part.type)
+      return type === 'image' || type === 'file'
+    })
+    if (nonTextContent.length) {
+      append(reviewMessageAttachmentsFromPayload({ nonTextContent }))
+    }
+  }
+  return attachments
+}
+
 /**
  * Snapshot entries stay adapter/native-owned. The Product Surface only consumes
  * stable message-shaped fields when they are present and ignores unknown rows.
@@ -72,7 +102,8 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       || contentText(item.text)
       || contentText(nested.content)
       || contentText(nested.text)
-    if (!body) return []
+    const attachments = messageAttachments(item, nested)
+    if (!body && !attachments.length) return []
     const id = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-message-${index}`
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
     return [{
@@ -80,6 +111,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       kind: 'message' as const,
       role,
       text: body,
+      ...(attachments.length ? { attachments } : {}),
       streaming: false,
       ...(at ? { at } : {}),
     }]
