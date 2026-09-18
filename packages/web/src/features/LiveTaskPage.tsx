@@ -222,6 +222,13 @@ function queueTextMessage(text: string): LiveMessageDto {
   return { parts: [{ type: 'text', text }] }
 }
 
+function firstUserEntryCursor(items: readonly LiveTaskProjectionItem[]): string | undefined {
+  return items.find(
+    (item): item is Extract<LiveTaskProjectionItem, { kind: 'message' }> =>
+      item.kind === 'message' && item.role === 'user' && Boolean(item.entryId),
+  )?.entryId
+}
+
 const LIVE_TASK_SNAPSHOT_PAGE_LIMIT = 120
 const LIVE_TASK_HISTORY_WINDOW_MAX_PAGES = 5
 
@@ -634,6 +641,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const historyNewerSentinelRef = useRef<HTMLDivElement>(null)
   const lastReaderScrollTopRef = useRef(0)
   const historyAtLatestRef = useRef(true)
+  const historyIndexAnchorCursorRef = useRef<string | undefined>(undefined)
   const historyBlocksRef = useRef<LiveHistoryPageBlock[]>([])
   const projectionRef = useRef(projection)
   projectionRef.current = projection
@@ -674,6 +682,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setHistoryPagingDirection(null)
     lastReaderScrollTopRef.current = 0
     historyAtLatestRef.current = true
+    historyIndexAnchorCursorRef.current = undefined
     historyBlocksRef.current = []
     setMessageActions([])
     setMessageActionPending(null)
@@ -728,6 +737,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
+        historyIndexAnchorCursorRef.current = firstUserEntryCursor(projectedItems)
         setProjection(nextProjection)
         historyBlocksRef.current = [historyPageBlock(snapshot, projectedItems)]
         setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
@@ -789,7 +799,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
         matched.capabilities.includes('history-index')
-          ? liveApi.historyIndex(current.liveId, current.runtimeSessionId, { limit: 0 }).catch(() => null)
+          ? liveApi.historyIndex(
+              current.liveId,
+              current.runtimeSessionId,
+              historyIndexAnchorCursorRef.current
+                ? { cursor: historyIndexAnchorCursorRef.current }
+                : { limit: 0 },
+            ).catch(() => null)
           : Promise.resolve(null),
       ])
       if (cancelled) return
@@ -1004,7 +1020,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('history-index')) {
-          void liveApi.historyIndex(current.liveId, current.runtimeSessionId, { limit: 0 }).then(setHistoryIndex, () => undefined)
+          void liveApi.historyIndex(current.liveId, current.runtimeSessionId, { limit: 0 }).then(summary => {
+            setHistoryIndex(previous => ({
+              total: summary.total,
+              items: previous?.items ?? [],
+            }))
+          }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
@@ -1711,8 +1732,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   )
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
   const turnRailItems = useMemo(() => {
-    const firstGlobalOrdinal = historyPage?.rounds?.firstOrdinal
-    return [...roundSegments.stable, ...roundSegments.active].map(round => {
+    const segments = [...roundSegments.stable, ...roundSegments.active]
+    const firstLoadedCursor = segments
+      .map(round => round.model.semanticId ?? round.model.id)
+      .find(semanticId => semanticId.startsWith('live-round:'))
+      ?.slice('live-round:'.length)
+    const indexedFirstOrdinal = firstLoadedCursor
+      ? historyIndex?.items.find(item => item.cursor === firstLoadedCursor)?.ordinal
+      : undefined
+    const firstGlobalOrdinal = historyPage?.rounds?.firstOrdinal ?? indexedFirstOrdinal
+    return segments.map(round => {
       const localOrdinal = round.model.ordinal
       const ordinal = firstGlobalOrdinal && localOrdinal
         ? firstGlobalOrdinal + localOrdinal - 1
@@ -1733,7 +1762,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         loaded: true,
       } satisfies TaskTurnRailData
     })
-  }, [historyPage?.rounds?.firstOrdinal, roundSegments, t])
+  }, [historyIndex?.items, historyPage?.rounds?.firstOrdinal, roundSegments, t])
   const loadedRoundMax = turnRailItems.reduce((max, item) => Math.max(max, item.ordinal ?? 0), 0)
   const turnRailTotal = Math.max(
     historyPage?.rounds?.total ?? 0,
