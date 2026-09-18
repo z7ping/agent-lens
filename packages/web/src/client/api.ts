@@ -311,6 +311,7 @@ export class AgentLensApi {
     options: {
       cursor?: string
       ordinal?: number
+      afterOrdinal?: number
       limit?: number
       direction?: ReviewDetailDirection
       filter?: ReviewDetailFilter
@@ -319,6 +320,7 @@ export class AgentLensApi {
     const params = new URLSearchParams()
     if (options.cursor) params.set('cursor', options.cursor)
     if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
+    if (options.afterOrdinal !== undefined) params.set('afterOrdinal', String(options.afterOrdinal))
     if (options.direction) params.set('direction', options.direction)
     if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
