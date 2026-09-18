@@ -42,6 +42,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly sent: Array<{ runtimeSessionId: string; message: LiveMessageInput; options?: LiveSendOptions | undefined }> = []
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
+  readonly messageActionExecutions: Array<{ runtimeSessionId: string; actionId: string; targetEntryId: string }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
   readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0 }
@@ -150,6 +151,25 @@ class FakeLiveAdapter implements LiveAdapter {
       { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
       { value: '/skill:repo-review', label: '/skill:repo-review', group: 'skill' },
     ]
+  }
+
+  async messageActions(runtimeSessionId: string) {
+    await this.state(runtimeSessionId)
+    return [{
+      actionId: 'test.rewind',
+      label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
+      roles: ['user'] as const,
+      requiresIdle: true,
+    }]
+  }
+
+  async executeMessageAction(runtimeSessionId: string, actionId: string, targetEntryId: string) {
+    await this.state(runtimeSessionId)
+    this.messageActionExecutions.push({ runtimeSessionId, actionId, targetEntryId })
+    return {
+      outcome: 'refresh-current' as const,
+      draftText: 'restored draft',
+    }
   }
 
   async queueState(runtimeSessionId: string) {
@@ -325,6 +345,40 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         { value: '/skill:repo-review', label: '/skill:repo-review', group: 'skill' },
       ],
     })
+
+    const messageActions = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`)
+    assert.equal(messageActions.status, 200)
+    assert.deepEqual(await messageActions.json(), {
+      items: [{
+        actionId: 'test.rewind',
+        label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
+        roles: ['user'],
+        requiresIdle: true,
+      }],
+    })
+
+    const executedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.rewind', targetEntryId: 'entry-1' }),
+    })
+    assert.equal(executedMessageAction.status, 200)
+    assert.deepEqual(await executedMessageAction.json(), {
+      outcome: 'refresh-current',
+      draftText: 'restored draft',
+    })
+    assert.deepEqual(adapter.messageActionExecutions, [{
+      runtimeSessionId: 'runtime-1',
+      actionId: 'test.rewind',
+      targetEntryId: 'entry-1',
+    }])
+
+    const rejectedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.rewind' }),
+    })
+    assert.equal(rejectedMessageAction.status, 400)
 
     const queueState = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`)
     assert.equal(queueState.status, 200)
