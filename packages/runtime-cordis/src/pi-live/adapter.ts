@@ -12,6 +12,7 @@ import type {
   LiveModelControl,
   LiveRuntimeEvent,
   LiveSendOptions,
+  LiveWorkspaceFileReference,
   StorageService,
 } from '@agent-lens/core'
 import {
@@ -42,6 +43,7 @@ const CAPABILITIES = [
   'thinking-control',
   'extension-ui',
   'command-discovery',
+  'workspace-file-reference',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
@@ -395,6 +397,25 @@ export class PiLiveAdapter implements LiveAdapter {
       ...(command.description ? { description: command.description } : {}),
       group: command.source,
     }))
+  }
+
+  async workspaceFileReference(
+    _runtimeSessionId: string,
+    relativePath: string,
+    isDirectory: boolean,
+  ): Promise<LiveWorkspaceFileReference> {
+    const path = relativePath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+|\/+$/g, '')
+    if (!path || path.includes('\0') || /[\r\n"]/u.test(path)) {
+      throw new Error('Pi Live workspace file reference path is invalid')
+    }
+
+    const value = isDirectory ? `${path}/` : path
+    const quoted = value.includes(' ')
+    const insertText = quoted ? `@"${value}"${isDirectory ? '' : ' '}` : `@${value}${isDirectory ? '' : ' '}`
+    return {
+      insertText,
+      cursorOffset: isDirectory && quoted ? insertText.length - 1 : insertText.length,
+    }
   }
 
   private async resolveMessage(message: LiveMessage): Promise<{
