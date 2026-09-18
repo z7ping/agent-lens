@@ -121,3 +121,14 @@ export interface AgentDetailResponseDto {
     generatedAt: string
   }
 }
+
+export interface AgentEnrichmentResponseDto {
+  sourceId: string
+  integration?: AgentIntegrationStatusDto
+  capabilities: AgentCapabilityDto[]
+  usedAssets: AgentUsedAssetDto[]
+  meta: {
+    protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+    generatedAt: string
+  }
+}
