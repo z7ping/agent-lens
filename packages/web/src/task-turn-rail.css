@@ -7,30 +7,27 @@
 .task-turn-rail {
   position: fixed;
   z-index: 48;
-  display: flex;
+  display: block;
   width: 24px;
   height: 100vh;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
   padding: 6px 0;
   transform: translateY(-50%);
   opacity: .62;
-  pointer-events: none;
+  pointer-events: auto;
   transition: opacity .16s ease;
 }
 .task-turn-rail:hover { opacity: 1; }
 .task-turn-rail::before { display: none; content: none; }
 .task-turn-rail .turn-tick {
-  position: relative;
+  position: absolute;
+  left: 0;
   display: grid;
   width: 24px;
   height: 9px;
   min-height: 2px;
   max-height: 9px;
-  flex: 0 1 9px;
   place-items: center;
+  transform: translateY(-50%);
   padding: 0;
   border: 0;
   border-radius: 4px;
