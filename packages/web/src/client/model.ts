@@ -140,6 +140,18 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
   }
 }
 
+function mergeReviewTail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  const interactions = new Map(current.interactions.map(item => [item.id, item]))
+  for (const interaction of next.interactions) interactions.set(interaction.id, interaction)
+  const ordered = [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal)
+  return {
+    ...current,
+    ...next,
+    interactions: ordered.slice(-REVIEW_DETAIL_WINDOW_SIZE),
+    page: current.page,
+  }
+}
+
 function reviewSummaryMatchesFilters(item: ReviewSessionSummaryDto, filters: ReviewFilters): boolean {
   if (item.sessionActivity === 'system-activity') return false
   if (filters.sourceIds !== null && !item.sourceIds.some(sourceId => filters.sourceIds!.includes(sourceId))) return false
@@ -1360,6 +1372,55 @@ export class AgentLensClientModel {
     this.publish({
       ...this.snapshot,
       review: { ...current, detailHasNewData: true },
+    })
+  }
+
+  async refreshReviewTailIncremental(): Promise<void> {
+    const current = this.snapshot.review
+    const detail = current.detail
+    if (
+      !current.selectedId
+      || !detail
+      || current.detailLoading
+      || current.detailLoadingMore
+      || detail.page.filter !== 'all'
+    ) return
+
+    const last = detail.interactions.at(-1)
+    if (!last) {
+      await this.jumpToLatestReviewDetail()
+      return
+    }
+
+    const selectedId = current.selectedId
+    const generation = this.detailGeneration
+    let merged = detail
+    let cursor: string | undefined
+    let caughtUp = false
+
+    for (let page = 0; page < 5; page += 1) {
+      const next = await this.api.reviewDetail(selectedId, cursor
+        ? { cursor, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all' }
+        : { afterOrdinal: last.ordinal, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all' })
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+      merged = mergeReviewTail(merged, next)
+      if (!next.page.hasMore || !next.page.nextCursor) {
+        caughtUp = true
+        break
+      }
+      cursor = next.page.nextCursor
+    }
+
+    const latest = this.snapshot.review
+    if (generation !== this.detailGeneration || latest.selectedId !== selectedId) return
+    this.publish({
+      ...this.snapshot,
+      review: {
+        ...latest,
+        detail: merged,
+        detailHasNewData: !caughtUp,
+        error: '',
+      },
     })
   }
 
