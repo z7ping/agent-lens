@@ -1,8 +1,6 @@
 import { performance } from 'node:perf_hooks'
-import type { PiLiveEventDto } from '@agent-lens/protocol'
-import { PiLiveEventScheduler } from '../../packages/web/src/client/pi-live.js'
-import { PiLiveFollowController } from '../../packages/web/src/features/pi-live-follow-controller.js'
-import { PiLivePresentationScheduler } from '../../packages/web/src/features/pi-live-presentation.js'
+import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
+import { LiveEventScheduler } from '../../packages/web/src/client/live.js'
 
 function argNumber(name: string, fallback: number): number {
   const prefix = `--${name}=`
@@ -12,151 +10,75 @@ function argNumber(name: string, fallback: number): number {
   return parsed
 }
 
-function event(sequence: number, type: string, payload: Record<string, unknown>): PiLiveEventDto {
+function event(
+  sequence: number,
+  normalizedEvent: NonNullable<LiveRuntimeEventDto['normalizedEvent']>,
+): LiveRuntimeEventDto {
   return {
     runtimeSessionId: 'benchmark-runtime',
     sequence,
     receivedAt: new Date(1_700_000_000_000 + sequence).toISOString(),
-    event: { type, ...payload },
+    event: {},
+    normalizedEvent,
   }
 }
 
-const globalRecord = globalThis as unknown as Record<string, unknown>
-const originalDocument = globalRecord.document
-const originalRaf = globalRecord.requestAnimationFrame
-const originalCancelRaf = globalRecord.cancelAnimationFrame
-let hidden = false
+const deltaEvents = Math.floor(argNumber('delta-events', 50_000))
+const budgetPushMs = argNumber('budget-push-ms', 500)
+const budgetDeliveredRatio = argNumber('budget-delivered-ratio', 0.002)
 
-globalRecord.document = { get hidden() { return hidden } }
-globalRecord.requestAnimationFrame = ((callback: (at: number) => void) => {
-  const timer = setTimeout(() => callback(performance.now()), 0)
-  return timer as unknown as number
-}) as unknown
-globalRecord.cancelAnimationFrame = ((id: number) => clearTimeout(id as unknown as ReturnType<typeof setTimeout>)) as unknown
+let delivered = 0
+let batches = 0
+const scheduler = new LiveEventScheduler(events => {
+  delivered += events.length
+  batches += 1
+})
 
-try {
-  const deltaEvents = Math.floor(argNumber('delta-events', 50_000))
-  const toolCalls = Math.floor(argNumber('tool-calls', 100))
-  const budgetPushMs = argNumber('budget-push-ms', 500)
-  const budgetDeliveredRatio = argNumber('budget-delivered-ratio', 0.02)
-  const budgetPresentationCommitRatio = argNumber('budget-presentation-commit-ratio', 0.01)
-
-  let delivered = 0
-  let batches = 0
-  let renderedMutations = 0
-  const follow = new PiLiveFollowController()
-  const presentation = new PiLivePresentationScheduler<number>(mutation => {
-    renderedMutations = mutation(renderedMutations)
-    if (follow.isFollowing) follow.recordScrollWrite()
-  }, 60_000)
-  const scheduler = new PiLiveEventScheduler(events => {
-    delivered += events.length
-    batches += 1
-    for (const value of events) {
-      const type = typeof value.event.type === 'string' ? value.event.type : ''
-      if (type === 'message_update' || type === 'tool_execution_update') {
-        presentation.push(count => count + 1)
-      } else if (type === 'agent_settled' || type === 'tool_execution_start' || type === 'tool_execution_end') {
-        presentation.boundary(count => count + 1)
-      }
-    }
-    presentation.flush()
-  })
-
-  let sequence = 1
-  const startedAt = performance.now()
-  scheduler.push(event(sequence++, 'message_start', {}))
-  for (let index = 0; index < deltaEvents; index += 1) {
-    scheduler.push(event(sequence++, 'message_update', {
-      assistantMessageEvent: {
-        type: index % 5 === 0 ? 'thinking_delta' : 'text_delta',
-        contentIndex: index % 5 === 0 ? 1 : 0,
-        delta: 'x',
-      },
-    }))
-  }
-  for (let tool = 0; tool < toolCalls; tool += 1) {
-    const id = `tool-${tool}`
-    scheduler.push(event(sequence++, 'tool_execution_start', { toolCallId: id, toolName: 'benchmark' }))
-    for (let update = 0; update < 20; update += 1) {
-      scheduler.push(event(sequence++, 'tool_execution_update', {
-        toolCallId: id,
-        partialResult: { progress: update },
-      }))
-    }
-    scheduler.push(event(sequence++, 'tool_execution_end', { toolCallId: id, result: { ok: true }, isError: false }))
-  }
-  scheduler.flush()
-  const pushMs = performance.now() - startedAt
-  const visibleDiagnostics = scheduler.snapshot()
-
-  hidden = true
-  scheduler.visibilityChanged()
-  for (let index = 0; index < 5_000; index += 1) {
-    scheduler.push(event(sequence++, 'message_update', {
-      assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'b' },
-    }))
-  }
-  scheduler.flush()
-  const hiddenDiagnostics = scheduler.snapshot()
-
-  const deliveredBeforeDispose = delivered
-  scheduler.push(event(sequence++, 'message_update', {
-    assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'stale' },
+let sequence = 1
+const startedAt = performance.now()
+scheduler.push(event(sequence++, { type: 'message.start', role: 'assistant', messageId: 'assistant-1' }))
+for (let index = 0; index < deltaEvents; index += 1) {
+  scheduler.push(event(sequence++, {
+    type: index % 5 === 0 ? 'reasoning.delta' : 'text.delta',
+    messageId: 'assistant-1',
+    contentIndex: index % 5 === 0 ? 1 : 0,
+    delta: 'x',
   }))
-  scheduler.dispose()
-  const deliveredAfterDispose = delivered
-
-  const deliveredRatio = hiddenDiagnostics.deliveredEvents / hiddenDiagnostics.ingressEvents
-  const presentationDiagnostics = presentation.snapshot()
-  const followDiagnostics = follow.snapshot()
-  const presentationCommitRatio = presentationDiagnostics.commitCount / hiddenDiagnostics.ingressEvents
-  const result = {
-    benchmark: 'pi-live-scheduler',
-    deltaEvents,
-    toolCalls,
-    ingressEvents: hiddenDiagnostics.ingressEvents,
-    deliveredEvents: hiddenDiagnostics.deliveredEvents,
-    coalescedEvents: hiddenDiagnostics.coalescedEvents,
-    maxQueueDepth: hiddenDiagnostics.maxQueueDepth,
-    batches,
-    delivered,
-    pushMs,
-    deliveredRatio,
-    renderedMutations,
-    presentationCommits: presentationDiagnostics.commitCount,
-    presentationQueuedMutations: presentationDiagnostics.queuedMutations,
-    presentationMaxQueueDepth: presentationDiagnostics.maxQueueDepth,
-    presentationMaxApplyMs: presentationDiagnostics.maxApplyDurationMs,
-    presentationLongApplies: presentationDiagnostics.longApplyCount,
-    presentationCommitRatio,
-    scrollWrites: followDiagnostics.scrollWrites,
-    visibleHiddenFlag: visibleDiagnostics.hidden,
-    hiddenHiddenFlag: hiddenDiagnostics.hidden,
-    staleDeliveriesOnDispose: deliveredAfterDispose - deliveredBeforeDispose,
-    budgetPushMs,
-    budgetDeliveredRatio,
-    budgetPresentationCommitRatio,
-  }
-
-  console.log(`[AgentLens perf] Pi Live Scheduler ingress=${result.ingressEvents} delivered=${result.deliveredEvents} coalesced=${result.coalescedEvents} presentationCommits=${result.presentationCommits} scrollWrites=${result.scrollWrites} maxApply=${result.presentationMaxApplyMs.toFixed(2)}ms push=${pushMs.toFixed(2)}ms ratio=${(deliveredRatio * 100).toFixed(2)}% disposeStale=${result.staleDeliveriesOnDispose}`)
-  console.log(JSON.stringify(result))
-
-  if (visibleDiagnostics.hidden) throw new Error('前台调度诊断错误地标记为后台')
-  if (!hiddenDiagnostics.hidden) throw new Error('Page Visibility 切换后未进入后台降频状态')
-  if (result.staleDeliveriesOnDispose !== 0) throw new Error('Pi Live 调度器销毁时仍交付了已过期事件')
-  if (pushMs > budgetPushMs) throw new Error(`Pi Live 高频事件入队 ${pushMs.toFixed(2)}ms 超过预算 ${budgetPushMs}ms`)
-  if (deliveredRatio > budgetDeliveredRatio) throw new Error(`Pi Live 事件交付比 ${(deliveredRatio * 100).toFixed(2)}% 超过预算 ${(budgetDeliveredRatio * 100).toFixed(2)}%，背压合并不足`)
-  if (presentationCommitRatio > budgetPresentationCommitRatio) throw new Error(`Pi Live 展示提交比 ${(presentationCommitRatio * 100).toFixed(2)}% 超过预算 ${(budgetPresentationCommitRatio * 100).toFixed(2)}%`)
-  if (result.scrollWrites > result.presentationCommits) throw new Error('Pi Live 单个展示批次产生了多次程序滚动写入')
-  if (presentationDiagnostics.longApplyCount > 0) throw new Error(`Pi Live 展示批次出现 ${presentationDiagnostics.longApplyCount} 次 >=16ms 应用`)
-  if (hiddenDiagnostics.coalescedEvents <= deltaEvents) throw new Error('Pi Live 高频 delta 未形成足够合并')
-  presentation.dispose()
-} finally {
-  if (originalDocument === undefined) delete globalRecord.document
-  else globalRecord.document = originalDocument
-  if (originalRaf === undefined) delete globalRecord.requestAnimationFrame
-  else globalRecord.requestAnimationFrame = originalRaf
-  if (originalCancelRaf === undefined) delete globalRecord.cancelAnimationFrame
-  else globalRecord.cancelAnimationFrame = originalCancelRaf
 }
+scheduler.flush()
+const pushMs = performance.now() - startedAt
+const visible = scheduler.snapshot()
+
+const deliveredBeforeDispose = delivered
+scheduler.push(event(sequence++, {
+  type: 'text.delta',
+  messageId: 'assistant-2',
+  contentIndex: 0,
+  delta: 'stale',
+}))
+scheduler.dispose()
+scheduler.flush()
+
+const deliveredRatio = visible.deliveredEvents / visible.ingressEvents
+const result = {
+  benchmark: 'generic-live-event-scheduler',
+  deltaEvents,
+  ingressEvents: visible.ingressEvents,
+  deliveredEvents: visible.deliveredEvents,
+  coalescedEvents: visible.coalescedEvents,
+  maxQueueDepth: visible.maxQueueDepth,
+  batches,
+  pushMs,
+  deliveredRatio,
+  staleDeliveriesOnDispose: delivered - deliveredBeforeDispose,
+  budgetPushMs,
+  budgetDeliveredRatio,
+}
+
+console.log(`[AgentLens perf] Generic Live Scheduler ingress=${result.ingressEvents} delivered=${result.deliveredEvents} coalesced=${result.coalescedEvents} push=${pushMs.toFixed(2)}ms ratio=${(deliveredRatio * 100).toFixed(3)}% disposeStale=${result.staleDeliveriesOnDispose}`)
+console.log(JSON.stringify(result))
+
+if (result.staleDeliveriesOnDispose !== 0) throw new Error('Live 调度器销毁时仍交付了过期事件')
+if (pushMs > budgetPushMs) throw new Error(`Live 高频事件入队 ${pushMs.toFixed(2)}ms 超过预算 ${budgetPushMs}ms`)
+if (deliveredRatio > budgetDeliveredRatio) throw new Error(`Live 事件交付比 ${(deliveredRatio * 100).toFixed(3)}% 超过预算 ${(budgetDeliveredRatio * 100).toFixed(3)}%`)
+if (visible.coalescedEvents < deltaEvents - 4) throw new Error('Live text/reasoning delta 未形成足够合并')
