@@ -18,7 +18,7 @@ const historyRounds = Math.floor(argNumber('history-rounds', 250))
 const streamingUpdates = Math.floor(argNumber('streaming-updates', 20_000))
 const budgetMs = argNumber('budget-ms', 800)
 const budgetParentUpdates = Math.floor(argNumber('budget-parent-updates', 2))
-const budgetHistoryInvalidations = Math.floor(argNumber('budget-history-invalidations', 0))
+const budgetHistoryInvalidations = Math.floor(argNumber('budget-history-invalidations', 1))
 
 const gate = new ComposerDraftPresenceGate()
 const stableItems: LiveTaskProjectionItem[] = []
@@ -71,6 +71,9 @@ console.log(JSON.stringify(result))
 
 if (parentUpdates > budgetParentUpdates) {
   throw new Error(`Composer ${edits} 次本地编辑触发 ${parentUpdates} 次父级更新，超过预算 ${budgetParentUpdates}`)
+}
+if (historyRenderInvalidations !== 0) {
+  throw new Error(`Composer/Streaming 改变了稳定 Round 数组引用 ${historyRenderInvalidations} 次；稳定历史必须保持 0 次失效`)
 }
 if (historyRenderInvalidations > budgetHistoryInvalidations) {
   throw new Error(`Composer/Streaming 导致稳定历史轮次失效 ${historyRenderInvalidations} 次，超过预算 ${budgetHistoryInvalidations}`)
