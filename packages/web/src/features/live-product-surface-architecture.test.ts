@@ -59,6 +59,22 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
 })
 
 
+test('@文件补全保持 Runtime-bound 通用 Live Product 边界', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /capabilities\.includes\('workspace-file-reference'\)/)
+  assert.match(liveTask, /liveApi\.workspaceFileReferences\(current\.liveId, current\.runtimeSessionId, query, 20\)/)
+  assert.match(liveTask, /workspaceReferenceSearch=/)
+  assert.doesNotMatch(liveTask, /workspacePath[\s\S]{0,120}workspaceFileReferences|liveId\s*===\s*['"]pi['"]/)
+
+  assert.match(liveComposer, /function WorkspaceReferenceMenuPlugin/)
+  assert.match(liveComposer, /workspaceReferenceQueryFromEditor/)
+  assert.match(liveComposer, /insertWorkspaceReference/)
+  assert.match(liveComposer, /COMMAND_PRIORITY_CRITICAL/)
+  assert.match(liveComposer, /event\.isComposing/)
+  assert.match(liveComposer, /event\.keyCode !== 229/)
+  assert.doesNotMatch(liveComposer, /\bpi\b|Pi Live/)
+})
+
 test('消息级私有动作通过受控 Contribution 暴露，不提升为 Pi 专属 Product 分支', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.match(liveTask, /liveApi\.messageActions\(current\.liveId, current\.runtimeSessionId\)/)
