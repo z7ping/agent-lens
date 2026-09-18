@@ -1,11 +1,14 @@
 import { AGENT_LENS_PROTOCOL_VERSION } from './timeline'
 
+export type AgentPackageIdentityCoverageDto = 'complete' | 'partial' | 'unknown' | 'unavailable'
+
 export interface AgentInstallationOverviewDto {
   id: string
   version?: string
   executable?: string
   configRoot?: string
   dataRoot?: string
+  packageIdentityCoverage?: AgentPackageIdentityCoverageDto
   firstSeenAt: string
   lastSeenAt: string
 }
@@ -40,6 +43,7 @@ export interface AgentAssetBindingDto {
   scopeRoot?: string
   path?: string
   source?: string
+  packageIdentity?: string
   version?: string
   states: AgentAssetStateDto[]
 }
