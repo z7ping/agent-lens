@@ -43,9 +43,10 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
   readonly messageActionExecutions: Array<{ runtimeSessionId: string; actionId: string; targetEntryId: string }> = []
+  readonly runtimeActionExecutions: Array<{ runtimeSessionId: string; actionId: string }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
   readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
-  readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0 }
+  readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0, disclosures: 0 }
   private modelValue = 'model-a'
   private sequence = 0
 
@@ -82,7 +83,8 @@ class FakeLiveAdapter implements LiveAdapter {
       ...(workspacePath ? { workspacePath } : {}),
       isStreaming: false,
       pendingMessageCount: 0,
-    }
+      privateDiagnostic: 'must-not-cross-generic-live-http',
+    } as LiveRuntimeState
     this.runtimes.set(id, state)
     return state
   }
@@ -196,6 +198,37 @@ class FakeLiveAdapter implements LiveAdapter {
     }
   }
 
+
+  async runtimeDisclosures(runtimeSessionId: string) {
+    this.readCounts.disclosures += 1
+    await this.delayRead()
+    await this.state(runtimeSessionId)
+    return [{
+      contributionId: 'test.runtime',
+      title: { default: 'Runtime diagnostics', localizations: { 'zh-CN': '运行时诊断' } },
+      summary: { default: 'Ready', localizations: { 'zh-CN': '就绪' } },
+      tone: 'neutral' as const,
+      defaultExpanded: false,
+      fields: [{
+        label: { default: 'SDK' },
+        value: '1.0.0',
+      }],
+      actions: [{
+        actionId: 'test.retry',
+        label: { default: 'Retry', localizations: { 'zh-CN': '重试' } },
+        tone: 'primary' as const,
+      }],
+    }]
+  }
+
+  async executeRuntimeAction(runtimeSessionId: string, actionId: string) {
+    const state = await this.state(runtimeSessionId)
+    this.runtimeActionExecutions.push({ runtimeSessionId, actionId })
+    return {
+      runtime: { ...state, privateDiagnostic: 'runtime-action-private-field' },
+    }
+  }
+
   async queueState(runtimeSessionId: string) {
     await this.state(runtimeSessionId)
     return {
@@ -282,6 +315,15 @@ test('generic Live HTTP surface coalesces concurrent identical adapter reads', a
     assert.equal(snapshots.every(response => response.status === 200), true)
     assert.equal(adapter.readCounts.snapshot, 1)
     assert.equal(adapter.readCounts.state, 1)
+
+    adapter.readCounts.disclosures = 0
+    adapter.readCounts.state = 0
+    const disclosures = await Promise.all(
+      Array.from({ length: 100 }, () =>
+        fetch(`${base}/api/v1/live/test/runtimes/runtime-1/runtime-disclosures`)),
+    )
+    assert.equal(disclosures.every(response => response.status === 200), true)
+    assert.equal(adapter.readCounts.disclosures, 1)
   } finally {
     await surface.dispose()
     storage.close()
@@ -360,6 +402,52 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       body: JSON.stringify({ message: 'change course', behavior: 'steer' }),
     })
     assert.equal(unsupportedSteer.status, 409)
+
+    const runtimeDisclosures = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/runtime-disclosures`)
+    assert.equal(runtimeDisclosures.status, 200)
+    assert.deepEqual(await runtimeDisclosures.json(), {
+      items: [{
+        contributionId: 'test.runtime',
+        title: { default: 'Runtime diagnostics', localizations: { 'zh-CN': '运行时诊断' } },
+        summary: { default: 'Ready', localizations: { 'zh-CN': '就绪' } },
+        tone: 'neutral',
+        defaultExpanded: false,
+        fields: [{ label: { default: 'SDK' }, value: '1.0.0' }],
+        actions: [{
+          actionId: 'test.retry',
+          label: { default: 'Retry', localizations: { 'zh-CN': '重试' } },
+          tone: 'primary',
+        }],
+      }],
+    })
+
+    const runtimeAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/runtime-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.retry' }),
+    })
+    assert.equal(runtimeAction.status, 200)
+    assert.deepEqual(await runtimeAction.json(), {
+      runtime: {
+        runtimeSessionId: 'runtime-1',
+        status: 'ready',
+        workspacePath: '/tmp/project',
+        isStreaming: false,
+        pendingMessageCount: 0,
+      },
+    })
+    assert.deepEqual(adapter.runtimeActionExecutions, [{
+      runtimeSessionId: 'runtime-1',
+      actionId: 'test.retry',
+    }])
+
+    const hiddenRuntimeAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/runtime-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.hidden' }),
+    })
+    assert.equal(hiddenRuntimeAction.status, 409)
+    assert.equal(adapter.runtimeActionExecutions.length, 1)
 
     const commands = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/commands`)
     assert.equal(commands.status, 200)
