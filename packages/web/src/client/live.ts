@@ -3,6 +3,7 @@ import type {
   LiveCommandsResponseDto,
   LiveCommandDto,
   LiveHistoryIndexDto,
+  LiveHistoryIndexQueryDto,
   LiveInterruptResultDto,
   LiveMessageActionContributionDto,
   LiveMessageActionResultDto,
@@ -323,9 +324,17 @@ export const liveApi = {
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
   },
 
-  historyIndex(liveId: string, runtimeSessionId: string, limit = 80): Promise<LiveHistoryIndexDto> {
-    const params = new URLSearchParams({ limit: String(Math.max(1, Math.min(80, limit))) })
-    return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}?${params}`)
+  historyIndex(
+    liveId: string,
+    runtimeSessionId: string,
+    query: LiveHistoryIndexQueryDto = {},
+  ): Promise<LiveHistoryIndexDto> {
+    const params = new URLSearchParams()
+    if (query.fromOrdinal !== undefined) params.set('from', String(query.fromOrdinal))
+    if (query.cursor) params.set('cursor', query.cursor)
+    if (query.limit !== undefined) params.set('limit', String(query.limit))
+    const suffix = params.size ? `?${params}` : ''
+    return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}${suffix}`)
   },
 
   async send(

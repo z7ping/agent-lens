@@ -160,12 +160,20 @@ export interface LiveSnapshotWindow {
   limit?: number | undefined
 }
 
+export interface LiveSnapshotRoundPage {
+  total: number
+  firstOrdinal?: number | undefined
+  lastOrdinal?: number | undefined
+}
+
 export interface LiveSnapshotPage {
   hasEarlier: boolean
   before?: string | undefined
   /** Inclusive cursors of the returned window, used by bounded client-side page eviction. */
   first?: string | undefined
   last?: string | undefined
+  /** Full-session round position for this bounded transcript window. */
+  rounds?: LiveSnapshotRoundPage | undefined
   /** Forward pagination used when reconnect recovery has more than one bounded page. */
   hasLater?: boolean | undefined
   after?: string | undefined
@@ -178,7 +186,16 @@ export interface LiveSnapshot {
   page?: LiveSnapshotPage | undefined
 }
 
-export const LIVE_HISTORY_INDEX_MAX_LIMIT = 80
+export const LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT = 120
+
+export interface LiveHistoryIndexQuery {
+  /** 1-based round ordinal. Omit with limit=0 to request summary only. */
+  fromOrdinal?: number | undefined
+  /** Resolve one exact round by its native user-message cursor. */
+  cursor?: string | undefined
+  /** Returned metadata rows only; 0 is a summary-only request. */
+  limit?: number | undefined
+}
 
 export interface LiveHistoryIndexItem {
   cursor: string
@@ -187,6 +204,7 @@ export interface LiveHistoryIndexItem {
 }
 
 export interface LiveHistoryIndex {
+  /** Total semantic rounds in the complete session, never a sampled count. */
   total: number
   items: readonly LiveHistoryIndexItem[]
 }
@@ -499,8 +517,11 @@ export interface LiveAdapter {
    * "return the complete transcript".
    */
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot>
-  /** Lightweight bounded round anchors for full-session navigation. */
-  historyIndex?(runtimeSessionId: string, limit?: number): Promise<LiveHistoryIndex>
+  /**
+   * Full-session round index with bounded query results. total is always the
+   * complete round count; items contains only the requested range/lookup.
+   */
+  historyIndex?(runtimeSessionId: string, query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
   /** Present only when the adapter declares model-switching. */
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */
