@@ -1034,6 +1034,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [busy, current, thinking])
 
+  const rounds = useMemo(() => projectLiveTaskRounds(items), [items])
+
   if (!current) {
     return <main className="pi-live-page pi-live-page-embedded">
       <div className="pi-live-error" role="alert">{error || t('live.invalidRuntime')}</div>
@@ -1044,7 +1046,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const workspace = workspaceDisplayName(state?.workspacePath)
   const title = state?.title?.trim() || workspace || t('center.history.genericAgentTask', { agent: agentLabel })
   const runtimeStatus = statusLabel(state, t)
-  const rounds = useMemo(() => projectLiveTaskRounds(items), [items])
   const streamSupported = product?.capabilities.includes('stream') === true
   const connectionLabel = streamSupported
     ? connected ? t('live.connected') : t('live.connecting')
