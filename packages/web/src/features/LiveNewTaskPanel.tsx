@@ -171,7 +171,7 @@ export function LiveNewTaskPanel({
   return <div className="task-center-new">
     <section className="task-center-new-card">
       <header className="task-center-new-head">
-        <div className="task-center-new-agent-mark" aria-hidden="true"><UiIcon name="agent" size={18}/></div>
+        <div className="task-center-new-agent-mark" aria-hidden="true"><UiIcon name="agent" size={16}/></div>
         <div>
           <div className="task-center-new-kicker">{t('center.newTask.kicker')}</div>
           <h1>{t('center.newTask.title')}</h1>
