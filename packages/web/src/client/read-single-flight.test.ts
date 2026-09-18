@@ -73,6 +73,28 @@ test('Hub Review detail and local list coalesce 100 concurrent identical reads',
   assert.equal(calls.get('/api/v1/review?limit=200'), 1)
 })
 
+test('usage and insights aggregate reads coalesce 100 concurrent identical requests', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+
+  const calls = new Map<string, number>()
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const path = String(input)
+    calls.set(path, (calls.get(path) ?? 0) + 1)
+    await new Promise(resolve => setTimeout(resolve, 5))
+    return jsonResponse({})
+  }) as typeof fetch
+
+  const api = new AgentLensApi()
+  const filters = { sourceIds: null, projectId: '', range: '7d' as const }
+
+  await Promise.all(Array.from({ length: 100 }, () => api.usage(filters)))
+  await Promise.all(Array.from({ length: 100 }, () => api.insights(filters)))
+
+  assert.equal(calls.size, 2)
+  assert.equal([...calls.values()].every(count => count === 1), true)
+})
+
 test('managed asset directory and preview reads coalesce identical concurrent requests', async t => {
   const originalFetch = globalThis.fetch
   t.after(() => { globalThis.fetch = originalFetch })
