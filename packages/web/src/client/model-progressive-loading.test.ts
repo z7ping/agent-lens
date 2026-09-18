@@ -13,7 +13,7 @@ import { AgentLensApi, type ReviewFilters } from './api'
 import { AgentLensClientModel, REVIEW_DETAIL_WINDOW_SIZE } from './model'
 
 function summary(index: number): ReviewSessionSummaryDto {
-  const at = new Date(Date.UTC(2026, 8, 1, 0, 0, 30 - index)).toISOString()
+  const at = new Date(Date.now() - index * 1_000).toISOString()
   return {
     id: `session-${index}`,
     installationId: 'installation-1',
