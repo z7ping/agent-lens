@@ -27,6 +27,13 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Run type and presentation gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run check:web-presentation
+
       - name: Run focused regression tests
         shell: bash
         run: |
