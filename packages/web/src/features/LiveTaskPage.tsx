@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -292,7 +292,7 @@ function GenericLiveItem({
   />
 }
 
-function GenericLiveRound({
+const GenericLiveRound = memo(function GenericLiveRound({
   projection,
   agentLabel,
   eager,
@@ -327,7 +327,34 @@ function GenericLiveRound({
       />)}
     </TaskRound>
   </VirtualRoundMount>
-}
+}, (previous, next) => {
+  if (previous.agentLabel !== next.agentLabel
+    || previous.eager !== next.eager
+    || previous.messageActions !== next.messageActions
+    || previous.actionPending !== next.actionPending
+    || previous.runtimeStreaming !== next.runtimeStreaming
+    || previous.onMessageAction !== next.onMessageAction) return false
+
+  const before = previous.projection
+  const after = next.projection
+  if (before.items.length !== after.items.length) return false
+  for (let index = 0; index < before.items.length; index += 1) {
+    if (before.items[index] !== after.items[index]) return false
+  }
+
+  const beforeModel = before.model
+  const afterModel = after.model
+  return beforeModel.id === afterModel.id
+    && beforeModel.semanticId === afterModel.semanticId
+    && beforeModel.ordinal === afterModel.ordinal
+    && beforeModel.label === afterModel.label
+    && beforeModel.state === afterModel.state
+    && beforeModel.preview === afterModel.preview
+    && beforeModel.toolCount === afterModel.toolCount
+    && beforeModel.errorCount === afterModel.errorCount
+    && beforeModel.durationMs === afterModel.durationMs
+    && beforeModel.highLatency === afterModel.highLatency
+})
 
 export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation('task')
