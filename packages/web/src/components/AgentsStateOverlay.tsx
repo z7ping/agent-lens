@@ -4,17 +4,13 @@ import { CommandRow, EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from
 
 export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClientModel; snapshot: ClientSnapshot }) {
   const { t } = useTranslation('agents')
-  const response = snapshot.agents
+  const response = snapshot.agentSummaries
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `agents-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
-  const hasManagement = Boolean(snapshot.integrationManagement?.items.length)
-
-  if (!response && hasManagement) return null
-
   if (!response && snapshot.agentsError) {
     return <div className={`${shellClass} is-empty`}>
       <div className="agents-state-inner">
-        <ErrorStateBanner message={snapshot.agentsError} onRetry={() => void model.refreshFacetsAndAgents()}/>
+        <ErrorStateBanner message={snapshot.agentsError} onRetry={() => void model.refreshAgents()}/>
       </div>
     </div>
   }
