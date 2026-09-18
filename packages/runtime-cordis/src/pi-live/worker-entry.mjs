@@ -12,6 +12,7 @@ const MAX_SNAPSHOT_TRANSFERS = 8
 const SNAPSHOT_TRANSFER_TTL_MS = 30_000
 const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
 const LIVE_SNAPSHOT_MAX_LIMIT = 500
+const LIVE_HISTORY_INDEX_MAX_LIMIT = 80
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -381,7 +382,8 @@ function beginSnapshotTransfer(since, window) {
   const before = typeof requestedWindow.before === 'string' ? requestedWindow.before : ''
   const afterCursor = typeof requestedWindow.after === 'string' ? requestedWindow.after : ''
   const edge = requestedWindow.edge === 'earliest' || requestedWindow.edge === 'latest' ? requestedWindow.edge : ''
-  const selectors = [since, before, afterCursor, edge].filter(Boolean)
+  const around = typeof requestedWindow.around === 'string' ? requestedWindow.around : ''
+  const selectors = [since, before, afterCursor, edge, around].filter(Boolean)
   if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
 
   const all = session.sessionManager.getEntries()
@@ -398,6 +400,12 @@ function beginSnapshotTransfer(since, window) {
   } else if (edge === 'earliest') {
     start = 0
     end = Math.min(all.length, limit)
+  } else if (around) {
+    const aroundIndex = all.findIndex(entry => entryId(entry) === around)
+    if (aroundIndex < 0) throw new Error('Live snapshot around cursor was not found')
+    start = Math.max(0, aroundIndex - Math.floor(limit * .3))
+    end = Math.min(all.length, start + limit)
+    start = Math.max(0, end - limit)
   } else {
     if (before) {
       const beforeIndex = all.findIndex(entry => entryId(entry) === before)
@@ -436,6 +444,39 @@ function beginSnapshotTransfer(since, window) {
     expiresAt: Date.now() + SNAPSHOT_TRANSFER_TTL_MS,
   })
   return nextSnapshotChunk(transferId)
+}
+
+function historyIndex(limitValue) {
+  const limit = Number.isInteger(limitValue)
+    ? Math.max(2, Math.min(LIVE_HISTORY_INDEX_MAX_LIMIT, limitValue))
+    : LIVE_HISTORY_INDEX_MAX_LIMIT
+  const rounds = []
+  for (const raw of session.sessionManager.getEntries()) {
+    const entry = record(raw)
+    const message = record(entry.message)
+    const cursor = entryId(entry)
+    if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
+    const content = message.content ?? entry.content
+    const preview = Array.isArray(content)
+      ? content.map(part => typeof part === 'string'
+        ? part
+        : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
+      : typeof content === 'string' ? content : ''
+    rounds.push({
+      cursor,
+      ordinal: rounds.length + 1,
+      ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+    })
+  }
+  if (rounds.length <= limit) return { total: rounds.length, items: rounds }
+  const indexes = new Set()
+  for (let slot = 0; slot < limit; slot += 1) {
+    indexes.add(Math.round(slot * (rounds.length - 1) / (limit - 1)))
+  }
+  return {
+    total: rounds.length,
+    items: [...indexes].sort((a, b) => a - b).map(index => rounds[index]),
+  }
 }
 
 function resolvedRuntimeSessionDir(cwd, value) {
@@ -750,6 +791,7 @@ async function command(name, value = {}) {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi Runtime entry id is required')
     return session.sessionManager.getEntries().find(entry => entryId(entry) === value.entryId) ?? null
   }
+  if (name === 'historyIndex') return historyIndex(value.limit)
   if (name === 'commands') return slashCommands()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
