@@ -19,7 +19,6 @@ export function projectReviewLiveInteraction(
   if (!session?.productId) return null
   const candidates = products.filter(product =>
     product.productId === session.productId
-    && product.availability.available
     && (product.capabilities.includes('resume') || product.capabilities.includes('fork')),
   )
   if (candidates.length !== 1) return null
