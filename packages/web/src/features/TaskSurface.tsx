@@ -33,6 +33,8 @@ export interface TaskBoundaryNavigation {
 export interface TaskTurnRailData {
   id: string
   semanticId?: string | undefined
+  cursor?: string | undefined
+  loaded?: boolean | undefined
   label: string
   preview?: string | undefined
   error?: boolean | undefined
@@ -54,6 +56,8 @@ interface TaskSurfaceViewValue {
 interface TaskTurnRailItem {
   id: string
   semanticId: string
+  cursor?: string | undefined
+  loaded?: boolean | undefined
   label: string
   preview: string
   error: boolean
@@ -259,7 +263,7 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
       continue
     }
 
-    const item = { id: semanticId, semanticId, label, preview, error, state, element }
+    const item = { id: semanticId, semanticId, label, preview, error, state, element, loaded: true }
     bySemanticId.set(semanticId, item)
     result.push(item)
   }
@@ -302,6 +306,8 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
     return Boolean(next)
       && item.id === next.id
       && item.semanticId === next.semanticId
+      && item.cursor === next.cursor
+      && item.loaded === next.loaded
       && item.label === next.label
       && item.preview === next.preview
       && item.error === next.error
@@ -368,6 +374,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const { t } = useTranslation('task')
   const rootRef = useRef<HTMLElement>(null)
   const railItemsRef = useRef<TaskTurnRailItem[]>([])
+  const pendingTurnRailTargetRef = useRef<string | null>(null)
   const railElementBySemanticIdRef = useRef(new Map<string, HTMLElement>())
   const providedTurnRailItemsRef = useRef(providedTurnRailItems)
   providedTurnRailItemsRef.current = providedTurnRailItems
@@ -379,7 +386,10 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const sessionMode = mode === 'review' || mode === 'live'
   const providedRailIdentity = useMemo(
     () => providedTurnRailItems
-      ? JSON.stringify(providedTurnRailItems.map(item => item.semanticId?.trim() || item.id))
+      ? JSON.stringify(providedTurnRailItems.map(item => [
+          item.semanticId?.trim() || item.id,
+          item.loaded === true,
+        ]))
       : '',
     [providedTurnRailItems],
   )
@@ -469,6 +479,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       return {
         id: item.id,
         semanticId,
+        ...(item.cursor ? { cursor: item.cursor } : {}),
+        ...(item.loaded !== undefined ? { loaded: item.loaded } : {}),
         label: item.label,
         preview: compactRailPreview(item.preview),
         error: item.error === true,
@@ -531,20 +543,11 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     }
   }, [scanRounds, scheduleRailViewport])
 
-  const jumpToRound = (item: TaskTurnRailItem) => {
-    if (!item.element) {
-      void onTurnRailSelect?.({
-        id: item.id,
-        semanticId: item.semanticId,
-        label: item.label,
-        preview: item.preview,
-        error: item.error,
-        state: item.state,
-      })
-      return
-    }
-    const viewport = railViewportRef.current ?? scrollViewport(rootRef.current!, item.element)
-    const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const scrollRailItemToAnchor = useCallback((item: TaskTurnRailItem) => {
+    if (!item.element || !rootRef.current) return false
+    const viewport = railViewportRef.current ?? scrollViewport(rootRef.current, item.element)
+    const reducedMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const viewportRect = viewport.getBoundingClientRect()
     const delta = item.element.getBoundingClientRect().top - roundAnchorY(viewportRect)
     viewport.scrollTo({
@@ -552,6 +555,33 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       behavior: reducedMotion ? 'auto' : 'smooth',
     })
     setActiveRoundId(item.id)
+    return true
+  }, [])
+
+  useEffect(() => {
+    const targetId = pendingTurnRailTargetRef.current
+    if (!targetId) return
+    const target = railItems.find(item => item.id === targetId || item.semanticId === targetId)
+    if (!target?.element) return
+    const frame = window.requestAnimationFrame(() => {
+      if (scrollRailItemToAnchor(target)) pendingTurnRailTargetRef.current = null
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [railItems, scrollRailItemToAnchor])
+
+  const jumpToRound = (item: TaskTurnRailItem) => {
+    if (scrollRailItemToAnchor(item)) return
+    pendingTurnRailTargetRef.current = item.id
+    void onTurnRailSelect?.({
+      id: item.id,
+      semanticId: item.semanticId,
+      ...(item.cursor ? { cursor: item.cursor } : {}),
+      ...(item.loaded !== undefined ? { loaded: item.loaded } : {}),
+      label: item.label,
+      preview: item.preview,
+      error: item.error,
+      state: item.state,
+    })
   }
 
   const jumpToBoundary = (boundary: 'start' | 'end') => {
