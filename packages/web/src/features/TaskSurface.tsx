@@ -371,6 +371,20 @@ function sampledRoundOrdinals(
   return [...required].sort((left, right) => left - right).slice(0, TASK_TURN_RAIL_MAX_TICKS)
 }
 
+function virtualTurnRailItem(ordinal: number): TaskTurnRailItem {
+  const id = `turn-ordinal:${ordinal}`
+  return {
+    id,
+    semanticId: id,
+    ordinal,
+    loaded: false,
+    label: agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal }),
+    preview: '',
+    error: false,
+    state: 'settled',
+  }
+}
+
 function renderTurnRailItems(
   items: readonly TaskTurnRailItem[],
   activeId: string,
@@ -392,17 +406,7 @@ function renderTurnRailItems(
   return sampledRoundOrdinals(total!, requiredOrdinals).map(ordinal => {
     const loaded = byOrdinal.get(ordinal)
     if (loaded) return loaded
-    const id = `turn-ordinal:${ordinal}`
-    return {
-      id,
-      semanticId: id,
-      ordinal,
-      loaded: false,
-      label: agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal }),
-      preview: '',
-      error: false,
-      state: 'settled',
-    }
+    return virtualTurnRailItem(ordinal)
   })
 }
 
@@ -683,15 +687,27 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
           aria-label={t('surface.turnRail')}
           style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
+          onClick={event => {
+            if (event.target !== event.currentTarget || !Number.isInteger(turnRailTotal) || turnRailTotal! <= 0) return
+            const rect = event.currentTarget.getBoundingClientRect()
+            if (rect.height <= 0) return
+            const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
+            const ordinal = 1 + Math.round(ratio * Math.max(0, turnRailTotal! - 1))
+            jumpToRound(virtualTurnRailItem(ordinal))
+          }}
         >
-          {renderedRailItems.map(item => {
+          {renderedRailItems.map((item, index) => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
             const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : ''].filter(Boolean).join(' · ')
+            const position = Number.isInteger(turnRailTotal) && turnRailTotal! > 1 && item.ordinal
+              ? (item.ordinal - 1) / (turnRailTotal! - 1)
+              : renderedRailItems.length > 1 ? index / (renderedRailItems.length - 1) : .5
             return <button
               key={item.id}
               type="button"
               className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
+              style={{ top: `${Math.max(0, Math.min(1, position)) * 100}%` }}
               data-tip={tip}
               aria-label={t('surface.jumpTo', { tip })}
               aria-current={active ? 'step' : undefined}
