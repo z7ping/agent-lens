@@ -13,6 +13,7 @@ import {
   projectLiveTaskRounds,
   liveTaskRoundEstimate,
   reduceLiveTaskEvent,
+  settleLiveTaskProjectionItems,
 } from './live-task-projection'
 
 function event(sequence: number, normalizedEvent: NonNullable<LiveRuntimeEventDto['normalizedEvent']>): LiveRuntimeEventDto {
@@ -125,6 +126,36 @@ test('normalized Live events drive shared message reasoning and tool projections
   ])
 })
 
+
+test('streaming reducer updates the newest matching active node', () => {
+  const items = [
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'historical', streaming: false },
+    { id: 'separator', kind: 'message' as const, role: 'user' as const, text: 'next', streaming: false },
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'current-', streaming: true },
+  ]
+
+  const next = reduceLiveTaskEvent(items, event(7, {
+    type: 'text.delta',
+    messageId: 'a1',
+    contentIndex: 0,
+    delta: 'tail',
+  }))
+
+  assert.equal(next[0]?.kind === 'message' ? next[0].text : '', 'historical')
+  assert.equal(next[2]?.kind === 'message' ? next[2].text : '', 'current-tail')
+})
+
+test('settling an interrupted active turn clears every running presentation state', () => {
+  const settled = settleLiveTaskProjectionItems([
+    { id: 'a1', kind: 'message', role: 'assistant', text: 'partial', streaming: true },
+    { id: 'r1', kind: 'thinking', text: 'thinking', streaming: true },
+    { id: 'tool-1', kind: 'tool', callId: 'call-1', name: 'read', status: 'running' },
+  ])
+
+  assert.equal(settled[0]?.kind === 'message' ? settled[0].streaming : true, false)
+  assert.equal(settled[1]?.kind === 'thinking' ? settled[1].streaming : true, false)
+  assert.equal(settled[2]?.kind === 'tool' ? settled[2].status : '', 'success')
+})
 
 test('Live input history comes from submitted user messages and keeps chronological duplicates', () => {
   const items = projectLiveSnapshotEntries([
