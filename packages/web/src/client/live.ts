@@ -138,6 +138,10 @@ export const liveApi = {
     )
   },
 
+  queueState(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {
+    return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/queue')))
+  },
+
   clearQueue(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {
     return requestJson(
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/queue')),
