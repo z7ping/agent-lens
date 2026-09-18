@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mapObservation } from './repository-row-mappers.js'
+import { mapAssetBinding, mapObservation } from './repository-row-mappers.js'
 
 test('mapObservation accepts persisted runtime startup observations', () => {
   const observation = mapObservation({
@@ -15,4 +15,20 @@ test('mapObservation accepts persisted runtime startup observations', () => {
   })
 
   assert.equal(observation.kind, 'runtime.startup')
+})
+
+
+test('mapAssetBinding preserves structured package identity for replication roots', () => {
+  const binding = mapAssetBinding({
+    id: 'binding-package',
+    asset_id: 'asset-package',
+    installation_id: 'installation-pi',
+    source: 'opaque-source',
+    package_identity: 'npm:@example/pi-tools',
+    version: '2.1.0',
+  })
+
+  assert.equal(binding.source, 'opaque-source')
+  assert.equal(binding.packageIdentity, 'npm:@example/pi-tools')
+  assert.equal(binding.version, '2.1.0')
 })
