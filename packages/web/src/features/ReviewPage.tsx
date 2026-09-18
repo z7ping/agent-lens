@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { reviewMessageAttachmentsFromPayload } from '@agent-lens/protocol'
 import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
@@ -9,6 +8,7 @@ import type {
   ReviewDetailFilter,
   ReviewEventNodeDto,
   ReviewInteractionDto,
+  ReviewMessageAttachmentDto,
   ReviewMessageNodeDto,
   ReviewNodeDto,
   ReviewSessionSummaryDto,
@@ -646,13 +646,29 @@ function MarkdownSurface({ text }: { text: string }) {
 function MessageBubble({
   node,
   inspect,
+  loadAttachments,
   nestedTools = [],
 }: {
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
+  loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   nestedTools?: ReviewToolNodeDto[]
 }) {
   const { t } = useTranslation('review')
+  const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
+
+  useEffect(() => {
+    setAttachments(node.attachments ?? [])
+    if (node.role === 'reasoning' || node.role === 'commentary') return
+    if (!(node.attachments ?? []).some(item => item.type === 'image')) return
+    let active = true
+    void loadAttachments(node.id).then(
+      items => { if (active) setAttachments(items) },
+      () => undefined,
+    )
+    return () => { active = false }
+  }, [loadAttachments, node.attachments, node.id, node.role])
+
   if (node.role === 'reasoning' || node.role === 'commentary') {
     const label = node.role === 'commentary' ? t('local.process.execution') : t('local.process.thinking')
     const thinking: TaskThinkingModel = {
@@ -677,7 +693,7 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
-    attachments={reviewMessageAttachmentsFromPayload(node.payload)}
+    attachments={attachments}
     author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
@@ -820,6 +836,7 @@ function ReviewRoundAdapter({
   interaction,
   round,
   inspect,
+  loadAttachments,
   defaultExpanded,
   expansionStore,
   forceExpanded,
@@ -829,6 +846,7 @@ function ReviewRoundAdapter({
   interaction: ReviewInteractionDto
   round: TaskRoundModel
   inspect(node: ReviewNodeDto): void
+  loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   defaultExpanded: boolean
   expansionStore: Map<string, boolean>
   forceExpanded: boolean
@@ -848,8 +866,8 @@ function ReviewRoundAdapter({
       if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect}/>
       if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
       if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
-      if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect}/>
-      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect}/>
+      if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
+      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments}/>
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
     })}
   </TaskRound>
@@ -1549,6 +1567,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   forceRevision={roundExpansionRevision}
                   showAllEvents={showAllEvents}
                   inspect={setInspect}
+                  loadAttachments={model.reviewAttachments}
                 />
               </VirtualRoundMount>)}
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
