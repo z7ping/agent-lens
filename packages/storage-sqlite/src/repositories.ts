@@ -843,9 +843,9 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         db.prepare(`
           INSERT INTO asset_bindings(
             id, asset_id, installation_id, runtime_profile_id,
-            scope, scope_root, path, source, version
+            scope, scope_root, path, source, package_identity, version
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             asset_id = excluded.asset_id,
             installation_id = excluded.installation_id,
@@ -854,6 +854,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
             scope_root = excluded.scope_root,
             path = excluded.path,
             source = excluded.source,
+            package_identity = excluded.package_identity,
             version = excluded.version
           WHERE asset_bindings.asset_id IS NOT excluded.asset_id
              OR asset_bindings.installation_id IS NOT excluded.installation_id
@@ -862,6 +863,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
              OR asset_bindings.scope_root IS NOT excluded.scope_root
              OR asset_bindings.path IS NOT excluded.path
              OR asset_bindings.source IS NOT excluded.source
+             OR asset_bindings.package_identity IS NOT excluded.package_identity
              OR asset_bindings.version IS NOT excluded.version
         `).run(
           binding.id,
@@ -872,6 +874,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           binding.scopeRoot ?? null,
           binding.path ?? null,
           binding.source ?? null,
+          binding.packageIdentity ?? null,
           binding.version ?? null,
         )
       })
