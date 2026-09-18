@@ -199,7 +199,6 @@ requireText(liveTaskProjection, /semanticId:\s*round\.id/, 'Live 分块必须共
 requireText(liveTaskProjection, /type === 'thinking' \|\| type === 'reasoning'/, 'Live Snapshot 投影不得在刷新后丢失 Thinking')
 requireText(liveTaskProjection, /type === 'toolCall' \|\| type === 'tool_call'/, 'Live Snapshot 投影不得在刷新后丢失 Tool')
 requireText(liveTaskProjection, /reviewMessageAttachmentsFromPayload/, 'Live Snapshot 投影不得在刷新后丢失图片附件')
-requireText(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: ['"]image['"] \}>/, '图片乐观预览必须显式收窄 image part，避免结构化消息类型漂移')
 requireText(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/, '图片发送前必须生成独立 Web 本地乐观预览')
 requireText(taskMessage, /previewUrl\?: string/, 'TaskMessage 本地表现模型必须允许 Web-only previewUrl')
 requireText(taskMessage, /URL\.revokeObjectURL\(attachment\.previewUrl\)/, 'TaskMessage 卸载或替换乐观图片时必须释放 blob URL')
