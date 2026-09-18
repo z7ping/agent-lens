@@ -108,11 +108,13 @@ test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.match(liveTaskProjection, /messageAttachments\(item, nested\)/)
   assert.match(liveTask, /attachments=\{item\.attachments\}/)
-  assert.match(liveTask, /optimisticImageAttachments\(message\)/)
+  assert.match(liveTask, /optimisticMessageAttachments\(message\)/)
   assert.match(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: 'image' \}>/)
   assert.match(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/)
   assert.match(taskMessage, /previewUrl\?: string/)
   assert.match(taskMessage, /URL\.revokeObjectURL\(attachment\.previewUrl\)/)
+  assert.match(taskMessage, /attachment\.type === 'file'/)
+  assert.match(taskMessage, /message\.fileAttachment/)
 })
 
 test('消息级私有动作通过受控 Contribution 暴露，不提升为 Pi 专属 Product 分支', () => {
