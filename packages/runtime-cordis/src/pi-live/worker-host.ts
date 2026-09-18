@@ -59,7 +59,7 @@ export interface PiRuntimeHandle {
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
-  entry(entryId: string): Promise<unknown | null>
+  entry?(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   controls(): Promise<PiLiveControls>

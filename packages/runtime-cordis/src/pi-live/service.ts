@@ -860,7 +860,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const state = await this.runtimeState(runtime)
 
     const actions = []
-    if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation === true) {
+    if (runtime.handle?.entry && runtime.handle.navigateTree && state.capabilities?.treeNavigation === true) {
       actions.push({
         actionId: 'pi.edit-from-here',
         label: {
@@ -878,7 +878,7 @@ export class DefaultPiLiveService implements PiLiveService {
         requiresIdle: true,
       })
     }
-    if (state.sessionFile && state.capabilities?.messageFork === true) {
+    if (runtime.handle?.entry && state.sessionFile && state.capabilities?.messageFork === true) {
       actions.push({
         actionId: 'pi.new-session-from-here',
         label: {
@@ -906,6 +906,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (state.isStreaming) {
       throw this.conflict('Pi message actions require an idle session')
     }
+    if (!runtime.handle!.entry) throw this.conflict('Pi Runtime does not expose targeted entry lookup')
     const targetEntry = await runtime.handle!.entry(targetEntryId)
     const target = piUserMessageEntry(targetEntry ? [targetEntry] : [], targetEntryId)
 
