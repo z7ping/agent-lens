@@ -58,3 +58,12 @@ test('轮次导轨逻辑覆盖全量轮次，80 只属于视觉 DOM 上限', () 
   assert.match(taskSurface, /pendingTurnRailTargetRef/)
   assert.doesNotMatch(liveTask, /historyIndex\(current\.liveId, current\.runtimeSessionId, 80\)/)
 })
+
+
+test('80 只限制导轨 DOM，不限制全会话轮次数据语义', () => {
+  assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS\s*=\s*80/)
+  assert.match(taskSurface, /sampledRoundOrdinals\(total!/)
+  assert.match(taskSurface, /turnRailTotal/)
+  assert.match(liveTask, /fromOrdinal: targetOrdinal, limit: 1/)
+  assert.doesNotMatch(liveTask, /historyIndex\([^\n]*80/)
+})
