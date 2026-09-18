@@ -41,6 +41,9 @@ export interface ClientSnapshot {
   agentsRescanError: string
   agentEnvironmentRescanTargetId: string
   integrationDiscovery: IntegrationToolDiscoveryResponseDto | null
+  integrationPreferences: IntegrationPreferencesResponseDto | null
+  integrationPreferencesLoading: boolean
+  integrationPreferencesError: string
   integrationManagement: IntegrationManagementResponseDto | null
   integrationManagementLoading: boolean
   integrationManagementError: string
@@ -185,6 +188,9 @@ export class AgentLensClientModel {
     agentsRescanError: '',
     agentEnvironmentRescanTargetId: '',
     integrationDiscovery: null,
+    integrationPreferences: null,
+    integrationPreferencesLoading: false,
+    integrationPreferencesError: '',
     integrationManagement: null,
     integrationManagementLoading: false,
     integrationManagementError: '',
@@ -233,6 +239,7 @@ export class AgentLensClientModel {
   private agentsInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
+  private integrationPreferencesInFlight: Promise<void> | null = null
   private integrationManagementInFlight: Promise<void> | null = null
   private integrationDiscoveryPolls = 0
   private visibilityListener: (() => void) | null = null
@@ -482,6 +489,36 @@ export class AgentLensClientModel {
     }
   }
 
+  refreshIntegrationPreferences(): Promise<void> {
+    if (this.integrationPreferencesInFlight) return this.integrationPreferencesInFlight
+    this.patch({ integrationPreferencesLoading: true, integrationPreferencesError: '' })
+    const pending = this.api.integrationPreferences().then(
+      result => {
+        this.patch({
+          integrationPreferences: result,
+          integrationPreferencesLoading: false,
+          integrationPreferencesError: '',
+        })
+      },
+      error => {
+        this.patch({
+          integrationPreferencesLoading: false,
+          integrationPreferencesError: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      },
+    ).finally(() => {
+      if (this.integrationPreferencesInFlight === pending) this.integrationPreferencesInFlight = null
+    })
+    this.integrationPreferencesInFlight = pending
+    return pending
+  }
+
+  ensureIntegrationPreferences(): Promise<void> {
+    if (this.snapshot.integrationPreferences) return Promise.resolve()
+    return this.refreshIntegrationPreferences()
+  }
+
   refreshIntegrationManagement(): Promise<void> {
     if (this.integrationManagementInFlight) return this.integrationManagementInFlight
     this.patch({ integrationManagementLoading: true, integrationManagementError: '' })
@@ -490,6 +527,9 @@ export class AgentLensClientModel {
         const discovery = discoveryFromManagement(management)
         this.patch({
           integrationManagement: management,
+          integrationPreferences: { preferences: management.preferences, meta: management.meta },
+          integrationPreferencesLoading: false,
+          integrationPreferencesError: '',
           integrationManagementLoading: false,
           integrationManagementError: '',
           integrationDiscovery: discovery,
@@ -521,13 +561,14 @@ export class AgentLensClientModel {
   ): Promise<IntegrationPreferencesResponseDto> {
     const result = await this.api.updateIntegrationPreferences(input)
     const current = this.snapshot.integrationManagement
+    const patch: Partial<ClientSnapshot> = { integrationPreferences: result }
     if (current) {
-      const management = applyManagementPreferences({
+      patch.integrationManagement = applyManagementPreferences({
         ...current,
         meta: { ...current.meta, generatedAt: result.meta.generatedAt },
       }, result.preferences)
-      this.patch({ integrationManagement: management })
     }
+    this.patch(patch)
     return result
   }
 
@@ -548,7 +589,7 @@ export class AgentLensClientModel {
   }
 
   async acknowledgeIntegration(integrationId: string): Promise<void> {
-    const current = this.snapshot.integrationManagement?.preferences
+    const current = this.snapshot.integrationPreferences?.preferences ?? this.snapshot.integrationManagement?.preferences
     if (!current || current.acknowledgedIntegrationIds.includes(integrationId)) return
     await this.updateIntegrationPreferences({
       acknowledgedIntegrationIds: [...current.acknowledgedIntegrationIds, integrationId],
