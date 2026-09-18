@@ -8,6 +8,8 @@ const [
   legacyRedirect,
   liveNewTask,
   liveTask,
+  liveTaskProjection,
+  liveStyles,
   liveClient,
   liveProtocol,
   architectureTest,
@@ -29,6 +31,8 @@ const [
   readFile(new URL('../packages/web/src/features/LegacyLiveTaskRedirect.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/LiveNewTaskPanel.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/LiveTaskPage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/live-task-projection.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/live-product-surface-architecture.test.ts', import.meta.url), 'utf8'),
@@ -111,6 +115,22 @@ requireText(liveTask, /liveApi\.terminate\(current\.liveId, current\.runtimeSess
 requireText(liveTask, /liveApi\.respondToExtension\(current\.liveId, current\.runtimeSessionId, extension\.requestId, value\)/, 'Extension UI 回应必须走通用 Live API')
 requireText(liveTask, /<TaskSurface\s+mode="live"/, 'LiveTaskPage 必须复用唯一 TaskSurface')
 forbidText(liveTask, /\bpiLiveApi\b|\bPiLivePage\b|current\.liveId\s*={2,3}\s*['"]pi['"]/, 'LiveTaskPage 不得恢复 Pi 专属产品层判断')
+
+requireText(liveStyles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/, 'Live 页面桌面壳层必须保留会话栏 + 主区两列')
+requireText(liveTask, /<aside className="pi-live-sessions"/, 'LiveTaskPage 两列壳层必须实际渲染通用会话栏')
+requireText(liveTask, /setRuntimes\(matched\.runtimes\)/, 'Live 会话栏必须来自当前 Live Product runtimes')
+requireText(liveTask, /projectLiveTaskRounds\(items\)/, 'LiveTaskPage 必须恢复语义 Round 投影')
+requireText(liveTask, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
+requireText(liveTask, /new LiveFollowController\(\)/, 'LiveTaskPage 必须恢复流式阅读自动跟随控制')
+requireText(liveTask, /pi-live-new-records/, 'LiveTaskPage 必须在用户脱离底部后提供新内容提示')
+requireText(liveTask, /composerExpanded/, 'LiveTaskPage 必须保留通用输入区展开/收起能力')
+requireText(liveTask, /startupQueued/, 'LiveTaskPage 必须保留 Runtime 初始化期首条消息暂存')
+requireText(liveTask, /interruptNotice/, 'LiveTaskPage 必须保留中断成功反馈')
+requireText(liveTask, /attachments=\{item\.attachments\}/, 'LiveTaskPage 必须把 Snapshot 附件交给共享 TaskMessage')
+requireText(liveTaskProjection, /projectLiveTaskRounds/, 'Live Product 投影必须提供语义 Round')
+requireText(liveTaskProjection, /type === 'thinking' \|\| type === 'reasoning'/, 'Live Snapshot 投影不得在刷新后丢失 Thinking')
+requireText(liveTaskProjection, /type === 'toolCall' \|\| type === 'tool_call'/, 'Live Snapshot 投影不得在刷新后丢失 Tool')
+requireText(liveTaskProjection, /reviewMessageAttachmentsFromPayload/, 'Live Snapshot 投影不得在刷新后丢失图片附件')
 
 /* Generic client/protocol remain the only product-level API vocabulary. */
 requireText(liveClient, /const LIVE_ROOT = '\/api\/v1\/live'/, '通用 Live Client 根路径必须保持 /api/v1/live')

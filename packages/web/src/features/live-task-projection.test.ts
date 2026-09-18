@@ -6,6 +6,8 @@ import {
   appendOptimisticLiveUserMessage,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
+  projectLiveTaskRounds,
+  liveTaskRoundEstimate,
   reduceLiveTaskEvent,
 } from './live-task-projection'
 
@@ -19,6 +21,23 @@ function event(sequence: number, normalizedEvent: NonNullable<LiveRuntimeEventDt
   }
 }
 
+test('snapshot projection keeps generic inline image attachments', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      id: 'u-image',
+      role: 'user',
+      content: [{ type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' }],
+    },
+  ])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.type, 'image')
+  assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
+})
+
 test('snapshot projection consumes message-shaped native rows without Agent-specific branches', () => {
   assert.deepEqual(projectLiveSnapshotEntries([
     { id: 'u1', role: 'user', content: 'hello' },
@@ -28,6 +47,45 @@ test('snapshot projection consumes message-shaped native rows without Agent-spec
     { id: 'u1', kind: 'message', role: 'user', text: 'hello', streaming: false },
     { id: 'a1', kind: 'message', role: 'assistant', text: 'world', streaming: false },
   ])
+})
+
+test('snapshot projection preserves assistant reasoning and tool history across reload', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message',
+      id: 'assistant-1',
+      timestamp: '2026-09-18T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'inspect first' },
+          { type: 'text', text: 'checking' },
+          { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { path: 'README.md' } },
+          { type: 'text', text: 'done' },
+        ],
+      },
+    },
+    {
+      type: 'message',
+      id: 'result-1',
+      timestamp: '2026-09-18T00:00:01.000Z',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'tool-1',
+        toolName: 'read',
+        isError: false,
+        content: [{ type: 'text', text: 'file content' }],
+      },
+    },
+  ])
+
+  assert.deepEqual(items.map(item => item.kind), ['thinking', 'message', 'tool', 'message'])
+  assert.equal(items[0]?.kind === 'thinking' ? items[0].text : '', 'inspect first')
+  const tool = items.find(item => item.kind === 'tool')
+  assert.ok(tool?.kind === 'tool')
+  assert.equal(tool.name, 'read')
+  assert.equal(tool.status, 'success')
+  assert.equal(tool.output, 'file content')
 })
 
 test('normalized Live events drive shared message reasoning and tool projections', () => {
@@ -60,4 +118,37 @@ test('Live input history comes from submitted user messages and keeps chronologi
   assert.deepEqual(projectLiveInputHistory(items), ['first', 'second', 'second'])
   assert.deepEqual(appendLiveInputHistory(['first'], ' second '), ['first', 'second'])
   assert.deepEqual(appendLiveInputHistory(['a', 'b'], 'c', 2), ['b', 'c'])
+})
+
+
+test('generic Live projection restores semantic rounds from user-message boundaries', () => {
+  const items = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'first task', streaming: false, at: '2026-09-17T12:00:00.000Z' },
+    { id: 'a1', kind: 'message' as const, role: 'assistant' as const, text: 'done', streaming: false, at: '2026-09-17T12:00:01.000Z' },
+    { id: 't1', kind: 'tool' as const, callId: 'tool-1', name: 'read', status: 'success' as const, at: '2026-09-17T12:00:02.000Z' },
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: 'second task', streaming: false, at: '2026-09-17T12:00:03.000Z' },
+    { id: 'r2', kind: 'thinking' as const, text: 'working', streaming: true, at: '2026-09-17T12:00:04.000Z' },
+  ]
+
+  const rounds = projectLiveTaskRounds(items)
+  assert.equal(rounds.length, 2)
+  assert.equal(rounds[0]?.model.ordinal, 1)
+  assert.equal(rounds[0]?.model.preview, 'first task')
+  assert.equal(rounds[0]?.model.toolCount, 1)
+  assert.equal(rounds[0]?.model.state, 'settled')
+  assert.equal(rounds[1]?.model.ordinal, 2)
+  assert.equal(rounds[1]?.model.preview, 'second task')
+  assert.equal(rounds[1]?.model.state, 'running')
+  assert.ok(liveTaskRoundEstimate(rounds[0]!) >= 180)
+})
+
+test('generic Live projection preserves pre-user activity as a background round', () => {
+  const rounds = projectLiveTaskRounds([
+    { id: 'a0', kind: 'message', role: 'assistant', text: 'restored output', streaming: false },
+    { id: 'u1', kind: 'message', role: 'user', text: 'continue', streaming: false },
+  ])
+  assert.equal(rounds.length, 2)
+  assert.equal(rounds[0]?.model.ordinal, undefined)
+  assert.equal(rounds[0]?.items[0]?.id, 'a0')
+  assert.equal(rounds[1]?.model.ordinal, 1)
 })

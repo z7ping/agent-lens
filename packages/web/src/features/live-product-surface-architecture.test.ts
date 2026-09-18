@@ -91,3 +91,29 @@ test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
   assert.match(liveComposer, /restoreMessageBeforeCurrentDraft/)
   assert.doesNotMatch(liveTask, /onDraftChange=/)
 })
+
+
+test('LiveTask migration keeps the full session-view shell instead of only the generic protocol', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const styles = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
+
+  assert.match(styles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/)
+  assert.match(liveTask, /<aside className="pi-live-sessions"/)
+  assert.match(liveTask, /setRuntimes\(matched\.runtimes\)/)
+  assert.match(liveTask, /projectLiveTaskRounds\(items\)/)
+  assert.match(liveTask, /<GenericLiveRound/)
+  assert.match(liveTask, /<VirtualRoundMount/)
+  assert.match(liveTask, /<TaskRound/)
+  assert.match(liveTask, /new LiveFollowController\(\)/)
+  assert.match(liveTask, /ref=\{readerRef\}/)
+  assert.match(liveTask, /onScroll=\{onReaderScroll\}/)
+  assert.match(liveTask, /pi-live-new-records/)
+  assert.doesNotMatch(liveTask, /\{items\.map\(item => <GenericLiveItem/)
+})
+
+test('LiveTask session sidebar stays agent-neutral', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /current\.liveId/)
+  assert.match(liveTask, /product\.productId/)
+  assert.doesNotMatch(liveTask, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
+})
