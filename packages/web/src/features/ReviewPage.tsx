@@ -965,8 +965,13 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }, [review.response?.items, visibleHubSessions, t])
 
   useEffect(() => {
+    if (!detail?.id) {
+      setLiveProducts([])
+      return
+    }
     let cancelled = false
     let retryTimer: number | undefined
+    let initialTimer: number | undefined
 
     const refreshLiveProducts = (allowRetry = true) => {
       void liveApi.products().then(
@@ -989,11 +994,12 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       )
     }
     const handleLiveStateChanged = () => refreshLiveProducts()
-    refreshLiveProducts()
+    initialTimer = window.setTimeout(() => refreshLiveProducts(), 100)
     window.addEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
     window.addEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
     return () => {
       cancelled = true
+      if (initialTimer !== undefined) window.clearTimeout(initialTimer)
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       window.removeEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
       window.removeEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
