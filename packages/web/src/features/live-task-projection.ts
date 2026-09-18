@@ -504,7 +504,7 @@ export function projectLiveTaskRounds(
           label: index === 0
             ? aggregate.label
             : agentLensI18n.t('task:surface.roundContinuation', { label: aggregate.label }),
-          ...(index === 0 && aggregate.preview ? { preview: aggregate.preview } : { preview: undefined }),
+          ...(index === 0 && aggregate.preview ? { preview: aggregate.preview } : {}),
           toolCount: index === 0 ? aggregate.toolCount : model.toolCount,
           errorCount: index === 0 ? aggregate.errorCount : model.errorCount,
           durationMs: index === 0 ? aggregate.durationMs : model.durationMs,
