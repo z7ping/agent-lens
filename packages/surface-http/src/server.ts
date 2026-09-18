@@ -508,6 +508,14 @@ export async function startHttpSurface(
         writeJson(response, 200, await agents.querySummary())
         return
       }
+      const agentEnrichmentMatch = url.pathname.match(/^\/api\/v1\/agents\/([^/]+)\/enrichment$/)
+      if (agentEnrichmentMatch) {
+        const sourceId = decodeURIComponent(agentEnrichmentMatch[1] ?? '')
+        if (!sourceId) throw badRequest('sourceId is required')
+        const enrichment = await withReadPriority(storage, 'supporting', () => agents.getEnrichment(sourceId))
+        writeJson(response, enrichment ? 200 : 404, enrichment ?? { error: 'not_found' })
+        return
+      }
       if (url.pathname.startsWith('/api/v1/agents/')) {
         const sourceId = decodeURIComponent(url.pathname.slice('/api/v1/agents/'.length))
         if (!sourceId) throw badRequest('sourceId is required')
