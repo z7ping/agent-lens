@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import type { AgentAssetInventoryDto, AgentOverviewDto } from '@agent-lens/protocol'
+import type { AgentAssetInventoryDto, AgentCoverageItemDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 import { Disclosure } from './ui'
@@ -51,7 +51,7 @@ function stateValue(asset: AgentAssetInventoryDto, state: string): boolean | 'un
   return result
 }
 
-function coverageStatus(agent: AgentOverviewDto, type: 'skill' | 'mcp', canonicalName: string): CoverageStatus {
+function coverageStatus(agent: AgentCoverageItemDto, type: 'skill' | 'mcp', canonicalName: string): CoverageStatus {
   if (agent.usedAssets.some(item => item.type === type && item.canonicalName === canonicalName && item.callCount > 0)) return 'used'
   const asset = agent.assetInventory.find(item => item.type === type && item.canonicalName === canonicalName)
   if (!asset) return 'unobserved'
@@ -74,7 +74,7 @@ const stageKey: Record<string, string> = {
   assets: 'insightsRail.stage.assets',
 }
 
-function CoverageCard({ agents }: { agents: AgentOverviewDto[] }) {
+function CoverageCard({ agents }: { agents: AgentCoverageItemDto[] }) {
   const { t } = useTranslation('agents')
   const rows = useMemo(() => {
     const map = new Map<string, { type: 'skill' | 'mcp'; canonicalName: string; displayName: string; calls: number }>()
@@ -149,10 +149,11 @@ function NativeEventSummary({ groups, total }: { groups: JsonRecord[]; total: nu
 export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnapshot; sourceId: string }) {
   const { t, i18n } = useTranslation('agents')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
-  const agents = useOrderedAgents(snapshot.agents?.items ?? [])
-  const fallbackSourceId = agents.find(agent => agent.detected)?.sourceId || agents[0]?.sourceId || ''
-  const selectedSourceId = agents.some(agent => agent.sourceId === sourceId) ? sourceId : fallbackSourceId
-  const selectedAgent = agents.find(agent => agent.sourceId === selectedSourceId)
+  const summaryAgents = useOrderedAgents(snapshot.agentSummaries?.items ?? [])
+  const coverageAgents = useOrderedAgents(snapshot.agentCoverage?.items ?? [])
+  const fallbackSourceId = summaryAgents.find(agent => agent.detected)?.sourceId || summaryAgents[0]?.sourceId || ''
+  const selectedSourceId = summaryAgents.some(agent => agent.sourceId === sourceId) ? sourceId : fallbackSourceId
+  const selectedAgent = summaryAgents.find(agent => agent.sourceId === selectedSourceId)
 
   const details = recordValue(snapshot.health?.storage.details)
   const growth = recordValue(details?.dataGrowth)
@@ -199,6 +200,6 @@ export function AgentInsightsRail({ snapshot, sourceId }: { snapshot: ClientSnap
         {!runtime.length && !growth && <div className="agent-insight-empty">{t('insightsRail.noDiagnostics')}</div>}
       </div>
     </section>
-    <CoverageCard agents={agents}/>
+    <CoverageCard agents={coverageAgents}/>
   </aside>
 }
