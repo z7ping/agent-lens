@@ -235,16 +235,14 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         const sourceClause = options?.sourceId ? 'AND source_id = ?' : ''
         if (options?.sourceId) params.push(options.sourceId)
         const requestedLimit = options?.limit
-        const limit = Number.isInteger(requestedLimit)
-          ? Math.max(1, Math.min(64, requestedLimit!))
-          : 64
-        params.push(limit)
+        const hasLimit = Number.isInteger(requestedLimit)
+        if (hasLimit) params.push(Math.max(1, Math.min(64, requestedLimit!)))
         return db.prepare(`
           SELECT * FROM source_sessions
           WHERE logical_session_id = ?
           ${sourceClause}
           ORDER BY id
-          LIMIT ?
+          ${hasLimit ? 'LIMIT ?' : ''}
         `).all(...params).map(mapSourceSession)
       })
     },
