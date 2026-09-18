@@ -74,6 +74,14 @@ function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
   if (from) params.set('from', from)
 }
 
+function queryFilterKey(filters: QueryFilters): string {
+  return JSON.stringify({
+    sourceIds: filters.sourceIds === null ? null : [...filters.sourceIds].sort(),
+    projectId: filters.projectId,
+    range: filters.range,
+  })
+}
+
 function responseErrorMessage(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const message = Reflect.get(value, 'message')
@@ -314,7 +322,7 @@ export class AgentLensApi {
     const requestPath = `/api/v1/usage?${params}`
     return shareInFlight(
       aggregateReadInFlight,
-      requestPath,
+      `usage:${queryFilterKey(filters)}`,
       () => requestJson<ToolAssetUsageResponseDto>(requestPath),
     )
   }
@@ -327,7 +335,7 @@ export class AgentLensApi {
     const requestPath = `/api/v1/usage/detail?${params}`
     return shareInFlight(
       aggregateReadInFlight,
-      requestPath,
+      `usage-detail:${queryFilterKey(filters)}:${toolName}`,
       () => requestJson<ToolAssetUsageResponseDto>(requestPath),
     )
   }
@@ -338,7 +346,7 @@ export class AgentLensApi {
     const requestPath = `/api/v1/insights?${params}`
     return shareInFlight(
       aggregateReadInFlight,
-      requestPath,
+      `insights:${queryFilterKey(filters)}`,
       () => requestJson<InsightsResponseDto>(requestPath),
     )
   }
