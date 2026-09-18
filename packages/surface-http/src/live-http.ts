@@ -2,6 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type {
   LiveAdapter,
   LiveCapabilityName,
+  LiveContributionText,
+  LiveMessageActionContribution,
+  LiveMessageActionResult,
   LiveService,
   LiveStartCapabilities,
   LiveStartInput,
@@ -11,6 +14,10 @@ import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
+const MAX_LIVE_MESSAGE_ACTIONS = 16
+const MAX_LIVE_MESSAGE_ACTION_ID = 128
+const MAX_LIVE_CONTRIBUTION_LABEL = 120
+const MAX_LIVE_CONTRIBUTION_DESCRIPTION = 600
 const SSE_HEARTBEAT_MS = 15_000
 const DEFAULT_START_CAPABILITIES: Readonly<LiveStartCapabilities> = {
   workspace: 'unsupported',
@@ -58,6 +65,75 @@ function nonEmpty(value: unknown, name: string): string {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function contributionText(value: unknown, maxLength: number): LiveContributionText | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const row = value as Record<string, unknown>
+  const defaultText = typeof row.default === 'string' ? row.default.trim() : ''
+  if (!defaultText) return null
+  const localized = (candidate: unknown) => typeof candidate === 'string' && candidate.trim()
+    ? candidate.trim().slice(0, maxLength)
+    : undefined
+  return {
+    default: defaultText.slice(0, maxLength),
+    ...(localized(row.zhCN) ? { zhCN: localized(row.zhCN) } : {}),
+    ...(localized(row.enUS) ? { enUS: localized(row.enUS) } : {}),
+  }
+}
+
+function normalizeMessageActions(value: unknown): LiveMessageActionContribution[] {
+  if (!Array.isArray(value)) return []
+  const result: LiveMessageActionContribution[] = []
+  const seen = new Set<string>()
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+    const row = candidate as Record<string, unknown>
+    const actionId = typeof row.actionId === 'string' ? row.actionId : ''
+    if (!actionId || actionId !== actionId.trim() || actionId.length > MAX_LIVE_MESSAGE_ACTION_ID || seen.has(actionId)) continue
+    const label = contributionText(row.label, MAX_LIVE_CONTRIBUTION_LABEL)
+    if (!label || !Array.isArray(row.roles)) continue
+    const roles = [...new Set(row.roles.filter((role): role is 'user' | 'assistant' => role === 'user' || role === 'assistant'))]
+    if (!roles.length) continue
+    if (row.requiresIdle !== undefined && typeof row.requiresIdle !== 'boolean') continue
+    const description = row.description === undefined
+      ? undefined
+      : contributionText(row.description, MAX_LIVE_CONTRIBUTION_DESCRIPTION)
+    if (row.description !== undefined && !description) continue
+    seen.add(actionId)
+    result.push({
+      actionId,
+      label,
+      ...(description ? { description } : {}),
+      roles,
+      ...(typeof row.requiresIdle === 'boolean' ? { requiresIdle: row.requiresIdle } : {}),
+    })
+    if (result.length >= MAX_LIVE_MESSAGE_ACTIONS) break
+  }
+  return result
+}
+
+function normalizeMessageActionResult(value: unknown): LiveMessageActionResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(500, 'Live message action returned an invalid result')
+  }
+  const row = value as Record<string, unknown>
+  if (row.outcome !== 'refresh-current' && row.outcome !== 'open-runtime') {
+    throw httpError(500, 'Live message action returned an invalid outcome')
+  }
+  if (row.outcome === 'open-runtime' && (!row.runtime || typeof row.runtime !== 'object' || Array.isArray(row.runtime))) {
+    throw httpError(500, 'Live message action open-runtime result requires runtime')
+  }
+  if (row.draftText !== undefined && typeof row.draftText !== 'string') {
+    throw httpError(500, 'Live message action returned invalid draftText')
+  }
+  return {
+    outcome: row.outcome,
+    ...(row.runtime && typeof row.runtime === 'object' && !Array.isArray(row.runtime)
+      ? { runtime: row.runtime as LiveMessageActionResult['runtime'] }
+      : {}),
+    ...(typeof row.draftText === 'string' ? { draftText: row.draftText } : {}),
+  }
 }
 
 function startCapabilities(adapter: LiveAdapter): Readonly<LiveStartCapabilities> {
@@ -395,13 +471,13 @@ export async function handleLiveRequest(
 
     if (action === 'message-actions' && request.method === 'GET') {
       writeJson(response, 200, {
-        items: jsonValue(adapter.messageActions
+        items: jsonValue(normalizeMessageActions(adapter.messageActions
           ? await shareAdapterRead(
               adapter,
               `message-actions:${runtimeSessionId}`,
               () => adapter.messageActions!(runtimeSessionId),
             )
-          : []),
+          : [])),
       })
       return true
     }
@@ -418,15 +494,16 @@ export async function handleLiveRequest(
       if (!adapter.messageActions) {
         throw httpError(409, `${adapter.manifest.displayName} has not declared Live message actions`)
       }
-      const declared = await adapter.messageActions(runtimeSessionId)
+      const declared = normalizeMessageActions(await adapter.messageActions(runtimeSessionId))
       if (!declared.some(action => action.actionId === actionId)) {
         throw httpError(409, 'Live message action is not currently declared by this adapter')
       }
-      writeJson(response, 200, jsonValue(await adapter.executeMessageAction(
+      const result = normalizeMessageActionResult(await adapter.executeMessageAction(
         runtimeSessionId,
         actionId,
         targetEntryId,
-      )))
+      ))
+      writeJson(response, 200, jsonValue(result))
       return true
     }
     if (action === 'queue' && request.method === 'GET') {
