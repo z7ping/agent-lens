@@ -140,6 +140,7 @@ export interface PiLiveService {
   prompt(runtimeSessionId: string, message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void>
   steer(runtimeSessionId: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   followUp(runtimeSessionId: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void>
+  queueState(runtimeSessionId: string): Promise<PiLiveQueueState>
   clearQueue(runtimeSessionId: string): Promise<PiLiveQueueState>
   abort(runtimeSessionId: string, options?: { restoreQueue?: boolean }): Promise<PiLiveQueueState>
   respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
