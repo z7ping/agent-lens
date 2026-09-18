@@ -57,7 +57,7 @@ export interface PiRuntimeHandle {
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string): Promise<PiLiveSnapshot>
-  commands(): Promise<PiLiveCommand[]>
+  commands?(): Promise<PiLiveCommand[]>
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState>
