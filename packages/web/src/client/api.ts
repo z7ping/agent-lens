@@ -33,6 +33,7 @@ import {
   type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
   type SourceRecordResponseDto,
+  type SourceRecordsResponseDto,
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
@@ -334,6 +335,19 @@ export class AgentLensApi {
 
   sourceRecord(id: string): Promise<SourceRecordResponseDto> {
     return requestJson(`/api/v1/source-records/${encodeURIComponent(id)}`)
+  }
+
+  sourceRecords(ids: readonly string[]): Promise<SourceRecordResponseDto[]> {
+    const unique = [...new Set(ids.map(id => id.trim()).filter(Boolean))].slice(0, 50)
+    if (!unique.length) return Promise.resolve([])
+    const params = new URLSearchParams()
+    for (const id of unique) params.append('id', id)
+    const requestPath = `/api/v1/source-records?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `source-records:${unique.join('\u0000')}`,
+      () => requestJson<SourceRecordsResponseDto>(requestPath).then(result => result.items),
+    )
   }
 
   usage(filters: QueryFilters): Promise<ToolAssetUsageResponseDto> {
