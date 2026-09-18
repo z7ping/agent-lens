@@ -11,6 +11,13 @@ export interface ObservationCommittedEventDto {
   emittedAt: string
 }
 
+export interface SessionUpdatedEventDto {
+  type: 'session.updated'
+  logicalSessionId: string
+  affected: LiveUpdateArea[]
+  emittedAt: string
+}
+
 export interface AgentChangedEventDto {
   type: 'agent.changed'
   sourceId?: string
@@ -20,7 +27,7 @@ export interface AgentChangedEventDto {
   emittedAt: string
 }
 
-export type LiveUpdateEventDto = ObservationCommittedEventDto | AgentChangedEventDto
+export type LiveUpdateEventDto = ObservationCommittedEventDto | SessionUpdatedEventDto | AgentChangedEventDto
 
 const LIVE_UPDATE_AREAS = ['review', 'sessions', 'usage', 'agents', 'insights'] as const
 
@@ -73,6 +80,15 @@ export function parseLiveUpdateEvent(value: unknown): LiveUpdateEventDto {
       ...(installationId === undefined ? {} : { installationId }),
       ...(projectId === undefined ? {} : { projectId }),
       ...(sourceId === undefined ? {} : { sourceId }),
+      affected: affectedAreas(record.affected),
+      emittedAt,
+    }
+  }
+
+  if (type === 'session.updated') {
+    return {
+      type,
+      logicalSessionId: requiredString(record, 'logicalSessionId'),
       affected: affectedAreas(record.affected),
       emittedAt,
     }
