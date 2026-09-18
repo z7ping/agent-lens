@@ -100,6 +100,30 @@ test('snapshot projection keeps nested persisted image attachments used by Pi se
   assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
 })
 
+test('snapshot projection keeps nested persisted file attachments', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message',
+      id: 'entry-file-1',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: '看这个文件' },
+          { type: 'file', name: 'report.pdf', mimeType: 'application/pdf', sizeBytes: 42 },
+        ],
+      },
+    },
+  ])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.entryId, 'entry-file-1')
+  assert.equal(item.text, '看这个文件')
+  assert.equal(item.attachments?.[0]?.type, 'file')
+  assert.equal(item.attachments?.[0]?.name, 'report.pdf')
+})
+
 test('snapshot projection consumes message-shaped native rows without Agent-specific branches', () => {
   assert.deepEqual(projectLiveSnapshotEntries([
     { id: 'u1', role: 'user', content: 'hello' },
