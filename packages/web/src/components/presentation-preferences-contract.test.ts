@@ -12,7 +12,7 @@ test('PinnedAgentsProvider owns browser visibility only while IntegrationOrderPr
   assert.doesNotMatch(pinned, /displayOrder|readLegacyAgentOrderPreference|updateIntegrationPreferences|IntegrationManagementResponseDto/)
 
   assert.match(order, /readLegacyAgentOrderPreference/)
-  assert.match(order, /preferences\.displayOrder/)
+  assert.match(order, /preferenceState\?\.displayOrder/)
   assert.match(order, /updateIntegrationPreferences\(\{ displayOrder:/)
 
   assert.match(scope, /usePinnedAgents\(\)/)
