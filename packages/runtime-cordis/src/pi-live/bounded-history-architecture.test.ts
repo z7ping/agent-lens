@@ -39,3 +39,17 @@ test('Pi Live 轮次索引保留全量语义但单次查询有界', () => {
   assert.match(workerSource, /aroundIndex - Math\.floor\(limit \* \.3\)/)
   assert.doesNotMatch(workerSource, /Math\.round\(slot \* \(rounds\.length - 1\)/)
 })
+
+
+test('Pi Live 首屏 Snapshot 不触发全量轮次索引构建', () => {
+  assert.match(workerSource, /function snapshotRoundPage\(all, start, end\) \{\s*if \(!roundIndexCache\) return undefined/)
+  assert.match(workerSource, /if \(roundIndexCache\) roundIndex\(all\)/)
+  assert.doesNotMatch(workerSource, /const rounds = roundIndex\(all\)[\s\S]{0,400}function beginSnapshotTransfer/)
+})
+
+test('Pi Live cursor 分页在索引建立后使用 Entry 位置缓存', () => {
+  assert.match(workerSource, /entryPositions/)
+  assert.match(workerSource, /roundByCursor/)
+  assert.match(workerSource, /roundIndexCache\?\.entryPositions/)
+  assert.doesNotMatch(workerSource, /\?\? entryPosition\(cursor\)/)
+})
