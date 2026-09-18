@@ -43,7 +43,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
-  readonly queueState = { steering: ['queued steer'], followUp: ['queued follow-up'] }
+  readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0 }
   private modelValue = 'model-a'
   private sequence = 0
@@ -144,14 +144,22 @@ class FakeLiveAdapter implements LiveAdapter {
     return () => undefined
   }
 
+  async queueState(runtimeSessionId: string) {
+    await this.state(runtimeSessionId)
+    return {
+      steering: [...this.queueMessages.steering],
+      followUp: [...this.queueMessages.followUp],
+    }
+  }
+
   async clearQueue(runtimeSessionId: string) {
     await this.state(runtimeSessionId)
     const current = {
-      steering: [...this.queueState.steering],
-      followUp: [...this.queueState.followUp],
+      steering: [...this.queueMessages.steering],
+      followUp: [...this.queueMessages.followUp],
     }
-    this.queueState.steering.splice(0)
-    this.queueState.followUp.splice(0)
+    this.queueMessages.steering.splice(0)
+    this.queueMessages.followUp.splice(0)
     return current
   }
 
@@ -159,8 +167,8 @@ class FakeLiveAdapter implements LiveAdapter {
     await this.state(runtimeSessionId)
     return {
       restoredQueue: {
-        steering: [...this.queueState.steering],
-        followUp: [...this.queueState.followUp],
+        steering: [...this.queueMessages.steering],
+        followUp: [...this.queueMessages.followUp],
       },
     }
   }
@@ -300,6 +308,13 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       body: JSON.stringify({ message: 'change course', behavior: 'steer' }),
     })
     assert.equal(unsupportedSteer.status, 409)
+
+    const queueState = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`)
+    assert.equal(queueState.status, 200)
+    assert.deepEqual(await queueState.json(), {
+      steering: ['queued steer'],
+      followUp: ['queued follow-up'],
+    })
 
     const clearedQueue = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`, { method: 'DELETE' })
     assert.equal(clearedQueue.status, 200)
