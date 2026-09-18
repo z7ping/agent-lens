@@ -416,6 +416,18 @@ export class AgentLensApi {
     return backupOverviewInFlight
   }
 
+  async pollBackupOverview(): Promise<BackupOverviewResponseDto> {
+    this.backupOverviewLoaded = true
+    const result = await shareInFlight(
+      aggregateReadInFlight,
+      'backup-overview:background',
+      () => requestJson<BackupOverviewResponseDto>('/api/v1/backups?background=1'),
+    )
+    backupOverviewCache = result
+    reuseBackupOverviewOnce = false
+    return result
+  }
+
   async refreshBackupOverview(): Promise<BackupOverviewResponseDto> {
     this.backupOverviewLoaded = true
     reuseBackupOverviewOnce = false
