@@ -5,6 +5,7 @@ import type {
   LiveAdapter,
   LiveAdapterManifest,
   LiveCapabilityName,
+  LiveHistoryIndexQuery,
   LiveMessageInput,
   LiveModelControl,
   LiveRuntimeEvent,
@@ -120,20 +121,32 @@ class FakeLiveAdapter implements LiveAdapter {
     return {
       state: await this.state(runtimeSessionId),
       entries: [{ kind: 'snapshot' }],
-      page: { hasEarlier: true, before: 'entry-0', first: 'entry-0', last: 'entry-9', hasLater: true, after: 'entry-9' },
+      page: {
+        hasEarlier: true,
+        before: 'entry-0',
+        first: 'entry-0',
+        last: 'entry-9',
+        rounds: { total: 3, firstOrdinal: 1, lastOrdinal: 3 },
+        hasLater: true,
+        after: 'entry-9',
+      },
     }
   }
 
-  async historyIndex(runtimeSessionId: string, limit = 80) {
+  async historyIndex(runtimeSessionId: string, query: LiveHistoryIndexQuery = {}) {
     await this.state(runtimeSessionId)
-    return {
-      total: 3,
-      items: [
-        { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
-        { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
-        { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
-      ].slice(0, limit),
+    const all = [
+      { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
+      { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
+      { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
+    ]
+    if (query.cursor) {
+      return { total: all.length, items: all.filter(item => item.cursor === query.cursor) }
     }
+    const limit = query.limit ?? 0
+    if (limit <= 0) return { total: all.length, items: [] }
+    const start = Math.max(0, (query.fromOrdinal ?? 1) - 1)
+    return { total: all.length, items: all.slice(start, start + limit) }
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl> {
@@ -426,7 +439,15 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         pendingMessageCount: 0,
       },
       entries: [{ kind: 'snapshot' }],
-      page: { hasEarlier: true, before: 'entry-0', first: 'entry-0', last: 'entry-9', hasLater: true, after: 'entry-9' },
+      page: {
+        hasEarlier: true,
+        before: 'entry-0',
+        first: 'entry-0',
+        last: 'entry-9',
+        rounds: { total: 3, firstOrdinal: 1, lastOrdinal: 3 },
+        hasLater: true,
+        after: 'entry-9',
+      },
     })
     assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { limit: 120 })
 
@@ -461,16 +482,26 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     const mixedAroundSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?around=entry-user-2&edge=latest`)
     assert.equal(mixedAroundSnapshot.status, 400)
 
-    const historyIndex = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?limit=80`)
-    assert.equal(historyIndex.status, 200)
-    assert.deepEqual(await historyIndex.json(), {
+    const historySummary = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index`)
+    assert.equal(historySummary.status, 200)
+    assert.deepEqual(await historySummary.json(), { total: 3, items: [] })
+
+    const historyByOrdinal = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?from=2&limit=1`)
+    assert.equal(historyByOrdinal.status, 200)
+    assert.deepEqual(await historyByOrdinal.json(), {
       total: 3,
-      items: [
-        { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
-        { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
-        { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
-      ],
+      items: [{ cursor: 'entry-user-2', ordinal: 2, preview: 'second' }],
     })
+
+    const historyByCursor = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?cursor=entry-user-3`)
+    assert.equal(historyByCursor.status, 200)
+    assert.deepEqual(await historyByCursor.json(), {
+      total: 3,
+      items: [{ cursor: 'entry-user-3', ordinal: 3, preview: 'third' }],
+    })
+
+    const invalidHistoryIndex = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?from=2&cursor=entry-user-2`)
+    assert.equal(invalidHistoryIndex.status, 400)
 
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',
