@@ -5,6 +5,7 @@ import type {
   LiveAdapterManifest,
   LiveAttachmentService,
   LiveCapabilityName,
+  LiveCommand,
   LiveEvent,
   LiveMessage,
   LiveMessageInput,
@@ -40,6 +41,7 @@ const CAPABILITIES = [
   'model-switching',
   'thinking-control',
   'extension-ui',
+  'command-discovery',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
@@ -384,6 +386,15 @@ export class PiLiveAdapter implements LiveAdapter {
 
   respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void> {
     return this.service.respondToExtension(runtimeSessionId, requestId, response)
+  }
+
+  async commands(runtimeSessionId: string): Promise<readonly LiveCommand[]> {
+    return (await this.service.commands(runtimeSessionId)).map(command => ({
+      value: `/${command.name}`,
+      label: `/${command.name}`,
+      ...(command.description ? { description: command.description } : {}),
+      group: command.source,
+    }))
   }
 
   private async resolveMessage(message: LiveMessage): Promise<{
