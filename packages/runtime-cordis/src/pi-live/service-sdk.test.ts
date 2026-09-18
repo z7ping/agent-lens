@@ -211,6 +211,30 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     assistantMessageEvent: { type: 'toolcall_start', contentIndex: 1, id: 'call-1', toolName: 'read' },
   })
 
+  emit(agentListener, {
+    type: 'message_end',
+    message: { role: 'assistant', id: 'assistant-1' },
+  })
+  emit(agentListener, {
+    type: 'message_start',
+    message: { role: 'assistant', id: 'assistant-2' },
+  })
+  emit(agentListener, {
+    type: 'message_update',
+    message: { role: 'assistant', usage: { output: 9 } },
+    assistantMessageEvent: {
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: 'second round',
+      partial: { role: 'assistant', content: [{ type: 'text', text: 'second round' }] },
+    },
+  })
+  const messageUpdates = events.filter(event => event.type === 'message_update'
+    && event.assistantMessageEvent
+    && typeof event.assistantMessageEvent === 'object'
+    && (event.assistantMessageEvent as Record<string, unknown>).type === 'text_delta')
+  assert.equal(messageUpdates.at(-1)?.messageId, 'assistant-2')
+
   let promptFinished = false
   const promptRequest = service.prompt(state.runtimeSessionId, 'hello', 'followUp').then(() => { promptFinished = true })
   await promptRequest
