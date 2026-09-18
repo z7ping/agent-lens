@@ -75,19 +75,21 @@ function messageHasAttachments(message: LiveMessageDto): boolean {
   return message.parts.some(part => part.type === 'image' || part.type === 'file')
 }
 
-async function optimisticImageAttachments(
+async function optimisticMessageAttachments(
   message: LiveMessageDto,
 ): Promise<LiveTaskProjectionAttachment[]> {
-  const images = message.parts.filter(
-    (part): part is Extract<LiveMessageDto['parts'][number], { type: 'image' }> => part.type === 'image',
+  const attachments = message.parts.filter(
+    (part): part is Extract<LiveMessageDto['parts'][number], { type: 'image' | 'file' }> =>
+      part.type === 'image' || part.type === 'file',
   )
-  return Promise.all(images.map(async part => {
+  return Promise.all(attachments.map(async part => {
     const attachment: LiveTaskProjectionAttachment = {
-      type: 'image',
+      type: part.type,
       ...(part.name ? { name: part.name } : {}),
       ...(part.mimeType ? { mimeType: part.mimeType } : {}),
       ...(part.sizeBytes !== undefined ? { sizeBytes: part.sizeBytes } : {}),
     }
+    if (part.type !== 'image') return attachment
     try {
       const response = await fetch(liveAttachmentPreviewUrl(part.attachmentId))
       if (!response.ok) return attachment
@@ -958,7 +960,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setBusy(true)
     setError('')
     const optimisticAttachments = behavior === 'normal'
-      ? await optimisticImageAttachments(message)
+      ? await optimisticMessageAttachments(message)
       : []
     const optimisticId = behavior === 'normal' && (optimisticText || optimisticAttachments.length)
       ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
