@@ -378,6 +378,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const followReleaseFrameRef = useRef<number | null>(null)
   const startupSendingRef = useRef(false)
   const leafIdRef = useRef<string | undefined>(undefined)
+  const stableProjectionCountRef = useRef(0)
   const queueRevisionRef = useRef(0)
 
   const setComposerValue = useCallback((value: string) => {
@@ -414,6 +415,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setQueueMutationPending(false)
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
+    stableProjectionCountRef.current = 0
     setConnected(false)
     setBootstrapTarget(null)
     setSyncError('')
@@ -468,6 +470,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const projectedItems = projectLiveSnapshotEntries(snapshotResult.snapshot.entries)
         setItems(projectedItems)
         setInputHistory(projectLiveInputHistory(projectedItems))
+        stableProjectionCountRef.current = projectedItems.length
         leafIdRef.current = snapshotResult.snapshot.leafId ?? undefined
       } else {
         setSyncError(snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason))
@@ -497,8 +500,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const generation = ++recoveryGeneration
       try {
         const queueRevision = queueRevisionRef.current
+        const recoveryLeafId = leafIdRef.current
+        const stableProjectionCount = stableProjectionCountRef.current
         const [snapshot, queueState, disclosureOptions] = await Promise.all([
-          liveApi.snapshot(current.liveId, current.runtimeSessionId, leafIdRef.current),
+          liveApi.snapshot(current.liveId, current.runtimeSessionId, recoveryLeafId),
           product.capabilities.includes('queue')
             ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
             : Promise.resolve(null),
@@ -507,8 +512,24 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (generation !== recoveryGeneration) return
         setState(snapshot.state)
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
-        setItems(previous => leafIdRef.current ? mergeLiveProjectionItems(previous, recovered) : recovered)
-        leafIdRef.current = snapshot.leafId ?? leafIdRef.current
+        if (!recoveryLeafId) {
+          setItems(recovered)
+          stableProjectionCountRef.current = recovered.length
+          leafIdRef.current = snapshot.leafId ?? undefined
+        } else if (snapshot.state.isStreaming) {
+          // 重连中的增量快照只补已持久化片段，不推进稳定边界；
+          // 完成态会再次从旧 leaf 对账，从而替换乐观/流式临时节点。
+          setItems(previous => mergeLiveProjectionItems(previous, recovered))
+        } else if (recovered.length > 0) {
+          setItems(previous => [
+            ...previous.slice(0, stableProjectionCount),
+            ...recovered,
+          ])
+          stableProjectionCountRef.current = stableProjectionCount + recovered.length
+          leafIdRef.current = snapshot.leafId ?? recoveryLeafId
+        } else {
+          leafIdRef.current = snapshot.leafId ?? recoveryLeafId
+        }
         setRuntimeDisclosures(disclosureOptions)
         setSyncError('')
         if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
@@ -571,16 +592,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         }
         if (envelope.normalizedEvent?.type === 'completed') {
           void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
-          void liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
-            const projected = projectLiveSnapshotEntries(snapshot.entries)
-            setState(snapshot.state)
-            setItems(projected)
-            setInputHistory(projectLiveInputHistory(projected))
-            leafIdRef.current = snapshot.leafId ?? undefined
-            setSyncError('')
-          }, reason => {
-            setSyncError(reason instanceof Error ? reason.message : String(reason))
-          })
+          void recover()
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
@@ -942,6 +954,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setState(snapshot.state)
       setItems(projected)
       setInputHistory(projectLiveInputHistory(projected))
+      stableProjectionCountRef.current = projected.length
       leafIdRef.current = snapshot.leafId ?? undefined
       if (typeof result.draftText === 'string') setComposerValue(result.draftText)
       composerRef.current?.focus({ preventScroll: true })
