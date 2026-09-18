@@ -667,7 +667,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (envelope.normalizedEvent?.type === 'completed') {
           setActivityStatus('idle')
           void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
-          void recover('settle')
+          if (product.capabilities.includes('recovery')) {
+            void recover('settle')
+          } else {
+            setProjection(previous => ({
+              stable: previous.active.length
+                ? [...previous.stable, ...previous.active]
+                : previous.stable,
+              active: [],
+            }))
+            snapshotBaseActiveCountRef.current = 0
+          }
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
