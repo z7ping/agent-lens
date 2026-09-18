@@ -11,6 +11,8 @@ export type TaskMessageAttachment = ReviewMessageAttachmentDto & {
   previewUrl?: string | undefined
 }
 
+const EMPTY_TASK_MESSAGE_ATTACHMENTS: readonly TaskMessageAttachment[] = []
+
 export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
@@ -30,7 +32,7 @@ export interface TaskMessageProps {
 export function TaskMessage({
   role,
   text,
-  attachments = [],
+  attachments = EMPTY_TASK_MESSAGE_ATTACHMENTS,
   author,
   time,
   meta,
