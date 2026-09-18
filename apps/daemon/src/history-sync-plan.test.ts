@@ -3,9 +3,11 @@ import test from 'node:test'
 import {
   createProgressiveHistoryStages,
   createParserReplayMaintenanceStages,
+  deferredHistoryStages,
   parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
+  startupHistoryStage,
   yieldToForeground,
 } from './history-sync-plan'
 
@@ -23,6 +25,12 @@ test('最新与最近会话不受热窗口限制', () => {
   assert.equal(stages[0]?.window.activeSince, undefined)
   assert.equal(stages[1]?.window.activeSince, undefined)
   assert.equal(stages[2]?.window.activeSince, '2026-08-25T00:00:00.000Z')
+})
+
+test('启动阶段只拿 latest，recent 与 hot-window 留给后台维护', () => {
+  const stages = createProgressiveHistoryStages(Date.parse('2026-09-01T00:00:00.000Z'))
+  assert.equal(startupHistoryStage(stages)?.id, 'latest')
+  assert.deepEqual(deferredHistoryStages(stages).map(stage => stage.id), ['recent', 'hot-window'])
 })
 
 test('容量受限时停止历史扩张，但始终保留严格有界的最新会话发现', () => {
