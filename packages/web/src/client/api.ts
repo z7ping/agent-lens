@@ -1,6 +1,7 @@
 import {
   parseLiveUpdateEvent,
   type AgentDetailResponseDto,
+  type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
   type AgentRescanResponseDto,
   type AgentSummaryResponseDto,
@@ -172,6 +173,11 @@ export class AgentLensApi {
   }
   agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
     return requestJson<AgentDetailResponseDto>(`/api/v1/agents/${encodeURIComponent(sourceId)}`)
+      .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
+  }
+
+  agentEnrichment(sourceId: string): Promise<AgentEnrichmentResponseDto | null> {
+    return requestJson<AgentEnrichmentResponseDto>(`/api/v1/agents/${encodeURIComponent(sourceId)}/enrichment`)
       .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
   }
 
