@@ -20,7 +20,7 @@ test('Live client coalesces 100 concurrent identical GET reads', async t => {
     calls += 1
     await gate
     const path = String(input)
-    if (path === '/api/v1/live') {
+    if (path === '/api/v1/live/products') {
       return jsonResponse({ items: [] })
     }
     if (path.includes('/snapshot')) {
