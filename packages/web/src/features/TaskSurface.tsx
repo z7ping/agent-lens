@@ -146,6 +146,27 @@ function cssPixelValue(element: HTMLElement, property: string): number {
   const value = Number.parseFloat(window.getComputedStyle(element).getPropertyValue(property))
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
+
+const TASK_ROUND_ANCHOR_RATIO = .3
+const TASK_ROUND_ANCHOR_MIN_PX = 72
+const TASK_ROUND_ANCHOR_MAX_PX = 190
+
+function roundAnchorY(viewportRect: DOMRect): number {
+  return viewportRect.top + Math.min(
+    Math.max(viewportRect.height * TASK_ROUND_ANCHOR_RATIO, TASK_ROUND_ANCHOR_MIN_PX),
+    TASK_ROUND_ANCHOR_MAX_PX,
+  )
+}
+
+function sessionRailLeft(root: HTMLElement, fallback: DOMRect): number {
+  const document = root.querySelector<HTMLElement>('.task-session-document')
+  const documentRect = document?.getBoundingClientRect()
+  const contentLeft = document && documentRect && documentRect.width > 0
+    ? documentRect.left + cssPixelValue(document, 'padding-left')
+    : fallback.left
+  return Math.max(16, contentLeft - 34)
+}
+
 function sessionRailFrame(root: HTMLElement, fallback: DOMRect): RailFrameRect {
   const surface = root.getBoundingClientRect()
   const header = Array.from(root.children).find(child => child instanceof HTMLElement && child.classList.contains('task-header'))
@@ -345,15 +366,14 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     }
 
     if (items.length) {
-      const anchorY = viewportRect.top + Math.min(Math.max(viewportRect.height * .3, 72), 190)
-      const active = activeTurnRailItem(items, anchorY)
+      const active = activeTurnRailItem(items, roundAnchorY(viewportRect))
       setActiveRoundId(current => current === active.id ? current : active.id)
     }
 
     const railFrame = sessionMode ? sessionRailFrame(root, viewportRect) : viewportRect
     const boundary = sessionBoundaryPosition(root, railFrame, viewportRect)
     const nextPosition = {
-      left: railFrame.left + 10,
+      left: sessionMode ? sessionRailLeft(root, viewportRect) : railFrame.left + 10,
       top: railFrame.top + railFrame.height / 2,
       maxHeight: Math.max(96, railFrame.height - 24),
       boundaryBottom: boundary.bottom,
@@ -415,8 +435,14 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   }, [scanRounds, scheduleRailViewport])
 
   const jumpToRound = (item: TaskTurnRailItem) => {
+    const viewport = railViewportRef.current ?? scrollViewport(rootRef.current!, item.element)
     const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    item.element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' })
+    const viewportRect = viewport.getBoundingClientRect()
+    const delta = item.element.getBoundingClientRect().top - roundAnchorY(viewportRect)
+    viewport.scrollTo({
+      top: Math.max(0, viewport.scrollTop + delta),
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
     setActiveRoundId(item.id)
   }
 
