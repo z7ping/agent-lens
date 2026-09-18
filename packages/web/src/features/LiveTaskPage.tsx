@@ -203,6 +203,7 @@ function GenericLiveItem({ item, agentLabel }: { item: LiveTaskProjectionItem; a
     return <TaskMessage
       role={item.role}
       text={item.text}
+      attachments={item.attachments}
       author={item.role === 'assistant' ? agentLabel : undefined}
       streaming={item.streaming}
     />
