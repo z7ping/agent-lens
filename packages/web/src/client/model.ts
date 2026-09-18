@@ -22,6 +22,7 @@ import type {
   ManagedAssetRoot,
   LiveUpdateEventDto,
   ReviewDetailFilter,
+  ReviewMessageAttachmentDto,
   ReviewResponseDto,
   ReviewSessionDetailDto,
   ReviewSessionSummaryDto,
@@ -332,6 +333,9 @@ export class AgentLensClientModel {
   constructor(private readonly api = new AgentLensApi()) {}
 
   getSnapshot = (): ClientSnapshot => this.snapshot
+
+  reviewAttachments = (observationId: string): Promise<ReviewMessageAttachmentDto[]> =>
+    this.api.reviewAttachments(observationId)
 
   sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
   sourceRecords = (ids: readonly string[]): Promise<SourceRecordResponseDto[]> => this.api.sourceRecords(ids)
