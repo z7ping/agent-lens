@@ -26,13 +26,11 @@ async function resumablePiRecord(
   storage: StorageService,
   sourceSessions: readonly SourceSession[],
 ): Promise<SourceRecord | null> {
-  const findBySourceSession = storage.repositories.sourceRecords.findBySourceSession
-  if (!findBySourceSession) {
-    throw interactionError('当前存储不支持有界历史定位，无法继续会话')
-  }
-
   for (const sourceSession of sourceSessions) {
-    const item = await findBySourceSession(
+    // Pi's first JSONL "session" row uses the session id as its native event id.
+    // idx_source_records_native(source_id, installation_id, native_id) makes this
+    // an identity lookup independent of the transcript length.
+    const item = await storage.repositories.sourceRecords.findByNativeId(
       'pi',
       sourceSession.installationId,
       sourceSession.nativeSessionId,

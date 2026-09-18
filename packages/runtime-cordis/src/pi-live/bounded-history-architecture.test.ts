@@ -8,10 +8,11 @@ const workerSource = readFileSync(new URL('./worker-entry.mjs', import.meta.url)
 
 test('Pi 历史继续只按原生 Session 身份定位，不扫描 Observation / Evidence 时间线', () => {
   assert.match(historySource, /listSourceSessionsByLogicalSession/)
-  assert.match(historySource, /findBySourceSession/)
+  assert.match(historySource, /findByNativeId/)
   assert.doesNotMatch(historySource, /observations\.query/)
   assert.doesNotMatch(historySource, /repositories\.evidence/)
   assert.doesNotMatch(historySource, /limit:\s*5_000/)
+  assert.match(historySource, /idx_source_records_native/)
 })
 
 test('Pi Live Snapshot 在 Service 与 Worker 双边都保持固定上限', () => {

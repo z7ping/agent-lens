@@ -389,16 +389,6 @@ export interface SourceRecordRepository {
     installationId: AgentInstallationId,
     nativeId: string,
   ): Promise<SourceRecord | null>
-  /**
-   * Bounded lookup by native session identity. Resume/fork paths must use this
-   * with SessionRepository.listSourceSessionsByLogicalSession instead of
-   * scanning Canonical Observation/Evidence history.
-   */
-  findBySourceSession?(
-    sourceId: string,
-    installationId: AgentInstallationId,
-    nativeSessionId: string,
-  ): Promise<SourceRecord | null>
   put(record: SourceRecord): Promise<void>
 }
 
