@@ -27,6 +27,7 @@ import {
   type RuntimeModeDto,
   type RuntimeOwnerDto,
   type SourceRecordResponseDto,
+  type SourceRecordsResponseDto,
   type StorageDiagnosticsResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
@@ -540,6 +541,40 @@ export async function startHttpSurface(
         const limit = parseLimit(url.searchParams, 500) ?? 500
         const detail = await withReadPriority(storage, 'supporting', () => options.hubReview!.get(id, limit))
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
+        return
+      }
+      if (url.pathname === '/api/v1/source-records') {
+        const ids = [...new Set(url.searchParams.getAll('id').map(id => id.trim()).filter(Boolean))].slice(0, 50)
+        if (!ids.length) throw badRequest('at least one source record id is required')
+        const records = await withReadPriority(storage, 'opportunistic', async () => {
+          if (storage.repositories.sourceRecords.getMany) {
+            return storage.repositories.sourceRecords.getMany(ids)
+          }
+          return (await Promise.all(ids.map(id => storage.repositories.sourceRecords.get(id))))
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        })
+        const byId = new Map(records.map(record => [record.id, record]))
+        const items: SourceRecordResponseDto[] = ids.flatMap(id => {
+          const record = byId.get(id)
+          if (!record) return []
+          return [{
+            id: record.id,
+            sourceId: record.sourceId,
+            installationId: record.installationId,
+            ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
+            nativeType: record.nativeType,
+            ...(record.nativeId ? { nativeId: record.nativeId } : {}),
+            ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
+            ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
+            capturedAt: record.capturedAt,
+            locator: record.locator,
+            ...(record.fingerprint ? { fingerprint: record.fingerprint } : {}),
+            payload: jsonValue(record.payload),
+            parserVersion: record.parserVersion,
+          }]
+        })
+        const body: SourceRecordsResponseDto = { items }
+        writeJson(response, 200, body)
         return
       }
       if (url.pathname.startsWith('/api/v1/source-records/')) {
