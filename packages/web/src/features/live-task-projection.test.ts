@@ -8,6 +8,7 @@ import {
   LiveTaskRoundProjector,
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
+  mergeLiveActiveProjectionItems,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
@@ -126,6 +127,24 @@ test('normalized Live events drive shared message reasoning and tool projections
   ])
 })
 
+
+test('streaming recovery supplements missing nodes without overwriting newer live state', () => {
+  const current = [
+    { id: 'user:optimistic', kind: 'message' as const, role: 'user' as const, text: 'same prompt', streaming: false },
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'newer-live', streaming: true },
+  ]
+  const recovered = [
+    { id: 'entry-user-1', kind: 'message' as const, role: 'user' as const, text: 'same prompt', streaming: false },
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'older-snapshot', streaming: true },
+    { id: 'tool:1', kind: 'tool' as const, callId: '1', name: 'read', status: 'success' as const },
+  ]
+
+  const merged = mergeLiveActiveProjectionItems(current, recovered)
+  assert.equal(merged.length, 3)
+  assert.equal(merged[0]?.id, 'entry-user-1')
+  assert.equal(merged[1]?.kind === 'message' ? merged[1].text : '', 'newer-live')
+  assert.equal(merged[2]?.kind, 'tool')
+})
 
 test('streaming reducer updates the newest matching active node', () => {
   const items = [
