@@ -2,6 +2,11 @@ import { reviewMessageAttachmentsFromPayload, type LiveEventDto, type LiveRuntim
 import { agentLensI18n } from '../i18n/runtime'
 import type { TaskRoundModel } from './task-detail-model'
 
+export type LiveTaskProjectionAttachment = ReviewMessageAttachmentDto & {
+  /** Web-local optimistic preview; persisted snapshots continue to use dataUrl. */
+  previewUrl?: string | undefined
+}
+
 export type LiveTaskProjectionItem =
   | {
       id: string
@@ -10,7 +15,7 @@ export type LiveTaskProjectionItem =
       text: string
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
-      attachments?: ReviewMessageAttachmentDto[] | undefined
+      attachments?: LiveTaskProjectionAttachment[] | undefined
       streaming: boolean
       at?: string | undefined
     }
@@ -666,14 +671,16 @@ export function appendOptimisticLiveUserMessage(
   items: readonly LiveTaskProjectionItem[],
   textValue: string,
   id = `user:${Date.now()}`,
+  attachments: readonly LiveTaskProjectionAttachment[] = [],
 ): LiveTaskProjectionItem[] {
   const value = textValue.trim()
-  if (!value) return [...items]
+  if (!value && !attachments.length) return [...items]
   return [...items, {
     id,
     kind: 'message',
     role: 'user',
     text: value,
+    ...(attachments.length ? { attachments: [...attachments] } : {}),
     streaming: false,
   }]
 }
