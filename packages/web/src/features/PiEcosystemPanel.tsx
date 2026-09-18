@@ -142,6 +142,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
     if (!response?.items.length) return
     const targets = response.items.filter(pkg =>
       pkg.resourceTypes.length === 0
+      && Boolean(pkg.version)
       && details[pkg.packageSource]?.version !== pkg.version
     )
     if (!targets.length) return
@@ -160,6 +161,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         nextIndex += 1
         if (!pkg) continue
         try {
+          if (!pkg.version) continue
           const detail = await loadPiEcosystemPackageDetails({
             packageName: pkg.packageName,
             version: pkg.version,
@@ -273,7 +275,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
           : localState === 'not-installed'
             ? t('notInstalled')
             : t('localUnknown')
-        const detail = details[pkg.packageSource]?.version === pkg.version
+        const detail = pkg.version && details[pkg.packageSource]?.version === pkg.version
           ? details[pkg.packageSource]
           : undefined
         const resourceTypes = pkg.resourceTypes.length ? pkg.resourceTypes : detail?.resourceTypes ?? []
@@ -302,7 +304,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
                 ? '—'
                 : formatMonthlyDownloads(pkg.monthlyDownloads, locale)}</strong>
             </span>
-            <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version}</code></span>
+            <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version ?? '—'}</code></span>
             {localPackage?.versions.length
               ? <span className="pi-package-local-version"><small>{t('localVersion')}</small><code>{localPackage.versions.join(' · ')}</code></span>
               : null}
@@ -329,7 +331,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
               </div>
               <div className="pi-package-detail-row">
                 <span>{t('version')}</span>
-                <code>{pkg.version}</code>
+                <code>{pkg.version ?? '—'}</code>
               </div>
               {pkg.publishedAt && <div className="pi-package-detail-row">
                 <span>{t('publishedAt')}</span>

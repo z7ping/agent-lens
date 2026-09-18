@@ -13,7 +13,7 @@ export interface PiEcosystemSearchRequestDto {
 export interface PiEcosystemPackageDto {
   packageSource: string
   packageName: string
-  version: string
+  version?: string | undefined
   description?: string | undefined
   keywords: string[]
   resourceTypes: PiEcosystemResourceTypeDto[]
@@ -31,7 +31,7 @@ export interface PiEcosystemSearchResponseDto {
   sort: PiEcosystemSortDto
   items: PiEcosystemPackageDto[]
   upstreamTotal: number
-  source: 'npm-registry'
+  source: 'pi-dev' | 'npm-registry'
   fetchedAt: string
   stale: boolean
   meta: {

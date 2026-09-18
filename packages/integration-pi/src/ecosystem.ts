@@ -17,41 +17,20 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-const NPM_SEARCH_ENDPOINT = 'https://registry.npmjs.org/-/v1/search'
+const PI_CATALOG_ENDPOINT = 'https://pi.dev/packages'
 const NPM_REGISTRY_ENDPOINT = 'https://registry.npmjs.org/'
-const NPM_DOWNLOADS_ENDPOINT = 'https://api.npmjs.org/downloads/point/last-month'
-const SEARCH_CACHE_TTL_MS = 60_000
+const CATALOG_CACHE_TTL_MS = 10 * 60_000
 const PACKAGE_CACHE_TTL_MS = 5 * 60_000
-const DOWNLOAD_CACHE_TTL_MS = 5 * 60_000
-const REQUEST_TIMEOUT_MS = 8_000
+const CATALOG_TIMEOUT_MS = 15_000
+const PACKAGE_TIMEOUT_MS = 8_000
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 20
-const SEARCH_PAGE_SIZE = 250
-const MAX_CATALOG_CANDIDATES = 1_000
-const TYPE_FILTER_BATCH_SIZE = 20
-const PACKAGE_DETAIL_CONCURRENCY = 6
-const DOWNLOAD_BATCH_SIZE = 128
 const MAX_SEARCH_CACHE_ENTRIES = 64
 const MAX_PACKAGE_CACHE_ENTRIES = 256
-const MAX_DOWNLOAD_CACHE_ENTRIES = 2_048
 
 interface CacheEntry<T> {
   value: T
   expiresAt: number
-}
-
-interface NpmSearchPackage {
-  name?: unknown
-  version?: unknown
-  description?: unknown
-  keywords?: unknown
-  date?: unknown
-  links?: unknown
-}
-
-interface NpmSearchResult {
-  total?: unknown
-  objects?: unknown
 }
 
 interface NpmPackageDetails {
@@ -59,21 +38,13 @@ interface NpmPackageDetails {
   repositoryUrl?: string | undefined
 }
 
-interface NpmPackageCandidate {
-  pkg: NpmSearchPackage
-  packageName: string
-  version: string
-  publishedAt?: string | undefined
+interface PiCatalogParseResult {
+  items: PiEcosystemPackageDto[]
+  total: number
 }
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.flatMap(item => typeof item === 'string' && item.trim() ? [item.trim()] : [])
-    : []
 }
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
@@ -92,38 +63,34 @@ function repositoryUrl(value: unknown): string | undefined {
     .replace(/\.git$/, '')
 }
 
-function piPackageUrl(packageName: string): string {
-  const path = packageName.split('/').map(segment => encodeURIComponent(segment)).join('/')
-  return `https://pi.dev/packages/${path}`
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_match, dec: string) => String.fromCodePoint(Number(dec)))
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
 }
 
-function resourceTypesFromManifest(manifest: Record<string, unknown> | undefined): PiEcosystemResourceTypeDto[] {
-  const pi = objectValue(manifest?.pi)
-  if (!pi) return []
-  const rows: Array<[PiEcosystemResourceTypeDto, string]> = [
-    ['extension', 'extensions'],
-    ['skill', 'skills'],
-    ['prompt', 'prompts'],
-    ['theme', 'themes'],
-  ]
-  return rows.flatMap(([type, field]) => {
-    const value = pi[field]
-    return (Array.isArray(value) && value.length > 0) || (typeof value === 'string' && value.trim())
-      ? [type]
-      : []
-  })
+function stripTags(value: string): string {
+  return value.replace(/<[^>]*>/g, '')
 }
 
-function searchPackage(value: unknown): NpmSearchPackage | undefined {
-  const row = objectValue(value)
-  return objectValue(row?.package) as NpmSearchPackage | undefined
+function attribute(tag: string, name: string): string | undefined {
+  const match = tag.match(new RegExp(`${name}="([^"]*)"`))
+  return match?.[1] === undefined ? undefined : decodeHtmlEntities(match[1])
 }
 
-function packageLinks(value: unknown): Record<string, unknown> | undefined {
-  return objectValue(value)
+function finiteNonNegative(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
-function validResourceType(value: unknown): value is PiEcosystemResourceTypeDto {
+function validResourceType(value: string): value is PiEcosystemResourceTypeDto {
   return value === 'extension' || value === 'skill' || value === 'prompt' || value === 'theme'
 }
 
@@ -147,98 +114,128 @@ function setBounded<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number):
   }
 }
 
-async function mapWithConcurrency<T, R>(
-  values: readonly T[],
-  concurrency: number,
-  mapper: (value: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  if (!values.length) return []
-  const results = new Array<R>(values.length)
-  let nextIndex = 0
-  const worker = async () => {
-    while (nextIndex < values.length) {
-      const index = nextIndex
-      nextIndex += 1
-      results[index] = await mapper(values[index]!, index)
-    }
+function packageVersionFromBody(body: string): string | undefined {
+  const decoded = decodeHtmlEntities(body)
+  const match = decoded.match(/[?&]package-version=([^&#"']+)/)
+  if (!match?.[1]) return undefined
+  try {
+    return decodeURIComponent(match[1]).trim() || undefined
+  } catch {
+    return match[1].trim() || undefined
   }
-  await Promise.all(Array.from(
-    { length: Math.min(Math.max(1, concurrency), values.length) },
-    () => worker(),
-  ))
-  return results
 }
 
-async function responseJson(response: Response, context: string): Promise<unknown> {
-  if (!response.ok) {
-    throw new Error(`${context} failed with HTTP ${response.status}`)
+function absolutePiUrl(path: string | undefined, packageName: string): string {
+  if (!path) return `${PI_CATALOG_ENDPOINT}/${encodeURIComponent(packageName)}`
+  try {
+    return new URL(decodeHtmlEntities(path), 'https://pi.dev').toString()
+  } catch {
+    return `${PI_CATALOG_ENDPOINT}/${encodeURIComponent(packageName)}`
   }
-  return response.json()
 }
 
-function publishedTimestamp(candidate: NpmPackageCandidate): number {
-  const value = candidate.publishedAt ? Date.parse(candidate.publishedAt) : Number.NaN
-  return Number.isFinite(value) ? value : 0
+export function parsePiCatalogHtml(html: string): PiCatalogParseResult {
+  const cards = [...html.matchAll(/<article[^>]*data-package-card="true"[^>]*>/g)]
+  const items: PiEcosystemPackageDto[] = []
+
+  for (let index = 0; index < cards.length; index += 1) {
+    const card = cards[index]!
+    const tag = card[0]
+    const bodyStart = (card.index ?? 0) + tag.length
+    const bodyEnd = index + 1 < cards.length ? (cards[index + 1]!.index ?? html.length) : html.length
+    const body = html.slice(bodyStart, bodyEnd)
+
+    const packageName = attribute(tag, 'data-package-name')
+    if (!packageName) continue
+
+    const resourceTypes = (attribute(tag, 'data-package-types') ?? '')
+      .split(/\s+/)
+      .filter(validResourceType)
+    const monthlyDownloads = finiteNonNegative(attribute(tag, 'data-package-downloads'))
+    const publishedAtMs = finiteNonNegative(attribute(tag, 'data-package-date'))
+    const descriptionMatch = body.match(/<p class="packages-desc">([\s\S]*?)<\/p>/)
+    const npmMatch = body.match(/href="(https:\/\/www\.npmjs\.com\/package\/[^"]+)"/)
+    const repositoryMatch = body.match(/href="(https:\/\/github\.com\/[^"]+)"/)
+    const pageMatch = body.match(/class="packages-name"><a href="([^"]+)"/)
+    const version = packageVersionFromBody(body)
+    const description = descriptionMatch
+      ? decodeHtmlEntities(stripTags(descriptionMatch[1] ?? '')).trim()
+      : ''
+
+    items.push({
+      packageSource: `npm:${packageName}`,
+      packageName,
+      ...(version ? { version } : {}),
+      ...(description ? { description } : {}),
+      keywords: [],
+      resourceTypes,
+      ...(monthlyDownloads !== undefined ? { monthlyDownloads } : {}),
+      npmUrl: npmMatch?.[1]
+        ? decodeHtmlEntities(npmMatch[1])
+        : `https://www.npmjs.com/package/${packageName}`,
+      officialUrl: absolutePiUrl(pageMatch?.[1], packageName),
+      ...(repositoryMatch?.[1] ? { repositoryUrl: decodeHtmlEntities(repositoryMatch[1]) } : {}),
+      installCommand: `pi install npm:${packageName}`,
+      ...(publishedAtMs !== undefined && publishedAtMs > 0
+        ? { publishedAt: new Date(publishedAtMs).toISOString() }
+        : {}),
+    })
+  }
+
+  const totalMatch = html.match(/class="packages-count">\s*\d+\s*-\s*\d+\s*\/\s*(\d+)/)
+  const total = totalMatch?.[1] ? Number(totalMatch[1]) : items.length
+
+  return {
+    items,
+    total: Number.isSafeInteger(total) && total >= 0 ? total : items.length,
+  }
 }
 
-function sortCandidates(
-  candidates: NpmPackageCandidate[],
-  downloads: Map<string, number>,
+function catalogUrl(
+  query: string,
+  type: PiEcosystemResourceTypeDto | undefined,
   sort: PiEcosystemSortDto,
-): NpmPackageCandidate[] {
-  return [...candidates].sort((left, right) => {
-    const leftDownloads = downloads.get(left.packageName) ?? -1
-    const rightDownloads = downloads.get(right.packageName) ?? -1
-    if (sort === 'downloads') {
-      return rightDownloads - leftDownloads
-        || publishedTimestamp(right) - publishedTimestamp(left)
-        || left.packageName.localeCompare(right.packageName)
-    }
-    return publishedTimestamp(right) - publishedTimestamp(left)
-      || rightDownloads - leftDownloads
-      || left.packageName.localeCompare(right.packageName)
+): string {
+  const url = new URL(PI_CATALOG_ENDPOINT)
+  if (query) url.searchParams.set('name', query)
+  if (type) url.searchParams.set('type', type)
+  if (sort === 'recent') url.searchParams.set('sort', 'recent')
+  return url.toString()
+}
+
+function resourceTypesFromManifest(manifest: Record<string, unknown> | undefined): PiEcosystemResourceTypeDto[] {
+  const pi = objectValue(manifest?.pi)
+  if (!pi) return []
+  const rows: Array<[PiEcosystemResourceTypeDto, string]> = [
+    ['extension', 'extensions'],
+    ['skill', 'skills'],
+    ['prompt', 'prompts'],
+    ['theme', 'themes'],
+  ]
+  return rows.flatMap(([type, field]) => {
+    const value = pi[field]
+    return (Array.isArray(value) && value.length > 0) || (typeof value === 'string' && value.trim())
+      ? [type]
+      : []
   })
 }
 
-function packageDto(
-  candidate: NpmPackageCandidate,
-  monthlyDownloads: number | undefined,
-  details?: NpmPackageDetails,
-): PiEcosystemPackageDto {
-  const links = packageLinks(candidate.pkg.links)
-  const repository = details?.repositoryUrl ?? stringValue(links?.repository)
-  const description = stringValue(candidate.pkg.description)
-  return {
-    packageSource: `npm:${candidate.packageName}`,
-    packageName: candidate.packageName,
-    version: candidate.version,
-    ...(description ? { description } : {}),
-    keywords: stringArray(candidate.pkg.keywords),
-    resourceTypes: details?.resourceTypes ?? [],
-    ...(monthlyDownloads !== undefined ? { monthlyDownloads } : {}),
-    npmUrl: stringValue(links?.npm) ?? `https://www.npmjs.com/package/${candidate.packageName}`,
-    officialUrl: piPackageUrl(candidate.packageName),
-    ...(repository ? { repositoryUrl: repositoryUrl(repository) ?? repository } : {}),
-    installCommand: `pi install npm:${candidate.packageName}`,
-    ...(candidate.publishedAt ? { publishedAt: candidate.publishedAt } : {}),
-  }
+async function responseText(response: Response, context: string): Promise<string> {
+  if (!response.ok) throw new Error(`${context} failed with HTTP ${response.status}`)
+  return response.text()
 }
 
-function downloadCount(value: unknown): number | undefined {
-  const row = objectValue(value)
-  const downloads = row?.downloads
-  return typeof downloads === 'number' && Number.isFinite(downloads) && downloads >= 0
-    ? downloads
-    : undefined
+async function responseJson(response: Response, context: string): Promise<unknown> {
+  if (!response.ok) throw new Error(`${context} failed with HTTP ${response.status}`)
+  return response.json()
 }
 
-export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
+export class PiDevEcosystemProvider implements PiEcosystemQueryService {
   private readonly searchCache = new Map<string, CacheEntry<PiEcosystemSearchResponseDto>>()
   private readonly lastGoodSearch = new Map<string, PiEcosystemSearchResponseDto>()
   private readonly searchInFlight = new Map<string, Promise<PiEcosystemSearchResponseDto>>()
   private readonly packageCache = new Map<string, CacheEntry<NpmPackageDetails>>()
   private readonly packageInFlight = new Map<string, Promise<NpmPackageDetails>>()
-  private readonly downloadCache = new Map<string, CacheEntry<number | undefined>>()
 
   constructor(
     private readonly fetcher: typeof fetch = fetch,
@@ -247,7 +244,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
 
   async search(request: PiEcosystemSearchRequestDto = {}): Promise<PiEcosystemSearchResponseDto> {
     const query = request.query?.trim() ?? ''
-    const type = validResourceType(request.type) ? request.type : undefined
+    const type = request.type && validResourceType(request.type) ? request.type : undefined
     const sort = validSort(request.sort) ? request.sort : 'downloads'
     const limit = boundedLimit(request.limit)
     const cacheKey = JSON.stringify({ query, type: type ?? '', sort, limit })
@@ -258,23 +255,24 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     if (existing) return existing
 
     let pending!: Promise<PiEcosystemSearchResponseDto>
-    pending = (async () => {
-      try {
-        const value = await this.searchFresh(query, type, sort, limit)
+    pending = this.searchFresh(query, type, sort, limit)
+      .then(value => {
         setBounded(this.searchCache, cacheKey, {
           value,
-          expiresAt: this.now() + SEARCH_CACHE_TTL_MS,
+          expiresAt: this.now() + CATALOG_CACHE_TTL_MS,
         }, MAX_SEARCH_CACHE_ENTRIES)
         setBounded(this.lastGoodSearch, cacheKey, value, MAX_SEARCH_CACHE_ENTRIES)
         return value
-      } catch (error) {
+      })
+      .catch(error => {
         const lastGood = this.lastGoodSearch.get(cacheKey)
         if (lastGood) return { ...lastGood, stale: true }
         throw error
-      }
-    })().finally(() => {
-      if (this.searchInFlight.get(cacheKey) === pending) this.searchInFlight.delete(cacheKey)
-    })
+      })
+      .finally(() => {
+        if (this.searchInFlight.get(cacheKey) === pending) this.searchInFlight.delete(cacheKey)
+      })
+
     this.searchInFlight.set(cacheKey, pending)
     return pending
   }
@@ -299,145 +297,34 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     sort: PiEcosystemSortDto,
     limit: number,
   ): Promise<PiEcosystemSearchResponseDto> {
-    const { candidates, upstreamTotal } = await this.searchCandidates(query)
-    const downloads = await this.monthlyDownloads(candidates.map(candidate => candidate.packageName))
-    const ranked = sortCandidates(candidates, downloads, sort)
+    const url = catalogUrl(query, type, sort)
+    let html: string
+    try {
+      html = await responseText(await this.fetcher(url, {
+        headers: { accept: 'text/html' },
+        signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
+      }), 'Pi Package Catalog')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Pi Package Catalog unavailable: ${message}`)
+    }
 
-    let selected: Array<{ candidate: NpmPackageCandidate; details?: NpmPackageDetails }> = []
-    if (type) {
-      for (let offset = 0; offset < ranked.length && selected.length < limit; offset += TYPE_FILTER_BATCH_SIZE) {
-        const batch = ranked.slice(offset, offset + TYPE_FILTER_BATCH_SIZE)
-        const detailed = await mapWithConcurrency(
-          batch,
-          PACKAGE_DETAIL_CONCURRENCY,
-          async candidate => ({
-            candidate,
-            details: await this.packageDetailsInternal(candidate.packageName, candidate.version)
-              .catch((): NpmPackageDetails => ({ resourceTypes: [] })),
-          }),
-        )
-        selected.push(...detailed.filter(item => item.details.resourceTypes.includes(type)))
-      }
-      selected = selected.slice(0, limit)
-    } else {
-      selected = ranked.slice(0, limit).map(candidate => ({ candidate }))
+    const parsed = parsePiCatalogHtml(html)
+    if (!parsed.items.length && !query && !type) {
+      throw new Error('Pi Package Catalog returned no packages')
     }
 
     return {
       query,
       ...(type ? { type } : {}),
       sort,
-      items: selected.map(({ candidate, details }) =>
-        packageDto(candidate, downloads.get(candidate.packageName), details)),
-      upstreamTotal,
-      source: 'npm-registry',
+      items: parsed.items.slice(0, limit),
+      upstreamTotal: parsed.total,
+      source: 'pi-dev',
       fetchedAt: new Date(this.now()).toISOString(),
       stale: false,
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
     }
-  }
-
-  private async searchCandidates(query: string): Promise<{
-    candidates: NpmPackageCandidate[]
-    upstreamTotal: number
-  }> {
-    const candidates = new Map<string, NpmPackageCandidate>()
-    let upstreamTotal = 0
-
-    for (let from = 0; from < MAX_CATALOG_CANDIDATES; from += SEARCH_PAGE_SIZE) {
-      const url = new URL(NPM_SEARCH_ENDPOINT)
-      url.searchParams.set('text', ['keywords:pi-package', query].filter(Boolean).join(' '))
-      url.searchParams.set('size', String(Math.min(SEARCH_PAGE_SIZE, MAX_CATALOG_CANDIDATES - from)))
-      url.searchParams.set('from', String(from))
-
-      const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      const raw = await responseJson(await this.fetcher(url, {
-        headers: { accept: 'application/json' },
-        signal,
-      }), 'npm package search')
-      const result = objectValue(raw) as NpmSearchResult | undefined
-      const objects = Array.isArray(result?.objects) ? result.objects : []
-      if (from === 0) {
-        upstreamTotal = typeof result?.total === 'number' && Number.isFinite(result.total)
-          ? result.total
-          : objects.length
-      }
-
-      for (const value of objects) {
-        const pkg = searchPackage(value)
-        const packageName = stringValue(pkg?.name)
-        const version = stringValue(pkg?.version)
-        if (!packageName || !version || candidates.has(packageName)) continue
-        candidates.set(packageName, {
-          pkg,
-          packageName,
-          version,
-          ...(stringValue(pkg?.date) ? { publishedAt: stringValue(pkg?.date) } : {}),
-        })
-      }
-
-      if (!objects.length || from + objects.length >= upstreamTotal) break
-    }
-
-    return {
-      candidates: [...candidates.values()],
-      upstreamTotal,
-    }
-  }
-
-  private async monthlyDownloads(packageNames: string[]): Promise<Map<string, number>> {
-    const result = new Map<string, number>()
-    const missing: string[] = []
-    for (const packageName of packageNames) {
-      const cached = this.downloadCache.get(packageName)
-      if (cached && cached.expiresAt > this.now()) {
-        if (cached.value !== undefined) result.set(packageName, cached.value)
-      } else {
-        missing.push(packageName)
-      }
-    }
-
-    const batches: string[][] = []
-    for (let offset = 0; offset < missing.length; offset += DOWNLOAD_BATCH_SIZE) {
-      batches.push(missing.slice(offset, offset + DOWNLOAD_BATCH_SIZE))
-    }
-
-    await Promise.all(batches.map(async batch => {
-      const encodedPackages = batch.map(packageName => encodeURIComponent(packageName)).join(',')
-      try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-        const raw = await responseJson(await this.fetcher(`${NPM_DOWNLOADS_ENDPOINT}/${encodedPackages}`, {
-          headers: { accept: 'application/json' },
-          signal,
-        }), 'npm download counts')
-        const root = objectValue(raw)
-
-        if (batch.length === 1) {
-          const packageName = batch[0]!
-          const count = downloadCount(root)
-          setBounded(this.downloadCache, packageName, {
-            value: count,
-            expiresAt: this.now() + DOWNLOAD_CACHE_TTL_MS,
-          }, MAX_DOWNLOAD_CACHE_ENTRIES)
-          if (count !== undefined) result.set(packageName, count)
-          return
-        }
-
-        for (const packageName of batch) {
-          const count = downloadCount(root?.[packageName])
-          setBounded(this.downloadCache, packageName, {
-            value: count,
-            expiresAt: this.now() + DOWNLOAD_CACHE_TTL_MS,
-          }, MAX_DOWNLOAD_CACHE_ENTRIES)
-          if (count !== undefined) result.set(packageName, count)
-        }
-      } catch {
-        // Download counts are useful ranking metadata, but their temporary absence must not make
-        // the Pi catalog unavailable. Unknown counts sort after known counts.
-      }
-    }))
-
-    return result
   }
 
   private async packageDetailsInternal(packageName: string, version: string): Promise<NpmPackageDetails> {
@@ -450,12 +337,11 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
 
     let pending!: Promise<NpmPackageDetails>
     pending = (async () => {
-      const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       const raw = await responseJson(await this.fetcher(
         `${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`,
         {
           headers: { accept: 'application/json' },
-          signal,
+          signal: AbortSignal.timeout(PACKAGE_TIMEOUT_MS),
         },
       ), `npm package metadata ${packageName}@${version}`)
       const manifest = objectValue(raw)
@@ -472,14 +358,18 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     })().finally(() => {
       if (this.packageInFlight.get(cacheKey) === pending) this.packageInFlight.delete(cacheKey)
     })
+
     this.packageInFlight.set(cacheKey, pending)
     return pending
   }
 }
 
+// Compatibility export for tests/extensions that referenced the previous implementation name.
+export { PiDevEcosystemProvider as NpmPiEcosystemProvider }
+
 const applyPiEcosystem = Object.assign(
   async (ctx: AgentLensContext) => {
-    const service = new NpmPiEcosystemProvider()
+    const service = new PiDevEcosystemProvider()
     return ctx.provide('piEcosystem', service)
   },
   { inject: [] as string[] },
@@ -488,19 +378,15 @@ const applyPiEcosystem = Object.assign(
 export const piEcosystemPlugin = applyPiEcosystem
 
 export const piEcosystemInternals = {
+  parsePiCatalogHtml,
+  catalogUrl,
   resourceTypesFromManifest,
   repositoryUrl,
-  piPackageUrl,
-  boundedLimit,
   validSort,
+  boundedLimit,
   setBounded,
-  mapWithConcurrency,
-  sortCandidates,
-  downloadCount,
-  PACKAGE_DETAIL_CONCURRENCY,
-  TYPE_FILTER_BATCH_SIZE,
-  DOWNLOAD_BATCH_SIZE,
+  CATALOG_CACHE_TTL_MS,
+  CATALOG_TIMEOUT_MS,
   MAX_SEARCH_CACHE_ENTRIES,
   MAX_PACKAGE_CACHE_ENTRIES,
-  MAX_DOWNLOAD_CACHE_ENTRIES,
 }
