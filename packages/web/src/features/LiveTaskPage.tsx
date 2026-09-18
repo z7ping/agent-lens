@@ -20,10 +20,16 @@ import {
   type LiveMarkdownComposerHandle,
 } from '../components/LiveMarkdownComposer'
 import { MarkdownContent } from '../components/MarkdownContent'
+import {
+  liveComposerDraftKey,
+  readLiveComposerDraft,
+} from '../components/live-composer-session-state'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import {
+  appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
+  projectLiveInputHistory,
   projectLiveSnapshotEntries,
   reduceLiveTaskEvent,
   type LiveTaskProjectionItem,
@@ -213,6 +219,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const location = useLocation()
   const navigate = useNavigate()
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
+  const composerDraftKey = useMemo(
+    () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
+    [current?.liveId, current?.runtimeSessionId],
+  )
   const [product, setProduct] = useState<LiveProductDto | null>(null)
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
@@ -230,6 +240,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [error, setError] = useState('')
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [composerAttachmentPending, setComposerAttachmentPending] = useState(false)
+  const [inputHistory, setInputHistory] = useState<string[]>([])
   const [draft, setDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
@@ -260,6 +271,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     leafIdRef.current = undefined
     setConnected(false)
     setError('')
+    setInputHistory([])
+    setComposerValue(current ? readLiveComposerDraft(composerDraftKey) : '')
 
     if (!current) {
       setError(t('live.invalidRuntime'))
@@ -286,8 +299,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : Promise.resolve(null),
       ])
       if (cancelled) return
+      const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
       setState(runtime)
-      setItems(projectLiveSnapshotEntries(snapshot.entries))
+      setItems(projectedItems)
+      setInputHistory(projectLiveInputHistory(projectedItems))
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
@@ -297,7 +312,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     })
 
     return () => { cancelled = true }
-  }, [current?.liveId, current?.runtimeSessionId, t])
+  }, [composerDraftKey, current?.liveId, current?.runtimeSessionId, setComposerValue, t])
 
   useEffect(() => {
     if (!current || !product?.capabilities.includes('stream')) return
@@ -410,6 +425,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     clearComposer()
     try {
       await liveApi.send(current.liveId, current.runtimeSessionId, message, behavior)
+      if (optimisticText) setInputHistory(previous => appendLiveInputHistory(previous, optimisticText))
       if (behavior === 'normal') {
         setState(previous => previous ? { ...previous, isStreaming: true } : previous)
       }
@@ -639,6 +655,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             <LiveMarkdownComposer
               ref={composerRef}
               draft={draft}
+              draftKey={composerDraftKey || undefined}
+              inputHistory={inputHistory}
               onDraftPresenceChange={setComposerHasContent}
               canSubmit={canSubmit}
               onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
