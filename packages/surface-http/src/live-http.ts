@@ -410,6 +410,17 @@ function requireCapability(adapter: LiveAdapter, capability: LiveCapabilityName)
   }
 }
 
+function liveMetadata(adapter: LiveAdapter): JsonValue {
+  return jsonValue({
+    liveId: adapter.manifest.liveId,
+    productId: adapter.manifest.productId,
+    displayName: adapter.manifest.displayName,
+    capabilities: [...adapter.capabilities],
+    inputCapabilities: adapter.inputCapabilities,
+    startCapabilities: startCapabilities(adapter),
+  })
+}
+
 function liveDescriptor(adapter: LiveAdapter, availability: unknown, runtimes: unknown): JsonValue {
   return jsonValue({
     liveId: adapter.manifest.liveId,
@@ -562,7 +573,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const adapterMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)(?:\/(availability|runtimes))?$/)
+    const adapterMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)(?:\/(metadata|availability|runtimes))?$/)
     if (adapterMatch) {
       const liveId = decodeURIComponent(adapterMatch[1]!)
       const action = adapterMatch[2]
@@ -570,6 +581,10 @@ export async function handleLiveRequest(
 
       if (!action && request.method === 'GET') {
         writeJson(response, 200, await describeAdapter(adapter))
+        return true
+      }
+      if (action === 'metadata' && request.method === 'GET') {
+        writeJson(response, 200, liveMetadata(adapter))
         return true
       }
       if (action === 'availability' && request.method === 'GET') {
