@@ -158,6 +158,7 @@ export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' 
 export type LiveEventDto =
   | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
   | { type: 'title.update'; title: string }
+  | { type: 'control.changed'; control: 'model' | 'thinking' }
   | {
       type: 'message.start' | 'message.end'
       role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
@@ -448,6 +449,11 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
   if (type === 'title.update') {
     const title = eventText(event.title)?.trim()
     return title ? { type, title: title.slice(0, 240) } : null
+  }
+  if (type === 'control.changed') {
+    return event.control === 'model' || event.control === 'thinking'
+      ? { type, control: event.control }
+      : null
   }
   if (type === 'message.start' || type === 'message.end') {
     const role = event.role
