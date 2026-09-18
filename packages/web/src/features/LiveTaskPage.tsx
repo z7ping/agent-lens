@@ -658,6 +658,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }))
         }
         if (envelope.normalizedEvent?.type === 'status') {
+          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
+            setError(envelope.normalizedEvent.message)
+          }
           if (envelope.normalizedEvent.status === 'running'
             || envelope.normalizedEvent.status === 'compacting'
             || envelope.normalizedEvent.status === 'idle') {
@@ -693,6 +696,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
+          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
+            setError(envelope.normalizedEvent.message)
+          }
           setActivityStatus('idle')
           void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
           if (product.capabilities.includes('recovery')) {
