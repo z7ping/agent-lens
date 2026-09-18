@@ -497,11 +497,18 @@ export class SessionRelationshipProjection {
       confidence: item.confidence,
     }))
 
-    const timeline = await this.timeline.query({ logicalSessionId, limit: 1000 })
-    const sourceSessionIds = [...new Set(timeline.items.map(item => item.sourceSessionId))]
-    for (const id of sourceSessionIds) {
-      const source = await this.storage.repositories.sessions.getSourceSession(id)
-      if (!source?.nativeParentSessionId) continue
+    const sessionRepository = this.storage.repositories.sessions
+    const sourceSessions = sessionRepository.listSourceSessionsByLogicalSession
+      ? await sessionRepository.listSourceSessionsByLogicalSession(logicalSessionId)
+      : await (async () => {
+          const timeline = await this.timeline.query({ logicalSessionId, limit: 1000 })
+          const sourceSessionIds = [...new Set(timeline.items.map(item => item.sourceSessionId))]
+          return (await Promise.all(sourceSessionIds.map(id => sessionRepository.getSourceSession(id))))
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        })()
+
+    for (const source of sourceSessions) {
+      if (!source.nativeParentSessionId) continue
       items.push({
         id: `native-parent:${source.id}`,
         sourceId: source.sourceId,
