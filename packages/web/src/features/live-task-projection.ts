@@ -419,8 +419,12 @@ function buildRoundModel(
   background = false,
 ): TaskRoundModel {
   const timing = roundTiming(items)
-  const previewSource = items.find(item => item.kind === 'message' && item.role === 'user')
-    ?? items.find(item => item.kind === 'message')
+  const previewSource = items.find(
+    (item): item is Extract<LiveTaskProjectionItem, { kind: 'message' }> =>
+      item.kind === 'message' && item.role === 'user',
+  ) ?? items.find(
+    (item): item is Extract<LiveTaskProjectionItem, { kind: 'message' }> => item.kind === 'message',
+  )
   const toolCount = items.filter(item => item.kind === 'tool').length
   const errorCount = items.filter(item => item.kind === 'tool' && item.status === 'error').length
   const running = items.some(item =>
