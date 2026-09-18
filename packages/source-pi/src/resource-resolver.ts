@@ -345,6 +345,7 @@ async function resolvedPromptsAsAssets(input: {
         ? 'unknown'
         : selected.has(pathKey(resource.path))
 
+    const packageIdentity = resourcePackageIdentity(resource)
     assets.push({
       definition: {
         type: 'prompt',
@@ -355,9 +356,7 @@ async function resolvedPromptsAsAssets(input: {
         ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
-        ...(resourcePackageIdentity(resource)
-          ? { packageIdentity: resourcePackageIdentity(resource) }
-          : {}),
+        ...(packageIdentity ? { packageIdentity } : {}),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -416,6 +415,7 @@ async function resolvedThemesAsAssets(input: {
       ? false
       : 'unknown'
 
+    const packageIdentity = resourcePackageIdentity(resource)
     assets.push({
       definition: {
         type: 'theme',
@@ -426,9 +426,7 @@ async function resolvedThemesAsAssets(input: {
         ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
-        ...(resourcePackageIdentity(resource)
-          ? { packageIdentity: resourcePackageIdentity(resource) }
-          : {}),
+        ...(packageIdentity ? { packageIdentity } : {}),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
