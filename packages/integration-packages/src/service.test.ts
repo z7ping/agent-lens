@@ -203,6 +203,35 @@ test('legacy physicalization isolates one broken package and retries only until 
   }
 })
 
+test('legacy physicalization repairs a completed marker when the physical package disappeared', async () => {
+  const f = await fixture()
+  try {
+    const service = new IntegrationPackageService({
+      bundleDir: f.bundleDir,
+      installRoot: f.installRoot,
+    })
+    await service.initialize()
+
+    const first = await service.ensureLegacyPhysicalization(['pi'])
+    assert.equal(first.migrated, true)
+    assert.equal(service.state('pi').installed, true)
+
+    await rm(join(f.installRoot, 'pi'), { recursive: true, force: true })
+    await service.reconcile()
+    assert.equal(service.state('pi').installed, false)
+
+    const recovered = await service.ensureLegacyPhysicalization(['pi'])
+    assert.equal(recovered.migrated, true)
+    assert.deepEqual(recovered.operations.map(item => [item.integrationId, item.status]), [
+      ['pi', 'completed'],
+    ])
+    assert.equal(service.state('pi').installed, true)
+    assert.equal(service.state('pi').integrity, 'verified')
+  } finally {
+    await f.cleanup()
+  }
+})
+
 test('legacy DSH selection is physically installed through the same Integration lifecycle', async () => {
   const f = await fixture()
   try {

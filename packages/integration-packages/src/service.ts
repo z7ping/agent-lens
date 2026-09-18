@@ -360,7 +360,13 @@ export class IntegrationPackageService {
       // requested Integration is reconciled independently below.
     }
 
-    const pendingIds = ids.filter(id => !completedIds.has(id))
+    const pendingIds = ids.filter(id => {
+      if (!completedIds.has(id)) return true
+      const state = this.states.get(id) ?? this.emptyState(id)
+      return !state.installed
+        || state.integrity !== 'verified'
+        || state.compatibility !== 'compatible'
+    })
     if (!pendingIds.length) return { migrated: false, operations: [] }
 
     const operations: IntegrationPackageOperation[] = []

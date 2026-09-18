@@ -126,7 +126,15 @@ let foregroundGate: ForegroundActivityGate | null = null
 const projectDirectoryPicker = createProjectDirectoryPicker()
 let capturePolicyStartup = resolveCapturePolicyPluginState()
 let persistedCapturePolicy = readCapturePolicyConfigurationSync(capturePolicyStartup.configurationPath)
-const legacyInstallation = existsSync(dbPath) || persistedCapturePolicy !== null
+const devReinstallIntegrationIds = new Set(
+  String(process.env.AGENT_LENS_DEV_REINSTALL_INTEGRATIONS ?? '')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean),
+)
+const legacyInstallation = existsSync(dbPath)
+  || persistedCapturePolicy !== null
+  || devReinstallIntegrationIds.size > 0
 const explicitSourceOverride = process.env.AGENT_LENS_ENABLED_SOURCES !== undefined
 
 // Physical Integration installs are opt-in for a genuinely fresh local
@@ -201,12 +209,20 @@ if (capabilities.localCapture) {
   })
   try {
     await candidate.initialize()
+    const catalog = candidate.catalog()
     const legacySelected = legacyInstallation || explicitSourceOverride
-      ? candidate.catalog()
+      ? catalog
           .filter(item => enabledSourceIds.has(item.productId))
           .map(item => item.integrationId)
       : []
-    const legacyPhysicalization = await candidate.ensureLegacyPhysicalization(legacySelected)
+    const devReinstallSelected = catalog
+      .filter(item => devReinstallIntegrationIds.has(item.integrationId))
+      .map(item => item.integrationId)
+    const physicalizationSelected = [...new Set([
+      ...legacySelected,
+      ...devReinstallSelected,
+    ])]
+    const legacyPhysicalization = await candidate.ensureLegacyPhysicalization(physicalizationSelected)
     for (const operation of legacyPhysicalization.operations) {
       if (operation.status === 'completed') continue
       integrationPackageLoadFailures.push({

@@ -178,15 +178,45 @@ async function cachedIntegrationFingerprint(bundleDir) {
   }
 }
 
+export async function devInstalledIntegrationIds(integrationsPath) {
+  let entries
+  try {
+    entries = await readdir(integrationsPath, { withFileTypes: true })
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return []
+    throw error
+  }
+
+  const ids = new Set()
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+    try {
+      const pointer = JSON.parse(await readFile(
+        join(integrationsPath, entry.name, 'current.json'),
+        'utf8',
+      ))
+      const integrationId = typeof pointer?.integrationId === 'string'
+        ? pointer.integrationId.trim().toLowerCase()
+        : ''
+      if (integrationId && integrationId === entry.name.toLowerCase()) ids.add(integrationId)
+    } catch {
+      // Corrupt/incomplete installs are not preserved as user install intent.
+      // Package lifecycle recovery handles those independently.
+    }
+  }
+  return [...ids].sort()
+}
+
 export async function prepareDevIntegrationBundles(repoRoot, paths) {
   const fingerprint = await integrationBundleDevFingerprint(repoRoot)
   const cached = await cachedIntegrationFingerprint(paths.integrationBundleDir)
   if (cached === fingerprint) {
-    return { rebuilt: false, fingerprint }
+    return { rebuilt: false, fingerprint, reinstallIntegrationIds: [] }
   }
 
-  // 只有 bundle 输入发生变化时才清理同版本的开发安装，确保 daemon
-  // 不会继续加载上一次源码对应的物理 Integration。
+  // Bundle 输入变化时必须刷新同版本开发实体，但“物理安装了哪些
+  // Integration”本身属于用户意图，不能随构建缓存一起丢失。
+  const reinstallIntegrationIds = await devInstalledIntegrationIds(paths.integrationsPath)
   await rm(paths.integrationsPath, { recursive: true, force: true })
   await buildIntegrationPackages({
     root: repoRoot,
@@ -198,7 +228,7 @@ export async function prepareDevIntegrationBundles(repoRoot, paths) {
     `${fingerprint}\n`,
     'utf8',
   )
-  return { rebuilt: true, fingerprint }
+  return { rebuilt: true, fingerprint, reinstallIntegrationIds }
 }
 
 export function isPortAvailable(port, host = '127.0.0.1') {
@@ -281,7 +311,7 @@ export async function waitForRuntimeReady(
 
 export function buildDevEnvironment(baseEnv, repoRoot, port) {
   const paths = devRuntimePaths(repoRoot, port)
-  return {
+  const env = {
     ...baseEnv,
     AGENT_LENS_PORT: String(port),
     AGENT_LENS_DEV_API_PORT: String(port),
@@ -292,6 +322,10 @@ export function buildDevEnvironment(baseEnv, repoRoot, port) {
     AGENT_LENS_DAEMON_MODE: 'foreground',
     AGENT_LENS_RUNTIME_OWNER: 'cli',
   }
+  // Internal one-shot handoff is produced only by this startup after a real
+  // bundle rebuild. Never inherit a stale value from the parent shell.
+  delete env.AGENT_LENS_DEV_REINSTALL_INTEGRATIONS
+  return env
 }
 
 export function npmInvocation(env = process.env, workspace = '@agent-lens/daemon') {
@@ -371,10 +405,16 @@ export async function runDevRuntime() {
   const bundleStartedAt = Date.now()
   devLog('正在检查官方 Integration bundle cache')
   const bundle = await prepareDevIntegrationBundles(repoRoot, paths)
+  if (bundle.reinstallIntegrationIds.length) {
+    devEnv.AGENT_LENS_DEV_REINSTALL_INTEGRATIONS = bundle.reinstallIntegrationIds.join(',')
+  }
   devLog(
     bundle.rebuilt ? '官方 Integration bundle 已重建' : '官方 Integration bundle cache 命中，复用现有产物',
     `耗时 ${Date.now() - bundleStartedAt}ms`,
   )
+  if (bundle.reinstallIntegrationIds.length) {
+    devLog('将恢复开发态已接入 Integration', bundle.reinstallIntegrationIds.join(', '))
+  }
 
   if (port === startPort) {
     console.info(`[AgentLens] 开发运行时端口：${port}`)
