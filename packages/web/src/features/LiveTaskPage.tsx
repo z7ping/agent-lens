@@ -141,7 +141,7 @@ function mergeRuntimeState(
 }
 
 function runtimeSessionTitle(runtime: LiveRuntimeStateDto): string {
-  return workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
+  return runtime.title?.trim() || workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
 }
 
 function contributionText(
@@ -538,6 +538,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         ])
         if (generation !== recoveryGeneration) return
         setState(snapshot.state)
+        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         if (!recoveryLeafId) {
           setItems(recovered)
@@ -1041,7 +1042,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
   const agentLabel = product?.displayName ?? current.liveId
   const workspace = workspaceDisplayName(state?.workspacePath)
-  const title = workspace || t('center.history.genericAgentTask', { agent: agentLabel })
+  const title = state?.title?.trim() || workspace || t('center.history.genericAgentTask', { agent: agentLabel })
   const runtimeStatus = statusLabel(state, t)
   const rounds = useMemo(() => projectLiveTaskRounds(items), [items])
   const streamSupported = product?.capabilities.includes('stream') === true
