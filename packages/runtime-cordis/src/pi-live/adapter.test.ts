@@ -266,6 +266,35 @@ test('Pi Live Adapter exposes queue control and restores queued messages on inte
 })
 
 
+test('Pi Live Adapter exposes private message semantics only through controlled contribution methods', async () => {
+  const calls: Array<{ actionId: string; targetEntryId: string }> = []
+  const service = {
+    messageActions: async () => [{
+      actionId: 'pi.private-action',
+      label: { default: 'Private action', zhCN: '私有动作', enUS: 'Private action' },
+      roles: ['user'] as const,
+      requiresIdle: true,
+    }],
+    executeMessageAction: async (_runtimeSessionId: string, actionId: string, targetEntryId: string) => {
+      calls.push({ actionId, targetEntryId })
+      return { outcome: 'refresh-current' as const, draftText: 'draft' }
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.deepEqual(await adapter.messageActions('runtime-1'), [{
+    actionId: 'pi.private-action',
+    label: { default: 'Private action', zhCN: '私有动作', enUS: 'Private action' },
+    roles: ['user'],
+    requiresIdle: true,
+  }])
+  assert.deepEqual(
+    await adapter.executeMessageAction('runtime-1', 'pi.private-action', 'entry-1'),
+    { outcome: 'refresh-current', draftText: 'draft' },
+  )
+  assert.deepEqual(calls, [{ actionId: 'pi.private-action', targetEntryId: 'entry-1' }])
+})
+
 test('Pi Live Adapter exposes Runtime commands through generic command-discovery', async () => {
   const service = {
     commands: async () => [
