@@ -38,6 +38,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       turnRail: 'Turn rail',
       backgroundActivity: 'Background activity',
       roundOrdinal: 'Round {{count}}',
+      roundContinuation: '{{label}} (cont.)',
       running: 'Running',
       hasError: 'Has errors',
       jumpTo: 'Jump to {{tip}}',
