@@ -73,13 +73,20 @@ function contributionText(value: unknown, maxLength: number): LiveContributionTe
   const row = value as Record<string, unknown>
   const defaultText = typeof row.default === 'string' ? row.default.trim() : ''
   if (!defaultText) return null
-  const localized = (candidate: unknown) => typeof candidate === 'string' && candidate.trim()
-    ? candidate.trim().slice(0, maxLength)
-    : undefined
+
+  const localizations: Record<string, string> = {}
+  if (row.localizations && typeof row.localizations === 'object' && !Array.isArray(row.localizations)) {
+    for (const [rawLocale, rawText] of Object.entries(row.localizations as Record<string, unknown>)) {
+      const locale = rawLocale.trim()
+      if (!locale || locale.length > 32 || typeof rawText !== 'string' || !rawText.trim()) continue
+      localizations[locale] = rawText.trim().slice(0, maxLength)
+      if (Object.keys(localizations).length >= 8) break
+    }
+  }
+
   return {
     default: defaultText.slice(0, maxLength),
-    ...(localized(row.zhCN) ? { zhCN: localized(row.zhCN) } : {}),
-    ...(localized(row.enUS) ? { enUS: localized(row.enUS) } : {}),
+    ...(Object.keys(localizations).length ? { localizations } : {}),
   }
 }
 
