@@ -11,6 +11,9 @@ const productSurfaceFiles = [
 
 const liveComposer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
 const runtimeDisclosures = readFileSync(new URL('../components/LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
+const taskLiveRuntimeList = readFileSync(new URL('./TaskLiveRuntimeList.tsx', import.meta.url), 'utf8')
+const liveTaskProjection = readFileSync(new URL('./live-task-projection.ts', import.meta.url), 'utf8')
+const liveTaskRenderBoundary = readFileSync(new URL('./live-task-render-boundary.ts', import.meta.url), 'utf8')
 
 test('统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面', () => {
   for (const file of productSurfaceFiles) {
@@ -55,6 +58,8 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /liveApi\.clearQueue/)
   assert.match(liveTask, /onSubmit=\{\(message, mode\) => \{ void send\(message, mode === 'followUp' \? 'follow-up' : undefined\) \}\}/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
+  assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
+  assert.match(liveTask, /event\.type === 'title\.update'/)
   assert.match(liveTask, /liveApi\.snapshot\([^\n]+leafIdRef\.current/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })
@@ -81,9 +86,14 @@ test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污�
   assert.match(liveTask, /liveApi\.runtimeDisclosures\(current\.liveId, current\.runtimeSessionId\)/)
   assert.match(liveTask, /liveApi\.executeRuntimeAction\(/)
   assert.match(liveTask, /<LiveRuntimeDisclosures/)
-  assert.ok(
-    liveTask.indexOf('<LiveRuntimeDisclosures') < liveTask.indexOf('className="pi-live-reader'),
-    'runtime disclosures must stay outside the ordinary task reader',
+  assert.match(
+    liveTask,
+    /<div className="pi-live-document live-task-document">[\s\S]{0,500}<LiveRuntimeDisclosures/,
+    'runtime disclosures must stay inside the Session Document without creating a fourth TaskSurface slot',
+  )
+  assert.doesNotMatch(
+    liveTask,
+    /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/,
   )
 
   assert.match(runtimeDisclosures, /AgentLens-owned|LiveRuntimeDisclosureContributionDto/)
@@ -145,7 +155,11 @@ test('LiveTask migration keeps the full session-view shell instead of only the g
   assert.match(styles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/)
   assert.match(liveTask, /<aside className="pi-live-sessions"/)
   assert.match(liveTask, /setRuntimes\(matched\.runtimes\)/)
-  assert.match(liveTask, /projectLiveTaskRounds\(items\)/)
+  assert.match(liveTask, /LiveTaskRoundProjector/)
+  assert.match(liveTask, /roundProjectorRef\.current\.project\(items, projectionStableCount\)/)
+  assert.match(liveTaskProjection, /liveTaskStableRoundPrefixLength/)
+  assert.match(liveTaskProjection, /liveEventChangesTaskTranscript/)
+  assert.match(liveTaskRenderBoundary, /sameStableLiveTaskRoundProps/)
   assert.match(liveTask, /<GenericLiveRound/)
   assert.match(liveTask, /<VirtualRoundMount/)
   assert.match(liveTask, /<TaskRound/)
@@ -154,6 +168,13 @@ test('LiveTask migration keeps the full session-view shell instead of only the g
   assert.match(liveTask, /onScroll=\{onReaderScroll\}/)
   assert.match(liveTask, /pi-live-new-records/)
   assert.doesNotMatch(liveTask, /\{items\.map\(item => <GenericLiveItem/)
+})
+
+test('通用 Live 标题在任务中心与 Live 会话栏保持一致', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /runtime\.title\?\.trim\(\) \|\| workspaceDisplayName/)
+  assert.match(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/)
+  assert.match(taskLiveRuntimeList, /item\.state\.title\?\.trim\(\) \|\| workspace \|\| fallback/)
 })
 
 test('LiveTask session sidebar stays agent-neutral', () => {
