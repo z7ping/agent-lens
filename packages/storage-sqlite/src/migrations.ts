@@ -44,7 +44,6 @@ const migrations: readonly Migration[] = [
     requiresForeignKeysOff: true,
     requiresLegacyAlterTable: true,
   },
-  { version: 29, name: 'source-record-session-locator-index', fileName: '029-source-record-session-locator-index.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
