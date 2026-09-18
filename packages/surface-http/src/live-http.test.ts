@@ -423,6 +423,24 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     await olderSnapshot.json()
     assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { before: 'entry-0', limit: 25 })
 
+    const newerSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?after=entry-9&limit=30`)
+    assert.equal(newerSnapshot.status, 200)
+    await newerSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { after: 'entry-9', limit: 30 })
+
+    const earliestSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?edge=earliest&limit=40`)
+    assert.equal(earliestSnapshot.status, 200)
+    await earliestSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { edge: 'earliest', limit: 40 })
+
+    const latestSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?edge=latest&limit=40`)
+    assert.equal(latestSnapshot.status, 200)
+    await latestSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { edge: 'latest', limit: 40 })
+
+    const mixedSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?before=entry-0&after=entry-9`)
+    assert.equal(mixedSnapshot.status, 400)
+
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
