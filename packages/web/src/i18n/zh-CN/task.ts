@@ -82,6 +82,14 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       streamingMode: '流式消息方式',
       steer: '立即调整',
       followUp: '排队继续',
+      queue: {
+        edit: '编辑',
+        withdraw: '撤回',
+        steer: '待介入',
+        followUp: '完成后继续',
+        joining: '正在加入队列',
+        queued: '已排队',
+      },
       extension: {
         title: '需要确认',
         reject: '拒绝',
