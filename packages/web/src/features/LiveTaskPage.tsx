@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type {
   LiveCommandDto,
   LiveEventDto,
+  LiveHistoryIndexDto,
   LiveInputCapabilitiesDto,
   LiveMessageActionContributionDto,
   LiveMessageDto,
@@ -59,7 +60,7 @@ import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
-import { TaskSurface } from './TaskSurface'
+import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
 import { workspaceDisplayName } from './task-detail-model'
@@ -587,6 +588,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     active: LiveTaskProjectionItem[]
   }>({ stable: [], active: [] })
   const [historyPage, setHistoryPage] = useState<LiveSnapshotDto['page'] | null>(null)
+  const [historyIndex, setHistoryIndex] = useState<LiveHistoryIndexDto | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPagingArmed, setHistoryPagingArmed] = useState(false)
   const [historyPagingDirection, setHistoryPagingDirection] = useState<'older' | 'newer' | null>(null)
@@ -659,6 +661,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setState(null)
     setProjection({ stable: [], active: [] })
     setHistoryPage(null)
+    setHistoryIndex(null)
     setHistoryLoading(false)
     setHistoryPagingArmed(false)
     setHistoryPagingDirection(null)
@@ -772,17 +775,21 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
 
       // Opportunistic reads never hold the first transcript or primary controls.
-      const [messageActionOptions, runtimeDisclosureOptions, commandOptions] = await Promise.all([
+      const [messageActionOptions, runtimeDisclosureOptions, commandOptions, historyIndexValue] = await Promise.all([
         liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
         liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         matched.capabilities.includes('command-discovery')
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
+        matched.capabilities.includes('history-index')
+          ? liveApi.historyIndex(current.liveId, current.runtimeSessionId, 80).catch(() => null)
+          : Promise.resolve(null),
       ])
       if (cancelled) return
       setMessageActions(messageActionOptions)
       setRuntimeDisclosures(runtimeDisclosureOptions)
       setCommands(commandOptions)
+      setHistoryIndex(historyIndexValue)
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })
@@ -988,6 +995,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
+        }
+        if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('history-index')) {
+          void liveApi.historyIndex(current.liveId, current.runtimeSessionId, 80).then(setHistoryIndex, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
@@ -1644,22 +1654,73 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [busy, current, thinking])
 
+  const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
+    if (!current || !item.cursor || historyLoading) return
+    setHistoryLoading(true)
+    try {
+      const snapshot = await liveApi.snapshot(
+        current.liveId,
+        current.runtimeSessionId,
+        undefined,
+        { around: item.cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+      )
+      const projected = projectLiveSnapshotEntries(snapshot.entries)
+      const nextProjection = splitLiveProjectionItems(projected, false)
+      roundProjectorRef.current.reset()
+      setProjection(nextProjection)
+      historyBlocksRef.current = [historyPageBlock(snapshot, projected)]
+      setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
+      historyAtLatestRef.current = snapshot.page?.hasLater !== true
+      setState(snapshot.state)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
+      setInputHistory(projectLiveInputHistory(projected))
+      snapshotBaseActiveCountRef.current = 0
+      followControllerRef.current.markUserIntent()
+      setSyncError('')
+    } catch (reason) {
+      setSyncError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setHistoryLoading(false)
+      setHistoryPagingArmed(false)
+      setHistoryPagingDirection(null)
+    }
+  }, [current, historyLoading])
+
   const roundSegments = useMemo(
     () => roundProjectorRef.current.projectSegmented(projection.stable, projection.active),
     [projection.stable, projection.active],
   )
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
-  const turnRailItems = useMemo(
-    () => [...roundSegments.stable, ...roundSegments.active].map(round => ({
+  const turnRailItems = useMemo(() => {
+    const loaded = [...roundSegments.stable, ...roundSegments.active].map(round => ({
       id: round.model.id,
       semanticId: round.model.semanticId,
       label: round.model.label,
       preview: round.model.preview,
       error: round.model.errorCount > 0,
       state: round.model.state,
-    })),
-    [roundSegments],
-  )
+      loaded: true,
+    } satisfies TaskTurnRailData))
+    if (!historyIndex?.items.length) return loaded
+
+    const loadedBySemanticId = new Map(
+      loaded.map(item => [item.semanticId ?? item.id, item] as const),
+    )
+    return historyIndex.items.map(indexItem => {
+      const semanticId = `live-round:${indexItem.cursor}`
+      const currentItem = loadedBySemanticId.get(semanticId)
+      return {
+        id: semanticId,
+        semanticId,
+        cursor: indexItem.cursor,
+        loaded: Boolean(currentItem),
+        label: currentItem?.label ?? t('surface.roundOrdinal', { count: indexItem.ordinal }),
+        preview: currentItem?.preview ?? indexItem.preview,
+        error: currentItem?.error ?? false,
+        state: currentItem?.state ?? 'settled',
+      } satisfies TaskTurnRailData
+    })
+  }, [historyIndex, roundSegments, t])
   const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
@@ -1753,6 +1814,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onEnd: jumpLatest,
       }}
       turnRailItems={turnRailItems}
+      onTurnRailSelect={jumpToIndexedRound}
     >
       <TaskHeader
         marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
