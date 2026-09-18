@@ -308,6 +308,25 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }, [model, onIntegrations, snapshot.integrationPreferences])
 
   useEffect(() => {
+    if (
+      onIntegrations
+      || !snapshot.integrationPreferences?.preferences.onboarding.completed
+      || snapshot.integrationManagement
+      || snapshot.integrationManagementLoading
+    ) return
+    const timer = window.setTimeout(() => {
+      void model.ensureIntegrationManagement().catch(() => undefined)
+    }, 750)
+    return () => window.clearTimeout(timer)
+  }, [
+    model,
+    onIntegrations,
+    snapshot.integrationPreferences,
+    snapshot.integrationManagement,
+    snapshot.integrationManagementLoading,
+  ])
+
+  useEffect(() => {
     const onboardingIncomplete = snapshot.integrationPreferences
       ? !snapshot.integrationPreferences.preferences.onboarding.completed
       : false
