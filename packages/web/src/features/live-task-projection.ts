@@ -110,6 +110,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     projected[existingIndex] = {
       ...current,
       ...item,
+      name: item.name === 'tool' ? current.name : item.name,
       inputPreview: item.inputPreview ?? current.inputPreview,
       output: item.output ?? current.output,
     }
@@ -203,7 +204,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         const value = text(part.text) || text(part.content) || text(part.value)
         if (!value) return
         projected.push({
-          id: `${baseId}:content:${contentIndex}`,
+          id: content.length === 1 ? baseId : `${baseId}:content:${contentIndex}`,
           kind: 'message',
           role: 'assistant',
           text: value,
