@@ -323,8 +323,8 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       followUp: ['queued follow-up'],
     })
 
-    adapter.queueState.steering.push('restored steer')
-    adapter.queueState.followUp.push('restored follow-up')
+    adapter.queueMessages.steering.push('restored steer')
+    adapter.queueMessages.followUp.push('restored follow-up')
 
     const modelControl = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/model-control`)
     assert.equal(modelControl.status, 200)
