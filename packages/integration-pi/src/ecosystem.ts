@@ -321,7 +321,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     sort: PiEcosystemSortDto,
     limit: number,
   ): Promise<PiEcosystemSearchResponseDto> {
-    const { candidates, upstreamTotal } = await this.searchCandidates(
+    const { candidates, upstreamTotal, partial } = await this.searchCandidates(
       query,
       catalogCandidateBudget(type, limit),
     )
@@ -357,7 +357,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
       upstreamTotal,
       source: 'npm-registry',
       fetchedAt: new Date(this.now()).toISOString(),
-      stale: false,
+      stale: partial,
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
     }
   }
@@ -394,9 +394,11 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
   ): Promise<{
     candidates: NpmPackageCandidate[]
     upstreamTotal: number
+    partial: boolean
   }> {
     const candidates = new Map<string, NpmPackageCandidate>()
     let upstreamTotal = 0
+    let partial = false
     let from = 0
 
     while (from < maxCandidates) {
@@ -408,6 +410,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
         if (candidates.size > 0) {
           // Extra pages improve ranking/filter coverage but must never make an already
           // usable Catalog disappear because npm had a transient slow page.
+          partial = true
           break
         }
         const retrySize = Math.min(SEARCH_RETRY_PAGE_SIZE, size)
@@ -448,6 +451,7 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     return {
       candidates: [...candidates.values()],
       upstreamTotal,
+      partial,
     }
   }
 
