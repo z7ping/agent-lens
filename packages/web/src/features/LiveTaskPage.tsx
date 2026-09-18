@@ -46,6 +46,7 @@ import {
   liveTaskRoundEstimate,
   liveEventChangesTaskTranscript,
   reduceLiveTaskEvent,
+  settleLiveTaskProjectionItems,
   type LiveTaskProjectionItem,
   type LiveTaskRoundProjection,
 } from './live-task-projection'
@@ -918,6 +919,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setRestoredQueue(restored)
       setQueue(emptyLiveQueue())
       setPendingQueue([])
+      setProjection(previous => ({
+        ...previous,
+        active: settleLiveTaskProjectionItems(previous.active),
+      }))
       setState(previous => previous ? { ...previous, isStreaming: false, pendingMessageCount: 0 } : previous)
       setInterruptNotice(true)
     } catch (reason) {
