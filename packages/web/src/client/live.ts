@@ -104,7 +104,9 @@ export class LiveEventScheduler {
 
     const key = liveCoalesceKey(value, this.messageEpoch)
     const existing = key ? this.indexes.get(key) : undefined
-    if (existing !== undefined) {
+    // Only adjacent presentation events may coalesce. Merging across a status/tool/message
+    // boundary would reorder facts (e.g. text → tool.start → text).
+    if (existing !== undefined && existing === this.queue.length - 1) {
       this.queue[existing] = mergeLiveCoalesced(this.queue[existing]!, value)
       this.diagnostics.coalescedEvents += 1
     } else {
