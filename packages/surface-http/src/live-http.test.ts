@@ -25,9 +25,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -42,6 +42,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly sent: Array<{ runtimeSessionId: string; message: LiveMessageInput; options?: LiveSendOptions | undefined }> = []
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
+  readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
   private modelValue = 'model-a'
   private sequence = 0
 
@@ -67,6 +68,16 @@ class FakeLiveAdapter implements LiveAdapter {
     }
     this.runtimes.set(id, state)
     return state
+  }
+
+  async resume(logicalSessionId: string) {
+    this.historyInteractions.push({ action: 'resume', logicalSessionId })
+    return this.start({ workspacePath: `/history/${logicalSessionId}` })
+  }
+
+  async fork(logicalSessionId: string) {
+    this.historyInteractions.push({ action: 'fork', logicalSessionId })
+    return this.start({ workspacePath: `/history/${logicalSessionId}` })
   }
 
   async state(runtimeSessionId: string) {
@@ -159,7 +170,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -248,6 +259,32 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     const terminated = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1`, { method: 'DELETE' })
     assert.equal(terminated.status, 200)
     assert.equal(adapter.runtimes.size, 0)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
+test('generic Live HTTP surface routes history resume and fork through adapter capabilities', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter()
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const resumed = await fetch(`${base}/api/v1/live/test/history/logical-1/resume`, { method: 'POST' })
+    assert.equal(resumed.status, 201)
+    assert.equal((await resumed.json() as LiveRuntimeState).runtimeSessionId, 'runtime-1')
+
+    const forked = await fetch(`${base}/api/v1/live/test/history/logical-1/fork`, { method: 'POST' })
+    assert.equal(forked.status, 201)
+    assert.equal((await forked.json() as LiveRuntimeState).runtimeSessionId, 'runtime-2')
+
+    assert.deepEqual(adapter.historyInteractions, [
+      { action: 'resume', logicalSessionId: 'logical-1' },
+      { action: 'fork', logicalSessionId: 'logical-1' },
+    ])
   } finally {
     await surface.dispose()
     storage.close()
