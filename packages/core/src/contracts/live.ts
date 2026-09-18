@@ -176,6 +176,10 @@ export interface LiveControlChangedEvent {
   control: 'model' | 'thinking'
 }
 
+export interface LiveRuntimeDisclosureChangedEvent {
+  type: 'runtime-disclosure.changed'
+}
+
 export interface LiveMessageBoundaryEvent {
   type: 'message.start' | 'message.end'
   role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
@@ -254,6 +258,7 @@ export type LiveEvent =
   | LiveStatusEvent
   | LiveTitleUpdateEvent
   | LiveControlChangedEvent
+  | LiveRuntimeDisclosureChangedEvent
   | LiveMessageBoundaryEvent
   | LiveContentEvent
   | LiveToolStartEvent
