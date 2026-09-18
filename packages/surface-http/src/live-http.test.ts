@@ -25,9 +25,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -144,6 +144,14 @@ class FakeLiveAdapter implements LiveAdapter {
     return () => undefined
   }
 
+  async commands(runtimeSessionId: string) {
+    await this.state(runtimeSessionId)
+    return [
+      { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
+      { value: '/skill:repo-review', label: '/skill:repo-review', group: 'skill' },
+    ]
+  }
+
   async queueState(runtimeSessionId: string) {
     await this.state(runtimeSessionId)
     return {
@@ -251,7 +259,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -308,6 +316,15 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       body: JSON.stringify({ message: 'change course', behavior: 'steer' }),
     })
     assert.equal(unsupportedSteer.status, 409)
+
+    const commands = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/commands`)
+    assert.equal(commands.status, 200)
+    assert.deepEqual(await commands.json(), {
+      items: [
+        { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
+        { value: '/skill:repo-review', label: '/skill:repo-review', group: 'skill' },
+      ],
+    })
 
     const queueState = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`)
     assert.equal(queueState.status, 200)
