@@ -413,6 +413,15 @@ export async function handleLiveRequest(
       const actionId = optionalString(body.actionId)
       const targetEntryId = optionalString(body.targetEntryId)
       if (!actionId || !targetEntryId) throw httpError(400, 'actionId and targetEntryId are required')
+      if (actionId.length > 128) throw httpError(400, 'actionId is too long')
+      if (targetEntryId.length > 512) throw httpError(400, 'targetEntryId is too long')
+      if (!adapter.messageActions) {
+        throw httpError(409, `${adapter.manifest.displayName} has not declared Live message actions`)
+      }
+      const declared = await adapter.messageActions(runtimeSessionId)
+      if (!declared.some(action => action.actionId === actionId)) {
+        throw httpError(409, 'Live message action is not currently declared by this adapter')
+      }
       writeJson(response, 200, jsonValue(await adapter.executeMessageAction(
         runtimeSessionId,
         actionId,
