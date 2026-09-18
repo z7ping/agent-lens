@@ -1,4 +1,4 @@
-import type { LiveMessageDto } from '@agent-lens/protocol'
+import type { LiveCommandDto, LiveMessageDto } from '@agent-lens/protocol'
 import { CodeNode } from '@lexical/code'
 import { LinkNode } from '@lexical/link'
 import { ListItemNode, ListNode } from '@lexical/list'
@@ -10,6 +10,7 @@ import {
   type Transformer,
 } from '@lexical/markdown'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
+import { createPortal } from 'react-dom'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { ContentEditable } from '@lexical/react/LexicalContentEditable'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
@@ -29,6 +30,7 @@ import {
   $insertNodes,
   $isElementNode,
   $isRootOrShadowRoot,
+  COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
   INSERT_PARAGRAPH_COMMAND,
   KEY_ARROW_DOWN_COMMAND,
@@ -40,7 +42,18 @@ import {
   type LexicalEditor,
   type LexicalNode,
 } from 'lexical'
-import { forwardRef, memo, useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react'
+import {
+  forwardRef,
+  memo,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ForwardedRef,
+} from 'react'
 import { removeLiveAttachment, uploadLiveAttachment } from '../client/live-attachments'
 import { ComposerDraftPresenceGate } from './live-markdown-composer-state'
 import {
@@ -85,6 +98,8 @@ export interface LiveMarkdownComposerProps {
   draftKey?: string | undefined
   /** Oldest -> newest submitted textual inputs for ArrowUp/ArrowDown recall. */
   inputHistory?: readonly string[] | undefined
+  /** Runtime-owned commands. Composer only filters and inserts the opaque value. */
+  commands?: readonly LiveCommandDto[] | undefined
   onSubmit(message: LiveMessageDto, mode: 'default' | 'followUp'): void
   onEscape: (() => void) | undefined
   canSubmit: boolean
@@ -253,6 +268,27 @@ function draftTextFromEditor(editorState: EditorState): string {
   return messageFromEditor(editorState).parts
     .flatMap(part => part.type === 'text' || part.type === 'large-text' ? [part.text] : [])
     .join('\n\n')
+}
+
+function commandQueryFromEditor(editorState: EditorState): string | null {
+  let query: string | null = null
+  editorState.read(() => {
+    const text = $getRoot().getTextContent()
+    if (!text.startsWith('/') || /[\r\n\t ]/.test(text)) return
+    query = text.slice(1)
+  })
+  return query
+}
+
+function replacePlainTextDocument(editor: LexicalEditor, value: string): void {
+  editor.update(() => {
+    const root = $getRoot()
+    root.clear()
+    const paragraph = $createParagraphNode()
+    if (value) paragraph.append($createTextNode(value))
+    root.append(paragraph)
+    paragraph.selectEnd()
+  })
 }
 
 function historyTextFromEditor(editorState: EditorState): string | null {
@@ -519,6 +555,165 @@ function ImagePastePlugin({
 }
 
 
+function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandDto[] | undefined }) {
+  const [editor] = useLexicalComposerContext()
+  const menuId = useId()
+  const [query, setQuery] = useState<string | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [position, setPosition] = useState<CSSProperties | null>(null)
+
+  const matches = useMemo(() => {
+    if (query === null) return []
+    const needle = query.toLocaleLowerCase()
+    return commands
+      .filter(command => {
+        if (!needle) return true
+        return [command.value, command.label, command.description, command.group]
+          .filter((value): value is string => typeof value === 'string' && value.length > 0)
+          .some(value => value.toLocaleLowerCase().includes(needle))
+      })
+      .slice(0, 12)
+  }, [commands, query])
+
+  useEffect(() => {
+    if (query === null) {
+      setActiveIndex(0)
+      return
+    }
+    setActiveIndex(index => Math.min(index, Math.max(0, matches.length - 1)))
+  }, [matches.length, query])
+
+  useEffect(() => editor.registerUpdateListener(({ editorState }) => {
+    const next = commandQueryFromEditor(editorState)
+    setQuery(previous => previous === next ? previous : next)
+  }), [editor])
+
+  useEffect(() => {
+    if (query === null || !matches.length) {
+      setPosition(null)
+      return
+    }
+    const update = () => {
+      const root = editor.getRootElement()
+      if (!root) return
+      const rect = root.getBoundingClientRect()
+      const width = Math.min(Math.max(280, rect.width), Math.max(280, window.innerWidth - 16))
+      const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
+      setPosition({
+        position: 'fixed',
+        left,
+        bottom: window.innerHeight - rect.top + 8,
+        width,
+      })
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [editor, matches.length, query])
+
+  useEffect(() => {
+    if (query === null || !matches.length) return
+
+    const choose = (index: number) => {
+      const command = matches[index]
+      if (!command) return
+      replacePlainTextDocument(editor, `${command.value} `)
+      setQuery(null)
+      requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+    }
+    const move = (delta: 1 | -1) => {
+      setActiveIndex(index => (index + delta + matches.length) % matches.length)
+    }
+    const eventAllowed = (event: KeyboardEvent) => !event.isComposing && event.keyCode !== 229
+
+    const unregisterUp = editor.registerCommand(
+      KEY_ARROW_UP_COMMAND,
+      event => {
+        if (!eventAllowed(event)) return false
+        event.preventDefault()
+        move(-1)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    const unregisterDown = editor.registerCommand(
+      KEY_ARROW_DOWN_COMMAND,
+      event => {
+        if (!eventAllowed(event)) return false
+        event.preventDefault()
+        move(1)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    const unregisterEnter = editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      event => {
+        if (!event || !eventAllowed(event)) return false
+        event.preventDefault()
+        choose(activeIndex)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    const unregisterEscape = editor.registerCommand(
+      KEY_ESCAPE_COMMAND,
+      event => {
+        if (!eventAllowed(event)) return false
+        event.preventDefault()
+        setQuery(null)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    return () => {
+      unregisterUp()
+      unregisterDown()
+      unregisterEnter()
+      unregisterEscape()
+    }
+  }, [activeIndex, editor, matches, query])
+
+  if (query === null || !matches.length || !position) return null
+
+  return createPortal(
+    <div
+      className="select-menu-popover live-command-menu"
+      style={position}
+      role="listbox"
+      id={menuId}
+      aria-label="Live commands"
+      onPointerDown={event => event.preventDefault()}
+    >
+      <div className="select-menu-options live-command-menu-options">
+        {matches.map((command, index) => <button
+          key={`${command.group ?? ''}:${command.value}`}
+          type="button"
+          role="option"
+          aria-selected={index === activeIndex}
+          className={`select-menu-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+          onMouseEnter={() => setActiveIndex(index)}
+          onClick={() => {
+            replacePlainTextDocument(editor, `${command.value} `)
+            setQuery(null)
+            requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+          }}
+        >
+          <span>
+            <b>{command.label ?? command.value}</b>
+            {command.description && <small>{command.description}</small>}
+          </span>
+        </button>)}
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function KeyboardPlugin({
   canSubmit,
   onSubmit,
@@ -666,6 +861,7 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
   onDraftPresenceChange,
   draftKey,
   inputHistory,
+  commands,
   onSubmit,
   onEscape,
   canSubmit,
@@ -710,6 +906,7 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
       <DraftPersistencePlugin draftKey={draftKey}/>
       <ExternalDraftPlugin draft={draft}/>
       <EditablePlugin disabled={disabled}/>
+      <CommandMenuPlugin commands={commands}/>
       <KeyboardPlugin canSubmit={canSubmit} onSubmit={onSubmit} onEscape={onEscape} inputHistory={inputHistory}/>
       <ComposerRefPlugin forwardedRef={ref}/>
     </div>
