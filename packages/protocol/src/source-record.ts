@@ -16,3 +16,8 @@ export interface SourceRecordResponseDto {
   payload: JsonValue
   parserVersion: string
 }
+
+
+export interface SourceRecordsResponseDto {
+  items: SourceRecordResponseDto[]
+}
