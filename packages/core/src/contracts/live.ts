@@ -331,11 +331,13 @@ export type LiveContributionTone = 'neutral' | 'info' | 'warning' | 'danger'
 export type LiveContributionActionTone = 'default' | 'primary' | 'danger'
 export type LiveRuntimeContributionFieldKind = 'text' | 'list' | 'code'
 
+export type LiveContributionValue = string | LiveContributionText
+
 export interface LiveRuntimeContributionField {
   label: LiveContributionText
   kind?: LiveRuntimeContributionFieldKind | undefined
-  value?: string | undefined
-  values?: readonly string[] | undefined
+  value?: LiveContributionValue | undefined
+  values?: readonly LiveContributionValue[] | undefined
 }
 
 export interface LiveRuntimeActionContribution {
