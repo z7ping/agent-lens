@@ -624,11 +624,16 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation === true) {
       actions.push({
         actionId: 'pi.edit-from-here',
-        label: { default: 'Edit from here', zhCN: '从这里编辑', enUS: 'Edit from here' },
+        label: {
+          default: 'Edit from here',
+          localizations: { 'zh-CN': '从这里编辑', 'en-US': 'Edit from here' },
+        },
         description: {
           default: 'Move this session back before this message and restore its text to the composer.',
-          zhCN: '当前会话回到这条消息之前，并把原消息恢复到输入框。',
-          enUS: 'Move this session back before this message and restore its text to the composer.',
+          localizations: {
+            'zh-CN': '当前会话回到这条消息之前，并把原消息恢复到输入框。',
+            'en-US': 'Move this session back before this message and restore its text to the composer.',
+          },
         },
         roles: ['user'] as const,
         requiresIdle: true,
@@ -637,11 +642,16 @@ export class DefaultPiLiveService implements PiLiveService {
     if (state.sessionFile && state.capabilities?.messageFork === true) {
       actions.push({
         actionId: 'pi.new-session-from-here',
-        label: { default: 'New session', zhCN: '从这里新建会话', enUS: 'New session' },
+        label: {
+          default: 'New session',
+          localizations: { 'zh-CN': '从这里新建会话', 'en-US': 'New session' },
+        },
         description: {
           default: 'Create an independent session from before this message.',
-          zhCN: '从这条消息之前创建一个独立会话，并把原消息放回输入框。',
-          enUS: 'Create an independent session from before this message.',
+          localizations: {
+            'zh-CN': '从这条消息之前创建一个独立会话，并把原消息放回输入框。',
+            'en-US': 'Create an independent session from before this message.',
+          },
         },
         roles: ['user'] as const,
         requiresIdle: true,
