@@ -85,6 +85,15 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       streamingMode: '流式消息方式',
       steer: '立即调整',
       followUp: '排队继续',
+      newRecords: '有新内容',
+      sidebar: {
+        title: '实时会话',
+        closeKeepsRunning: '离开页面不会结束任务',
+        newTask: '新建任务',
+        empty: '当前没有实时会话。',
+        history: '查看历史任务',
+        pending: '{{count}} 条排队',
+      },
       queue: {
         edit: '编辑',
         withdraw: '撤回',
