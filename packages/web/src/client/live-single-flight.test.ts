@@ -87,3 +87,38 @@ test('Live client never coalesces side-effecting POST requests', async t => {
 
   assert.equal(calls, 2)
 })
+
+
+test('Live message action reads are coalesced but executions are never coalesced', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+
+  let calls = 0
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    calls += 1
+    const path = String(input)
+    if ((init?.method ?? 'GET').toUpperCase() === 'GET') {
+      await gate
+      assert.match(path, /\/message-actions$/)
+      return jsonResponse({ items: [] })
+    }
+    assert.equal(init?.method, 'POST')
+    assert.match(path, /\/message-actions$/)
+    return jsonResponse({ outcome: 'refresh-current' })
+  }) as typeof fetch
+
+  const reads = Array.from({ length: 100 }, () => liveApi.messageActions('pi', 'runtime-1'))
+  assert.equal(calls, 1)
+  release()
+  await Promise.all(reads)
+  assert.equal(calls, 1)
+
+  calls = 0
+  await Promise.all([
+    liveApi.executeMessageAction('pi', 'runtime-1', 'action-1', 'entry-1'),
+    liveApi.executeMessageAction('pi', 'runtime-1', 'action-1', 'entry-1'),
+  ])
+  assert.equal(calls, 2)
+})
