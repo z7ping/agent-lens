@@ -338,10 +338,37 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
   if (leafId !== undefined && leafId !== null && typeof leafId !== 'string') {
     throw httpError(500, 'Live adapter returned an invalid snapshot leaf id')
   }
+  const rawPage = row.page
+  let page: LiveSnapshot['page']
+  if (rawPage !== undefined) {
+    if (!rawPage || typeof rawPage !== 'object' || Array.isArray(rawPage)) {
+      throw httpError(500, 'Live adapter returned invalid snapshot page metadata')
+    }
+    const value = rawPage as Record<string, unknown>
+    if (typeof value.hasEarlier !== 'boolean') {
+      throw httpError(500, 'Live adapter snapshot page must declare hasEarlier')
+    }
+    if (value.before !== undefined && typeof value.before !== 'string') {
+      throw httpError(500, 'Live adapter snapshot before cursor is invalid')
+    }
+    if (value.hasLater !== undefined && typeof value.hasLater !== 'boolean') {
+      throw httpError(500, 'Live adapter snapshot hasLater is invalid')
+    }
+    if (value.after !== undefined && typeof value.after !== 'string') {
+      throw httpError(500, 'Live adapter snapshot after cursor is invalid')
+    }
+    page = {
+      hasEarlier: value.hasEarlier,
+      ...(typeof value.before === 'string' ? { before: value.before } : {}),
+      ...(typeof value.hasLater === 'boolean' ? { hasLater: value.hasLater } : {}),
+      ...(typeof value.after === 'string' ? { after: value.after } : {}),
+    }
+  }
   return {
     state: normalizePublicRuntimeState(row.state),
     entries: row.entries,
     ...(leafId !== undefined ? { leafId: leafId as string | null } : {}),
+    ...(page ? { page } : {}),
   }
 }
 

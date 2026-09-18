@@ -105,6 +105,8 @@ export interface LiveSnapshotDto {
   page?: {
     hasEarlier: boolean
     before?: string | undefined
+    hasLater?: boolean | undefined
+    after?: string | undefined
   } | undefined
 }
 
