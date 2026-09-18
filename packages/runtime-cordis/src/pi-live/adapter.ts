@@ -174,6 +174,10 @@ function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undef
 export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
   const type = liveText(event.type)
   if (type === 'agent_start') return { type: 'status', status: 'running' }
+  if (type === 'task_summary') {
+    const title = liveText(event.taskSummary).trim()
+    return title ? { type: 'title.update', title } : undefined
+  }
   if (type === 'agent_settled' || type === 'agent_end') {
     return { type: 'completed', status: 'completed' }
   }
