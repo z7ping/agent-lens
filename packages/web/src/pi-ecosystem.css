@@ -1,0 +1,366 @@
+/*
+ * Pi Package Catalog 产品组件。
+ *
+ * 外壳继续使用 AgentLens 正式 Token / Primitive；列表本身按“生态浏览 + 本机对照”
+ * 的任务重新组织；Disclosure 行为继续复用共享 Primitive，只独立定义 Package Catalog 的视觉结构。
+ */
+
+.pi-ecosystem-section {
+  padding-bottom: 16px;
+}
+
+.pi-ecosystem-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 150px auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pi-ecosystem-search {
+  width: 100%;
+}
+
+.pi-ecosystem-type-filter.select-menu-trigger-toolbar {
+  width: 150px;
+  min-width: 150px;
+  background: var(--al-surface);
+  border-color: var(--al-line-strong);
+}
+
+.pi-ecosystem-error {
+  margin: 10px 0 0;
+}
+
+.pi-ecosystem-empty {
+  padding-top: 16px;
+}
+
+.pi-package-list {
+  margin-top: 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--al-surface);
+}
+
+.pi-package-item.ui-disclosure {
+  border: 0;
+  border-top: 1px solid var(--al-line);
+  background: transparent;
+}
+
+.pi-package-item:first-child {
+  border-top: 0;
+}
+
+.pi-package-item.ui-disclosure > summary {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+  padding: 10px 12px;
+  color: var(--al-ink-2);
+  cursor: pointer;
+  transition: background-color .14s ease;
+}
+
+.pi-package-item.ui-disclosure > summary:hover {
+  background: var(--al-soft-2);
+}
+
+.pi-package-item.ui-disclosure > summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.pi-package-item.ui-disclosure > summary .ui-disclosure-chevron {
+  color: var(--al-muted-2);
+  transform: rotate(-90deg);
+  transition: transform .14s ease;
+}
+
+.pi-package-item.ui-disclosure[open] > summary .ui-disclosure-chevron {
+  transform: rotate(0);
+}
+
+.pi-package-item.ui-disclosure > summary .ui-disclosure-summary,
+.pi-package-item.ui-disclosure > summary .ui-disclosure-meta {
+  min-width: 0;
+}
+
+.pi-package-item.ui-disclosure > .ui-disclosure-body {
+  padding: 0;
+  border-top: 0;
+}
+
+.pi-package-summary-copy {
+  min-width: 0;
+}
+
+.pi-package-title-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.pi-package-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-package-summary-description {
+  display: -webkit-box;
+  max-width: 760px;
+  margin-top: 5px;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pi-package-types,
+.pi-package-detail-types {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pi-package-types > span,
+.pi-package-detail-types > span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--al-soft);
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pi-package-summary-meta {
+  display: grid;
+  min-width: 146px;
+  grid-template-columns: repeat(2, auto);
+  align-items: center;
+  justify-items: end;
+  gap: 4px 10px;
+}
+
+.pi-package-summary-meta .ui-status-badge {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+
+.pi-package-version,
+.pi-package-local-version {
+  display: grid;
+  gap: 1px;
+  text-align: right;
+}
+
+.pi-package-version small,
+.pi-package-local-version small {
+  color: var(--al-muted-2);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.pi-package-version code,
+.pi-package-local-version code {
+  color: var(--al-ink-2);
+  font: 12px/1.3 var(--font-mono);
+}
+
+.pi-package-detail {
+  padding: 2px 12px 12px 36px;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
+  background: var(--al-soft-2);
+}
+
+.pi-package-detail-grid {
+  display: grid;
+  padding-top: 7px;
+}
+
+.pi-package-detail-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 68%, transparent);
+  font-size: 12px;
+}
+
+.pi-package-detail-row:first-child {
+  border-top: 0;
+}
+
+.pi-package-detail-row > span:first-child {
+  color: var(--al-muted);
+}
+
+.pi-package-detail-row > code {
+  color: var(--al-ink-2);
+  font: 12px/1.45 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.pi-package-description p {
+  margin: 0;
+  color: var(--al-ink-2);
+  line-height: 1.55;
+}
+
+.pi-package-local-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pi-package-local-assets > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border: 1px solid var(--al-line);
+  border-radius: 7px;
+  background: var(--al-surface);
+}
+
+.pi-package-local-assets b {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-package-local-assets small {
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.pi-package-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-surface);
+}
+
+.pi-package-command code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-ink-2);
+  font: 12px/1.4 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pi-package-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+@media (max-width: 767.98px) {
+  .pi-ecosystem-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pi-ecosystem-search {
+    grid-column: 1 / -1;
+  }
+
+  .pi-ecosystem-type-filter.select-menu-trigger-toolbar {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pi-package-item.ui-disclosure > summary {
+    grid-template-columns: 14px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .pi-package-item.ui-disclosure > summary > .ui-disclosure-meta {
+    grid-column: 2;
+  }
+
+  .pi-package-summary-meta {
+    min-width: 0;
+    grid-template-columns: auto auto 1fr;
+    justify-items: start;
+  }
+
+  .pi-package-summary-meta .ui-status-badge {
+    grid-column: auto;
+    justify-self: start;
+  }
+
+  .pi-package-version,
+  .pi-package-local-version {
+    text-align: left;
+  }
+
+  .pi-package-detail {
+    padding-left: 36px;
+  }
+
+  .pi-package-detail-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .pi-package-title-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .pi-package-summary-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pi-package-summary-meta .ui-status-badge {
+    grid-column: 1 / -1;
+  }
+
+  .pi-package-command {
+    grid-template-columns: 1fr;
+  }
+
+  .pi-package-command .btn {
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-package-item.ui-disclosure > summary,
+  .pi-package-item.ui-disclosure > summary .ui-disclosure-chevron {
+    transition: none;
+  }
+}
