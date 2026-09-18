@@ -1,6 +1,7 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
+import { SESSION_SUMMARY_PROJECTION_ID } from '@agent-lens/projection-session'
 import type { DataRuntimeHealthDto, PiEcosystemQueryService } from '@agent-lens/protocol'
 import {
   defineAgentLensPlugin,
@@ -40,6 +41,8 @@ export interface HttpSurfacePluginConfig {
   diagnosticsDetails?: () =>
     | Readonly<Record<string, unknown>>
     | Promise<Readonly<Record<string, unknown>>>
+  /** Startup diagnostics hook for the first Task Center list query. */
+  reviewQueryObserved?: (visibleCount: number) => void
   /** Product-level Integration runtime availability. */
   integrationStatus?: (
     productId: string,
@@ -195,6 +198,20 @@ const applyHttpSurface = Object.assign(
       })
     })
 
+    ctx.on('projection/rebuilt', event => {
+      if (
+        event.projectionId !== SESSION_SUMMARY_PROJECTION_ID
+        || event.subjectType !== 'logical-session'
+        || !event.subjectId
+      ) return
+      eventHub.publish({
+        type: 'session.updated',
+        logicalSessionId: event.subjectId,
+        affected: ['review', 'sessions'],
+        emittedAt: new Date().toISOString(),
+      })
+    })
+
     ctx.on('source/detected', event => {
       eventHub.publish({
         type: 'agent.changed',
@@ -244,6 +261,7 @@ const applyHttpSurface = Object.assign(
       ...(config.localePackDirectory ? { localePackDirectory: config.localePackDirectory } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
       ...(config.openHostPath ? { openHostPath: config.openHostPath } : {}),
+      ...(config.reviewQueryObserved ? { reviewQueryObserved: config.reviewQueryObserved } : {}),
       hubReview,
     })
     const unprovideHubReview = ctx.provide('hubReview', hubReview)
