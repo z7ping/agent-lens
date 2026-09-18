@@ -7,6 +7,7 @@ import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
+import { PiWorkspaceFileReferenceIndex } from './workspace-files'
 import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
 
 interface OwnedRuntime {
@@ -219,6 +220,7 @@ export class DefaultPiLiveService implements PiLiveService {
   private readonly runtimes = new Map<string, OwnedRuntime>()
   private readonly host: PiRuntimeHost
   private readonly recoveryStore?: PiLiveRecoveryStore | undefined
+  private readonly workspaceFiles = new PiWorkspaceFileReferenceIndex()
   private availabilityPromise: Promise<PiLiveAvailability> | null = null
   private recoveryLoadPromise: Promise<void> | null = null
   private recoveryLoaded = false
@@ -577,6 +579,11 @@ export class DefaultPiLiveService implements PiLiveService {
   async commands(id: string): Promise<PiLiveCommand[]> {
     const runtime = await this.readyRuntime(id)
     return runtime.handle!.commands ? runtime.handle!.commands() : []
+  }
+
+  async workspaceFileReferences(id: string, query: string, limit = 20) {
+    const runtime = await this.runtime(id)
+    return this.workspaceFiles.search(runtime.workspacePath, query, limit)
   }
   async controls(id: string): Promise<PiLiveControls> { return (await this.readyRuntime(id)).handle!.controls() }
   async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
