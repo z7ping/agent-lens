@@ -318,7 +318,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|queue|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|message-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -390,6 +390,34 @@ export async function handleLiveRequest(
           () => adapter.commands!(runtimeSessionId),
         )),
       })
+      return true
+    }
+
+    if (action === 'message-actions' && request.method === 'GET') {
+      writeJson(response, 200, {
+        items: jsonValue(adapter.messageActions
+          ? await shareAdapterRead(
+              adapter,
+              `message-actions:${runtimeSessionId}`,
+              () => adapter.messageActions!(runtimeSessionId),
+            )
+          : []),
+      })
+      return true
+    }
+    if (action === 'message-actions' && request.method === 'POST') {
+      if (!adapter.executeMessageAction) {
+        throw httpError(409, `${adapter.manifest.displayName} does not expose Live message actions`)
+      }
+      const body = objectBody(await readJson(request))
+      const actionId = optionalString(body.actionId)
+      const targetEntryId = optionalString(body.targetEntryId)
+      if (!actionId || !targetEntryId) throw httpError(400, 'actionId and targetEntryId are required')
+      writeJson(response, 200, jsonValue(await adapter.executeMessageAction(
+        runtimeSessionId,
+        actionId,
+        targetEntryId,
+      )))
       return true
     }
     if (action === 'queue' && request.method === 'GET') {
