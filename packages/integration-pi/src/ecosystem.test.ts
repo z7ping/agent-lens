@@ -137,6 +137,14 @@ test('Pi ecosystem reuses fresh catalog cache and falls back to last good result
   assert.equal(stale.fetchedAt, first.fetchedAt)
 })
 
+test('Pi ecosystem hard deadline settles even when an upstream operation ignores abort', async () => {
+  assert.equal(piEcosystemInternals.CATALOG_TIMEOUT_MS, 6_000)
+  await assert.rejects(
+    piEcosystemInternals.withinDeadline(20, 'test catalog', async () => new Promise<never>(() => undefined)),
+    /test catalog timed out after 20ms/,
+  )
+})
+
 test('Pi ecosystem package details still use exact npm version only on demand', async () => {
   let calls = 0
   const fetcher = (async (input: string | URL | Request) => {

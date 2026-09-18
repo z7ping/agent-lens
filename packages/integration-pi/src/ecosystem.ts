@@ -21,7 +21,7 @@ const PI_CATALOG_ENDPOINT = 'https://pi.dev/packages'
 const NPM_REGISTRY_ENDPOINT = 'https://registry.npmjs.org/'
 const CATALOG_CACHE_TTL_MS = 10 * 60_000
 const PACKAGE_CACHE_TTL_MS = 5 * 60_000
-const CATALOG_TIMEOUT_MS = 15_000
+const CATALOG_TIMEOUT_MS = 6_000
 const PACKAGE_TIMEOUT_MS = 8_000
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 20
@@ -230,6 +230,29 @@ async function responseJson(response: Response, context: string): Promise<unknow
   return response.json()
 }
 
+async function withinDeadline<T>(
+  timeoutMs: number,
+  label: string,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController()
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort()
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+  })
+  try {
+    // AbortSignal.timeout() alone cannot guarantee settlement if an upstream
+    // fetch implementation ignores abort. The race releases the single-flight
+    // entry so one stalled connection never pins every catalog request.
+    return await Promise.race([operation(controller.signal), deadline])
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
+}
+
 export class PiDevEcosystemProvider implements PiEcosystemQueryService {
   private readonly searchCache = new Map<string, CacheEntry<PiEcosystemSearchResponseDto>>()
   private readonly lastGoodSearch = new Map<string, PiEcosystemSearchResponseDto>()
@@ -300,10 +323,10 @@ export class PiDevEcosystemProvider implements PiEcosystemQueryService {
     const url = catalogUrl(query, type, sort)
     let html: string
     try {
-      html = await responseText(await this.fetcher(url, {
-        headers: { accept: 'text/html' },
-        signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS),
-      }), 'Pi Package Catalog')
+      html = await withinDeadline(CATALOG_TIMEOUT_MS, 'Pi Package Catalog', async signal => responseText(
+        await this.fetcher(url, { headers: { accept: 'text/html' }, signal }),
+        'Pi Package Catalog',
+      ))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       throw new Error(`Pi Package Catalog unavailable: ${message}`)
@@ -337,13 +360,13 @@ export class PiDevEcosystemProvider implements PiEcosystemQueryService {
 
     let pending!: Promise<NpmPackageDetails>
     pending = (async () => {
-      const raw = await responseJson(await this.fetcher(
-        `${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`,
-        {
-          headers: { accept: 'application/json' },
-          signal: AbortSignal.timeout(PACKAGE_TIMEOUT_MS),
-        },
-      ), `npm package metadata ${packageName}@${version}`)
+      const raw = await withinDeadline(PACKAGE_TIMEOUT_MS, `npm package metadata ${packageName}@${version}`, async signal => responseJson(
+        await this.fetcher(
+          `${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`,
+          { headers: { accept: 'application/json' }, signal },
+        ),
+        `npm package metadata ${packageName}@${version}`,
+      ))
       const manifest = objectValue(raw)
       const resolvedRepositoryUrl = repositoryUrl(manifest?.repository)
       const value: NpmPackageDetails = {
@@ -370,6 +393,9 @@ export { PiDevEcosystemProvider as NpmPiEcosystemProvider }
 const applyPiEcosystem = Object.assign(
   async (ctx: AgentLensContext) => {
     const service = new PiDevEcosystemProvider()
+    // 目录是展示用的远程数据。启动时异步预热，避免用户首次打开 Pi
+    // 生态页才承担网络握手；同一请求仍由 searchInFlight 合并。
+    void service.search().catch(() => undefined)
     return ctx.provide('piEcosystem', service)
   },
   { inject: [] as string[] },
@@ -387,6 +413,7 @@ export const piEcosystemInternals = {
   setBounded,
   CATALOG_CACHE_TTL_MS,
   CATALOG_TIMEOUT_MS,
+  withinDeadline,
   MAX_SEARCH_CACHE_ENTRIES,
   MAX_PACKAGE_CACHE_ENTRIES,
 }
