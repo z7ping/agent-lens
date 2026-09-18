@@ -1,5 +1,6 @@
 import type {
   AgentDetailResponseDto,
+  AgentEnrichmentResponseDto,
   AgentOverviewResponseDto,
   AgentRescanResponseDto,
   AgentSummaryResponseDto,
@@ -220,6 +221,26 @@ function mergeAgentDetail(
   }
 }
 
+function mergeAgentEnrichment(
+  current: AgentOverviewResponseDto | null,
+  enrichment: AgentEnrichmentResponseDto,
+): AgentOverviewResponseDto | null {
+  if (!current) return current
+  const item = current.items.find(agent => agent.sourceId === enrichment.sourceId)
+  if (!item) return current
+  return {
+    items: current.items.map(agent => agent.sourceId === enrichment.sourceId
+      ? {
+          ...agent,
+          ...(enrichment.integration ? { integration: enrichment.integration } : {}),
+          capabilities: enrichment.capabilities,
+          usedAssets: enrichment.usedAssets,
+        }
+      : agent),
+    meta: enrichment.meta,
+  }
+}
+
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
     health: null,
@@ -288,6 +309,7 @@ export class AgentLensClientModel {
   private facetsInFlight: Promise<void> | null = null
   private agentsInFlight: Promise<void> | null = null
   private readonly agentDetailInFlight = new Map<string, Promise<void>>()
+  private readonly agentEnrichmentInFlight = new Map<string, Promise<void>>()
   private agentCoverageInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
@@ -515,6 +537,7 @@ export class AgentLensClientModel {
           agentDetailLoadingSourceId: '',
           agentDetailError: '',
         })
+        void this.ensureAgentEnrichment(sourceId)
       },
       error => {
         this.patch({
@@ -527,6 +550,27 @@ export class AgentLensClientModel {
       this.agentDetailInFlight.delete(sourceId)
     })
     this.agentDetailInFlight.set(sourceId, pending)
+    return pending
+  }
+
+  ensureAgentEnrichment(sourceId: string): Promise<void> {
+    if (!sourceId) return Promise.resolve()
+    const current = this.snapshot.agents?.items.find(item => item.sourceId === sourceId)
+    if (current && (current.usedAssets.length > 0 || current.capabilities.length > 0 || current.integration)) {
+      return Promise.resolve()
+    }
+    const existing = this.agentEnrichmentInFlight.get(sourceId)
+    if (existing) return existing
+    const pending = this.api.agentEnrichment(sourceId).then(enrichment => {
+      if (!enrichment) return
+      const agents = mergeAgentEnrichment(this.snapshot.agents, enrichment)
+      if (agents) this.patch({ agents })
+    }).catch(() => {
+      // Supporting enrichment must never fail the core Agent detail.
+    }).finally(() => {
+      this.agentEnrichmentInFlight.delete(sourceId)
+    })
+    this.agentEnrichmentInFlight.set(sourceId, pending)
     return pending
   }
 
