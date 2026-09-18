@@ -43,6 +43,7 @@ import {
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
   liveTaskRoundEstimate,
+  liveEventChangesTaskTranscript,
   reduceLiveTaskEvent,
   type LiveTaskProjectionItem,
   type LiveTaskRoundProjection,
@@ -576,9 +577,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       current.runtimeSessionId,
       envelope => {
         setConnected(true)
-        setItems(previous => reduceLiveTaskEvent(previous, envelope))
+        if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
+          setItems(previous => reduceLiveTaskEvent(previous, envelope))
+          if (!followControllerRef.current.isFollowing) setNewRecords(true)
+        }
         setState(previous => runtimeStateFromEvent(previous, envelope))
-        if (!followControllerRef.current.isFollowing) setNewRecords(true)
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
