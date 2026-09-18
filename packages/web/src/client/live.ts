@@ -229,9 +229,18 @@ async function historyInteraction(
   return state
 }
 
+export type LiveProductMetadata = Pick<
+  LiveProductDto,
+  'liveId' | 'productId' | 'displayName' | 'capabilities' | 'inputCapabilities' | 'startCapabilities'
+>
+
 export const liveApi = {
   async products(): Promise<LiveProductDto[]> {
     return (await requestJson<LiveProductsResponseDto>(LIVE_ROOT)).items
+  },
+
+  metadata(liveId: string): Promise<LiveProductMetadata> {
+    return requestJson(livePath(liveId, '/metadata'))
   },
 
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
