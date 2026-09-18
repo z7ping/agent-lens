@@ -416,14 +416,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : 'steer' as const
       : 'normal' as const
     const optimisticText = messageText(message)
+    const optimisticId = behavior === 'normal' && optimisticText
+      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
+      : null
     const pending = behavior !== 'normal' && optimisticText
       ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
       : null
 
     setBusy(true)
     setError('')
-    if (behavior === 'normal' && optimisticText) {
-      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText))
+    if (behavior === 'normal' && optimisticText && optimisticId) {
+      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
@@ -435,6 +438,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
+      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
       composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
