@@ -222,6 +222,109 @@ function queueTextMessage(text: string): LiveMessageDto {
 }
 
 const LIVE_TASK_SNAPSHOT_PAGE_LIMIT = 120
+const LIVE_TASK_HISTORY_WINDOW_MAX_PAGES = 5
+
+interface LiveHistoryPageBlock {
+  page: NonNullable<LiveSnapshotDto['page']>
+  itemIds: string[]
+}
+
+interface LiveReaderAnchor {
+  interactionId: string
+  offset: number
+  scrollTop: number
+}
+
+function snapshotPage(snapshot: LiveSnapshotDto): NonNullable<LiveSnapshotDto['page']> {
+  return snapshot.page ?? { hasEarlier: false }
+}
+
+function historyPageBlock(
+  snapshot: LiveSnapshotDto,
+  items: readonly LiveTaskProjectionItem[],
+): LiveHistoryPageBlock {
+  return {
+    page: snapshotPage(snapshot),
+    itemIds: items.map(item => item.id),
+  }
+}
+
+function aggregateHistoryPage(blocks: readonly LiveHistoryPageBlock[]): NonNullable<LiveSnapshotDto['page']> {
+  const first = blocks[0]?.page
+  const last = blocks.at(-1)?.page
+  if (!first || !last) return { hasEarlier: false }
+  return {
+    hasEarlier: first.hasEarlier,
+    ...(first.before ? { before: first.before } : {}),
+    ...(first.first ? { first: first.first } : {}),
+    ...(last.last ? { last: last.last } : {}),
+    ...(last.hasLater ? { hasLater: true } : {}),
+    ...(last.after ? { after: last.after } : {}),
+  }
+}
+
+function compactHistoryBlocks(
+  blocks: LiveHistoryPageBlock[],
+  direction: 'older' | 'newer',
+): { blocks: LiveHistoryPageBlock[]; removedIds: Set<string> } {
+  const next = [...blocks]
+  const removedIds = new Set<string>()
+  while (next.length > LIVE_TASK_HISTORY_WINDOW_MAX_PAGES) {
+    const removed = direction === 'older' ? next.pop() : next.shift()
+    for (const id of removed?.itemIds ?? []) removedIds.add(id)
+  }
+  return { blocks: next, removedIds }
+}
+
+function refreshLatestHistoryBlock(
+  blocks: readonly LiveHistoryPageBlock[],
+  projection: { stable: readonly LiveTaskProjectionItem[]; active: readonly LiveTaskProjectionItem[] },
+): LiveHistoryPageBlock[] {
+  if (!blocks.length) return []
+  const next = [...blocks]
+  const fixedIds = new Set(next.slice(0, -1).flatMap(block => block.itemIds))
+  const itemIds = [...projection.stable, ...projection.active]
+    .map(item => item.id)
+    .filter(id => !fixedIds.has(id))
+  next[next.length - 1] = { ...next[next.length - 1]!, itemIds }
+  return next
+}
+
+function captureLiveReaderAnchor(reader: HTMLElement): LiveReaderAnchor {
+  const readerTop = reader.getBoundingClientRect().top
+  const anchorY = readerTop + Math.min(Math.max(reader.clientHeight * .3, 72), 190)
+  const elements = reader.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')
+  let anchor: HTMLElement | null = null
+  for (const element of elements) {
+    if (element.closest('.task-session-reader') !== reader) continue
+    const top = element.getBoundingClientRect().top
+    if (top <= anchorY) anchor = element
+    else if (!anchor) {
+      anchor = element
+      break
+    } else break
+  }
+  return {
+    interactionId: anchor?.dataset.interactionId ?? '',
+    offset: anchor ? anchor.getBoundingClientRect().top - readerTop : 0,
+    scrollTop: reader.scrollTop,
+  }
+}
+
+function restoreLiveReaderAnchor(reader: HTMLElement, saved: LiveReaderAnchor): void {
+  if (!saved.interactionId) {
+    reader.scrollTop = saved.scrollTop
+    return
+  }
+  const anchor = [...reader.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')]
+    .find(element => element.dataset.interactionId === saved.interactionId)
+  if (!anchor) {
+    reader.scrollTop = saved.scrollTop
+    return
+  }
+  const readerTop = reader.getBoundingClientRect().top
+  reader.scrollTop += anchor.getBoundingClientRect().top - readerTop - saved.offset
+}
 
 function splitLiveProjectionItems(
   items: LiveTaskProjectionItem[],
@@ -520,6 +623,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const historyNewerSentinelRef = useRef<HTMLDivElement>(null)
   const lastReaderScrollTopRef = useRef(0)
   const historyAtLatestRef = useRef(true)
+  const historyBlocksRef = useRef<LiveHistoryPageBlock[]>([])
+  const projectionRef = useRef(projection)
+  projectionRef.current = projection
   const followControllerRef = useRef(new LiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
@@ -556,6 +662,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setHistoryPagingDirection(null)
     lastReaderScrollTopRef.current = 0
     historyAtLatestRef.current = true
+    historyBlocksRef.current = []
     setMessageActions([])
     setMessageActionPending(null)
     setRuntimeDisclosures([])
@@ -610,7 +717,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
         setProjection(nextProjection)
-        setHistoryPage(snapshot.page ?? { hasEarlier: false })
+        historyBlocksRef.current = [historyPageBlock(snapshot, projectedItems)]
+        setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
         historyAtLatestRef.current = snapshot.page?.hasLater !== true
         setInputHistory(projectLiveInputHistory(projectedItems))
         snapshotBaseActiveCountRef.current = nextProjection.active.length
@@ -721,6 +829,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         } else if (!recoveryLeafId) {
           const nextProjection = splitLiveProjectionItems(recovered, snapshot.state.isStreaming)
           setProjection(nextProjection)
+          historyBlocksRef.current = [historyPageBlock(snapshot, recovered)]
+          setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
           setInputHistory(projectLiveInputHistory(recovered))
           snapshotBaseActiveCountRef.current = nextProjection.active.length
           leafIdRef.current = snapshot.leafId ?? undefined
@@ -993,7 +1103,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const nextProjection = splitLiveProjectionItems(projected, edge === 'latest' && snapshot.state.isStreaming)
       roundProjectorRef.current.reset()
       setProjection(nextProjection)
-      setHistoryPage(snapshot.page ?? { hasEarlier: false })
+      historyBlocksRef.current = [historyPageBlock(snapshot, projected)]
+      setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
       historyAtLatestRef.current = snapshot.page?.hasLater !== true
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
@@ -1027,6 +1138,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const jumpEarliest = useCallback(() => replaceHistoryWindow('earliest'), [replaceHistoryWindow])
   const jumpLatest = useCallback(() => replaceHistoryWindow('latest'), [replaceHistoryWindow])
 
+  useEffect(() => {
+    if (!historyAtLatestRef.current || historyLoading) return
+    const totalItems = projection.stable.length + projection.active.length
+    if (totalItems <= LIVE_TASK_SNAPSHOT_PAGE_LIMIT * LIVE_TASK_HISTORY_WINDOW_MAX_PAGES) return
+    void replaceHistoryWindow('latest')
+  }, [historyLoading, projection.active.length, projection.stable.length, replaceHistoryWindow])
+
   const loadEarlier = useCallback(async () => {
     if (!current || !historyPagingArmed || historyPagingDirection !== 'older' || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
     const reader = readerRef.current
@@ -1041,29 +1159,35 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         { before: historyPage.before, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
       const older = projectLiveSnapshotEntries(snapshot.entries)
+      const savedAnchor = reader ? captureLiveReaderAnchor(reader) : null
+      const baseBlocks = historyAtLatestRef.current
+        ? refreshLatestHistoryBlock(historyBlocksRef.current, projectionRef.current)
+        : historyBlocksRef.current
+      const compacted = compactHistoryBlocks(
+        [historyPageBlock(snapshot, older), ...baseBlocks],
+        'older',
+      )
+      historyBlocksRef.current = compacted.blocks
+      const nextPage = aggregateHistoryPage(compacted.blocks)
+      historyAtLatestRef.current = nextPage.hasLater !== true
       roundProjectorRef.current.reset()
       setProjection(previous => ({
-        stable: prependUniqueLiveProjectionItems(older, previous.stable),
-        active: previous.active,
+        stable: prependUniqueLiveProjectionItems(older, previous.stable)
+          .filter(item => !compacted.removedIds.has(item.id)),
+        active: previous.active.filter(item => !compacted.removedIds.has(item.id)),
       }))
-      setHistoryPage(previous => {
-        const next = {
-          hasEarlier: snapshot.page?.hasEarlier ?? false,
-          ...(snapshot.page?.before ? { before: snapshot.page.before } : {}),
-          ...(previous?.hasLater ? { hasLater: true as const } : {}),
-          ...(previous?.after ? { after: previous.after } : {}),
-        }
-        historyAtLatestRef.current = next.hasLater !== true
-        return next
-      })
+      setHistoryPage(nextPage)
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setSyncError('')
       window.requestAnimationFrame(() => {
         const currentReader = readerRef.current
         if (!currentReader || currentReader !== reader) return
-        const addedHeight = Math.max(0, currentReader.scrollHeight - previousScrollHeight)
-        currentReader.scrollTop = previousScrollTop + addedHeight
+        if (savedAnchor) restoreLiveReaderAnchor(currentReader, savedAnchor)
+        else {
+          const addedHeight = Math.max(0, currentReader.scrollHeight - previousScrollHeight)
+          currentReader.scrollTop = previousScrollTop + addedHeight
+        }
         lastReaderScrollTopRef.current = currentReader.scrollTop
       })
     } catch (reason) {
@@ -1088,23 +1212,24 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const newer = projectLiveSnapshotEntries(snapshot.entries)
       const reachedLatest = snapshot.page?.hasLater !== true
       const newerProjection = splitLiveProjectionItems(newer, reachedLatest && snapshot.state.isStreaming)
+      const savedAnchor = readerRef.current ? captureLiveReaderAnchor(readerRef.current) : null
+      const compacted = compactHistoryBlocks(
+        [...historyBlocksRef.current, historyPageBlock(snapshot, newer)],
+        'newer',
+      )
+      historyBlocksRef.current = compacted.blocks
+      const nextPage = aggregateHistoryPage(compacted.blocks)
+      historyAtLatestRef.current = nextPage.hasLater !== true
       roundProjectorRef.current.reset()
       setProjection(previous => ({
-        stable: appendUniqueLiveProjectionItems(previous.stable, newerProjection.stable),
-        active: reachedLatest
+        stable: appendUniqueLiveProjectionItems(previous.stable, newerProjection.stable)
+          .filter(item => !compacted.removedIds.has(item.id)),
+        active: (reachedLatest
           ? appendUniqueLiveProjectionItems(previous.active, newerProjection.active)
-          : previous.active,
+          : previous.active)
+          .filter(item => !compacted.removedIds.has(item.id)),
       }))
-      setHistoryPage(previous => {
-        const next = {
-          hasEarlier: previous?.hasEarlier ?? false,
-          ...(previous?.before ? { before: previous.before } : {}),
-          ...(snapshot.page?.hasLater ? { hasLater: true as const } : {}),
-          ...(snapshot.page?.after ? { after: snapshot.page.after } : {}),
-        }
-        historyAtLatestRef.current = next.hasLater !== true
-        return next
-      })
+      setHistoryPage(nextPage)
       if (reachedLatest) {
         leafIdRef.current = snapshot.leafId ?? leafIdRef.current
         setNewRecords(false)
@@ -1112,6 +1237,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setSyncError('')
+      if (savedAnchor) {
+        window.requestAnimationFrame(() => {
+          const reader = readerRef.current
+          if (!reader) return
+          restoreLiveReaderAnchor(reader, savedAnchor)
+          lastReaderScrollTopRef.current = reader.scrollTop
+        })
+      }
     } catch (reason) {
       setSyncError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -1454,7 +1587,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const nextProjection = splitLiveProjectionItems(projected, snapshot.state.isStreaming)
       setState(snapshot.state)
       setProjection(nextProjection)
-      setHistoryPage(snapshot.page ?? { hasEarlier: false })
+      historyBlocksRef.current = [historyPageBlock(snapshot, projected)]
+      setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
+      historyAtLatestRef.current = snapshot.page?.hasLater !== true
       setInputHistory(projectLiveInputHistory(projected))
       snapshotBaseActiveCountRef.current = nextProjection.active.length
       leafIdRef.current = snapshot.leafId ?? undefined
