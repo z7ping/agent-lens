@@ -112,7 +112,12 @@ function runtimeStateFromEvent(
   return current
 }
 
-function statusLabel(state: LiveRuntimeStateDto | null, t: ReturnType<typeof useTranslation>['t']): string {
+function statusLabel(
+  state: LiveRuntimeStateDto | null,
+  t: ReturnType<typeof useTranslation>['t'],
+  activity?: 'running' | 'compacting' | 'idle' | null,
+): string {
+  if (activity === 'compacting') return t('center.runtimeStatus.compacting')
   if (!state) return t('center.runtimeStatus.initializing')
   const status = taskLiveRuntimeStatus(state)
   return t(`center.runtimeStatus.${status}`)
@@ -364,6 +369,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [restoredQueue, setRestoredQueue] = useState<RestoredQueueDraft[]>([])
   const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
+  const [activityStatus, setActivityStatus] = useState<'running' | 'compacting' | 'idle' | null>(null)
   const [bootstrapTarget, setBootstrapTarget] = useState<{ liveId: string; runtimeSessionId: string } | null>(null)
   const [syncError, setSyncError] = useState('')
   const [newRecords, setNewRecords] = useState(false)
@@ -427,6 +433,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     projectionStableCountRef.current = 0
     roundProjectorRef.current.reset()
     setConnected(false)
+    setActivityStatus(null)
     setBootstrapTarget(null)
     setSyncError('')
     setNewRecords(false)
@@ -594,6 +601,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }))
         }
         if (envelope.normalizedEvent?.type === 'status') {
+          if (envelope.normalizedEvent.status === 'running'
+            || envelope.normalizedEvent.status === 'compacting'
+            || envelope.normalizedEvent.status === 'idle') {
+            setActivityStatus(envelope.normalizedEvent.status)
+          } else if (envelope.normalizedEvent.status === 'ready') {
+            setActivityStatus(null)
+          }
           void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
             setRuntimeDisclosures,
             () => undefined,
@@ -622,6 +636,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
+          setActivityStatus('idle')
           void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
           void recover()
         }
@@ -1055,7 +1070,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const agentLabel = product?.displayName ?? current.liveId
   const workspace = workspaceDisplayName(state?.workspacePath)
   const title = state?.title?.trim() || workspace || t('center.history.genericAgentTask', { agent: agentLabel })
-  const runtimeStatus = statusLabel(state, t)
+  const runtimeStatus = statusLabel(state, t, activityStatus)
   const streamSupported = product?.capabilities.includes('stream') === true
   const connectionLabel = streamSupported
     ? connected ? t('live.connected') : t('live.connecting')
