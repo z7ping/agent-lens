@@ -514,6 +514,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         if (!recoveryLeafId) {
           setItems(recovered)
+          setInputHistory(projectLiveInputHistory(recovered))
           stableProjectionCountRef.current = recovered.length
           leafIdRef.current = snapshot.leafId ?? undefined
         } else if (snapshot.state.isStreaming) {
