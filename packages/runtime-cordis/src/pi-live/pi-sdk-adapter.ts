@@ -28,6 +28,8 @@ export interface PiSdkSessionManager {
   getSessionName(): ReturnType<SessionManager['getSessionName']>
   getLeafId(): ReturnType<SessionManager['getLeafId']>
   getEntries(): unknown[]
+  getEntry?: SessionManager['getEntry']
+  branch?: SessionManager['branch']
   /** Available on Pi versions that support native session branching. Required only for “分叉继续”. */
   createBranchedSession?: SessionManager['createBranchedSession']
 }
@@ -69,6 +71,7 @@ export interface PiSdkSession {
   prompt(message: Parameters<AgentSession['prompt']>[0], options?: PiSdkPromptOptions): Promise<void>
   steer(message: Parameters<AgentSession['steer']>[0], images?: Parameters<AgentSession['steer']>[1]): ReturnType<AgentSession['steer']>
   followUp(message: Parameters<AgentSession['followUp']>[0], images?: Parameters<AgentSession['followUp']>[1]): ReturnType<AgentSession['followUp']>
+  navigateTree?: AgentSession['navigateTree']
   clearQueue(): ReturnType<AgentSession['clearQueue']>
   abortBash?: AgentSession['abortBash']
   abort(): ReturnType<AgentSession['abort']>
