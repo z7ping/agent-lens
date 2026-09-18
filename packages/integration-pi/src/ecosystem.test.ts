@@ -114,6 +114,7 @@ test('Pi ecosystem default catalog retries a timed-out first search page with a 
   const response = await provider.search({ sort: 'downloads', limit: 20 })
 
   assert.equal(searchCalls, 2)
+  assert.equal(response.stale, false)
   assert.deepEqual(response.items.map(item => item.packageName), ['pi-b', 'pi-a'])
   const first = new URL(requested[0]!)
   const retry = new URL(requested[1]!)
@@ -159,6 +160,7 @@ test('Pi ecosystem keeps usable candidates when a later search page times out', 
   const response = await provider.search({ type: 'skill', sort: 'downloads', limit: 20 })
 
   assert.equal(searchCalls, 2)
+  assert.equal(response.stale, true)
   assert.equal(response.items.length, 20)
   assert.equal(response.items[0]?.packageName, 'pi-000')
 })
