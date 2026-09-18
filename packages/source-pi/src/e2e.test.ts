@@ -207,6 +207,15 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
       },
     ].map(item => JSON.stringify(item)).join('\n')}\n`, 'utf8')
 
+    const startupLatest = await history.sync({
+      source: piSourceDefinition,
+      host,
+      detected,
+      abortSignal: new AbortController().signal,
+      historyWindow: { sessionLimit: 1 },
+    })
+    assert.equal(startupLatest.records, 2)
+
     const runtimeController = new AbortController()
     const handle = await runtime.start({
       source: piSourceDefinition,
