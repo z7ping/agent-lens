@@ -226,6 +226,50 @@ for (const probe of probes) {
   console.log(`${result.passed ? 'PASS' : 'FAIL'} p95=${result.result.p95Ms}ms failures=${result.result.failures}/${result.result.count}`)
 }
 
+const taskCenterMeasurement = measurements.find(item => item.id === 'taskCenter')
+const agentSummaryMeasurement = measurements.find(item => item.id === 'agentsSummary')
+const firstReviewId = taskCenterMeasurement?.lastBody?.items?.[0]?.id
+const firstAgentSourceId = agentSummaryMeasurement?.lastBody?.items?.[0]?.sourceId
+const dynamicProbes = [
+  ...(typeof firstReviewId === 'string' && firstReviewId ? [{
+    id: 'reviewDetail',
+    label: 'Review detail latest 10 interactions',
+    path: `/api/v1/review/${encodeURIComponent(firstReviewId)}?direction=backward&limit=10`,
+    p95BudgetMs: 1_000,
+    acceptedStatuses: new Set([200]),
+  }] : []),
+  ...(typeof firstAgentSourceId === 'string' && firstAgentSourceId ? [{
+    id: 'agentDetail',
+    label: 'Agent exact detail',
+    path: `/api/v1/agents/${encodeURIComponent(firstAgentSourceId)}`,
+    p95BudgetMs: 1_500,
+    acceptedStatuses: new Set([200]),
+  }] : []),
+]
+
+const liveId = process.env.AGENT_LENS_ACCEPT_LIVE_ID?.trim()
+const liveRuntimeSessionId = process.env.AGENT_LENS_ACCEPT_RUNTIME_SESSION_ID?.trim()
+if (liveId && liveRuntimeSessionId) {
+  dynamicProbes.push({
+    id: 'liveSnapshot',
+    label: 'Live current runtime snapshot',
+    path: `/api/v1/live/${encodeURIComponent(liveId)}/runtimes/${encodeURIComponent(liveRuntimeSessionId)}/snapshot`,
+    p95BudgetMs: 1_500,
+    acceptedStatuses: new Set([200]),
+  })
+}
+
+for (const probe of dynamicProbes) {
+  process.stdout.write(`measuring ${probe.label} ... `)
+  const result = await measureProbe(probe)
+  measurements.push(result)
+  console.log(
+    `${result.passed ? 'PASS' : 'FAIL'} p50=${result.result.p50Ms}ms p95=${result.result.p95Ms}ms `
+    + `bytes(p50/p95)=${result.result.responseBytes?.p50 ?? 0}/${result.result.responseBytes?.p95 ?? 0} `
+    + `failures=${result.result.failures}/${result.result.count}`,
+  )
+}
+
 let storageDiagnostics = null
 if (options.storageDiagnosticsBurst > 0) {
   const diagnosticsRequest = request(
