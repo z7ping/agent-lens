@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { HermesLiveAdapter, hermesLiveManifest, normalizeHermesLiveEvent } from './index'
-import type { DefaultHermesLiveService } from './service'
+import { DefaultHermesLiveService } from './service'
+import type { HermesApiClient } from './client'
 
 test('Hermes Live does not advertise Pi thinking-control semantics', () => {
   assert.equal(hermesLiveManifest.capabilities?.includes('thinking-control') ?? false, false)
@@ -28,6 +29,22 @@ test('Hermes Live shares the unified text message contract without claiming atta
   assert.deepEqual(prompts, ['summarize\n\na\nb'])
 })
 
+
+test('Hermes Live preserves the generic task title in Runtime state', async () => {
+  const client = {
+    createSession: async (input: { title?: string }) => {
+      assert.equal(input.title, 'Hermes task')
+      return 'session-1'
+    },
+  } as unknown as HermesApiClient
+  const service = new DefaultHermesLiveService(client)
+
+  const state = await service.start({ title: 'Hermes task' })
+  assert.equal(state.title, 'Hermes task')
+  assert.equal((await service.state(state.runtimeSessionId)).title, 'Hermes task')
+
+  await service.dispose()
+})
 
 test('Hermes Live maps public run events into the same Live renderer vocabulary', () => {
   assert.deepEqual(normalizeHermesLiveEvent({
