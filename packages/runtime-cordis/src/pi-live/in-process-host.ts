@@ -160,6 +160,7 @@ class InProcessHandle implements PiRuntimeHandle {
     leafId?: string | null
     rows: PiRoundIndexRow[]
     entryPositions: Map<string, number>
+    roundByCursor: Map<string, PiRoundIndexRow>
   } | undefined
 
   constructor(
@@ -194,6 +195,7 @@ class InProcessHandle implements PiRuntimeHandle {
         || String(record(all[cached.entryCount - 1]).id ?? '') === cached.lastEntryId)
     const rows = appendOnly ? [...cached.rows] : []
     const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map<string, number>()
+    const roundByCursor = appendOnly ? new Map(cached.roundByCursor) : new Map<string, PiRoundIndexRow>()
     const start = appendOnly ? cached.entryCount : 0
 
     for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
@@ -207,12 +209,14 @@ class InProcessHandle implements PiRuntimeHandle {
           ? part
           : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
         : typeof content === 'string' ? content : ''
-      rows.push({
+      const row: PiRoundIndexRow = {
         cursor: entry.id,
         ordinal: rows.length + 1,
         entryIndex,
         ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
-      })
+      }
+      rows.push(row)
+      roundByCursor.set(row.cursor, row)
     }
 
     this.roundIndexCache = {
@@ -221,6 +225,7 @@ class InProcessHandle implements PiRuntimeHandle {
       leafId,
       rows,
       entryPositions,
+      roundByCursor,
     }
     return rows
   }
@@ -260,7 +265,7 @@ class InProcessHandle implements PiRuntimeHandle {
     if (this.roundIndexCache) this.roundIndex(all)
     const entryPosition = (cursor: string | undefined) => cursor
       ? this.roundIndexCache?.entryPositions.get(cursor)
-        ?? entryPosition(cursor)
+        ?? all.findIndex(entry => record(entry).id === cursor)
       : -1
     const requested = window?.limit
     const limit = Number.isInteger(requested)
@@ -317,7 +322,7 @@ class InProcessHandle implements PiRuntimeHandle {
     const rows = this.roundIndex()
     const cursor = query.cursor?.trim()
     if (cursor) {
-      const row = rows.find(item => item.cursor === cursor)
+      const row = this.roundIndexCache?.roundByCursor.get(cursor)
       return { total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
     }
 
