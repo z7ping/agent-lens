@@ -253,6 +253,11 @@ export const liveApi = {
     return requestJson(livePath(liveId, '/metadata'))
   },
 
+  productMetadata(productId: string): Promise<LiveProductMetadata[]> {
+    const params = new URLSearchParams({ productId })
+    return requestJson<{ items: LiveProductMetadata[] }>(`${LIVE_ROOT}/product-metadata?${params}`).then(result => result.items)
+  },
+
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
     if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
       return liveRuntimeListCache.items
