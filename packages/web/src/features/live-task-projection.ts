@@ -263,6 +263,40 @@ function contentId(event: LiveEventDto, kind: 'message' | 'thinking', fallback: 
   return `${kind}:${fallback}`
 }
 
+export function mergeLiveActiveProjectionItems(
+  previous: readonly LiveTaskProjectionItem[],
+  incoming: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const merged = [...previous]
+  const indexes = new Map(merged.map((item, index) => [item.id, index] as const))
+
+  for (const item of incoming) {
+    // A live SSE update can arrive while reconnect recovery is reading a snapshot.
+    // Existing exact IDs are therefore newer presentation state and must win.
+    if (indexes.has(item.id)) continue
+
+    // Reconcile a persisted user row with its local optimistic placeholder.
+    if (item.kind === 'message' && item.role === 'user') {
+      const optimisticIndex = merged.findIndex(candidate =>
+        candidate.kind === 'message'
+        && candidate.role === 'user'
+        && candidate.id.startsWith('user:')
+        && candidate.text === item.text,
+      )
+      if (optimisticIndex >= 0) {
+        indexes.delete(merged[optimisticIndex]!.id)
+        merged[optimisticIndex] = item
+        indexes.set(item.id, optimisticIndex)
+        continue
+      }
+    }
+
+    indexes.set(item.id, merged.length)
+    merged.push(item)
+  }
+  return merged
+}
+
 function findLastProjectionIndex(
   items: readonly LiveTaskProjectionItem[],
   predicate: (item: LiveTaskProjectionItem) => boolean,
