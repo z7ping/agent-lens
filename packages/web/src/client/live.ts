@@ -408,7 +408,12 @@ export const liveApi = {
   ): () => void {
     const source = new EventSource(livePath(liveId, runtimeSuffix(runtimeSessionId, '/events')))
     const scheduler = new LiveEventScheduler(events => {
-      for (const value of events) listener(value)
+      for (const value of events) {
+        listener(value)
+        if (value.normalizedEvent?.type === 'title.update') {
+          notifyLiveStateChanged(liveId, runtimeSessionId)
+        }
+      }
     })
     const onVisibility = () => scheduler.visibilityChanged()
     const onLive = (event: MessageEvent<string>) => {
