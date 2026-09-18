@@ -309,6 +309,7 @@ export class AgentLensClientModel {
   getSnapshot = (): ClientSnapshot => this.snapshot
 
   sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
+  sourceRecords = (ids: readonly string[]): Promise<SourceRecordResponseDto[]> => this.api.sourceRecords(ids)
 
   managedAssetDirectory = (
     productId: string,
