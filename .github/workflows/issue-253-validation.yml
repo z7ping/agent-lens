@@ -1,10 +1,9 @@
 name: Issue 253 Read Path Validation
 
 on:
-  pull_request:
-    types: [ready_for_review]
+  push:
     branches:
-      - main
+      - perf/253-read-path
 
 permissions:
   contents: read
@@ -14,7 +13,6 @@ env:
 
 jobs:
   linux-performance:
-    if: github.head_ref == 'perf/253-read-path'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -69,7 +67,6 @@ jobs:
           if-no-files-found: warn
 
   windows-performance:
-    if: github.head_ref == 'perf/253-read-path'
     runs-on: windows-latest
     timeout-minutes: 40
     steps:
