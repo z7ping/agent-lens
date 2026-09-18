@@ -138,6 +138,10 @@ requireText(liveTask, /snapshotBaseActiveCountRef/, 'Live 完成态必须保留 
 requireText(liveTask, /active:\s*reduceLiveTaskEvent\(previous\.active, envelope\)/, 'Live 高频 SSE 只能更新当前活动轮，不能复制稳定历史')
 requireText(liveTask, /active:\s*appendOptimisticLiveUserMessage\(previous\.active, optimisticText, optimisticId\)/, '新一轮发送必须追加到活动尾部，避免未完成对账时错误推进稳定边界')
 requireText(liveTask, /mode === ['"]settle['"] && snapshot\.state\.isStreaming/, '上一轮完成对账返回时若下一轮已开始，必须丢弃旧投影结果并保留原 leaf')
+requireText(liveTask, /const liveTurnRevisionRef = useRef\(0\)/, 'Live 必须记录活动轮修订号，防止旧 Snapshot 覆盖下一轮')
+requireText(liveTask, /const recoveryTurnRevision = liveTurnRevisionRef\.current[\s\S]{0,500}liveTurnRevisionRef\.current !== recoveryTurnRevision/, 'Recovery 返回前若活动轮已变化，必须整体丢弃陈旧结果')
+requireText(liveTask, /normalizedEvent\.status === ['"]running['"][\s\S]{0,120}liveTurnRevisionRef\.current \+= 1/, 'Runtime 开始新一轮时必须推进活动轮修订号')
+
 requireText(liveTask, /let recoveryTask: Promise<void> \| null = null/, 'Live recovery 必须单飞，避免 ready/reconnect/completed 并发打 Snapshot')
 requireText(liveTask, /let pendingRecoveryMode: ['"]live['"] \| ['"]settle['"] \| null = null/, 'Live recovery 必须记录单飞期间的 pending 恢复')
 requireText(liveTask, /if \(recoveryTask\)[\s\S]{0,180}pendingRecoveryMode = mode[\s\S]{0,120}return recoveryTask/, 'Live recovery 并发请求必须合并为 pending 补跑')
