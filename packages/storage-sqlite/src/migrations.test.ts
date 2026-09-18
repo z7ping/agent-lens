@@ -28,6 +28,7 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
 
     const sourceRecordIndexesBefore = storage.db.prepare("PRAGMA index_list('source_records')")
       .all() as Array<{ name: string }>
+    assert.ok(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_native'))
     assert.equal(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_parser_replay'), false)
     assert.equal(sourceRecordIndexesBefore.some(index => index.name === 'idx_source_records_payload_compression_pending'), false)
 
