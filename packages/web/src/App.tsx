@@ -12,7 +12,7 @@ import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { MarkdownThemeManager } from './components/MarkdownThemeManager'
-import { PageLoadingState } from './components/StateViews'
+import { ErrorStateBanner, PageLoadingState } from './components/StateViews'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
 
@@ -279,8 +279,17 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }, [agentOverviewSourceId, resolvedAgentOverviewSourceId])
 
   useEffect(() => {
-    void model.ensureIntegrationManagement().catch(() => undefined)
+    void model.ensureIntegrationPreferences().catch(() => undefined)
   }, [model])
+
+  useEffect(() => {
+    const onboardingIncomplete = snapshot.integrationPreferences
+      ? !snapshot.integrationPreferences.preferences.onboarding.completed
+      : false
+    if (onIntegrations || onboardingIncomplete) {
+      void model.ensureIntegrationManagement().catch(() => undefined)
+    }
+  }, [model, onIntegrations, snapshot.integrationPreferences])
 
   useEffect(() => {
     setMobileNavigationOpen(false)
@@ -311,18 +320,34 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     replace: replaceReviewUrl,
   })
 
-  if (!snapshot.integrationManagement && !snapshot.integrationManagementError) {
+  if (!snapshot.integrationPreferences) {
     return <main className="integration-onboarding-shell">
-      <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>
+      {snapshot.integrationPreferencesError
+        ? <ErrorStateBanner
+            message={snapshot.integrationPreferencesError}
+            onRetry={() => void model.refreshIntegrationPreferences().catch(() => undefined)}
+          />
+        : <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>}
     </main>
   }
 
-  if (snapshot.integrationManagement && !snapshot.integrationManagement.preferences.onboarding.completed) {
+  if (!snapshot.integrationPreferences.preferences.onboarding.completed) {
+    if (!snapshot.integrationManagement) {
+      return <main className="integration-onboarding-shell">
+        {snapshot.integrationManagementError
+          ? <ErrorStateBanner
+              message={snapshot.integrationManagementError}
+              onRetry={() => void model.refreshIntegrationManagement().catch(() => undefined)}
+            />
+          : <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>}
+      </main>
+    }
     return <IntegrationOnboarding model={model} snapshot={snapshot}/>
   }
 
   return <IntegrationOrderProvider
     management={snapshot.integrationManagement}
+    preferences={snapshot.integrationPreferences}
     model={model}
   >
     <PinnedAgentsProvider agents={agents}>
