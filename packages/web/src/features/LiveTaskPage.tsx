@@ -358,7 +358,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [restoredQueue, setRestoredQueue] = useState<RestoredQueueDraft[]>([])
   const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
-  const [bootstrapReady, setBootstrapReady] = useState(false)
+  const [bootstrapTarget, setBootstrapTarget] = useState<{ liveId: string; runtimeSessionId: string } | null>(null)
   const [syncError, setSyncError] = useState('')
   const [newRecords, setNewRecords] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
@@ -415,7 +415,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
     setConnected(false)
-    setBootstrapReady(false)
+    setBootstrapTarget(null)
     setSyncError('')
     setNewRecords(false)
     setComposerExpanded(false)
@@ -477,7 +477,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setModelControl(model)
       setThinking(thinkingControl)
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
-      setBootstrapReady(true)
+      setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })
@@ -486,7 +486,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [current?.liveId, current?.runtimeSessionId, t])
 
   useEffect(() => {
-    if (!current || !bootstrapReady || !product?.capabilities.includes('stream')) return
+    if (!current
+      || bootstrapTarget?.liveId !== current.liveId
+      || bootstrapTarget.runtimeSessionId !== current.runtimeSessionId
+      || !product?.capabilities.includes('stream')) return
     let recoveryGeneration = 0
     const recover = async () => {
       if (!product.capabilities.includes('recovery')) return
@@ -574,7 +577,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       recoveryGeneration += 1
       unsubscribe()
     }
-  }, [bootstrapReady, current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities])
+  }, [
+    bootstrapTarget?.liveId,
+    bootstrapTarget?.runtimeSessionId,
+    current?.liveId,
+    current?.runtimeSessionId,
+    product?.liveId,
+    product?.capabilities,
+  ])
 
 
   useEffect(() => {
