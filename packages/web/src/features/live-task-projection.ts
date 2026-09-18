@@ -548,27 +548,38 @@ export class LiveTaskRoundProjector {
   private stableRounds: LiveTaskRoundProjection[] = []
   private stableOrdinal = 0
 
-  project(
-    items: readonly LiveTaskProjectionItem[],
-    requestedStableCount: number,
+  projectSegments(
+    stableItems: readonly LiveTaskProjectionItem[],
+    activeItems: readonly LiveTaskProjectionItem[],
   ): LiveTaskRoundProjection[] {
-    const stableCount = Math.max(0, Math.min(items.length, requestedStableCount))
-    const stableTail = stableCount > 0 ? items[stableCount - 1] : undefined
+    const stableCount = stableItems.length
+    const stableTail = stableCount > 0 ? stableItems[stableCount - 1] : undefined
     if (this.stableCount !== stableCount || this.stableTail !== stableTail) {
       this.stableCount = stableCount
       this.stableTail = stableTail
-      this.stableRounds = projectLiveTaskRounds(items.slice(0, stableCount))
+      this.stableRounds = projectLiveTaskRounds(stableItems)
       this.stableOrdinal = this.stableRounds.reduce(
         (max, round) => Math.max(max, round.model.ordinal ?? 0),
         0,
       )
     }
 
-    if (stableCount >= items.length) return this.stableRounds
+    if (!activeItems.length) return this.stableRounds
     return [
       ...this.stableRounds,
-      ...projectLiveTaskRounds(items.slice(stableCount), this.stableOrdinal),
+      ...projectLiveTaskRounds(activeItems, this.stableOrdinal),
     ]
+  }
+
+  project(
+    items: readonly LiveTaskProjectionItem[],
+    requestedStableCount: number,
+  ): LiveTaskRoundProjection[] {
+    const stableCount = Math.max(0, Math.min(items.length, requestedStableCount))
+    return this.projectSegments(
+      items.slice(0, stableCount),
+      items.slice(stableCount),
+    )
   }
 
   reset(): void {
