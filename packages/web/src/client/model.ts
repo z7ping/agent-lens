@@ -1,6 +1,8 @@
 import type {
+  AgentDetailResponseDto,
   AgentOverviewResponseDto,
   AgentRescanResponseDto,
+  AgentSummaryResponseDto,
   CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
@@ -31,7 +33,10 @@ import { translateProduct } from '../i18n/runtime'
 export interface ClientSnapshot {
   health: HealthResponseDto | null
   facets: FacetResponseDto | null
+  agentSummaries: AgentSummaryResponseDto | null
   agents: AgentOverviewResponseDto | null
+  agentDetailLoadingSourceId: string
+  agentDetailError: string
   capturePolicy: CapturePolicyResponseDto | null
   agentsLoading: boolean
   agentsError: string
@@ -174,11 +179,42 @@ function sortReviewSummaries(items: ReviewSessionSummaryDto[]): ReviewSessionSum
   )
 }
 
+function summariesFromOverview(response: AgentOverviewResponseDto): AgentSummaryResponseDto {
+  return {
+    items: response.items.map(item => ({
+      sourceId: item.sourceId,
+      productId: item.productId,
+      displayName: item.displayName,
+      supported: item.supported,
+      enabled: item.enabled,
+      detected: item.detected,
+      installationIds: item.installations.map(installation => installation.id),
+      installationCount: item.installations.length,
+    })),
+    meta: response.meta,
+  }
+}
+
+function mergeAgentDetail(
+  current: AgentOverviewResponseDto | null,
+  detail: AgentDetailResponseDto,
+): AgentOverviewResponseDto {
+  const items = new Map((current?.items ?? []).map(item => [item.sourceId, item]))
+  items.set(detail.item.sourceId, detail.item)
+  return {
+    items: [...items.values()],
+    meta: detail.meta,
+  }
+}
+
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
     health: null,
     facets: null,
+    agentSummaries: null,
     agents: null,
+    agentDetailLoadingSourceId: '',
+    agentDetailError: '',
     capturePolicy: null,
     agentsLoading: false,
     agentsError: '',
@@ -237,6 +273,8 @@ export class AgentLensClientModel {
   private reviewActive = false
   private facetsInFlight: Promise<void> | null = null
   private agentsInFlight: Promise<void> | null = null
+  private readonly agentDetailInFlight = new Map<string, Promise<void>>()
+  private agentCoverageInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
   private integrationPreferencesInFlight: Promise<void> | null = null
@@ -358,14 +396,11 @@ export class AgentLensClientModel {
   async refreshAgents(): Promise<void> {
     const generation = ++this.agentsGeneration
     const invalidation = this.agentsInvalidation
-    this.patch({
-      agentsLoading: true,
-      agentsError: '',
-    })
+    this.patch({ agentsLoading: true, agentsError: '' })
 
-    let agents: AgentOverviewResponseDto
+    let summaries: AgentSummaryResponseDto
     try {
-      agents = await this.api.agents()
+      summaries = await this.api.agentSummaries()
     } catch {
       if (generation !== this.agentsGeneration) return
       this.patch({
@@ -376,10 +411,10 @@ export class AgentLensClientModel {
     }
     if (generation !== this.agentsGeneration) return
 
-    // The Agent overview is the page-critical read. Publish it before secondary
-    // management/capture data starts so those reads cannot hold the first render.
+    // Summary is the page/navigation critical read. Detail and management data
+    // are loaded independently after this point.
     this.patch({
-      agents,
+      agentSummaries: summaries,
       agentsLoading: false,
       agentsError: '',
       agentsHasNewData: this.agentsInvalidation !== invalidation,
@@ -432,6 +467,49 @@ export class AgentLensClientModel {
     }
   }
 
+  ensureAgentDetail(sourceId: string): Promise<void> {
+    if (!sourceId) return Promise.resolve()
+    if (this.snapshot.agents?.items.some(item => item.sourceId === sourceId)) return Promise.resolve()
+    const existing = this.agentDetailInFlight.get(sourceId)
+    if (existing) return existing
+
+    this.patch({ agentDetailLoadingSourceId: sourceId, agentDetailError: '' })
+    const pending = this.api.agentDetail(sourceId).then(
+      detail => {
+        if (!detail) throw new Error(`Unknown Agent source: ${sourceId}`)
+        this.patch({
+          agents: mergeAgentDetail(this.snapshot.agents, detail),
+          agentDetailLoadingSourceId: '',
+          agentDetailError: '',
+        })
+      },
+      error => {
+        this.patch({
+          agentDetailLoadingSourceId: '',
+          agentDetailError: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      },
+    ).finally(() => {
+      this.agentDetailInFlight.delete(sourceId)
+    })
+    this.agentDetailInFlight.set(sourceId, pending)
+    return pending
+  }
+
+  refreshAgentCoverage(): Promise<void> {
+    const summaryCount = this.snapshot.agentSummaries?.items.length ?? 0
+    if (summaryCount > 0 && (this.snapshot.agents?.items.length ?? 0) >= summaryCount) return Promise.resolve()
+    if (this.agentCoverageInFlight) return this.agentCoverageInFlight
+    const pending = this.api.agents().then(agents => {
+      this.patch({ agents })
+    }).finally(() => {
+      if (this.agentCoverageInFlight === pending) this.agentCoverageInFlight = null
+    })
+    this.agentCoverageInFlight = pending
+    return pending
+  }
+
   rescanAgents(sourceId?: string): Promise<AgentRescanResponseDto> {
     if (this.agentsRescanInFlight) return this.agentsRescanInFlight
     const generation = ++this.agentsGeneration
@@ -441,6 +519,7 @@ export class AgentLensClientModel {
         if (generation === this.agentsGeneration) {
           this.patch({
             agents: result.agents,
+            agentSummaries: summariesFromOverview(result.agents),
             facets: result.facets,
             agentsLoading: false,
             agentsHasNewData: false,
@@ -726,7 +805,7 @@ export class AgentLensClientModel {
   }
 
   ensureAgents(): Promise<void> {
-    if (this.snapshot.agents) return Promise.resolve()
+    if (this.snapshot.agentSummaries) return Promise.resolve()
     if (this.agentsInFlight) return this.agentsInFlight
     const pending = this.refreshAgents().finally(() => {
       if (this.agentsInFlight === pending) this.agentsInFlight = null
