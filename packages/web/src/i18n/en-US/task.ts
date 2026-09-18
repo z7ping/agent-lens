@@ -99,6 +99,14 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       send: 'Send',
       unsupportedInput: 'This agent does not support {{type}} input.',
+      sidebar: {
+        title: 'Live sessions',
+        closeKeepsRunning: 'Leaving this page does not end tasks',
+        newTask: 'New task',
+        empty: 'No live sessions.',
+        history: 'View task history',
+        pending: '{{count}} queued',
+      },
       input: {
         largeText: 'large text',
         image: 'image',
