@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import type {
-  LiveContributionText,
-  LiveRuntimeContributionField,
-  LiveRuntimeDisclosureContribution,
+  LIVE_SNAPSHOT_DEFAULT_LIMIT,
+  LIVE_SNAPSHOT_MAX_LIMIT,
+  type LiveContributionText,
+  type LiveRuntimeContributionField,
+  type LiveRuntimeDisclosureContribution,
+  type LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
@@ -823,10 +826,19 @@ export class DefaultPiLiveService implements PiLiveService {
     return { runtime: await this.retry(id) }
   }
 
-  async snapshot(id: string, since?: string): Promise<PiLiveSnapshot> {
+  async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
-    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }
-    const snapshot = await runtime.handle.snapshot(since)
+    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
+    if (since && window?.before) throw new Error('Live snapshot cannot combine since and before cursors')
+    const requestedLimit = window?.limit
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit!))
+      : LIVE_SNAPSHOT_DEFAULT_LIMIT
+    const boundedWindow: LiveSnapshotWindow = {
+      ...(window?.before ? { before: window.before } : {}),
+      limit,
+    }
+    const snapshot = await runtime.handle.snapshot(since, boundedWindow)
     this.persistSessionIfChanged(runtime, snapshot.state)
     this.updateRuntimeResources(runtime, snapshot.state)
     this.persistStartupAuditBestEffort(runtime, snapshot.state)

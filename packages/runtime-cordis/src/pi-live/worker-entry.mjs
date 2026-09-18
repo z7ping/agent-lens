@@ -10,6 +10,8 @@ const MAX_MESSAGE_BYTES = 1024 * 1024
 const SNAPSHOT_CHUNK_BYTES = 384 * 1024
 const MAX_SNAPSHOT_TRANSFERS = 8
 const SNAPSHOT_TRANSFER_TTL_MS = 30_000
+const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
+const LIVE_SNAPSHOT_MAX_LIMIT = 500
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -362,11 +364,57 @@ function nextSnapshotChunk(transferId) {
   return { transferId, sequence, chunk, done }
 }
 
-function beginSnapshotTransfer(since) {
+function snapshotLimit(window) {
+  const requested = record(window).limit
+  return Number.isInteger(requested)
+    ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested))
+    : LIVE_SNAPSHOT_DEFAULT_LIMIT
+}
+
+function entryId(value) {
+  const id = record(value).id
+  return typeof id === 'string' && id ? id : undefined
+}
+
+function beginSnapshotTransfer(since, window) {
+  const requestedWindow = record(window)
+  if (since && typeof requestedWindow.before === 'string' && requestedWindow.before) {
+    throw new Error('Live snapshot cannot combine since and before cursors')
+  }
+
   const all = session.sessionManager.getEntries()
-  const index = since ? all.findIndex(entry => record(entry).id === since) : -1
-  const entries = since && index >= 0 ? all.slice(index + 1) : all
-  const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId() }
+  const limit = snapshotLimit(requestedWindow)
+  let entries
+  let page
+
+  if (since) {
+    const index = all.findIndex(entry => entryId(entry) === since)
+    const start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+    const end = Math.min(all.length, start + limit)
+    entries = all.slice(start, end)
+    const after = end < all.length ? entryId(entries.at(-1)) : undefined
+    page = {
+      hasEarlier: index < 0 && start > 0,
+      ...(end < all.length ? { hasLater: true, ...(after ? { after } : {}) } : {}),
+    }
+  } else {
+    let end = all.length
+    const before = typeof requestedWindow.before === 'string' ? requestedWindow.before : ''
+    if (before) {
+      const beforeIndex = all.findIndex(entry => entryId(entry) === before)
+      if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
+      end = beforeIndex
+    }
+    const start = Math.max(0, end - limit)
+    entries = all.slice(start, end)
+    const olderCursor = start > 0 ? entryId(entries[0]) : undefined
+    page = {
+      hasEarlier: start > 0,
+      ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
+    }
+  }
+
+  const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId(), page }
   const bytes = serialize(snapshot)
 
   pruneSnapshotTransfers()
@@ -687,7 +735,7 @@ function thinkingControl() {
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   if (name === 'state') return state()
-  if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since)
+  if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since, value.window)
   if (name === 'snapshotChunk') {
     if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
     return nextSnapshotChunk(value.transferId)

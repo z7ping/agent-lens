@@ -142,14 +142,23 @@ export interface LiveRuntimeState {
   pendingMessageCount: number
 }
 
+/** Every Live snapshot request is bounded independently of machine speed/memory. */
+export const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
+export const LIVE_SNAPSHOT_MAX_LIMIT = 500
+
 export interface LiveSnapshotWindow {
+  /** Exclusive cursor for loading older native entries. */
   before?: string | undefined
+  /** Entry budget. Adapters must clamp omitted/oversized values to the shared limits above. */
   limit?: number | undefined
 }
 
 export interface LiveSnapshotPage {
   hasEarlier: boolean
   before?: string | undefined
+  /** Forward pagination used when reconnect recovery has more than one bounded page. */
+  hasLater?: boolean | undefined
+  after?: string | undefined
 }
 
 export interface LiveSnapshot {
@@ -462,6 +471,10 @@ export interface LiveAdapter {
   /** Present only when the adapter declares fork. Logical session ids stay AgentLens-owned. */
   fork?(logicalSessionId: string): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
+  /**
+   * Must be bounded. Omitting window means LIVE_SNAPSHOT_DEFAULT_LIMIT, never
+   * "return the complete transcript".
+   */
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot>
   /** Present only when the adapter declares model-switching. */
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>

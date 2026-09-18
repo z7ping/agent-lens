@@ -12,6 +12,7 @@ import type {
   LiveModelControl,
   LiveRuntimeEvent,
   LiveSendOptions,
+  LiveSnapshotWindow,
   StorageService,
 } from '@agent-lens/core'
 import {
@@ -348,8 +349,8 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.state(runtimeSessionId)
   }
 
-  snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot> {
-    return this.service.snapshot(runtimeSessionId, since)
+  snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    return this.service.snapshot(runtimeSessionId, since, window)
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {

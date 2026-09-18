@@ -2,6 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
+import type { LiveSnapshotWindow } from '@agent-lens/core'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
@@ -57,7 +58,7 @@ export interface PiRuntimeHandle {
   readonly initializationElapsedMs?: number | undefined
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   state(): Promise<PiLiveRuntimeState>
-  snapshot(since?: string): Promise<PiLiveSnapshot>
+  snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
   controls(): Promise<PiLiveControls>
@@ -135,9 +136,13 @@ function parseSnapshot(value: unknown): PiLiveSnapshot {
   return value as PiLiveSnapshot
 }
 
-async function collectSnapshotTransfer(request: SnapshotTransferRequest, since?: string): Promise<PiLiveSnapshot> {
+async function collectSnapshotTransfer(
+  request: SnapshotTransferRequest,
+  since?: string,
+  window?: LiveSnapshotWindow,
+): Promise<PiLiveSnapshot> {
   const chunks: Buffer[] = []
-  let page = parseSnapshotTransferChunk(await request('snapshotBegin', { since }))
+  let page = parseSnapshotTransferChunk(await request('snapshotBegin', { since, window }))
   const transferId = page.transferId
   let expectedSequence = 0
 
@@ -318,8 +323,8 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   }
 
   state(): Promise<PiLiveRuntimeState> { return this.request('state') }
-  snapshot(since?: string): Promise<PiLiveSnapshot> {
-    return collectSnapshotTransfer((command, payload) => this.request(command, payload), since)
+  snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    return collectSnapshotTransfer((command, payload) => this.request(command, payload), since, window)
   }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {

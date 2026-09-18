@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { isLiveThinkingControl } from '@agent-lens/core'
+import { LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveSnapshotWindow } from '@agent-lens/core'
 import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
@@ -178,7 +178,48 @@ class InProcessHandle implements PiRuntimeHandle {
       packageUpdateCheck: this.packageUpdateState.status,
       ...(this.packageUpdateState.updates.length ? { packageUpdates: [...this.packageUpdateState.updates] } : {}) }
   }
-  async snapshot(since?: string): Promise<PiLiveSnapshot> { const all = this.session.sessionManager.getEntries(); const index = since ? all.findIndex(entry => record(entry).id === since) : -1; return { state: await this.state(), entries: since && index >= 0 ? all.slice(index + 1) : all, leafId: this.session.sessionManager.getLeafId() } }
+  async snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    if (since && window?.before) throw new Error('Live snapshot cannot combine since and before cursors')
+    const all = this.session.sessionManager.getEntries()
+    const requested = window?.limit
+    const limit = Number.isInteger(requested)
+      ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested!))
+      : LIVE_SNAPSHOT_DEFAULT_LIMIT
+    if (since) {
+      const index = all.findIndex(entry => record(entry).id === since)
+      const start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+      const end = Math.min(all.length, start + limit)
+      const entries = all.slice(start, end)
+      const after = end < all.length ? record(entries.at(-1)).id : undefined
+      return {
+        state: await this.state(),
+        entries,
+        leafId: this.session.sessionManager.getLeafId(),
+        page: {
+          hasEarlier: index < 0 && start > 0,
+          ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
+        },
+      }
+    }
+    let end = all.length
+    if (window?.before) {
+      const beforeIndex = all.findIndex(entry => record(entry).id === window.before)
+      if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
+      end = beforeIndex
+    }
+    const start = Math.max(0, end - limit)
+    const entries = all.slice(start, end)
+    const before = start > 0 ? record(entries[0]).id : undefined
+    return {
+      state: await this.state(),
+      entries,
+      leafId: this.session.sessionManager.getLeafId(),
+      page: {
+        hasEarlier: start > 0,
+        ...(start > 0 && typeof before === 'string' ? { before } : {}),
+      },
+    }
+  }
   private modelSnapshot(provider?: string): readonly PiSdkModel[] { const snapshot = [...this.session.modelRuntime.getAvailableSnapshot()]; const selected = this.session.model; const catalog = selected && !snapshot.some(model => model.provider === selected.provider && model.id === selected.id) ? [...snapshot, selected] : snapshot; return provider ? catalog.filter(model => model.provider === provider) : catalog }
   private async modelsForSelection(provider?: string): Promise<readonly PiSdkModel[]> { const snapshot = this.modelSnapshot(provider); return snapshot.length ? snapshot : await this.session.modelRuntime.getAvailable(provider) }
   private thinkingControl(): PiLiveControls['thinking'] {
