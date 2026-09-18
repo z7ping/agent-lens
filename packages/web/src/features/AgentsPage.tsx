@@ -109,6 +109,8 @@ const assetScopeLabelKey: Record<string, string> = {
 const USER_ASSET_LIMIT = 24
 const RUNTIME_CONFIG_PATH_LIMIT = 18
 
+type PiAgentView = 'overview' | 'ecosystem'
+
 function translatedLabel(
   map: Record<string, string>,
   value: string,
@@ -457,13 +459,14 @@ function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rul
   </section>
 }
 
-function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, onManageIntegration }: {
+function AgentCard({ model, agent, management, discovery, discoveryScanning, discoveryError, piView, onManageIntegration }: {
   model: AgentLensClientModel
   agent: AgentOverviewDto
   management: IntegrationManagementItemDto | undefined
   discovery: IntegrationToolDiscoveryItemDto | undefined
   discoveryScanning: boolean
   discoveryError: string
+  piView: PiAgentView
   onManageIntegration(integrationId: string): void
 }) {
   const { t } = useTranslation('agents')
@@ -596,10 +599,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       onManage={onManageIntegration}
     />}
 
+    {isPi && piView === 'ecosystem' ? <PiEcosystemPanel agent={agent}/> : <>
     {isPi ? <>
       <PiUsageGuidance agent={agent}/>
       <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
-      <PiEcosystemPanel agent={agent}/>
     </> : <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3></div><span className="section-total">{userAssetCount}</span></div>
       <div className="asset-kpis">
@@ -679,6 +682,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         </div>
       </Disclosure>
     </section>
+    </>}
     {pathError && <div className="agent-path-error" role="alert">{pathError}</div>}
     {managedRoot && installation && managedRootPath && <AgentManagedFilesDialog
       open
@@ -706,7 +710,15 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   </article>
 }
 
-export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; sourceId: string }) {
+export function AgentsPage({
+  model,
+  sourceId,
+  piView = 'overview',
+}: {
+  model: AgentLensClientModel
+  sourceId: string
+  piView?: PiAgentView
+}) {
   const { t } = useTranslation('agents')
   const navigate = useNavigate()
   const snapshot = useClientSnapshot(model)
@@ -779,6 +791,7 @@ export function AgentsPage({ model, sourceId }: { model: AgentLensClientModel; s
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
+            piView={piView}
             onManageIntegration={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
           /> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
