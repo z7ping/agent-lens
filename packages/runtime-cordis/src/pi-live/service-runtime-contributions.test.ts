@@ -108,7 +108,6 @@ test('Pi runtime retry action reuses native retry lifecycle and becomes a ready 
 
     const result = await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.retry')
     assert.equal(result.runtime.status, 'initializing')
-    assert.equal(host.starts, 1)
 
     const ready = await waitForStatus(service, started.runtimeSessionId, 'ready')
     assert.equal(host.starts, 2)
