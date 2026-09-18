@@ -37,11 +37,13 @@ const scheduler = new LiveEventScheduler(events => {
 let sequence = 1
 const startedAt = performance.now()
 scheduler.push(event(sequence++, { type: 'message.start', role: 'assistant', messageId: 'assistant-1' }))
+const textEvents = Math.max(1, Math.floor(deltaEvents * 0.8))
 for (let index = 0; index < deltaEvents; index += 1) {
+  const reasoning = index >= textEvents
   scheduler.push(event(sequence++, {
-    type: index % 5 === 0 ? 'reasoning.delta' : 'text.delta',
+    type: reasoning ? 'reasoning.delta' : 'text.delta',
     messageId: 'assistant-1',
-    contentIndex: index % 5 === 0 ? 1 : 0,
+    contentIndex: reasoning ? 1 : 0,
     delta: 'x',
   }))
 }
@@ -81,4 +83,4 @@ console.log(JSON.stringify(result))
 if (result.staleDeliveriesOnDispose !== 0) throw new Error('Live 调度器销毁时仍交付了过期事件')
 if (pushMs > budgetPushMs) throw new Error(`Live 高频事件入队 ${pushMs.toFixed(2)}ms 超过预算 ${budgetPushMs}ms`)
 if (deliveredRatio > budgetDeliveredRatio) throw new Error(`Live 事件交付比 ${(deliveredRatio * 100).toFixed(3)}% 超过预算 ${(budgetDeliveredRatio * 100).toFixed(3)}%`)
-if (visible.coalescedEvents < deltaEvents - 4) throw new Error('Live text/reasoning delta 未形成足够合并')
+if (visible.coalescedEvents < deltaEvents - 3) throw new Error('Live 连续 text/reasoning delta 未形成足够合并')
