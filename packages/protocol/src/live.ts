@@ -159,6 +159,7 @@ export type LiveEventDto =
   | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
   | { type: 'title.update'; title: string }
   | { type: 'control.changed'; control: 'model' | 'thinking' }
+  | { type: 'runtime-disclosure.changed' }
   | {
       type: 'message.start' | 'message.end'
       role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
@@ -455,6 +456,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ? { type, control: event.control }
       : null
   }
+  if (type === 'runtime-disclosure.changed') return { type }
   if (type === 'message.start' || type === 'message.end') {
     const role = event.role
     const validRole = role === undefined
