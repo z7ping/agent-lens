@@ -1087,16 +1087,25 @@ export class AgentLensClientModel {
   private onLiveEvent(event: LiveUpdateEventDto): void {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
-      const updatesSelectedSession = this.reviewActive
-        && event.type === 'observation.committed'
-        && Boolean(event.logicalSessionId)
-        && event.logicalSessionId === this.snapshot.review.selectedId
-      if (updatesSelectedSession) {
-        if (this.detailTimer) clearTimeout(this.detailTimer)
-        this.detailTimer = setTimeout(() => {
-          this.detailTimer = null
-          if (this.reviewActive) void this.refreshSelectedTailIncremental()
-        }, 160)
+      if (event.type === 'session.updated') {
+        // Session Summary is materialized now; only a short coalescing window is
+        // needed before refreshing the Task Center list.
+        this.scheduleReviewRefresh(100)
+      } else if (event.type === 'observation.committed') {
+        const updatesSelectedSession = this.reviewActive
+          && Boolean(event.logicalSessionId)
+          && event.logicalSessionId === this.snapshot.review.selectedId
+        if (updatesSelectedSession) {
+          if (this.detailTimer) clearTimeout(this.detailTimer)
+          this.detailTimer = setTimeout(() => {
+            this.detailTimer = null
+            if (this.reviewActive) void this.refreshSelectedTailIncremental()
+          }, 160)
+        }
+        // Summary-ready normally arrives first and replaces this timer with the
+        // 100ms path. Keep a bounded fallback so projection failure cannot leave
+        // the list stale forever.
+        this.scheduleReviewRefresh(2_000)
       } else {
         this.scheduleReviewRefresh()
       }
