@@ -374,7 +374,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      <TaskLiveRuntimeList/>
+      <TaskLiveRuntimeList deferMs={mode === 'new' ? 500 : 150}/>
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
