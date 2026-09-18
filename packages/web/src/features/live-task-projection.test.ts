@@ -49,6 +49,21 @@ test('snapshot projection consumes message-shaped native rows without Agent-spec
   ])
 })
 
+test('message action targets are exposed only for persisted message entries', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message',
+      id: 'entry-user-1',
+      parentId: null,
+      message: { role: 'user', content: [{ type: 'text', text: 'persisted prompt' }] },
+    },
+    { id: 'event-user-1', role: 'user', content: 'generic event message' },
+  ])
+
+  assert.equal(items[0]?.kind === 'message' ? items[0].entryId : undefined, 'entry-user-1')
+  assert.equal(items[1]?.kind === 'message' ? items[1].entryId : undefined, undefined)
+})
+
 test('snapshot projection preserves assistant reasoning and tool history across reload', () => {
   const items = projectLiveSnapshotEntries([
     {
