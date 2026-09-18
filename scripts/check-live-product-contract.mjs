@@ -182,6 +182,8 @@ requireText(liveClient, /event\.type === ['"]runtime-disclosure\.changed['"][\s\
 
 requireText(liveTask, /setActivityStatus\(envelope\.normalizedEvent\.status\)/, 'LiveTaskPage 必须消费 compacting 等通用活动状态')
 requireText(liveTask, /event\.status === ['"]failed['"] \|\| event\.status === ['"]terminating['"] \|\| event\.status === ['"]terminated['"]/, 'Live 终止/失败状态必须清理 isStreaming，不能继续显示可中断')
+requireText(liveTask, /normalizedEvent\.status === ['"]failed['"] && envelope\.normalizedEvent\.message[\s\S]{0,120}setError/, 'Live failed status 必须把 Runtime 原因反馈给用户')
+requireText(liveTask, /normalizedEvent\?\.type === ['"]completed['"][\s\S]{0,260}normalizedEvent\.status === ['"]failed['"][\s\S]{0,120}setError/, 'Live completed failed 必须把 Run 失败原因反馈给用户')
 
 requireText(liveTaskProjection, /semanticId:\s*round\.id/, 'Live 分块必须共享语义轮次 ID，不能把渲染分片伪装成新轮次')
 requireText(liveTaskProjection, /type === 'thinking' \|\| type === 'reasoning'/, 'Live Snapshot 投影不得在刷新后丢失 Thinking')
@@ -227,6 +229,8 @@ requireText(liveProtocol, /type:\s*['"]runtime-disclosure\.changed['"]/, 'Protoc
 requireText(piLiveAdapter, /type === ['"]task_summary['"][\s\S]{0,180}type:\s*['"]title\.update['"]/, 'Pi task_summary 必须只在 Adapter 边界映射为通用 title.update')
 requireText(piLiveAdapter, /type === ['"]model_changed['"][\s\S]{0,120}control:\s*['"]model['"]/, 'Pi model_changed 必须只在 Adapter 边界映射为通用 control.changed')
 requireText(piLiveAdapter, /type === ['"]thinking_level_changed['"][\s\S]{0,120}control:\s*['"]thinking['"]/, 'Pi thinking_level_changed 必须只在 Adapter 边界映射为通用 control.changed')
+requireText(piLiveAdapter, /type === ['"]runtime_exit['"][\s\S]{0,180}type:\s*['"]status['"][\s\S]{0,120}status:\s*['"]failed['"]/, 'Pi runtime_exit 必须映射为终止性 failed status，不能与扩展错误混为一谈')
+requireText(piLiveAdapter, /type === ['"]extension_error['"][\s\S]{0,180}type:\s*['"]error['"]/, 'Pi extension_error 必须保留为非终止性通用 error')
 requireText(piLiveAdapter, /type === ['"]runtime_resources['"][\s\S]{0,180}runtime-disclosure\.changed/, 'Pi 私有诊断变化必须只在 Adapter 边界映射为 Runtime Disclosure 失效事件')
 requireText(liveHttp, /const title = typeof row\.title === ['"]string['"]/, 'Live HTTP 必须安全投影通用 Runtime title')
 requireText(liveTask, /runtime\.title\?\.trim\(\) \|\| workspaceDisplayName/, 'Live 会话栏必须优先展示通用任务标题')
