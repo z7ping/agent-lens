@@ -102,6 +102,10 @@ export interface LiveSnapshotDto {
   state: LiveRuntimeStateDto
   entries: unknown[]
   leafId?: string | null | undefined
+  page?: {
+    hasEarlier: boolean
+    before?: string | undefined
+  } | undefined
 }
 
 export interface LiveQueueStateDto {
