@@ -246,6 +246,14 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
   assert.equal((await first.state(initial.runtimeSessionId)).status, 'ready')
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.sessionPath, '/sessions/live.jsonl')
 
+  await first.prompt(initial.runtimeSessionId, '自动标题应跨 Daemon 恢复')
+  for (let index = 0; index < 20
+    && store.values.get(initial.runtimeSessionId)?.taskSummary !== '自动标题应跨 Daemon 恢复'; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal(store.values.get(initial.runtimeSessionId)?.taskSummary, '自动标题应跨 Daemon 恢复')
+  assert.equal((await first.state(initial.runtimeSessionId)).title, '自动标题应跨 Daemon 恢复')
+
   await first.dispose()
   assert.equal(firstTerminateCalls, 1)
   assert.equal(store.values.has(initial.runtimeSessionId), true)
@@ -269,6 +277,7 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
 
   assert.equal(restored.runtimeSessionId, initial.runtimeSessionId)
   assert.equal(restored.status, 'ready')
+  assert.equal(restored.title, '自动标题应跨 Daemon 恢复')
   assert.equal(restored.initializationMessage?.startsWith('Pi Runtime 已恢复'), true)
   assert.equal(recoveredInput?.sessionPath, '/sessions/live.jsonl')
   assert.equal(recoveredInput?.historyAction, 'continue')
