@@ -33,6 +33,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       source: 'Source',
       rendered: 'Rendered',
       imageAttachment: 'Image attachment',
+      fileAttachment: 'File attachment',
     },
     surface: {
       turnRail: 'Turn rail',
