@@ -45,7 +45,7 @@ test('具体 Agent 的 Review 事件解释只能留在 Product Presentation 投�
 
 test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi 原生字段', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
-  for (const capability of ['model-switching', 'thinking-control', 'extension-ui', 'recovery', 'steer', 'queue']) {
+  for (const capability of ['model-switching', 'thinking-control', 'extension-ui', 'command-discovery', 'recovery', 'steer', 'queue']) {
     assert.match(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), capability)
   }
   assert.match(liveTask, /liveApi\.modelControl/)
@@ -58,6 +58,20 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })
 
+
+test('Slash 命令发现保持通用 Live Product 边界', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /capabilities\.includes\('command-discovery'\)/)
+  assert.match(liveTask, /liveApi\.commands\(current\.liveId, current\.runtimeSessionId\)/)
+  assert.match(liveTask, /commands=\{commands\}/)
+  assert.doesNotMatch(liveTask, /get_commands|BUILTIN_SLASH_COMMANDS|command\.source\s*===\s*['"](?:extension|prompt|skill)['"]/)
+
+  assert.match(liveComposer, /function CommandMenuPlugin/)
+  assert.match(liveComposer, /COMMAND_PRIORITY_CRITICAL/)
+  assert.match(liveComposer, /replacePlainTextDocument\(editor, `\$\{command\.value\} `\)/)
+  assert.match(liveComposer, /className="select-menu-popover live-command-menu"/)
+  assert.doesNotMatch(liveComposer, /\bpi\b|Pi Live|BUILTIN_SLASH_COMMANDS/)
+})
 
 test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
