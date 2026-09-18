@@ -191,6 +191,8 @@ function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefi
     modelSwitching: capabilities.modelSwitching,
     thinkingLevelControl: capabilities.thinkingLevelControl,
     extensionUi: capabilities.extensionUi,
+    ...(typeof capabilities.treeNavigation === 'boolean' ? { treeNavigation: capabilities.treeNavigation } : {}),
+    ...(typeof capabilities.messageFork === 'boolean' ? { messageFork: capabilities.messageFork } : {}),
   }
 }
 
