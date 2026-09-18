@@ -368,7 +368,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
