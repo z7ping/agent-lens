@@ -389,6 +389,7 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     && (cached.entryCount === 0 || entryId(all[cached.entryCount - 1]) === cached.lastEntryId)
   const rows = appendOnly ? [...cached.rows] : []
   const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map()
+  const roundByCursor = appendOnly ? new Map(cached.roundByCursor) : new Map()
   const start = appendOnly ? cached.entryCount : 0
 
   for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
@@ -404,15 +405,17 @@ function roundIndex(all = session.sessionManager.getEntries()) {
         ? part
         : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
       : typeof content === 'string' ? content : ''
-    rows.push({
+    const row = {
       cursor,
       ordinal: rows.length + 1,
       entryIndex,
       ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
-    })
+    }
+    rows.push(row)
+    roundByCursor.set(row.cursor, row)
   }
 
-  roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows, entryPositions }
+  roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows, entryPositions, roundByCursor }
   return rows
 }
 
@@ -446,7 +449,7 @@ function beginSnapshotTransfer(since, window) {
   const all = session.sessionManager.getEntries()
   if (roundIndexCache) roundIndex(all)
   const entryPosition = cursor => cursor
-    ? roundIndexCache?.entryPositions?.get(cursor) ?? entryPosition(cursor)
+    ? roundIndexCache?.entryPositions?.get(cursor) ?? all.findIndex(entry => entryId(entry) === cursor)
     : -1
   const limit = snapshotLimit(requestedWindow)
   let start = 0
@@ -514,7 +517,7 @@ function historyIndex(queryValue) {
   const rows = roundIndex()
   const cursor = typeof query.cursor === 'string' ? query.cursor.trim() : ''
   if (cursor) {
-    const row = rows.find(item => item.cursor === cursor)
+    const row = roundIndexCache?.roundByCursor?.get(cursor)
     return {
       total: rows.length,
       items: row ? [{
