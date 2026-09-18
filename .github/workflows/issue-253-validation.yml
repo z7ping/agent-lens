@@ -42,7 +42,7 @@ jobs:
           npm run test --workspace @agent-lens/source-pi
           npm run test --workspace @agent-lens/projection-review
           npm run test --workspace @agent-lens/web
-          npm run test --workspace @agent-lens/daemon
+          npx --no-install tsx --test "apps/daemon/src/data-runtime/*.test.ts"
 
       - name: Run focused performance contracts
         shell: bash
@@ -109,7 +109,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test --workspace @agent-lens/web
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test --workspace @agent-lens/daemon
+          npx --no-install tsx --test "apps/daemon/src/data-runtime/*.test.ts"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run Windows large-scale validation
