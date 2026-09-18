@@ -30,6 +30,7 @@ export interface PiSdkSessionManager {
   getEntries(): unknown[]
   getEntry?: SessionManager['getEntry']
   branch?: SessionManager['branch']
+  newSession?: SessionManager['newSession']
   /** Available on Pi versions that support native session branching. Required only for “分叉继续”. */
   createBranchedSession?: SessionManager['createBranchedSession']
 }
