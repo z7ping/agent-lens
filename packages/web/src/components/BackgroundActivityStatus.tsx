@@ -55,7 +55,7 @@ export function BackgroundActivityStatus({ health }: { health: HealthResponseDto
     }
     const refresh = async () => {
       if (document.hidden) {
-        schedule(10_000)
+        schedule(30_000)
         return
       }
       controller?.abort()
@@ -78,7 +78,7 @@ export function BackgroundActivityStatus({ health }: { health: HealthResponseDto
       void refresh()
     }
 
-    void refresh()
+    schedule(2_000)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       disposed = true
