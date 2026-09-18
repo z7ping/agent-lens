@@ -8,6 +8,8 @@ export type LiveTaskProjectionItem =
       kind: 'message'
       role: 'user' | 'assistant'
       text: string
+      /** Stable native session entry id; present only for snapshot-backed messages. */
+      entryId?: string | undefined
       attachments?: ReviewMessageAttachmentDto[] | undefined
       streaming: boolean
       at?: string | undefined
@@ -120,6 +122,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     const item = record(value)
     const nested = record(item.message)
     const rawRole = text(item.role) || text(nested.role)
+    const nativeEntryId = item.type === 'message' ? text(item.id) : ''
     const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
     const content = Array.isArray(nested.content)
@@ -160,6 +163,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         kind: 'message',
         role,
         text: body,
+        ...(nativeEntryId ? { entryId: nativeEntryId } : {}),
         ...(attachments.length ? { attachments } : {}),
         streaming: false,
         ...(at ? { at } : {}),
@@ -178,6 +182,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         kind: 'message',
         role: 'assistant',
         text: body,
+        ...(nativeEntryId ? { entryId: nativeEntryId } : {}),
         streaming: false,
         ...(at ? { at } : {}),
       })
