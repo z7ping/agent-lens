@@ -380,6 +380,16 @@ export async function handleLiveRequest(
       writeJson(response, 202, { ok: true })
       return true
     }
+    if (action === 'queue' && request.method === 'GET') {
+      requireCapability(adapter, 'queue')
+      if (!adapter.queueState) throw httpError(409, `${adapter.manifest.displayName} does not expose Live queue state`)
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `queue:${runtimeSessionId}`,
+        () => adapter.queueState!(runtimeSessionId),
+      )))
+      return true
+    }
     if (action === 'queue' && request.method === 'DELETE') {
       requireCapability(adapter, 'queue')
       if (!adapter.clearQueue) throw httpError(409, `${adapter.manifest.displayName} does not expose Live queue control`)
