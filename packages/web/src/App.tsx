@@ -308,6 +308,14 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }, [model, onIntegrations, snapshot.integrationPreferences])
 
   useEffect(() => {
+    const onboardingIncomplete = snapshot.integrationPreferences
+      ? !snapshot.integrationPreferences.preferences.onboarding.completed
+      : false
+    model.setIntegrationDiscoveryActive(onAgents || onIntegrations || onboardingIncomplete)
+    return () => model.setIntegrationDiscoveryActive(false)
+  }, [model, onAgents, onIntegrations, snapshot.integrationPreferences])
+
+  useEffect(() => {
     setMobileNavigationOpen(false)
   }, [location.pathname])
 
