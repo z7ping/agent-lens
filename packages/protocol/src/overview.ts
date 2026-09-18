@@ -132,3 +132,21 @@ export interface AgentEnrichmentResponseDto {
     generatedAt: string
   }
 }
+
+export interface AgentCoverageItemDto {
+  sourceId: string
+  productId: string
+  displayName: string
+  detected: boolean
+  enabled: boolean
+  assetInventory: AgentAssetInventoryDto[]
+  usedAssets: AgentUsedAssetDto[]
+}
+
+export interface AgentCoverageResponseDto {
+  items: AgentCoverageItemDto[]
+  meta: {
+    protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+    generatedAt: string
+  }
+}
