@@ -481,10 +481,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
         matched.capabilities.includes('model-switching')
-          ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => null)
+          ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => {
+              if (!cancelled) setSyncError(t('live.controlsSyncFailed'))
+              return null
+            })
           : Promise.resolve(null),
         matched.capabilities.includes('thinking-control')
-          ? liveApi.thinkingControl(current.liveId, current.runtimeSessionId).catch(() => null)
+          ? liveApi.thinkingControl(current.liveId, current.runtimeSessionId).catch(() => {
+              if (!cancelled) setSyncError(t('live.controlsSyncFailed'))
+              return null
+            })
           : Promise.resolve(null),
         matched.capabilities.includes('queue')
           ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
@@ -639,10 +645,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         }
         if (envelope.normalizedEvent?.type === 'control.changed') {
           if (envelope.normalizedEvent.control === 'model' && product.capabilities.includes('model-switching')) {
-            void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(setModelControl, () => undefined)
+            void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(
+              setModelControl,
+              () => setSyncError(t('live.controlsSyncFailed')),
+            )
           }
           if (envelope.normalizedEvent.control === 'thinking' && product.capabilities.includes('thinking-control')) {
-            void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(setThinking, () => undefined)
+            void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(
+              setThinking,
+              () => setSyncError(t('live.controlsSyncFailed')),
+            )
           }
         }
         if (envelope.normalizedEvent?.type === 'queue.update') {
