@@ -13,6 +13,10 @@ const [
   architectureTest,
   reviewPage,
   reviewLiveInteraction,
+  liveComposer,
+  liveImageNode,
+  liveAttachmentClient,
+  liveAttachmentHttp,
 ] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
@@ -26,6 +30,10 @@ const [
   readFile(new URL('../packages/web/src/features/live-product-surface-architecture.test.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/review-live-interaction.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/components/LiveImageNode.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/client/live-attachments.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/surface-http/src/live-attachments-http.ts', import.meta.url), 'utf8'),
 ])
 
 const failures = []
@@ -101,6 +109,31 @@ for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'ste
   requireText(liveProtocol, new RegExp(`\\| '${capability}'`), `Live protocol capability 缺少：${capability}`)
 }
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
+
+/* Live input/composer behavior is product-level, not Pi-specific. */
+requireText(liveComposer, /KEY_ENTER_COMMAND/, 'Live Composer 缺少 Enter command 边界')
+requireText(liveComposer, /PASTE_COMMAND/, 'Live Composer 缺少统一粘贴 command')
+requireText(liveComposer, /LiveLargeTextNode/, 'Live Composer 缺少结构化大文本节点')
+requireText(liveComposer, /LiveImageNode/, 'Live Composer 缺少结构化图片节点')
+requireText(liveComposer, /function ImagePastePlugin/, 'Live Composer 缺少图片粘贴边界')
+requireText(liveComposer, /uploadLiveAttachment\(item\.file, item\.attachmentId\)/, '图片必须先进入通用 Live Attachment Service')
+requireText(liveComposer, /pendingCountRef\.current \+= pending\.length/, '并发附件上传必须保持有界发送锁')
+requireText(liveComposer, /globalThis\.crypto\.randomUUID\(\)/, '图片粘贴必须先生成 opaque attachmentId')
+requireText(liveComposer, /getMessage\(\)/, 'Live Composer 必须输出统一结构化消息')
+requireText(liveComposer, /event\.isComposing/, 'Live Composer 缺少 IME isComposing 保护')
+requireText(liveComposer, /keyCode === 229/, 'Live Composer 缺少 IME 229 兼容')
+requireText(liveComposer, /function ExternalDraftPlugin/, 'Live Composer 缺少外部 Draft revision 边界')
+requireText(liveComposer, /editor\.isComposing\(\)/, '外部 Draft 同步不得打断 IME')
+requireText(liveComposer, /function DraftPresencePlugin/, 'Live Composer 本地编辑必须只向父级传播轻量 presence')
+requireText(liveComposer, /export const LiveMarkdownComposer = memo\(LiveMarkdownComposerImpl\)/, 'Live Composer 必须与阅读区父级渲染隔离')
+requireText(liveImageNode, /getImagePart\(\): LiveImagePartDto \| null/, 'Live Image Node 必须输出统一 image part')
+requireText(liveImageNode, /liveAttachmentPreviewUrl\(attachmentId\)/, '图片预览必须使用 opaque attachmentId')
+requireText(liveAttachmentClient, /\/api\/v1\/live\/attachments/, 'Web 图片上传必须使用通用 Live attachment 端点')
+requireText(liveAttachmentHttp, /LIVE_ATTACHMENT_MAX_ITEM_BYTES/, 'Live Attachment HTTP 必须保持单项大小上限')
+requireText(liveTask, /draft=\{draft\}/, 'LiveTaskPage 必须通过显式 Draft revision 控制 Composer')
+requireText(liveTask, /onDraftPresenceChange=\{setComposerHasContent\}/, 'LiveTaskPage 只能消费轻量内容存在性')
+requireText(liveTask, /onAttachmentPendingChange=\{setComposerAttachmentPending\}/, 'LiveTaskPage 必须感知附件上传 pending')
+requireText(liveTask, /disabled=\{!canSubmit \|\| !composerHasContent\}/, '发送按钮必须受 capability/pending/content 联合约束')
 
 /* Historical Review actions are also product/capability projections, never source-id checks. */
 requireText(reviewPage, /projectReviewLiveInteraction\(detail, liveProducts\)/, 'Review 必须通过通用 Live Product 投影恢复/分叉能力')
