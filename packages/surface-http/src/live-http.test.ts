@@ -25,9 +25,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -151,6 +151,14 @@ class FakeLiveAdapter implements LiveAdapter {
       { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
       { value: '/skill:repo-review', label: '/skill:repo-review', group: 'skill' },
     ]
+  }
+
+  async workspaceFileReferences(runtimeSessionId: string, query: string, limit = 20) {
+    await this.state(runtimeSessionId)
+    return [
+      { path: 'src/index.ts', value: '@src/index.ts' },
+      { path: 'docs/user guide.md', value: '@"docs/user guide.md"' },
+    ].filter(item => item.path.includes(query)).slice(0, limit)
   }
 
   async messageActions(runtimeSessionId: string) {
@@ -360,6 +368,14 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
         { value: '/skill:repo-review', label: '/skill:repo-review', group: 'skill' },
       ],
+    })
+
+    const workspaceReferences = await fetch(
+      `${base}/api/v1/live/test/runtimes/runtime-1/workspace-references?q=src&limit=10`,
+    )
+    assert.equal(workspaceReferences.status, 200)
+    assert.deepEqual(await workspaceReferences.json(), {
+      items: [{ path: 'src/index.ts', value: '@src/index.ts' }],
     })
 
     const messageActions = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`)
