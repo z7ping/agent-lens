@@ -1,9 +1,11 @@
 import type {
   LiveAvailabilityDto,
+  LiveInterruptResultDto,
   LiveMessageInputDto,
   LiveModelControlDto,
   LiveProductDto,
   LiveProductsResponseDto,
+  LiveQueueStateDto,
   LiveRuntimeEventDto,
   LiveRuntimeRefDto,
   LiveRuntimeStateDto,
@@ -136,7 +138,14 @@ export const liveApi = {
     )
   },
 
-  interrupt(liveId: string, runtimeSessionId: string): Promise<unknown> {
+  clearQueue(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {
+    return requestJson(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/queue')),
+      { method: 'DELETE' },
+    )
+  },
+
+  interrupt(liveId: string, runtimeSessionId: string): Promise<LiveInterruptResultDto> {
     return requestJson(
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/interrupt')),
       { method: 'POST' },
