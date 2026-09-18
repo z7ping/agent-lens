@@ -57,6 +57,151 @@ function taskSummary(message: string): string | undefined {
   return normalized ? normalized.slice(0, 240) : undefined
 }
 
+
+function contributionText(defaultText: string, zhCN: string) {
+  return {
+    default: defaultText,
+    localizations: {
+      'zh-CN': zhCN,
+      'en-US': defaultText,
+    },
+  }
+}
+
+function contributionDuration(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '—'
+  const ms = Math.max(0, value)
+  if (ms < 1) return '<1ms'
+  if (ms < 1_000) return `${Math.round(ms)}ms`
+  return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)}s`
+}
+
+const PI_STAGE_LABELS: Record<PiLiveInitializationStage, { en: string; zh: string }> = {
+  starting_worker: { en: 'Starting worker', zh: '启动 Worker' },
+  loading_sdk: { en: 'Loading SDK', zh: '加载 SDK' },
+  loading_resources: { en: 'Loading resources', zh: '加载资源' },
+  creating_session: { en: 'Creating session', zh: '创建会话' },
+  binding_extensions: { en: 'Binding extensions', zh: '绑定扩展' },
+  ready: { en: 'Ready', zh: '就绪' },
+}
+
+function stageLabel(stage: PiLiveInitializationStage | undefined): { en: string; zh: string } | undefined {
+  return stage ? PI_STAGE_LABELS[stage] : undefined
+}
+
+function runtimeStatusLabel(status: PiLiveRuntimeState['status']): { en: string; zh: string } {
+  if (status === 'failed') return { en: 'Failed', zh: '失败' }
+  if (status === 'initializing') return { en: 'Initializing', zh: '初始化中' }
+  if (status === 'terminating') return { en: 'Terminating', zh: '正在终止' }
+  if (status === 'terminated') return { en: 'Terminated', zh: '已终止' }
+  return { en: 'Ready', zh: '就绪' }
+}
+
+function runtimeDisclosureFields(state: PiLiveRuntimeState) {
+  const fields = []
+  const currentStage = stageLabel(state.initializationStage)
+  if (currentStage) {
+    fields.push({
+      label: contributionText('Current stage', '当前阶段'),
+      value: currentStage.en,
+      values: undefined,
+    })
+  }
+
+  const elapsed = state.initializationElapsedMs
+    ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
+  if (elapsed !== undefined) {
+    fields.push({
+      label: contributionText('Initialization elapsed', '初始化耗时'),
+      value: contributionDuration(elapsed),
+    })
+  }
+
+  if (state.initializationTimings?.length) {
+    fields.push({
+      label: contributionText('Initialization stages', '初始化阶段'),
+      kind: 'list' as const,
+      values: state.initializationTimings.map(item => {
+        const label = stageLabel(item.stage)?.en ?? item.stage
+        return `${label} · ${contributionDuration(item.durationMs)}`
+      }),
+    })
+  }
+
+  const sdkVersion = state.sdkVersion ?? state.capabilities?.sdkVersion
+  if (sdkVersion) {
+    fields.push({
+      label: contributionText('Pi SDK', 'Pi SDK'),
+      value: sdkVersion,
+    })
+  }
+  if (state.runtimeMode) {
+    fields.push({
+      label: contributionText('Runtime mode', '运行时模式'),
+      value: state.runtimeMode === 'session_runtime' ? 'Session Runtime' : 'Compatibility',
+    })
+  }
+  if (state.processId !== undefined) {
+    fields.push({
+      label: contributionText('Worker PID', 'Worker PID'),
+      value: String(state.processId),
+    })
+  }
+
+  const resources = state.startupResources
+  const resourceGroups: Array<[string, string, string[] | undefined]> = [
+    ['Contexts', '上下文', resources?.contexts],
+    ['Skills', '技能', resources?.skills],
+    ['Prompts', '提示词', resources?.prompts],
+    ['Extensions', '扩展', resources?.extensions],
+    ['Themes', '主题', resources?.themes],
+  ]
+  for (const [en, zh, values] of resourceGroups) {
+    if (!values?.length) continue
+    fields.push({
+      label: contributionText(en, zh),
+      kind: 'list' as const,
+      values,
+    })
+  }
+
+  if (state.packageUpdates?.length) {
+    fields.push({
+      label: contributionText('Package updates', '可用包更新'),
+      kind: 'list' as const,
+      values: state.packageUpdates.map(item => `${item.displayName} · ${item.scope} · ${item.type}`),
+    })
+  }
+  if (state.packageUpdateCheck === 'failed') {
+    fields.push({
+      label: contributionText('Package update check', '包更新检查'),
+      value: 'Failed',
+    })
+  }
+  if (resources?.diagnostics.length) {
+    fields.push({
+      label: contributionText('Resource diagnostics', '资源诊断'),
+      kind: 'code' as const,
+      values: resources.diagnostics,
+    })
+  }
+  if (state.startupOutput?.length) {
+    fields.push({
+      label: contributionText('Startup output', '启动输出'),
+      kind: 'code' as const,
+      values: state.startupOutput,
+    })
+  }
+  if (state.error) {
+    fields.push({
+      label: contributionText('Runtime error', '运行时错误'),
+      kind: 'code' as const,
+      value: state.error,
+    })
+  }
+  return fields
+}
+
 interface PiUserMessageEntryTarget {
   entryId: string
   parentId: string | null
@@ -601,6 +746,50 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async state(id: string): Promise<PiLiveRuntimeState> {
     return this.runtimeState(await this.runtime(id))
+  }
+
+
+  async runtimeDisclosures(id: string) {
+    const state = await this.state(id)
+    const status = runtimeStatusLabel(state.status)
+    const elapsed = state.initializationElapsedMs
+      ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
+    const duration = contributionDuration(elapsed)
+    return [{
+      contributionId: 'pi.runtime.diagnostics',
+      title: contributionText('Runtime diagnostics', '运行时诊断'),
+      summary: contributionText(
+        `${status.en} · ${duration}`,
+        `${status.zh} · ${duration}`,
+      ),
+      tone: state.status === 'failed'
+        ? 'danger' as const
+        : state.status === 'initializing'
+          ? 'info' as const
+          : 'neutral' as const,
+      defaultExpanded: state.status === 'failed' || state.status === 'initializing',
+      fields: runtimeDisclosureFields(state),
+      ...(state.status === 'failed'
+        ? {
+            actions: [{
+              actionId: 'pi.runtime.retry',
+              label: contributionText('Retry', '重试'),
+              description: contributionText(
+                'Restart this failed Pi Runtime with the same task context.',
+                '使用相同任务上下文重新启动失败的 Pi Runtime。',
+              ),
+              tone: 'primary' as const,
+            }],
+          }
+        : {}),
+    }]
+  }
+
+  async executeRuntimeAction(id: string, actionId: string) {
+    if (actionId !== 'pi.runtime.retry') {
+      throw this.conflict(`Unknown Pi runtime action: ${actionId}`)
+    }
+    return { runtime: await this.retry(id) }
   }
 
   async snapshot(id: string, since?: string): Promise<PiLiveSnapshot> {
