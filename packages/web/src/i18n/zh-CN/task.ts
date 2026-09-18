@@ -99,6 +99,14 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       },
       send: '发送',
       unsupportedInput: '当前智能体不支持{{type}}输入。',
+      sidebar: {
+        title: '实时会话',
+        closeKeepsRunning: '离开页面不会结束任务',
+        newTask: '新建任务',
+        empty: '当前没有实时会话。',
+        history: '查看历史任务',
+        pending: '{{count}} 条排队',
+      },
       input: {
         largeText: '大段文本',
         image: '图片',
