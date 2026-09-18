@@ -12,7 +12,7 @@ const MAX_SNAPSHOT_TRANSFERS = 8
 const SNAPSHOT_TRANSFER_TTL_MS = 30_000
 const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
 const LIVE_SNAPSHOT_MAX_LIMIT = 500
-const LIVE_HISTORY_INDEX_MAX_LIMIT = 80
+const LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT = 120
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -29,6 +29,7 @@ let runtimeMode = 'compatibility'
 let capabilities
 let packageUpdateCheck = 'checking'
 let packageUpdates = []
+let roundIndexCache
 let initializationStartedAt = 0
 let currentInitializationStage
 let currentStageStartedAt = 0
@@ -377,6 +378,57 @@ function entryId(value) {
   return typeof id === 'string' && id ? id : undefined
 }
 
+function roundIndex(all = session.sessionManager.getEntries()) {
+  const lastEntryId = all.length ? entryId(all.at(-1)) : undefined
+  const cached = roundIndexCache
+  if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId) return cached.rows
+
+  const appendOnly = cached
+    && all.length >= cached.entryCount
+    && (cached.entryCount === 0 || entryId(all[cached.entryCount - 1]) === cached.lastEntryId)
+  const rows = appendOnly ? [...cached.rows] : []
+  const start = appendOnly ? cached.entryCount : 0
+
+  for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
+    const entry = record(all[entryIndex])
+    const message = record(entry.message)
+    const cursor = entryId(entry)
+    if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
+    const content = message.content ?? entry.content
+    const preview = Array.isArray(content)
+      ? content.map(part => typeof part === 'string'
+        ? part
+        : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
+      : typeof content === 'string' ? content : ''
+    rows.push({
+      cursor,
+      ordinal: rows.length + 1,
+      entryIndex,
+      ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+    })
+  }
+
+  roundIndexCache = { entryCount: all.length, lastEntryId, rows }
+  return rows
+}
+
+function snapshotRoundPage(all, start, end) {
+  const rows = roundIndex(all)
+  let first
+  let last
+  for (const row of rows) {
+    if (row.entryIndex < start) continue
+    if (row.entryIndex >= end) break
+    first ??= row
+    last = row
+  }
+  return {
+    total: rows.length,
+    ...(first ? { firstOrdinal: first.ordinal } : {}),
+    ...(last ? { lastOrdinal: last.ordinal } : {}),
+  }
+}
+
 function beginSnapshotTransfer(since, window) {
   const requestedWindow = record(window)
   const before = typeof requestedWindow.before === 'string' ? requestedWindow.before : ''
@@ -425,6 +477,7 @@ function beginSnapshotTransfer(since, window) {
     ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
     ...(firstCursor ? { first: firstCursor } : {}),
     ...(lastCursor ? { last: lastCursor } : {}),
+    rounds: snapshotRoundPage(all, start, end),
     ...(end < all.length ? { hasLater: true, ...(newerCursor ? { after: newerCursor } : {}) } : {}),
   }
 
@@ -446,36 +499,34 @@ function beginSnapshotTransfer(since, window) {
   return nextSnapshotChunk(transferId)
 }
 
-function historyIndex(limitValue) {
-  const limit = Number.isInteger(limitValue)
-    ? Math.max(2, Math.min(LIVE_HISTORY_INDEX_MAX_LIMIT, limitValue))
-    : LIVE_HISTORY_INDEX_MAX_LIMIT
-  const rounds = []
-  for (const raw of session.sessionManager.getEntries()) {
-    const entry = record(raw)
-    const message = record(entry.message)
-    const cursor = entryId(entry)
-    if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
-    const content = message.content ?? entry.content
-    const preview = Array.isArray(content)
-      ? content.map(part => typeof part === 'string'
-        ? part
-        : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
-      : typeof content === 'string' ? content : ''
-    rounds.push({
-      cursor,
-      ordinal: rounds.length + 1,
-      ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
-    })
+function historyIndex(queryValue) {
+  const query = record(queryValue)
+  const rows = roundIndex()
+  const cursor = typeof query.cursor === 'string' ? query.cursor.trim() : ''
+  if (cursor) {
+    const row = rows.find(item => item.cursor === cursor)
+    return {
+      total: rows.length,
+      items: row ? [{
+        cursor: row.cursor,
+        ordinal: row.ordinal,
+        ...(row.preview ? { preview: row.preview } : {}),
+      }] : [],
+    }
   }
-  if (rounds.length <= limit) return { total: rounds.length, items: rounds }
-  const indexes = new Set()
-  for (let slot = 0; slot < limit; slot += 1) {
-    indexes.add(Math.round(slot * (rounds.length - 1) / (limit - 1)))
-  }
+
+  const limit = Number.isInteger(query.limit)
+    ? Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, query.limit))
+    : 0
+  if (limit === 0) return { total: rows.length, items: [] }
+
+  const fromOrdinal = Number.isInteger(query.fromOrdinal) && query.fromOrdinal > 0
+    ? query.fromOrdinal
+    : 1
+  const start = Math.min(rows.length, fromOrdinal - 1)
   return {
-    total: rounds.length,
-    items: [...indexes].sort((a, b) => a - b).map(index => rounds[index]),
+    total: rows.length,
+    items: rows.slice(start, start + limit).map(({ entryIndex, ...item }) => item),
   }
 }
 
@@ -791,7 +842,7 @@ async function command(name, value = {}) {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi Runtime entry id is required')
     return session.sessionManager.getEntries().find(entry => entryId(entry) === value.entryId) ?? null
   }
-  if (name === 'historyIndex') return historyIndex(value.limit)
+  if (name === 'historyIndex') return historyIndex(value)
   if (name === 'commands') return slashCommands()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
@@ -841,6 +892,7 @@ async function dispose() {
   if (terminating) return
   terminating = true
   snapshotTransfers.clear()
+  roundIndexCache = undefined
   unsubscribe()
   extensionUi?.dispose()
   if (session?.isStreaming) { session.abortBash?.(); await session.abort().catch(() => undefined) }
