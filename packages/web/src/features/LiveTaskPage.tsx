@@ -5,6 +5,7 @@ import type {
   LiveCommandDto,
   LiveEventDto,
   LiveInputCapabilitiesDto,
+  LiveMessageActionContributionDto,
   LiveMessageDto,
   LiveModelControlDto,
   LiveProductDto,
@@ -27,6 +28,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import {
   liveComposerDraftKey,
   readLiveComposerDraft,
+  writeLiveComposerDraft,
 } from '../components/live-composer-session-state'
 import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
@@ -139,6 +141,16 @@ function runtimeSessionTitle(runtime: LiveRuntimeStateDto): string {
   return workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
 }
 
+function contributionText(
+  value: LiveMessageActionContributionDto['label'],
+  language: string,
+): string {
+  const normalized = language.replace(/_/g, '-').toLowerCase()
+  const localized = Object.entries(value.localizations ?? {})
+    .find(([locale]) => locale.toLowerCase() === normalized)?.[1]
+  return localized || value.default
+}
+
 function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
   const stamp = Date.now()
   return [
@@ -204,15 +216,48 @@ function LiveExtensionPrompt({
   </div>
 }
 
-function GenericLiveItem({ item, agentLabel }: { item: LiveTaskProjectionItem; agentLabel: string }) {
-  const { t } = useTranslation('task')
+function GenericLiveItem({
+  item,
+  agentLabel,
+  messageActions,
+  actionPending,
+  runtimeStreaming,
+  onMessageAction,
+}: {
+  item: LiveTaskProjectionItem
+  agentLabel: string
+  messageActions: readonly LiveMessageActionContributionDto[]
+  actionPending: string | null
+  runtimeStreaming: boolean
+  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
+}) {
+  const { t, i18n } = useTranslation('task')
   if (item.kind === 'message') {
+    const actions = item.entryId
+      ? messageActions.filter(action => action.roles.includes(item.role))
+      : []
     return <TaskMessage
       role={item.role}
       text={item.text}
       attachments={item.attachments}
       author={item.role === 'assistant' ? agentLabel : undefined}
       streaming={item.streaming}
+      actions={actions.length
+        ? actions.map(action => {
+            const key = `${action.actionId}:${item.entryId}`
+            const disabled = actionPending !== null || (action.requiresIdle === true && runtimeStreaming)
+            const description = action.description ? contributionText(action.description, i18n.language) : undefined
+            return <Button
+              key={action.actionId}
+              size="small"
+              disabled={disabled}
+              title={description}
+              onClick={() => onMessageAction(action, item)}
+            >
+              {actionPending === key ? t('live.messageActionPending') : contributionText(action.label, i18n.language)}
+            </Button>
+          })
+        : undefined}
     />
   }
   if (item.kind === 'thinking') {
@@ -248,10 +293,18 @@ function GenericLiveRound({
   projection,
   agentLabel,
   eager,
+  messageActions,
+  actionPending,
+  runtimeStreaming,
+  onMessageAction,
 }: {
   projection: LiveTaskRoundProjection
   agentLabel: string
   eager: boolean
+  messageActions: readonly LiveMessageActionContributionDto[]
+  actionPending: string | null
+  runtimeStreaming: boolean
+  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   return <VirtualRoundMount
     rootSelector=".pi-live-reader"
@@ -260,7 +313,15 @@ function GenericLiveRound({
     estimate={liveTaskRoundEstimate(projection)}
   >
     <TaskRound model={projection.model} className="live-task-round">
-      {projection.items.map(item => <GenericLiveItem key={item.id} item={item} agentLabel={agentLabel}/>)}
+      {projection.items.map(item => <GenericLiveItem
+        key={item.id}
+        item={item}
+        agentLabel={agentLabel}
+        messageActions={messageActions}
+        actionPending={actionPending}
+        runtimeStreaming={runtimeStreaming}
+        onMessageAction={onMessageAction}
+      />)}
     </TaskRound>
   </VirtualRoundMount>
 }
@@ -279,6 +340,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
+  const [messageActions, setMessageActions] = useState<LiveMessageActionContributionDto[]>([])
+  const [messageActionPending, setMessageActionPending] = useState<string | null>(null)
   const [commands, setCommands] = useState<LiveCommandDto[]>([])
   const [modelControl, setModelControl] = useState<LiveModelControlDto | null>(null)
   const [thinking, setThinking] = useState<LiveThinkingControlDto | null>(null)
@@ -330,6 +393,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setRuntimes([])
     setState(null)
     setItems([])
+    setMessageActions([])
+    setMessageActionPending(null)
     setCommands([])
     setModelControl(null)
     setThinking(null)
@@ -363,9 +428,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setProduct(matched)
       setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
-      const [runtime, snapshot, commandOptions, model, thinkingControl, queueState] = await Promise.all([
+      const [runtime, snapshot, messageActionOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
         liveApi.snapshot(current.liveId, current.runtimeSessionId),
+        liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
         matched.capabilities.includes('command-discovery')
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
@@ -385,6 +451,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
       setItems(projectedItems)
       setInputHistory(projectLiveInputHistory(projectedItems))
+      setMessageActions(messageActionOptions)
       setCommands(commandOptions)
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
@@ -445,8 +512,24 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             return !accepted.includes(item.text)
           }))
         }
+        if (envelope.normalizedEvent?.type === 'status' && envelope.normalizedEvent.status === 'ready') {
+          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+        }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
+        }
+        if (envelope.normalizedEvent?.type === 'completed') {
+          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(actions => {
+            setMessageActions(actions)
+            if (!actions.length) return
+            return liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
+              const projected = projectLiveSnapshotEntries(snapshot.entries)
+              setState(snapshot.state)
+              setItems(projected)
+              setInputHistory(projectLiveInputHistory(projected))
+              leafIdRef.current = snapshot.leafId ?? undefined
+            })
+          }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
@@ -770,6 +853,48 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     return liveApi.workspaceFileReferences(current.liveId, current.runtimeSessionId, query, 20)
   }, [current, product])
 
+  const runMessageAction = useCallback(async (
+    action: LiveMessageActionContributionDto,
+    item: Extract<LiveTaskProjectionItem, { kind: 'message' }>,
+  ) => {
+    if (!current || !item.entryId || messageActionPending) return
+    if (action.requiresIdle && state?.isStreaming) return
+    const pendingKey = `${action.actionId}:${item.entryId}`
+    setMessageActionPending(pendingKey)
+    setError('')
+    try {
+      const result = await liveApi.executeMessageAction(
+        current.liveId,
+        current.runtimeSessionId,
+        action.actionId,
+        item.entryId,
+      )
+      if (result.outcome === 'open-runtime' && result.runtime) {
+        if (result.draftText) {
+          writeLiveComposerDraft(
+            liveComposerDraftKey(current.liveId, result.runtime.runtimeSessionId),
+            result.draftText,
+          )
+        }
+        navigate(`/review/live/${encodeURIComponent(current.liveId)}/${encodeURIComponent(result.runtime.runtimeSessionId)}`)
+        return
+      }
+
+      const snapshot = await liveApi.snapshot(current.liveId, current.runtimeSessionId)
+      const projected = projectLiveSnapshotEntries(snapshot.entries)
+      setState(snapshot.state)
+      setItems(projected)
+      setInputHistory(projectLiveInputHistory(projected))
+      leafIdRef.current = snapshot.leafId ?? undefined
+      if (typeof result.draftText === 'string') setComposerValue(result.draftText)
+      composerRef.current?.focus({ preventScroll: true })
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setMessageActionPending(null)
+    }
+  }, [current, messageActionPending, navigate, setComposerValue, state?.isStreaming])
+
   const changeThinking = useCallback(async (value: string) => {
     if (!current || !thinking || busy) return
     setBusy(true)
@@ -916,6 +1041,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             projection={round}
             agentLabel={agentLabel}
             eager={round.model.state === 'running' || index >= rounds.length - 2}
+            messageActions={messageActions}
+            actionPending={messageActionPending}
+            runtimeStreaming={state?.isStreaming ?? false}
+            onMessageAction={runMessageAction}
           />)}
           {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
