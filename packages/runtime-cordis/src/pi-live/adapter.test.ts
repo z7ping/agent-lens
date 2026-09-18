@@ -283,3 +283,33 @@ test('Pi Live Adapter exposes Runtime commands through generic command-discovery
     { value: '/skill:repo-review', label: '/skill:repo-review', description: 'Review repository', group: 'skill' },
   ])
 })
+
+
+test('Pi Live Adapter owns workspace file reference syntax including quoted paths', async () => {
+  const adapter = new PiLiveAdapter({} as PiLiveService, attachmentService())
+  assert.equal(adapter.capabilities.has('workspace-file-reference'), true)
+
+  assert.deepEqual(await adapter.workspaceFileReference('runtime-1', 'src/App.tsx', false), {
+    insertText: '@src/App.tsx ',
+    cursorOffset: '@src/App.tsx '.length,
+  })
+  assert.deepEqual(await adapter.workspaceFileReference('runtime-1', 'src/components', true), {
+    insertText: '@src/components/',
+    cursorOffset: '@src/components/'.length,
+  })
+
+  const quotedDirectory = '@"my dir/src/"'
+  assert.deepEqual(await adapter.workspaceFileReference('runtime-1', 'my dir/src', true), {
+    insertText: quotedDirectory,
+    cursorOffset: quotedDirectory.length - 1,
+  })
+  assert.deepEqual(await adapter.workspaceFileReference('runtime-1', 'my dir/file.ts', false), {
+    insertText: '@"my dir/file.ts" ',
+    cursorOffset: '@"my dir/file.ts" '.length,
+  })
+
+  await assert.rejects(
+    () => adapter.workspaceFileReference('runtime-1', 'bad"name.ts', false),
+    /path is invalid/,
+  )
+})
