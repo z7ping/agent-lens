@@ -133,6 +133,8 @@ export type LiveRuntimeStatus =
 
 export interface LiveRuntimeState {
   runtimeSessionId: string
+  /** Agent-neutral human-readable task/session title for Product Surface navigation. */
+  title?: string | undefined
   status: LiveRuntimeStatus
   nativeSessionId?: string
   workspacePath?: string
