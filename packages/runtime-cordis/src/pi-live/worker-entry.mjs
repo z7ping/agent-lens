@@ -385,6 +385,7 @@ function roundIndex(all = session.sessionManager.getEntries()) {
   if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId && cached.leafId === leafId) return cached.rows
 
   const appendOnly = cached
+    && cached.leafId === leafId
     && all.length >= cached.entryCount
     && (cached.entryCount === 0 || entryId(all[cached.entryCount - 1]) === cached.lastEntryId)
   const rows = appendOnly ? [...cached.rows] : []
