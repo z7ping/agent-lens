@@ -179,22 +179,6 @@ function resourcePackageIdentity(resource: PiResolvedResource): string | undefin
   return npmPackageIdentity(resource.metadata.source)
 }
 
-export async function describePiAssetDiscoveryCoverage(
-  ctx: SourceExecutionContext,
-): Promise<{ packageIdentity: 'complete' | 'unknown' | 'unavailable' }> {
-  const executable = ctx.installation.executable
-  const agentDir = ctx.installation.configRoot
-  if (!executable || !agentDir) return { packageIdentity: 'unavailable' }
-  try {
-    const installed = await loadInstalledPiSdk(executable)
-    return resolvePiSdkResourceApi(installed.module)
-      ? { packageIdentity: 'complete' }
-      : { packageIdentity: 'unavailable' }
-  } catch {
-    return { packageIdentity: 'unknown' }
-  }
-}
-
 function resourceBindingScope(
   resource: PiResolvedResource,
   projectCwd?: string,
