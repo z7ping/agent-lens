@@ -1486,6 +1486,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     [projection.stable, projection.active],
   )
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
+  const turnRailItems = useMemo(
+    () => [...roundSegments.stable, ...roundSegments.active].map(round => ({
+      id: round.model.id,
+      semanticId: round.model.semanticId,
+      label: round.model.label,
+      preview: round.model.preview,
+      error: round.model.errorCount > 0,
+      state: round.model.state,
+    })),
+    [roundSegments],
+  )
   const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
@@ -1578,6 +1589,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onStart: jumpEarliest,
         onEnd: jumpLatest,
       }}
+      turnRailItems={turnRailItems}
     >
       <TaskHeader
         marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}

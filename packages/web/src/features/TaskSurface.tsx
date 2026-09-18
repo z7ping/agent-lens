@@ -30,9 +30,20 @@ export interface TaskBoundaryNavigation {
   onEnd(): void | Promise<void>
 }
 
+export interface TaskTurnRailData {
+  id: string
+  semanticId?: string | undefined
+  label: string
+  preview?: string | undefined
+  error?: boolean | undefined
+  state?: string | undefined
+}
+
 export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
   mode: TaskSurfaceMode
   boundaryNavigation?: TaskBoundaryNavigation | undefined
+  turnRailItems?: readonly TaskTurnRailData[] | undefined
+  onTurnRailSelect?(item: TaskTurnRailData): void | Promise<void>
 }
 
 interface TaskSurfaceViewValue {
@@ -47,7 +58,7 @@ interface TaskTurnRailItem {
   preview: string
   error: boolean
   state: string
-  element: HTMLElement
+  element?: HTMLElement | undefined
 }
 
 interface TaskTurnRailPosition {
@@ -299,13 +310,15 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
   })
 }
 
-function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTurnRailItem {
+function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTurnRailItem | null {
+  const positioned = items.filter((item): item is TaskTurnRailItem & { element: HTMLElement } => Boolean(item.element))
+  if (!positioned.length) return null
   let low = 0
-  let high = items.length - 1
+  let high = positioned.length - 1
   let candidate = 0
   while (low <= high) {
     const middle = (low + high) >> 1
-    const item = items[middle]!
+    const item = positioned[middle]!
     const top = item.element.getBoundingClientRect().top
     if (top <= anchorY) {
       candidate = middle
@@ -314,7 +327,7 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
       high = middle - 1
     }
   }
-  return items[candidate]!
+  return positioned[candidate] ?? null
 }
 
 /**
@@ -323,7 +336,7 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  * TaskSurface 持有统一 Reader/Document/Composer 槽位、语义轮次导轨与边界导航。
  */
 export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function TaskSurface(
-  { mode, className, children, boundaryNavigation, ...props },
+  { mode, className, children, boundaryNavigation, turnRailItems: providedTurnRailItems, onTurnRailSelect, ...props },
   ref,
 ) {
   const { t } = useTranslation('task')
@@ -351,8 +364,9 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     }
 
     const items = railItemsRef.current
+    const firstElement = items.find(item => item.element)?.element
     const viewport = railViewportRef.current
-      ?? (items.length ? scrollViewport(root, items[0]!.element) : root.querySelector<HTMLElement>('.task-session-reader'))
+      ?? (firstElement ? scrollViewport(root, firstElement) : root.querySelector<HTMLElement>('.task-session-reader'))
     railViewportRef.current = viewport
     if (!viewport) {
       setRailPosition(null)
@@ -367,7 +381,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
 
     if (items.length) {
       const active = activeTurnRailItem(items, roundAnchorY(viewportRect))
-      setActiveRoundId(current => current === active.id ? current : active.id)
+      if (active) setActiveRoundId(current => current === active.id ? current : active.id)
     }
 
     const railFrame = sessionMode ? sessionRailFrame(root, viewportRect) : viewportRect
@@ -403,14 +417,49 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     const collected = collectTurnRailItems(root)
     const next = stabilizeTurnRailItemIds(railItemsRef.current, collected)
     railItemsRef.current = next
-    railViewportRef.current = next.length
-      ? scrollViewport(root, next[0]!.element)
+    const firstElement = next.find(item => item.element)?.element
+    railViewportRef.current = firstElement
+      ? scrollViewport(root, firstElement)
       : root.querySelector<HTMLElement>('.task-session-reader')
     setRailItems(current => sameTurnRailItems(current, next) ? current : next)
     scheduleRailViewport()
   }, [scheduleRailViewport])
 
   useEffect(() => {
+    const root = rootRef.current
+    if (!root || !providedTurnRailItems) return
+    const frame = window.requestAnimationFrame(() => {
+      const elementBySemanticId = new Map<string, HTMLElement>()
+      for (const element of root.querySelectorAll<HTMLElement>('[data-round-semantic-id]')) {
+        if (element.closest('.task-surface') !== root) continue
+        const semanticId = element.dataset.roundSemanticId?.trim()
+        if (semanticId && !elementBySemanticId.has(semanticId)) elementBySemanticId.set(semanticId, element)
+      }
+      const next: TaskTurnRailItem[] = providedTurnRailItems.map(item => {
+        const semanticId = item.semanticId?.trim() || item.id
+        return {
+          id: item.id,
+          semanticId,
+          label: item.label,
+          preview: compactRailPreview(item.preview),
+          error: item.error === true,
+          state: item.state || 'settled',
+          element: elementBySemanticId.get(semanticId),
+        }
+      })
+      railItemsRef.current = next
+      const firstElement = next.find(item => item.element)?.element
+      railViewportRef.current = firstElement
+        ? scrollViewport(root, firstElement)
+        : root.querySelector<HTMLElement>('.task-session-reader')
+      setRailItems(current => sameTurnRailItems(current, next) ? current : next)
+      scheduleRailViewport()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [providedTurnRailItems, scheduleRailViewport])
+
+  useEffect(() => {
+    if (providedTurnRailItems) return
     const root = rootRef.current
     if (!root || typeof MutationObserver === 'undefined') return
     scanRounds()
@@ -435,6 +484,17 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   }, [scanRounds, scheduleRailViewport])
 
   const jumpToRound = (item: TaskTurnRailItem) => {
+    if (!item.element) {
+      void onTurnRailSelect?.({
+        id: item.id,
+        semanticId: item.semanticId,
+        label: item.label,
+        preview: item.preview,
+        error: item.error,
+        state: item.state,
+      })
+      return
+    }
     const viewport = railViewportRef.current ?? scrollViewport(rootRef.current!, item.element)
     const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const viewportRect = viewport.getBoundingClientRect()

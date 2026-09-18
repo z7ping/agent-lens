@@ -1321,6 +1321,17 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       return interaction ? [{ interaction, round }] : []
     })
   }, [detail, taskDetailModel])
+  const turnRailItems = useMemo(
+    () => annotatedInteractions.map(({ round }) => ({
+      id: round.id,
+      semanticId: round.semanticId,
+      label: round.label,
+      preview: round.preview,
+      error: round.errorCount > 0,
+      state: round.state,
+    })),
+    [annotatedInteractions],
+  )
   const pageIncomplete = detail?.page.hasMore ?? false
   const isBackward = detail?.page.direction === 'backward'
   const isFiltered = roundFilter !== 'all'
@@ -1478,6 +1489,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           onStart: showFromStart,
           onEnd: jumpToLatest,
         } : undefined}
+        turnRailItems={detail ? turnRailItems : undefined}
       >
         {detail && <TaskHeader
           marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
