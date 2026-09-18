@@ -88,6 +88,10 @@ export const englishTaskMessages: LocaleMessagesDto = {
       commandMenu: {
         aria: 'Available commands',
       },
+
+      workspaceReferenceMenu: {
+        aria: 'Workspace files',
+      },
       connected: 'Live connection established',
       connecting: 'Connecting to live task',
       model: 'Model',
