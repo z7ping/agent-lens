@@ -399,8 +399,15 @@ function renderTurnRailItems(
     }
   }
   const activeOrdinal = items.find(item => item.id === activeId)?.ordinal
+  const loadedOrdinals = items
+    .flatMap(item => item.ordinal ? [item.ordinal] : [])
+    .sort((left, right) => left - right)
+  const activeLoadedIndex = activeOrdinal ? loadedOrdinals.indexOf(activeOrdinal) : -1
+  const activeNeighborhood = activeLoadedIndex >= 0
+    ? loadedOrdinals.slice(Math.max(0, activeLoadedIndex - 2), activeLoadedIndex + 3)
+    : []
   const requiredOrdinals = [
-    ...(activeOrdinal ? [activeOrdinal] : []),
+    ...activeNeighborhood,
     ...items.filter(item => item.error || item.state === 'running').flatMap(item => item.ordinal ? [item.ordinal] : []),
   ]
   return sampledRoundOrdinals(total!, requiredOrdinals).map(ordinal => {
@@ -680,6 +687,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         }
       : undefined)
 
+  const jumpToRailPosition = (clientY: number, railElement: HTMLElement | null) => {
+    if (!railElement || !Number.isInteger(turnRailTotal) || turnRailTotal! <= 0) return
+    const rect = railElement.getBoundingClientRect()
+    if (rect.height <= 0) return
+    const ratio = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
+    const ordinal = 1 + Math.round(ratio * Math.max(0, turnRailTotal! - 1))
+    jumpToRound(virtualTurnRailItem(ordinal))
+  }
+
   const renderedRailItems = renderTurnRailItems(railItems, activeRoundId, turnRailTotal)
   const rail = renderedRailItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
@@ -688,12 +704,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           aria-label={t('surface.turnRail')}
           style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
           onClick={event => {
-            if (event.target !== event.currentTarget || !Number.isInteger(turnRailTotal) || turnRailTotal! <= 0) return
-            const rect = event.currentTarget.getBoundingClientRect()
-            if (rect.height <= 0) return
-            const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height))
-            const ordinal = 1 + Math.round(ratio * Math.max(0, turnRailTotal! - 1))
-            jumpToRound(virtualTurnRailItem(ordinal))
+            if (event.target !== event.currentTarget) return
+            jumpToRailPosition(event.clientY, event.currentTarget)
           }}
         >
           {renderedRailItems.map((item, index) => {
@@ -711,7 +723,13 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
               data-tip={tip}
               aria-label={t('surface.jumpTo', { tip })}
               aria-current={active ? 'step' : undefined}
-              onClick={() => jumpToRound(item)}
+              onClick={event => {
+                if (event.detail > 0) {
+                  jumpToRailPosition(event.clientY, event.currentTarget.parentElement)
+                  return
+                }
+                jumpToRound(item)
+              }}
             ><i/></button>
           })}
         </nav>,
