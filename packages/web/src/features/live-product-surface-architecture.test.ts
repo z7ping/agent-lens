@@ -61,7 +61,7 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
   assert.match(liveTask, /event\.type === 'title\.update'/)
-  assert.match(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
+  assert.match(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })
 
@@ -168,7 +168,7 @@ test('LiveTask migration keeps the full session-view shell instead of only the g
 
   assert.match(styles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/)
   assert.match(liveTask, /<aside className="pi-live-sessions"/)
-  assert.match(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId\)/)
+  assert.match(liveTask, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
   assert.match(liveTask, /liveApi\.list\(current\.liveId\)/)
   assert.match(liveTask, /LiveTaskRoundProjector/)
   assert.match(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/)
