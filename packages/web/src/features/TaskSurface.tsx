@@ -750,6 +750,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     : null
 
   const activeRailIndex = Math.max(0, railItems.findIndex(item => item.id === activeRoundId))
+  const activeRailOrdinal = railItems.find(item => item.id === activeRoundId)?.ordinal ?? activeRailIndex + 1
+  const compactRailTotal = Number.isInteger(turnRailTotal) && turnRailTotal! > 0 ? turnRailTotal! : railItems.length
   const firstErrorItem = railItems.find(item => item.error)
   const compactNav = railItems.length > 0 && resolvedBoundaryNavigation && railPosition && typeof document !== 'undefined'
     ? createPortal(
@@ -766,7 +768,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
-          <span aria-live="polite">{activeRailIndex + 1} / {railItems.length}</span>
+          <span aria-live="polite">{activeRailOrdinal} / {compactRailTotal}</span>
           {firstErrorItem && <IconButton
             className="task-compact-round-error"
             title={t('surface.jumpErrorRound', { label: firstErrorItem.label })}
