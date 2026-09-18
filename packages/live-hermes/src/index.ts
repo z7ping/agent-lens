@@ -222,8 +222,9 @@ export class HermesLiveAdapter implements LiveAdapter {
     })
   }
 
-  interrupt(runtimeSessionId: string): Promise<unknown> {
-    return this.service.interrupt(runtimeSessionId)
+  async interrupt(runtimeSessionId: string) {
+    await this.service.interrupt(runtimeSessionId)
+    return {}
   }
 
   terminate(runtimeSessionId: string): Promise<void> {
