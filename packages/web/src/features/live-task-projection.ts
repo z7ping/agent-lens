@@ -263,12 +263,22 @@ function contentId(event: LiveEventDto, kind: 'message' | 'thinking', fallback: 
   return `${kind}:${fallback}`
 }
 
+function findLastProjectionIndex(
+  items: readonly LiveTaskProjectionItem[],
+  predicate: (item: LiveTaskProjectionItem) => boolean,
+): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index]!)) return index
+  }
+  return -1
+}
+
 function upsertMessage(
   items: readonly LiveTaskProjectionItem[],
   id: string,
   updater: (current: Extract<LiveTaskProjectionItem, { kind: 'message' }> | undefined) => Extract<LiveTaskProjectionItem, { kind: 'message' }>,
 ): LiveTaskProjectionItem[] {
-  const index = items.findIndex(item => item.kind === 'message' && item.id === id)
+  const index = findLastProjectionIndex(items, item => item.kind === 'message' && item.id === id)
   const current = index >= 0 ? items[index] as Extract<LiveTaskProjectionItem, { kind: 'message' }> : undefined
   const next = updater(current)
   if (index < 0) return [...items, next]
@@ -282,7 +292,7 @@ function upsertThinking(
   id: string,
   updater: (current: Extract<LiveTaskProjectionItem, { kind: 'thinking' }> | undefined) => Extract<LiveTaskProjectionItem, { kind: 'thinking' }>,
 ): LiveTaskProjectionItem[] {
-  const index = items.findIndex(item => item.kind === 'thinking' && item.id === id)
+  const index = findLastProjectionIndex(items, item => item.kind === 'thinking' && item.id === id)
   const current = index >= 0 ? items[index] as Extract<LiveTaskProjectionItem, { kind: 'thinking' }> : undefined
   const next = updater(current)
   if (index < 0) return [...items, next]
@@ -296,7 +306,7 @@ function upsertTool(
   callId: string,
   updater: (current: Extract<LiveTaskProjectionItem, { kind: 'tool' }> | undefined) => Extract<LiveTaskProjectionItem, { kind: 'tool' }>,
 ): LiveTaskProjectionItem[] {
-  const index = items.findIndex(item => item.kind === 'tool' && item.callId === callId)
+  const index = findLastProjectionIndex(items, item => item.kind === 'tool' && item.callId === callId)
   const current = index >= 0 ? items[index] as Extract<LiveTaskProjectionItem, { kind: 'tool' }> : undefined
   const next = updater(current)
   if (index < 0) return [...items, next]
@@ -305,7 +315,7 @@ function upsertTool(
   return copy
 }
 
-function settle(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
+export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
   return items.map(item => {
     if (item.kind === 'message' && item.streaming) return { ...item, streaming: false }
     if (item.kind === 'thinking' && item.streaming) return { ...item, streaming: false }
@@ -406,7 +416,7 @@ export function reduceLiveTaskEvent(
     }))
   }
 
-  if (event.type === 'completed') return settle(items)
+  if (event.type === 'completed') return settleLiveTaskProjectionItems(items)
   return [...items]
 }
 
