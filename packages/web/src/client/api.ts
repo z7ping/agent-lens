@@ -28,6 +28,7 @@ import {
   type ReviewDetailFilter,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
+  type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
   type SourceRecordResponseDto,
   type ToolAssetUsageResponseDto,
@@ -285,6 +286,11 @@ export class AgentLensApi {
     if (cursor) params.set('cursor', cursor)
     params.set('limit', String(Math.max(1, Math.min(limit, 500))))
     return requestJson<ReviewResponseDto>(`/api/v1/review?${params}`, signal ? { signal } : {})
+  }
+
+  reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+    return requestJson<ReviewSessionSummaryDto>(`/api/v1/review/${encodeURIComponent(id)}/summary`)
+      .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
   }
 
   reviewDetail(
