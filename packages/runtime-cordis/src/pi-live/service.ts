@@ -574,7 +574,10 @@ export class DefaultPiLiveService implements PiLiveService {
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
   }
 
-  async commands(id: string): Promise<PiLiveCommand[]> { return (await this.readyRuntime(id)).handle!.commands() }
+  async commands(id: string): Promise<PiLiveCommand[]> {
+    const runtime = await this.readyRuntime(id)
+    return runtime.handle!.commands ? runtime.handle!.commands() : []
+  }
   async controls(id: string): Promise<PiLiveControls> { return (await this.readyRuntime(id)).handle!.controls() }
   async setModel(id: string, provider: string, modelId: string): Promise<PiLiveRuntimeState> {
     const runtime = await this.readyRuntime(id)
