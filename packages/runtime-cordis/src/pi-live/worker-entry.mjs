@@ -507,7 +507,7 @@ function runtimeCapabilities(hasSessionRuntime) {
     thinkingLevelControl: typeof session?.setThinkingLevel === 'function' && typeof session?.getAvailableThinkingLevels === 'function',
     extensionUi: typeof session?.bindExtensions === 'function',
     treeNavigation: typeof session?.navigateTree === 'function',
-    messageFork: hasSessionRuntime && typeof runtime?.fork === 'function',
+    messageFork: typeof session?.sessionManager?.createBranchedSession === 'function',
   }
 }
 
