@@ -402,6 +402,8 @@ export interface LiveTaskRoundProjection {
   items: LiveTaskProjectionItem[]
 }
 
+export const LIVE_TASK_ROUND_FACT_LIMIT = 8
+
 function compactRoundPreview(value: string, max = 120): string {
   const text = value.replace(/\s+/g, ' ').trim()
   return text.length > max ? `${text.slice(0, max)}…` : text
@@ -486,10 +488,31 @@ export function projectLiveTaskRounds(
     current.items.push(item)
   }
 
-  return raw.map(round => ({
-    model: buildRoundModel(round.items, round.ordinal, round.id, round.background),
-    items: round.items,
-  }))
+  return raw.flatMap(round => {
+    const aggregate = buildRoundModel(round.items, round.ordinal, round.id, round.background)
+    const fragmentCount = Math.max(1, Math.ceil(round.items.length / LIVE_TASK_ROUND_FACT_LIMIT))
+    return Array.from({ length: fragmentCount }, (_, index) => {
+      const fragment = round.items.slice(
+        index * LIVE_TASK_ROUND_FACT_LIMIT,
+        (index + 1) * LIVE_TASK_ROUND_FACT_LIMIT,
+      )
+      const model = buildRoundModel(fragment, round.ordinal, `${round.id}:${index}`, round.background)
+      return {
+        model: {
+          ...model,
+          semanticId: round.id,
+          label: index === 0
+            ? aggregate.label
+            : agentLensI18n.t('task:surface.roundContinuation', { label: aggregate.label }),
+          ...(index === 0 && aggregate.preview ? { preview: aggregate.preview } : { preview: undefined }),
+          toolCount: index === 0 ? aggregate.toolCount : model.toolCount,
+          errorCount: index === 0 ? aggregate.errorCount : model.errorCount,
+          durationMs: index === 0 ? aggregate.durationMs : model.durationMs,
+        },
+        items: fragment,
+      }
+    })
+  })
 }
 
 export function liveTaskRoundEstimate(round: LiveTaskRoundProjection): number {
