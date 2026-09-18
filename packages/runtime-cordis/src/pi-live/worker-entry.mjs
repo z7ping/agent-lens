@@ -388,10 +388,13 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     && all.length >= cached.entryCount
     && (cached.entryCount === 0 || entryId(all[cached.entryCount - 1]) === cached.lastEntryId)
   const rows = appendOnly ? [...cached.rows] : []
+  const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map()
   const start = appendOnly ? cached.entryCount : 0
 
   for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
     const entry = record(all[entryIndex])
+    const id = entryId(entry)
+    if (id) entryPositions.set(id, entryIndex)
     const message = record(entry.message)
     const cursor = entryId(entry)
     if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
@@ -409,7 +412,7 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     })
   }
 
-  roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows }
+  roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows, entryPositions }
   return rows
 }
 
@@ -441,13 +444,17 @@ function beginSnapshotTransfer(since, window) {
   if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
 
   const all = session.sessionManager.getEntries()
+  if (roundIndexCache) roundIndex(all)
+  const entryPosition = cursor => cursor
+    ? roundIndexCache?.entryPositions?.get(cursor) ?? entryPosition(cursor)
+    : -1
   const limit = snapshotLimit(requestedWindow)
   let start = 0
   let end = all.length
 
   if (since || afterCursor) {
     const cursor = since || afterCursor
-    const index = all.findIndex(entry => entryId(entry) === cursor)
+    const index = entryPosition(cursor)
     if (index < 0 && afterCursor) throw new Error('Live snapshot after cursor was not found')
     start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
     end = Math.min(all.length, start + limit)
@@ -455,14 +462,14 @@ function beginSnapshotTransfer(since, window) {
     start = 0
     end = Math.min(all.length, limit)
   } else if (around) {
-    const aroundIndex = all.findIndex(entry => entryId(entry) === around)
+    const aroundIndex = entryPosition(around)
     if (aroundIndex < 0) throw new Error('Live snapshot around cursor was not found')
     start = Math.max(0, aroundIndex - Math.floor(limit * .3))
     end = Math.min(all.length, start + limit)
     start = Math.max(0, end - limit)
   } else {
     if (before) {
-      const beforeIndex = all.findIndex(entry => entryId(entry) === before)
+      const beforeIndex = entryPosition(before)
       if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
       end = beforeIndex
     }
