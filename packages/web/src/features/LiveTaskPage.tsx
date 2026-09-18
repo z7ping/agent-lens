@@ -573,6 +573,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
+        if (envelope.normalizedEvent?.type === 'control.changed') {
+          if (envelope.normalizedEvent.control === 'model' && product.capabilities.includes('model-switching')) {
+            void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(setModelControl, () => undefined)
+          }
+          if (envelope.normalizedEvent.control === 'thinking' && product.capabilities.includes('thinking-control')) {
+            void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(setThinking, () => undefined)
+          }
+        }
         if (envelope.normalizedEvent?.type === 'queue.update') {
           queueRevisionRef.current += 1
           const nextQueue = {
