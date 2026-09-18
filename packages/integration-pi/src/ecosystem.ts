@@ -257,7 +257,8 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     const existing = this.searchInFlight.get(cacheKey)
     if (existing) return existing
 
-    const pending = (async () => {
+    let pending!: Promise<PiEcosystemSearchResponseDto>
+    pending = (async () => {
       try {
         const value = await this.searchFresh(query, type, sort, limit)
         setBounded(this.searchCache, cacheKey, {
@@ -447,7 +448,8 @@ export class NpmPiEcosystemProvider implements PiEcosystemQueryService {
     const existing = this.packageInFlight.get(cacheKey)
     if (existing) return existing
 
-    const pending = (async () => {
+    let pending!: Promise<NpmPackageDetails>
+    pending = (async () => {
       const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       const raw = await responseJson(await this.fetcher(
         `${NPM_REGISTRY_ENDPOINT}${encodeURIComponent(packageName)}/${encodeURIComponent(version)}`,
