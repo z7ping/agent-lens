@@ -327,8 +327,12 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   .pi-live-editor { height: 78px; min-height: 78px; }
   .pi-live-composer.is-expanded .pi-live-editor { height: clamp(200px, 40vh, 360px); }
   .pi-live-compose-runtime { display: none; }
+  .pi-live-compose-bar { flex-wrap: wrap; gap: 6px 8px; }
+  .pi-live-compose-settings { width: 100%; flex: 1 1 100%; order: 1; }
   .pi-live-model-picker { width: 132px; max-width: 132px; }
   .pi-live-thinking-picker { width: 104px; max-width: 104px; }
+  .pi-live-compose-mode { order: 2; margin-left: 0; }
+  .pi-live-send { order: 3; margin-left: auto; }
   .pi-live-mode-action { padding-inline: 6px; }
   .pi-live-compose-hint { display: none; }
   .pi-live-blocking { grid-template-columns: 1fr; }
@@ -401,10 +405,7 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   margin-top: 10px;
 }
 
-@media (max-width: 720px) {
-  .live-runtime-disclosures {
-    width: calc(100% - 24px);
-  }
+@media (max-width: 767.98px) {
   .live-runtime-disclosure-field {
     grid-template-columns: 1fr;
     gap: 4px;
