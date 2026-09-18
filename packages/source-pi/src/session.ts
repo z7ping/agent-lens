@@ -61,6 +61,26 @@ interface HistoryCheckpoint {
   fileId?: string
 }
 
+export interface PiHistoryScanDiagnostics {
+  enumeratedFiles: number
+  statFiles: number
+  unchangedFiles: number
+  changedFiles: number
+  parsedFiles: number
+  bytesRead: number
+}
+
+function createHistoryScanDiagnostics(): PiHistoryScanDiagnostics {
+  return {
+    enumeratedFiles: 0,
+    statFiles: 0,
+    unchangedFiles: 0,
+    changedFiles: 0,
+    parsedFiles: 0,
+    bytesRead: 0,
+  }
+}
+
 function sha256(value: string | Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -205,11 +225,17 @@ async function* walkJsonlFiles(root: string): AsyncIterable<string> {
   }
 }
 
-export async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
+export async function listJsonlFiles(
+  root: string,
+  historyWindow?: SourceHistoryWindow,
+  diagnostics?: PiHistoryScanDiagnostics,
+): Promise<string[]> {
   const paths: string[] = []
   for await (const file of walkJsonlFiles(root)) paths.push(file)
+  if (diagnostics) diagnostics.enumeratedFiles += paths.length
   const candidates = (await Promise.all(paths.map(async path => {
     try {
+      if (diagnostics) diagnostics.statFiles += 1
       return { path, mtimeMs: (await stat(path)).mtimeMs }
     } catch (error) {
       if (isMissingPathError(error)) return null
@@ -344,6 +370,7 @@ export async function* ingestPiFile(
   ctx: SourceExecutionContext,
   filePath: string,
   onSession?: (session: PiSessionMetadata) => void | Promise<void>,
+  diagnostics?: PiHistoryScanDiagnostics,
 ): AsyncIterable<SourceRecord> {
   if (ctx.abortSignal.aborted || extname(filePath).toLowerCase() !== '.jsonl') return
   let fileStat
@@ -362,7 +389,11 @@ export async function* ingestPiFile(
     && previous.offset === fileStat.size
     && previous.size === fileStat.size
     && previous.mtimeMs === fileStat.mtimeMs
-  if (unchanged) return
+  if (unchanged) {
+    if (diagnostics) diagnostics.unchangedFiles += 1
+    return
+  }
+  if (diagnostics) diagnostics.changedFiles += 1
 
   const reset = !previous
     || previous.path !== filePath
@@ -373,8 +404,10 @@ export async function* ingestPiFile(
   let incompleteTail = false
   const session = await sessionMetadata(filePath)
   await onSession?.(session)
+  if (diagnostics) diagnostics.parsedFiles += 1
 
   for await (const line of readJsonlLines(filePath, offset)) {
+    if (diagnostics) diagnostics.bytesRead += Math.max(0, line.endOffset - line.startOffset)
     if (ctx.abortSignal.aborted) return
 
     // A live JSONL file may be observed between two writes. An unterminated fragment that
@@ -473,12 +506,22 @@ export async function* ingestPiHistory(ctx: SourceHistoryExecutionContext): Asyn
     if (!knownCwds.has(key)) knownCwds.set(key, cwd)
   }
 
-  for (const filePath of await listJsonlFiles(sessionsDir, ctx.historyWindow)) {
-    if (ctx.abortSignal.aborted) return
-    yield* ingestPiFile(ctx, filePath, rememberSession)
-  }
-  if (!ctx.abortSignal.aborted) {
-    await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, [...knownCwds.values()])
+  const diagnostics = createHistoryScanDiagnostics()
+  const startedAt = performance.now()
+  try {
+    for (const filePath of await listJsonlFiles(sessionsDir, ctx.historyWindow, diagnostics)) {
+      if (ctx.abortSignal.aborted) return
+      yield* ingestPiFile(ctx, filePath, rememberSession, diagnostics)
+    }
+    if (!ctx.abortSignal.aborted) {
+      await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, [...knownCwds.values()])
+    }
+  } finally {
+    console.debug('[AgentLens] Pi history scan', {
+      ...diagnostics,
+      elapsedMs: Math.round(performance.now() - startedAt),
+      sessionLimit: ctx.historyWindow?.sessionLimit ?? null,
+    })
   }
 }
 
@@ -543,6 +586,7 @@ export const piSessionInternals = {
   piSessionsDir,
   readJsonlLines,
   ingestPiFile,
+  createHistoryScanDiagnostics,
   readSessionHeader,
   resolveDetectedSessionDir,
 }
