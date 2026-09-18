@@ -691,10 +691,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
             }
             if (product.capabilities.includes('model-switching')) {
-              void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(setModelControl, () => undefined)
+              void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(
+                setModelControl,
+                () => setSyncError(t('live.controlsSyncFailed')),
+              )
             }
             if (product.capabilities.includes('thinking-control')) {
-              void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(setThinking, () => undefined)
+              void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(
+                setThinking,
+                () => setSyncError(t('live.controlsSyncFailed')),
+              )
             }
             if (product.capabilities.includes('queue')) {
               const queueRevision = queueRevisionRef.current
@@ -746,6 +752,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     current?.runtimeSessionId,
     product?.liveId,
     product?.capabilities,
+    t,
   ])
 
 
