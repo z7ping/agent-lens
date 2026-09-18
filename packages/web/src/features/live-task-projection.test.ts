@@ -5,6 +5,9 @@ import {
   appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
   LIVE_TASK_ROUND_FACT_LIMIT,
+  LiveTaskRoundProjector,
+  liveEventChangesTaskTranscript,
+  liveTaskStableRoundPrefixLength,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
@@ -156,6 +159,49 @@ test('generic Live projection restores semantic rounds from user-message boundar
   assert.equal(rounds[1]?.model.preview, 'second task')
   assert.equal(rounds[1]?.model.state, 'running')
   assert.ok(liveTaskRoundEstimate(rounds[0]!) >= 180)
+})
+
+test('generic Live transcript classification ignores control-only events', () => {
+  assert.equal(liveEventChangesTaskTranscript({ type: 'title.update', title: 'Task' }), false)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'running' }), false)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'queue.update', steering: [], followUp: [] }), false)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'text.delta', delta: 'x' }), true)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'completed', status: 'completed' }), true)
+})
+
+test('generic Live round projector reuses stable history while streaming the current turn', () => {
+  const stable = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'first', streaming: false },
+    { id: 'a1', kind: 'message' as const, role: 'assistant' as const, text: 'done', streaming: false },
+  ]
+  const current = [
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: 'second', streaming: false },
+    { id: 'a2', kind: 'message' as const, role: 'assistant' as const, text: 'hel', streaming: true },
+  ]
+  const projector = new LiveTaskRoundProjector()
+  const first = projector.project([...stable, ...current], stable.length)
+  const stableRound = first[0]
+
+  const next = projector.project([
+    ...stable,
+    current[0]!,
+    { ...current[1]!, text: 'hello' },
+  ], stable.length)
+
+  assert.equal(next[0], stableRound)
+  assert.equal(next[1]?.model.ordinal, 2)
+  assert.equal(next[1]?.items[1]?.kind === 'message' ? next[1].items[1].text : '', 'hello')
+})
+
+test('generic Live stable round boundary excludes the active semantic turn', () => {
+  const items = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'first', streaming: false },
+    { id: 'a1', kind: 'message' as const, role: 'assistant' as const, text: 'done', streaming: false },
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: 'second', streaming: false },
+    { id: 'a2', kind: 'message' as const, role: 'assistant' as const, text: 'working', streaming: true },
+  ]
+  assert.equal(liveTaskStableRoundPrefixLength(items, true), 2)
+  assert.equal(liveTaskStableRoundPrefixLength(items, false), 4)
 })
 
 test('generic Live projection chunks oversized semantic rounds without splitting turn identity', () => {
