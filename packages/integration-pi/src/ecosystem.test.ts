@@ -78,8 +78,89 @@ test('Pi ecosystem catalog defaults to objective monthly-download ordering witho
 
   const search = new URL(requested[0]!)
   assert.equal(search.searchParams.get('text'), 'keywords:pi-package')
-  assert.equal(search.searchParams.get('size'), '250')
+  assert.equal(search.searchParams.get('size'), '100')
   assert.equal(search.searchParams.get('from'), '0')
+})
+
+test('Pi ecosystem default catalog retries a timed-out first search page with a smaller payload', async () => {
+  const requested: string[] = []
+  let searchCalls = 0
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input)
+    requested.push(url)
+    if (url.includes('/-/v1/search')) {
+      searchCalls += 1
+      if (searchCalls === 1) {
+        throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+      }
+      return jsonResponse({
+        total: 2,
+        objects: [
+          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
+          searchObject('pi-b', '2.0.0', '2026-09-10T00:00:00.000Z'),
+        ],
+      })
+    }
+    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
+      return jsonResponse({
+        'pi-a': { downloads: 10, package: 'pi-a' },
+        'pi-b': { downloads: 20, package: 'pi-b' },
+      })
+    }
+    throw new Error(`unexpected request: ${url}`)
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const response = await provider.search({ sort: 'downloads', limit: 20 })
+
+  assert.equal(searchCalls, 2)
+  assert.deepEqual(response.items.map(item => item.packageName), ['pi-b', 'pi-a'])
+  const first = new URL(requested[0]!)
+  const retry = new URL(requested[1]!)
+  assert.equal(first.searchParams.get('size'), String(piEcosystemInternals.SEARCH_PAGE_SIZE))
+  assert.equal(retry.searchParams.get('size'), String(piEcosystemInternals.SEARCH_RETRY_PAGE_SIZE))
+})
+
+test('Pi ecosystem keeps usable candidates when a later search page times out', async () => {
+  let searchCalls = 0
+  const candidates = Array.from({ length: 100 }, (_, index) =>
+    searchObject(
+      `pi-${String(index).padStart(3, '0')}`,
+      '1.0.0',
+      '2026-09-01T00:00:00.000Z',
+    )
+  )
+  const fetcher = (async (input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes('/-/v1/search')) {
+      searchCalls += 1
+      if (searchCalls === 1) return jsonResponse({ total: 200, objects: candidates })
+      throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+    }
+    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
+      const payload: Record<string, { downloads: number; package: string }> = {}
+      for (let index = 0; index < 100; index += 1) {
+        const packageName = `pi-${String(index).padStart(3, '0')}`
+        payload[packageName] = { downloads: 100 - index, package: packageName }
+      }
+      return jsonResponse(payload)
+    }
+    if (url.includes('registry.npmjs.org/pi-')) {
+      return jsonResponse({
+        name: 'pi-skill',
+        version: '1.0.0',
+        pi: { skills: ['./skills'] },
+      })
+    }
+    throw new Error(`unexpected request: ${url}`)
+  }) as typeof fetch
+
+  const provider = new NpmPiEcosystemProvider(fetcher)
+  const response = await provider.search({ type: 'skill', sort: 'downloads', limit: 20 })
+
+  assert.equal(searchCalls, 2)
+  assert.equal(response.items.length, 20)
+  assert.equal(response.items[0]?.packageName, 'pi-000')
 })
 
 test('Pi ecosystem catalog can sort by most recently published while retaining download counts', async () => {
@@ -285,6 +366,11 @@ test('Pi ecosystem provider reuses short search cache and falls back to bounded 
   assert.equal(searchCalls, 2)
   assert.equal(stale.stale, true)
   assert.equal(stale.fetchedAt, first.fetchedAt)
+})
+
+test('Pi ecosystem candidate budget keeps the default catalog bounded', () => {
+  assert.equal(piEcosystemInternals.catalogCandidateBudget(undefined, 20), 100)
+  assert.equal(piEcosystemInternals.catalogCandidateBudget('skill', 20), 300)
 })
 
 test('Pi ecosystem detail enrichment preserves order while bounding concurrency', async () => {
