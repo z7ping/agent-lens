@@ -217,6 +217,12 @@ export interface LiveCompletedEvent {
   message?: string | undefined
 }
 
+export interface LiveQueueUpdateEvent {
+  type: 'queue.update'
+  steering: readonly string[]
+  followUp: readonly string[]
+}
+
 export type LiveUiRequestMethod = 'select' | 'confirm' | 'input' | 'editor'
 
 export interface LiveUiRequestEvent {
@@ -237,6 +243,7 @@ export type LiveEvent =
   | LiveToolStartEvent
   | LiveToolOutputEvent
   | LiveToolEndEvent
+  | LiveQueueUpdateEvent
   | LiveUiRequestEvent
   | LiveErrorEvent
   | LiveCompletedEvent
@@ -253,6 +260,15 @@ export interface LiveRuntimeEvent {
 
 export interface LiveSendOptions {
   behavior?: 'normal' | 'steer' | 'follow-up'
+}
+
+export interface LiveQueueState {
+  steering: readonly string[]
+  followUp: readonly string[]
+}
+
+export interface LiveInterruptResult {
+  restoredQueue?: LiveQueueState | undefined
 }
 
 export interface LiveControlDisplayInfo {
@@ -349,7 +365,9 @@ export interface LiveAdapter {
   respondToExtension?(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
-  interrupt?(runtimeSessionId: string): Promise<unknown>
+  /** Present only when the adapter declares queue. Clears and returns the current queued messages. */
+  clearQueue?(runtimeSessionId: string): Promise<LiveQueueState>
+  interrupt?(runtimeSessionId: string): Promise<LiveInterruptResult>
   terminate(runtimeSessionId: string): Promise<void>
   dispose(): Promise<void>
 }
