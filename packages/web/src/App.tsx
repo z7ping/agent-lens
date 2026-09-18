@@ -225,7 +225,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onAgents = location.pathname.startsWith('/agents')
   const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
-  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
+  const onReviewIndex = location.pathname === '/review'
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onLiveTask)
   const agentOverviewItems = snapshot.agents?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
@@ -304,12 +304,19 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
-    if (needsFacets) void model.ensureFacets()
-    if (onLocalReview) void model.ensureReview()
+    if (onLocalReview && onReviewIndex) void model.ensureReview()
     if (onTools) void model.ensureUsage()
     if (onAgents) void model.ensureAgents()
     return () => { if (onLocalReview) model.setReviewActive(false) }
-  }, [model, needsFacets, onLocalReview, onTools, onAgents])
+  }, [model, onLocalReview, onReviewIndex, onTools, onAgents])
+
+  useEffect(() => {
+    const reviewReadyForFacets = onLocalReview && snapshot.review.response !== null
+    const toolsReadyForFacets = onTools && snapshot.usage.response !== null
+    if (reviewReadyForFacets || toolsReadyForFacets || onInsights) {
+      void model.ensureFacets()
+    }
+  }, [model, onLocalReview, onTools, onInsights, snapshot.review.response, snapshot.usage.response])
 
   useReviewUrlSync({
     active: onLocalReview,
