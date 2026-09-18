@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: issue-253-validation
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: 22.23.0
 
@@ -27,6 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          npm run test --workspace @agent-lens/source-support
           npm run test --workspace @agent-lens/source-pi
           npm run test --workspace @agent-lens/projection-review
           npm run test --workspace @agent-lens/web
@@ -89,6 +94,8 @@ jobs:
       - name: Run Windows focused regression tests
         shell: pwsh
         run: |
+          npm run test --workspace @agent-lens/source-support
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test --workspace @agent-lens/source-pi
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test --workspace @agent-lens/projection-review
