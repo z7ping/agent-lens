@@ -256,6 +256,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [setComposerValue])
 
   useEffect(() => {
+    setComposerValue(composerDraftKey ? readLiveComposerDraft(composerDraftKey) : '')
+  }, [composerDraftKey, setComposerValue])
+
+  useEffect(() => {
     let cancelled = false
     setProduct(null)
     setState(null)
@@ -272,7 +276,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setConnected(false)
     setError('')
     setInputHistory([])
-    setComposerValue(current ? readLiveComposerDraft(composerDraftKey) : '')
 
     if (!current) {
       setError(t('live.invalidRuntime'))
@@ -312,7 +315,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     })
 
     return () => { cancelled = true }
-  }, [composerDraftKey, current?.liveId, current?.runtimeSessionId, setComposerValue, t])
+  }, [current?.liveId, current?.runtimeSessionId, t])
 
   useEffect(() => {
     if (!current || !product?.capabilities.includes('stream')) return
