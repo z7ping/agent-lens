@@ -76,6 +76,60 @@ test('Agent Detail 只按 sourceId 构造当前智能体详情', async () => {
   }
 })
 
+test('Agent Core Detail 不读取 Integration / Usage / Capability enrichment', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    let integrationReads = 0
+    const projection = new AgentOverviewProjection(
+      storage,
+      sources,
+      { listForSource: () => [{ name: 'session', status: 'available', captureModes: ['history'] }] } as never,
+      undefined,
+      undefined,
+      async () => {
+        integrationReads += 1
+        return { availability: 'available', capabilities: [] }
+      },
+    )
+    const detail = await projection.get('codex')
+    assert.ok(detail)
+    assert.equal(integrationReads, 0)
+    assert.deepEqual(detail.item.capabilities, [])
+    assert.deepEqual(detail.item.usedAssets, [])
+    assert.equal(detail.item.integration, undefined)
+  } finally {
+    storage.close()
+  }
+})
+
+test('Agent Coverage 不读取 Integration / Capability，只返回覆盖分析字段', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    let integrationReads = 0
+    const projection = new AgentOverviewProjection(
+      storage,
+      sources,
+      { listForSource: () => [{ name: 'session', status: 'available', captureModes: ['history'] }] } as never,
+      undefined,
+      undefined,
+      async () => {
+        integrationReads += 1
+        return { availability: 'available', capabilities: [] }
+      },
+    )
+    const coverage = await projection.queryCoverage()
+    assert.equal(coverage.items.length, 1)
+    assert.equal(coverage.items[0]?.sourceId, 'codex')
+    assert.equal(integrationReads, 0)
+    assert.ok(Array.isArray(coverage.items[0]?.assetInventory))
+    assert.ok(Array.isArray(coverage.items[0]?.usedAssets))
+  } finally {
+    storage.close()
+  }
+})
+
 test('AgentOverviewProjection keeps inventory state separate from observed usage', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
