@@ -318,7 +318,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|queue|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -378,6 +378,18 @@ export async function handleLiveRequest(
       }
       await adapter.send(runtimeSessionId, message, behavior ? { behavior } : undefined)
       writeJson(response, 202, { ok: true })
+      return true
+    }
+    if (action === 'commands' && request.method === 'GET') {
+      requireCapability(adapter, 'command-discovery')
+      if (!adapter.commands) throw httpError(409, `${adapter.manifest.displayName} does not expose Live command discovery`)
+      writeJson(response, 200, {
+        items: jsonValue(await shareAdapterRead(
+          adapter,
+          `commands:${runtimeSessionId}`,
+          () => adapter.commands!(runtimeSessionId),
+        )),
+      })
       return true
     }
     if (action === 'queue' && request.method === 'GET') {
