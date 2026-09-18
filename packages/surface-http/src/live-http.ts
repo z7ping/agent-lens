@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
+  LIVE_HISTORY_INDEX_MAX_LIMIT,
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
 } from '@agent-lens/core'
@@ -380,6 +381,38 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
     ...(leafId !== undefined ? { leafId: leafId as string | null } : {}),
     ...(page ? { page } : {}),
   }
+}
+
+function normalizeHistoryIndex(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(500, 'Live adapter returned an invalid history index')
+  }
+  const row = value as Record<string, unknown>
+  if (!Number.isSafeInteger(row.total) || Number(row.total) < 0 || !Array.isArray(row.items)) {
+    throw httpError(500, 'Live adapter returned invalid history index metadata')
+  }
+  if (row.items.length > LIVE_HISTORY_INDEX_MAX_LIMIT) {
+    throw httpError(500, 'Live adapter history index exceeded the bounded limit')
+  }
+  const items = row.items.map(raw => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw httpError(500, 'Live adapter history index item is invalid')
+    }
+    const item = raw as Record<string, unknown>
+    if (typeof item.cursor !== 'string' || !item.cursor
+      || !Number.isSafeInteger(item.ordinal) || Number(item.ordinal) < 1) {
+      throw httpError(500, 'Live adapter history index cursor is invalid')
+    }
+    if (item.preview !== undefined && typeof item.preview !== 'string') {
+      throw httpError(500, 'Live adapter history index preview is invalid')
+    }
+    return {
+      cursor: item.cursor,
+      ordinal: Number(item.ordinal),
+      ...(typeof item.preview === 'string' ? { preview: item.preview.slice(0, 120) } : {}),
+    }
+  })
+  return { total: Number(row.total), items }
 }
 
 function normalizeRuntimeActionResult(value: unknown): LiveRuntimeActionResult {
@@ -776,8 +809,9 @@ export async function handleLiveRequest(
       const after = optionalString(url.searchParams.get('after'))
       const rawEdge = optionalString(url.searchParams.get('edge'))
       const edge = rawEdge === 'earliest' || rawEdge === 'latest' ? rawEdge : undefined
+      const around = optionalString(url.searchParams.get('around'))
       if (rawEdge && !edge) throw httpError(400, 'Live snapshot edge must be earliest or latest')
-      const selectors = [since, before, after, edge].filter(Boolean)
+      const selectors = [since, before, after, edge, around].filter(Boolean)
       if (selectors.length > 1) throw httpError(400, 'Live snapshot accepts only one cursor or edge selector')
       const rawLimit = url.searchParams.get('limit')
       const requestedLimit = rawLimit === null ? LIVE_SNAPSHOT_DEFAULT_LIMIT : Number(rawLimit)
@@ -789,15 +823,35 @@ export async function handleLiveRequest(
         ...(before ? { before } : {}),
         ...(after ? { after } : {}),
         ...(edge ? { edge } : {}),
+        ...(around ? { around } : {}),
         limit,
       }
       const snapshot = normalizePublicSnapshot(await shareAdapterRead(
         adapter,
-        `snapshot:${runtimeSessionId}:${since ?? ''}:${before ?? ''}:${after ?? ''}:${edge ?? ''}:${limit}`,
+        `snapshot:${runtimeSessionId}:${since ?? ''}:${before ?? ''}:${after ?? ''}:${edge ?? ''}:${around ?? ''}:${limit}`,
         () => adapter.snapshot(runtimeSessionId, since, window),
       ))
       markRuntimeValidated(adapter, runtimeSessionId)
       writeJson(response, 200, jsonValue(snapshot))
+      return true
+    }
+    if (action === 'history-index' && request.method === 'GET') {
+      requireCapability(adapter, 'history-index')
+      if (!adapter.historyIndex) {
+        throw httpError(409, `${adapter.manifest.displayName} does not expose Live history index`)
+      }
+      const requested = Number(url.searchParams.get('limit') ?? LIVE_HISTORY_INDEX_MAX_LIMIT)
+      if (!Number.isInteger(requested) || requested < 2) {
+        throw httpError(400, 'Live history index limit must be an integer >= 2')
+      }
+      const limit = Math.min(LIVE_HISTORY_INDEX_MAX_LIMIT, requested)
+      const index = normalizeHistoryIndex(await shareAdapterRead(
+        adapter,
+        `history-index:${runtimeSessionId}:${limit}`,
+        () => adapter.historyIndex!(runtimeSessionId, limit),
+      ))
+      markRuntimeValidated(adapter, runtimeSessionId)
+      writeJson(response, 200, jsonValue(index))
       return true
     }
     if (action === 'events' && request.method === 'GET') {
