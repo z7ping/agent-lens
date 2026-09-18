@@ -8,7 +8,6 @@ import type {
   LiveMessageActionContributionDto,
   LiveMessageDto,
   LiveModelControlDto,
-  LiveProductDto,
   LiveQueueStateDto,
   LiveRuntimeActionContributionDto,
   LiveRuntimeDisclosureContributionDto,
@@ -17,7 +16,7 @@ import type {
   LiveThinkingControlDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
-import { liveApi } from '../client/live'
+import { liveApi, type LiveProductMetadata } from '../client/live'
 import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -427,7 +426,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
     [current?.liveId, current?.runtimeSessionId],
   )
-  const [product, setProduct] = useState<LiveProductDto | null>(null)
+  const [product, setProduct] = useState<LiveProductMetadata | null>(null)
   const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [projection, setProjection] = useState<{
@@ -531,24 +530,43 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       return () => { cancelled = true }
     }
 
-    void liveApi.products().then(async products => {
+    const metadataRequest = liveApi.metadata(current.liveId).then(metadata => {
+      if (!cancelled) setProduct(metadata)
+      return metadata
+    })
+
+    const criticalRequest = liveApi.snapshot(current.liveId, current.runtimeSessionId).then(
+      snapshot => {
+        if (cancelled) return
+        setState(snapshot.state)
+        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
+        const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
+        const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
+        setProjection(nextProjection)
+        setInputHistory(projectLiveInputHistory(projectedItems))
+        snapshotBaseActiveCountRef.current = nextProjection.active.length
+        leafIdRef.current = snapshot.leafId ?? undefined
+        setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
+      },
+      async snapshotError => {
+        if (cancelled) return
+        setSyncError(snapshotError instanceof Error ? snapshotError.message : String(snapshotError))
+        const runtime = await liveApi.state(current.liveId, current.runtimeSessionId)
+        if (cancelled) return
+        setState(runtime)
+        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
+        setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
+      },
+    )
+
+    void Promise.all([criticalRequest, metadataRequest]).then(async ([, matched]) => {
       if (cancelled) return
-      const matched = products.find(item => item.liveId === current.liveId)
-      if (!matched) throw new Error(t('live.productUnavailable'))
-      setProduct(matched)
-      setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
-      const [runtime, snapshotResult, messageActionOptions, runtimeDisclosureOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
-        liveApi.state(current.liveId, current.runtimeSessionId),
-        liveApi.snapshot(current.liveId, current.runtimeSessionId).then(
-          snapshot => ({ ok: true as const, snapshot }),
-          reason => ({ ok: false as const, reason }),
-        ),
-        liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
-        liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
-        matched.capabilities.includes('command-discovery')
-          ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
-          : Promise.resolve([]),
+
+      // Supporting reads: controls and the product-local runtime list can fill in
+      // after the transcript is already visible.
+      const [runtimeList, model, thinkingControl, queueState] = await Promise.all([
+        liveApi.list(current.liveId).catch(() => []),
         matched.capabilities.includes('model-switching')
           ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => {
               if (!cancelled) setSyncError(t('live.controlsSyncFailed'))
@@ -566,29 +584,26 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : Promise.resolve(null),
       ])
       if (cancelled) return
-      const effectiveRuntime = snapshotResult.ok ? snapshotResult.snapshot.state : runtime
-      setState(effectiveRuntime)
-      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, effectiveRuntime))
-      if (snapshotResult.ok) {
-        const projectedItems = projectLiveSnapshotEntries(snapshotResult.snapshot.entries)
-        const nextProjection = splitLiveProjectionItems(
-          projectedItems,
-          snapshotResult.snapshot.state.isStreaming,
-        )
-        setProjection(nextProjection)
-        setInputHistory(projectLiveInputHistory(projectedItems))
-        snapshotBaseActiveCountRef.current = nextProjection.active.length
-        leafIdRef.current = snapshotResult.snapshot.leafId ?? undefined
-      } else {
-        setSyncError(snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason))
-      }
-      setMessageActions(messageActionOptions)
-      setRuntimeDisclosures(runtimeDisclosureOptions)
-      setCommands(commandOptions)
+      setRuntimes(currentRuntimes => {
+        const currentState = currentRuntimes.find(item => item.runtimeSessionId === current.runtimeSessionId)
+        return currentState ? mergeRuntimeState(runtimeList, currentState) : runtimeList
+      })
       setModelControl(model)
       setThinking(thinkingControl)
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
-      setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
+
+      // Opportunistic reads never hold the first transcript or primary controls.
+      const [messageActionOptions, runtimeDisclosureOptions, commandOptions] = await Promise.all([
+        liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
+        liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
+        matched.capabilities.includes('command-discovery')
+          ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
+          : Promise.resolve([]),
+      ])
+      if (cancelled) return
+      setMessageActions(messageActionOptions)
+      setRuntimeDisclosures(runtimeDisclosureOptions)
+      setCommands(commandOptions)
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })

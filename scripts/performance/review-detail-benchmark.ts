@@ -19,7 +19,7 @@ const options: Options = {
   observationsPerInteraction: readPositiveInt('observations-per-interaction', 10),
   evidencePerObservation: readPositiveInt('evidence-per-observation', 1),
   samples: readPositiveInt('samples', 10),
-  limit: readPositiveInt('limit', 20),
+  limit: readPositiveInt('limit', 10),
 }
 
 function isoAt(offsetSeconds: number): string {
@@ -139,10 +139,18 @@ try {
   if (projectionRows !== 1) throw new Error(`session summary projection mismatch: ${projectionRows}`)
 
   const results = []
-  results.push(await measure('first-page-forward', options.samples, async () => {
-    const detail = await review.get(logicalSessionId, { limit: options.limit, direction: 'forward' })
-    if (!detail || detail.interactions.length !== Math.min(options.limit, options.interactions)) throw new Error('unexpected forward page')
+  results.push(await measure('first-page-backward', options.samples, async () => {
+    const detail = await review.get(logicalSessionId, { limit: options.limit, direction: 'backward' })
+    if (!detail || detail.interactions.length !== Math.min(options.limit, options.interactions)) throw new Error('unexpected backward page')
+    const expectedLastOrdinal = options.interactions
+    if (detail.interactions.at(-1)?.ordinal !== expectedLastOrdinal) {
+      throw new Error(`backward page did not end at latest interaction: ${detail.interactions.at(-1)?.ordinal}`)
+    }
   }))
+  const representativeDetail = await review.get(logicalSessionId, { limit: options.limit, direction: 'backward' })
+  const representativeDetailBytes = representativeDetail
+    ? Buffer.byteLength(JSON.stringify(representativeDetail), 'utf8')
+    : 0
   results.push(await measure('latest', options.samples, async () => {
     const detail = await review.get(logicalSessionId, { filter: 'latest' })
     if (!detail || detail.interactions.length !== 1) throw new Error('unexpected latest page')
@@ -190,6 +198,11 @@ try {
       walMiB: mb(walBytes),
     },
     reviewDetail: results,
+    representativeDetail: {
+      direction: 'backward',
+      interactions: representativeDetail?.interactions.length ?? 0,
+      responseBytes: representativeDetailBytes,
+    },
     queryPlan: plan.map(row => row.detail),
     sessionSummaryQueryPlan: summaryPlan.map(row => row.detail),
   }, null, 2))

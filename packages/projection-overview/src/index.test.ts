@@ -28,6 +28,108 @@ function policy(enabled: boolean): CapturePolicyService {
   } as unknown as CapturePolicyService
 }
 
+test('Agent Summary 只读取轻量安装状态，不触发资产清单和 Usage 聚合', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const host = await identity.resolveHost({ name: 'summary-light-host' })
+    await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+
+    let inventoryReads = 0
+    const originalInventory = storage.assetInventory!.listByInstallation.bind(storage.assetInventory)
+    storage.assetInventory!.listByInstallation = async installationId => {
+      inventoryReads += 1
+      return originalInventory(installationId)
+    }
+
+    let usageReads = 0
+    const originalUsage = storage.toolUsageObservations!.aggregateAssetsBySource!.bind(storage.toolUsageObservations)
+    storage.toolUsageObservations!.aggregateAssetsBySource = async input => {
+      usageReads += 1
+      return originalUsage(input)
+    }
+
+    const projection = new AgentOverviewProjection(storage, sources)
+    const summary = await projection.querySummary()
+
+    assert.equal(summary.items.length, 1)
+    assert.equal(summary.items[0]?.sourceId, 'codex')
+    assert.equal(summary.items[0]?.installationCount, 1)
+    assert.equal(inventoryReads, 0)
+    assert.equal(usageReads, 0)
+  } finally {
+    storage.close()
+  }
+})
+
+test('Agent Detail 只按 sourceId 构造当前智能体详情', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const projection = new AgentOverviewProjection(storage, sources)
+    const detail = await projection.get('codex')
+    assert.equal(detail?.item.sourceId, 'codex')
+    assert.equal(await projection.get('missing'), null)
+  } finally {
+    storage.close()
+  }
+})
+
+test('Agent Core Detail 不读取 Integration / Usage / Capability enrichment', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    let integrationReads = 0
+    const projection = new AgentOverviewProjection(
+      storage,
+      sources,
+      { listForSource: () => [{ name: 'session', status: 'available', captureModes: ['history'] }] } as never,
+      undefined,
+      undefined,
+      async () => {
+        integrationReads += 1
+        return { availability: 'available', capabilities: [] }
+      },
+    )
+    const detail = await projection.get('codex')
+    assert.ok(detail)
+    assert.equal(integrationReads, 0)
+    assert.deepEqual(detail.item.capabilities, [])
+    assert.deepEqual(detail.item.usedAssets, [])
+    assert.equal(detail.item.integration, undefined)
+  } finally {
+    storage.close()
+  }
+})
+
+test('Agent Coverage 不读取 Integration / Capability，只返回覆盖分析字段', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    let integrationReads = 0
+    const projection = new AgentOverviewProjection(
+      storage,
+      sources,
+      { listForSource: () => [{ name: 'session', status: 'available', captureModes: ['history'] }] } as never,
+      undefined,
+      undefined,
+      async () => {
+        integrationReads += 1
+        return { availability: 'available', capabilities: [] }
+      },
+    )
+    const coverage = await projection.queryCoverage()
+    assert.equal(coverage.items.length, 1)
+    assert.equal(coverage.items[0]?.sourceId, 'codex')
+    assert.equal(integrationReads, 0)
+    assert.ok(Array.isArray(coverage.items[0]?.assetInventory))
+    assert.ok(Array.isArray(coverage.items[0]?.usedAssets))
+  } finally {
+    storage.close()
+  }
+})
+
 test('AgentOverviewProjection keeps inventory state separate from observed usage', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

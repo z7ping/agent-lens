@@ -1,7 +1,11 @@
 import {
   parseLiveUpdateEvent,
+  type AgentCoverageResponseDto,
+  type AgentDetailResponseDto,
+  type AgentEnrichmentResponseDto,
   type AgentOverviewResponseDto,
   type AgentRescanResponseDto,
+  type AgentSummaryResponseDto,
   type BackupCreateRequestDto,
   type BackupOverviewResponseDto,
   type BackupRestorePreviewResponseDto,
@@ -26,10 +30,14 @@ import {
   type ManagedAssetRoot,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
+  type ReviewMessageAttachmentDto,
+  type ReviewMessageAttachmentsResponseDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
+  type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
   type SourceRecordResponseDto,
+  type SourceRecordsResponseDto,
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
@@ -163,6 +171,41 @@ export class AgentLensApi {
 
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
+  agentSummaries(): Promise<AgentSummaryResponseDto> {
+    return shareInFlight(
+      aggregateReadInFlight,
+      'agent-summaries',
+      () => requestJson('/api/v1/agents/summary'),
+    )
+  }
+
+  agentCoverage(): Promise<AgentCoverageResponseDto> {
+    return shareInFlight(
+      aggregateReadInFlight,
+      'agent-coverage',
+      () => requestJson('/api/v1/agents/coverage'),
+    )
+  }
+  agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
+    const requestPath = `/api/v1/agents/${encodeURIComponent(sourceId)}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `agent-detail:${sourceId}`,
+      () => requestJson<AgentDetailResponseDto>(requestPath)
+        .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error)),
+    )
+  }
+
+  agentEnrichment(sourceId: string): Promise<AgentEnrichmentResponseDto | null> {
+    const requestPath = `/api/v1/agents/${encodeURIComponent(sourceId)}/enrichment`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `agent-enrichment:${sourceId}`,
+      () => requestJson<AgentEnrichmentResponseDto>(requestPath)
+        .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error)),
+    )
+  }
+
   agents(): Promise<AgentOverviewResponseDto> {
     if (agentsInFlight) return agentsInFlight
     const pending = requestJson<AgentOverviewResponseDto>('/api/v1/agents')
@@ -227,6 +270,9 @@ export class AgentLensApi {
   integrations(): Promise<IntegrationManagementResponseDto> {
     return requestJson('/api/v1/integrations')
   }
+  integrationPreferences(): Promise<IntegrationPreferencesResponseDto> {
+    return requestJson('/api/v1/integrations/preferences')
+  }
   updateIntegrationPreferences(
     input: IntegrationPreferenceUpdateRequestDto,
   ): Promise<IntegrationPreferencesResponseDto> {
@@ -287,11 +333,26 @@ export class AgentLensApi {
     return requestJson<ReviewResponseDto>(`/api/v1/review?${params}`, signal ? { signal } : {})
   }
 
+  reviewAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]> {
+    const requestPath = `/api/v1/review/observations/${encodeURIComponent(observationId)}/attachments`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `review-attachments:${observationId}`,
+      () => requestJson<ReviewMessageAttachmentsResponseDto>(requestPath).then(result => result.items),
+    )
+  }
+
+  reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+    return requestJson<ReviewSessionSummaryDto>(`/api/v1/review/${encodeURIComponent(id)}/summary`)
+      .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
+  }
+
   reviewDetail(
     id: string,
     options: {
       cursor?: string
       ordinal?: number
+      afterOrdinal?: number
       limit?: number
       direction?: ReviewDetailDirection
       filter?: ReviewDetailFilter
@@ -300,6 +361,7 @@ export class AgentLensApi {
     const params = new URLSearchParams()
     if (options.cursor) params.set('cursor', options.cursor)
     if (options.ordinal !== undefined) params.set('ordinal', String(options.ordinal))
+    if (options.afterOrdinal !== undefined) params.set('afterOrdinal', String(options.afterOrdinal))
     if (options.direction) params.set('direction', options.direction)
     if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
@@ -313,6 +375,19 @@ export class AgentLensApi {
 
   sourceRecord(id: string): Promise<SourceRecordResponseDto> {
     return requestJson(`/api/v1/source-records/${encodeURIComponent(id)}`)
+  }
+
+  sourceRecords(ids: readonly string[]): Promise<SourceRecordResponseDto[]> {
+    const unique = [...new Set(ids.map(id => id.trim()).filter(Boolean))].slice(0, 50)
+    if (!unique.length) return Promise.resolve([])
+    const params = new URLSearchParams()
+    for (const id of unique) params.append('id', id)
+    const requestPath = `/api/v1/source-records?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `source-records:${unique.join('\u0000')}`,
+      () => requestJson<SourceRecordsResponseDto>(requestPath).then(result => result.items),
+    )
   }
 
   usage(filters: QueryFilters): Promise<ToolAssetUsageResponseDto> {
@@ -373,6 +448,18 @@ export class AgentLensApi {
       },
     )
     return backupOverviewInFlight
+  }
+
+  async pollBackupOverview(): Promise<BackupOverviewResponseDto> {
+    this.backupOverviewLoaded = true
+    const result = await shareInFlight(
+      aggregateReadInFlight,
+      'backup-overview:background',
+      () => requestJson<BackupOverviewResponseDto>('/api/v1/backups?background=1'),
+    )
+    backupOverviewCache = result
+    reuseBackupOverviewOnce = false
+    return result
   }
 
   async refreshBackupOverview(): Promise<BackupOverviewResponseDto> {

@@ -1,0 +1,130 @@
+name: Issue 253 Read Path Validation
+
+on:
+  pull_request:
+    types: [ready_for_review]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 22.23.0
+
+jobs:
+  linux-performance:
+    if: github.head_ref == 'perf/253-read-path'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run focused performance contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p performance-artifacts
+          DB="$RUNNER_TEMP/agent-lens-253-large.db"
+          npm run perf:session-summary -- --sessions=5000 --observations-per-session=20 --evidence-per-observation=1 --samples=5 --limit=20 --database-path="$DB" | tee performance-artifacts/session-summary.txt
+          npm run perf:review-detail -- --interactions=500 --observations-per-interaction=10 --evidence-per-observation=1 --samples=5 --limit=10 | tee performance-artifacts/review-detail.txt
+          npm run perf:review-virtualization -- --rounds=1000 --viewport-height=800 --budget-mounted=40 | tee performance-artifacts/review-virtualization.txt
+          npm run perf:tool-overview -- --installations=3 --sessions-per-installation=30 --calls-per-session=20 --evidence-per-observation=1 --samples=5 --limit=100 --global-p95-budget-ms=3000 --overview-p95-budget-ms=5000 | tee performance-artifacts/tool-overview.txt
+          npm run perf:pi-history-idle -- --files=5000 --records-per-file=2 --payload-bytes=256 --samples=3 | tee performance-artifacts/pi-history-idle.txt
+          npm run perf:data-runtime-isolation | tee performance-artifacts/data-runtime-isolation.txt
+
+          npm run build:dist
+          export AGENT_LENS_PORT=56853
+          export AGENT_LENS_DB_PATH="$DB"
+          export AGENT_LENS_VAULT_PATH="$RUNNER_TEMP/agent-lens-253-vault"
+          export AGENT_LENS_CAPTURE_POLICY_PATH="$RUNNER_TEMP/agent-lens-253-capture-policy.json"
+          export AGENT_LENS_DAEMON_MODE=foreground
+          export AGENT_LENS_RUNTIME_OWNER=ci
+          node dist/daemon.mjs > performance-artifacts/daemon.log 2>&1 &
+          DAEMON_PID=$!
+          trap 'kill "$DAEMON_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 120); do
+            if node -e "fetch('http://127.0.0.1:56853/api/v1/health').then(r=>{if(r.ok||r.status===503)process.exit(0);process.exit(1)}).catch(()=>process.exit(1))"; then
+              READY=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$READY" = "1"
+          sleep 5
+          AGENT_LENS_ACCEPT_BASE_URL=http://127.0.0.1:56853 npm run accept:large-db-performance -- --samples=5 --warmup=1 --tools-burst=32 --burst=64 --storage-diagnostics-burst=16 | tee performance-artifacts/large-db-acceptance.txt
+
+      - name: Upload Linux validation
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: issue-253-linux-performance
+          path: performance-artifacts/
+          if-no-files-found: warn
+
+  windows-performance:
+    if: github.head_ref == 'perf/253-read-path'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run Windows large-scale validation
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path performance-artifacts | Out-Null
+          $db = Join-Path $env:RUNNER_TEMP 'agent-lens-253-large.db'
+          npm run perf:session-summary -- --sessions=5000 --observations-per-session=20 --evidence-per-observation=1 --samples=5 --limit=20 --database-path="$db" | Tee-Object -FilePath performance-artifacts/session-summary.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run perf:review-detail -- --interactions=500 --observations-per-interaction=10 --evidence-per-observation=1 --samples=5 --limit=10 | Tee-Object -FilePath performance-artifacts/review-detail.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run perf:pi-history-idle -- --files=5000 --records-per-file=2 --payload-bytes=256 --samples=3 | Tee-Object -FilePath performance-artifacts/pi-history-idle.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run perf:data-runtime-isolation | Tee-Object -FilePath performance-artifacts/data-runtime-isolation.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          npm run build:dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:AGENT_LENS_PORT = '56854'
+          $env:AGENT_LENS_DB_PATH = $db
+          $env:AGENT_LENS_VAULT_PATH = Join-Path $env:RUNNER_TEMP 'agent-lens-253-vault'
+          $env:AGENT_LENS_CAPTURE_POLICY_PATH = Join-Path $env:RUNNER_TEMP 'agent-lens-253-capture-policy.json'
+          $env:AGENT_LENS_DAEMON_MODE = 'foreground'
+          $env:AGENT_LENS_RUNTIME_OWNER = 'ci'
+          $daemon = Start-Process -FilePath node -ArgumentList 'dist/daemon.mjs' -PassThru -NoNewWindow -RedirectStandardOutput performance-artifacts/daemon.out.log -RedirectStandardError performance-artifacts/daemon.err.log
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 120; $i++) {
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:56854/api/v1/health' -TimeoutSec 2
+                if ($response.StatusCode -eq 200 -or $response.StatusCode -eq 503) { $ready = $true; break }
+              } catch {}
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $ready) { throw 'Daemon did not become ready' }
+            Start-Sleep -Seconds 5
+            $env:AGENT_LENS_ACCEPT_BASE_URL = 'http://127.0.0.1:56854'
+            npm run accept:large-db-performance -- --samples=5 --warmup=1 --tools-burst=32 --burst=64 --storage-diagnostics-burst=16 | Tee-Object -FilePath performance-artifacts/large-db-acceptance.txt
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            if ($daemon -and -not $daemon.HasExited) { Stop-Process -Id $daemon.Id -Force }
+          }
+
+      - name: Upload Windows validation
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: issue-253-windows-performance
+          path: performance-artifacts/
+          if-no-files-found: warn

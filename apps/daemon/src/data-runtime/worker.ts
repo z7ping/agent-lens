@@ -129,10 +129,12 @@ function validRequest(value: unknown): value is DataRuntimeRequest {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
   const params = record.params
+  const deadlineAt = record.deadlineAt
   return record.protocolVersion === DATA_RUNTIME_PROTOCOL_VERSION
     && record.type === 'request'
     && typeof record.requestId === 'string'
     && isDataRuntimeMethod(record.method)
+    && (deadlineAt === undefined || (typeof deadlineAt === 'number' && Number.isFinite(deadlineAt)))
     && (params === undefined || (params !== null && typeof params === 'object' && !Array.isArray(params)))
 }
 
@@ -265,6 +267,17 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
   }
   if (!validRequest(value)) {
     fail('unknown', 'invalid_request', 'Invalid Data Runtime IPC request')
+    return
+  }
+
+  if (value.deadlineAt !== undefined && Date.now() >= value.deadlineAt) {
+    logDataRuntimeDebug('[AgentLens] Data Runtime skipped expired queued request', {
+      role,
+      method: value.method,
+      ...(safeRequestPath(value) ? { path: safeRequestPath(value) } : {}),
+      queuedMs: Math.round(performance.now() - queuedAt),
+    })
+    fail(value.requestId, 'request_expired', 'Data Runtime request expired before execution')
     return
   }
 

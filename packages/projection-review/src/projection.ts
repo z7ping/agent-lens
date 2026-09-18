@@ -251,6 +251,21 @@ export class ReviewProjection {
     return Promise.all(raw.entries.map(item => this.summary(item)))
   }
 
+  async getSummary(logicalSessionId: string): Promise<ReviewSessionSummaryDto | null> {
+    if (this.storage.sessionSummaries) {
+      const result = await this.storage.sessionSummaries.query({
+        logicalSessionId,
+        limit: 1,
+      })
+      const record = result.items.find(item => item.logicalSessionId === logicalSessionId)
+      return record ? this.summaryFromRecord(record) : null
+    }
+
+    const sessionResult = await this.sessions.queryEntries({ logicalSessionId, limit: 1 })
+    const session = sessionResult.entries.find(item => item.session.id === logicalSessionId)
+    return session ? this.summary(session) : null
+  }
+
   async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
     const startedAt = performance.now()
     let summary: ReviewSessionSummaryDto | null = null

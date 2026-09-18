@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { reviewMessageAttachmentsFromPayload } from '@agent-lens/protocol'
 import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
   JsonValue,
-  LiveProductDto,
   ReviewDetailFilter,
   ReviewEventNodeDto,
   ReviewInteractionDto,
+  ReviewMessageAttachmentDto,
   ReviewMessageNodeDto,
   ReviewNodeDto,
   ReviewSessionSummaryDto,
@@ -18,9 +17,8 @@ import type {
   TimelineEvidenceDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
-import { LIVE_RECONNECTED_EVENT } from '../client/api'
 import { fetchHubReviewSessions } from '../client/hub-review'
-import { liveApi } from '../client/live'
+import { liveApi, type LiveProductMetadata } from '../client/live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -532,7 +530,7 @@ function RawInspectorContent({
   </section>
 }
 
-function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; onClose(): void; loadSourceRecord(id: string): Promise<SourceRecordResponseDto> }) {
+function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNodeDto; onClose(): void; loadSourceRecords(ids: readonly string[]): Promise<SourceRecordResponseDto[]> }) {
   const { t } = useTranslation('review')
   const [tab, setTab] = useState<InspectorTab>('detail')
   const sourceRecordIds = useMemo(() => [...new Set(node.evidence.map(item => item.sourceRecordId).filter((id): id is string => Boolean(id)))], [node.evidence])
@@ -547,12 +545,12 @@ function Inspector({ node, onClose, loadSourceRecord }: { node: ReviewNodeDto; o
     setRawError('')
     if (!sourceRecordIds.length) return () => { active = false }
     setRawLoading(true)
-    void Promise.all(sourceRecordIds.map(id => loadSourceRecord(id))).then(
+    void loadSourceRecords(sourceRecordIds).then(
       records => { if (active) { setRawRecords(records); setRawLoading(false) } },
       reason => { if (active) { setRawError(reason instanceof Error ? reason.message : String(reason)); setRawLoading(false) } },
     )
     return () => { active = false }
-  }, [loadSourceRecord, node.id, sourceRecordIds, tab])
+  }, [loadSourceRecords, node.id, sourceRecordIds, tab])
 
   const title = node.type === 'tool' ? node.name : node.type === 'event' ? reviewEventLabel(node) : roleLabel(node.role)
   const detailSummary = node.type === 'event'
@@ -648,13 +646,29 @@ function MarkdownSurface({ text }: { text: string }) {
 function MessageBubble({
   node,
   inspect,
+  loadAttachments,
   nestedTools = [],
 }: {
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
+  loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   nestedTools?: ReviewToolNodeDto[]
 }) {
   const { t } = useTranslation('review')
+  const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
+
+  useEffect(() => {
+    setAttachments(node.attachments ?? [])
+    if (node.role === 'reasoning' || node.role === 'commentary') return
+    if (!(node.attachments ?? []).some(item => item.type === 'image')) return
+    let active = true
+    void loadAttachments(node.id).then(
+      items => { if (active) setAttachments(items) },
+      () => undefined,
+    )
+    return () => { active = false }
+  }, [loadAttachments, node.attachments, node.id, node.role])
+
   if (node.role === 'reasoning' || node.role === 'commentary') {
     const label = node.role === 'commentary' ? t('local.process.execution') : t('local.process.thinking')
     const thinking: TaskThinkingModel = {
@@ -679,7 +693,7 @@ function MessageBubble({
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
-    attachments={reviewMessageAttachmentsFromPayload(node.payload)}
+    attachments={attachments}
     author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
@@ -822,6 +836,7 @@ function ReviewRoundAdapter({
   interaction,
   round,
   inspect,
+  loadAttachments,
   defaultExpanded,
   expansionStore,
   forceExpanded,
@@ -831,6 +846,7 @@ function ReviewRoundAdapter({
   interaction: ReviewInteractionDto
   round: TaskRoundModel
   inspect(node: ReviewNodeDto): void
+  loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   defaultExpanded: boolean
   expansionStore: Map<string, boolean>
   forceExpanded: boolean
@@ -850,8 +866,8 @@ function ReviewRoundAdapter({
       if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect}/>
       if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
       if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
-      if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect}/>
-      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect}/>
+      if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
+      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments}/>
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
     })}
   </TaskRound>
@@ -918,7 +934,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
-  const [liveProducts, setLiveProducts] = useState<LiveProductDto[]>([])
+  const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
   const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork'>('')
   const [historyInteractionError, setHistoryInteractionError] = useState('')
   const [pathError, setPathError] = useState('')
@@ -965,11 +981,16 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   }, [review.response?.items, visibleHubSessions, t])
 
   useEffect(() => {
+    if (!detail?.id) {
+      setLiveProducts([])
+      return
+    }
     let cancelled = false
     let retryTimer: number | undefined
+    let initialTimer: number | undefined
 
     const refreshLiveProducts = (allowRetry = true) => {
-      void liveApi.products().then(
+      void liveApi.productMetadata(detail.productId).then(
         products => {
           if (cancelled) return
           if (retryTimer !== undefined) {
@@ -989,14 +1010,13 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       )
     }
     const handleLiveStateChanged = () => refreshLiveProducts()
-    refreshLiveProducts()
+    initialTimer = window.setTimeout(() => refreshLiveProducts(), 100)
     window.addEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
-    window.addEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
     return () => {
       cancelled = true
+      if (initialTimer !== undefined) window.clearTimeout(initialTimer)
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       window.removeEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
-      window.removeEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
     }
   }, [detail?.id])
 
@@ -1320,6 +1340,34 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     followingTailRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180
   }
 
+  useEffect(() => {
+    if (
+      !review.detailHasNewData
+      || !followingTailRef.current
+      || roundFilter !== 'all'
+      || review.detailLoading
+      || review.detailLoadingMore
+    ) return
+
+    let cancelled = false
+    void model.refreshReviewTailIncremental().then(() => {
+      if (cancelled || !followingTailRef.current) return
+      window.requestAnimationFrame(() => {
+        const pane = readerPaneRef.current
+        if (!pane || !followingTailRef.current) return
+        pane.scrollTop = pane.scrollHeight
+      })
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [
+    model,
+    review.detailHasNewData,
+    review.detail?.interactions.length,
+    review.detailLoading,
+    review.detailLoadingMore,
+    roundFilter,
+  ])
+
   const emptyLabel = roundFilter === 'errors'
     ? t('local.interaction.noErrors')
     : roundFilter === 'latency'
@@ -1519,6 +1567,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   forceRevision={roundExpansionRevision}
                   showAllEvents={showAllEvents}
                   inspect={setInspect}
+                  loadAttachments={model.reviewAttachments}
                 />
               </VirtualRoundMount>)}
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
@@ -1538,6 +1587,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>
       </TaskSurface>
     </div>
-    {inspect && <Inspector node={inspect} loadSourceRecord={model.sourceRecord} onClose={() => setInspect(null)}/>} 
+    {inspect && <Inspector node={inspect} loadSourceRecords={model.sourceRecords} onClose={() => setInspect(null)}/>} 
   </main>
 }

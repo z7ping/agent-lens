@@ -21,6 +21,11 @@ export interface ReviewMessageAttachmentDto {
   dataUrl?: string
 }
 
+export interface ReviewMessageAttachmentsResponseDto {
+  observationId: string
+  items: ReviewMessageAttachmentDto[]
+}
+
 function attachmentRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -261,6 +266,7 @@ export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
 export interface ReviewDetailQueryDto {
   cursor?: string
   ordinal?: number
+  afterOrdinal?: number
   limit?: number
   direction?: ReviewDetailDirection
   filter?: ReviewDetailFilter

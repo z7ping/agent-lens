@@ -30,6 +30,20 @@ const SLOW_WRITER_QUEUE_LOG_MS = 100
 const READER_ADMISSION_RETRY_ATTEMPTS = 3
 const READER_ADMISSION_RETRY_DELAY_MS = 75
 
+export type DataRuntimeReadPriority = 'critical' | 'supporting' | 'opportunistic'
+
+class DataRuntimeReadPriorityContext {
+  private readonly scope = new AsyncLocalStorage<DataRuntimeReadPriority>()
+
+  current(): DataRuntimeReadPriority {
+    return this.scope.getStore() ?? 'critical'
+  }
+
+  run<T>(priority: DataRuntimeReadPriority, operation: () => Promise<T>): Promise<T> {
+    return this.scope.run(priority, operation)
+  }
+}
+
 const READ_PREFIXES = [
   'get',
   'list',
@@ -119,8 +133,13 @@ export class DataRuntimeReaderPool {
     if (!readers.length) throw new Error('Data Runtime Reader Pool requires at least one reader')
   }
 
-  async request<T>(method: Parameters<DataRuntimeClient['request']>[0], params: Record<string, unknown>, timeoutMs: number): Promise<T> {
-    const immediate = this.pickAvailable()
+  async request<T>(
+    method: Parameters<DataRuntimeClient['request']>[0],
+    params: Record<string, unknown>,
+    timeoutMs: number,
+    priority: DataRuntimeReadPriority = 'critical',
+  ): Promise<T> {
+    const immediate = this.pickAvailable(priority)
     if (immediate) return immediate.request<T>(method, params, timeoutMs)
 
     if (this.queued >= FOREGROUND_QUEUE_MAX) {
@@ -139,12 +158,13 @@ export class DataRuntimeReaderPool {
     const waitBudgetMs = Math.min(timeoutMs, FOREGROUND_QUEUE_WAIT_MS)
     try {
       while (performance.now() - startedAt < waitBudgetMs) {
-        const reader = this.pickAvailable()
+        const reader = this.pickAvailable(priority)
         if (reader) {
           const elapsed = performance.now() - startedAt
           if (elapsed >= SLOW_READER_QUEUE_LOG_MS) {
             logDataRuntimeDebug('[AgentLens] Data Runtime reader queue wait', {
               ...readerRequestContext(method, params),
+              priority,
               waitedMs: Math.round(elapsed),
               queued: this.queued,
               readerPending: reader.snapshot().pending,
@@ -157,6 +177,7 @@ export class DataRuntimeReaderPool {
       this.queueTimeouts += 1
       logDataRuntimeFailure('[AgentLens] Data Runtime reader queue timeout', {
         ...readerRequestContext(method, params),
+        priority,
         waitedMs: Math.round(performance.now() - startedAt),
         waitBudgetMs,
         queued: this.queued,
@@ -190,10 +211,13 @@ export class DataRuntimeReaderPool {
     return this.snapshots().reduce((sum, item) => sum + item.pending, 0)
   }
 
-  private pickAvailable(): DataRuntimeClient | undefined {
+  private pickAvailable(priority: DataRuntimeReadPriority): DataRuntimeClient | undefined {
     const ready = this.readers.filter(reader => reader.state() === 'ready')
+    const eligible = priority === 'critical' || ready.length <= 1
+      ? ready
+      : ready.filter(reader => reader !== this.readers[0])
     const capacity = DATA_RUNTIME_MAX_PENDING_REQUESTS - READER_RESERVED_PENDING
-    const candidates = ready.filter(reader => reader.snapshot().pending < capacity)
+    const candidates = eligible.filter(reader => reader.snapshot().pending < capacity)
     if (!candidates.length) return undefined
     let bestPending = Number.POSITIVE_INFINITY
     let best: DataRuntimeClient[] = []
@@ -234,6 +258,7 @@ class RemoteStorageExecutor {
     readonly writer: DataRuntimeClient,
     readonly foregroundReaders: DataRuntimeReaderPool,
     readonly maintenanceReader: DataRuntimeClient,
+    private readonly readPriority: DataRuntimeReadPriorityContext,
   ) {}
 
   async call<T>(
@@ -256,7 +281,7 @@ class RemoteStorageExecutor {
       if (options.maintenanceRead || isMaintenanceReadPath(path)) {
         return this.maintenanceReader.request<T>('storage.call', params, timeoutFor(path, true))
       }
-      return this.requestForegroundRead<T>(params, timeoutFor(path, true))
+      return this.requestForegroundRead<T>(params, timeoutFor(path, true), this.readPriority.current())
     }
 
     return this.enqueueWriter(
@@ -316,10 +341,18 @@ class RemoteStorageExecutor {
     }
   }
 
-  private async requestForegroundRead<T>(params: Record<string, unknown>, timeoutMs: number): Promise<T> {
+  withReadPriority<T>(priority: DataRuntimeReadPriority, operation: () => Promise<T>): Promise<T> {
+    return this.readPriority.run(priority, operation)
+  }
+
+  private async requestForegroundRead<T>(
+    params: Record<string, unknown>,
+    timeoutMs: number,
+    priority: DataRuntimeReadPriority,
+  ): Promise<T> {
     for (let attempt = 1; attempt <= READER_ADMISSION_RETRY_ATTEMPTS; attempt += 1) {
       try {
-        return await this.foregroundReaders.request<T>('storage.call', params, timeoutMs)
+        return await this.foregroundReaders.request<T>('storage.call', params, timeoutMs, priority)
       } catch (error) {
         // A full, healthy pool is transient backpressure: the slow request owns
         // a Reader, while this independent foreground read has not begun. Retry
@@ -578,6 +611,10 @@ export class DataRuntimeStorageService implements StorageService {
     this.replicationRuntimeControl = namespaceProxy(executor, ['replicationRuntimeControl'])
   }
 
+  withReadPriority<T>(priority: DataRuntimeReadPriority, operation: () => Promise<T>): Promise<T> {
+    return this.executor.withReadPriority(priority, operation)
+  }
+
   transaction<T>(fn: (tx: StorageTransaction) => Promise<T>): Promise<T> {
     return this.executor.transaction(() => fn(this.repositories))
   }
@@ -604,7 +641,10 @@ export class DataRuntimeUnifiedReadService implements UnifiedReadService {
   readonly logicalSessions: UnifiedReadService['logicalSessions']
   readonly observations: UnifiedReadService['observations']
 
-  constructor(private readonly readers: DataRuntimeReaderPool) {
+  constructor(
+    private readonly readers: DataRuntimeReaderPool,
+    private readonly readPriority: DataRuntimeReadPriorityContext,
+  ) {
     this.logicalSessions = {
       get: publicId => this.call(['logicalSessions', 'get'], [publicId]),
       list: limit => this.call(['logicalSessions', 'list'], limit === undefined ? [] : [limit]),
@@ -618,7 +658,12 @@ export class DataRuntimeUnifiedReadService implements UnifiedReadService {
   }
 
   private call<T>(path: readonly string[], args: readonly unknown[]): Promise<T> {
-    return this.readers.request<T>('unified-read.call', { path: [...path], args: [...args] }, READ_TIMEOUT_MS)
+    return this.readers.request<T>(
+      'unified-read.call',
+      { path: [...path], args: [...args] },
+      READ_TIMEOUT_MS,
+      this.readPriority.current(),
+    )
   }
 }
 
@@ -632,10 +677,11 @@ export function createDataRuntimeStorage(
   dataRuntime: DataRuntimeService
 } {
   const foregroundReaders = new DataRuntimeReaderPool(readers)
-  const executor = new RemoteStorageExecutor(writer, foregroundReaders, maintenanceReader)
+  const readPriority = new DataRuntimeReadPriorityContext()
+  const executor = new RemoteStorageExecutor(writer, foregroundReaders, maintenanceReader, readPriority)
   return {
     storage: new DataRuntimeStorageService(executor),
-    unifiedRead: new DataRuntimeUnifiedReadService(foregroundReaders),
+    unifiedRead: new DataRuntimeUnifiedReadService(foregroundReaders, readPriority),
     dataRuntime: new DataRuntimeService(writer, foregroundReaders, maintenanceReader, executor),
   }
 }
@@ -653,4 +699,5 @@ export const dataRuntimeStorageInternals = {
   FOREGROUND_QUEUE_MAX,
   FOREGROUND_QUEUE_WAIT_MS,
   READER_RESERVED_PENDING,
+  DataRuntimeReadPriorityContext,
 }

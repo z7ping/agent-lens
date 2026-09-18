@@ -15,7 +15,7 @@ export interface ReviewLiveInteraction {
  */
 export function projectReviewLiveInteraction(
   session: Pick<ReviewSessionSummaryDto, 'productId'> | null | undefined,
-  products: readonly LiveProductDto[],
+  products: readonly Pick<LiveProductDto, 'liveId' | 'productId' | 'displayName' | 'capabilities'>[],
 ): ReviewLiveInteraction | null {
   if (!session?.productId) return null
   const candidates = products.filter(product =>

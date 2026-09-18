@@ -27,6 +27,10 @@ import { shareInFlight } from './single-flight'
 
 const liveReadInFlight = new Map<string, Promise<unknown>>()
 const LIVE_ROOT = '/api/v1/live'
+const LIVE_PRODUCT_CACHE_MS = 2_000
+const LIVE_RUNTIME_LIST_CACHE_MS = 1_000
+let liveProductCache: { at: number; items: LiveProductDto[] } | null = null
+let liveRuntimeListCache: { at: number; items: LiveRuntimeRefDto[] } | null = null
 
 const LIVE_VISIBLE_FLUSH_MS = 48
 const LIVE_HIDDEN_FLUSH_MS = 250
@@ -211,6 +215,7 @@ function runtimeSuffix(runtimeSessionId: string, action = ''): string {
 }
 
 function notifyLiveStateChanged(liveId: string, runtimeSessionId?: string): void {
+  liveRuntimeListCache = null
   window.dispatchEvent(new CustomEvent('agent-lens:live-state-changed', {
     detail: { liveId, ...(runtimeSessionId ? { runtimeSessionId } : {}) },
   }))
@@ -229,19 +234,37 @@ async function historyInteraction(
   return state
 }
 
+export type LiveProductMetadata = Pick<
+  LiveProductDto,
+  'liveId' | 'productId' | 'displayName' | 'capabilities' | 'inputCapabilities' | 'startCapabilities'
+>
+
 export const liveApi = {
   async products(): Promise<LiveProductDto[]> {
-    return (await requestJson<LiveProductsResponseDto>(LIVE_ROOT)).items
+    if (liveProductCache && Date.now() - liveProductCache.at < LIVE_PRODUCT_CACHE_MS) {
+      return liveProductCache.items
+    }
+    const items = (await requestJson<LiveProductsResponseDto>(`${LIVE_ROOT}/products`)).items
+    liveProductCache = { at: Date.now(), items }
+    return items
+  },
+
+  metadata(liveId: string): Promise<LiveProductMetadata> {
+    return requestJson(livePath(liveId, '/metadata'))
+  },
+
+  productMetadata(productId: string): Promise<LiveProductMetadata[]> {
+    const params = new URLSearchParams({ productId })
+    return requestJson<{ items: LiveProductMetadata[] }>(`${LIVE_ROOT}/product-metadata?${params}`).then(result => result.items)
   },
 
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
-    const products = await this.products()
-    return products.flatMap(product => product.runtimes.map(state => ({
-      liveId: product.liveId,
-      productId: product.productId,
-      displayName: product.displayName,
-      state,
-    })))
+    if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
+      return liveRuntimeListCache.items
+    }
+    const items = (await requestJson<{ items: LiveRuntimeRefDto[] }>(`${LIVE_ROOT}/runtimes`)).items
+    liveRuntimeListCache = { at: Date.now(), items }
+    return items
   },
 
   availability(liveId: string): Promise<LiveAvailabilityDto> {

@@ -42,7 +42,13 @@ test('Review detail accepts only the formal direction and filters', () => {
 
   assert.throws(() => parseReviewDetailQuery(params('direction=sideways')), /Unknown review detail direction/)
   assert.throws(() => parseReviewDetailQuery(params('filter=tools')), /Unknown review detail filter/)
+  assert.deepEqual(
+    parseReviewDetailQuery(params('afterOrdinal=10&direction=forward&limit=10')),
+    { afterOrdinal: 10, direction: 'forward', limit: 10 },
+  )
+  assert.throws(() => parseReviewDetailQuery(params('ordinal=3&afterOrdinal=10')), /mutually exclusive/)
   assert.throws(() => parseReviewDetailQuery(params('ordinal=0')), /ordinal must be a positive integer/)
+  assert.throws(() => parseReviewDetailQuery(params('afterOrdinal=0')), /afterOrdinal must be a positive integer/)
 })
 
 test('Timeline validates kind, direction, range and limit at the HTTP boundary', () => {

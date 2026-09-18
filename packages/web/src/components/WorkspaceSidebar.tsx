@@ -128,7 +128,7 @@ export function WorkspaceSidebar({
           defaultOpen
           showAllOption
           summary={t('navigation:backupScope')}
-          agents={agents}
+          agents={agentSelectionAgents}
           agentSelection={{ mode: 'single', value: backupAssetSourceId, onChange: sourceId => { onBackupAssetSourceIdChange(sourceId); onMobileClose() } }}
         />
       </div>}

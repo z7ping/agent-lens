@@ -78,6 +78,7 @@ export interface DataRuntimeClientSnapshot {
   requests: number
   completed: number
   timeouts: number
+  lateReplies: number
   livenessFailures: number
   lastError?: string
   durationMs: { last: number; max: number; p50: number; p95: number; p99: number }
@@ -87,6 +88,7 @@ interface PendingRequest {
   startedAt: number
   timer: NodeJS.Timeout
   context: Record<string, unknown>
+  timedOut: boolean
   resolve(value: unknown): void
   reject(error: Error): void
 }
@@ -117,6 +119,7 @@ export class DataRuntimeClient {
   private requests = 0
   private completed = 0
   private timeouts = 0
+  private lateReplies = 0
   private livenessFailures = 0
   private lastError: string | undefined
   private lastDurationMs = 0
@@ -196,6 +199,7 @@ export class DataRuntimeClient {
       requests: this.requests,
       completed: this.completed,
       timeouts: this.timeouts,
+      lateReplies: this.lateReplies,
       livenessFailures: this.livenessFailures,
       ...(this.lastError ? { lastError: this.lastError } : {}),
       durationMs: {
@@ -287,6 +291,7 @@ export class DataRuntimeClient {
       type: 'request',
       requestId,
       method,
+      deadlineAt: Date.now() + Math.max(1, timeoutMs),
       ...(params ? { params } : {}),
     }
     if (encodedMessageBytes(request) > DATA_RUNTIME_MAX_MESSAGE_BYTES) {
@@ -305,16 +310,19 @@ export class DataRuntimeClient {
       const timer = setTimeout(() => {
         const pending = this.pending.get(requestId)
         if (!pending) return
-        this.pending.delete(requestId)
+        pending.timedOut = true
         this.timeouts += 1
         const error = new Error(`Data Runtime ${this.role} request timed out: ${method}`)
         this.lastError = error.message
-        // 超时不会取消 Worker 中已经开始的 SQLite 任务；记录发起端事实，和 Worker 完成日志配对。
+        // Synchronous SQLite cannot be safely preempted once execution starts. Keep the
+        // timed-out request in pending until the Worker actually replies so pool admission
+        // still sees this Reader as occupied. Queued expired work is discarded by deadlineAt.
         logDataRuntimeFailure('[AgentLens] Data Runtime request timeout', {
           ...pending.context,
           timeoutMs,
           elapsedMs: Math.round(performance.now() - pending.startedAt),
           pendingAfterTimeout: this.pending.size,
+          readerQuarantined: true,
         })
         reject(error)
 
@@ -328,7 +336,7 @@ export class DataRuntimeClient {
         }
       }, Math.max(1, timeoutMs))
       timer.unref?.()
-      this.pending.set(requestId, { startedAt, timer, context, resolve, reject })
+      this.pending.set(requestId, { startedAt, timer, context, timedOut: false, resolve, reject })
       worker.postMessage(request)
     })
   }
@@ -367,6 +375,18 @@ export class DataRuntimeClient {
     this.lastDurationMs = duration
     this.maxDurationMs = Math.max(this.maxDurationMs, duration)
     pushSample(this.durations, duration)
+
+    if (pending.timedOut) {
+      this.lateReplies += 1
+      logDataRuntimeDebug('[AgentLens] Data Runtime timed-out request finally released Reader', {
+        ...pending.context,
+        durationMs: Math.round(duration),
+        pendingAfterReply: this.pending.size,
+        result: value.type,
+      })
+      return
+    }
+
     this.completed += 1
 
     if (duration >= SLOW_ROUND_TRIP_LOG_MS) {

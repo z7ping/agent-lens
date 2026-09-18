@@ -36,6 +36,23 @@ const DEFAULT_START_CAPABILITIES: Readonly<LiveStartCapabilities> = {
   title: 'unsupported',
 }
 const adapterReadInFlight = new WeakMap<LiveAdapter, Map<string, Promise<unknown>>>()
+const LIVE_RUNTIME_VALIDATION_TTL_MS = 2_000
+const validatedRuntimeAt = new WeakMap<LiveAdapter, Map<string, number>>()
+
+function markRuntimeValidated(adapter: LiveAdapter, runtimeSessionId: string): void {
+  let values = validatedRuntimeAt.get(adapter)
+  if (!values) {
+    values = new Map()
+    validatedRuntimeAt.set(adapter, values)
+  }
+  values.set(runtimeSessionId, Date.now())
+}
+
+function runtimeRecentlyValidated(adapter: LiveAdapter, runtimeSessionId: string): boolean {
+  const at = validatedRuntimeAt.get(adapter)?.get(runtimeSessionId)
+  return at !== undefined && Date.now() - at < LIVE_RUNTIME_VALIDATION_TTL_MS
+}
+
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 20) return '[max-depth]'
@@ -410,6 +427,17 @@ function requireCapability(adapter: LiveAdapter, capability: LiveCapabilityName)
   }
 }
 
+function liveMetadata(adapter: LiveAdapter): JsonValue {
+  return jsonValue({
+    liveId: adapter.manifest.liveId,
+    productId: adapter.manifest.productId,
+    displayName: adapter.manifest.displayName,
+    capabilities: [...adapter.capabilities],
+    inputCapabilities: adapter.inputCapabilities,
+    startCapabilities: startCapabilities(adapter),
+  })
+}
+
 function liveDescriptor(adapter: LiveAdapter, availability: unknown, runtimes: unknown): JsonValue {
   return jsonValue({
     liveId: adapter.manifest.liveId,
@@ -463,6 +491,41 @@ async function describeAdapter(adapter: LiveAdapter): Promise<JsonValue> {
   })
 }
 
+async function describeProduct(adapter: LiveAdapter): Promise<JsonValue> {
+  const availabilityResult = await Promise.resolve(
+    shareAdapterRead(adapter, 'availability', () => adapter.availability()),
+  ).then(
+    value => ({ ok: true as const, value }),
+    reason => ({ ok: false as const, reason }),
+  )
+  const availability = availabilityResult.ok
+    ? availabilityResult.value
+    : {
+        available: false,
+        reason: availabilityResult.reason instanceof Error
+          ? availabilityResult.reason.message
+          : String(availabilityResult.reason),
+      }
+  return liveDescriptor(adapter, availability, [])
+}
+
+async function listKnownRuntimes(service: LiveService): Promise<JsonValue> {
+  const groups = await Promise.all(service.list().map(async adapter => {
+    try {
+      const runtimes = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
+      return runtimes.map(state => ({
+        liveId: adapter.manifest.liveId,
+        productId: adapter.manifest.productId,
+        displayName: adapter.manifest.displayName,
+        state: normalizePublicRuntimeState(state),
+      }))
+    } catch {
+      return []
+    }
+  }))
+  return jsonValue({ items: groups.flat() })
+}
+
 function sendBehavior(value: unknown): 'normal' | 'steer' | 'follow-up' | undefined {
   if (value === undefined) return undefined
   if (value === 'normal' || value === 'steer' || value === 'follow-up') return value
@@ -476,7 +539,10 @@ async function connectEvents(
   runtimeSessionId: string,
 ): Promise<void> {
   requireCapability(adapter, 'stream')
-  await shareAdapterRead(adapter, `state:${runtimeSessionId}`, () => adapter.state(runtimeSessionId))
+  if (!runtimeRecentlyValidated(adapter, runtimeSessionId)) {
+    await shareAdapterRead(adapter, `state:${runtimeSessionId}`, () => adapter.state(runtimeSessionId))
+    markRuntimeValidated(adapter, runtimeSessionId)
+  }
   response.statusCode = 200
   response.setHeader('content-type', 'text/event-stream; charset=utf-8')
   response.setHeader('cache-control', 'no-cache, no-transform')
@@ -545,6 +611,39 @@ export async function handleLiveRequest(
       return true
     }
 
+    if (url.pathname === '/api/v1/live/products') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const items = await Promise.all(service.list().map(describeProduct))
+      writeJson(response, 200, { items })
+      return true
+    }
+
+    if (url.pathname === '/api/v1/live/product-metadata') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const productId = optionalString(url.searchParams.get('productId'))
+      if (!productId) throw httpError(400, 'productId is required')
+      const items = service.list()
+        .filter(adapter => adapter.manifest.productId === productId)
+        .map(adapter => liveMetadata(adapter))
+      writeJson(response, 200, { items })
+      return true
+    }
+
+    if (url.pathname === '/api/v1/live/runtimes') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      writeJson(response, 200, await listKnownRuntimes(service))
+      return true
+    }
+
     const historyMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/history\/([^/]+)\/(resume|fork)$/)
     if (historyMatch) {
       if (request.method !== 'POST') {
@@ -562,7 +661,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const adapterMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)(?:\/(availability|runtimes))?$/)
+    const adapterMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)(?:\/(metadata|availability|runtimes))?$/)
     if (adapterMatch) {
       const liveId = decodeURIComponent(adapterMatch[1]!)
       const action = adapterMatch[2]
@@ -570,6 +669,10 @@ export async function handleLiveRequest(
 
       if (!action && request.method === 'GET') {
         writeJson(response, 200, await describeAdapter(adapter))
+        return true
+      }
+      if (action === 'metadata' && request.method === 'GET') {
+        writeJson(response, 200, liveMetadata(adapter))
         return true
       }
       if (action === 'availability' && request.method === 'GET') {
@@ -618,20 +721,24 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'state' && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(normalizePublicRuntimeState(await shareAdapterRead(
+      const state = normalizePublicRuntimeState(await shareAdapterRead(
         adapter,
         `state:${runtimeSessionId}`,
         () => adapter.state(runtimeSessionId),
-      ))))
+      ))
+      markRuntimeValidated(adapter, runtimeSessionId)
+      writeJson(response, 200, jsonValue(state))
       return true
     }
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
-      writeJson(response, 200, jsonValue(normalizePublicSnapshot(await shareAdapterRead(
+      const snapshot = normalizePublicSnapshot(await shareAdapterRead(
         adapter,
         `snapshot:${runtimeSessionId}:${since ?? ''}`,
         () => adapter.snapshot(runtimeSessionId, since),
-      ))))
+      ))
+      markRuntimeValidated(adapter, runtimeSessionId)
+      writeJson(response, 200, jsonValue(snapshot))
       return true
     }
     if (action === 'events' && request.method === 'GET') {

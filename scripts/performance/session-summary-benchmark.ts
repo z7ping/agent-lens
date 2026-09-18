@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import {
   sessionSummaryProjectionSelectSql,
@@ -14,6 +14,11 @@ interface Options {
   evidencePerObservation: number
   samples: number
   limit: number
+}
+
+function stringArg(name: string): string | undefined {
+  const prefix = `--${name}=`
+  return process.argv.find(arg => arg.startsWith(prefix))?.slice(prefix.length)?.trim() || undefined
 }
 
 const options: Options = {
@@ -30,8 +35,14 @@ function isoAt(offsetSeconds: number): string {
 
 const expectedObservations = options.sessions * options.observationsPerSession
 const expectedEvidence = expectedObservations * options.evidencePerObservation
-const root = mkdtempSync(join(tmpdir(), 'agent-lens-perf-'))
-const databasePath = join(root, 'session-summary.db')
+const explicitDatabasePath = stringArg('database-path')
+const root = explicitDatabasePath
+  ? dirname(resolve(explicitDatabasePath))
+  : mkdtempSync(join(tmpdir(), 'agent-lens-perf-'))
+const databasePath = explicitDatabasePath
+  ? resolve(explicitDatabasePath)
+  : join(root, 'session-summary.db')
+if (explicitDatabasePath) mkdirSync(root, { recursive: true })
 const storage = new SqliteStorageService({ path: databasePath })
 
 console.log('AgentLens session summary benchmark')
@@ -174,5 +185,9 @@ try {
   }, null, 2))
 } finally {
   await storage.close()
-  rmSync(root, { recursive: true, force: true })
+  if (explicitDatabasePath) {
+    console.log(`database preserved: ${databasePath}`)
+  } else {
+    rmSync(root, { recursive: true, force: true })
+  }
 }

@@ -15,6 +15,7 @@ export interface InsightsClientSnapshot {
 }
 
 type Listener = () => void
+type LiveEventSubscribe = (listener: (event: LiveUpdateEventDto) => void) => () => void
 
 export class InsightsClientModel {
   private snapshot: InsightsClientSnapshot = {
@@ -44,13 +45,15 @@ export class InsightsClientModel {
     for (const listener of this.listeners) listener()
   }
 
-  async start(): Promise<void> {
+  async start(subscribeLiveEvents?: LiveEventSubscribe): Promise<void> {
     if (!this.unsubscribeLive) {
-      this.unsubscribeLive = this.api.subscribe(
-        event => this.onLiveEvent(event),
-        connected => this.publish({ ...this.snapshot, liveConnected: connected }),
-        () => this.invalidateAfterReconnect(),
-      )
+      this.unsubscribeLive = subscribeLiveEvents
+        ? subscribeLiveEvents(event => this.onLiveEvent(event))
+        : this.api.subscribe(
+            event => this.onLiveEvent(event),
+            connected => this.publish({ ...this.snapshot, liveConnected: connected }),
+            () => this.invalidateAfterReconnect(),
+          )
     }
     await this.refresh()
   }

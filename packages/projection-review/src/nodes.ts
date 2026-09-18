@@ -45,6 +45,33 @@ export function textFromPayload(value: JsonValue | unknown): string | undefined 
   return undefined
 }
 
+function sanitizeAttachmentPayloadValue(value: JsonValue): JsonValue {
+  if (typeof value === 'string') {
+    if (/^data:[^;]+;base64,/i.test(value) || value.length > 1024) return '[attachment-data-omitted]'
+    return value
+  }
+  if (Array.isArray(value)) return value.map(sanitizeAttachmentPayloadValue)
+  if (!value || typeof value !== 'object') return value
+  const result: Record<string, JsonValue> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (['dataUrl', 'data_url', 'data', 'base64'].includes(key)) continue
+    result[key] = sanitizeAttachmentPayloadValue(item)
+  }
+  return result
+}
+
+function lightweightMessagePayload(value: JsonValue): JsonValue {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value
+  const result: Record<string, JsonValue> = { ...value }
+  if (Array.isArray(value.attachments)) {
+    result.attachments = value.attachments.map(sanitizeAttachmentPayloadValue)
+  }
+  if (Array.isArray(value.nonTextContent)) {
+    result.nonTextContent = value.nonTextContent.map(sanitizeAttachmentPayloadValue)
+  }
+  return result
+}
+
 function toolCallId(item: TimelineItemDto): string | undefined {
   return stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
 }
@@ -121,7 +148,7 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         ...reviewNodeSource(item),
         text: text ?? (hasDisplayableAttachment ? '' : '（无可显示文本）'),
         ...(attachments.length ? { attachments } : {}),
-        payload: item.payload,
+        payload: lightweightMessagePayload(item.payload),
         evidence: item.evidence,
         observationIds: [item.id],
       }

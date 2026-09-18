@@ -175,13 +175,22 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const projects = snapshot.facets?.projects ?? []
 
   useEffect(() => {
+    if (mode !== 'history' || !review.response) {
+      setHubSessions([])
+      return
+    }
     let cancelled = false
-    void fetchHubReviewSessions(200).then(
-      value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
-      () => { if (!cancelled) setHubSessions([]) },
-    )
-    return () => { cancelled = true }
-  }, [review.response?.meta.generatedAt])
+    const timer = window.setTimeout(() => {
+      void fetchHubReviewSessions(200).then(
+        value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
+        () => { if (!cancelled) setHubSessions([]) },
+      )
+    }, 200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [mode, review.response?.meta.generatedAt])
 
   useEffect(() => {
     if (mode !== 'new') return
@@ -365,7 +374,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      <TaskLiveRuntimeList/>
+      <TaskLiveRuntimeList deferMs={mode === 'new' ? 500 : 150}/>
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>

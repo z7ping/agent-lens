@@ -184,9 +184,14 @@ export function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQue
   const direction = parseReviewDetailDirection(optionalParam(params, 'direction'))
   const filter = parseReviewDetailFilter(optionalParam(params, 'filter'))
   const ordinal = parsePositiveInteger(params, 'ordinal')
+  const afterOrdinal = parsePositiveInteger(params, 'afterOrdinal')
+  if (ordinal !== undefined && afterOrdinal !== undefined) {
+    throw badRequest('ordinal and afterOrdinal are mutually exclusive')
+  }
   return {
     ...(cursor ? { cursor } : {}),
     ...(ordinal === undefined ? {} : { ordinal }),
+    ...(afterOrdinal === undefined ? {} : { afterOrdinal }),
     ...(direction ? { direction } : {}),
     ...(filter ? { filter } : {}),
     ...(limit === undefined ? {} : { limit }),

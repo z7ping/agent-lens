@@ -93,3 +93,35 @@ test('two RuntimeProfiles may persist the same nativeSessionId without collision
     await storage.close()
   }
 })
+
+
+test('session repository lists source sessions by logical session in one query surface', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  try {
+    await storage.migrate()
+    const now = '2026-09-18T00:00:00.000Z'
+    await storage.repositories.hosts.put({ id: 'host-1', name: 'local', platform: 'linux', arch: 'x64', createdAt: now, lastSeenAt: now })
+    await storage.repositories.installations.putProduct({ id: 'pi', name: 'Pi' })
+    await storage.repositories.installations.put({ id: 'install-1', hostId: 'host-1', productId: 'pi', firstSeenAt: now, lastSeenAt: now })
+    await storage.repositories.sessions.putLogicalSession({ id: 'logical-1', installationId: 'install-1' })
+    await storage.repositories.sessions.putLogicalSession({ id: 'logical-2', installationId: 'install-1' })
+    await storage.repositories.sessions.putSourceSession({
+      id: 'source-a', sourceId: 'pi', installationId: 'install-1',
+      nativeSessionId: 'native-a', logicalSessionId: 'logical-1', nativeParentSessionId: 'native-parent',
+    })
+    await storage.repositories.sessions.putSourceSession({
+      id: 'source-b', sourceId: 'pi', installationId: 'install-1',
+      nativeSessionId: 'native-b', logicalSessionId: 'logical-1',
+    })
+    await storage.repositories.sessions.putSourceSession({
+      id: 'source-other', sourceId: 'pi', installationId: 'install-1',
+      nativeSessionId: 'native-other', logicalSessionId: 'logical-2',
+    })
+
+    const list = storage.repositories.sessions.listSourceSessionsByLogicalSession
+    assert.ok(list)
+    assert.deepEqual((await list.call(storage.repositories.sessions, 'logical-1')).map(item => item.id), ['source-a', 'source-b'])
+  } finally {
+    await storage.close()
+  }
+})

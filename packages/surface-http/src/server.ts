@@ -19,6 +19,7 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
+  reviewMessageAttachmentsFromPayload,
   type AgentRescanResponseDto,
   type AgentRescanSummaryDto,
   type HealthResponseDto,
@@ -26,7 +27,9 @@ import {
   type PiEcosystemQueryService,
   type RuntimeModeDto,
   type RuntimeOwnerDto,
+  type ReviewMessageAttachmentsResponseDto,
   type SourceRecordResponseDto,
+  type SourceRecordsResponseDto,
   type StorageDiagnosticsResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
@@ -79,6 +82,20 @@ const HEALTH_CACHE_TTL_MS = 2_000
 const USAGE_DETAIL_LIMIT = 5
 const RUNTIME_STARTED_AT = new Date().toISOString()
 const SLOW_HTTP_REQUEST_LOG_MS = 500
+
+type ForegroundReadPriority = 'critical' | 'supporting' | 'opportunistic'
+type PriorityAwareStorage = StorageService & {
+  withReadPriority?<T>(priority: ForegroundReadPriority, operation: () => Promise<T>): Promise<T>
+}
+
+function withReadPriority<T>(
+  storage: StorageService,
+  priority: ForegroundReadPriority,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const scoped = (storage as PriorityAwareStorage).withReadPriority
+  return scoped ? scoped.call(storage, priority, operation) : operation()
+}
 
 export interface HttpSurfaceOptions {
   port?: number
@@ -223,11 +240,17 @@ export async function startHttpSurface(
       finished = true
       const durationMs = performance.now() - startedAt
       if (!route.startsWith('/api/') || (durationMs < SLOW_HTTP_REQUEST_LOG_MS && response.statusCode < 500)) return
+      const contentLength = response.getHeader('content-length')
       console.warn('[AgentLens] HTTP request observed', {
         method: request.method ?? 'UNKNOWN',
         route,
         statusCode: response.statusCode,
         durationMs: Math.round(durationMs),
+        ...(typeof contentLength === 'number'
+          ? { responseBytes: contentLength }
+          : typeof contentLength === 'string' && /^\d+$/.test(contentLength)
+            ? { responseBytes: Number(contentLength) }
+            : {}),
       })
     })
     response.once('close', () => {
@@ -244,7 +267,13 @@ export async function startHttpSurface(
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
       if (await handleLiveRequest(request, response, url, options.lives)) return
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
-      if (await handleBackupRequest(request, response, url, options.backup)) return
+      const backgroundBackupRead = request.method === 'GET'
+        && url.pathname === '/api/v1/backups'
+        && url.searchParams.get('background') === '1'
+      const backupHandled = backgroundBackupRead
+        ? await withReadPriority(storage, 'supporting', () => handleBackupRequest(request, response, url, options.backup))
+        : await handleBackupRequest(request, response, url, options.backup)
+      if (backupHandled) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
       if (await handleAgentFilesRequest(request, response, url, storage, options.sources)) return
       if (await handleIntegrationAuthorizationRequest(
@@ -391,7 +420,7 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/background-activity') {
-        writeJson(response, 200, await readBackgroundActivity(storage))
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => readBackgroundActivity(storage)))
         return
       }
       if (url.pathname === '/api/v1/locales') {
@@ -482,15 +511,38 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/facets') {
-        writeJson(response, 200, await facets.query())
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => facets.query()))
         return
       }
       if (url.pathname === '/api/v1/projects/launchable') {
-        writeJson(response, 200, await readLaunchableProjects(storage, url.searchParams))
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => readLaunchableProjects(storage, url.searchParams)))
+        return
+      }
+      if (url.pathname === '/api/v1/agents/summary') {
+        writeJson(response, 200, await agents.querySummary())
+        return
+      }
+      if (url.pathname === '/api/v1/agents/coverage') {
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => agents.queryCoverage()))
+        return
+      }
+      const agentEnrichmentMatch = url.pathname.match(/^\/api\/v1\/agents\/([^/]+)\/enrichment$/)
+      if (agentEnrichmentMatch) {
+        const sourceId = decodeURIComponent(agentEnrichmentMatch[1] ?? '')
+        if (!sourceId) throw badRequest('sourceId is required')
+        const enrichment = await withReadPriority(storage, 'supporting', () => agents.getEnrichment(sourceId))
+        writeJson(response, enrichment ? 200 : 404, enrichment ?? { error: 'not_found' })
+        return
+      }
+      if (url.pathname.startsWith('/api/v1/agents/')) {
+        const sourceId = decodeURIComponent(url.pathname.slice('/api/v1/agents/'.length))
+        if (!sourceId) throw badRequest('sourceId is required')
+        const detail = await agents.get(sourceId)
+        writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
         return
       }
       if (url.pathname === '/api/v1/agents') {
-        writeJson(response, 200, await agents.query())
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => agents.query()))
         return
       }
       if (url.pathname === '/api/v1/hub/review') {
@@ -499,7 +551,7 @@ export async function startHttpSurface(
           return
         }
         const limit = parseLimit(url.searchParams, 500) ?? 100
-        writeJson(response, 200, await options.hubReview.query(limit))
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => options.hubReview!.query(limit)))
         return
       }
       if (url.pathname.startsWith('/api/v1/hub/review/')) {
@@ -513,14 +565,48 @@ export async function startHttpSurface(
           return
         }
         const limit = parseLimit(url.searchParams, 500) ?? 500
-        const detail = await options.hubReview.get(id, limit)
+        const detail = await withReadPriority(storage, 'supporting', () => options.hubReview!.get(id, limit))
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
+        return
+      }
+      if (url.pathname === '/api/v1/source-records') {
+        const ids = [...new Set(url.searchParams.getAll('id').map(id => id.trim()).filter(Boolean))].slice(0, 50)
+        if (!ids.length) throw badRequest('at least one source record id is required')
+        const records = await withReadPriority(storage, 'opportunistic', async () => {
+          if (storage.repositories.sourceRecords.getMany) {
+            return storage.repositories.sourceRecords.getMany(ids)
+          }
+          return (await Promise.all(ids.map(id => storage.repositories.sourceRecords.get(id))))
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        })
+        const byId = new Map(records.map(record => [record.id, record]))
+        const items: SourceRecordResponseDto[] = ids.flatMap(id => {
+          const record = byId.get(id)
+          if (!record) return []
+          return [{
+            id: record.id,
+            sourceId: record.sourceId,
+            installationId: record.installationId,
+            ...(record.sourceSessionNativeId ? { sourceSessionNativeId: record.sourceSessionNativeId } : {}),
+            nativeType: record.nativeType,
+            ...(record.nativeId ? { nativeId: record.nativeId } : {}),
+            ...(record.sourceSequence === undefined ? {} : { sourceSequence: record.sourceSequence }),
+            ...(record.occurredAt ? { occurredAt: record.occurredAt } : {}),
+            capturedAt: record.capturedAt,
+            locator: record.locator,
+            ...(record.fingerprint ? { fingerprint: record.fingerprint } : {}),
+            payload: jsonValue(record.payload),
+            parserVersion: record.parserVersion,
+          }]
+        })
+        const body: SourceRecordsResponseDto = { items }
+        writeJson(response, 200, body)
         return
       }
       if (url.pathname.startsWith('/api/v1/source-records/')) {
         const id = decodeURIComponent(url.pathname.slice('/api/v1/source-records/'.length))
         if (!id) throw badRequest('sourceRecordId is required')
-        const record = await storage.repositories.sourceRecords.get(id)
+        const record = await withReadPriority(storage, 'opportunistic', () => storage.repositories.sourceRecords.get(id))
         if (!record) {
           writeJson(response, 404, { error: 'not_found' })
           return
@@ -557,6 +643,35 @@ export async function startHttpSurface(
         writeJson(response, 200, result)
         return
       }
+      const reviewAttachmentMatch = url.pathname.match(/^\/api\/v1\/review\/observations\/([^/]+)\/attachments$/)
+      if (reviewAttachmentMatch) {
+        const observationId = decodeURIComponent(reviewAttachmentMatch[1] ?? '')
+        if (!observationId) throw badRequest('observationId is required')
+        const observation = await withReadPriority(
+          storage,
+          'opportunistic',
+          () => storage.repositories.observations.get(observationId),
+        )
+        if (!observation) {
+          writeJson(response, 404, { error: 'not_found' })
+          return
+        }
+        const body: ReviewMessageAttachmentsResponseDto = {
+          observationId,
+          items: reviewMessageAttachmentsFromPayload(observation.payload),
+        }
+        writeJson(response, 200, body)
+        return
+      }
+
+      const reviewSummaryMatch = url.pathname.match(/^\/api\/v1\/review\/([^/]+)\/summary$/)
+      if (reviewSummaryMatch) {
+        const id = decodeURIComponent(reviewSummaryMatch[1] ?? '')
+        if (!id) throw badRequest('logicalSessionId is required')
+        const summary = await review.getSummary(id)
+        writeJson(response, summary ? 200 : 404, summary ?? { error: 'not_found' })
+        return
+      }
       if (url.pathname.startsWith('/api/v1/review/')) {
         const id = decodeURIComponent(url.pathname.slice('/api/v1/review/'.length))
         if (!id) throw badRequest('logicalSessionId is required')
@@ -579,7 +694,7 @@ export async function startHttpSurface(
       if (url.pathname === '/api/v1/relationships') {
         const logicalSessionId = url.searchParams.get('logicalSessionId')
         if (!logicalSessionId) throw badRequest('logicalSessionId is required')
-        writeJson(response, 200, await relationships.query(logicalSessionId))
+        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => relationships.query(logicalSessionId)))
         return
       }
 

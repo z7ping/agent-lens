@@ -229,6 +229,13 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceSession(row) : null
       })
     },
+    async listSourceSessionsByLogicalSession(logicalSessionId) {
+      return executor.run(() => db.prepare(`
+        SELECT * FROM source_sessions
+        WHERE logical_session_id = ?
+        ORDER BY id
+      `).all(logicalSessionId).map(mapSourceSession))
+    },
     async findSourceSession(sourceId, installationId, nativeSessionId) {
       return executor.run(() => {
         const row = db.prepare(`

@@ -22,10 +22,45 @@ test('ordinary request timeout does not recycle the shared Worker', async () => 
       client.request('diagnostic.block', { durationMs: 120 }, 20),
       /request timed out/,
     )
+    // The promise has timed out, but the synchronous Worker work is still running.
+    // Keep it counted as pending so the Reader pool cannot treat this Worker as idle.
+    assert.equal(client.snapshot().pending, 1)
     await new Promise(resolve => setTimeout(resolve, 150))
+    assert.equal(client.snapshot().pending, 0)
+    assert.equal(client.snapshot().lateReplies, 1)
     assert.equal(client.state(), 'ready')
     await client.request('ping', undefined, 1_000)
     assert.equal(client.snapshot().livenessFailures, 0)
+  } finally {
+    await client.shutdown()
+  }
+})
+
+test('request that expires while queued is skipped before worker execution', async () => {
+  const client = new DataRuntimeClient({
+    allowDiagnostics: true,
+    role: 'reader',
+    heartbeatIntervalMs: 60_000,
+  })
+  await client.start()
+  try {
+    const first = client.request('diagnostic.block', { durationMs: 180 }, 1_000)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await assert.rejects(
+      client.request('diagnostic.block', { durationMs: 160 }, 25),
+      /request timed out/,
+    )
+    assert.equal(client.snapshot().pending, 2)
+
+    await first
+    const startedAt = performance.now()
+    const ping = await client.request<{ ok: boolean }>('ping', {}, 1_000)
+    assert.equal(ping.ok, true)
+    assert.ok(
+      performance.now() - startedAt < 100,
+      'expired queued diagnostic work should not execute before the next request',
+    )
+    assert.equal(client.state(), 'ready')
   } finally {
     await client.shutdown()
   }

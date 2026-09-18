@@ -59,15 +59,20 @@ const probes = [
   { id: 'ready', label: '/ready', path: '/api/v1/ready', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
   { id: 'health', label: '/health', path: '/api/v1/health', p95BudgetMs: 500, acceptedStatuses: new Set([200, 503]) },
   { id: 'piAvailability', label: 'Pi availability', path: '/api/v1/pi-live/availability', p95BudgetMs: 100, acceptedStatuses: new Set([200]) },
-  { id: 'taskCenter', label: 'Task Center first page', path: '/api/v1/review?limit=20', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
-  { id: 'facets', label: 'facets', path: '/api/v1/facets', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
+  { id: 'taskCenter', label: 'Task Center summary first page', path: '/api/v1/review?limit=20', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
   { id: 'tools', label: 'Tools summary', path: '/api/v1/usage?limit=500', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
-  { id: 'agents', label: 'Agent overview', path: '/api/v1/agents', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
+  { id: 'insights', label: 'Insights summary', path: '/api/v1/insights', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
+  { id: 'agentsSummary', label: 'Agent summary', path: '/api/v1/agents/summary', p95BudgetMs: 500, acceptedStatuses: new Set([200]) },
+  { id: 'backup', label: 'Backup overview', path: '/api/v1/backups', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
+  { id: 'facets', label: 'facets supporting read', path: '/api/v1/facets', p95BudgetMs: 1_000, acceptedStatuses: new Set([200]) },
+  { id: 'agentsCoverage', label: 'Agent coverage opportunistic read', path: '/api/v1/agents/coverage', p95BudgetMs: 2_000, acceptedStatuses: new Set([200]) },
 ]
 
 const toolsProbe = probes.find(probe => probe.id === 'tools')
 if (!toolsProbe) throw new Error('Tools acceptance probe is missing')
-const mixedForegroundProbes = probes.filter(probe => ['taskCenter', 'facets', 'tools', 'agents'].includes(probe.id))
+const criticalForegroundProbes = probes.filter(probe => ['taskCenter', 'tools', 'insights', 'agentsSummary', 'backup'].includes(probe.id))
+const supportingForegroundProbes = probes.filter(probe => ['facets', 'agentsCoverage'].includes(probe.id))
+const mixedForegroundProbes = [...criticalForegroundProbes, ...supportingForegroundProbes]
 
 async function request(path, acceptedStatuses, timeoutMs = options.timeoutMs) {
   const controller = new AbortController()
@@ -79,11 +84,13 @@ async function request(path, acceptedStatuses, timeoutMs = options.timeoutMs) {
       signal: controller.signal,
       headers: { accept: 'application/json' },
     })
+    const rawBody = await response.text()
     const elapsedMs = performance.now() - startedAt
     const accepted = acceptedStatuses.has(response.status)
+    const responseBytes = Buffer.byteLength(rawBody, 'utf8')
     let body = null
-    try { body = await response.json() } catch { /* body is diagnostic only */ }
-    return { ok: accepted, status: response.status, elapsedMs, body }
+    try { body = rawBody ? JSON.parse(rawBody) : null } catch { /* body is diagnostic only */ }
+    return { ok: accepted, status: response.status, elapsedMs, responseBytes, body }
   } catch (error) {
     return {
       ok: false,
@@ -100,12 +107,14 @@ async function measureProbe(probe) {
   for (let index = 0; index < options.warmup; index += 1) await request(probe.path, probe.acceptedStatuses)
 
   const samples = []
+  const responseSizes = []
   let failures = 0
   const statuses = new Map()
   let lastBody = null
   for (let index = 0; index < options.samples; index += 1) {
     const result = await request(probe.path, probe.acceptedStatuses)
     samples.push(result.elapsedMs)
+    if (typeof result.responseBytes === 'number') responseSizes.push(result.responseBytes)
     statuses.set(result.status, (statuses.get(result.status) ?? 0) + 1)
     if (!result.ok) failures += 1
     if (result.body !== undefined) lastBody = result.body
@@ -126,6 +135,12 @@ async function measureProbe(probe) {
       p95Ms: rounded(p95Ms),
       p99Ms: rounded(p99Ms),
       maxMs: rounded(Math.max(...samples)),
+      responseBytes: responseSizes.length ? {
+        min: Math.min(...responseSizes),
+        p50: Math.round(percentile(responseSizes, 0.50)),
+        p95: Math.round(percentile(responseSizes, 0.95)),
+        max: Math.max(...responseSizes),
+      } : null,
       failures,
       failureRate: rounded(failureRate),
       statuses: Object.fromEntries([...statuses.entries()].map(([status, count]) => [String(status), count])),
@@ -169,6 +184,21 @@ async function runBurst(count, burstProbes) {
       status: result.status,
       message: result.body?.message ?? result.error ?? null,
     })),
+    perProbe: Object.fromEntries(
+      [...results.reduce((map, result) => {
+        const entry = map.get(result.probe) ?? { durations: [], failures: 0 }
+        entry.durations.push(result.elapsedMs)
+        if (!result.ok) entry.failures += 1
+        map.set(result.probe, entry)
+        return map
+      }, new Map()).entries()].map(([probe, entry]) => [probe, {
+        count: entry.durations.length,
+        failures: entry.failures,
+        p50Ms: rounded(percentile(entry.durations, 0.50)),
+        p95Ms: rounded(percentile(entry.durations, 0.95)),
+        maxMs: rounded(Math.max(...entry.durations)),
+      }]),
+    ),
     passed: failures.length === 0,
   }
 }
@@ -194,6 +224,50 @@ for (const probe of probes) {
   const result = await measureProbe(probe)
   measurements.push(result)
   console.log(`${result.passed ? 'PASS' : 'FAIL'} p95=${result.result.p95Ms}ms failures=${result.result.failures}/${result.result.count}`)
+}
+
+const taskCenterMeasurement = measurements.find(item => item.id === 'taskCenter')
+const agentSummaryMeasurement = measurements.find(item => item.id === 'agentsSummary')
+const firstReviewId = taskCenterMeasurement?.lastBody?.items?.[0]?.id
+const firstAgentSourceId = agentSummaryMeasurement?.lastBody?.items?.[0]?.sourceId
+const dynamicProbes = [
+  ...(typeof firstReviewId === 'string' && firstReviewId ? [{
+    id: 'reviewDetail',
+    label: 'Review detail latest 10 interactions',
+    path: `/api/v1/review/${encodeURIComponent(firstReviewId)}?direction=backward&limit=10`,
+    p95BudgetMs: 1_000,
+    acceptedStatuses: new Set([200]),
+  }] : []),
+  ...(typeof firstAgentSourceId === 'string' && firstAgentSourceId ? [{
+    id: 'agentDetail',
+    label: 'Agent exact detail',
+    path: `/api/v1/agents/${encodeURIComponent(firstAgentSourceId)}`,
+    p95BudgetMs: 1_500,
+    acceptedStatuses: new Set([200]),
+  }] : []),
+]
+
+const liveId = process.env.AGENT_LENS_ACCEPT_LIVE_ID?.trim()
+const liveRuntimeSessionId = process.env.AGENT_LENS_ACCEPT_RUNTIME_SESSION_ID?.trim()
+if (liveId && liveRuntimeSessionId) {
+  dynamicProbes.push({
+    id: 'liveSnapshot',
+    label: 'Live current runtime snapshot',
+    path: `/api/v1/live/${encodeURIComponent(liveId)}/runtimes/${encodeURIComponent(liveRuntimeSessionId)}/snapshot`,
+    p95BudgetMs: 1_500,
+    acceptedStatuses: new Set([200]),
+  })
+}
+
+for (const probe of dynamicProbes) {
+  process.stdout.write(`measuring ${probe.label} ... `)
+  const result = await measureProbe(probe)
+  measurements.push(result)
+  console.log(
+    `${result.passed ? 'PASS' : 'FAIL'} p50=${result.result.p50Ms}ms p95=${result.result.p95Ms}ms `
+    + `bytes(p50/p95)=${result.result.responseBytes?.p50 ?? 0}/${result.result.responseBytes?.p95 ?? 0} `
+    + `failures=${result.result.failures}/${result.result.count}`,
+  )
 }
 
 let storageDiagnostics = null

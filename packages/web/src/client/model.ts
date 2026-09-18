@@ -1,6 +1,10 @@
 import type {
+  AgentCoverageResponseDto,
+  AgentDetailResponseDto,
+  AgentEnrichmentResponseDto,
   AgentOverviewResponseDto,
   AgentRescanResponseDto,
+  AgentSummaryResponseDto,
   CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
@@ -18,8 +22,10 @@ import type {
   ManagedAssetRoot,
   LiveUpdateEventDto,
   ReviewDetailFilter,
+  ReviewMessageAttachmentDto,
   ReviewResponseDto,
   ReviewSessionDetailDto,
+  ReviewSessionSummaryDto,
   SessionRelationshipResponseDto,
   SourceRecordResponseDto,
   ToolAssetUsageResponseDto,
@@ -30,7 +36,11 @@ import { translateProduct } from '../i18n/runtime'
 export interface ClientSnapshot {
   health: HealthResponseDto | null
   facets: FacetResponseDto | null
+  agentSummaries: AgentSummaryResponseDto | null
+  agentCoverage: AgentCoverageResponseDto | null
   agents: AgentOverviewResponseDto | null
+  agentDetailLoadingSourceId: string
+  agentDetailError: string
   capturePolicy: CapturePolicyResponseDto | null
   agentsLoading: boolean
   agentsError: string
@@ -40,6 +50,9 @@ export interface ClientSnapshot {
   agentsRescanError: string
   agentEnvironmentRescanTargetId: string
   integrationDiscovery: IntegrationToolDiscoveryResponseDto | null
+  integrationPreferences: IntegrationPreferencesResponseDto | null
+  integrationPreferencesLoading: boolean
+  integrationPreferencesError: string
   integrationManagement: IntegrationManagementResponseDto | null
   integrationManagementLoading: boolean
   integrationManagementError: string
@@ -72,6 +85,7 @@ export interface ClientSnapshot {
 }
 
 type Listener = () => void
+type LiveEventListener = (event: LiveUpdateEventDto) => void
 const initialQuery: QueryFilters = { sourceIds: null, projectId: '', range: '7d' }
 const INITIAL_REVIEW_LIMIT = 20
 const REVIEW_PAGE_SIZE = 20
@@ -131,11 +145,114 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
   }
 }
 
+function mergeReviewTail(current: ReviewSessionDetailDto, next: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  const interactions = new Map(current.interactions.map(item => [item.id, item]))
+  for (const interaction of next.interactions) interactions.set(interaction.id, interaction)
+  const ordered = [...interactions.values()].sort((a, b) => a.ordinal - b.ordinal)
+  return {
+    ...current,
+    ...next,
+    interactions: ordered.slice(-REVIEW_DETAIL_WINDOW_SIZE),
+    page: current.page,
+  }
+}
+
+function reviewSummaryMatchesFilters(item: ReviewSessionSummaryDto, filters: ReviewFilters): boolean {
+  if (item.sessionActivity === 'system-activity') return false
+  if (filters.sourceIds !== null && !item.sourceIds.some(sourceId => filters.sourceIds!.includes(sourceId))) return false
+  if (filters.projectId && item.projectId !== filters.projectId) return false
+  if (filters.status === 'with-errors' && !item.hasErrors) return false
+  if (filters.status === 'clean' && item.hasErrors) return false
+
+  const endedAt = Date.parse(item.endedAt)
+  if (filters.range !== 'all' && Number.isFinite(endedAt)) {
+    const now = new Date()
+    if (filters.range === 'today') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+      if (endedAt < start) return false
+    } else {
+      const days = filters.range === '7d' ? 7 : 30
+      if (endedAt < now.getTime() - days * 86_400_000) return false
+    }
+  }
+
+  const search = filters.search.trim().toLowerCase()
+  if (search) {
+    const haystack = [
+      item.title,
+      item.preview,
+      item.projectName,
+      item.workspacePath,
+      ...item.sourceIds,
+    ].filter(Boolean).join('\n').toLowerCase()
+    if (!haystack.includes(search)) return false
+  }
+  return true
+}
+
+function sortReviewSummaries(items: ReviewSessionSummaryDto[]): ReviewSessionSummaryDto[] {
+  return items.sort((left, right) =>
+    right.endedAt.localeCompare(left.endedAt) || left.id.localeCompare(right.id)
+  )
+}
+
+function summariesFromOverview(response: AgentOverviewResponseDto): AgentSummaryResponseDto {
+  return {
+    items: response.items.map(item => ({
+      sourceId: item.sourceId,
+      productId: item.productId,
+      displayName: item.displayName,
+      supported: item.supported,
+      enabled: item.enabled,
+      detected: item.detected,
+      installationIds: item.installations.map(installation => installation.id),
+      installationCount: item.installations.length,
+    })),
+    meta: response.meta,
+  }
+}
+
+function mergeAgentDetail(
+  current: AgentOverviewResponseDto | null,
+  detail: AgentDetailResponseDto,
+): AgentOverviewResponseDto {
+  const items = new Map((current?.items ?? []).map(item => [item.sourceId, item]))
+  items.set(detail.item.sourceId, detail.item)
+  return {
+    items: [...items.values()],
+    meta: detail.meta,
+  }
+}
+
+function mergeAgentEnrichment(
+  current: AgentOverviewResponseDto | null,
+  enrichment: AgentEnrichmentResponseDto,
+): AgentOverviewResponseDto | null {
+  if (!current) return current
+  const item = current.items.find(agent => agent.sourceId === enrichment.sourceId)
+  if (!item) return current
+  return {
+    items: current.items.map(agent => agent.sourceId === enrichment.sourceId
+      ? {
+          ...agent,
+          ...(enrichment.integration ? { integration: enrichment.integration } : {}),
+          capabilities: enrichment.capabilities,
+          usedAssets: enrichment.usedAssets,
+        }
+      : agent),
+    meta: enrichment.meta,
+  }
+}
+
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
     health: null,
     facets: null,
+    agentSummaries: null,
+    agentCoverage: null,
     agents: null,
+    agentDetailLoadingSourceId: '',
+    agentDetailError: '',
     capturePolicy: null,
     agentsLoading: false,
     agentsError: '',
@@ -145,6 +262,9 @@ export class AgentLensClientModel {
     agentsRescanError: '',
     agentEnvironmentRescanTargetId: '',
     integrationDiscovery: null,
+    integrationPreferences: null,
+    integrationPreferencesLoading: false,
+    integrationPreferencesError: '',
     integrationManagement: null,
     integrationManagementLoading: false,
     integrationManagementError: '',
@@ -160,7 +280,7 @@ export class AgentLensClientModel {
       relationshipError: '',
       selectedId: '',
       limit: INITIAL_REVIEW_LIMIT,
-      loading: true,
+      loading: false,
       loadingMore: false,
       detailLoading: false,
       detailLoadingMore: false,
@@ -176,6 +296,7 @@ export class AgentLensClientModel {
     },
   }
   private readonly listeners = new Set<Listener>()
+  private readonly liveEventListeners = new Set<LiveEventListener>()
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private reviewRefreshDueAt: number | null = null
@@ -185,13 +306,21 @@ export class AgentLensClientModel {
   private reviewInFlight: Promise<void> | null = null
   private reviewRequestDirty = false
   private reviewLiveDirty = false
+  private reviewPaginationDirty = false
+  private readonly pendingReviewSummaryIds = new Set<string>()
+  private reviewSummaryPatchTimer: ReturnType<typeof setTimeout> | null = null
   private reviewActive = false
   private facetsInFlight: Promise<void> | null = null
   private agentsInFlight: Promise<void> | null = null
+  private readonly agentDetailInFlight = new Map<string, Promise<void>>()
+  private readonly agentEnrichmentInFlight = new Map<string, Promise<void>>()
+  private agentCoverageInFlight: Promise<void> | null = null
   private agentsRescanInFlight: Promise<AgentRescanResponseDto> | null = null
   private integrationDiscoveryInFlight: Promise<IntegrationToolDiscoveryResponseDto> | null = null
+  private integrationPreferencesInFlight: Promise<void> | null = null
   private integrationManagementInFlight: Promise<void> | null = null
   private integrationDiscoveryPolls = 0
+  private integrationDiscoveryActive = false
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
@@ -205,7 +334,11 @@ export class AgentLensClientModel {
 
   getSnapshot = (): ClientSnapshot => this.snapshot
 
+  reviewAttachments = (observationId: string): Promise<ReviewMessageAttachmentDto[]> =>
+    this.api.reviewAttachments(observationId)
+
   sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
+  sourceRecords = (ids: readonly string[]): Promise<SourceRecordResponseDto[]> => this.api.sourceRecords(ids)
 
   managedAssetDirectory = (
     productId: string,
@@ -233,6 +366,11 @@ export class AgentLensClientModel {
     return () => this.listeners.delete(listener)
   }
 
+  subscribeLiveEvents = (listener: LiveEventListener): (() => void) => {
+    this.liveEventListeners.add(listener)
+    return () => this.liveEventListeners.delete(listener)
+  }
+
   private publish(next: ClientSnapshot): void {
     this.snapshot = next
     if (this.notifyQueued) return
@@ -256,7 +394,17 @@ export class AgentLensClientModel {
     }
     if (!this.visibilityListener && typeof document !== 'undefined') {
       this.visibilityListener = () => {
-        if (!document.hidden && this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+        if (document.hidden) {
+          if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
+          this.integrationDiscoveryTimer = null
+          return
+        }
+        if (this.reviewActive && this.reviewLiveDirty) this.scheduleReviewRefresh(0)
+        const discoveryStatus = this.snapshot.integrationDiscovery?.status
+        if (
+          this.integrationDiscoveryActive
+          && (discoveryStatus === 'idle' || discoveryStatus === 'scanning')
+        ) this.scheduleIntegrationDiscoveryRefresh()
       }
       document.addEventListener('visibilitychange', this.visibilityListener)
     }
@@ -272,13 +420,18 @@ export class AgentLensClientModel {
     this.reviewRefreshDueAt = null
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
+    if (this.reviewSummaryPatchTimer) clearTimeout(this.reviewSummaryPatchTimer)
+    this.pendingReviewSummaryIds.clear()
     if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
     if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)
     this.refreshTimer = null
     this.detailTimer = null
     this.reviewSearchTimer = null
+    this.reviewSummaryPatchTimer = null
     this.integrationDiscoveryTimer = null
     this.integrationDiscoveryPolls = 0
+    this.integrationDiscoveryActive = false
+    this.liveEventListeners.clear()
     this.visibilityListener = null
     this.reviewActive = false
   }
@@ -305,69 +458,140 @@ export class AgentLensClientModel {
   async refreshAgents(): Promise<void> {
     const generation = ++this.agentsGeneration
     const invalidation = this.agentsInvalidation
-    this.patch({
-      agentsLoading: true,
-      agentsError: '',
-      integrationManagementLoading: true,
-      integrationManagementError: '',
-      integrationDiscoveryLoading: true,
-    })
+    this.patch({ agentsLoading: true, agentsError: '' })
+
+    let summaries: AgentSummaryResponseDto
     try {
-      const [agents, capturePolicy, management] = await Promise.all([
-        this.api.agents().then(
-          value => ({ value, error: '' }),
-          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
-        ),
-        this.api.capturePolicy().catch(() => null),
-        this.api.integrations().then(
-          value => ({ value, error: '' }),
-          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
-        ),
-      ])
-      if (generation !== this.agentsGeneration) return
-
-      let discovery = this.snapshot.integrationDiscovery
-      let discoveryError = ''
-      if (management.value) {
-        discovery = discoveryFromManagement(management.value)
-      } else {
-        const fallback = await this.api.integrationDiscovery().then(
-          value => ({ value, error: '' }),
-          error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
-        )
-        discovery = fallback.value ?? discovery
-        discoveryError = fallback.error
-      }
-
-      this.patch({
-        agents: agents.value ?? this.snapshot.agents,
-        capturePolicy,
-        agentsLoading: false,
-        agentsError: agents.error ? translateProduct('errors:agentsOverviewFailed') : '',
-        agentsHasNewData: this.agentsInvalidation !== invalidation,
-        integrationManagement: management.value ?? this.snapshot.integrationManagement,
-        integrationManagementLoading: false,
-        integrationManagementError: management.error,
-        integrationDiscovery: discovery,
-        integrationDiscoveryLoading: false,
-        integrationDiscoveryError: discoveryError,
-      })
-
-      if (discovery?.status === 'idle' || discovery?.status === 'scanning') {
-        this.scheduleIntegrationDiscoveryRefresh()
-      } else if (discovery?.status === 'complete') {
-        this.integrationDiscoveryPolls = 0
-      }
+      summaries = await this.api.agentSummaries()
     } catch {
-      // Existing data remains visible on refresh failure.
       if (generation !== this.agentsGeneration) return
       this.patch({
         agentsLoading: false,
         agentsError: translateProduct('errors:agentsOverviewFailed'),
-        integrationManagementLoading: false,
-        integrationDiscoveryLoading: false,
       })
+      return
     }
+    if (generation !== this.agentsGeneration) return
+
+    // Summary is the page/navigation critical read. Detail and management data
+    // are loaded independently after this point.
+    this.patch({
+      agentSummaries: summaries,
+      agentCoverage: null,
+      agentsLoading: false,
+      agentsError: '',
+      agentsHasNewData: this.agentsInvalidation !== invalidation,
+    })
+
+    this.patch({
+      integrationManagementLoading: true,
+      integrationManagementError: '',
+      integrationDiscoveryLoading: true,
+    })
+    const [capturePolicy, management] = await Promise.all([
+      this.api.capturePolicy().catch(() => null),
+      this.api.integrations().then(
+        value => ({ value, error: '' }),
+        error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+      ),
+    ])
+    if (generation !== this.agentsGeneration) return
+
+    let discovery = this.snapshot.integrationDiscovery
+    let discoveryError = ''
+    if (management.value) {
+      discovery = discoveryFromManagement(management.value)
+    } else {
+      const fallback = await this.api.integrationDiscovery().then(
+        value => ({ value, error: '' }),
+        error => ({ value: null, error: error instanceof Error ? error.message : String(error) }),
+      )
+      discovery = fallback.value ?? discovery
+      discoveryError = fallback.error
+    }
+
+    this.patch({
+      capturePolicy,
+      integrationManagement: management.value ?? this.snapshot.integrationManagement,
+      ...(management.value
+        ? { integrationPreferences: { preferences: management.value.preferences, meta: management.value.meta } }
+        : {}),
+      integrationManagementLoading: false,
+      integrationManagementError: management.error,
+      integrationDiscovery: discovery,
+      integrationDiscoveryLoading: false,
+      integrationDiscoveryError: discoveryError,
+    })
+
+    if (discovery?.status === 'idle' || discovery?.status === 'scanning') {
+      this.scheduleIntegrationDiscoveryRefresh()
+    } else if (discovery?.status === 'complete') {
+      this.integrationDiscoveryPolls = 0
+    }
+  }
+
+  ensureAgentDetail(sourceId: string): Promise<void> {
+    if (!sourceId) return Promise.resolve()
+    if (this.snapshot.agents?.items.some(item => item.sourceId === sourceId)) return Promise.resolve()
+    const existing = this.agentDetailInFlight.get(sourceId)
+    if (existing) return existing
+
+    this.patch({ agentDetailLoadingSourceId: sourceId, agentDetailError: '' })
+    const pending = this.api.agentDetail(sourceId).then(
+      detail => {
+        if (!detail) throw new Error(`Unknown Agent source: ${sourceId}`)
+        this.patch({
+          agents: mergeAgentDetail(this.snapshot.agents, detail),
+          agentDetailLoadingSourceId: '',
+          agentDetailError: '',
+        })
+        void this.ensureAgentEnrichment(sourceId)
+      },
+      error => {
+        this.patch({
+          agentDetailLoadingSourceId: '',
+          agentDetailError: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      },
+    ).finally(() => {
+      this.agentDetailInFlight.delete(sourceId)
+    })
+    this.agentDetailInFlight.set(sourceId, pending)
+    return pending
+  }
+
+  ensureAgentEnrichment(sourceId: string): Promise<void> {
+    if (!sourceId) return Promise.resolve()
+    const current = this.snapshot.agents?.items.find(item => item.sourceId === sourceId)
+    if (current && (current.usedAssets.length > 0 || current.capabilities.length > 0 || current.integration)) {
+      return Promise.resolve()
+    }
+    const existing = this.agentEnrichmentInFlight.get(sourceId)
+    if (existing) return existing
+    const pending = this.api.agentEnrichment(sourceId).then(enrichment => {
+      if (!enrichment) return
+      const agents = mergeAgentEnrichment(this.snapshot.agents, enrichment)
+      if (agents) this.patch({ agents })
+    }).catch(() => {
+      // Supporting enrichment must never fail the core Agent detail.
+    }).finally(() => {
+      this.agentEnrichmentInFlight.delete(sourceId)
+    })
+    this.agentEnrichmentInFlight.set(sourceId, pending)
+    return pending
+  }
+
+  refreshAgentCoverage(): Promise<void> {
+    if (this.snapshot.agentCoverage) return Promise.resolve()
+    if (this.agentCoverageInFlight) return this.agentCoverageInFlight
+    const pending = this.api.agentCoverage().then(agentCoverage => {
+      this.patch({ agentCoverage })
+    }).finally(() => {
+      if (this.agentCoverageInFlight === pending) this.agentCoverageInFlight = null
+    })
+    this.agentCoverageInFlight = pending
+    return pending
   }
 
   rescanAgents(sourceId?: string): Promise<AgentRescanResponseDto> {
@@ -379,6 +603,8 @@ export class AgentLensClientModel {
         if (generation === this.agentsGeneration) {
           this.patch({
             agents: result.agents,
+            agentSummaries: summariesFromOverview(result.agents),
+            agentCoverage: null,
             facets: result.facets,
             agentsLoading: false,
             agentsHasNewData: false,
@@ -405,8 +631,24 @@ export class AgentLensClientModel {
     return pending
   }
 
+  setIntegrationDiscoveryActive(active: boolean): void {
+    this.integrationDiscoveryActive = active
+    if (!active) {
+      if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
+      this.integrationDiscoveryTimer = null
+      return
+    }
+    const status = this.snapshot.integrationDiscovery?.status
+    if (status === 'idle' || status === 'scanning') this.scheduleIntegrationDiscoveryRefresh()
+  }
+
   private scheduleIntegrationDiscoveryRefresh(): void {
-    if (this.integrationDiscoveryTimer || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS) return
+    if (
+      !this.integrationDiscoveryActive
+      || (typeof document !== 'undefined' && document.hidden)
+      || this.integrationDiscoveryTimer
+      || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS
+    ) return
     this.integrationDiscoveryTimer = setTimeout(() => {
       this.integrationDiscoveryTimer = null
       this.integrationDiscoveryPolls += 1
@@ -436,6 +678,36 @@ export class AgentLensClientModel {
     }
   }
 
+  refreshIntegrationPreferences(): Promise<void> {
+    if (this.integrationPreferencesInFlight) return this.integrationPreferencesInFlight
+    this.patch({ integrationPreferencesLoading: true, integrationPreferencesError: '' })
+    const pending = this.api.integrationPreferences().then(
+      result => {
+        this.patch({
+          integrationPreferences: result,
+          integrationPreferencesLoading: false,
+          integrationPreferencesError: '',
+        })
+      },
+      error => {
+        this.patch({
+          integrationPreferencesLoading: false,
+          integrationPreferencesError: error instanceof Error ? error.message : String(error),
+        })
+        throw error
+      },
+    ).finally(() => {
+      if (this.integrationPreferencesInFlight === pending) this.integrationPreferencesInFlight = null
+    })
+    this.integrationPreferencesInFlight = pending
+    return pending
+  }
+
+  ensureIntegrationPreferences(): Promise<void> {
+    if (this.snapshot.integrationPreferences) return Promise.resolve()
+    return this.refreshIntegrationPreferences()
+  }
+
   refreshIntegrationManagement(): Promise<void> {
     if (this.integrationManagementInFlight) return this.integrationManagementInFlight
     this.patch({ integrationManagementLoading: true, integrationManagementError: '' })
@@ -444,6 +716,9 @@ export class AgentLensClientModel {
         const discovery = discoveryFromManagement(management)
         this.patch({
           integrationManagement: management,
+          integrationPreferences: { preferences: management.preferences, meta: management.meta },
+          integrationPreferencesLoading: false,
+          integrationPreferencesError: '',
           integrationManagementLoading: false,
           integrationManagementError: '',
           integrationDiscovery: discovery,
@@ -475,13 +750,14 @@ export class AgentLensClientModel {
   ): Promise<IntegrationPreferencesResponseDto> {
     const result = await this.api.updateIntegrationPreferences(input)
     const current = this.snapshot.integrationManagement
+    const patch: Partial<ClientSnapshot> = { integrationPreferences: result }
     if (current) {
-      const management = applyManagementPreferences({
+      patch.integrationManagement = applyManagementPreferences({
         ...current,
         meta: { ...current.meta, generatedAt: result.meta.generatedAt },
       }, result.preferences)
-      this.patch({ integrationManagement: management })
     }
+    this.patch(patch)
     return result
   }
 
@@ -502,7 +778,7 @@ export class AgentLensClientModel {
   }
 
   async acknowledgeIntegration(integrationId: string): Promise<void> {
-    const current = this.snapshot.integrationManagement?.preferences
+    const current = this.snapshot.integrationPreferences?.preferences ?? this.snapshot.integrationManagement?.preferences
     if (!current || current.acknowledgedIntegrationIds.includes(integrationId)) return
     await this.updateIntegrationPreferences({
       acknowledgedIntegrationIds: [...current.acknowledgedIntegrationIds, integrationId],
@@ -630,7 +906,7 @@ export class AgentLensClientModel {
   }
 
   ensureAgents(): Promise<void> {
-    if (this.snapshot.agents) return Promise.resolve()
+    if (this.snapshot.agentSummaries) return Promise.resolve()
     if (this.agentsInFlight) return this.agentsInFlight
     const pending = this.refreshAgents().finally(() => {
       if (this.agentsInFlight === pending) this.agentsInFlight = null
@@ -669,6 +945,85 @@ export class AgentLensClientModel {
     }, wait)
   }
 
+  private scheduleReviewSummaryPatch(logicalSessionId: string): void {
+    if (!logicalSessionId) {
+      this.scheduleReviewRefresh(0)
+      return
+    }
+    this.pendingReviewSummaryIds.add(logicalSessionId)
+    if (!this.reviewActive || !this.snapshot.review.response) {
+      this.reviewLiveDirty = true
+      return
+    }
+    if (this.pendingReviewSummaryIds.size > INITIAL_REVIEW_LIMIT) {
+      this.pendingReviewSummaryIds.clear()
+      this.scheduleReviewRefresh(0)
+      return
+    }
+    if (this.reviewSummaryPatchTimer) return
+    this.reviewSummaryPatchTimer = setTimeout(() => {
+      this.reviewSummaryPatchTimer = null
+      void this.flushReviewSummaryPatches()
+    }, 100)
+  }
+
+  private async flushReviewSummaryPatches(): Promise<void> {
+    if (!this.reviewActive || !this.snapshot.review.response) {
+      this.reviewLiveDirty = true
+      return
+    }
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.reviewLiveDirty = true
+      return
+    }
+
+    const ids = [...this.pendingReviewSummaryIds]
+    this.pendingReviewSummaryIds.clear()
+    if (!ids.length) return
+    const filters = this.snapshot.review.filters
+    const results = await Promise.allSettled(ids.map(id => this.api.reviewSummary(id)))
+    if (results.some(result => result.status === 'rejected')) {
+      this.scheduleReviewRefresh(0)
+      return
+    }
+
+    const latest = this.snapshot.review
+    if (!latest.response) return
+    const items = new Map(latest.response.items.map(item => [item.id, item]))
+    let changed = false
+    for (let index = 0; index < ids.length; index += 1) {
+      const id = ids[index]!
+      const result = results[index]!
+      const summary = result.status === 'fulfilled' ? result.value : null
+      const existed = items.has(id)
+      const visible = summary ? reviewSummaryMatchesFilters(summary, filters) : false
+      if (summary && visible) {
+        items.set(id, summary)
+        changed = true
+      } else if (existed) {
+        items.delete(id)
+        changed = true
+      }
+    }
+    if (!changed) return
+
+    const currentLimit = Math.max(INITIAL_REVIEW_LIMIT, latest.limit, latest.response.items.length)
+    const merged = sortReviewSummaries([...items.values()]).slice(0, currentLimit)
+    this.reviewPaginationDirty = true
+    this.publish({
+      ...this.snapshot,
+      review: {
+        ...latest,
+        response: {
+          ...latest.response,
+          items: merged,
+          meta: { ...latest.response.meta, count: merged.length, generatedAt: new Date().toISOString() },
+        },
+        limit: merged.length,
+      },
+    })
+  }
+
   setReviewFilters(patch: Partial<ReviewFilters>): void {
     const filters = { ...this.snapshot.review.filters, ...patch }
     const keys = Object.keys(patch)
@@ -701,6 +1056,10 @@ export class AgentLensClientModel {
   }
 
   async loadMoreReview(): Promise<void> {
+    if (this.reviewPaginationDirty) {
+      await this.refreshReview({ preserveDetail: true })
+      if (this.reviewPaginationDirty) return
+    }
     const current = this.snapshot.review
     const cursor = current.response?.meta.nextCursor
     if (current.loading || current.loadingMore || !current.response?.meta.hasMore || !cursor) return
@@ -962,6 +1321,7 @@ export class AgentLensClientModel {
       if (!selectedId || (!preserveDetail && !response.items.some(item => item.id === selectedId))) {
         selectedId = response.items[0]?.id ?? ''
       }
+      this.reviewPaginationDirty = false
       this.publish({
         ...this.snapshot,
         review: {
@@ -1013,30 +1373,41 @@ export class AgentLensClientModel {
       },
     })
     try {
-      const detailRequest = this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
-        .then(detail => detail.interactions.length > 0 || !detail.interactionIndex?.length
-          ? detail
-          : this.api.reviewDetail(id, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE }))
-      const relationshipsRequest = this.api.relationships(id).then(
-        relationships => ({ relationships, relationshipError: '' }),
-        reason => ({
-          relationships: null,
-          relationshipError: reason instanceof Error ? reason.message : String(reason),
-        }),
-      )
-      const [detail, relationshipState] = await Promise.all([detailRequest, relationshipsRequest])
+      const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
         review: {
           ...this.snapshot.review,
           detail,
-          relationships: relationshipState.relationships,
-          relationshipError: relationshipState.relationshipError,
           detailLoading: false,
           error: '',
         },
       })
+      if (!this.snapshot.review.response) {
+        void this.refreshReview({ preserveDetail: true })
+      }
+
+      void this.api.relationships(id).then(
+        relationships => {
+          if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+          this.publish({
+            ...this.snapshot,
+            review: { ...this.snapshot.review, relationships, relationshipError: '' },
+          })
+        },
+        reason => {
+          if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+          this.publish({
+            ...this.snapshot,
+            review: {
+              ...this.snapshot.review,
+              relationships: null,
+              relationshipError: reason instanceof Error ? reason.message : String(reason),
+            },
+          })
+        },
+      )
     } catch (error) {
       if (generation !== this.detailGeneration) return
       this.publish({
@@ -1093,13 +1464,67 @@ export class AgentLensClientModel {
     })
   }
 
+  async refreshReviewTailIncremental(): Promise<void> {
+    const current = this.snapshot.review
+    const detail = current.detail
+    if (
+      !current.selectedId
+      || !detail
+      || current.detailLoading
+      || current.detailLoadingMore
+      || detail.page.filter !== 'all'
+    ) return
+
+    const last = detail.interactions.at(-1)
+    if (!last) {
+      await this.jumpToLatestReviewDetail()
+      return
+    }
+
+    const selectedId = current.selectedId
+    const generation = this.detailGeneration
+    let merged = detail
+    let cursor: string | undefined
+    let caughtUp = false
+
+    for (let page = 0; page < 5; page += 1) {
+      const next = await this.api.reviewDetail(selectedId, cursor
+        ? { cursor, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all' }
+        : { afterOrdinal: last.ordinal, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all' })
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
+      merged = mergeReviewTail(merged, next)
+      if (!next.page.hasMore || !next.page.nextCursor) {
+        caughtUp = true
+        break
+      }
+      cursor = next.page.nextCursor
+    }
+
+    const latest = this.snapshot.review
+    if (generation !== this.detailGeneration || latest.selectedId !== selectedId) return
+    this.publish({
+      ...this.snapshot,
+      review: {
+        ...latest,
+        detail: merged,
+        detailHasNewData: !caughtUp,
+        error: '',
+      },
+    })
+  }
+
   private onLiveEvent(event: LiveUpdateEventDto): void {
+    for (const listener of this.liveEventListeners) listener(event)
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
       if (event.type === 'session.updated') {
-        // Session Summary is materialized now; only a short coalescing window is
-        // needed before refreshing the Task Center list.
-        this.scheduleReviewRefresh(100)
+        // The summary is already materialized. Patch only this Session instead of
+        // re-querying the complete first window.
+        if (this.refreshTimer) clearTimeout(this.refreshTimer)
+        this.refreshTimer = null
+        this.reviewRefreshDueAt = null
+        this.reviewLiveDirty = false
+        this.scheduleReviewSummaryPatch(event.logicalSessionId)
       } else if (event.type === 'observation.committed') {
         const updatesSelectedSession = this.reviewActive
           && Boolean(event.logicalSessionId)
@@ -1128,7 +1553,7 @@ export class AgentLensClientModel {
     }
     if (affected.includes('agents')) {
       this.agentsInvalidation += 1
-      if (!this.snapshot.agentsHasNewData) this.patch({ agentsHasNewData: true })
+      this.patch({ agentCoverage: null, agentsHasNewData: true })
     }
   }
 }

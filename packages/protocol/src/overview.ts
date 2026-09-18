@@ -72,6 +72,25 @@ export interface AgentIntegrationStatusDto {
   capabilities: AgentIntegrationCapabilityStatusDto[]
 }
 
+export interface AgentSummaryDto {
+  sourceId: string
+  productId: string
+  displayName: string
+  supported: boolean
+  enabled: boolean
+  detected: boolean
+  installationIds: string[]
+  installationCount: number
+}
+
+export interface AgentSummaryResponseDto {
+  items: AgentSummaryDto[]
+  meta: {
+    protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+    generatedAt: string
+  }
+}
+
 export interface AgentOverviewDto {
   sourceId: string
   productId: string
@@ -89,6 +108,43 @@ export interface AgentOverviewDto {
 
 export interface AgentOverviewResponseDto {
   items: AgentOverviewDto[]
+  meta: {
+    protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+    generatedAt: string
+  }
+}
+
+export interface AgentDetailResponseDto {
+  item: AgentOverviewDto
+  meta: {
+    protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+    generatedAt: string
+  }
+}
+
+export interface AgentEnrichmentResponseDto {
+  sourceId: string
+  integration?: AgentIntegrationStatusDto
+  capabilities: AgentCapabilityDto[]
+  usedAssets: AgentUsedAssetDto[]
+  meta: {
+    protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
+    generatedAt: string
+  }
+}
+
+export interface AgentCoverageItemDto {
+  sourceId: string
+  productId: string
+  displayName: string
+  detected: boolean
+  enabled: boolean
+  assetInventory: AgentAssetInventoryDto[]
+  usedAssets: AgentUsedAssetDto[]
+}
+
+export interface AgentCoverageResponseDto {
+  items: AgentCoverageItemDto[]
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     generatedAt: string

@@ -12,7 +12,7 @@ import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { MarkdownThemeManager } from './components/MarkdownThemeManager'
-import { PageLoadingState } from './components/StateViews'
+import { ErrorStateBanner, PageLoadingState } from './components/StateViews'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
 
@@ -40,12 +40,17 @@ function AgentRescanAction({
 }) {
   const { t } = useTranslation('agents')
   const directAgent = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
+  const summaryAgent = snapshot.agentSummaries?.items.find(item => item.sourceId === selectedAgentId)
   const management = snapshot.integrationManagement?.items.find(item =>
     item.integrationId === selectedAgentId
     || item.productId === selectedAgentId
     || (directAgent ? item.productId === directAgent.productId : false)
+    || (summaryAgent ? item.productId === summaryAgent.productId : false)
   )
   const agent = directAgent ?? snapshot.agents?.items.find(item =>
+    management ? item.productId === management.productId : false
+  )
+  const summary = summaryAgent ?? snapshot.agentSummaries?.items.find(item =>
     management ? item.productId === management.productId : false
   )
   const discovery = management?.tool ?? snapshot.integrationDiscovery?.items.find(item =>
@@ -53,9 +58,10 @@ function AgentRescanAction({
     || item.productId === selectedAgentId
     || (management ? item.integrationId === management.integrationId || item.productId === management.productId : false)
     || (agent ? item.productId === agent.productId : false)
+    || (summary ? item.productId === summary.productId : false)
   )
-  const targetId = selectedAgentId || agent?.sourceId || management?.integrationId || ''
-  const sourceId = agent?.sourceId
+  const targetId = selectedAgentId || agent?.sourceId || summary?.sourceId || management?.integrationId || ''
+  const sourceId = agent?.sourceId ?? summary?.sourceId
   const integrationId = management?.integrationId ?? discovery?.integrationId
   const ownsStatus = Boolean(targetId) && snapshot.agentEnvironmentRescanTargetId === targetId
   const anyScanBusy = snapshot.agentsRescanning || snapshot.integrationDiscoveryRescanning
@@ -161,6 +167,7 @@ function WorkspaceTopBar({
     items = [{ label: t('insights') }, { label: t('usageOverview') }]
   } else if (pathname.startsWith('/agents')) {
     const selected = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
+      ?? snapshot.agentSummaries?.items.find(item => item.sourceId === selectedAgentId)
     const managed = snapshot.integrationManagement?.items.find(item =>
       item.integrationId === selectedAgentId || item.productId === selectedAgentId
     )
@@ -201,7 +208,16 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false)
   const [markdownThemeManagerOpen, setMarkdownThemeManagerOpen] = useState(false)
-  const agents = snapshot.facets?.agents ?? []
+  const summaryAgents: AgentFacetDto[] = (snapshot.agentSummaries?.items ?? []).map(agent => ({
+    sourceId: agent.sourceId,
+    productId: agent.productId,
+    displayName: agent.displayName,
+    supported: agent.supported,
+    enabled: agent.enabled,
+    detected: agent.detected,
+    installationIds: agent.installationIds,
+  }))
+  const agents = snapshot.facets?.agents ?? summaryAgents
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
@@ -225,12 +241,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onAgents = location.pathname.startsWith('/agents')
   const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
-  const needsFacets = (onReview && !onNewTask) || onTools || onInsights || onAgents || onBackup
+  const onReviewIndex = location.pathname === '/review'
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onLiveTask)
-  const agentOverviewItems = snapshot.agents?.items ?? []
+  const agentSummaryItems = snapshot.agentSummaries?.items ?? []
   const managedIntegrationItems = snapshot.integrationManagement?.items ?? []
   const agentSelectionMap = new Map<string, AgentFacetDto>(agents.map(agent => [agent.sourceId, agent] as const))
-  for (const agent of agentOverviewItems) {
+  for (const agent of agentSummaryItems) {
     agentSelectionMap.set(agent.sourceId, {
       sourceId: agent.sourceId,
       productId: agent.productId,
@@ -238,12 +254,12 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       supported: agent.supported,
       enabled: agent.enabled,
       detected: agent.detected,
-      installationIds: agent.installations.map(item => item.id),
+      installationIds: agent.installationIds,
     })
   }
   for (const management of managedIntegrationItems) {
     const discoveryDetected = management.tool?.presence === 'present' || management.tool?.presence === 'data-only'
-    const overview = agentOverviewItems.find(item =>
+    const overview = agentSummaryItems.find(item =>
       item.productId === management.productId || item.sourceId === management.integrationId
     )
     if (!overview && !discoveryDetected) continue
@@ -256,18 +272,18 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       supported: true,
       enabled: management.enabled.configured,
       detected: Boolean(current?.detected || overview?.detected || discoveryDetected),
-      installationIds: overview?.installations.map(item => item.id) ?? current?.installationIds ?? [],
+      installationIds: overview?.installationIds ?? current?.installationIds ?? [],
     })
   }
   const agentSelectionItems = [...agentSelectionMap.values()]
   const selectedIntegrationExists = managedIntegrationItems.some(item =>
     item.integrationId === agentOverviewSourceId || item.productId === agentOverviewSourceId
   )
-  const resolvedAgentOverviewSourceId = agentOverviewItems.some(item => item.sourceId === agentOverviewSourceId) || selectedIntegrationExists
+  const resolvedAgentOverviewSourceId = agentSummaryItems.some(item => item.sourceId === agentOverviewSourceId) || selectedIntegrationExists
     ? agentOverviewSourceId
     : managedIntegrationItems.find(item => item.tool?.presence === 'present' || item.tool?.presence === 'data-only')?.integrationId
-      ?? agentOverviewItems.find(item => item.detected)?.sourceId
-      ?? agentOverviewItems[0]?.sourceId
+      ?? agentSummaryItems.find(item => item.detected)?.sourceId
+      ?? agentSummaryItems[0]?.sourceId
       ?? agents.find(agent => agent.detected)?.sourceId
       ?? agents[0]?.sourceId
       ?? ''
@@ -279,8 +295,44 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   }, [agentOverviewSourceId, resolvedAgentOverviewSourceId])
 
   useEffect(() => {
-    void model.ensureIntegrationManagement().catch(() => undefined)
+    void model.ensureIntegrationPreferences().catch(() => undefined)
   }, [model])
+
+  useEffect(() => {
+    const onboardingIncomplete = snapshot.integrationPreferences
+      ? !snapshot.integrationPreferences.preferences.onboarding.completed
+      : false
+    if (onIntegrations || onboardingIncomplete) {
+      void model.ensureIntegrationManagement().catch(() => undefined)
+    }
+  }, [model, onIntegrations, snapshot.integrationPreferences])
+
+  useEffect(() => {
+    if (
+      onIntegrations
+      || !snapshot.integrationPreferences?.preferences.onboarding.completed
+      || snapshot.integrationManagement
+      || snapshot.integrationManagementLoading
+    ) return
+    const timer = window.setTimeout(() => {
+      void model.ensureIntegrationManagement().catch(() => undefined)
+    }, 750)
+    return () => window.clearTimeout(timer)
+  }, [
+    model,
+    onIntegrations,
+    snapshot.integrationPreferences,
+    snapshot.integrationManagement,
+    snapshot.integrationManagementLoading,
+  ])
+
+  useEffect(() => {
+    const onboardingIncomplete = snapshot.integrationPreferences
+      ? !snapshot.integrationPreferences.preferences.onboarding.completed
+      : false
+    model.setIntegrationDiscoveryActive(onAgents || onIntegrations || onboardingIncomplete)
+    return () => model.setIntegrationDiscoveryActive(false)
+  }, [model, onAgents, onIntegrations, snapshot.integrationPreferences])
 
   useEffect(() => {
     setMobileNavigationOpen(false)
@@ -295,12 +347,19 @@ function Shell({ model }: { model: AgentLensClientModel }) {
 
   useEffect(() => {
     model.setReviewActive(onLocalReview)
-    if (needsFacets) void model.ensureFacets()
-    if (onLocalReview) void model.ensureReview()
+    if (onLocalReview && onReviewIndex) void model.ensureReview()
     if (onTools) void model.ensureUsage()
     if (onAgents) void model.ensureAgents()
     return () => { if (onLocalReview) model.setReviewActive(false) }
-  }, [model, needsFacets, onLocalReview, onTools, onAgents])
+  }, [model, onLocalReview, onReviewIndex, onTools, onAgents])
+
+  useEffect(() => {
+    const reviewReadyForFacets = onLocalReview && snapshot.review.response !== null
+    const toolsReadyForFacets = onTools && snapshot.usage.response !== null
+    if (reviewReadyForFacets || toolsReadyForFacets || onInsights) {
+      void model.ensureFacets()
+    }
+  }, [model, onLocalReview, onTools, onInsights, snapshot.review.response, snapshot.usage.response])
 
   useReviewUrlSync({
     active: onLocalReview,
@@ -311,18 +370,34 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     replace: replaceReviewUrl,
   })
 
-  if (!snapshot.integrationManagement && !snapshot.integrationManagementError) {
+  if (!snapshot.integrationPreferences) {
     return <main className="integration-onboarding-shell">
-      <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>
+      {snapshot.integrationPreferencesError
+        ? <ErrorStateBanner
+            message={snapshot.integrationPreferencesError}
+            onRetry={() => void model.refreshIntegrationPreferences().catch(() => undefined)}
+          />
+        : <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>}
     </main>
   }
 
-  if (snapshot.integrationManagement && !snapshot.integrationManagement.preferences.onboarding.completed) {
+  if (!snapshot.integrationPreferences.preferences.onboarding.completed) {
+    if (!snapshot.integrationManagement) {
+      return <main className="integration-onboarding-shell">
+        {snapshot.integrationManagementError
+          ? <ErrorStateBanner
+              message={snapshot.integrationManagementError}
+              onRetry={() => void model.refreshIntegrationManagement().catch(() => undefined)}
+            />
+          : <PageLoadingState title={t('shell:loadingIntegrations')} description={t('shell:loadingIntegrationsDescription')}/>}
+      </main>
+    }
     return <IntegrationOnboarding model={model} snapshot={snapshot}/>
   }
 
   return <IntegrationOrderProvider
     management={snapshot.integrationManagement}
+    preferences={snapshot.integrationPreferences}
     model={model}
   >
     <PinnedAgentsProvider agents={agents}>

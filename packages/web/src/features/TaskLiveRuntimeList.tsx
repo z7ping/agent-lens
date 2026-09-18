@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
@@ -30,30 +30,60 @@ function runtimeStatusBadge(
   return { label: labels.idle, tone: 'warning' }
 }
 
-export function TaskLiveRuntimeList() {
+export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
   const { t } = useTranslation('task')
   const location = useLocation()
   const navigate = useNavigate()
   const [runtimes, setRuntimes] = useState<LiveRuntimeRefDto[]>([])
 
-  const refresh = useCallback(() => {
-    void liveApi.knownRuntimes().then(setRuntimes, () => setRuntimes([]))
-  }, [])
-
   useEffect(() => {
-    refresh()
-    const onVisibility = () => { if (!document.hidden) refresh() }
-    const onLiveStateChanged = () => refresh()
+    let disposed = false
+    let timer: number | undefined
+    let inFlight = false
+    let dirty = false
+
+    const schedule = (delay = 100) => {
+      if (disposed) return
+      if (timer !== undefined) window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        timer = undefined
+        void refresh()
+      }, delay)
+    }
+    const refresh = async () => {
+      if (disposed) return
+      if (inFlight) {
+        dirty = true
+        return
+      }
+      inFlight = true
+      dirty = false
+      try {
+        const next = await liveApi.knownRuntimes()
+        if (!disposed) setRuntimes(next)
+      } catch {
+        if (!disposed) setRuntimes([])
+      } finally {
+        inFlight = false
+        if (dirty && !disposed) schedule(100)
+      }
+    }
+
+    schedule(deferMs)
+    const onVisibility = () => { if (!document.hidden) schedule(0) }
+    const onLiveStateChanged = () => schedule(100)
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('agent-lens:live-state-changed', onLiveStateChanged)
     // Pi compatibility surfaces still emit this event until the migration is complete.
     window.addEventListener('agent-lens:pi-live-state-changed', onLiveStateChanged)
     return () => {
+      disposed = true
+      if (timer !== undefined) window.clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('agent-lens:live-state-changed', onLiveStateChanged)
       window.removeEventListener('agent-lens:pi-live-state-changed', onLiveStateChanged)
     }
-  }, [location.pathname, refresh])
+  }, [deferMs])
 
   if (!runtimes.length) return null
 
