@@ -1,7 +1,9 @@
 import {
   parseLiveUpdateEvent,
+  type AgentDetailResponseDto,
   type AgentOverviewResponseDto,
   type AgentRescanResponseDto,
+  type AgentSummaryResponseDto,
   type BackupCreateRequestDto,
   type BackupOverviewResponseDto,
   type BackupRestorePreviewResponseDto,
@@ -164,6 +166,14 @@ export class AgentLensApi {
 
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
+  agentSummaries(): Promise<AgentSummaryResponseDto> {
+    return requestJson('/api/v1/agents/summary')
+  }
+  agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
+    return requestJson<AgentDetailResponseDto>(`/api/v1/agents/${encodeURIComponent(sourceId)}`)
+      .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
+  }
+
   agents(): Promise<AgentOverviewResponseDto> {
     if (agentsInFlight) return agentsInFlight
     const pending = requestJson<AgentOverviewResponseDto>('/api/v1/agents')
