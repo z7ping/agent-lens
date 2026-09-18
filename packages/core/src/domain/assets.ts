@@ -32,6 +32,8 @@ export interface AssetDefinition {
 
 export type AssetScope = 'installation' | 'user' | 'project' | 'workspace'
 
+export type PackageIdentityCoverage = 'complete' | 'partial' | 'unknown' | 'unavailable'
+
 export interface AssetBinding {
   id: AssetBindingId
   assetId: AssetDefinitionId
@@ -39,6 +41,7 @@ export interface AssetBinding {
   runtimeProfileId?: RuntimeProfileId
   path?: string
   source?: string
+  packageIdentity?: string
   version?: string
   scope?: AssetScope
   scopeRoot?: string
@@ -86,6 +89,7 @@ export interface AssetBindingHint {
   runtimeProfileId?: RuntimeProfileId
   path?: string
   source?: string
+  packageIdentity?: string
   version?: string
   scope?: AssetScope
   scopeRoot?: string
