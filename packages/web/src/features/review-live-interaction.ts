@@ -8,8 +8,9 @@ export interface ReviewLiveInteraction {
 }
 
 /**
- * Review interaction availability is a Product projection: historical facts
- * identify their product, while the active Live adapter advertises operations.
+ * Historical facts identify their Product while the Live adapter advertises
+ * operations. Capability presence decides whether resume/fork exists; a
+ * transient availability probe must not erase an operation the adapter owns.
  * Source ids never decide whether a control is shown.
  */
 export function projectReviewLiveInteraction(
