@@ -54,6 +54,7 @@ let backupOverviewInFlight: Promise<BackupOverviewResponseDto> | null = null
 let backupOverviewCache: BackupOverviewResponseDto | null = null
 let reuseBackupOverviewOnce = false
 const managedAssetReadInFlight = new Map<string, Promise<unknown>>()
+const aggregateReadInFlight = new Map<string, Promise<unknown>>()
 
 function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
@@ -310,7 +311,12 @@ export class AgentLensApi {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     params.set('limit', '500')
-    return requestJson(`/api/v1/usage?${params}`)
+    const requestPath = `/api/v1/usage?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      requestPath,
+      () => requestJson<ToolAssetUsageResponseDto>(requestPath),
+    )
   }
 
   usageDetail(filters: QueryFilters, toolName: string): Promise<ToolAssetUsageResponseDto> {
@@ -318,13 +324,23 @@ export class AgentLensApi {
     appendFilters(params, filters)
     params.set('toolName', toolName)
     params.set('limit', '1')
-    return requestJson(`/api/v1/usage/detail?${params}`)
+    const requestPath = `/api/v1/usage/detail?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      requestPath,
+      () => requestJson<ToolAssetUsageResponseDto>(requestPath),
+    )
   }
 
   insights(filters: QueryFilters): Promise<InsightsResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
-    return requestJson(`/api/v1/insights?${params}`)
+    const requestPath = `/api/v1/insights?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      requestPath,
+      () => requestJson<InsightsResponseDto>(requestPath),
+    )
   }
 
   backupOverview(): Promise<BackupOverviewResponseDto> {
