@@ -233,6 +233,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [draft, setDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
+  const queueRevisionRef = useRef(0)
 
   const setComposerValue = useCallback((value: string) => {
     setDraft(currentDraft => ({ revision: currentDraft.revision + 1, value }))
@@ -255,6 +256,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setPendingQueue([])
     setRestoredQueue([])
     setQueueMutationPending(false)
+    queueRevisionRef.current += 1
     leafIdRef.current = undefined
     setConnected(false)
     setError('')
@@ -269,6 +271,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const matched = products.find(item => item.liveId === current.liveId)
       if (!matched) throw new Error(t('live.productUnavailable'))
       setProduct(matched)
+      const queueRevision = queueRevisionRef.current
       const [runtime, snapshot, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
         liveApi.snapshot(current.liveId, current.runtimeSessionId),
@@ -288,7 +291,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
-      if (queueState) setQueue(queueState)
+      if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })
@@ -304,6 +307,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (!product.capabilities.includes('recovery')) return
       const generation = ++recoveryGeneration
       try {
+        const queueRevision = queueRevisionRef.current
         const [snapshot, queueState] = await Promise.all([
           liveApi.snapshot(current.liveId, current.runtimeSessionId, leafIdRef.current),
           product.capabilities.includes('queue')
@@ -315,7 +319,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         setItems(previous => leafIdRef.current ? mergeLiveProjectionItems(previous, recovered) : recovered)
         leafIdRef.current = snapshot.leafId ?? leafIdRef.current
-        if (queueState) setQueue(queueState)
+        if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
       } catch (reason) {
         if (generation === recoveryGeneration) setError(reason instanceof Error ? reason.message : String(reason))
       }
@@ -331,6 +335,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           setExtension(envelope.normalizedEvent)
         }
         if (envelope.normalizedEvent?.type === 'queue.update') {
+          queueRevisionRef.current += 1
           const nextQueue = {
             steering: [...envelope.normalizedEvent.steering],
             followUp: [...envelope.normalizedEvent.followUp],
