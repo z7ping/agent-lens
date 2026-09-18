@@ -266,6 +266,23 @@ test('Pi Live Adapter exposes queue control and restores queued messages on inte
 })
 
 
+test('Pi Live Adapter exposes runtime-bound workspace file references generically', async () => {
+  const calls: Array<{ runtimeSessionId: string; query: string; limit?: number }> = []
+  const service = {
+    workspaceFileReferences: async (runtimeSessionId: string, query: string, limit?: number) => {
+      calls.push({ runtimeSessionId, query, limit })
+      return [{ path: 'src/index.ts', value: '@src/index.ts' }]
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.equal(adapter.capabilities.has('workspace-file-reference'), true)
+  assert.deepEqual(await adapter.workspaceFileReferences('runtime-1', 'src', 12), [
+    { path: 'src/index.ts', value: '@src/index.ts' },
+  ])
+  assert.deepEqual(calls, [{ runtimeSessionId: 'runtime-1', query: 'src', limit: 12 }])
+})
+
 test('Pi Live Adapter exposes private message semantics only through controlled contribution methods', async () => {
   const calls: Array<{ actionId: string; targetEntryId: string }> = []
   const service = {
