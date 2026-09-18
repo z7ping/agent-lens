@@ -54,6 +54,22 @@ test('Live event scheduler keeps only the latest presentation value for one tool
   scheduler.dispose()
 })
 
+test('Live event scheduler coalesces Runtime Disclosure invalidations', () => {
+  const batches: LiveRuntimeEventDto[][] = []
+  const scheduler = new LiveEventScheduler(events => batches.push(events))
+
+  scheduler.push(event(1, { type: 'runtime-disclosure.changed' }))
+  scheduler.push(event(2, { type: 'runtime-disclosure.changed' }))
+  scheduler.push(event(3, { type: 'runtime-disclosure.changed' }))
+  scheduler.flush()
+
+  const delivered = batches.flat()
+  assert.equal(delivered.length, 1)
+  assert.equal(delivered[0]?.normalizedEvent?.type, 'runtime-disclosure.changed')
+  assert.equal(scheduler.snapshot().coalescedEvents, 2)
+  scheduler.dispose()
+})
+
 test('Live event scheduler never coalesces deltas across assistant messages', () => {
   const batches: LiveRuntimeEventDto[][] = []
   const scheduler = new LiveEventScheduler(events => batches.push(events))
