@@ -178,6 +178,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     const title = liveText(event.taskSummary).trim()
     return title ? { type: 'title.update', title } : undefined
   }
+  if (type === 'model_changed') return { type: 'control.changed', control: 'model' }
+  if (type === 'thinking_level_changed') return { type: 'control.changed', control: 'thinking' }
   if (type === 'agent_settled' || type === 'agent_end') {
     return { type: 'completed', status: 'completed' }
   }
