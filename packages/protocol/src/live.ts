@@ -56,6 +56,7 @@ export type LiveCapabilityNameDto =
   | 'model-switching'
   | 'thinking-control'
   | 'extension-ui'
+  | 'command-discovery'
   | 'recovery'
 
 export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
@@ -214,6 +215,15 @@ export interface LiveControlDisplayInfoDto {
 export interface LiveControlOptionDto extends LiveControlDisplayInfoDto {
   /** Runtime-owned opaque value; surfaces must round-trip it unchanged. */
   value: string
+}
+
+export interface LiveCommandDto extends LiveControlDisplayInfoDto {
+  value: string
+  group?: string | undefined
+}
+
+export interface LiveCommandsResponseDto {
+  items: LiveCommandDto[]
 }
 
 export interface LiveThinkingControlDto extends LiveControlDisplayInfoDto {
