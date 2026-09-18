@@ -69,7 +69,7 @@ export function TaskLiveRuntimeList() {
       }
     }
 
-    schedule(0)
+    schedule(150)
     const onVisibility = () => { if (!document.hidden) schedule(0) }
     const onLiveStateChanged = () => schedule(100)
     document.addEventListener('visibilitychange', onVisibility)
@@ -83,7 +83,7 @@ export function TaskLiveRuntimeList() {
       window.removeEventListener('agent-lens:live-state-changed', onLiveStateChanged)
       window.removeEventListener('agent-lens:pi-live-state-changed', onLiveStateChanged)
     }
-  }, [location.pathname])
+  }, [])
 
   if (!runtimes.length) return null
 
