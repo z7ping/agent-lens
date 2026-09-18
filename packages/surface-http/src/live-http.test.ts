@@ -380,6 +380,14 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     })
     assert.equal(rejectedMessageAction.status, 400)
 
+    const hiddenMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.hidden', targetEntryId: 'entry-1' }),
+    })
+    assert.equal(hiddenMessageAction.status, 409)
+    assert.equal(adapter.messageActionExecutions.length, 1, 'undeclared action must never reach adapter execution')
+
     const queueState = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`)
     assert.equal(queueState.status, 200)
     assert.deepEqual(await queueState.json(), {
