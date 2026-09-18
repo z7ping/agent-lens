@@ -1002,7 +1002,9 @@ export class SourceAssetRunner {
               abortSignal,
               checkpoint,
             })
-            runtimeStatus.packageIdentityCoverage = discoveryCoverage.packageIdentity
+            if (discoveryCoverage.packageIdentity !== undefined) {
+              runtimeStatus.packageIdentityCoverage = discoveryCoverage.packageIdentity
+            }
           } catch {
             runtimeStatus.packageIdentityCoverage = 'unknown'
           }
