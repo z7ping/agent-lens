@@ -133,12 +133,12 @@ async function checkPackageUpdates(
   }
 }
 
-function forkSessionManager(manager: PiSdkSessionManager): PiSdkSessionManager {
+function forkSessionManager(manager: PiSdkSessionManager, targetLeafId?: string): PiSdkSessionManager {
   if (typeof manager.createBranchedSession !== 'function') {
     throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
   }
-  const leafId = manager.getLeafId()
-  if (!leafId) throw new Error('该 Pi 历史会话没有可分叉的当前节点')
+  const leafId = targetLeafId ?? manager.getLeafId()
+  if (!leafId) throw new Error('该 Pi 历史会话没有可分叉的目标节点')
   const forkedSessionPath = manager.createBranchedSession(leafId)
   if (!forkedSessionPath) throw new Error('Pi 未能从当前节点创建新的 Session')
   return manager
@@ -176,6 +176,15 @@ class InProcessHandle implements PiRuntimeHandle {
     return isLiveThinkingControl(candidate) ? candidate : undefined
   }
   async commands() { return piSdkCommands(this.session) }
+  async navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
+    if (this.session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
+    if (typeof this.session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
+    const result = await this.session.navigateTree(entryId)
+    return {
+      cancelled: result.cancelled,
+      ...(typeof result.editorText === 'string' ? { editorText: result.editorText } : {}),
+    }
+  }
   async controls(): Promise<PiLiveControls> {
     const thinking = this.thinkingControl()
     return {
@@ -206,7 +215,10 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
     const installed = await this.loadSdk(input.executable)
     const sessionDir = resolvePiLiveRuntimeSessionDir(input.cwd, input.sessionDir)
     let manager = input.sessionPath ? installed.module.SessionManager.open(input.sessionPath, sessionDir, input.cwd) : installed.module.SessionManager.create(input.cwd, sessionDir)
-    if (input.sessionPath && input.historyAction === 'fork') manager = forkSessionManager(manager)
+    if (input.sessionPath && input.historyAction === 'fork') manager = forkSessionManager(
+      manager,
+      typeof input.branchFromEntryId === 'string' ? input.branchFromEntryId : undefined,
+    )
     const created = await installed.module.createAgentSession({ cwd: input.cwd, sessionManager: manager })
     assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
     const session = created.session
