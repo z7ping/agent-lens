@@ -2,7 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
-  type LiveAdapter,
+} from '@agent-lens/core'
+import type {
+  LiveAdapter,
   LiveCapabilityName,
   LiveContributionText,
   LiveContributionValue,
@@ -15,9 +17,9 @@ import {
   LiveRuntimeState,
   LiveSnapshot,
   LiveService,
+  LiveSnapshotWindow,
   LiveStartCapabilities,
   LiveStartInput,
-  type LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
