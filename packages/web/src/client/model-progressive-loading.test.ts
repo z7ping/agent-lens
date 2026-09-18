@@ -119,6 +119,11 @@ test('review 后台刷新保持已加载窗口且不重新进入首屏 loading',
       return Promise.resolve(response(limit))
     }
 
+    override reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+      summaryCalls += 1
+      return Promise.resolve({ ...summary(2), id, title: '会话 2 已更新' })
+    }
+
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
       return Promise.resolve({
         ...summary(1),
@@ -219,8 +224,9 @@ test('正在阅读的会话持续写入时只提示新记录，不刷新任务�
   model.stop()
 })
 
-test('session.updated 在摘要物化后快速刷新任务列表', async () => {
+test('session.updated 在摘要物化后只精准读取对应摘要', async () => {
   let reviewCalls = 0
+  let summaryCalls = 0
 
   class SessionUpdatedApi extends AgentLensApi {
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
@@ -256,17 +262,23 @@ test('session.updated 在摘要物化后快速刷新任务列表', async () => {
   })
   await new Promise(resolve => setTimeout(resolve, 180))
 
-  assert.equal(reviewCalls, 2)
+  assert.equal(reviewCalls, 1)
+  assert.equal(summaryCalls, 1)
+  assert.equal(model.getSnapshot().review.response?.items.find(item => item.id === 'session-2')?.title, '会话 2 已更新')
   model.stop()
 })
 
-test('session.updated 的快速刷新不会被后续 Observation 兜底延后', async () => {
+test('session.updated 的精准摘要更新不会被后续 Observation 兜底覆盖', async () => {
   let reviewCalls = 0
 
   class PrioritizedRefreshApi extends AgentLensApi {
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
       reviewCalls += 1
       return Promise.resolve(response(limit))
+    }
+
+    override reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+      return Promise.resolve({ ...summary(2), id })
     }
 
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
@@ -306,7 +318,7 @@ test('session.updated 的快速刷新不会被后续 Observation 兜底延后', 
   })
 
   await new Promise(resolve => setTimeout(resolve, 180))
-  assert.equal(reviewCalls, 2)
+  assert.equal(reviewCalls, 1)
   model.stop()
 })
 
@@ -317,6 +329,10 @@ test('高频 Observation 与 Summary Ready 只合并为一次任务列表刷新'
     override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
       reviewCalls += 1
       return Promise.resolve(response(limit))
+    }
+
+    override reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
+      return Promise.resolve({ ...summary(2), id })
     }
 
     override reviewDetail(): Promise<ReviewSessionDetailDto> {
@@ -358,7 +374,7 @@ test('高频 Observation 与 Summary Ready 只合并为一次任务列表刷新'
   })
 
   await new Promise(resolve => setTimeout(resolve, 180))
-  assert.equal(reviewCalls, 2)
+  assert.equal(reviewCalls, 1)
   model.stop()
 })
 
@@ -400,7 +416,7 @@ test('后台刷新不会把摘要窗口外的当前阅读会话切回第一条',
   assert.equal(detailCalls, callsBeforeRefresh)
 })
 
-test('默认最新页为空但轻量索引仍有记录时自动从头加载', async () => {
+test('默认最新页为空时 Web 不再二次 forward，尾页正确性由 Projection 保证', async () => {
   const directions: Array<'forward' | 'backward' | undefined> = []
 
   class SparseLatestApi extends AgentLensApi {
@@ -424,7 +440,52 @@ test('默认最新页为空但轻量索引仍有记录时自动从头加载', as
   const model = new AgentLensClientModel(new SparseLatestApi())
   await model.selectReviewSession('session-1')
 
-  assert.deepEqual(directions, ['backward', 'forward'])
-  assert.equal(model.getSnapshot().review.detail?.interactions.length, 10)
-  assert.equal(model.getSnapshot().review.detail?.page.direction, 'forward')
+  assert.deepEqual(directions, ['backward'])
+  assert.equal(model.getSnapshot().review.detail?.interactions.length, 0)
+  assert.equal(model.getSnapshot().review.detail?.page.direction, 'backward')
+})
+
+
+test('当前会话尾部增量只从最后 ordinal 开始并合并新增轮次', async () => {
+  const tailQueries: Array<{ afterOrdinal?: number; cursor?: string }> = []
+
+  class TailApi extends AgentLensApi {
+    override reviewDetail(
+      _id: string,
+      options: { afterOrdinal?: number; cursor?: string; direction?: 'forward' | 'backward'; limit?: number } = {},
+    ): Promise<ReviewSessionDetailDto> {
+      if (options.afterOrdinal !== undefined || options.cursor) {
+        tailQueries.push({ afterOrdinal: options.afterOrdinal, cursor: options.cursor })
+        return Promise.resolve({
+          ...summary(1),
+          interactionCount: 12,
+          interactions: [interaction(10), interaction(11), interaction(12)],
+          page: { count: 3, hasMore: false, direction: 'forward', filter: 'all' },
+        })
+      }
+      return Promise.resolve({
+        ...summary(1),
+        interactionCount: 10,
+        interactions: Array.from({ length: 10 }, (_, index) => interaction(index + 1)),
+        page: { count: 10, hasMore: true, nextCursor: 'older', direction: 'backward', filter: 'all' },
+      })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({
+        items: [],
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' },
+      })
+    }
+  }
+
+  const model = new AgentLensClientModel(new TailApi())
+  await model.selectReviewSession('session-1')
+  ;(model.getSnapshot().review as { detailHasNewData: boolean }).detailHasNewData = true
+  await model.refreshReviewTailIncremental()
+
+  assert.deepEqual(tailQueries, [{ afterOrdinal: 10, cursor: undefined }])
+  assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(item => item.ordinal), [1,2,3,4,5,6,7,8,9,10,11,12])
+  assert.equal(model.getSnapshot().review.detailHasNewData, false)
+  model.stop()
 })
