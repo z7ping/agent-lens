@@ -59,9 +59,14 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       .all() as Array<{ name: string }>
     assert.ok(assetBindingColumns.some(column => column.name === 'scope'))
     assert.ok(assetBindingColumns.some(column => column.name === 'scope_root'))
+    assert.ok(assetBindingColumns.some(column => column.name === 'package_identity'))
+    const runtimeStatusColumns = storage.db.prepare("PRAGMA table_info('source_runtime_status')")
+      .all() as Array<{ name: string }>
+    assert.ok(runtimeStatusColumns.some(column => column.name === 'package_identity_coverage'))
     const assetBindingIndexes = storage.db.prepare("PRAGMA index_list('asset_bindings')")
       .all() as Array<{ name: string }>
     assert.ok(assetBindingIndexes.some(index => index.name === 'idx_asset_bindings_scope'))
+    assert.ok(assetBindingIndexes.some(index => index.name === 'idx_asset_bindings_package_identity'))
 
     const checkpointTriggers = storage.db.prepare(`
       SELECT name FROM sqlite_master
