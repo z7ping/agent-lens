@@ -283,6 +283,46 @@ test('Pi Live Adapter exposes runtime-bound workspace file references genericall
   assert.deepEqual(calls, [{ runtimeSessionId: 'runtime-1', query: 'src', limit: 12 }])
 })
 
+test('Pi Live Adapter exposes runtime diagnostics only through controlled contribution methods', async () => {
+  const calls: string[] = []
+  const service = {
+    runtimeDisclosures: async () => [{
+      contributionId: 'pi.runtime.diagnostics',
+      title: { default: 'Runtime diagnostics' },
+      fields: [{ label: { default: 'SDK' }, value: '0.84.4' }],
+      actions: [{ actionId: 'pi.runtime.retry', label: { default: 'Retry' } }],
+    }],
+    executeRuntimeAction: async (_runtimeSessionId: string, actionId: string) => {
+      calls.push(actionId)
+      return {
+        runtime: {
+          runtimeSessionId: 'runtime-1',
+          status: 'initializing' as const,
+          isStreaming: false,
+          pendingMessageCount: 0,
+        },
+      }
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.deepEqual(await adapter.runtimeDisclosures('runtime-1'), [{
+    contributionId: 'pi.runtime.diagnostics',
+    title: { default: 'Runtime diagnostics' },
+    fields: [{ label: { default: 'SDK' }, value: '0.84.4' }],
+    actions: [{ actionId: 'pi.runtime.retry', label: { default: 'Retry' } }],
+  }])
+  assert.deepEqual(await adapter.executeRuntimeAction('runtime-1', 'pi.runtime.retry'), {
+    runtime: {
+      runtimeSessionId: 'runtime-1',
+      status: 'initializing',
+      isStreaming: false,
+      pendingMessageCount: 0,
+    },
+  })
+  assert.deepEqual(calls, ['pi.runtime.retry'])
+})
+
 test('Pi Live Adapter exposes private message semantics only through controlled contribution methods', async () => {
   const calls: Array<{ actionId: string; targetEntryId: string }> = []
   const service = {
