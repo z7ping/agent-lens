@@ -206,7 +206,7 @@ export class AgentLensClientModel {
       relationshipError: '',
       selectedId: '',
       limit: INITIAL_REVIEW_LIMIT,
-      loading: true,
+      loading: false,
       loadingMore: false,
       detailLoading: false,
       detailLoadingMore: false,
@@ -1195,6 +1195,9 @@ export class AgentLensClientModel {
           error: '',
         },
       })
+      if (!this.snapshot.review.response) {
+        void this.refreshReview({ preserveDetail: true })
+      }
 
       void this.api.relationships(id).then(
         relationships => {
