@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { AGENT_LENS_PROTOCOL_VERSION } from '@agent-lens/protocol'
 import {
   loadPiEcosystemPackageDetails,
   searchPiEcosystem,
@@ -40,7 +41,7 @@ test('Pi ecosystem concurrent identical search shares one browser request while 
     source: 'npm-registry',
     fetchedAt: '2026-09-18T00:00:00.000Z',
     stale: false,
-    meta: { protocolVersion: '1.0' },
+    meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
   }))
 
   const result = await second
