@@ -38,6 +38,22 @@ test('Live event scheduler coalesces ordered text and reasoning deltas before Re
   scheduler.dispose()
 })
 
+test('Live event scheduler keeps only the latest presentation value for one tool output', () => {
+  const batches: LiveRuntimeEventDto[][] = []
+  const scheduler = new LiveEventScheduler(events => batches.push(events))
+
+  scheduler.push(event(1, { type: 'tool.output', callId: 'tool-1', name: 'read', output: '10%' }))
+  scheduler.push(event(2, { type: 'tool.output', callId: 'tool-1', name: 'read', output: '50%' }))
+  scheduler.push(event(3, { type: 'tool.output', callId: 'tool-1', name: 'read', output: '90%' }))
+  scheduler.flush()
+
+  const delivered = batches.flat()
+  assert.equal(delivered.length, 1)
+  assert.equal(delivered[0]?.normalizedEvent?.type, 'tool.output')
+  assert.equal(delivered[0]?.normalizedEvent?.type === 'tool.output' ? delivered[0].normalizedEvent.output : '', '90%')
+  scheduler.dispose()
+})
+
 test('Live event scheduler never coalesces deltas across assistant messages', () => {
   const batches: LiveRuntimeEventDto[][] = []
   const scheduler = new LiveEventScheduler(events => batches.push(events))
