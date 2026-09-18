@@ -398,26 +398,23 @@ export class AgentOverviewProjection {
             })),
           },
         } : {}),
-        installations: installations.map(item => ({
-          id: item.id,
-          ...(item.version ? { version: item.version } : {}),
-          ...(item.executable ? { executable: item.executable } : {}),
-          ...(item.configRoot ? { configRoot: item.configRoot } : {}),
-          ...(item.dataRoot ? { dataRoot: item.dataRoot } : {}),
-          ...(packageIdentityCoverageForInstallation(
+        installations: installations.map(item => {
+          const packageIdentityCoverage = packageIdentityCoverageForInstallation(
             sourceRuntimeStatuses,
             definition.manifest.sourceId,
             item.id,
-          ) ? {
-              packageIdentityCoverage: packageIdentityCoverageForInstallation(
-                sourceRuntimeStatuses,
-                definition.manifest.sourceId,
-                item.id,
-              )!,
-            } : {}),
-          firstSeenAt: item.firstSeenAt,
-          lastSeenAt: item.lastSeenAt,
-        })),
+          )
+          return {
+            id: item.id,
+            ...(item.version ? { version: item.version } : {}),
+            ...(item.executable ? { executable: item.executable } : {}),
+            ...(item.configRoot ? { configRoot: item.configRoot } : {}),
+            ...(item.dataRoot ? { dataRoot: item.dataRoot } : {}),
+            ...(packageIdentityCoverage ? { packageIdentityCoverage } : {}),
+            firstSeenAt: item.firstSeenAt,
+            lastSeenAt: item.lastSeenAt,
+          }
+        }),
         capabilities: (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
           name: item.name,
           status: item.status,
