@@ -238,7 +238,11 @@ function messageFromEditor(editorState: EditorState): LiveMessageDto {
 }
 
 function editorHasContent(editorState: EditorState): boolean {
-  return messageHasContent(messageFromEditor(editorState))
+  let hasContent = false
+  editorState.read(() => {
+    hasContent = Boolean($getRoot().getTextContent().trim())
+  })
+  return hasContent
 }
 
 function draftTextFromEditor(editorState: EditorState): string {
