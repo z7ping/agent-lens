@@ -408,11 +408,15 @@ function beginSnapshotTransfer(since, window) {
   }
 
   const entries = all.slice(start, end)
-  const olderCursor = start > 0 ? entryId(entries[0]) : undefined
-  const newerCursor = end < all.length ? entryId(entries.at(-1)) : undefined
+  const firstCursor = entries.length ? entryId(entries[0]) : undefined
+  const lastCursor = entries.length ? entryId(entries.at(-1)) : undefined
+  const olderCursor = start > 0 ? firstCursor : undefined
+  const newerCursor = end < all.length ? lastCursor : undefined
   const page = {
     hasEarlier: start > 0,
     ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
+    ...(firstCursor ? { first: firstCursor } : {}),
+    ...(lastCursor ? { last: lastCursor } : {}),
     ...(end < all.length ? { hasLater: true, ...(newerCursor ? { after: newerCursor } : {}) } : {}),
   }
 

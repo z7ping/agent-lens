@@ -208,8 +208,10 @@ class InProcessHandle implements PiRuntimeHandle {
     }
 
     const entries = all.slice(start, end)
-    const before = start > 0 ? record(entries[0]).id : undefined
-    const after = end < all.length ? record(entries.at(-1)).id : undefined
+    const first = entries.length ? record(entries[0]).id : undefined
+    const last = entries.length ? record(entries.at(-1)).id : undefined
+    const before = start > 0 ? first : undefined
+    const after = end < all.length ? last : undefined
     return {
       state: await this.state(),
       entries,
@@ -217,6 +219,8 @@ class InProcessHandle implements PiRuntimeHandle {
       page: {
         hasEarlier: start > 0,
         ...(start > 0 && typeof before === 'string' ? { before } : {}),
+        ...(typeof first === 'string' ? { first } : {}),
+        ...(typeof last === 'string' ? { last } : {}),
         ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
       },
     }

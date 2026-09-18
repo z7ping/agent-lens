@@ -160,6 +160,9 @@ export interface LiveSnapshotWindow {
 export interface LiveSnapshotPage {
   hasEarlier: boolean
   before?: string | undefined
+  /** Inclusive cursors of the returned window, used by bounded client-side page eviction. */
+  first?: string | undefined
+  last?: string | undefined
   /** Forward pagination used when reconnect recovery has more than one bounded page. */
   hasLater?: boolean | undefined
   after?: string | undefined

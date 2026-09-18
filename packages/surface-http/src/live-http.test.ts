@@ -120,7 +120,7 @@ class FakeLiveAdapter implements LiveAdapter {
     return {
       state: await this.state(runtimeSessionId),
       entries: [{ kind: 'snapshot' }],
-      page: { hasEarlier: true, before: 'entry-0', hasLater: true, after: 'entry-9' },
+      page: { hasEarlier: true, before: 'entry-0', first: 'entry-0', last: 'entry-9', hasLater: true, after: 'entry-9' },
     }
   }
 
@@ -414,7 +414,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         pendingMessageCount: 0,
       },
       entries: [{ kind: 'snapshot' }],
-      page: { hasEarlier: true, before: 'entry-0', hasLater: true, after: 'entry-9' },
+      page: { hasEarlier: true, before: 'entry-0', first: 'entry-0', last: 'entry-9', hasLater: true, after: 'entry-9' },
     })
     assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { limit: 120 })
 

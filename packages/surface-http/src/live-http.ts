@@ -353,6 +353,12 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
     if (value.before !== undefined && typeof value.before !== 'string') {
       throw httpError(500, 'Live adapter snapshot before cursor is invalid')
     }
+    if (value.first !== undefined && typeof value.first !== 'string') {
+      throw httpError(500, 'Live adapter snapshot first cursor is invalid')
+    }
+    if (value.last !== undefined && typeof value.last !== 'string') {
+      throw httpError(500, 'Live adapter snapshot last cursor is invalid')
+    }
     if (value.hasLater !== undefined && typeof value.hasLater !== 'boolean') {
       throw httpError(500, 'Live adapter snapshot hasLater is invalid')
     }
@@ -362,6 +368,8 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
     page = {
       hasEarlier: value.hasEarlier,
       ...(typeof value.before === 'string' ? { before: value.before } : {}),
+      ...(typeof value.first === 'string' ? { first: value.first } : {}),
+      ...(typeof value.last === 'string' ? { last: value.last } : {}),
       ...(typeof value.hasLater === 'boolean' ? { hasLater: value.hasLater } : {}),
       ...(typeof value.after === 'string' ? { after: value.after } : {}),
     }
