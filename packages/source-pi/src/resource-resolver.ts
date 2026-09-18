@@ -158,6 +158,43 @@ function resourceSource(resource: PiResolvedResource, cwd?: string): string {
   return `pi:resource:${scope}${context}:${resource.metadata.origin}:${resource.metadata.source}`
 }
 
+function npmPackageIdentity(source: string): string | undefined {
+  if (!source.startsWith('npm:')) return undefined
+  const spec = source.slice('npm:'.length)
+  if (!spec) return undefined
+  let versionIndex = -1
+  if (spec.startsWith('@')) {
+    const slashIndex = spec.indexOf('/')
+    if (slashIndex < 0) return undefined
+    versionIndex = spec.indexOf('@', slashIndex + 1)
+  } else {
+    versionIndex = spec.indexOf('@')
+  }
+  const packageName = (versionIndex >= 0 ? spec.slice(0, versionIndex) : spec).trim()
+  return packageName ? `npm:${packageName}` : undefined
+}
+
+function resourcePackageIdentity(resource: PiResolvedResource): string | undefined {
+  if (resource.metadata.origin !== 'package') return undefined
+  return npmPackageIdentity(resource.metadata.source)
+}
+
+export async function describePiAssetDiscoveryCoverage(
+  ctx: SourceExecutionContext,
+): Promise<{ packageIdentity: 'complete' | 'unknown' | 'unavailable' }> {
+  const executable = ctx.installation.executable
+  const agentDir = ctx.installation.configRoot
+  if (!executable || !agentDir) return { packageIdentity: 'unavailable' }
+  try {
+    const installed = await loadInstalledPiSdk(executable)
+    return resolvePiSdkResourceApi(installed.module)
+      ? { packageIdentity: 'complete' }
+      : { packageIdentity: 'unavailable' }
+  } catch {
+    return { packageIdentity: 'unknown' }
+  }
+}
+
 function resourceBindingScope(
   resource: PiResolvedResource,
   projectCwd?: string,
@@ -318,6 +355,9 @@ async function resolvedPromptsAsAssets(input: {
         ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
+        ...(resourcePackageIdentity(resource)
+          ? { packageIdentity: resourcePackageIdentity(resource) }
+          : {}),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -386,6 +426,9 @@ async function resolvedThemesAsAssets(input: {
         ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source: resourceSource(resource, input.projectCwd),
+        ...(resourcePackageIdentity(resource)
+          ? { packageIdentity: resourcePackageIdentity(resource) }
+          : {}),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -581,6 +624,7 @@ async function resolvedSkillsAsAssets(input: {
         ? 'unknown'
         : selectedByPi
     const source = resourceSource(resource, input.projectCwd)
+    const packageIdentity = resourcePackageIdentity(resource)
 
     assets.push({
       definition: { type: 'skill', canonicalName: skill.name, displayName: skill.name },
@@ -588,6 +632,7 @@ async function resolvedSkillsAsAssets(input: {
         ...resourceBindingScope(resource, input.projectCwd),
         path: dirname(skill.filePath),
         source,
+        ...(packageIdentity ? { packageIdentity } : {}),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -620,6 +665,7 @@ async function resolvedExtensionsAsAssets(input: {
     const discoverable: EffectiveResourceState = enabled === false ? false : 'unknown'
     const name = extensionName(resource.path)
     const source = resourceSource(resource, input.projectCwd)
+    const packageIdentity = resourcePackageIdentity(resource)
     assets.push({
       definition: {
         type: 'extension',
@@ -631,6 +677,7 @@ async function resolvedExtensionsAsAssets(input: {
         ...resourceBindingScope(resource, input.projectCwd),
         path: resource.path,
         source,
+        ...(packageIdentity ? { packageIdentity } : {}),
         ...(version ? { version } : {}),
       },
       states: resourceStates({
@@ -775,6 +822,8 @@ export const piResourceResolverInternals = {
   configuredResource,
   effectiveEnabled,
   resourceSource,
+  npmPackageIdentity,
+  resourcePackageIdentity,
   resourceVersion,
   promptCandidate,
   selectedPromptPaths,
