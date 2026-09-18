@@ -327,6 +327,41 @@ export interface LiveMessageActionResult {
 }
 
 
+export type LiveContributionTone = 'neutral' | 'info' | 'warning' | 'danger'
+export type LiveContributionActionTone = 'default' | 'primary' | 'danger'
+export type LiveRuntimeContributionFieldKind = 'text' | 'list' | 'code'
+
+export interface LiveRuntimeContributionField {
+  label: LiveContributionText
+  kind?: LiveRuntimeContributionFieldKind | undefined
+  value?: string | undefined
+  values?: readonly string[] | undefined
+}
+
+export interface LiveRuntimeActionContribution {
+  /** Adapter-owned opaque action id. Product Surface must not interpret it. */
+  actionId: string
+  label: LiveContributionText
+  description?: LiveContributionText | undefined
+  tone?: LiveContributionActionTone | undefined
+}
+
+export interface LiveRuntimeDisclosureContribution {
+  /** Adapter-owned stable id used only for UI identity. */
+  contributionId: string
+  title: LiveContributionText
+  summary?: LiveContributionText | undefined
+  tone?: LiveContributionTone | undefined
+  defaultExpanded?: boolean | undefined
+  fields: readonly LiveRuntimeContributionField[]
+  actions?: readonly LiveRuntimeActionContribution[] | undefined
+}
+
+export interface LiveRuntimeActionResult {
+  runtime: LiveRuntimeState
+}
+
+
 export interface LiveThinkingControl extends LiveControlDisplayInfo {
   capability: 'thinking-control'
   /** Current effective Runtime value. */
@@ -425,6 +460,15 @@ export interface LiveAdapter {
     actionId: string,
     targetEntryId: string,
   ): Promise<LiveMessageActionResult>
+  /**
+   * Controlled Product Contribution for runtime-level diagnostics/actions.
+   * Product Surface owns disclosure placement and rendering.
+   */
+  runtimeDisclosures?(runtimeSessionId: string): Promise<readonly LiveRuntimeDisclosureContribution[]>
+  executeRuntimeAction?(
+    runtimeSessionId: string,
+    actionId: string,
+  ): Promise<LiveRuntimeActionResult>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   /** Present only when the adapter declares queue. Returns the current queued messages without mutation. */
