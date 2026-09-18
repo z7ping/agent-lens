@@ -259,7 +259,13 @@ export async function startHttpSurface(
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
       if (await handleLiveRequest(request, response, url, options.lives)) return
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
-      if (await handleBackupRequest(request, response, url, options.backup)) return
+      const backgroundBackupRead = request.method === 'GET'
+        && url.pathname === '/api/v1/backups'
+        && url.searchParams.get('background') === '1'
+      const backupHandled = backgroundBackupRead
+        ? await withReadPriority(storage, 'supporting', () => handleBackupRequest(request, response, url, options.backup))
+        : await handleBackupRequest(request, response, url, options.backup)
+      if (backupHandled) return
       if (await handleCapturePolicyRequest(request, response, url, options.capturePolicy)) return
       if (await handleAgentFilesRequest(request, response, url, storage, options.sources)) return
       if (await handleIntegrationAuthorizationRequest(
