@@ -228,6 +228,9 @@ export class AgentLensApi {
   integrations(): Promise<IntegrationManagementResponseDto> {
     return requestJson('/api/v1/integrations')
   }
+  integrationPreferences(): Promise<IntegrationPreferencesResponseDto> {
+    return requestJson('/api/v1/integrations/preferences')
+  }
   updateIntegrationPreferences(
     input: IntegrationPreferenceUpdateRequestDto,
   ): Promise<IntegrationPreferencesResponseDto> {
