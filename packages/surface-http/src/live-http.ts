@@ -174,8 +174,8 @@ function shareAdapterRead<T>(
 async function describeAdapter(adapter: LiveAdapter): Promise<JsonValue> {
   return shareAdapterRead(adapter, 'descriptor', async () => {
     const [availabilityResult, runtimesResult] = await Promise.allSettled([
-      adapter.availability(),
-      adapter.list(),
+      shareAdapterRead(adapter, 'availability', () => adapter.availability()),
+      shareAdapterRead(adapter, 'runtimes', () => adapter.list()),
     ])
     const availability = availabilityResult.status === 'fulfilled'
       ? availabilityResult.value
@@ -203,7 +203,7 @@ async function connectEvents(
   runtimeSessionId: string,
 ): Promise<void> {
   requireCapability(adapter, 'stream')
-  await adapter.state(runtimeSessionId)
+  await shareAdapterRead(adapter, `state:${runtimeSessionId}`, () => adapter.state(runtimeSessionId))
   response.statusCode = 200
   response.setHeader('content-type', 'text/event-stream; charset=utf-8')
   response.setHeader('cache-control', 'no-cache, no-transform')
@@ -343,7 +343,11 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'state' && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(await adapter.state(runtimeSessionId)))
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `state:${runtimeSessionId}`,
+        () => adapter.state(runtimeSessionId),
+      )))
       return true
     }
     if (action === 'snapshot' && request.method === 'GET') {
