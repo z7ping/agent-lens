@@ -6,6 +6,8 @@ import {
   appendOptimisticLiveUserMessage,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
+  projectLiveTaskRounds,
+  liveTaskRoundEstimate,
   reduceLiveTaskEvent,
 } from './live-task-projection'
 
@@ -60,4 +62,37 @@ test('Live input history comes from submitted user messages and keeps chronologi
   assert.deepEqual(projectLiveInputHistory(items), ['first', 'second', 'second'])
   assert.deepEqual(appendLiveInputHistory(['first'], ' second '), ['first', 'second'])
   assert.deepEqual(appendLiveInputHistory(['a', 'b'], 'c', 2), ['b', 'c'])
+})
+
+
+test('generic Live projection restores semantic rounds from user-message boundaries', () => {
+  const items = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'first task', streaming: false, at: '2026-09-17T12:00:00.000Z' },
+    { id: 'a1', kind: 'message' as const, role: 'assistant' as const, text: 'done', streaming: false, at: '2026-09-17T12:00:01.000Z' },
+    { id: 't1', kind: 'tool' as const, callId: 'tool-1', name: 'read', status: 'success' as const, at: '2026-09-17T12:00:02.000Z' },
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: 'second task', streaming: false, at: '2026-09-17T12:00:03.000Z' },
+    { id: 'r2', kind: 'thinking' as const, text: 'working', streaming: true, at: '2026-09-17T12:00:04.000Z' },
+  ]
+
+  const rounds = projectLiveTaskRounds(items)
+  assert.equal(rounds.length, 2)
+  assert.equal(rounds[0]?.model.ordinal, 1)
+  assert.equal(rounds[0]?.model.preview, 'first task')
+  assert.equal(rounds[0]?.model.toolCount, 1)
+  assert.equal(rounds[0]?.model.state, 'settled')
+  assert.equal(rounds[1]?.model.ordinal, 2)
+  assert.equal(rounds[1]?.model.preview, 'second task')
+  assert.equal(rounds[1]?.model.state, 'running')
+  assert.ok(liveTaskRoundEstimate(rounds[0]!) >= 180)
+})
+
+test('generic Live projection preserves pre-user activity as a background round', () => {
+  const rounds = projectLiveTaskRounds([
+    { id: 'a0', kind: 'message', role: 'assistant', text: 'restored output', streaming: false },
+    { id: 'u1', kind: 'message', role: 'user', text: 'continue', streaming: false },
+  ])
+  assert.equal(rounds.length, 2)
+  assert.equal(rounds[0]?.model.ordinal, undefined)
+  assert.equal(rounds[0]?.items[0]?.id, 'a0')
+  assert.equal(rounds[1]?.model.ordinal, 1)
 })
