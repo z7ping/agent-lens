@@ -464,6 +464,10 @@ export class PiLiveAdapter implements LiveAdapter {
     )
   }
 
+  queueState(runtimeSessionId: string) {
+    return this.service.queueState(runtimeSessionId)
+  }
+
   clearQueue(runtimeSessionId: string) {
     return this.service.clearQueue(runtimeSessionId)
   }
