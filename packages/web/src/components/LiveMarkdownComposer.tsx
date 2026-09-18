@@ -576,12 +576,12 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
   }, [commands, query])
 
   useEffect(() => {
-    if (query === null) {
-      setActiveIndex(0)
-      return
-    }
+    setActiveIndex(0)
+  }, [query])
+
+  useEffect(() => {
     setActiveIndex(index => Math.min(index, Math.max(0, matches.length - 1)))
-  }, [matches.length, query])
+  }, [matches.length])
 
   useEffect(() => editor.registerUpdateListener(({ editorState }) => {
     const next = commandQueryFromEditor(editorState)
@@ -597,7 +597,7 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
       const root = editor.getRootElement()
       if (!root) return
       const rect = root.getBoundingClientRect()
-      const width = Math.min(Math.max(280, rect.width), Math.max(280, window.innerWidth - 16))
+      const width = Math.min(Math.max(280, rect.width), Math.max(176, window.innerWidth - 16))
       const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
       setPosition({
         position: 'fixed',
