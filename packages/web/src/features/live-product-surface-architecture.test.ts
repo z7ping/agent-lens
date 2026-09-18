@@ -55,3 +55,25 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /liveApi\.snapshot\([^\n]+leafIdRef\.current/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })
+
+
+test('LiveTask 两列壳层必须同时保留通用会话栏与主任务区', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const styles = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
+
+  assert.match(styles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/)
+  assert.match(liveTask, /<aside className="pi-live-sessions"/)
+  assert.match(liveTask, /setRuntimes\(matched\.runtimes\)/)
+  assert.match(liveTask, /\/review\/live\/\$\{encodeURIComponent\(current\.liveId\)\}\/\$\{encodeURIComponent\(runtime\.runtimeSessionId\)\}/)
+  assert.ok(
+    liveTask.indexOf('<aside className="pi-live-sessions"') < liveTask.indexOf('<TaskSurface mode="live"'),
+    'Live session rail must occupy the first grid column before TaskSurface',
+  )
+})
+
+test('LiveTask 会话栏保持 agent-neutral，不回退到 Pi 专属 client', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /product\.productId/)
+  assert.match(liveTask, /product\?\.displayName|product\.displayName/)
+  assert.doesNotMatch(liveTask, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
+})
