@@ -519,6 +519,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const historyLoadSentinelRef = useRef<HTMLDivElement>(null)
   const historyNewerSentinelRef = useRef<HTMLDivElement>(null)
   const lastReaderScrollTopRef = useRef(0)
+  const historyAtLatestRef = useRef(true)
   const followControllerRef = useRef(new LiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
@@ -554,6 +555,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setHistoryPagingArmed(false)
     setHistoryPagingDirection(null)
     lastReaderScrollTopRef.current = 0
+    historyAtLatestRef.current = true
     setMessageActions([])
     setMessageActionPending(null)
     setRuntimeDisclosures([])
@@ -609,6 +611,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
         setProjection(nextProjection)
         setHistoryPage(snapshot.page ?? { hasEarlier: false })
+        historyAtLatestRef.current = snapshot.page?.hasLater !== true
         setInputHistory(projectLiveInputHistory(projectedItems))
         snapshotBaseActiveCountRef.current = nextProjection.active.length
         leafIdRef.current = snapshot.leafId ?? undefined
@@ -689,6 +692,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
     const recoverOnce = async (mode: 'live' | 'settle') => {
       if (!product.capabilities.includes('recovery')) return
+      if (!historyAtLatestRef.current) {
+        if (mode === 'settle') setNewRecords(true)
+        return
+      }
       const generation = ++recoveryGeneration
       try {
         const queueRevision = queueRevisionRef.current
@@ -779,11 +786,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       envelope => {
         setConnected(true)
         if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
-          setProjection(previous => ({
-            ...previous,
-            active: reduceLiveTaskEvent(previous.active, envelope),
-          }))
-          if (!followControllerRef.current.isFollowing) setNewRecords(true)
+          if (historyAtLatestRef.current) {
+            setProjection(previous => ({
+              ...previous,
+              active: reduceLiveTaskEvent(previous.active, envelope),
+            }))
+          }
+          if (!historyAtLatestRef.current || !followControllerRef.current.isFollowing) setNewRecords(true)
         }
         setState(previous => runtimeStateFromEvent(previous, envelope))
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
@@ -876,7 +885,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
           if (product.capabilities.includes('recovery')) {
             void recover('settle')
-          } else {
+          } else if (historyAtLatestRef.current) {
             setProjection(previous => ({
               stable: previous.active.length
                 ? [...previous.stable, ...previous.active]
@@ -981,15 +990,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         { edge, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
       const projected = projectLiveSnapshotEntries(snapshot.entries)
-      const nextProjection = splitLiveProjectionItems(projected, snapshot.state.isStreaming)
+      const nextProjection = splitLiveProjectionItems(projected, edge === 'latest' && snapshot.state.isStreaming)
       roundProjectorRef.current.reset()
       setProjection(nextProjection)
       setHistoryPage(snapshot.page ?? { hasEarlier: false })
+      historyAtLatestRef.current = snapshot.page?.hasLater !== true
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setInputHistory(projectLiveInputHistory(projected))
       snapshotBaseActiveCountRef.current = nextProjection.active.length
-      leafIdRef.current = snapshot.leafId ?? undefined
+      if (edge === 'latest') leafIdRef.current = snapshot.leafId ?? undefined
       setSyncError('')
       if (edge === 'latest') {
         followControllerRef.current.restore()
@@ -1036,12 +1046,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         stable: prependUniqueLiveProjectionItems(older, previous.stable),
         active: previous.active,
       }))
-      setHistoryPage(previous => ({
-        hasEarlier: snapshot.page?.hasEarlier ?? false,
-        ...(snapshot.page?.before ? { before: snapshot.page.before } : {}),
-        ...(previous?.hasLater ? { hasLater: true } : {}),
-        ...(previous?.after ? { after: previous.after } : {}),
-      }))
+      setHistoryPage(previous => {
+        const next = {
+          hasEarlier: snapshot.page?.hasEarlier ?? false,
+          ...(snapshot.page?.before ? { before: snapshot.page.before } : {}),
+          ...(previous?.hasLater ? { hasLater: true as const } : {}),
+          ...(previous?.after ? { after: previous.after } : {}),
+        }
+        historyAtLatestRef.current = next.hasLater !== true
+        return next
+      })
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setSyncError('')
@@ -1072,17 +1086,29 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         { after: historyPage.after, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
       const newer = projectLiveSnapshotEntries(snapshot.entries)
+      const reachedLatest = snapshot.page?.hasLater !== true
+      const newerProjection = splitLiveProjectionItems(newer, reachedLatest && snapshot.state.isStreaming)
       roundProjectorRef.current.reset()
       setProjection(previous => ({
-        stable: appendUniqueLiveProjectionItems(previous.stable, newer),
-        active: previous.active,
+        stable: appendUniqueLiveProjectionItems(previous.stable, newerProjection.stable),
+        active: reachedLatest
+          ? appendUniqueLiveProjectionItems(previous.active, newerProjection.active)
+          : previous.active,
       }))
-      setHistoryPage(previous => ({
-        hasEarlier: previous?.hasEarlier ?? false,
-        ...(previous?.before ? { before: previous.before } : {}),
-        ...(snapshot.page?.hasLater ? { hasLater: true } : {}),
-        ...(snapshot.page?.after ? { after: snapshot.page.after } : {}),
-      }))
+      setHistoryPage(previous => {
+        const next = {
+          hasEarlier: previous?.hasEarlier ?? false,
+          ...(previous?.before ? { before: previous.before } : {}),
+          ...(snapshot.page?.hasLater ? { hasLater: true as const } : {}),
+          ...(snapshot.page?.after ? { after: snapshot.page.after } : {}),
+        }
+        historyAtLatestRef.current = next.hasLater !== true
+        return next
+      })
+      if (reachedLatest) {
+        leafIdRef.current = snapshot.leafId ?? leafIdRef.current
+        setNewRecords(false)
+      }
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setSyncError('')
