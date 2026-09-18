@@ -475,6 +475,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }>({ stable: [], active: [] })
   const [historyPage, setHistoryPage] = useState<LiveSnapshotDto['page'] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyPagingArmed, setHistoryPagingArmed] = useState(false)
   const [messageActions, setMessageActions] = useState<LiveMessageActionContributionDto[]>([])
   const [messageActionPending, setMessageActionPending] = useState<string | null>(null)
   const [runtimeDisclosures, setRuntimeDisclosures] = useState<LiveRuntimeDisclosureContributionDto[]>([])
@@ -539,6 +540,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setProjection({ stable: [], active: [] })
     setHistoryPage(null)
     setHistoryLoading(false)
+    setHistoryPagingArmed(false)
     setMessageActions([])
     setMessageActionPending(null)
     setRuntimeDisclosures([])
@@ -937,6 +939,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
   const markReaderUserIntent = useCallback(() => {
     followControllerRef.current.markUserIntent()
+    setHistoryPagingArmed(true)
   }, [])
 
   const onReaderScroll = useCallback(() => {
@@ -959,7 +962,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const loadEarlier = useCallback(async () => {
-    if (!current || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
+    if (!current || !historyPagingArmed || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
     const reader = readerRef.current
     const previousScrollHeight = reader?.scrollHeight ?? 0
     const previousScrollTop = reader?.scrollTop ?? 0
@@ -991,19 +994,20 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setSyncError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setHistoryLoading(false)
+      setHistoryPagingArmed(false)
     }
-  }, [current, historyLoading, historyPage?.before, historyPage?.hasEarlier])
+  }, [current, historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed])
 
   useEffect(() => {
     const sentinel = historyLoadSentinelRef.current
     const reader = readerRef.current
-    if (!sentinel || !reader || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
+    if (!sentinel || !reader || !historyPagingArmed || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) void loadEarlier()
     }, { root: reader, rootMargin: '360px 0px 0px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [historyLoading, historyPage?.before, historyPage?.hasEarlier, loadEarlier])
+  }, [historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed, loadEarlier])
 
   const canQueueWhileStreaming = Boolean(
     product?.capabilities.includes('steer') || product?.capabilities.includes('queue'),
