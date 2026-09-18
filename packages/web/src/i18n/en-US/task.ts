@@ -82,6 +82,14 @@ export const englishTaskMessages: LocaleMessagesDto = {
       streamingMode: 'Streaming message mode',
       steer: 'Steer now',
       followUp: 'Queue follow-up',
+      queue: {
+        edit: 'Edit',
+        withdraw: 'Withdraw',
+        steer: 'Steer next',
+        followUp: 'Continue after completion',
+        joining: 'Joining queue',
+        queued: 'Queued',
+      },
       extension: {
         title: 'Confirmation required',
         reject: 'Reject',
