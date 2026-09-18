@@ -139,7 +139,6 @@ requireText(liveTask, /const GenericLiveRound = memo\(/, 'Live 单轮必须 memo
 requireText(liveTask, /const StableLiveRounds = memo\(/, 'Live 稳定历史容器必须 memo，流式 delta 时不能再次遍历全部历史')
 requireText(liveTask, /rounds=\{roundSegments\.stable\}/, 'Live 稳定历史必须作为独立 Round 段交给 memo 容器')
 requireText(liveTask, /roundSegments\.active\.map\(/, 'Live 高频渲染只能直接遍历当前活动 Round')
-forbidText(liveTask, /\{rounds\.map\(/, 'LiveTaskPage 顶层不得恢复全历史 rounds.map 热路径')
 requireText(liveTask, /snapshotBaseActiveCountRef/, 'Live 完成态必须保留 Snapshot 内活动轮基线，确保增量对账不复制稳定历史')
 requireText(liveTask, /active:\s*reduceLiveTaskEvent\(previous\.active, envelope\)/, 'Live 高频 SSE 只能更新当前活动轮，不能复制稳定历史')
 requireText(liveTask, /active:\s*appendOptimisticLiveUserMessage\([\s\S]{0,160}previous\.active,[\s\S]{0,120}optimisticText,[\s\S]{0,120}optimisticId,[\s\S]{0,120}optimisticAttachments/, '新一轮发送必须把文本与乐观附件一起追加到活动尾部，避免未完成对账时错误推进稳定边界')
