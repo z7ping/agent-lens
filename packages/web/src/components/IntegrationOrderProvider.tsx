@@ -7,7 +7,7 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react'
-import type { IntegrationManagementResponseDto } from '@agent-lens/protocol'
+import type { IntegrationManagementResponseDto, IntegrationPreferencesResponseDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { readLegacyAgentOrderPreference } from '../client/preferences'
 
@@ -33,10 +33,12 @@ export function useIntegrationOrder(): IntegrationOrderContextValue {
 
 export function IntegrationOrderProvider({
   management,
+  preferences,
   model,
   children,
 }: PropsWithChildren<{
   management: IntegrationManagementResponseDto | null
+  preferences: IntegrationPreferencesResponseDto | null
   model: AgentLensClientModel
 }>) {
   const legacyOrder = useRef(readLegacyAgentOrderPreference())
@@ -47,10 +49,11 @@ export function IntegrationOrderProvider({
     () => new Set(management?.items.map(item => item.integrationId) ?? []),
     [management],
   )
-  const serverOrder = management?.preferences.displayOrder ?? []
+  const preferenceState = preferences?.preferences ?? management?.preferences
+  const serverOrder = preferenceState?.displayOrder ?? []
   const pendingLegacyMigration = Boolean(
-    management
-    && !management.preferences.displayOrderConfigured
+    preferenceState
+    && !preferenceState.displayOrderConfigured
     && legacyOrder.current.length,
   )
   const ordered = optimisticOrder
@@ -61,14 +64,14 @@ export function IntegrationOrderProvider({
         : legacyOrder.current)
 
   useEffect(() => {
-    if (!management || management.preferences.displayOrderConfigured || migrationAttempted.current) return
+    if (!preferenceState || preferenceState.displayOrderConfigured || migrationAttempted.current) return
     const migrationOrder = legacyOrder.current
     if (!migrationOrder.length) return
     migrationAttempted.current = true
     void model.updateIntegrationPreferences({ displayOrder: migrationOrder }).catch(() => {
       migrationAttempted.current = false
     })
-  }, [management, model])
+  }, [model, preferenceState])
 
   const persistOrder = (next: string[]) => {
     setOptimisticOrder(next)
