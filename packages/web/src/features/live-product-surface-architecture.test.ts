@@ -156,7 +156,7 @@ test('LiveTask migration keeps the full session-view shell instead of only the g
   assert.match(liveTask, /<aside className="pi-live-sessions"/)
   assert.match(liveTask, /setRuntimes\(matched\.runtimes\)/)
   assert.match(liveTask, /LiveTaskRoundProjector/)
-  assert.match(liveTask, /roundProjectorRef\.current\.project\(items, projectionStableCount\)/)
+  assert.match(liveTask, /roundProjectorRef\.current\.projectSegments\(projection\.stable, projection\.active\)/)
   assert.match(liveTaskProjection, /liveTaskStableRoundPrefixLength/)
   assert.match(liveTaskProjection, /liveEventChangesTaskTranscript/)
   assert.match(liveTaskRenderBoundary, /sameStableLiveTaskRoundProps/)
