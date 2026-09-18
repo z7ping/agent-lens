@@ -362,14 +362,14 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 }
 .live-runtime-disclosure-field > b {
   color: var(--al-muted);
-  font-size: var(--al-font-size-sm);
+  font-size: 12px;
   font-weight: 650;
 }
 .live-runtime-disclosure-field > span,
 .live-runtime-disclosure-field li {
   min-width: 0;
   color: var(--al-ink-2);
-  font-size: var(--al-font-size-sm);
+  font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
