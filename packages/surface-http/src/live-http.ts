@@ -128,13 +128,15 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
   const row = value as Record<string, unknown>
   const runtimeSessionId = typeof row.runtimeSessionId === 'string' ? row.runtimeSessionId.trim() : ''
   const status = row.status
-  const allowedStatus = status === 'initializing'
-    || status === 'ready'
-    || status === 'failed'
-    || status === 'terminating'
-    || status === 'terminated'
-  if (!runtimeSessionId || runtimeSessionId.length > 512 || !allowedStatus) {
+  if (!runtimeSessionId || runtimeSessionId.length > 512) {
     throw httpError(500, 'Live message action returned an invalid runtime identity')
+  }
+  if (status !== 'initializing'
+    && status !== 'ready'
+    && status !== 'failed'
+    && status !== 'terminating'
+    && status !== 'terminated') {
+    throw httpError(500, 'Live message action returned an invalid runtime status')
   }
   if (typeof row.isStreaming !== 'boolean'
     || typeof row.pendingMessageCount !== 'number'
