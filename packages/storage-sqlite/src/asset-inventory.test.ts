@@ -39,6 +39,7 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
       installationId: 'installation:codex',
       path: '/tmp/.codex/skills/review',
       source: 'skills-dir',
+      packageIdentity: 'npm:@example/review-skill',
       scope: 'project',
       scopeRoot: '/tmp/project',
       version: '1.2.0',
@@ -64,6 +65,7 @@ test('asset inventory reader returns definitions, bindings and latest-first stat
     assert.equal(rows.length, 1)
     assert.equal(rows[0]?.definition.canonicalName, 'review')
     assert.equal(rows[0]?.binding.version, '1.2.0')
+    assert.equal(rows[0]?.binding.packageIdentity, 'npm:@example/review-skill')
     assert.equal(rows[0]?.binding.scope, 'project')
     assert.equal(rows[0]?.binding.scopeRoot, '/tmp/project')
     assert.deepEqual(rows[0]?.states.map(state => [state.id, state.value]), [
