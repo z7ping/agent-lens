@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
@@ -6,10 +6,15 @@ import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
+export type TaskMessageAttachment = ReviewMessageAttachmentDto & {
+  /** Web-local optimistic preview. Never crosses the Live/Review protocol boundary. */
+  previewUrl?: string | undefined
+}
+
 export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
-  attachments?: readonly ReviewMessageAttachmentDto[] | undefined
+  attachments?: readonly TaskMessageAttachment[] | undefined
   author?: string
   time?: string | undefined
   meta?: ReactNode
@@ -44,6 +49,12 @@ export function TaskMessage({
   const [canCollapse, setCanCollapse] = useState(false)
   const [collapsedHeight, setCollapsedHeight] = useState<number>()
   const surfaceRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => () => {
+    for (const attachment of attachments) {
+      if (attachment.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(attachment.previewUrl)
+    }
+  }, [attachments])
 
   const measure = useCallback(() => {
     const element = surfaceRef.current
@@ -100,12 +111,12 @@ export function TaskMessage({
         <span aria-hidden="true"/>
         <span aria-hidden="true"/>
       </div> : <>
-        {attachments.some(attachment => attachment.type === 'image' && attachment.dataUrl) && <div className="task-message-attachments">
-          {attachments.map((attachment, index) => attachment.type === 'image' && attachment.dataUrl
+        {attachments.some(attachment => attachment.type === 'image' && (attachment.previewUrl || attachment.dataUrl)) && <div className="task-message-attachments">
+          {attachments.map((attachment, index) => attachment.type === 'image' && (attachment.previewUrl || attachment.dataUrl)
             ? <img
                 key={`${attachment.type}:${attachment.name ?? index}:${index}`}
                 className="task-message-attachment-image"
-                src={attachment.dataUrl}
+                src={attachment.previewUrl || attachment.dataUrl}
                 alt={attachment.name ?? t('message.imageAttachment')}
                 loading="lazy"
                 decoding="async"
