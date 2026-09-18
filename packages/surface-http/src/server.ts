@@ -240,11 +240,17 @@ export async function startHttpSurface(
       finished = true
       const durationMs = performance.now() - startedAt
       if (!route.startsWith('/api/') || (durationMs < SLOW_HTTP_REQUEST_LOG_MS && response.statusCode < 500)) return
+      const contentLength = response.getHeader('content-length')
       console.warn('[AgentLens] HTTP request observed', {
         method: request.method ?? 'UNKNOWN',
         route,
         statusCode: response.statusCode,
         durationMs: Math.round(durationMs),
+        ...(typeof contentLength === 'number'
+          ? { responseBytes: contentLength }
+          : typeof contentLength === 'string' && /^\d+$/.test(contentLength)
+            ? { responseBytes: Number(contentLength) }
+            : {}),
       })
     })
     response.once('close', () => {
