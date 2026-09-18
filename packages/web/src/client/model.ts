@@ -20,6 +20,7 @@ import type {
   ReviewDetailFilter,
   ReviewResponseDto,
   ReviewSessionDetailDto,
+  ReviewSessionSummaryDto,
   SessionRelationshipResponseDto,
   SourceRecordResponseDto,
   ToolAssetUsageResponseDto,
@@ -131,6 +132,45 @@ function mergeReviewDetail(current: ReviewSessionDetailDto, next: ReviewSessionD
   }
 }
 
+function reviewSummaryMatchesFilters(item: ReviewSessionSummaryDto, filters: ReviewFilters): boolean {
+  if (item.sessionActivity === 'system-activity') return false
+  if (filters.sourceIds !== null && !item.sourceIds.some(sourceId => filters.sourceIds!.includes(sourceId))) return false
+  if (filters.projectId && item.projectId !== filters.projectId) return false
+  if (filters.status === 'with-errors' && !item.hasErrors) return false
+  if (filters.status === 'clean' && item.hasErrors) return false
+
+  const endedAt = Date.parse(item.endedAt)
+  if (filters.range !== 'all' && Number.isFinite(endedAt)) {
+    const now = new Date()
+    if (filters.range === 'today') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+      if (endedAt < start) return false
+    } else {
+      const days = filters.range === '7d' ? 7 : 30
+      if (endedAt < now.getTime() - days * 86_400_000) return false
+    }
+  }
+
+  const search = filters.search.trim().toLowerCase()
+  if (search) {
+    const haystack = [
+      item.title,
+      item.preview,
+      item.projectName,
+      item.workspacePath,
+      ...item.sourceIds,
+    ].filter(Boolean).join('\n').toLowerCase()
+    if (!haystack.includes(search)) return false
+  }
+  return true
+}
+
+function sortReviewSummaries(items: ReviewSessionSummaryDto[]): ReviewSessionSummaryDto[] {
+  return items.sort((left, right) =>
+    right.endedAt.localeCompare(left.endedAt) || left.id.localeCompare(right.id)
+  )
+}
+
 export class AgentLensClientModel {
   private snapshot: ClientSnapshot = {
     health: null,
@@ -185,6 +225,9 @@ export class AgentLensClientModel {
   private reviewInFlight: Promise<void> | null = null
   private reviewRequestDirty = false
   private reviewLiveDirty = false
+  private reviewPaginationDirty = false
+  private readonly pendingReviewSummaryIds = new Set<string>()
+  private reviewSummaryPatchTimer: ReturnType<typeof setTimeout> | null = null
   private reviewActive = false
   private facetsInFlight: Promise<void> | null = null
   private agentsInFlight: Promise<void> | null = null
@@ -272,11 +315,14 @@ export class AgentLensClientModel {
     this.reviewRefreshDueAt = null
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
+    if (this.reviewSummaryPatchTimer) clearTimeout(this.reviewSummaryPatchTimer)
+    this.pendingReviewSummaryIds.clear()
     if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
     if (this.visibilityListener && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.visibilityListener)
     this.refreshTimer = null
     this.detailTimer = null
     this.reviewSearchTimer = null
+    this.reviewSummaryPatchTimer = null
     this.integrationDiscoveryTimer = null
     this.integrationDiscoveryPolls = 0
     this.visibilityListener = null
@@ -669,6 +715,85 @@ export class AgentLensClientModel {
     }, wait)
   }
 
+  private scheduleReviewSummaryPatch(logicalSessionId: string): void {
+    if (!logicalSessionId) {
+      this.scheduleReviewRefresh(0)
+      return
+    }
+    this.pendingReviewSummaryIds.add(logicalSessionId)
+    if (!this.reviewActive || !this.snapshot.review.response) {
+      this.reviewLiveDirty = true
+      return
+    }
+    if (this.pendingReviewSummaryIds.size > INITIAL_REVIEW_LIMIT) {
+      this.pendingReviewSummaryIds.clear()
+      this.scheduleReviewRefresh(0)
+      return
+    }
+    if (this.reviewSummaryPatchTimer) return
+    this.reviewSummaryPatchTimer = setTimeout(() => {
+      this.reviewSummaryPatchTimer = null
+      void this.flushReviewSummaryPatches()
+    }, 100)
+  }
+
+  private async flushReviewSummaryPatches(): Promise<void> {
+    if (!this.reviewActive || !this.snapshot.review.response) {
+      this.reviewLiveDirty = true
+      return
+    }
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.reviewLiveDirty = true
+      return
+    }
+
+    const ids = [...this.pendingReviewSummaryIds]
+    this.pendingReviewSummaryIds.clear()
+    if (!ids.length) return
+    const filters = this.snapshot.review.filters
+    const results = await Promise.allSettled(ids.map(id => this.api.reviewSummary(id)))
+    if (results.some(result => result.status === 'rejected')) {
+      this.scheduleReviewRefresh(0)
+      return
+    }
+
+    const latest = this.snapshot.review
+    if (!latest.response) return
+    const items = new Map(latest.response.items.map(item => [item.id, item]))
+    let changed = false
+    for (let index = 0; index < ids.length; index += 1) {
+      const id = ids[index]!
+      const result = results[index]!
+      const summary = result.status === 'fulfilled' ? result.value : null
+      const existed = items.has(id)
+      const visible = summary ? reviewSummaryMatchesFilters(summary, filters) : false
+      if (summary && visible) {
+        items.set(id, summary)
+        changed = true
+      } else if (existed) {
+        items.delete(id)
+        changed = true
+      }
+    }
+    if (!changed) return
+
+    const currentLimit = Math.max(INITIAL_REVIEW_LIMIT, latest.limit, latest.response.items.length)
+    const merged = sortReviewSummaries([...items.values()]).slice(0, currentLimit)
+    this.reviewPaginationDirty = true
+    this.publish({
+      ...this.snapshot,
+      review: {
+        ...latest,
+        response: {
+          ...latest.response,
+          items: merged,
+          meta: { ...latest.response.meta, count: merged.length, generatedAt: new Date().toISOString() },
+        },
+        limit: merged.length,
+      },
+    })
+  }
+
   setReviewFilters(patch: Partial<ReviewFilters>): void {
     const filters = { ...this.snapshot.review.filters, ...patch }
     const keys = Object.keys(patch)
@@ -701,6 +826,10 @@ export class AgentLensClientModel {
   }
 
   async loadMoreReview(): Promise<void> {
+    if (this.reviewPaginationDirty) {
+      await this.refreshReview({ preserveDetail: true })
+      if (this.reviewPaginationDirty) return
+    }
     const current = this.snapshot.review
     const cursor = current.response?.meta.nextCursor
     if (current.loading || current.loadingMore || !current.response?.meta.hasMore || !cursor) return
@@ -962,6 +1091,7 @@ export class AgentLensClientModel {
       if (!selectedId || (!preserveDetail && !response.items.some(item => item.id === selectedId))) {
         selectedId = response.items[0]?.id ?? ''
       }
+      this.reviewPaginationDirty = false
       this.publish({
         ...this.snapshot,
         review: {
@@ -1013,30 +1143,38 @@ export class AgentLensClientModel {
       },
     })
     try {
-      const detailRequest = this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
-        .then(detail => detail.interactions.length > 0 || !detail.interactionIndex?.length
-          ? detail
-          : this.api.reviewDetail(id, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE }))
-      const relationshipsRequest = this.api.relationships(id).then(
-        relationships => ({ relationships, relationshipError: '' }),
-        reason => ({
-          relationships: null,
-          relationshipError: reason instanceof Error ? reason.message : String(reason),
-        }),
-      )
-      const [detail, relationshipState] = await Promise.all([detailRequest, relationshipsRequest])
+      const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
         review: {
           ...this.snapshot.review,
           detail,
-          relationships: relationshipState.relationships,
-          relationshipError: relationshipState.relationshipError,
           detailLoading: false,
           error: '',
         },
       })
+
+      void this.api.relationships(id).then(
+        relationships => {
+          if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+          this.publish({
+            ...this.snapshot,
+            review: { ...this.snapshot.review, relationships, relationshipError: '' },
+          })
+        },
+        reason => {
+          if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+          this.publish({
+            ...this.snapshot,
+            review: {
+              ...this.snapshot.review,
+              relationships: null,
+              relationshipError: reason instanceof Error ? reason.message : String(reason),
+            },
+          })
+        },
+      )
     } catch (error) {
       if (generation !== this.detailGeneration) return
       this.publish({
@@ -1097,9 +1235,13 @@ export class AgentLensClientModel {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
       if (event.type === 'session.updated') {
-        // Session Summary is materialized now; only a short coalescing window is
-        // needed before refreshing the Task Center list.
-        this.scheduleReviewRefresh(100)
+        // The summary is already materialized. Patch only this Session instead of
+        // re-querying the complete first window.
+        if (this.refreshTimer) clearTimeout(this.refreshTimer)
+        this.refreshTimer = null
+        this.reviewRefreshDueAt = null
+        this.reviewLiveDirty = false
+        this.scheduleReviewSummaryPatch(event.logicalSessionId)
       } else if (event.type === 'observation.committed') {
         const updatesSelectedSession = this.reviewActive
           && Boolean(event.logicalSessionId)
