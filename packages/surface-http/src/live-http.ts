@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import {
-  LIVE_HISTORY_INDEX_MAX_LIMIT,
+  LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT,
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
 } from '@agent-lens/core'
@@ -360,6 +360,21 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
     if (value.last !== undefined && typeof value.last !== 'string') {
       throw httpError(500, 'Live adapter snapshot last cursor is invalid')
     }
+    if (value.rounds !== undefined) {
+      if (!value.rounds || typeof value.rounds !== 'object' || Array.isArray(value.rounds)) {
+        throw httpError(500, 'Live adapter snapshot rounds metadata is invalid')
+      }
+      const rounds = value.rounds as Record<string, unknown>
+      if (!Number.isSafeInteger(rounds.total) || Number(rounds.total) < 0) {
+        throw httpError(500, 'Live adapter snapshot rounds total is invalid')
+      }
+      if (rounds.firstOrdinal !== undefined && (!Number.isSafeInteger(rounds.firstOrdinal) || Number(rounds.firstOrdinal) < 1)) {
+        throw httpError(500, 'Live adapter snapshot first round ordinal is invalid')
+      }
+      if (rounds.lastOrdinal !== undefined && (!Number.isSafeInteger(rounds.lastOrdinal) || Number(rounds.lastOrdinal) < 1)) {
+        throw httpError(500, 'Live adapter snapshot last round ordinal is invalid')
+      }
+    }
     if (value.hasLater !== undefined && typeof value.hasLater !== 'boolean') {
       throw httpError(500, 'Live adapter snapshot hasLater is invalid')
     }
@@ -371,6 +386,17 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
       ...(typeof value.before === 'string' ? { before: value.before } : {}),
       ...(typeof value.first === 'string' ? { first: value.first } : {}),
       ...(typeof value.last === 'string' ? { last: value.last } : {}),
+      ...(value.rounds && typeof value.rounds === 'object' && !Array.isArray(value.rounds) ? {
+        rounds: {
+          total: Number((value.rounds as Record<string, unknown>).total),
+          ...(Number.isSafeInteger((value.rounds as Record<string, unknown>).firstOrdinal)
+            ? { firstOrdinal: Number((value.rounds as Record<string, unknown>).firstOrdinal) }
+            : {}),
+          ...(Number.isSafeInteger((value.rounds as Record<string, unknown>).lastOrdinal)
+            ? { lastOrdinal: Number((value.rounds as Record<string, unknown>).lastOrdinal) }
+            : {}),
+        },
+      } : {}),
       ...(typeof value.hasLater === 'boolean' ? { hasLater: value.hasLater } : {}),
       ...(typeof value.after === 'string' ? { after: value.after } : {}),
     }
@@ -391,8 +417,8 @@ function normalizeHistoryIndex(value: unknown) {
   if (!Number.isSafeInteger(row.total) || Number(row.total) < 0 || !Array.isArray(row.items)) {
     throw httpError(500, 'Live adapter returned invalid history index metadata')
   }
-  if (row.items.length > LIVE_HISTORY_INDEX_MAX_LIMIT) {
-    throw httpError(500, 'Live adapter history index exceeded the bounded limit')
+  if (row.items.length > LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT) {
+    throw httpError(500, 'Live adapter history index exceeded the per-query bounded limit')
   }
   const items = row.items.map(raw => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -840,15 +866,30 @@ export async function handleLiveRequest(
       if (!adapter.historyIndex) {
         throw httpError(409, `${adapter.manifest.displayName} does not expose Live history index`)
       }
-      const requested = Number(url.searchParams.get('limit') ?? LIVE_HISTORY_INDEX_MAX_LIMIT)
-      if (!Number.isInteger(requested) || requested < 2) {
-        throw httpError(400, 'Live history index limit must be an integer >= 2')
+      const rawFrom = url.searchParams.get('from')
+      const rawLimit = url.searchParams.get('limit')
+      const cursor = optionalString(url.searchParams.get('cursor'))
+      const fromOrdinal = rawFrom === null ? undefined : Number(rawFrom)
+      const requestedLimit = rawLimit === null ? 0 : Number(rawLimit)
+      if (fromOrdinal !== undefined && (!Number.isInteger(fromOrdinal) || fromOrdinal < 1)) {
+        throw httpError(400, 'Live history index from must be a positive integer')
       }
-      const limit = Math.min(LIVE_HISTORY_INDEX_MAX_LIMIT, requested)
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 0) {
+        throw httpError(400, 'Live history index limit must be a non-negative integer')
+      }
+      if (cursor && fromOrdinal !== undefined) {
+        throw httpError(400, 'Live history index accepts cursor or from, not both')
+      }
+      const limit = Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, requestedLimit)
+      const query = {
+        ...(fromOrdinal !== undefined ? { fromOrdinal } : {}),
+        ...(cursor ? { cursor } : {}),
+        limit,
+      }
       const index = normalizeHistoryIndex(await shareAdapterRead(
         adapter,
-        `history-index:${runtimeSessionId}:${limit}`,
-        () => adapter.historyIndex!(runtimeSessionId, limit),
+        `history-index:${runtimeSessionId}:${fromOrdinal ?? ''}:${cursor ?? ''}:${limit}`,
+        () => adapter.historyIndex!(runtimeSessionId, query),
       ))
       markRuntimeValidated(adapter, runtimeSessionId)
       writeJson(response, 200, jsonValue(index))
