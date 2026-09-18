@@ -570,17 +570,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
-          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(actions => {
-            setMessageActions(actions)
-            if (!actions.length) return
-            return liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
-              const projected = projectLiveSnapshotEntries(snapshot.entries)
-              setState(snapshot.state)
-              setItems(projected)
-              setInputHistory(projectLiveInputHistory(projected))
-              leafIdRef.current = snapshot.leafId ?? undefined
-            })
-          }, () => undefined)
+          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+          void liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
+            const projected = projectLiveSnapshotEntries(snapshot.entries)
+            setState(snapshot.state)
+            setItems(projected)
+            setInputHistory(projectLiveInputHistory(projected))
+            leafIdRef.current = snapshot.leafId ?? undefined
+            setSyncError('')
+          }, reason => {
+            setSyncError(reason instanceof Error ? reason.message : String(reason))
+          })
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
@@ -1002,7 +1002,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const workspace = workspaceDisplayName(state?.workspacePath)
   const title = workspace || t('center.history.genericAgentTask', { agent: agentLabel })
   const runtimeStatus = statusLabel(state, t)
-  const rounds = projectLiveTaskRounds(items)
+  const rounds = useMemo(() => projectLiveTaskRounds(items), [items])
+  const streamSupported = product?.capabilities.includes('stream') === true
+  const connectionLabel = streamSupported
+    ? connected ? t('live.connected') : t('live.connecting')
+    : runtimeStatus
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
     if (message) void send(message)
@@ -1101,13 +1105,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         </>}
       />
 
-      <LiveRuntimeDisclosures
-        items={runtimeDisclosures}
-        language={i18n.resolvedLanguage ?? i18n.language}
-        pendingAction={runtimeActionPending}
-        onAction={action => { void runRuntimeAction(action) }}
-      />
-
       <div
         ref={readerRef}
         className="pi-live-reader live-task-reader"
@@ -1117,6 +1114,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onPointerDown={markReaderUserIntent}
       >
         <div className="pi-live-document live-task-document">
+          <LiveRuntimeDisclosures
+            items={runtimeDisclosures}
+            language={i18n.resolvedLanguage ?? i18n.language}
+            pendingAction={runtimeActionPending}
+            onAction={action => { void runRuntimeAction(action) }}
+          />
           {!state && !error && <div className="pi-live-startup-spotlight">
             <OperationProgress
               statusLabel={t('live.loadingStatus')}
@@ -1215,9 +1218,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             />
           </div>
           <div className="pi-live-compose-bar">
-            <span className="pi-live-compose-runtime" title={connected ? t('live.connected') : t('live.connecting')}>
+            <span
+              className={`pi-live-compose-runtime ${streamSupported && !connected ? 'pi-live-disconnected' : ''}`.trim()}
+              title={connectionLabel}
+            >
               <span className="pi-live-idle-dot" aria-hidden="true"/>
-              {runtimeStatus}
+              {connectionLabel}
             </span>
             <div className="pi-live-compose-settings">
               {modelControl && <ComposerPillSelect
