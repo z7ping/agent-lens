@@ -560,6 +560,7 @@ export class DefaultAssetService implements AssetService {
       ...(input.scopeRoot ? { scopeRoot: input.scopeRoot } : {}),
       ...(input.path ? { path: input.path } : {}),
       ...(input.source ? { source: input.source } : {}),
+      ...(input.packageIdentity ? { packageIdentity: input.packageIdentity } : {}),
       ...(input.version ? { version: input.version } : {}),
     }
     await this.storage.repositories.assets.putBinding(binding)
