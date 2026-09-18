@@ -24,6 +24,24 @@ const readyState: PiLiveRuntimeState = {
   pendingMessageCount: 0,
 }
 
+test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable extension error', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'runtime_exit',
+    errorMessage: 'worker exited',
+  }), {
+    type: 'status',
+    status: 'failed',
+    message: 'worker exited',
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_error',
+    error: 'extension failed',
+  }), {
+    type: 'error',
+    message: 'extension failed',
+  })
+})
+
 test('Pi Live Adapter maps native control and compaction changes into generic events', () => {
   assert.deepEqual(normalizePiLiveEvent({ type: 'model_changed' }), {
     type: 'control.changed',
