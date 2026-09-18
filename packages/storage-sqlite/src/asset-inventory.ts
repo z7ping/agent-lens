@@ -89,6 +89,7 @@ function mapBinding(value: unknown): AssetBinding {
   const scopeRoot = optionalString(row, 'scope_root')
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
+  const packageIdentity = optionalString(row, 'package_identity')
   const version = optionalString(row, 'version')
   return {
     id: requiredString(row, 'binding_id'),
@@ -99,6 +100,7 @@ function mapBinding(value: unknown): AssetBinding {
     ...(scopeRoot === undefined ? {} : { scopeRoot }),
     ...(path === undefined ? {} : { path }),
     ...(source === undefined ? {} : { source }),
+    ...(packageIdentity === undefined ? {} : { packageIdentity }),
     ...(version === undefined ? {} : { version }),
   }
 }
@@ -133,6 +135,7 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
           b.scope_root AS scope_root,
           b.path AS path,
           b.source AS source,
+          b.package_identity AS package_identity,
           b.version AS version,
           d.type AS asset_type,
           d.canonical_name AS canonical_name,
