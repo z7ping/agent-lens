@@ -396,6 +396,13 @@ export class PiLiveAdapter implements LiveAdapter {
       group: command.source,
     }))
   }
+  messageActions(runtimeSessionId: string) {
+    return this.service.messageActions(runtimeSessionId)
+  }
+
+  executeMessageAction(runtimeSessionId: string, actionId: string, targetEntryId: string) {
+    return this.service.executeMessageAction(runtimeSessionId, actionId, targetEntryId)
+  }
 
   private async resolveMessage(message: LiveMessage): Promise<{
     text: string
