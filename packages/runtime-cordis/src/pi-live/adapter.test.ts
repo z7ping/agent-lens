@@ -233,6 +233,10 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
 test('Pi Live Adapter exposes queue control and restores queued messages on interrupt', async () => {
   const calls: string[] = []
   const service = {
+    queueState: async () => ({
+      steering: ['current steer'],
+      followUp: ['current follow-up'],
+    }),
     clearQueue: async () => {
       calls.push('clear')
       return { steering: ['queued steer'], followUp: ['queued follow-up'] }
@@ -244,6 +248,10 @@ test('Pi Live Adapter exposes queue control and restores queued messages on inte
   } as unknown as PiLiveService
 
   const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.deepEqual(await adapter.queueState('runtime-1'), {
+    steering: ['current steer'],
+    followUp: ['current follow-up'],
+  })
   assert.deepEqual(await adapter.clearQueue('runtime-1'), {
     steering: ['queued steer'],
     followUp: ['queued follow-up'],
