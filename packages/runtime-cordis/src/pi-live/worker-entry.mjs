@@ -399,12 +399,19 @@ async function createSessionManager(sdk, input) {
   if (!input.sessionPath) return sdk.SessionManager.create(input.cwd, sessionDir)
   const manager = sdk.SessionManager.open(input.sessionPath, sessionDir, input.cwd)
   if (input.historyAction !== 'fork') return manager
-  if (typeof manager.createBranchedSession !== 'function') {
-    throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
+  if (typeof manager.createBranchedSession !== 'function' || typeof manager.newSession !== 'function') {
+    throw new Error('Installed Pi SDK does not support message-level session fork')
   }
-  const leafId = Object.hasOwn(input, 'branchFromEntryId')
-    ? input.branchFromEntryId
-    : manager.getLeafId()
+  const hasExplicitTarget = Object.hasOwn(input, 'branchFromEntryId')
+  const leafId = hasExplicitTarget ? input.branchFromEntryId : manager.getLeafId()
+  if (hasExplicitTarget && leafId === null) {
+    const fresh = sdk.SessionManager.create(input.cwd, sessionDir)
+    if (typeof fresh.newSession !== 'function') {
+      throw new Error('Installed Pi SDK does not support root message fork')
+    }
+    fresh.newSession({ parentSession: input.sessionPath })
+    return fresh
+  }
   if (typeof leafId !== 'string' || !leafId) throw new Error('该 Pi 历史会话没有可分叉的目标节点')
   const forkedSessionPath = await Promise.resolve(manager.createBranchedSession(leafId))
   if (typeof forkedSessionPath !== 'string' || !forkedSessionPath.trim()) {
@@ -507,7 +514,8 @@ function runtimeCapabilities(hasSessionRuntime) {
     thinkingLevelControl: typeof session?.setThinkingLevel === 'function' && typeof session?.getAvailableThinkingLevels === 'function',
     extensionUi: typeof session?.bindExtensions === 'function',
     treeNavigation: typeof session?.navigateTree === 'function',
-    messageFork: typeof session?.sessionManager?.createBranchedSession === 'function',
+    messageFork: typeof session?.sessionManager?.createBranchedSession === 'function'
+      && typeof session?.sessionManager?.newSession === 'function',
   }
 }
 
