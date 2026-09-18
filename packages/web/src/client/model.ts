@@ -473,6 +473,7 @@ export class AgentLensClientModel {
     // are loaded independently after this point.
     this.patch({
       agentSummaries: summaries,
+      agentCoverage: null,
       agentsLoading: false,
       agentsError: '',
       agentsHasNewData: this.agentsInvalidation !== invalidation,
@@ -1548,7 +1549,7 @@ export class AgentLensClientModel {
     }
     if (affected.includes('agents')) {
       this.agentsInvalidation += 1
-      if (!this.snapshot.agentsHasNewData) this.patch({ agentsHasNewData: true })
+      this.patch({ agentCoverage: null, agentsHasNewData: true })
     }
   }
 }
