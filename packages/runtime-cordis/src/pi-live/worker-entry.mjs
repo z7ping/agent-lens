@@ -402,8 +402,10 @@ async function createSessionManager(sdk, input) {
   if (typeof manager.createBranchedSession !== 'function') {
     throw new Error('Installed Pi SDK does not support createBranchedSession; cannot fork this history session')
   }
-  const leafId = manager.getLeafId()
-  if (!leafId) throw new Error('该 Pi 历史会话没有可分叉的当前节点')
+  const leafId = Object.hasOwn(input, 'branchFromEntryId')
+    ? input.branchFromEntryId
+    : manager.getLeafId()
+  if (typeof leafId !== 'string' || !leafId) throw new Error('该 Pi 历史会话没有可分叉的目标节点')
   const forkedSessionPath = await Promise.resolve(manager.createBranchedSession(leafId))
   if (typeof forkedSessionPath !== 'string' || !forkedSessionPath.trim()) {
     throw new Error('Pi 未能从当前节点创建新的 Session')
@@ -504,6 +506,8 @@ function runtimeCapabilities(hasSessionRuntime) {
     modelSwitching: typeof session?.setModel === 'function',
     thinkingLevelControl: typeof session?.setThinkingLevel === 'function' && typeof session?.getAvailableThinkingLevels === 'function',
     extensionUi: typeof session?.bindExtensions === 'function',
+    treeNavigation: typeof session?.navigateTree === 'function',
+    messageFork: hasSessionRuntime && typeof runtime?.fork === 'function',
   }
 }
 
@@ -681,6 +685,16 @@ async function command(name, value = {}) {
     return nextSnapshotChunk(value.transferId)
   }
   if (name === 'commands') return slashCommands()
+  if (name === 'navigateTree') {
+    if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
+    if (session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
+    if (typeof session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
+    const result = await session.navigateTree(value.entryId)
+    return {
+      cancelled: result?.cancelled === true,
+      ...(typeof result?.editorText === 'string' ? { editorText: result.editorText } : {}),
+    }
+  }
   if (name === 'controls') {
     const thinking = thinkingControl()
     return {
