@@ -414,6 +414,7 @@ function roundIndex(all = session.sessionManager.getEntries()) {
 }
 
 function snapshotRoundPage(all, start, end) {
+  if (!roundIndexCache) return undefined
   const rows = roundIndex(all)
   let first
   let last
@@ -473,12 +474,13 @@ function beginSnapshotTransfer(since, window) {
   const lastCursor = entries.length ? entryId(entries.at(-1)) : undefined
   const olderCursor = start > 0 ? firstCursor : undefined
   const newerCursor = end < all.length ? lastCursor : undefined
+  const rounds = snapshotRoundPage(all, start, end)
   const page = {
     hasEarlier: start > 0,
     ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
     ...(firstCursor ? { first: firstCursor } : {}),
     ...(lastCursor ? { last: lastCursor } : {}),
-    rounds: snapshotRoundPage(all, start, end),
+    ...(rounds ? { rounds } : {}),
     ...(end < all.length ? { hasLater: true, ...(newerCursor ? { after: newerCursor } : {}) } : {}),
   }
 
