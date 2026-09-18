@@ -13,6 +13,7 @@ export interface HermesLiveStartInput {
 
 interface OwnedRuntime {
   id: string
+  title?: string | undefined
   nativeSessionId?: string
   status: LiveRuntimeState['status']
   events: LiveEventChannel
@@ -82,6 +83,7 @@ export class DefaultHermesLiveService {
     const id = randomUUID()
     const runtime: OwnedRuntime = {
       id,
+      ...(parsed.title ? { title: parsed.title } : {}),
       status: 'initializing',
       events: new LiveEventChannel(id),
       activeRunId: undefined,
@@ -139,6 +141,7 @@ export class DefaultHermesLiveService {
     }
     if (!runtime.nativeSessionId) throw new Error('Hermes Live runtime has no native session id')
     if (!message.trim()) throw new Error('Hermes Live message cannot be empty')
+    if (!runtime.title) runtime.title = message.replace(/\s+/g, ' ').trim().slice(0, 240)
 
     await this.refreshActiveRun(runtime)
     if (runtime.activeRunId) {
@@ -269,6 +272,7 @@ export class DefaultHermesLiveService {
   private runtimeState(runtime: OwnedRuntime): LiveRuntimeState {
     return {
       runtimeSessionId: runtime.id,
+      ...(runtime.title ? { title: runtime.title } : {}),
       status: runtime.status,
       ...(runtime.nativeSessionId ? { nativeSessionId: runtime.nativeSessionId } : {}),
       isStreaming: Boolean(runtime.activeRunId),
