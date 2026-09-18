@@ -24,7 +24,9 @@ test('Review 与 Live 导轨由轮次数据驱动，不依赖全树 MutationObse
 
 test('超长轮次导轨限制真实 DOM tick 数量', () => {
   assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS\s*=\s*80/)
-  assert.match(taskSurface, /renderedRailItems = compactTurnRailItems/)
+  assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS\s*=\s*80/)
+  assert.match(taskSurface, /renderedRailItems = renderTurnRailItems/)
+  assert.match(taskSurface, /sampledRoundOrdinals/)
   assert.match(taskSurface, /renderedRailItems\.map/)
 })
 
@@ -45,10 +47,14 @@ test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
   assert.match(liveTask, /historyBlocksRef/)
 })
 
-test('未加载轮次通过有界 history index 与 around cursor 直接定位', () => {
-  assert.match(liveTask, /liveApi\.historyIndex\(current\.liveId, current\.runtimeSessionId, 80\)/)
-  assert.match(liveTask, /around: item\.cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
-  assert.match(liveTask, /onTurnRailSelect=\{jumpToIndexedRound\}/)
+test('轮次导轨逻辑覆盖全量轮次，80 只属于视觉 DOM 上限', () => {
+  assert.match(liveTask, /historyIndex\(current\.liveId, current\.runtimeSessionId, \{ limit: 0 \}\)/)
+  assert.match(liveTask, /fromOrdinal: targetOrdinal, limit: 1/)
+  assert.match(liveTask, /around: cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
+  assert.match(liveTask, /turnRailTotal=\{turnRailTotal\}/)
+  assert.match(taskSurface, /turnRailTotal\?: number/)
+  assert.match(taskSurface, /ratio \* Math\.max\(0, turnRailTotal! - 1\)/)
+  assert.match(taskSurface, /style=\{\{ top:/)
   assert.match(taskSurface, /pendingTurnRailTargetRef/)
-  assert.match(taskSurface, /item\.loaded === true/)
+  assert.doesNotMatch(liveTask, /historyIndex\(current\.liveId, current\.runtimeSessionId, 80\)/)
 })
