@@ -310,6 +310,32 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
   })
 }
 
+const TASK_TURN_RAIL_MAX_TICKS = 80
+
+function compactTurnRailItems(items: readonly TaskTurnRailItem[], activeId: string): TaskTurnRailItem[] {
+  if (items.length <= TASK_TURN_RAIL_MAX_TICKS) return [...items]
+  const required = new Set<number>([0, items.length - 1])
+  const activeIndex = items.findIndex(item => item.id === activeId)
+  if (activeIndex >= 0) {
+    for (let offset = -2; offset <= 2; offset += 1) {
+      const index = activeIndex + offset
+      if (index >= 0 && index < items.length) required.add(index)
+    }
+  }
+  items.forEach((item, index) => {
+    if (item.error || item.state === 'running') required.add(index)
+  })
+
+  const budget = Math.max(2, TASK_TURN_RAIL_MAX_TICKS - required.size)
+  const step = Math.max(1, Math.ceil(items.length / budget))
+  for (let index = 0; index < items.length; index += step) required.add(index)
+
+  return [...required]
+    .sort((left, right) => left - right)
+    .slice(0, TASK_TURN_RAIL_MAX_TICKS)
+    .map(index => items[index]!)
+}
+
 function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTurnRailItem | null {
   const positioned = items.filter((item): item is TaskTurnRailItem & { element: HTMLElement } => Boolean(item.element))
   if (!positioned.length) return null
@@ -525,14 +551,15 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         }
       : undefined)
 
-  const rail = railItems.length > 0 && railPosition && typeof document !== 'undefined'
+  const renderedRailItems = compactTurnRailItems(railItems, activeRoundId)
+  const rail = renderedRailItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
         <nav
           className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
           aria-label={t('surface.turnRail')}
           style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
         >
-          {railItems.map(item => {
+          {renderedRailItems.map(item => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
             const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : ''].filter(Boolean).join(' · ')
