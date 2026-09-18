@@ -29,9 +29,11 @@ export function parseTaskLiveRuntimeLocation(pathname: string): TaskLiveRuntimeL
 
 export function taskLiveRuntimeStatus(
   state: LiveRuntimeStateDto,
-): 'failed' | 'initializing' | 'streaming' | 'idle' {
+): 'failed' | 'initializing' | 'terminating' | 'terminated' | 'streaming' | 'idle' {
   if (state.status === 'failed') return 'failed'
   if (state.status === 'initializing') return 'initializing'
+  if (state.status === 'terminating') return 'terminating'
+  if (state.status === 'terminated') return 'terminated'
   if (state.isStreaming) return 'streaming'
   return 'idle'
 }

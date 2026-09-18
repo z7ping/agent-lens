@@ -4,11 +4,17 @@ import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
 import {
   appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
+  LIVE_TASK_ROUND_FACT_LIMIT,
+  LiveTaskRoundProjector,
+  liveEventChangesTaskTranscript,
+  liveTaskStableRoundPrefixLength,
+  mergeLiveActiveProjectionItems,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
   liveTaskRoundEstimate,
   reduceLiveTaskEvent,
+  settleLiveTaskProjectionItems,
 } from './live-task-projection'
 
 function event(sequence: number, normalizedEvent: NonNullable<LiveRuntimeEventDto['normalizedEvent']>): LiveRuntimeEventDto {
@@ -20,6 +26,38 @@ function event(sequence: number, normalizedEvent: NonNullable<LiveRuntimeEventDt
     normalizedEvent,
   }
 }
+
+test('optimistic projection keeps image-only user messages', () => {
+  const items = appendOptimisticLiveUserMessage([], '', 'user:image-only', [{
+    type: 'image',
+    name: 'shot.png',
+    mimeType: 'image/png',
+    sizeBytes: 12,
+    previewUrl: 'blob:agent-lens-preview',
+  }])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.previewUrl, 'blob:agent-lens-preview')
+})
+
+test('optimistic projection keeps file-only user messages', () => {
+  const items = appendOptimisticLiveUserMessage([], '', 'user:file-only', [{
+    type: 'file',
+    name: 'report.pdf',
+    mimeType: 'application/pdf',
+    sizeBytes: 42,
+  }])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.type, 'file')
+  assert.equal(item.attachments?.[0]?.name, 'report.pdf')
+})
 
 test('snapshot projection keeps generic inline image attachments', () => {
   const items = projectLiveSnapshotEntries([
@@ -36,6 +74,54 @@ test('snapshot projection keeps generic inline image attachments', () => {
   assert.equal(item.text, '')
   assert.equal(item.attachments?.[0]?.type, 'image')
   assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
+})
+
+test('snapshot projection keeps nested persisted image attachments used by Pi session entries', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message',
+      id: 'entry-image-1',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: '看这张图' },
+          { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },
+        ],
+      },
+    },
+  ])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.entryId, 'entry-image-1')
+  assert.equal(item.text, '看这张图')
+  assert.equal(item.attachments?.[0]?.type, 'image')
+  assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
+})
+
+test('snapshot projection keeps nested persisted file attachments', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message',
+      id: 'entry-file-1',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'text', text: '看这个文件' },
+          { type: 'file', name: 'report.pdf', mimeType: 'application/pdf', sizeBytes: 42 },
+        ],
+      },
+    },
+  ])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.entryId, 'entry-file-1')
+  assert.equal(item.text, '看这个文件')
+  assert.equal(item.attachments?.[0]?.type, 'file')
+  assert.equal(item.attachments?.[0]?.name, 'report.pdf')
 })
 
 test('snapshot projection consumes message-shaped native rows without Agent-specific branches', () => {
@@ -122,6 +208,54 @@ test('normalized Live events drive shared message reasoning and tool projections
 })
 
 
+test('streaming recovery supplements missing nodes without overwriting newer live state', () => {
+  const current = [
+    { id: 'user:optimistic', kind: 'message' as const, role: 'user' as const, text: 'same prompt', streaming: false },
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'newer-live', streaming: true },
+  ]
+  const recovered = [
+    { id: 'entry-user-1', kind: 'message' as const, role: 'user' as const, text: 'same prompt', streaming: false },
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'older-snapshot', streaming: true },
+    { id: 'tool:1', kind: 'tool' as const, callId: '1', name: 'read', status: 'success' as const },
+  ]
+
+  const merged = mergeLiveActiveProjectionItems(current, recovered)
+  assert.equal(merged.length, 3)
+  assert.equal(merged[0]?.id, 'entry-user-1')
+  assert.equal(merged[1]?.kind === 'message' ? merged[1].text : '', 'newer-live')
+  assert.equal(merged[2]?.kind, 'tool')
+})
+
+test('streaming reducer updates the newest matching active node', () => {
+  const items = [
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'historical', streaming: false },
+    { id: 'separator', kind: 'message' as const, role: 'user' as const, text: 'next', streaming: false },
+    { id: 'message:a1:0', kind: 'message' as const, role: 'assistant' as const, text: 'current-', streaming: true },
+  ]
+
+  const next = reduceLiveTaskEvent(items, event(7, {
+    type: 'text.delta',
+    messageId: 'a1',
+    contentIndex: 0,
+    delta: 'tail',
+  }))
+
+  assert.equal(next[0]?.kind === 'message' ? next[0].text : '', 'historical')
+  assert.equal(next[2]?.kind === 'message' ? next[2].text : '', 'current-tail')
+})
+
+test('settling an interrupted active turn clears every running presentation state', () => {
+  const settled = settleLiveTaskProjectionItems([
+    { id: 'a1', kind: 'message', role: 'assistant', text: 'partial', streaming: true },
+    { id: 'r1', kind: 'thinking', text: 'thinking', streaming: true },
+    { id: 'tool-1', kind: 'tool', callId: 'call-1', name: 'read', status: 'running' },
+  ])
+
+  assert.equal(settled[0]?.kind === 'message' ? settled[0].streaming : true, false)
+  assert.equal(settled[1]?.kind === 'thinking' ? settled[1].streaming : true, false)
+  assert.equal(settled[2]?.kind === 'tool' ? settled[2].status : '', 'success')
+})
+
 test('Live input history comes from submitted user messages and keeps chronological duplicates', () => {
   const items = projectLiveSnapshotEntries([
     { id: 'u1', role: 'user', content: 'first' },
@@ -155,6 +289,70 @@ test('generic Live projection restores semantic rounds from user-message boundar
   assert.equal(rounds[1]?.model.preview, 'second task')
   assert.equal(rounds[1]?.model.state, 'running')
   assert.ok(liveTaskRoundEstimate(rounds[0]!) >= 180)
+})
+
+test('generic Live transcript classification ignores control-only events', () => {
+  assert.equal(liveEventChangesTaskTranscript({ type: 'title.update', title: 'Task' }), false)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'running' }), false)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'queue.update', steering: [], followUp: [] }), false)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'text.delta', delta: 'x' }), true)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'completed', status: 'completed' }), true)
+})
+
+test('generic Live round projector reuses stable history while streaming the current turn', () => {
+  const stable = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'first', streaming: false },
+    { id: 'a1', kind: 'message' as const, role: 'assistant' as const, text: 'done', streaming: false },
+  ]
+  const current = [
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: 'second', streaming: false },
+    { id: 'a2', kind: 'message' as const, role: 'assistant' as const, text: 'hel', streaming: true },
+  ]
+  const projector = new LiveTaskRoundProjector()
+  const first = projector.project([...stable, ...current], stable.length)
+  const stableRound = first[0]
+
+  const next = projector.project([
+    ...stable,
+    current[0]!,
+    { ...current[1]!, text: 'hello' },
+  ], stable.length)
+
+  assert.equal(next[0], stableRound)
+  assert.equal(next[1]?.model.ordinal, 2)
+  assert.equal(next[1]?.items[1]?.kind === 'message' ? next[1].items[1].text : '', 'hello')
+})
+
+test('generic Live stable round boundary excludes the active semantic turn', () => {
+  const items = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'first', streaming: false },
+    { id: 'a1', kind: 'message' as const, role: 'assistant' as const, text: 'done', streaming: false },
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: 'second', streaming: false },
+    { id: 'a2', kind: 'message' as const, role: 'assistant' as const, text: 'working', streaming: true },
+  ]
+  assert.equal(liveTaskStableRoundPrefixLength(items, true), 2)
+  assert.equal(liveTaskStableRoundPrefixLength(items, false), 4)
+})
+
+test('generic Live projection chunks oversized semantic rounds without splitting turn identity', () => {
+  const items = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'large turn', streaming: false },
+    ...Array.from({ length: LIVE_TASK_ROUND_FACT_LIMIT * 2 + 1 }, (_, index) => ({
+      id: `tool-${index}`,
+      kind: 'tool' as const,
+      callId: `call-${index}`,
+      name: 'read',
+      status: 'success' as const,
+    })),
+  ]
+
+  const rounds = projectLiveTaskRounds(items)
+  assert.equal(rounds.length, 3)
+  assert.ok(rounds.every(round => round.items.length <= LIVE_TASK_ROUND_FACT_LIMIT))
+  assert.ok(rounds.every(round => round.model.semanticId === 'live-round:u1'))
+  assert.notEqual(rounds[0]?.model.id, rounds[1]?.model.id)
+  assert.equal(rounds[0]?.model.ordinal, 1)
+  assert.equal(rounds[0]?.model.toolCount, LIVE_TASK_ROUND_FACT_LIMIT * 2 + 1)
 })
 
 test('generic Live projection preserves pre-user activity as a background round', () => {

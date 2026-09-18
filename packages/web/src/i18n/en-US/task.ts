@@ -33,11 +33,13 @@ export const englishTaskMessages: LocaleMessagesDto = {
       source: 'Source',
       rendered: 'Rendered',
       imageAttachment: 'Image attachment',
+      fileAttachment: 'File attachment',
     },
     surface: {
       turnRail: 'Turn rail',
       backgroundActivity: 'Background activity',
       roundOrdinal: 'Round {{count}}',
+      roundContinuation: '{{label}} (cont.)',
       running: 'Running',
       hasError: 'Has errors',
       jumpTo: 'Jump to {{tip}}',
@@ -125,6 +127,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       send: 'Send',
       messageActionPending: 'Working…',
+      syncWarning: 'Live state sync is temporarily unavailable; the task can keep running: {{message}}',
+      controlsSyncFailed: 'Model or thinking controls could not be refreshed',
       unsupportedInput: 'This agent does not support {{type}} input.',
       input: {
         largeText: 'large text',
@@ -247,7 +251,10 @@ export const englishTaskMessages: LocaleMessagesDto = {
       runtimeStatus: {
         failed: 'Needs attention',
         initializing: 'Starting',
+        terminating: 'Stopping',
+        terminated: 'Stopped',
         streaming: 'Running',
+        compacting: 'Compacting context',
         idle: 'Waiting for input',
       },
     },

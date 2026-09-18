@@ -2,6 +2,11 @@ import { reviewMessageAttachmentsFromPayload, type LiveEventDto, type LiveRuntim
 import { agentLensI18n } from '../i18n/runtime'
 import type { TaskRoundModel } from './task-detail-model'
 
+export type LiveTaskProjectionAttachment = ReviewMessageAttachmentDto & {
+  /** Web-local optimistic preview; persisted snapshots continue to use dataUrl. */
+  previewUrl?: string | undefined
+}
+
 export type LiveTaskProjectionItem =
   | {
       id: string
@@ -10,7 +15,7 @@ export type LiveTaskProjectionItem =
       text: string
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
-      attachments?: ReviewMessageAttachmentDto[] | undefined
+      attachments?: LiveTaskProjectionAttachment[] | undefined
       streaming: boolean
       at?: string | undefined
     }
@@ -263,12 +268,56 @@ function contentId(event: LiveEventDto, kind: 'message' | 'thinking', fallback: 
   return `${kind}:${fallback}`
 }
 
+export function mergeLiveActiveProjectionItems(
+  previous: readonly LiveTaskProjectionItem[],
+  incoming: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const merged = [...previous]
+  const indexes = new Map(merged.map((item, index) => [item.id, index] as const))
+
+  for (const item of incoming) {
+    // A live SSE update can arrive while reconnect recovery is reading a snapshot.
+    // Existing exact IDs are therefore newer presentation state and must win.
+    if (indexes.has(item.id)) continue
+
+    // Reconcile a persisted user row with its local optimistic placeholder.
+    if (item.kind === 'message' && item.role === 'user') {
+      const optimisticIndex = merged.findIndex(candidate =>
+        candidate.kind === 'message'
+        && candidate.role === 'user'
+        && candidate.id.startsWith('user:')
+        && candidate.text === item.text,
+      )
+      if (optimisticIndex >= 0) {
+        indexes.delete(merged[optimisticIndex]!.id)
+        merged[optimisticIndex] = item
+        indexes.set(item.id, optimisticIndex)
+        continue
+      }
+    }
+
+    indexes.set(item.id, merged.length)
+    merged.push(item)
+  }
+  return merged
+}
+
+function findLastProjectionIndex(
+  items: readonly LiveTaskProjectionItem[],
+  predicate: (item: LiveTaskProjectionItem) => boolean,
+): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index]!)) return index
+  }
+  return -1
+}
+
 function upsertMessage(
   items: readonly LiveTaskProjectionItem[],
   id: string,
   updater: (current: Extract<LiveTaskProjectionItem, { kind: 'message' }> | undefined) => Extract<LiveTaskProjectionItem, { kind: 'message' }>,
 ): LiveTaskProjectionItem[] {
-  const index = items.findIndex(item => item.kind === 'message' && item.id === id)
+  const index = findLastProjectionIndex(items, item => item.kind === 'message' && item.id === id)
   const current = index >= 0 ? items[index] as Extract<LiveTaskProjectionItem, { kind: 'message' }> : undefined
   const next = updater(current)
   if (index < 0) return [...items, next]
@@ -282,7 +331,7 @@ function upsertThinking(
   id: string,
   updater: (current: Extract<LiveTaskProjectionItem, { kind: 'thinking' }> | undefined) => Extract<LiveTaskProjectionItem, { kind: 'thinking' }>,
 ): LiveTaskProjectionItem[] {
-  const index = items.findIndex(item => item.kind === 'thinking' && item.id === id)
+  const index = findLastProjectionIndex(items, item => item.kind === 'thinking' && item.id === id)
   const current = index >= 0 ? items[index] as Extract<LiveTaskProjectionItem, { kind: 'thinking' }> : undefined
   const next = updater(current)
   if (index < 0) return [...items, next]
@@ -296,7 +345,7 @@ function upsertTool(
   callId: string,
   updater: (current: Extract<LiveTaskProjectionItem, { kind: 'tool' }> | undefined) => Extract<LiveTaskProjectionItem, { kind: 'tool' }>,
 ): LiveTaskProjectionItem[] {
-  const index = items.findIndex(item => item.kind === 'tool' && item.callId === callId)
+  const index = findLastProjectionIndex(items, item => item.kind === 'tool' && item.callId === callId)
   const current = index >= 0 ? items[index] as Extract<LiveTaskProjectionItem, { kind: 'tool' }> : undefined
   const next = updater(current)
   if (index < 0) return [...items, next]
@@ -305,13 +354,27 @@ function upsertTool(
   return copy
 }
 
-function settle(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
+export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
   return items.map(item => {
     if (item.kind === 'message' && item.streaming) return { ...item, streaming: false }
     if (item.kind === 'thinking' && item.streaming) return { ...item, streaming: false }
     if (item.kind === 'tool' && item.status === 'running') return { ...item, status: 'success' as const }
     return item
   })
+}
+
+export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined): boolean {
+  if (!event) return false
+  return event.type === 'text.start'
+    || event.type === 'text.delta'
+    || event.type === 'text.end'
+    || event.type === 'reasoning.start'
+    || event.type === 'reasoning.delta'
+    || event.type === 'reasoning.end'
+    || event.type === 'tool.start'
+    || event.type === 'tool.output'
+    || event.type === 'tool.end'
+    || event.type === 'completed'
 }
 
 export function reduceLiveTaskEvent(
@@ -392,7 +455,7 @@ export function reduceLiveTaskEvent(
     }))
   }
 
-  if (event.type === 'completed') return settle(items)
+  if (event.type === 'completed') return settleLiveTaskProjectionItems(items)
   return [...items]
 }
 
@@ -401,6 +464,13 @@ export interface LiveTaskRoundProjection {
   model: TaskRoundModel
   items: LiveTaskProjectionItem[]
 }
+
+export interface LiveTaskRoundSegments {
+  stable: LiveTaskRoundProjection[]
+  active: LiveTaskRoundProjection[]
+}
+
+export const LIVE_TASK_ROUND_FACT_LIMIT = 8
 
 function compactRoundPreview(value: string, max = 120): string {
   const text = value.replace(/\s+/g, ' ').trim()
@@ -459,10 +529,11 @@ function buildRoundModel(
  */
 export function projectLiveTaskRounds(
   items: readonly LiveTaskProjectionItem[],
+  ordinalOffset = 0,
 ): LiveTaskRoundProjection[] {
   const raw: Array<{ id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] }> = []
   let current: { id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] } | undefined
-  let ordinal = 0
+  let ordinal = ordinalOffset
 
   for (const item of items) {
     const startsRound = item.kind === 'message' && item.role === 'user'
@@ -486,10 +557,102 @@ export function projectLiveTaskRounds(
     current.items.push(item)
   }
 
-  return raw.map(round => ({
-    model: buildRoundModel(round.items, round.ordinal, round.id, round.background),
-    items: round.items,
-  }))
+  return raw.flatMap(round => {
+    const aggregate = buildRoundModel(round.items, round.ordinal, round.id, round.background)
+    const fragmentCount = Math.max(1, Math.ceil(round.items.length / LIVE_TASK_ROUND_FACT_LIMIT))
+    return Array.from({ length: fragmentCount }, (_, index) => {
+      const fragment = round.items.slice(
+        index * LIVE_TASK_ROUND_FACT_LIMIT,
+        (index + 1) * LIVE_TASK_ROUND_FACT_LIMIT,
+      )
+      const model = buildRoundModel(fragment, round.ordinal, `${round.id}:${index}`, round.background)
+      return {
+        model: {
+          ...model,
+          semanticId: round.id,
+          label: index === 0
+            ? aggregate.label
+            : agentLensI18n.t('task:surface.roundContinuation', { label: aggregate.label }),
+          ...(index === 0 && aggregate.preview ? { preview: aggregate.preview } : {}),
+          toolCount: index === 0 ? aggregate.toolCount : model.toolCount,
+          errorCount: index === 0 ? aggregate.errorCount : model.errorCount,
+          durationMs: index === 0 ? aggregate.durationMs : model.durationMs,
+        },
+        items: fragment,
+      }
+    })
+  })
+}
+
+export function liveTaskStableRoundPrefixLength(
+  items: readonly LiveTaskProjectionItem[],
+  isStreaming: boolean,
+): number {
+  if (!isStreaming) return items.length
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (item?.kind === 'message' && item.role === 'user') return index
+  }
+  return 0
+}
+
+export class LiveTaskRoundProjector {
+  private stableCount = -1
+  private stableTail: LiveTaskProjectionItem | undefined
+  private stableRounds: LiveTaskRoundProjection[] = []
+  private stableOrdinal = 0
+
+  projectSegmented(
+    stableItems: readonly LiveTaskProjectionItem[],
+    activeItems: readonly LiveTaskProjectionItem[],
+  ): LiveTaskRoundSegments {
+    const stableCount = stableItems.length
+    const stableTail = stableCount > 0 ? stableItems[stableCount - 1] : undefined
+    if (this.stableCount !== stableCount || this.stableTail !== stableTail) {
+      this.stableCount = stableCount
+      this.stableTail = stableTail
+      this.stableRounds = projectLiveTaskRounds(stableItems)
+      this.stableOrdinal = this.stableRounds.reduce(
+        (max, round) => Math.max(max, round.model.ordinal ?? 0),
+        0,
+      )
+    }
+
+    return {
+      stable: this.stableRounds,
+      active: activeItems.length
+        ? projectLiveTaskRounds(activeItems, this.stableOrdinal)
+        : [],
+    }
+  }
+
+  projectSegments(
+    stableItems: readonly LiveTaskProjectionItem[],
+    activeItems: readonly LiveTaskProjectionItem[],
+  ): LiveTaskRoundProjection[] {
+    const segments = this.projectSegmented(stableItems, activeItems)
+    return segments.active.length
+      ? [...segments.stable, ...segments.active]
+      : segments.stable
+  }
+
+  project(
+    items: readonly LiveTaskProjectionItem[],
+    requestedStableCount: number,
+  ): LiveTaskRoundProjection[] {
+    const stableCount = Math.max(0, Math.min(items.length, requestedStableCount))
+    return this.projectSegments(
+      items.slice(0, stableCount),
+      items.slice(stableCount),
+    )
+  }
+
+  reset(): void {
+    this.stableCount = -1
+    this.stableTail = undefined
+    this.stableRounds = []
+    this.stableOrdinal = 0
+  }
 }
 
 export function liveTaskRoundEstimate(round: LiveTaskRoundProjection): number {
@@ -524,14 +687,16 @@ export function appendOptimisticLiveUserMessage(
   items: readonly LiveTaskProjectionItem[],
   textValue: string,
   id = `user:${Date.now()}`,
+  attachments: readonly LiveTaskProjectionAttachment[] = [],
 ): LiveTaskProjectionItem[] {
   const value = textValue.trim()
-  if (!value) return [...items]
+  if (!value && !attachments.length) return [...items]
   return [...items, {
     id,
     kind: 'message',
     role: 'user',
     text: value,
+    ...(attachments.length ? { attachments: [...attachments] } : {}),
     streaming: false,
   }]
 }

@@ -24,6 +24,64 @@ const readyState: PiLiveRuntimeState = {
   pendingMessageCount: 0,
 }
 
+test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable extension error', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'runtime_exit',
+    errorMessage: 'worker exited',
+  }), {
+    type: 'status',
+    status: 'failed',
+    message: 'worker exited',
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_error',
+    error: 'extension failed',
+  }), {
+    type: 'error',
+    message: 'extension failed',
+  })
+})
+
+test('Pi Live Adapter maps native control and compaction changes into generic events', () => {
+  assert.deepEqual(normalizePiLiveEvent({ type: 'model_changed' }), {
+    type: 'control.changed',
+    control: 'model',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'thinking_level_changed' }), {
+    type: 'control.changed',
+    control: 'thinking',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_start' }), {
+    type: 'status',
+    status: 'compacting',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'compaction_end' }), {
+    type: 'status',
+    status: 'ready',
+  })
+})
+
+test('Pi Live Adapter invalidates Runtime Disclosure for private diagnostic updates', () => {
+  for (const event of [
+    { type: 'runtime_resources', resources: {} },
+    { type: 'package_updates', status: 'complete', updates: [] },
+    { type: 'runtime_output', message: 'loading resource' },
+  ]) {
+    assert.deepEqual(normalizePiLiveEvent(event), { type: 'runtime-disclosure.changed' })
+  }
+})
+
+test('Pi Live Adapter maps task summary into generic title.update', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'task_summary',
+    taskSummary: '修复 Live 会话恢复',
+  }), {
+    type: 'title.update',
+    title: '修复 Live 会话恢复',
+  })
+  assert.equal(normalizePiLiveEvent({ type: 'task_summary', taskSummary: '   ' }), undefined)
+})
+
 test('Pi Live Adapter exposes thinking-control only through Runtime-provided opaque values', async () => {
   const changes: string[] = []
   let thinking = {
@@ -177,19 +235,23 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_update',
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'text_delta', delta: 'hello', contentIndex: 0 },
   }), {
     type: 'text.delta',
     delta: 'hello',
     contentIndex: 0,
+    messageId: 'assistant-1',
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_update',
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'thinking_delta', delta: 'reason', contentIndex: 1 },
   }), {
     type: 'reasoning.delta',
     delta: 'reason',
     contentIndex: 1,
+    messageId: 'assistant-1',
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'tool_execution_start',

@@ -266,6 +266,9 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
     || row.pendingMessageCount < 0) {
     throw httpError(500, 'Live adapter returned an invalid runtime state')
   }
+  const title = typeof row.title === 'string' && row.title.trim()
+    ? row.title.trim().slice(0, 240)
+    : undefined
   const nativeSessionId = typeof row.nativeSessionId === 'string' && row.nativeSessionId.trim()
     ? row.nativeSessionId.trim().slice(0, 512)
     : undefined
@@ -274,6 +277,7 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
     : undefined
   return {
     runtimeSessionId,
+    ...(title ? { title } : {}),
     status,
     ...(nativeSessionId ? { nativeSessionId } : {}),
     ...(workspacePath ? { workspacePath } : {}),

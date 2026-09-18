@@ -129,7 +129,11 @@ function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undef
   const partial = liveRecord(update.partial)
   const content = Array.isArray(partial.content) ? partial.content : []
   const block = contentIndex === undefined ? {} : liveRecord(content[contentIndex])
-  const common = contentIndex === undefined ? {} : { contentIndex }
+  const messageId = liveText(event.messageId)
+  const common = {
+    ...(contentIndex === undefined ? {} : { contentIndex }),
+    ...(messageId ? { messageId } : {}),
+  }
 
   if (type === 'text_start') {
     return { type: 'text.start', text: liveText(block.text), ...common }
@@ -170,6 +174,15 @@ function piMessageUpdateEvent(event: Record<string, unknown>): LiveEvent | undef
 export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
   const type = liveText(event.type)
   if (type === 'agent_start') return { type: 'status', status: 'running' }
+  if (type === 'task_summary') {
+    const title = liveText(event.taskSummary).trim()
+    return title ? { type: 'title.update', title } : undefined
+  }
+  if (type === 'model_changed') return { type: 'control.changed', control: 'model' }
+  if (type === 'thinking_level_changed') return { type: 'control.changed', control: 'thinking' }
+  if (type === 'runtime_resources' || type === 'package_updates' || type === 'runtime_output') {
+    return { type: 'runtime-disclosure.changed' }
+  }
   if (type === 'agent_settled' || type === 'agent_end') {
     return { type: 'completed', status: 'completed' }
   }
@@ -268,9 +281,17 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ...(liveText(event.prefill) ? { prefill: liveText(event.prefill) } : {}),
     }
   }
-  if (type === 'runtime_exit' || type === 'extension_error') {
+  if (type === 'runtime_exit') {
     const message = liveText(event.errorMessage) || liveText(event.error)
-    return { type: 'error', message: message || 'Pi Live runtime failed' }
+    return {
+      type: 'status',
+      status: 'failed',
+      message: message || 'Pi Live runtime exited',
+    }
+  }
+  if (type === 'extension_error') {
+    const message = liveText(event.errorMessage) || liveText(event.error)
+    return { type: 'error', message: message || 'Pi Live extension failed' }
   }
   return undefined
 }

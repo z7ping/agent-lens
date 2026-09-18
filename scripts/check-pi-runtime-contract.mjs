@@ -18,6 +18,7 @@ const [
   resumeWrapper,
   historyInteraction,
   piAdapter,
+  recoveryStore,
 ] = await Promise.all([
   readFile(new URL('../packages/web/src/features/pi-live-history.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/pi-native.ts', import.meta.url), 'utf8'),
@@ -36,6 +37,7 @@ const [
   readFile(new URL('../packages/surface-http/src/pi-live-resume.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/history-interaction.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/runtime-cordis/src/pi-live/adapter.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/runtime-cordis/src/pi-live/recovery-store.ts', import.meta.url), 'utf8'),
 ])
 
 const failures = []
@@ -104,6 +106,12 @@ requireText(runtime, /runtime\.initialization\.abort\(\)/, 'initializing Termina
 requireText(runtime, /if \(input\.sessionPath && input\.historyAction !== 'fork'\)[\s\S]{0,760}if \(duplicate\) return this\.runtimeState\(duplicate\)/, '同一原生 Pi 会话必须幂等复用 Runtime')
 requireText(runtime, /async abort\(id: string, options: \{ restoreQueue\?: boolean \} = \{\}\)/, 'Pi Runtime abort 必须支持队列恢复语义')
 requireText(runtime, /runtime\.status = 'terminated'/, 'Pi Runtime terminate 必须落明确终态')
+requireText(recoveryStore, /taskSummary\?:\s*string/, 'Pi Recovery Record 必须保留自动任务标题')
+requireText(recoveryStore, /taskSummary = optionalString\(item\.taskSummary\)\?\.slice\(0, 240\)/, 'Pi Recovery 读取必须限制自动任务标题长度')
+requireText(runtime, /\.\.\.\(runtime\.taskSummary \? \{ taskSummary: runtime\.taskSummary \} : \{\}\)/, 'Pi Runtime checkpoint 必须写入自动任务标题')
+requireText(runtime, /runtime\.taskSummary = item\.taskSummary/, 'Pi Runtime 恢复必须还原自动任务标题')
+requireText(runtime, /persistRuntimeMetadataBestEffort\(runtime\)/, '首条任务摘要生成后必须刷新 Recovery metadata checkpoint')
+requireText(runtime, /runtime\.taskSummary \|\| runtime\.input\.name\?\.trim\(\)/, 'Pi 自动任务摘要不得覆盖用户显式标题')
 
 /* Official SDK ownership stays in a worker boundary. */
 requireText(workerHost, /from 'node:child_process'/, 'Pi SDK 必须由独立 Worker 承载')

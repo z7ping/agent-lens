@@ -133,6 +133,8 @@ export type LiveRuntimeStatus =
 
 export interface LiveRuntimeState {
   runtimeSessionId: string
+  /** Agent-neutral human-readable task/session title for Product Surface navigation. */
+  title?: string | undefined
   status: LiveRuntimeStatus
   nativeSessionId?: string
   workspacePath?: string
@@ -162,6 +164,20 @@ export interface LiveStatusEvent {
   type: 'status'
   status: LiveEventStatus
   message?: string | undefined
+}
+
+export interface LiveTitleUpdateEvent {
+  type: 'title.update'
+  title: string
+}
+
+export interface LiveControlChangedEvent {
+  type: 'control.changed'
+  control: 'model' | 'thinking'
+}
+
+export interface LiveRuntimeDisclosureChangedEvent {
+  type: 'runtime-disclosure.changed'
 }
 
 export interface LiveMessageBoundaryEvent {
@@ -240,6 +256,9 @@ export interface LiveUiRequestEvent {
 
 export type LiveEvent =
   | LiveStatusEvent
+  | LiveTitleUpdateEvent
+  | LiveControlChangedEvent
+  | LiveRuntimeDisclosureChangedEvent
   | LiveMessageBoundaryEvent
   | LiveContentEvent
   | LiveToolStartEvent

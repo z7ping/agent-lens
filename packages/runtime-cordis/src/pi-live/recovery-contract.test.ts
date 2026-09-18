@@ -131,9 +131,15 @@ test('新建 Runtime 可交互就绪不等待 Recovery checkpoint', async () => 
 
   store.checkpoint.resolve(undefined)
   await new Promise(resolve => setTimeout(resolve, 0))
+  for (let index = 0; index < 20
+    && store.values.get(initial.runtimeSessionId)?.taskSummary !== 'hello'; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
   assert.equal(store.values.get(initial.runtimeSessionId)?.createdAt, initial.startedAt)
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.sessionPath, '/sessions/live.jsonl')
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.historyAction, 'continue')
+  assert.equal(store.values.get(initial.runtimeSessionId)?.taskSummary, 'hello')
+  assert.ok(store.putCalls >= 2, 'first-task summary must refresh an already pending recovery checkpoint')
 
   await service.terminate(initial.runtimeSessionId)
 })

@@ -9,6 +9,8 @@ const MAX_RECOVERABLE_RUNTIMES = 64
 export interface PiLiveRecoveryRecord {
   id: string
   input: PiLiveStartInput
+  /** First-task summary used as the durable human-readable Runtime title. */
+  taskSummary?: string | undefined
   createdAt: string
   updatedAt: string
 }
@@ -49,17 +51,26 @@ function recoveryRecord(value: unknown): PiLiveRecoveryRecord | null {
   const id = optionalString(item.id)
   const input = recoveryInput(item.input)
   if (!id || !input) return null
+  const taskSummary = optionalString(item.taskSummary)?.slice(0, 240)
   const createdAt = optionalString(item.createdAt) ?? new Date(0).toISOString()
   const updatedAt = optionalString(item.updatedAt) ?? createdAt
-  return { id, input, createdAt, updatedAt }
+  return {
+    id,
+    input,
+    ...(taskSummary ? { taskSummary } : {}),
+    createdAt,
+    updatedAt,
+  }
 }
 
 function normalizeRecord(value: PiLiveRecoveryRecord): PiLiveRecoveryRecord {
   const input = recoveryInput(value.input)
   if (!input) throw new Error('Pi Live recovery record requires a native session path')
+  const taskSummary = optionalString(value.taskSummary)?.slice(0, 240)
   return {
     id: value.id.trim(),
     input,
+    ...(taskSummary ? { taskSummary } : {}),
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
   }

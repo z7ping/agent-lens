@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -18,6 +18,7 @@ import type {
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
+import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
@@ -41,13 +42,19 @@ import {
   appendOptimisticLiveUserMessage,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
-  projectLiveTaskRounds,
+  LiveTaskRoundProjector,
+  liveTaskStableRoundPrefixLength,
   liveTaskRoundEstimate,
+  liveEventChangesTaskTranscript,
+  mergeLiveActiveProjectionItems,
   reduceLiveTaskEvent,
+  settleLiveTaskProjectionItems,
+  type LiveTaskProjectionAttachment,
   type LiveTaskProjectionItem,
   type LiveTaskRoundProjection,
 } from './live-task-projection'
 import { LiveFollowController } from './live-follow-controller'
+import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
@@ -68,6 +75,32 @@ function messageHasAttachments(message: LiveMessageDto): boolean {
   return message.parts.some(part => part.type === 'image' || part.type === 'file')
 }
 
+async function optimisticMessageAttachments(
+  message: LiveMessageDto,
+): Promise<LiveTaskProjectionAttachment[]> {
+  const attachments = message.parts.filter(
+    (part): part is Extract<LiveMessageDto['parts'][number], { type: 'image' | 'file' }> =>
+      part.type === 'image' || part.type === 'file',
+  )
+  return Promise.all(attachments.map(async part => {
+    const attachment: LiveTaskProjectionAttachment = {
+      type: part.type,
+      ...(part.name ? { name: part.name } : {}),
+      ...(part.mimeType ? { mimeType: part.mimeType } : {}),
+      ...(part.sizeBytes !== undefined ? { sizeBytes: part.sizeBytes } : {}),
+    }
+    if (part.type !== 'image') return attachment
+    try {
+      const response = await fetch(liveAttachmentPreviewUrl(part.attachmentId))
+      if (!response.ok) return attachment
+      const previewUrl = URL.createObjectURL(await response.blob())
+      return { ...attachment, previewUrl }
+    } catch {
+      return attachment
+    }
+  }))
+}
+
 function unsupportedInput(
   message: LiveMessageDto,
   capabilities: LiveInputCapabilitiesDto,
@@ -86,27 +119,49 @@ function runtimeStateFromEvent(
 ): LiveRuntimeStateDto | null {
   if (!current || !envelope.normalizedEvent) return current
   const event = envelope.normalizedEvent
+  if (event.type === 'title.update') {
+    return current.title === event.title ? current : { ...current, title: event.title }
+  }
   if (event.type === 'status') {
     if (event.status === 'initializing' || event.status === 'ready' || event.status === 'failed'
       || event.status === 'terminating' || event.status === 'terminated') {
-      return { ...current, status: event.status }
+      const terminal = event.status === 'failed' || event.status === 'terminating' || event.status === 'terminated'
+      const nextStreaming = terminal ? false : current.isStreaming
+      if (current.status === event.status && current.isStreaming === nextStreaming) return current
+      return {
+        ...current,
+        status: event.status,
+        ...(terminal ? { isStreaming: false } : {}),
+      }
     }
-    if (event.status === 'running') return { ...current, isStreaming: true }
-    if (event.status === 'idle') return { ...current, isStreaming: false }
+    if (event.status === 'running') return current.isStreaming ? current : { ...current, isStreaming: true }
+    if (event.status === 'idle') return current.isStreaming ? { ...current, isStreaming: false } : current
   }
   if (event.type === 'text.start' || event.type === 'text.delta'
     || event.type === 'reasoning.start' || event.type === 'reasoning.delta'
     || event.type === 'tool.start') {
-    return { ...current, isStreaming: true }
+    return current.isStreaming ? current : { ...current, isStreaming: true }
   }
   if (event.type === 'queue.update') {
-    return { ...current, pendingMessageCount: event.steering.length + event.followUp.length }
+    const pendingMessageCount = event.steering.length + event.followUp.length
+    return current.pendingMessageCount === pendingMessageCount
+      ? current
+      : { ...current, pendingMessageCount }
   }
-  if (event.type === 'completed') return { ...current, isStreaming: false, pendingMessageCount: 0 }
+  if (event.type === 'completed') {
+    return !current.isStreaming && current.pendingMessageCount === 0
+      ? current
+      : { ...current, isStreaming: false, pendingMessageCount: 0 }
+  }
   return current
 }
 
-function statusLabel(state: LiveRuntimeStateDto | null, t: ReturnType<typeof useTranslation>['t']): string {
+function statusLabel(
+  state: LiveRuntimeStateDto | null,
+  t: ReturnType<typeof useTranslation>['t'],
+  activity?: 'running' | 'compacting' | 'idle' | null,
+): string {
+  if (activity === 'compacting') return t('center.runtimeStatus.compacting')
   if (!state) return t('center.runtimeStatus.initializing')
   const status = taskLiveRuntimeStatus(state)
   return t(`center.runtimeStatus.${status}`)
@@ -141,7 +196,7 @@ function mergeRuntimeState(
 }
 
 function runtimeSessionTitle(runtime: LiveRuntimeStateDto): string {
-  return workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
+  return runtime.title?.trim() || workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
 }
 
 function contributionText(
@@ -166,13 +221,15 @@ function queueTextMessage(text: string): LiveMessageDto {
   return { parts: [{ type: 'text', text }] }
 }
 
-function mergeLiveProjectionItems(
-  previous: LiveTaskProjectionItem[],
-  incoming: LiveTaskProjectionItem[],
-): LiveTaskProjectionItem[] {
-  const items = new Map(previous.map(item => [item.id, item] as const))
-  for (const item of incoming) items.set(item.id, item)
-  return [...items.values()]
+function splitLiveProjectionItems(
+  items: LiveTaskProjectionItem[],
+  isStreaming: boolean,
+): { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] } {
+  const stableCount = liveTaskStableRoundPrefixLength(items, isStreaming)
+  return {
+    stable: items.slice(0, stableCount),
+    active: items.slice(stableCount),
+  }
 }
 
 function LiveExtensionPrompt({
@@ -292,7 +349,7 @@ function GenericLiveItem({
   />
 }
 
-function GenericLiveRound({
+const GenericLiveRound = memo(function GenericLiveRound({
   projection,
   agentLabel,
   eager,
@@ -327,7 +384,38 @@ function GenericLiveRound({
       />)}
     </TaskRound>
   </VirtualRoundMount>
-}
+}, sameStableLiveTaskRoundProps)
+
+const StableLiveRounds = memo(function StableLiveRounds({
+  rounds,
+  agentLabel,
+  eagerTailCount,
+  messageActions,
+  actionPending,
+  runtimeStreaming,
+  onMessageAction,
+}: {
+  rounds: readonly LiveTaskRoundProjection[]
+  agentLabel: string
+  eagerTailCount: number
+  messageActions: readonly LiveMessageActionContributionDto[]
+  actionPending: string | null
+  runtimeStreaming: boolean
+  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
+}) {
+  return <>
+    {rounds.map((round, index) => <GenericLiveRound
+      key={round.model.id}
+      projection={round}
+      agentLabel={agentLabel}
+      eager={index >= rounds.length - eagerTailCount}
+      messageActions={messageActions}
+      actionPending={actionPending}
+      runtimeStreaming={runtimeStreaming}
+      onMessageAction={onMessageAction}
+    />)}
+  </>
+})
 
 export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation('task')
@@ -342,7 +430,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [product, setProduct] = useState<LiveProductDto | null>(null)
   const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
-  const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
+  const [projection, setProjection] = useState<{
+    stable: LiveTaskProjectionItem[]
+    active: LiveTaskProjectionItem[]
+  }>({ stable: [], active: [] })
   const [messageActions, setMessageActions] = useState<LiveMessageActionContributionDto[]>([])
   const [messageActionPending, setMessageActionPending] = useState<string | null>(null)
   const [runtimeDisclosures, setRuntimeDisclosures] = useState<LiveRuntimeDisclosureContributionDto[]>([])
@@ -358,6 +449,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [restoredQueue, setRestoredQueue] = useState<RestoredQueueDraft[]>([])
   const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
+  const [activityStatus, setActivityStatus] = useState<'running' | 'compacting' | 'idle' | null>(null)
+  const [bootstrapTarget, setBootstrapTarget] = useState<{ liveId: string; runtimeSessionId: string } | null>(null)
+  const [syncError, setSyncError] = useState('')
   const [newRecords, setNewRecords] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState<LiveMessageDto | null>(null)
@@ -376,6 +470,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const followReleaseFrameRef = useRef<number | null>(null)
   const startupSendingRef = useRef(false)
   const leafIdRef = useRef<string | undefined>(undefined)
+  const snapshotBaseActiveCountRef = useRef(0)
+  const liveTurnRevisionRef = useRef(0)
+  const roundProjectorRef = useRef(new LiveTaskRoundProjector())
   const queueRevisionRef = useRef(0)
 
   const setComposerValue = useCallback((value: string) => {
@@ -397,7 +494,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setProduct(null)
     setRuntimes([])
     setState(null)
-    setItems([])
+    setProjection({ stable: [], active: [] })
     setMessageActions([])
     setMessageActionPending(null)
     setRuntimeDisclosures([])
@@ -412,7 +509,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setQueueMutationPending(false)
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
+    snapshotBaseActiveCountRef.current = 0
+    liveTurnRevisionRef.current = 0
+    roundProjectorRef.current.reset()
     setConnected(false)
+    setActivityStatus(null)
+    setBootstrapTarget(null)
+    setSyncError('')
     setNewRecords(false)
     setComposerExpanded(false)
     setStartupQueued(null)
@@ -435,37 +538,57 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setProduct(matched)
       setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
-      const [runtime, snapshot, messageActionOptions, runtimeDisclosureOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
+      const [runtime, snapshotResult, messageActionOptions, runtimeDisclosureOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
-        liveApi.snapshot(current.liveId, current.runtimeSessionId),
+        liveApi.snapshot(current.liveId, current.runtimeSessionId).then(
+          snapshot => ({ ok: true as const, snapshot }),
+          reason => ({ ok: false as const, reason }),
+        ),
         liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
         liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         matched.capabilities.includes('command-discovery')
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
         matched.capabilities.includes('model-switching')
-          ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => null)
+          ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => {
+              if (!cancelled) setSyncError(t('live.controlsSyncFailed'))
+              return null
+            })
           : Promise.resolve(null),
         matched.capabilities.includes('thinking-control')
-          ? liveApi.thinkingControl(current.liveId, current.runtimeSessionId).catch(() => null)
+          ? liveApi.thinkingControl(current.liveId, current.runtimeSessionId).catch(() => {
+              if (!cancelled) setSyncError(t('live.controlsSyncFailed'))
+              return null
+            })
           : Promise.resolve(null),
         matched.capabilities.includes('queue')
           ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
           : Promise.resolve(null),
       ])
       if (cancelled) return
-      const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
-      setState(runtime)
-      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
-      setItems(projectedItems)
-      setInputHistory(projectLiveInputHistory(projectedItems))
+      const effectiveRuntime = snapshotResult.ok ? snapshotResult.snapshot.state : runtime
+      setState(effectiveRuntime)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, effectiveRuntime))
+      if (snapshotResult.ok) {
+        const projectedItems = projectLiveSnapshotEntries(snapshotResult.snapshot.entries)
+        const nextProjection = splitLiveProjectionItems(
+          projectedItems,
+          snapshotResult.snapshot.state.isStreaming,
+        )
+        setProjection(nextProjection)
+        setInputHistory(projectLiveInputHistory(projectedItems))
+        snapshotBaseActiveCountRef.current = nextProjection.active.length
+        leafIdRef.current = snapshotResult.snapshot.leafId ?? undefined
+      } else {
+        setSyncError(snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason))
+      }
       setMessageActions(messageActionOptions)
       setRuntimeDisclosures(runtimeDisclosureOptions)
       setCommands(commandOptions)
-      leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
+      setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })
@@ -474,42 +597,136 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [current?.liveId, current?.runtimeSessionId, t])
 
   useEffect(() => {
-    if (!current || !product?.capabilities.includes('stream')) return
-    let opened = false
+    if (!current
+      || bootstrapTarget?.liveId !== current.liveId
+      || bootstrapTarget.runtimeSessionId !== current.runtimeSessionId
+      || !product?.capabilities.includes('stream')) return
     let recoveryGeneration = 0
-    const recover = async () => {
+    let recoveryActive = true
+    let recoveryTask: Promise<void> | null = null
+    let pendingRecoveryMode: 'live' | 'settle' | null = null
+
+    const recoverOnce = async (mode: 'live' | 'settle') => {
       if (!product.capabilities.includes('recovery')) return
       const generation = ++recoveryGeneration
       try {
         const queueRevision = queueRevisionRef.current
+        const recoveryLeafId = leafIdRef.current
+        const snapshotBaseActiveCount = snapshotBaseActiveCountRef.current
+        const recoveryTurnRevision = liveTurnRevisionRef.current
         const [snapshot, queueState, disclosureOptions] = await Promise.all([
-          liveApi.snapshot(current.liveId, current.runtimeSessionId, leafIdRef.current),
+          liveApi.snapshot(current.liveId, current.runtimeSessionId, recoveryLeafId),
           product.capabilities.includes('queue')
             ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
             : Promise.resolve(null),
           liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         ])
-        if (generation !== recoveryGeneration) return
+        if (!recoveryActive || generation !== recoveryGeneration) return
+        if (liveTurnRevisionRef.current !== recoveryTurnRevision) return
         setState(snapshot.state)
+        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
-        setItems(previous => leafIdRef.current ? mergeLiveProjectionItems(previous, recovered) : recovered)
-        leafIdRef.current = snapshot.leafId ?? leafIdRef.current
+        if (mode === 'settle' && snapshot.state.isStreaming) {
+          // A new turn started before the previous completion reconciliation returned.
+          // Keep the local active tail intact and do not advance leaf; the next settled
+          // recovery will reconcile every persisted entry since the original leaf.
+        } else if (!recoveryLeafId) {
+          const nextProjection = splitLiveProjectionItems(recovered, snapshot.state.isStreaming)
+          setProjection(nextProjection)
+          setInputHistory(projectLiveInputHistory(recovered))
+          snapshotBaseActiveCountRef.current = nextProjection.active.length
+          leafIdRef.current = snapshot.leafId ?? undefined
+        } else if (snapshot.state.isStreaming) {
+          // 重连中的增量快照只补当前活动轮的已持久化片段，不复制稳定历史；
+          // 完成态仍从旧 leaf 对账，替换活动轮中的乐观/流式临时节点。
+          setProjection(previous => ({
+            ...previous,
+            active: mergeLiveActiveProjectionItems(previous.active, recovered),
+          }))
+        } else if (recovered.length > 0) {
+          setProjection(previous => {
+            const reconciledActive = [
+              ...previous.active.slice(0, snapshotBaseActiveCount),
+              ...recovered,
+            ]
+            return {
+              stable: [...previous.stable, ...reconciledActive],
+              active: [],
+            }
+          })
+          snapshotBaseActiveCountRef.current = 0
+          leafIdRef.current = snapshot.leafId ?? recoveryLeafId
+        } else {
+          leafIdRef.current = snapshot.leafId ?? recoveryLeafId
+        }
         setRuntimeDisclosures(disclosureOptions)
+        setSyncError('')
         if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
       } catch (reason) {
-        if (generation === recoveryGeneration) setError(reason instanceof Error ? reason.message : String(reason))
+        if (recoveryActive && generation === recoveryGeneration) {
+          setSyncError(reason instanceof Error ? reason.message : String(reason))
+        }
       }
     }
+
+    const recover = (mode: 'live' | 'settle' = 'live'): Promise<void> => {
+      if (!product.capabilities.includes('recovery') || !recoveryActive) return Promise.resolve()
+      if (recoveryTask) {
+        if (mode === 'settle' || pendingRecoveryMode === null) pendingRecoveryMode = mode
+        return recoveryTask
+      }
+
+      let task: Promise<void>
+      task = (async () => {
+        let nextMode: 'live' | 'settle' | null = mode
+        while (recoveryActive && nextMode) {
+          const currentMode = nextMode
+          pendingRecoveryMode = null
+          await recoverOnce(currentMode)
+          nextMode = pendingRecoveryMode
+        }
+      })().finally(() => {
+        if (recoveryTask === task) recoveryTask = null
+      })
+      recoveryTask = task
+      return task
+    }
+
     const unsubscribe = liveApi.subscribe(
       current.liveId,
       current.runtimeSessionId,
       envelope => {
         setConnected(true)
-        setItems(previous => reduceLiveTaskEvent(previous, envelope))
+        if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
+          setProjection(previous => ({
+            ...previous,
+            active: reduceLiveTaskEvent(previous.active, envelope),
+          }))
+          if (!followControllerRef.current.isFollowing) setNewRecords(true)
+        }
         setState(previous => runtimeStateFromEvent(previous, envelope))
-        if (!followControllerRef.current.isFollowing) setNewRecords(true)
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
+        }
+        if (envelope.normalizedEvent?.type === 'runtime-disclosure.changed') {
+          void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
+            setRuntimeDisclosures,
+            () => undefined,
+          )
+        }
+        if (envelope.normalizedEvent?.type === 'control.changed') {
+          if (envelope.normalizedEvent.control === 'model' && product.capabilities.includes('model-switching')) {
+            void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(
+              setModelControl,
+              () => setSyncError(t('live.controlsSyncFailed')),
+            )
+          }
+          if (envelope.normalizedEvent.control === 'thinking' && product.capabilities.includes('thinking-control')) {
+            void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(
+              setThinking,
+              () => setSyncError(t('live.controlsSyncFailed')),
+            )
+          }
         }
         if (envelope.normalizedEvent?.type === 'queue.update') {
           queueRevisionRef.current += 1
@@ -524,44 +741,93 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }))
         }
         if (envelope.normalizedEvent?.type === 'status') {
+          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
+            setError(envelope.normalizedEvent.message)
+          }
+          if (envelope.normalizedEvent.status === 'running') {
+            liveTurnRevisionRef.current += 1
+          }
+          if (envelope.normalizedEvent.status === 'running'
+            || envelope.normalizedEvent.status === 'compacting'
+            || envelope.normalizedEvent.status === 'idle') {
+            setActivityStatus(envelope.normalizedEvent.status)
+          } else if (envelope.normalizedEvent.status === 'ready') {
+            setActivityStatus(null)
+          }
           void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
             setRuntimeDisclosures,
             () => undefined,
           )
           if (envelope.normalizedEvent.status === 'ready') {
+            void recover()
             void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+            if (product.capabilities.includes('command-discovery')) {
+              void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
+            }
+            if (product.capabilities.includes('model-switching')) {
+              void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(
+                setModelControl,
+                () => setSyncError(t('live.controlsSyncFailed')),
+              )
+            }
+            if (product.capabilities.includes('thinking-control')) {
+              void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(
+                setThinking,
+                () => setSyncError(t('live.controlsSyncFailed')),
+              )
+            }
+            if (product.capabilities.includes('queue')) {
+              const queueRevision = queueRevisionRef.current
+              void liveApi.queueState(current.liveId, current.runtimeSessionId).then(queueState => {
+                if (queueRevisionRef.current === queueRevision) setQueue(queueState)
+              }, () => undefined)
+            }
           }
         }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
-          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(actions => {
-            setMessageActions(actions)
-            if (!actions.length) return
-            return liveApi.snapshot(current.liveId, current.runtimeSessionId).then(snapshot => {
-              const projected = projectLiveSnapshotEntries(snapshot.entries)
-              setState(snapshot.state)
-              setItems(projected)
-              setInputHistory(projectLiveInputHistory(projected))
-              leafIdRef.current = snapshot.leafId ?? undefined
-            })
-          }, () => undefined)
+          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
+            setError(envelope.normalizedEvent.message)
+          }
+          setActivityStatus('idle')
+          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+          if (product.capabilities.includes('recovery')) {
+            void recover('settle')
+          } else {
+            setProjection(previous => ({
+              stable: previous.active.length
+                ? [...previous.stable, ...previous.active]
+                : previous.stable,
+              active: [],
+            }))
+            snapshotBaseActiveCountRef.current = 0
+          }
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
       () => setConnected(false),
       () => {
         setConnected(true)
-        if (opened) void recover()
-        opened = true
+        void recover()
       },
     )
     return () => {
+      recoveryActive = false
       recoveryGeneration += 1
+      pendingRecoveryMode = null
       unsubscribe()
     }
-  }, [current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities])
+  }, [
+    bootstrapTarget?.liveId,
+    bootstrapTarget?.runtimeSessionId,
+    current?.liveId,
+    current?.runtimeSessionId,
+    product?.liveId,
+    product?.capabilities,
+    t,
+  ])
 
 
   useEffect(() => {
@@ -593,7 +859,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         controller.endProgrammaticScroll()
       })
     })
-  }, [items])
+  }, [projection.stable, projection.active])
 
   useEffect(() => () => {
     if (followFrameRef.current !== null) window.cancelAnimationFrame(followFrameRef.current)
@@ -687,17 +953,29 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : 'steer' as const
       : 'normal' as const
     const optimisticText = messageText(message)
-    const optimisticId = behavior === 'normal' && optimisticText
-      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
-      : null
     const pending = behavior !== 'normal' && optimisticText
       ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
       : null
 
     setBusy(true)
     setError('')
-    if (behavior === 'normal' && optimisticText && optimisticId) {
-      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
+    const optimisticAttachments = behavior === 'normal'
+      ? await optimisticMessageAttachments(message)
+      : []
+    const optimisticId = behavior === 'normal' && (optimisticText || optimisticAttachments.length)
+      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
+      : null
+    if (behavior === 'normal') liveTurnRevisionRef.current += 1
+    if (behavior === 'normal' && optimisticId) {
+      setProjection(previous => ({
+        ...previous,
+        active: appendOptimisticLiveUserMessage(
+          previous.active,
+          optimisticText,
+          optimisticId,
+          optimisticAttachments,
+        ),
+      }))
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
@@ -709,7 +987,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
-      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
+      if (optimisticId) {
+        setProjection(previous => ({
+          ...previous,
+          active: previous.active.filter(item => item.id !== optimisticId),
+        }))
+      }
       composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -727,11 +1010,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       : null
 
     startupSendingRef.current = true
+    liveTurnRevisionRef.current += 1
     setBusy(true)
     setError('')
     setStartupQueued(currentMessage => currentMessage === message ? null : currentMessage)
     if (optimisticText && optimisticId) {
-      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
+      setProjection(previous => ({
+        ...previous,
+        active: appendOptimisticLiveUserMessage(previous.active, optimisticText, optimisticId),
+      }))
     }
 
     void liveApi.send(current.liveId, current.runtimeSessionId, message, 'normal').then(() => {
@@ -739,7 +1026,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setState(previous => previous ? { ...previous, isStreaming: true } : previous)
       composerRef.current?.focus({ preventScroll: true })
     }, reason => {
-      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
+      if (optimisticId) {
+        setProjection(previous => ({
+          ...previous,
+          active: previous.active.filter(item => item.id !== optimisticId),
+        }))
+      }
       composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     }).finally(() => {
@@ -766,6 +1058,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setRestoredQueue(restored)
       setQueue(emptyLiveQueue())
       setPendingQueue([])
+      setProjection(previous => ({
+        ...previous,
+        active: settleLiveTaskProjectionItems(previous.active),
+      }))
       setState(previous => previous ? { ...previous, isStreaming: false, pendingMessageCount: 0 } : previous)
       setInterruptNotice(true)
     } catch (reason) {
@@ -899,9 +1195,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
       const snapshot = await liveApi.snapshot(current.liveId, current.runtimeSessionId)
       const projected = projectLiveSnapshotEntries(snapshot.entries)
+      const nextProjection = splitLiveProjectionItems(projected, snapshot.state.isStreaming)
       setState(snapshot.state)
-      setItems(projected)
+      setProjection(nextProjection)
       setInputHistory(projectLiveInputHistory(projected))
+      snapshotBaseActiveCountRef.current = nextProjection.active.length
       leafIdRef.current = snapshot.leafId ?? undefined
       if (typeof result.draftText === 'string') setComposerValue(result.draftText)
       composerRef.current?.focus({ preventScroll: true })
@@ -952,6 +1250,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [busy, current, thinking])
 
+  const roundSegments = useMemo(
+    () => roundProjectorRef.current.projectSegmented(projection.stable, projection.active),
+    [projection.stable, projection.active],
+  )
+  const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
+  const itemCount = projection.stable.length + projection.active.length
+
   if (!current) {
     return <main className="pi-live-page pi-live-page-embedded">
       <div className="pi-live-error" role="alert">{error || t('live.invalidRuntime')}</div>
@@ -960,9 +1265,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
   const agentLabel = product?.displayName ?? current.liveId
   const workspace = workspaceDisplayName(state?.workspacePath)
-  const title = workspace || t('center.history.genericAgentTask', { agent: agentLabel })
-  const runtimeStatus = statusLabel(state, t)
-  const rounds = projectLiveTaskRounds(items)
+  const title = state?.title?.trim() || workspace || t('center.history.genericAgentTask', { agent: agentLabel })
+  const runtimeStatus = statusLabel(state, t, activityStatus)
+  const streamSupported = product?.capabilities.includes('stream') === true
+  const connectionLabel = streamSupported
+    ? connected ? t('live.connected') : t('live.connecting')
+    : runtimeStatus
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
     if (message) void send(message)
@@ -1061,13 +1369,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         </>}
       />
 
-      <LiveRuntimeDisclosures
-        items={runtimeDisclosures}
-        language={i18n.resolvedLanguage ?? i18n.language}
-        pendingAction={runtimeActionPending}
-        onAction={action => { void runRuntimeAction(action) }}
-      />
-
       <div
         ref={readerRef}
         className="pi-live-reader live-task-reader"
@@ -1077,6 +1378,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onPointerDown={markReaderUserIntent}
       >
         <div className="pi-live-document live-task-document">
+          <LiveRuntimeDisclosures
+            items={runtimeDisclosures}
+            language={i18n.resolvedLanguage ?? i18n.language}
+            pendingAction={runtimeActionPending}
+            onAction={action => { void runRuntimeAction(action) }}
+          />
           {!state && !error && <div className="pi-live-startup-spotlight">
             <OperationProgress
               statusLabel={t('live.loadingStatus')}
@@ -1084,17 +1391,27 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               description={t('live.loadingDescription')}
             />
           </div>}
-          {rounds.map((round, index) => <GenericLiveRound
+          <StableLiveRounds
+            rounds={roundSegments.stable}
+            agentLabel={agentLabel}
+            eagerTailCount={stableEagerTailCount}
+            messageActions={messageActions}
+            actionPending={messageActionPending}
+            runtimeStreaming={state?.isStreaming ?? false}
+            onMessageAction={runMessageAction}
+          />
+          {roundSegments.active.map((round, index) => <GenericLiveRound
             key={round.model.id}
             projection={round}
             agentLabel={agentLabel}
-            eager={round.model.state === 'running' || index >= rounds.length - 2}
+            eager={round.model.state === 'running' || index >= roundSegments.active.length - 2}
             messageActions={messageActions}
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
             onMessageAction={runMessageAction}
           />)}
-          {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
+          {!itemCount && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
+          {syncError && <div className="pi-live-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
           {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
         </div>
@@ -1174,9 +1491,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             />
           </div>
           <div className="pi-live-compose-bar">
-            <span className="pi-live-compose-runtime" title={connected ? t('live.connected') : t('live.connecting')}>
+            <span
+              className={`pi-live-compose-runtime ${streamSupported && !connected ? 'pi-live-disconnected' : ''}`.trim()}
+              title={connectionLabel}
+            >
               <span className="pi-live-idle-dot" aria-hidden="true"/>
-              {runtimeStatus}
+              {connectionLabel}
             </span>
             <div className="pi-live-compose-settings">
               {modelControl && <ComposerPillSelect

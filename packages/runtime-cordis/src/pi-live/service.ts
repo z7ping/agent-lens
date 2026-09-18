@@ -43,6 +43,7 @@ interface OwnedRuntime {
   projectName: string
   gitBranch?: string | undefined
   taskSummary?: string | undefined
+  activeAssistantMessageId?: string | undefined
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -507,6 +508,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdateCheck = undefined
     runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
+    runtime.activeAssistantMessageId = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
     this.scheduleInitialize(runtime, runtime.generation)
@@ -562,6 +564,7 @@ export class DefaultPiLiveService implements PiLiveService {
       if (this.disposed) return
       if (this.runtimes.has(item.id)) continue
       const runtime = this.createRuntime(item.id, item.input, true, item.createdAt)
+      runtime.taskSummary = item.taskSummary
       this.runtimes.set(runtime.id, runtime)
       void this.initialize(runtime, runtime.generation)
     }
@@ -582,6 +585,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const value: PiLiveRecoveryRecord = {
       id: runtime.id,
       input: recoveryInput(runtime.input, sessionPath),
+      ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
       createdAt: runtime.createdAt,
       updatedAt: new Date().toISOString(),
     }
@@ -619,6 +623,21 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!nextPath) return
     this.adoptRuntimeSession(runtime, nextPath)
     this.persistRuntimeBestEffort(runtime)
+  }
+
+  private persistRuntimeMetadataBestEffort(runtime: OwnedRuntime): void {
+    if (!this.recoveryStore || !runtime.input.sessionPath?.trim()) return
+    const previous = runtime.recoveryCheckpointTask
+    let checkpoint: Promise<void>
+    checkpoint = (async () => {
+      await previous?.catch(() => undefined)
+      await this.persistRuntime(runtime)
+    })().catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live recovery metadata checkpoint failed', error)
+    }).finally(() => {
+      if (runtime.recoveryCheckpointTask === checkpoint) runtime.recoveryCheckpointTask = undefined
+    })
+    runtime.recoveryCheckpointTask = checkpoint
   }
 
   private async refreshWorkspaceContext(runtime: OwnedRuntime): Promise<void> {
@@ -968,6 +987,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtime = await this.readyRuntime(id)
     const queue = await runtime.handle!.abort(options.restoreQueue !== false)
     runtime.queue = { steering: [], followUp: [] }
+    runtime.activeAssistantMessageId = undefined
     return queue
   }
   async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> { if (!requestId) throw new Error('Pi extension request id is required'); await (await this.readyRuntime(id)).handle!.respondToExtension(requestId, response) }
@@ -1095,6 +1115,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.error ? { error: runtime.error } : {}),
       ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
+      ...((runtime.taskSummary || runtime.input.name) ? { title: runtime.taskSummary || runtime.input.name } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
@@ -1125,6 +1146,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
+      ...((runtime.taskSummary || safeState.sessionName || runtime.input.name)
+        ? { title: runtime.taskSummary || safeState.sessionName || runtime.input.name }
+        : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
@@ -1253,20 +1277,43 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private captureTaskSummary(runtime: OwnedRuntime, message: string): void {
-    if (runtime.taskSummary) return
+    if (runtime.taskSummary || runtime.input.name?.trim()) return
     const summary = taskSummary(message)
     if (!summary) return
     runtime.taskSummary = summary
     this.publish(runtime, { type: 'task_summary', taskSummary: summary })
+    this.persistRuntimeMetadataBestEffort(runtime)
   }
 
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {
-    if (event.type === 'queue_update') {
+    const type = typeof event.type === 'string' ? event.type : ''
+    const message = event.message && typeof event.message === 'object' && !Array.isArray(event.message)
+      ? event.message as Record<string, unknown>
+      : undefined
+    const messageRole = typeof message?.role === 'string' ? message.role : ''
+    const messageId = typeof message?.id === 'string' ? message.id : ''
+
+    if (type === 'message_start' && messageRole === 'assistant') {
+      runtime.activeAssistantMessageId = messageId || undefined
+    }
+
+    const publishedEvent = type === 'message_update' && runtime.activeAssistantMessageId
+      ? { ...event, messageId: runtime.activeAssistantMessageId }
+      : event
+
+    if (type === 'queue_update') {
       runtime.queue = {
         steering: queueMessages(event.steering),
         followUp: queueMessages(event.followUp),
       }
     }
-    runtime.events.publish(event)
+    runtime.events.publish(publishedEvent)
+
+    if ((type === 'message_end' && messageRole === 'assistant')
+      || type === 'agent_settled'
+      || type === 'agent_end'
+      || type === 'runtime_exit') {
+      runtime.activeAssistantMessageId = undefined
+    }
   }
 }

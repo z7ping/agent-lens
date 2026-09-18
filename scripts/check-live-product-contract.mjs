@@ -12,10 +12,12 @@ const [
   liveStyles,
   liveClient,
   liveProtocol,
+  liveCore,
   architectureTest,
   reviewPage,
   reviewLiveInteraction,
   liveComposer,
+  taskMessage,
   liveImageNode,
   liveAttachmentClient,
   liveAttachmentHttp,
@@ -35,10 +37,12 @@ const [
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/live.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/core/src/contracts/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/live-product-surface-architecture.test.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/ReviewPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/review-live-interaction.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/TaskMessage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/components/LiveImageNode.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live-attachments.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/surface-http/src/live-attachments-http.ts', import.meta.url), 'utf8'),
@@ -129,15 +133,40 @@ forbidText(liveTask, /pi\.edit-from-here|pi\.new-session-from-here|navigateTree|
 requireText(liveTask, /liveApi\.runtimeDisclosures\(current\.liveId, current\.runtimeSessionId\)/, 'LiveTaskPage 必须通过通用 Contribution 读取 Runtime diagnostics')
 requireText(liveTask, /liveApi\.executeRuntimeAction\(/, 'LiveTaskPage 必须通过通用 Contribution 执行 Runtime action')
 requireText(liveTask, /<LiveRuntimeDisclosures/, 'LiveTaskPage 必须使用 AgentLens-owned Runtime Disclosure renderer')
+requireText(liveTask, /<div className="pi-live-document live-task-document">[\s\S]{0,500}<LiveRuntimeDisclosures/, 'Runtime Disclosure 必须位于 Session Document 内，不得创建 TaskSurface 第四结构槽')
+requireText(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/, 'Live 流式投影必须分别输出稳定历史与当前活动轮')
+requireText(liveTask, /const GenericLiveRound = memo\(/, 'Live 单轮必须 memo，不能在当前流式 delta 时重绘稳定轮次')
+requireText(liveTask, /const StableLiveRounds = memo\(/, 'Live 稳定历史容器必须 memo，流式 delta 时不能再次遍历全部历史')
+requireText(liveTask, /rounds=\{roundSegments\.stable\}/, 'Live 稳定历史必须作为独立 Round 段交给 memo 容器')
+requireText(liveTask, /roundSegments\.active\.map\(/, 'Live 高频渲染只能直接遍历当前活动 Round')
+requireText(liveTask, /snapshotBaseActiveCountRef/, 'Live 完成态必须保留 Snapshot 内活动轮基线，确保增量对账不复制稳定历史')
+requireText(liveTask, /active:\s*reduceLiveTaskEvent\(previous\.active, envelope\)/, 'Live 高频 SSE 只能更新当前活动轮，不能复制稳定历史')
+requireText(liveTask, /active:\s*appendOptimisticLiveUserMessage\([\s\S]{0,160}previous\.active,[\s\S]{0,120}optimisticText,[\s\S]{0,120}optimisticId,[\s\S]{0,120}optimisticAttachments/, '新一轮发送必须把文本与乐观附件一起追加到活动尾部，避免未完成对账时错误推进稳定边界')
+requireText(liveTask, /mode === ['"]settle['"] && snapshot\.state\.isStreaming/, '上一轮完成对账返回时若下一轮已开始，必须丢弃旧投影结果并保留原 leaf')
+requireText(liveTask, /const liveTurnRevisionRef = useRef\(0\)/, 'Live 必须记录活动轮修订号，防止旧 Snapshot 覆盖下一轮')
+requireText(liveTask, /const recoveryTurnRevision = liveTurnRevisionRef\.current/, 'Recovery 发起时必须记录活动轮修订号')
+requireText(liveTask, /if \(liveTurnRevisionRef\.current !== recoveryTurnRevision\) return/, 'Recovery 返回前若活动轮已变化，必须整体丢弃陈旧结果')
+requireText(liveTask, /normalizedEvent\.status === ['"]running['"][\s\S]{0,120}liveTurnRevisionRef\.current \+= 1/, 'Runtime 开始新一轮时必须推进活动轮修订号')
+
+requireText(liveTask, /let recoveryTask: Promise<void> \| null = null/, 'Live recovery 必须单飞，避免 ready/reconnect/completed 并发打 Snapshot')
+requireText(liveTask, /let pendingRecoveryMode: ['"]live['"] \| ['"]settle['"] \| null = null/, 'Live recovery 必须记录单飞期间的 pending 恢复')
+requireText(liveTask, /if \(recoveryTask\)[\s\S]{0,180}pendingRecoveryMode = mode[\s\S]{0,120}return recoveryTask/, 'Live recovery 并发请求必须合并为 pending 补跑')
+requireText(liveTask, /while \(recoveryActive && nextMode\)[\s\S]{0,220}await recoverOnce\(currentMode\)/, 'Live recovery 必须串行执行 pending 补跑')
+
+requireText(liveTask, /if \(product\.capabilities\.includes\(['"]recovery['"]\)\)[\s\S]{0,180}recover\(['"]settle['"]\)[\s\S]{0,260}else[\s\S]{0,220}stable:[\s\S]{0,120}previous\.active/, '没有 recovery capability 的 Live 产品完成后必须直接稳定活动轮')
+requireText(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须优先使用稳定 leaf 增量快照')
+forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
 requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')
 requireText(liveRuntimeDisclosures, /<Disclosure/, 'Runtime diagnostics 必须使用受控 Disclosure placement')
 forbidText(liveRuntimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/, 'Runtime Disclosure renderer 不得识别 Pi 私有语义')
 
 requireText(liveStyles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/, 'Live 页面桌面壳层必须保留会话栏 + 主区两列')
+forbidText(liveStyles, /max-width:\s*720px/, 'Live 样式不得引入脱离统一断点体系的 720px 私有断点')
+requireText(liveStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.pi-live-compose-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
 requireText(liveTask, /<aside className="pi-live-sessions"/, 'LiveTaskPage 两列壳层必须实际渲染通用会话栏')
 requireText(liveTask, /setRuntimes\(matched\.runtimes\)/, 'Live 会话栏必须来自当前 Live Product runtimes')
-requireText(liveTask, /projectLiveTaskRounds\(items\)/, 'LiveTaskPage 必须恢复语义 Round 投影')
+requireText(liveTask, /LiveTaskRoundProjector/, 'LiveTaskPage 必须通过通用增量 Projector 构造语义 Round')
 requireText(liveTask, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
 requireText(liveTask, /new LiveFollowController\(\)/, 'LiveTaskPage 必须恢复流式阅读自动跟随控制')
 requireText(liveTask, /pi-live-new-records/, 'LiveTaskPage 必须在用户脱离底部后提供新内容提示')
@@ -146,12 +175,50 @@ requireText(liveTask, /startupQueued/, 'LiveTaskPage 必须保留 Runtime 初始
 requireText(liveTask, /interruptNotice/, 'LiveTaskPage 必须保留中断成功反馈')
 requireText(liveTask, /attachments=\{item\.attachments\}/, 'LiveTaskPage 必须把 Snapshot 附件交给共享 TaskMessage')
 requireText(liveTaskProjection, /projectLiveTaskRounds/, 'Live Product 投影必须提供语义 Round')
+requireText(liveTaskProjection, /LIVE_TASK_ROUND_FACT_LIMIT\s*=\s*8/, 'Live 长单轮必须保持有界事实分块，不能一次挂载整轮')
+requireText(liveTaskProjection, /class LiveTaskRoundProjector/, 'Live 投影必须缓存稳定历史，不能每个流式批次重算全部会话')
+requireText(liveTaskProjection, /projectSegmented\([\s\S]{0,260}stableItems[\s\S]{0,260}activeItems/, 'Live Round Projector 必须直接返回稳定历史 / 活动轮两个独立段')
+requireText(liveTaskProjection, /stable:\s*this\.stableRounds,[\s\S]{0,180}active:\s*activeItems\.length/, 'Live Projector 必须复用稳定 Round 数组引用，只重算活动 Round')
+requireText(liveTaskProjection, /for \(let index = items\.length - 1; index >= 0; index -= 1\)/, 'Live 活动轮更新必须从尾部定位当前流式节点')
+requireText(liveTaskProjection, /function mergeLiveActiveProjectionItems[\s\S]{0,500}if \(indexes\.has\(item\.id\)\) continue/, '重连 Snapshot 不得覆盖同 ID 的更新实时节点')
+requireText(liveTaskProjection, /candidate\.id\.startsWith\(['"]user:['"]\)[\s\S]{0,140}candidate\.text === item\.text/, '重连 Snapshot 必须把持久化用户消息与乐观占位对账')
+requireText(liveTask, /settleLiveTaskProjectionItems\(previous\.active\)/, '手动 Stop 后必须立即收束活动轮展示状态')
+requireText(liveTaskProjection, /liveTaskStableRoundPrefixLength/, 'Live 必须区分稳定历史与当前流式语义轮次')
+requireText(liveTaskProjection, /liveEventChangesTaskTranscript/, 'Live 必须区分正文事件与控制事件，避免无意义正文重算')
+requireText(liveTask, /if \(liveEventChangesTaskTranscript\(envelope\.normalizedEvent\)\)/, 'Live SSE 控制事件不得触发正文 setItems')
+requireText(liveTask, /event\.type === ['"]title\.update['"]/, 'LiveTaskPage 必须实时消费通用 title.update')
+requireText(liveTask, /normalizedEvent\?\.type === ['"]control\.changed['"]/, 'LiveTaskPage 必须通过通用 control.changed 即时刷新 Runtime controls')
+requireText(liveTask, /normalizedEvent\?\.type === ['"]runtime-disclosure\.changed['"]/, 'LiveTaskPage 必须通过通用失效事件刷新 Runtime Disclosure')
+requireText(liveClient, /event\.type === ['"]runtime-disclosure\.changed['"][\s\S]{0,120}return ['"]runtime-disclosure\.changed['"]/, 'Runtime Disclosure 失效通知必须在调度器中合并')
+
+requireText(liveTask, /setActivityStatus\(envelope\.normalizedEvent\.status\)/, 'LiveTaskPage 必须消费 compacting 等通用活动状态')
+requireText(liveTask, /event\.status === ['"]failed['"] \|\| event\.status === ['"]terminating['"] \|\| event\.status === ['"]terminated['"]/, 'Live 终止/失败状态必须清理 isStreaming，不能继续显示可中断')
+requireText(liveTask, /normalizedEvent\.status === ['"]failed['"] && envelope\.normalizedEvent\.message[\s\S]{0,120}setError/, 'Live failed status 必须把 Runtime 原因反馈给用户')
+requireText(liveTask, /normalizedEvent\?\.type === ['"]completed['"][\s\S]{0,260}normalizedEvent\.status === ['"]failed['"][\s\S]{0,120}setError/, 'Live completed failed 必须把 Run 失败原因反馈给用户')
+
+requireText(liveTaskProjection, /semanticId:\s*round\.id/, 'Live 分块必须共享语义轮次 ID，不能把渲染分片伪装成新轮次')
 requireText(liveTaskProjection, /type === 'thinking' \|\| type === 'reasoning'/, 'Live Snapshot 投影不得在刷新后丢失 Thinking')
 requireText(liveTaskProjection, /type === 'toolCall' \|\| type === 'tool_call'/, 'Live Snapshot 投影不得在刷新后丢失 Tool')
 requireText(liveTaskProjection, /reviewMessageAttachmentsFromPayload/, 'Live Snapshot 投影不得在刷新后丢失图片附件')
+requireText(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/, '图片发送前必须生成独立 Web 本地乐观预览')
+requireText(taskMessage, /previewUrl\?: string/, 'TaskMessage 本地表现模型必须允许 Web-only previewUrl')
+requireText(taskMessage, /URL\.revokeObjectURL\(attachment\.previewUrl\)/, 'TaskMessage 卸载或替换乐观图片时必须释放 blob URL')
+requireText(liveTask, /optimisticMessageAttachments\(message\)/, 'Live 正常发送必须为通用附件建立乐观表现')
+requireText(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: ['"]image['"] \| ['"]file['"] \}>/, '乐观附件必须显式收窄 image/file part')
+requireText(taskMessage, /attachment\.type === ['"]file['"]/, 'TaskMessage 必须展示通用文件附件，不能只显示图片')
+requireText(zhTaskLocale, /fileAttachment:\s*['"]文件附件['"]/, '缺少文件附件中文文案')
+requireText(enTaskLocale, /fileAttachment:\s*['"]File attachment['"]/, '缺少文件附件英文文案')
+
 
 /* Generic client/protocol remain the only product-level API vocabulary. */
 requireText(liveClient, /const LIVE_ROOT = '\/api\/v1\/live'/, '通用 Live Client 根路径必须保持 /api/v1/live')
+requireText(liveClient, /class LiveEventScheduler/, '通用 Live Client 必须在正式 SSE 链路保留展示背压调度')
+requireText(liveClient, /LIVE_VISIBLE_FLUSH_MS\s*=\s*48/, '前台 Live delta 必须保持小批次合并，不能逐 token 触发 React')
+requireText(liveClient, /LIVE_HIDDEN_FLUSH_MS\s*=\s*250/, '后台 Live 必须降频，不能按前台频率持续渲染')
+requireText(liveClient, /scheduler\.push\(JSON\.parse\(event\.data\) as LiveRuntimeEventDto\)/, 'EventSource 必须先进入通用 Live 调度器再交给页面')
+requireText(liveClient, /existing === this\.queue\.length - 1/, 'Live 展示背压只能合并相邻事件，不能跨 Tool/Status 边界重排事实')
+requireText(liveClient, /visibilitychange/, 'Live 调度器必须响应 Page Visibility')
+requireText(liveClient, /scheduler\.dispose\(\)/, 'Live 页面离开时必须释放调度队列')
 requireText(liveClient, /async products\(\): Promise<LiveProductDto\[]>/, '通用 Live Client 必须提供 products')
 requireText(liveClient, /async knownRuntimes\(\): Promise<LiveRuntimeRefDto\[]>/, '通用 Live Client 必须聚合各 Live Product runtimes')
 requireText(liveClient, /start\(liveId: string, input: LiveStartInputDto = \{\}\)/, 'Live Client start 必须显式接收 liveId')
@@ -172,6 +239,22 @@ requireText(liveProtocol, /export interface LiveCommandDto[\s\S]{0,220}value:\s*
 requireText(liveProtocol, /export interface LiveMessageActionContributionDto[\s\S]{0,420}actionId:\s*string[\s\S]{0,420}roles:\s*Array<['"]user['"] \| ['"]assistant['"]>/, '受控消息动作必须保持 opaque actionId + role 声明')
 requireText(liveProtocol, /export interface LiveMessageActionResultDto[\s\S]{0,300}outcome:\s*['"]refresh-current['"] \| ['"]open-runtime['"]/, '消息动作结果只能返回受控导航结果')
 requireText(liveProtocol, /export interface LiveRuntimeDisclosureContributionDto[\s\S]{0,520}contributionId:\s*string[\s\S]{0,520}fields:\s*LiveRuntimeContributionFieldDto\[]/, 'Runtime Disclosure 必须保持声明式字段契约')
+requireText(liveCore, /export interface LiveRuntimeState[\s\S]{0,180}title\?:\s*string/, 'Core LiveRuntimeState 必须保留 Agent-neutral 任务标题')
+requireText(liveProtocol, /export interface LiveRuntimeStateDto[\s\S]{0,180}title\?:\s*string/, 'Protocol LiveRuntimeStateDto 必须暴露通用任务标题')
+requireText(liveCore, /type:\s*['"]title\.update['"][\s\S]{0,80}title:\s*string/, 'Core LiveEvent 必须包含通用 title.update')
+requireText(liveCore, /type:\s*['"]control\.changed['"][\s\S]{0,100}control:\s*['"]model['"] \| ['"]thinking['"]/, 'Core LiveEvent 必须包含通用 control.changed')
+requireText(liveProtocol, /type:\s*['"]title\.update['"];\s*title:\s*string/, 'Protocol LiveEventDto 必须包含通用 title.update')
+requireText(liveProtocol, /type:\s*['"]control\.changed['"];\s*control:\s*['"]model['"] \| ['"]thinking['"]/, 'Protocol LiveEventDto 必须包含通用 control.changed')
+requireText(liveProtocol, /type:\s*['"]runtime-disclosure\.changed['"]/, 'Protocol LiveEventDto 必须包含 Runtime Disclosure 失效事件')
+requireText(piLiveAdapter, /type === ['"]task_summary['"][\s\S]{0,180}type:\s*['"]title\.update['"]/, 'Pi task_summary 必须只在 Adapter 边界映射为通用 title.update')
+requireText(piLiveAdapter, /type === ['"]model_changed['"][\s\S]{0,120}control:\s*['"]model['"]/, 'Pi model_changed 必须只在 Adapter 边界映射为通用 control.changed')
+requireText(piLiveAdapter, /type === ['"]thinking_level_changed['"][\s\S]{0,120}control:\s*['"]thinking['"]/, 'Pi thinking_level_changed 必须只在 Adapter 边界映射为通用 control.changed')
+requireText(piLiveAdapter, /type === ['"]runtime_exit['"][\s\S]{0,180}type:\s*['"]status['"][\s\S]{0,120}status:\s*['"]failed['"]/, 'Pi runtime_exit 必须映射为终止性 failed status，不能与扩展错误混为一谈')
+requireText(piLiveAdapter, /type === ['"]extension_error['"][\s\S]{0,180}type:\s*['"]error['"]/, 'Pi extension_error 必须保留为非终止性通用 error')
+requireText(piLiveAdapter, /type === ['"]runtime_resources['"][\s\S]{0,180}runtime-disclosure\.changed/, 'Pi 私有诊断变化必须只在 Adapter 边界映射为 Runtime Disclosure 失效事件')
+requireText(liveHttp, /const title = typeof row\.title === ['"]string['"]/, 'Live HTTP 必须安全投影通用 Runtime title')
+requireText(liveTask, /runtime\.title\?\.trim\(\) \|\| workspaceDisplayName/, 'Live 会话栏必须优先展示通用任务标题')
+requireText(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/, 'Live 页头必须优先展示通用任务标题')
 requireText(liveProtocol, /export interface LiveRuntimeActionResultDto[\s\S]{0,180}runtime:\s*LiveRuntimeStateDto/, 'Runtime action 只能返回通用 Runtime state')
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
 

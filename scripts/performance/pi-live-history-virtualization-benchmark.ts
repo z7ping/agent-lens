@@ -15,20 +15,23 @@ const budgetMountedFacts = Math.floor(numberArg('budget-mounted-facts', 160))
 const budgetObserverInstances = Math.floor(numberArg('budget-observer-instances', 1))
 
 const [page, mount, projection] = await Promise.all([
-  readFile(new URL('../../packages/web/src/features/PiLivePage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../../packages/web/src/features/LiveTaskPage.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../../packages/web/src/components/VirtualRoundMount.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../../packages/web/src/features/pi-live-task-projection.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../../packages/web/src/features/live-task-projection.ts', import.meta.url), 'utf8'),
 ])
 
-const chunkSize = Number(projection.match(/PI_LIVE_HISTORY_ROUND_FACT_LIMIT\s*=\s*(\d+)/)?.[1])
-const eagerChunks = Number(page.match(/PI_LIVE_EAGER_CHUNKS\s*=\s*(\d+)/)?.[1])
+const chunkSize = Number(projection.match(/LIVE_TASK_ROUND_FACT_LIMIT\s*=\s*(\d+)/)?.[1])
+const eagerChunks = 2
 const rootMargin = Number(mount.match(/REVIEW_ROUND_ROOT_MARGIN_PX\s*=\s*(\d+)/)?.[1])
 
-if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error('Cannot resolve Pi Live history chunk size')
-if (!Number.isFinite(eagerChunks) || eagerChunks < 0) throw new Error('Cannot resolve Pi Live eager chunk count')
+if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error('Cannot resolve generic Live round chunk size')
 if (!Number.isFinite(rootMargin) || rootMargin < 0) throw new Error('Cannot resolve virtual mount root margin')
-if (!/rootSelector="\.pi-live-reader"/.test(page)) throw new Error('Pi Live history is not mounted against .pi-live-reader')
-if (!/visibleHistoryRounds\.map/.test(page) || !/VirtualRoundMount/.test(page) || !/PiLiveHistoryTaskRound/.test(page)) throw new Error('Pi Live semantic round virtualization is missing')
+if (!/rootSelector="\.pi-live-reader"/.test(page)) throw new Error('Live task virtualization is not mounted against .pi-live-reader')
+if (!/const StableLiveRounds = memo/.test(page) || !/roundSegments\.active\.map/.test(page) || !/<VirtualRoundMount/.test(page) || !/LiveTaskRoundProjector/.test(page)) throw new Error('Generic Live semantic round virtualization is missing')
+if (!/roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/.test(page)) throw new Error('Live streaming must keep stable history outside the active render path')
+if (!/stableEagerTailCount = Math\.max\(0, 2 - roundSegments\.active\.length\)/.test(page)) throw new Error('Live split rendering must preserve the two-round eager mount budget')
+if (!/class LiveTaskRoundProjector/.test(projection)) throw new Error('Generic Live incremental round projector is missing')
+if (!/liveTaskStableRoundPrefixLength/.test(projection)) throw new Error('Generic Live stable/current round boundary is missing')
 if (!/sharedVirtualObservers\s*=\s*new WeakMap/.test(mount)) throw new Error('VirtualRoundMount must share IntersectionObserver per scroll root')
 if (!/observer\.unobserve\(element\)/.test(mount)) throw new Error('Shared virtual observer must unobserve disposed targets')
 if (!/listeners\.size === 0[\s\S]*observer\.disconnect/.test(mount)) throw new Error('Shared virtual observer must disconnect when the last target leaves')
@@ -42,12 +45,12 @@ const observedTargets = Math.ceil(facts / chunkSize)
 const observerInstances = observedTargets > 0 ? 1 : 0
 
 const report = {
+  benchmark: 'generic-live-history-virtualization',
   facts,
   viewportHeight,
   rootMargin,
   chunkSize,
   eagerChunks,
-  minimumFactHeight,
   observedTargets,
   observerInstances,
   budgetObserverInstances,
@@ -58,8 +61,8 @@ const report = {
 console.log(JSON.stringify(report, null, 2))
 
 if (mountedFacts > budgetMountedFacts) {
-  throw new Error(`Pi Live mounted heavy fact budget exceeded: ${mountedFacts} > ${budgetMountedFacts}`)
+  throw new Error(`Live mounted heavy fact budget exceeded: ${mountedFacts} > ${budgetMountedFacts}`)
 }
 if (observerInstances > budgetObserverInstances) {
-  throw new Error(`Pi Live IntersectionObserver instance budget exceeded: ${observerInstances} > ${budgetObserverInstances}`)
+  throw new Error(`Live IntersectionObserver instance budget exceeded: ${observerInstances} > ${budgetObserverInstances}`)
 }

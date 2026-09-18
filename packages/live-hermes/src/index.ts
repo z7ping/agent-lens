@@ -72,6 +72,10 @@ function hermesNumber(value: unknown): number | undefined {
 export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>>): LiveEvent | undefined {
   const name = hermesText(event.event) || hermesText(event.type)
 
+  if (name === 'task.title.updated') {
+    const title = hermesText(event.title)
+    return title ? { type: 'title.update', title } : undefined
+  }
   if (name === 'runtime_status') {
     const status = hermesText(event.status)
     if (status === 'initializing' || status === 'ready' || status === 'failed'

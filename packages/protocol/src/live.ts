@@ -90,6 +90,7 @@ export type LiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'termin
 
 export interface LiveRuntimeStateDto {
   runtimeSessionId: string
+  title?: string | undefined
   status: LiveRuntimeStatusDto
   nativeSessionId?: string | undefined
   workspacePath?: string | undefined
@@ -156,6 +157,9 @@ export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' 
 
 export type LiveEventDto =
   | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
+  | { type: 'title.update'; title: string }
+  | { type: 'control.changed'; control: 'model' | 'thinking' }
+  | { type: 'runtime-disclosure.changed' }
   | {
       type: 'message.start' | 'message.end'
       role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
@@ -443,6 +447,16 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
     }
   }
+  if (type === 'title.update') {
+    const title = eventText(event.title)?.trim()
+    return title ? { type, title: title.slice(0, 240) } : null
+  }
+  if (type === 'control.changed') {
+    return event.control === 'model' || event.control === 'thinking'
+      ? { type, control: event.control }
+      : null
+  }
+  if (type === 'runtime-disclosure.changed') return { type }
   if (type === 'message.start' || type === 'message.end') {
     const role = event.role
     const validRole = role === undefined

@@ -241,10 +241,18 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
     }),
   }
   const first = new DefaultPiLiveService(firstHost, store)
-  const initial = await first.start({ cwd: '/workspace', name: '可恢复任务', provider: 'deepseek', model: 'v4' })
+  const initial = await first.start({ cwd: '/workspace', provider: 'deepseek', model: 'v4' })
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal((await first.state(initial.runtimeSessionId)).status, 'ready')
   assert.equal(store.values.get(initial.runtimeSessionId)?.input.sessionPath, '/sessions/live.jsonl')
+
+  await first.prompt(initial.runtimeSessionId, '自动标题应跨 Daemon 恢复')
+  for (let index = 0; index < 20
+    && store.values.get(initial.runtimeSessionId)?.taskSummary !== '自动标题应跨 Daemon 恢复'; index += 1) {
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal(store.values.get(initial.runtimeSessionId)?.taskSummary, '自动标题应跨 Daemon 恢复')
+  assert.equal((await first.state(initial.runtimeSessionId)).title, '自动标题应跨 Daemon 恢复')
 
   await first.dispose()
   assert.equal(firstTerminateCalls, 1)
@@ -269,6 +277,7 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
 
   assert.equal(restored.runtimeSessionId, initial.runtimeSessionId)
   assert.equal(restored.status, 'ready')
+  assert.equal(restored.title, '自动标题应跨 Daemon 恢复')
   assert.equal(restored.initializationMessage?.startsWith('Pi Runtime 已恢复'), true)
   assert.equal(recoveredInput?.sessionPath, '/sessions/live.jsonl')
   assert.equal(recoveredInput?.historyAction, 'continue')
@@ -282,6 +291,21 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
   const third = new DefaultPiLiveService(secondHost, store)
   await assert.rejects(() => third.state(initial.runtimeSessionId), /Unknown Pi Live runtime session/)
   await third.dispose()
+})
+
+test('显式任务标题不会被首条消息自动摘要覆盖', async () => {
+  const store = new MemoryRecoveryStore()
+  const service = new DefaultPiLiveService({
+    start: async id => handle(id, '/sessions/explicit-title.jsonl'),
+  }, store)
+  const initial = await service.start({ cwd: '/workspace', name: '用户指定标题' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  await service.prompt(initial.runtimeSessionId, '首条消息不应覆盖标题')
+
+  assert.equal((await service.state(initial.runtimeSessionId)).title, '用户指定标题')
+  assert.equal(store.values.get(initial.runtimeSessionId)?.input.name, '用户指定标题')
+  assert.equal(store.values.get(initial.runtimeSessionId)?.taskSummary, undefined)
+  await service.terminate(initial.runtimeSessionId)
 })
 
 test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 Session', async () => {

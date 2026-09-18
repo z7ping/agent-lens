@@ -33,11 +33,13 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       source: '源码',
       rendered: '渲染',
       imageAttachment: '图片附件',
+      fileAttachment: '文件附件',
     },
     surface: {
       turnRail: '轮次导轨',
       backgroundActivity: '后台活动',
       roundOrdinal: '第 {{count}} 轮',
+      roundContinuation: '{{label}}（续）',
       running: '进行中',
       hasError: '有错误',
       jumpTo: '跳到{{tip}}',
@@ -125,6 +127,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       },
       send: '发送',
       messageActionPending: '操作中…',
+      syncWarning: '实时状态同步暂时失败，任务仍可继续使用：{{message}}',
+      controlsSyncFailed: '模型或推理控制未能刷新',
       unsupportedInput: '当前智能体不支持{{type}}输入。',
       input: {
         largeText: '大段文本',
@@ -247,7 +251,10 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       runtimeStatus: {
         failed: '需要处理',
         initializing: '启动中',
+        terminating: '正在结束',
+        terminated: '已结束',
         streaming: '执行中',
+        compacting: '压缩上下文',
         idle: '等待输入',
       },
     },

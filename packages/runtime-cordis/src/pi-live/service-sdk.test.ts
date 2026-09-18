@@ -136,6 +136,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   const state = await waitUntilReady(service, initializing.runtimeSessionId)
   assert.equal(state.nativeSessionId, 'native-session-1')
   assert.equal(state.sessionName, 'AgentLens task')
+  assert.equal(state.title, 'AgentLens task')
   assert.equal(state.processId, undefined)
   assert.equal(calls.includes('model:openai/gpt-test'), true)
   assert.deepEqual(state.startupResources?.skills, ['static-skill', 'extension-skill'])
@@ -162,6 +163,10 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(events.some(event => event.type === 'tool_execution_start'), true)
 
   emit(agentListener, {
+    type: 'message_start',
+    message: { role: 'assistant', id: 'assistant-1' },
+  })
+  emit(agentListener, {
     type: 'message_update',
     message: { role: 'assistant', usage: { output: 7 } },
     assistantMessageEvent: {
@@ -175,6 +180,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(messageUpdate, {
     type: 'message_update',
     usage: { output: 7 },
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hello' },
   })
 
@@ -202,8 +208,33 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(toolCallUpdate, {
     type: 'message_update',
     usage: { output: 8 },
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'toolcall_start', contentIndex: 1, id: 'call-1', toolName: 'read' },
   })
+
+  emit(agentListener, {
+    type: 'message_end',
+    message: { role: 'assistant', id: 'assistant-1' },
+  })
+  emit(agentListener, {
+    type: 'message_start',
+    message: { role: 'assistant', id: 'assistant-2' },
+  })
+  emit(agentListener, {
+    type: 'message_update',
+    message: { role: 'assistant', usage: { output: 9 } },
+    assistantMessageEvent: {
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: 'second round',
+      partial: { role: 'assistant', content: [{ type: 'text', text: 'second round' }] },
+    },
+  })
+  const messageUpdates = events.filter(event => event.type === 'message_update'
+    && event.assistantMessageEvent
+    && typeof event.assistantMessageEvent === 'object'
+    && (event.assistantMessageEvent as Record<string, unknown>).type === 'text_delta')
+  assert.equal(messageUpdates.at(-1)?.messageId, 'assistant-2')
 
   let promptFinished = false
   const promptRequest = service.prompt(state.runtimeSessionId, 'hello', 'followUp').then(() => { promptFinished = true })
@@ -211,6 +242,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(promptFinished, true, 'HTTP-facing prompt should resolve after SDK preflight, before the agent turn completes')
   assert.equal(streaming, true, 'agent turn should still be running after prompt acknowledgement')
   assert.equal(calls.includes('prompt:hello:followUp:rpc'), true)
+  assert.equal((await service.state(state.runtimeSessionId)).title, 'hello')
 
   await service.steer(state.runtimeSessionId, 'change direction')
   await service.followUp(state.runtimeSessionId, 'afterwards')
