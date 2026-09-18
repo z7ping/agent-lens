@@ -31,6 +31,35 @@ test('ordinary request timeout does not recycle the shared Worker', async () => 
   }
 })
 
+test('request that expires while queued is skipped before worker execution', async () => {
+  const client = new DataRuntimeClient({
+    allowDiagnostics: true,
+    role: 'reader',
+    heartbeatIntervalMs: 60_000,
+  })
+  await client.start()
+  try {
+    const first = client.request('diagnostic.block', { durationMs: 180 }, 1_000)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await assert.rejects(
+      client.request('diagnostic.block', { durationMs: 160 }, 25),
+      /request timed out/,
+    )
+
+    await first
+    const startedAt = performance.now()
+    const ping = await client.request<{ ok: boolean }>('ping', {}, 1_000)
+    assert.equal(ping.ok, true)
+    assert.ok(
+      performance.now() - startedAt < 100,
+      'expired queued diagnostic work should not execute before the next request',
+    )
+    assert.equal(client.state(), 'ready')
+  } finally {
+    await client.shutdown()
+  }
+})
+
 test('heartbeat timeout recycles a genuinely unresponsive Worker', async () => {
   const client = new DataRuntimeClient({
     allowDiagnostics: true,
