@@ -301,6 +301,32 @@ export interface LiveWorkspaceFileReference {
 }
 
 
+export interface LiveContributionText {
+  default: string
+  /** Optional BCP-47 locale -> display text. Product Surface owns locale selection. */
+  localizations?: Readonly<Record<string, string>> | undefined
+}
+
+export interface LiveMessageActionContribution {
+  /** Adapter-owned opaque action id. Product Surface must not interpret it. */
+  actionId: string
+  label: LiveContributionText
+  description?: LiveContributionText | undefined
+  /** Message roles where this action is meaningful. */
+  roles: readonly ('user' | 'assistant')[]
+  /** Mutating session actions are normally disabled while a run is streaming. */
+  requiresIdle?: boolean | undefined
+}
+
+export interface LiveMessageActionResult {
+  /** Refresh the current runtime or open the returned runtime. */
+  outcome: 'refresh-current' | 'open-runtime'
+  runtime?: LiveRuntimeState | undefined
+  /** Optional text restored into the shared composer after the action. */
+  draftText?: string | undefined
+}
+
+
 export interface LiveThinkingControl extends LiveControlDisplayInfo {
   capability: 'thinking-control'
   /** Current effective Runtime value. */
@@ -388,6 +414,17 @@ export interface LiveAdapter {
     query: string,
     limit?: number,
   ): Promise<readonly LiveWorkspaceFileReference[]>
+
+  /**
+   * Controlled Product Contribution: adapter declares message actions, while
+   * AgentLens owns rendering, placement, invocation and navigation.
+   */
+  messageActions?(runtimeSessionId: string): Promise<readonly LiveMessageActionContribution[]>
+  executeMessageAction?(
+    runtimeSessionId: string,
+    actionId: string,
+    targetEntryId: string,
+  ): Promise<LiveMessageActionResult>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   /** Present only when the adapter declares queue. Returns the current queued messages without mutation. */
