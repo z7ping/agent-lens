@@ -67,3 +67,11 @@ test('80 只限制导轨 DOM，不限制全会话轮次数据语义', () => {
   assert.match(liveTask, /fromOrdinal: targetOrdinal, limit: 1/)
   assert.doesNotMatch(liveTask, /historyIndex\([^\n]*80/)
 })
+
+
+test('导轨任意指针位置映射真实 ordinal，而不是只能点击采样刻度', () => {
+  assert.match(taskSurface, /const jumpToRailPosition = \(clientY: number/)
+  assert.match(taskSurface, /ratio \* Math\.max\(0, turnRailTotal! - 1\)/)
+  assert.match(taskSurface, /event\.detail > 0/)
+  assert.match(taskSurface, /jumpToRailPosition\(event\.clientY, event\.currentTarget\.parentElement\)/)
+})
