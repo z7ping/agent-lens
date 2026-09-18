@@ -228,8 +228,7 @@ export interface LiveCommandsResponseDto {
 
 export interface LiveContributionTextDto {
   default: string
-  zhCN?: string | undefined
-  enUS?: string | undefined
+  localizations?: Record<string, string> | undefined
 }
 
 export interface LiveMessageActionContributionDto {
