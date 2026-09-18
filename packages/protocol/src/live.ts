@@ -226,10 +226,16 @@ export interface LiveCommandsResponseDto {
   items: LiveCommandDto[]
 }
 
+export interface LiveContributionTextDto {
+  default: string
+  zhCN?: string | undefined
+  enUS?: string | undefined
+}
+
 export interface LiveMessageActionContributionDto {
   actionId: string
-  label?: string | undefined
-  description?: string | undefined
+  label: LiveContributionTextDto
+  description?: LiveContributionTextDto | undefined
   roles: Array<'user' | 'assistant'>
   requiresIdle?: boolean | undefined
 }
