@@ -111,6 +111,7 @@ requireText(recoveryStore, /taskSummary = optionalString\(item\.taskSummary\)\?\
 requireText(runtime, /\.\.\.\(runtime\.taskSummary \? \{ taskSummary: runtime\.taskSummary \} : \{\}\)/, 'Pi Runtime checkpoint 必须写入自动任务标题')
 requireText(runtime, /runtime\.taskSummary = item\.taskSummary/, 'Pi Runtime 恢复必须还原自动任务标题')
 requireText(runtime, /persistRuntimeMetadataBestEffort\(runtime\)/, '首条任务摘要生成后必须刷新 Recovery metadata checkpoint')
+requireText(runtime, /runtime\.taskSummary \|\| runtime\.input\.name\?\.trim\(\)/, 'Pi 自动任务摘要不得覆盖用户显式标题')
 
 /* Official SDK ownership stays in a worker boundary. */
 requireText(workerHost, /from 'node:child_process'/, 'Pi SDK 必须由独立 Worker 承载')
