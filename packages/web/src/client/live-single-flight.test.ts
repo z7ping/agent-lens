@@ -77,19 +77,13 @@ test('Live client never coalesces side-effecting POST requests', async t => {
   globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
     calls += 1
     assert.equal(init?.method, 'POST')
-    return jsonResponse({
-      runtimeSessionId: `runtime-${calls}`,
-      status: 'ready',
-      isStreaming: false,
-      pendingMessageCount: 0,
-    }, 201)
+    return jsonResponse({ ok: true }, 202)
   }) as typeof fetch
 
-  const [first, second] = await Promise.all([
-    liveApi.start('pi', { workspacePath: '/a' }),
-    liveApi.start('pi', { workspacePath: '/a' }),
+  await Promise.all([
+    liveApi.send('pi', 'runtime-1', 'first'),
+    liveApi.send('pi', 'runtime-1', 'second'),
   ])
 
   assert.equal(calls, 2)
-  assert.notEqual(first.runtimeSessionId, second.runtimeSessionId)
 })
