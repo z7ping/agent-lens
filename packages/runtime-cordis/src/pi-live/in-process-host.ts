@@ -154,7 +154,7 @@ interface PiRoundIndexRow {
 
 class InProcessHandle implements PiRuntimeHandle {
   readonly capabilities: PiLiveRuntimeCapabilities
-  private roundIndexCache: { entryCount: number; lastEntryId?: string; rows: PiRoundIndexRow[] } | undefined
+  private roundIndexCache: { entryCount: number; lastEntryId?: string; leafId?: string | null; rows: PiRoundIndexRow[] } | undefined
 
   constructor(
     private readonly id: string,
@@ -178,8 +178,9 @@ class InProcessHandle implements PiRuntimeHandle {
 
   private roundIndex(all = this.session.sessionManager.getEntries()): PiRoundIndexRow[] {
     const lastEntryId = all.length ? String(record(all.at(-1)).id ?? '') || undefined : undefined
+    const leafId = this.session.sessionManager.getLeafId()
     const cached = this.roundIndexCache
-    if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId) return cached.rows
+    if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId && cached.leafId === leafId) return cached.rows
 
     const appendOnly = cached
       && all.length >= cached.entryCount
@@ -206,7 +207,12 @@ class InProcessHandle implements PiRuntimeHandle {
       })
     }
 
-    this.roundIndexCache = { entryCount: all.length, ...(lastEntryId ? { lastEntryId } : {}), rows }
+    this.roundIndexCache = {
+      entryCount: all.length,
+      ...(lastEntryId ? { lastEntryId } : {}),
+      leafId,
+      rows,
+    }
     return rows
   }
 
@@ -333,6 +339,7 @@ class InProcessHandle implements PiRuntimeHandle {
     if (this.session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
     if (typeof this.session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
     const result = await this.session.navigateTree(entryId)
+    this.roundIndexCache = undefined
     return {
       cancelled: result.cancelled,
       ...(typeof result.editorText === 'string' ? { editorText: result.editorText } : {}),
