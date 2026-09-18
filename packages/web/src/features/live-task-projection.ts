@@ -122,8 +122,8 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     const item = record(value)
     const nested = record(item.message)
     const rawRole = text(item.role) || text(nested.role)
-    const nativeEntryId = text(item.id)
-    const baseId = nativeEntryId || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
+    const nativeEntryId = item.type === 'message' ? text(item.id) : ''
+    const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
     const content = Array.isArray(nested.content)
       ? nested.content
