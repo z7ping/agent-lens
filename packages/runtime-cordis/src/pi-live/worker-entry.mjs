@@ -380,8 +380,9 @@ function entryId(value) {
 
 function roundIndex(all = session.sessionManager.getEntries()) {
   const lastEntryId = all.length ? entryId(all.at(-1)) : undefined
+  const leafId = session.sessionManager.getLeafId()
   const cached = roundIndexCache
-  if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId) return cached.rows
+  if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId && cached.leafId === leafId) return cached.rows
 
   const appendOnly = cached
     && all.length >= cached.entryCount
@@ -408,7 +409,7 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     })
   }
 
-  roundIndexCache = { entryCount: all.length, lastEntryId, rows }
+  roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows }
   return rows
 }
 
@@ -849,6 +850,7 @@ async function command(name, value = {}) {
     if (session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
     if (typeof session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
     const result = await session.navigateTree(value.entryId)
+    roundIndexCache = undefined
     return {
       cancelled: result?.cancelled === true,
       ...(typeof result?.editorText === 'string' ? { editorText: result.editorText } : {}),
