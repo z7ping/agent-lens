@@ -20,7 +20,9 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
 import { HeadingNode, QuoteNode } from '@lexical/rich-text'
 import {
+  $createLineBreakNode,
   $createParagraphNode,
+  $createTextNode,
   $getNodeByKey,
   $getRoot,
   $getSelection,
@@ -72,6 +74,8 @@ export interface LiveMarkdownComposerHandle {
   getMarkdown(): string
   getMessage(): LiveMessageDto
   isEmpty(): boolean
+  clear(): void
+  restoreMessage(message: LiveMessageDto): void
 }
 
 export interface LiveMarkdownComposerProps {
@@ -278,6 +282,66 @@ function replaceMarkdownDocument(editor: LexicalEditor, value: string): void {
     const paragraph = $createParagraphNode()
     root.append(paragraph)
     paragraph.selectStart()
+  })
+}
+
+function plainTextParagraphs(value: string): LexicalNode[] {
+  const blocks = value.split(/\n\n/)
+  return blocks.map(block => {
+    const paragraph = $createParagraphNode()
+    const lines = block.split('\n')
+    lines.forEach((line, index) => {
+      if (index > 0) paragraph.append($createLineBreakNode())
+      if (line) paragraph.append($createTextNode(line))
+    })
+    return paragraph
+  })
+}
+
+function restoredMessageNodes(message: LiveMessageDto): LexicalNode[] {
+  const nodes: LexicalNode[] = []
+  for (const part of message.parts) {
+    if (part.type === 'text') {
+      nodes.push(...plainTextParagraphs(part.text))
+    } else if (part.type === 'large-text') {
+      nodes.push($createLiveLargeTextNode(part.text))
+    } else if (part.type === 'image') {
+      nodes.push($createLiveImageNode({
+        attachmentId: part.attachmentId,
+        ...(part.name ? { name: part.name } : {}),
+        ...(part.mimeType ? { mimeType: part.mimeType } : {}),
+        ...(part.sizeBytes !== undefined ? { sizeBytes: part.sizeBytes } : {}),
+      }))
+    }
+  }
+  return nodes
+}
+
+function restoreMessageBeforeCurrentDraft(editor: LexicalEditor, message: LiveMessageDto): void {
+  editor.update(() => {
+    const root = $getRoot()
+    const restored = restoredMessageNodes(message)
+    if (!restored.length) return
+
+    const currentHasContent = Boolean(root.getTextContent().trim())
+    if (!currentHasContent) {
+      root.clear()
+      root.append(...restored)
+      const tail = $createParagraphNode()
+      root.append(tail)
+      tail.selectEnd()
+      return
+    }
+
+    const first = root.getFirstChild()
+    if (!first) {
+      root.append(...restored)
+      root.selectEnd()
+      return
+    }
+    for (const node of restored) first.insertBefore(node)
+    first.insertBefore($createParagraphNode())
+    root.selectEnd()
   })
 }
 
@@ -586,6 +650,12 @@ function ComposerRefPlugin({ forwardedRef }: { forwardedRef: ForwardedRef<LiveMa
     },
     isEmpty() {
       return !editorHasContent(editor.getEditorState())
+    },
+    clear() {
+      replaceMarkdownDocument(editor, '')
+    },
+    restoreMessage(message: LiveMessageDto) {
+      restoreMessageBeforeCurrentDraft(editor, message)
     },
   }), [editor])
   return null
