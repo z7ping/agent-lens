@@ -234,6 +234,12 @@ async function loadSessions(storage: StorageService, query: InsightsQueryDto): P
       // as in-range when its interval overlaps the requested upper boundary. Keep that
       // final overlap check here rather than narrowing the storage query incorrectly.
       if (matchesScope(item, query)) items.push(item)
+      if (items.length >= SESSION_SAMPLE_LIMIT) {
+        return {
+          items: items.slice(0, SESSION_SAMPLE_LIMIT),
+          sampled: response.hasMore || response.items.length > items.length,
+        }
+      }
     }
     if (!response.hasMore) break
     const last = response.items.at(-1)
