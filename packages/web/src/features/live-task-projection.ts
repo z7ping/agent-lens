@@ -234,7 +234,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         let inputPreview = ''
         if (typeof input === 'string') inputPreview = input
         else if (input !== undefined) {
-          try { inputPreview = JSON.stringify(input) } catch { inputPreview = String(input) }
+          try { inputPreview = JSON.stringify(input) ?? '' } catch { inputPreview = String(input) }
         }
         pushTool({
           id: `tool:${callId}`,
