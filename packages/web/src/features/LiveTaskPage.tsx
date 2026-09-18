@@ -269,7 +269,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const matched = products.find(item => item.liveId === current.liveId)
       if (!matched) throw new Error(t('live.productUnavailable'))
       setProduct(matched)
-      const [runtime, snapshot, model, thinkingControl] = await Promise.all([
+      const [runtime, snapshot, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
         liveApi.snapshot(current.liveId, current.runtimeSessionId),
         matched.capabilities.includes('model-switching')
@@ -278,6 +278,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         matched.capabilities.includes('thinking-control')
           ? liveApi.thinkingControl(current.liveId, current.runtimeSessionId).catch(() => null)
           : Promise.resolve(null),
+        matched.capabilities.includes('queue')
+          ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
+          : Promise.resolve(null),
       ])
       if (cancelled) return
       setState(runtime)
@@ -285,6 +288,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
+      if (queueState) setQueue(queueState)
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })
@@ -300,12 +304,18 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (!product.capabilities.includes('recovery')) return
       const generation = ++recoveryGeneration
       try {
-        const snapshot = await liveApi.snapshot(current.liveId, current.runtimeSessionId, leafIdRef.current)
+        const [snapshot, queueState] = await Promise.all([
+          liveApi.snapshot(current.liveId, current.runtimeSessionId, leafIdRef.current),
+          product.capabilities.includes('queue')
+            ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
+            : Promise.resolve(null),
+        ])
         if (generation !== recoveryGeneration) return
         setState(snapshot.state)
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         setItems(previous => leafIdRef.current ? mergeLiveProjectionItems(previous, recovered) : recovered)
         leafIdRef.current = snapshot.leafId ?? leafIdRef.current
+        if (queueState) setQueue(queueState)
       } catch (reason) {
         if (generation === recoveryGeneration) setError(reason instanceof Error ? reason.message : String(reason))
       }
@@ -366,15 +376,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     && !queueMutationPending,
   )
 
-  const send = useCallback(async (message: LiveMessageDto) => {
+  const send = useCallback(async (message: LiveMessageDto, requestedBehavior?: LiveQueueMode) => {
     if (!current || !product || !state || !canSubmit) return
     const unsupported = unsupportedInput(message, product.inputCapabilities)
     if (unsupported) {
       setError(t('live.unsupportedInput', { type: t(`live.input.${unsupported}`) }))
       return
     }
+    const preferredBehavior = requestedBehavior ?? streamingBehavior
     const behavior = state.isStreaming
-      ? streamingBehavior === 'steer' && product.capabilities.includes('steer')
+      ? preferredBehavior === 'steer' && product.capabilities.includes('steer')
         ? 'steer' as const
         : product.capabilities.includes('queue')
           ? 'follow-up' as const
@@ -625,7 +636,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               draft={draft}
               onDraftPresenceChange={setComposerHasContent}
               canSubmit={canSubmit}
-              onSubmit={message => { void send(message) }}
+              onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
               onEscape={canInterrupt ? () => { void interrupt() } : undefined}
               placeholder={t('live.composerPlaceholder')}
               ariaLabel={t('live.composerAria')}
