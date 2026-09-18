@@ -15,6 +15,7 @@ import type {
 } from '@agent-lens/protocol'
 import { liveApi } from '../client/live'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
+import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import {
   LiveMarkdownComposer,
   type LiveMarkdownComposerDraft,
@@ -32,12 +33,17 @@ import {
   appendOptimisticLiveUserMessage,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
+  projectLiveTaskRounds,
+  liveTaskRoundEstimate,
   reduceLiveTaskEvent,
   type LiveTaskProjectionItem,
+  type LiveTaskRoundProjection,
 } from './live-task-projection'
+import { LiveFollowController } from './live-follow-controller'
 import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
+import { TaskRound } from './TaskRound'
 import { TaskSurface } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
@@ -109,6 +115,21 @@ type LiveQueueListItem = {
 
 function emptyLiveQueue(): LiveQueueStateDto {
   return { steering: [], followUp: [] }
+}
+
+function mergeRuntimeState(
+  runtimes: LiveRuntimeStateDto[],
+  runtime: LiveRuntimeStateDto,
+): LiveRuntimeStateDto[] {
+  const index = runtimes.findIndex(item => item.runtimeSessionId === runtime.runtimeSessionId)
+  if (index < 0) return [runtime, ...runtimes]
+  const next = [...runtimes]
+  next[index] = runtime
+  return next
+}
+
+function runtimeSessionTitle(runtime: LiveRuntimeStateDto): string {
+  return workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
 }
 
 function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
@@ -215,6 +236,27 @@ function GenericLiveItem({ item, agentLabel }: { item: LiveTaskProjectionItem; a
   />
 }
 
+function GenericLiveRound({
+  projection,
+  agentLabel,
+  eager,
+}: {
+  projection: LiveTaskRoundProjection
+  agentLabel: string
+  eager: boolean
+}) {
+  return <VirtualRoundMount
+    rootSelector=".pi-live-reader"
+    flowRoot
+    eager={eager}
+    estimate={liveTaskRoundEstimate(projection)}
+  >
+    <TaskRound model={projection.model} className="live-task-round">
+      {projection.items.map(item => <GenericLiveItem key={item.id} item={item} agentLabel={agentLabel}/>)}
+    </TaskRound>
+  </VirtualRoundMount>
+}
+
 export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation('task')
   const location = useLocation()
@@ -225,6 +267,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     [current?.liveId, current?.runtimeSessionId],
   )
   const [product, setProduct] = useState<LiveProductDto | null>(null)
+  const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
   const [commands, setCommands] = useState<LiveCommandDto[]>([])
@@ -238,6 +281,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [restoredQueue, setRestoredQueue] = useState<RestoredQueueDraft[]>([])
   const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
+  const [newRecords, setNewRecords] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [composerHasContent, setComposerHasContent] = useState(false)
@@ -245,6 +289,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [inputHistory, setInputHistory] = useState<string[]>([])
   const [draft, setDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
+  const readerRef = useRef<HTMLDivElement>(null)
+  const followControllerRef = useRef(new LiveFollowController())
+  const followFrameRef = useRef<number | null>(null)
+  const followReleaseFrameRef = useRef<number | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
   const queueRevisionRef = useRef(0)
 
@@ -265,6 +313,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     let cancelled = false
     setProduct(null)
+    setRuntimes([])
     setState(null)
     setItems([])
     setCommands([])
@@ -278,6 +327,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
     setConnected(false)
+    setNewRecords(false)
+    followControllerRef.current = new LiveFollowController()
     setError('')
     setInputHistory([])
 
@@ -291,6 +342,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const matched = products.find(item => item.liveId === current.liveId)
       if (!matched) throw new Error(t('live.productUnavailable'))
       setProduct(matched)
+      setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
       const [runtime, snapshot, commandOptions, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
@@ -311,6 +363,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (cancelled) return
       const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
       setState(runtime)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
       setItems(projectedItems)
       setInputHistory(projectLiveInputHistory(projectedItems))
       setCommands(commandOptions)
@@ -357,6 +410,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setConnected(true)
         setItems(previous => reduceLiveTaskEvent(previous, envelope))
         setState(previous => runtimeStateFromEvent(previous, envelope))
+        if (!followControllerRef.current.isFollowing) setNewRecords(true)
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
@@ -389,6 +443,63 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       unsubscribe()
     }
   }, [current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities])
+
+
+  useEffect(() => {
+    if (!state) return
+    setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, state))
+  }, [state])
+
+  useEffect(() => {
+    const controller = followControllerRef.current
+    if (!controller.isFollowing || followFrameRef.current !== null) return
+    followFrameRef.current = window.requestAnimationFrame(() => {
+      followFrameRef.current = null
+      const reader = readerRef.current
+      if (!reader || !controller.isFollowing) return
+      const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
+      if (Math.abs(reader.scrollTop - target) <= 1) return
+      controller.beginProgrammaticScroll()
+      controller.recordScrollWrite()
+      reader.scrollTop = target
+      if (followReleaseFrameRef.current !== null) window.cancelAnimationFrame(followReleaseFrameRef.current)
+      followReleaseFrameRef.current = window.requestAnimationFrame(() => {
+        followReleaseFrameRef.current = null
+        controller.endProgrammaticScroll()
+      })
+    })
+  }, [items])
+
+  useEffect(() => () => {
+    if (followFrameRef.current !== null) window.cancelAnimationFrame(followFrameRef.current)
+    if (followReleaseFrameRef.current !== null) window.cancelAnimationFrame(followReleaseFrameRef.current)
+    followFrameRef.current = null
+    followReleaseFrameRef.current = null
+    followControllerRef.current.endProgrammaticScroll()
+  }, [])
+
+  const markReaderUserIntent = useCallback(() => {
+    followControllerRef.current.markUserIntent()
+  }, [])
+
+  const onReaderScroll = useCallback(() => {
+    const reader = readerRef.current
+    if (!reader) return
+    const distance = Math.max(0, reader.scrollHeight - reader.clientHeight - reader.scrollTop)
+    const following = followControllerRef.current.observeScroll(distance)
+    if (following) setNewRecords(false)
+  }, [])
+
+  const jumpLatest = useCallback(() => {
+    const reader = readerRef.current
+    if (!reader) return
+    followControllerRef.current.restore()
+    followControllerRef.current.beginProgrammaticScroll()
+    followControllerRef.current.recordScrollWrite()
+    reader.scrollTop = Math.max(0, reader.scrollHeight - reader.clientHeight)
+    followControllerRef.current.endProgrammaticScroll()
+    setNewRecords(false)
+  }, [])
 
   const canQueueWhileStreaming = Boolean(
     product?.capabilities.includes('steer') || product?.capabilities.includes('queue'),
@@ -580,7 +691,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [busy, current, thinking])
 
   if (!current) {
-    return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
+    return <main className="pi-live-page pi-live-page-embedded">
       <div className="pi-live-error" role="alert">{error || t('live.invalidRuntime')}</div>
     </main>
   }
@@ -589,6 +700,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const workspace = workspaceDisplayName(state?.workspacePath)
   const title = workspace || t('center.history.genericAgentTask', { agent: agentLabel })
   const runtimeStatus = statusLabel(state, t)
+  const rounds = projectLiveTaskRounds(items)
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
     if (message) void send(message)
@@ -614,6 +726,48 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   ]
 
   return <main className={`pi-live-page live-task-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
+    {!embedded && <aside className="pi-live-sessions" aria-label={t('live.sidebar.title')}>
+      <div className="pi-live-sessions-head">
+        <div>
+          <b>{t('live.sidebar.title')}</b>
+          <small>{t('live.sidebar.closeKeepsRunning')}</small>
+        </div>
+        <Button size="small" onClick={() => navigate('/review/new')}>{t('live.sidebar.newTask')}</Button>
+      </div>
+      <div className="pi-live-session-scroll">
+        {runtimes.map(runtime => {
+          const active = runtime.runtimeSessionId === current.runtimeSessionId
+          return <button
+            type="button"
+            key={runtime.runtimeSessionId}
+            className={`pi-live-session ${active ? 'active' : ''}`}
+            onClick={() => navigate(`/review/live/${encodeURIComponent(current.liveId)}/${encodeURIComponent(runtime.runtimeSessionId)}`)}
+          >
+            <div className="pi-live-session-top">
+              <span className={runtime.isStreaming || runtime.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'} aria-hidden="true"/>
+              <span>{agentLabel}</span>
+              <span>{statusLabel(runtime, t)}</span>
+            </div>
+            <div className="pi-live-session-title" title={runtime.workspacePath || runtime.runtimeSessionId}>
+              {runtimeSessionTitle(runtime)}
+            </div>
+            <div className="pi-live-session-foot">
+              <span title={runtime.runtimeSessionId}>{runtime.runtimeSessionId}</span>
+              {runtime.pendingMessageCount > 0 && <span>{t('live.sidebar.pending', { count: runtime.pendingMessageCount })}</span>}
+            </div>
+          </button>
+        })}
+        {!runtimes.length && <div className="pi-live-side-empty">{t('live.sidebar.empty')}</div>}
+        <button
+          type="button"
+          className="pi-live-review-link"
+          onClick={() => navigate(product ? `/review?source=${encodeURIComponent(product.productId)}` : '/review')}
+        >
+          {t('live.sidebar.history')} <UiIcon name="arrow-right" size={14}/>
+        </button>
+      </div>
+    </aside>}
+
     <TaskSurface mode="live" className="pi-live-workspace live-task-workspace">
       <TaskHeader
         marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
@@ -632,9 +786,21 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         </>}
       />
 
-      <div className="pi-live-reader live-task-reader">
+      <div
+        ref={readerRef}
+        className="pi-live-reader live-task-reader"
+        onScroll={onReaderScroll}
+        onWheel={markReaderUserIntent}
+        onTouchStart={markReaderUserIntent}
+        onPointerDown={markReaderUserIntent}
+      >
         <div className="pi-live-document live-task-document">
-          {items.map(item => <GenericLiveItem key={item.id} item={item} agentLabel={agentLabel}/>)}
+          {rounds.map((round, index) => <GenericLiveRound
+            key={round.model.id}
+            projection={round}
+            agentLabel={agentLabel}
+            eager={round.model.state === 'running' || index >= rounds.length - 2}
+          />)}
           {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
         </div>
@@ -642,6 +808,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
       <div className="pi-live-compose-wrap live-task-compose-wrap">
         <div className="pi-live-float-stack">
+          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('live.newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
           {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">
             {queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
               <span>{item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
