@@ -59,6 +59,17 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
 })
 
 
+test('消息级私有动作通过受控 Contribution 暴露，不提升为 Pi 专属 Product 分支', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /liveApi\.messageActions\(current\.liveId, current\.runtimeSessionId\)/)
+  assert.match(liveTask, /liveApi\.executeMessageAction\(/)
+  assert.match(liveTask, /action\.actionId/)
+  assert.match(liveTask, /action\.roles\.includes\(item\.role\)/)
+  assert.match(liveTask, /action\.requiresIdle/)
+  assert.match(liveTask, /item\.entryId/)
+  assert.doesNotMatch(liveTask, /pi\.edit-from-here|pi\.new-session-from-here|navigateTree|createBranchedSession/)
+})
+
 test('Slash 命令发现保持通用 Live Product 边界', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.match(liveTask, /capabilities\.includes\('command-discovery'\)/)
