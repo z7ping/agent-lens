@@ -527,7 +527,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       || bootstrapTarget.runtimeSessionId !== current.runtimeSessionId
       || !product?.capabilities.includes('stream')) return
     let recoveryGeneration = 0
-    const recover = async (mode: 'live' | 'settle' = 'live') => {
+    let recoveryActive = true
+    let recoveryTask: Promise<void> | null = null
+    let pendingRecoveryMode: 'live' | 'settle' | null = null
+
+    const recoverOnce = async (mode: 'live' | 'settle') => {
       if (!product.capabilities.includes('recovery')) return
       const generation = ++recoveryGeneration
       try {
@@ -541,7 +545,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             : Promise.resolve(null),
           liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         ])
-        if (generation !== recoveryGeneration) return
+        if (!recoveryActive || generation !== recoveryGeneration) return
         setState(snapshot.state)
         setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
@@ -582,11 +586,35 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setSyncError('')
         if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
       } catch (reason) {
-        if (generation === recoveryGeneration) {
+        if (recoveryActive && generation === recoveryGeneration) {
           setSyncError(reason instanceof Error ? reason.message : String(reason))
         }
       }
     }
+
+    const recover = (mode: 'live' | 'settle' = 'live'): Promise<void> => {
+      if (!product.capabilities.includes('recovery') || !recoveryActive) return Promise.resolve()
+      if (recoveryTask) {
+        if (mode === 'settle' || pendingRecoveryMode === null) pendingRecoveryMode = mode
+        return recoveryTask
+      }
+
+      let task: Promise<void>
+      task = (async () => {
+        let nextMode: 'live' | 'settle' | null = mode
+        while (recoveryActive && nextMode) {
+          const currentMode = nextMode
+          pendingRecoveryMode = null
+          await recoverOnce(currentMode)
+          nextMode = pendingRecoveryMode
+        }
+      })().finally(() => {
+        if (recoveryTask === task) recoveryTask = null
+      })
+      recoveryTask = task
+      return task
+    }
+
     const unsubscribe = liveApi.subscribe(
       current.liveId,
       current.runtimeSessionId,
@@ -688,7 +716,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       },
     )
     return () => {
+      recoveryActive = false
       recoveryGeneration += 1
+      pendingRecoveryMode = null
       unsubscribe()
     }
   }, [
