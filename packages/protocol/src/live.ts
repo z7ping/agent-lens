@@ -226,6 +226,29 @@ export interface LiveCommandsResponseDto {
   items: LiveCommandDto[]
 }
 
+export interface LiveMessageActionContributionDto {
+  actionId: string
+  label?: string | undefined
+  description?: string | undefined
+  roles: Array<'user' | 'assistant'>
+  requiresIdle?: boolean | undefined
+}
+
+export interface LiveMessageActionsResponseDto {
+  items: LiveMessageActionContributionDto[]
+}
+
+export interface LiveMessageActionRequestDto {
+  actionId: string
+  targetEntryId: string
+}
+
+export interface LiveMessageActionResultDto {
+  outcome: 'refresh-current' | 'open-runtime'
+  runtime?: LiveRuntimeStateDto | undefined
+  draftText?: string | undefined
+}
+
 export interface LiveThinkingControlDto extends LiveControlDisplayInfoDto {
   capability: 'thinking-control'
   value: string
