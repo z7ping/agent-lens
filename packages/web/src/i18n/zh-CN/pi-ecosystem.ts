@@ -3,6 +3,9 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 export const chinesePiEcosystemMessages: LocaleMessagesDto = {
   piEcosystem: {
     title: '生态发现',
+    tabsAria: 'Pi 视图',
+    overviewTab: '概览',
+    ecosystemTab: '生态发现',
     searchPlaceholder: '搜索 Pi Package',
     search: '搜索',
     description: '说明',
