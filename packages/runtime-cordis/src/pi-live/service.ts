@@ -43,6 +43,7 @@ interface OwnedRuntime {
   projectName: string
   gitBranch?: string | undefined
   taskSummary?: string | undefined
+  activeAssistantMessageId?: string | undefined
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -507,6 +508,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdateCheck = undefined
     runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
+    runtime.activeAssistantMessageId = undefined
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
     this.scheduleInitialize(runtime, runtime.generation)
@@ -968,6 +970,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtime = await this.readyRuntime(id)
     const queue = await runtime.handle!.abort(options.restoreQueue !== false)
     runtime.queue = { steering: [], followUp: [] }
+    runtime.activeAssistantMessageId = undefined
     return queue
   }
   async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> { if (!requestId) throw new Error('Pi extension request id is required'); await (await this.readyRuntime(id)).handle!.respondToExtension(requestId, response) }
@@ -1261,12 +1264,34 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {
-    if (event.type === 'queue_update') {
+    const type = typeof event.type === 'string' ? event.type : ''
+    const message = event.message && typeof event.message === 'object' && !Array.isArray(event.message)
+      ? event.message as Record<string, unknown>
+      : undefined
+    const messageRole = typeof message?.role === 'string' ? message.role : ''
+    const messageId = typeof message?.id === 'string' ? message.id : ''
+
+    if (type === 'message_start' && messageRole === 'assistant') {
+      runtime.activeAssistantMessageId = messageId || undefined
+    }
+
+    const publishedEvent = type === 'message_update' && runtime.activeAssistantMessageId
+      ? { ...event, messageId: runtime.activeAssistantMessageId }
+      : event
+
+    if (type === 'queue_update') {
       runtime.queue = {
         steering: queueMessages(event.steering),
         followUp: queueMessages(event.followUp),
       }
     }
-    runtime.events.publish(event)
+    runtime.events.publish(publishedEvent)
+
+    if ((type === 'message_end' && messageRole === 'assistant')
+      || type === 'agent_settled'
+      || type === 'agent_end'
+      || type === 'runtime_exit') {
+      runtime.activeAssistantMessageId = undefined
+    }
   }
 }
