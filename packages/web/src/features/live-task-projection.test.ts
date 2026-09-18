@@ -49,6 +49,45 @@ test('snapshot projection consumes message-shaped native rows without Agent-spec
   ])
 })
 
+test('snapshot projection preserves assistant reasoning and tool history across reload', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message',
+      id: 'assistant-1',
+      timestamp: '2026-09-18T00:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'inspect first' },
+          { type: 'text', text: 'checking' },
+          { type: 'toolCall', id: 'tool-1', name: 'read', arguments: { path: 'README.md' } },
+          { type: 'text', text: 'done' },
+        ],
+      },
+    },
+    {
+      type: 'message',
+      id: 'result-1',
+      timestamp: '2026-09-18T00:00:01.000Z',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'tool-1',
+        toolName: 'read',
+        isError: false,
+        content: [{ type: 'text', text: 'file content' }],
+      },
+    },
+  ])
+
+  assert.deepEqual(items.map(item => item.kind), ['thinking', 'message', 'tool', 'message'])
+  assert.equal(items[0]?.kind === 'thinking' ? items[0].text : '', 'inspect first')
+  const tool = items.find(item => item.kind === 'tool')
+  assert.ok(tool?.kind === 'tool')
+  assert.equal(tool.name, 'read')
+  assert.equal(tool.status, 'success')
+  assert.equal(tool.output, 'file content')
+})
+
 test('normalized Live events drive shared message reasoning and tool projections', () => {
   let items = projectLiveSnapshotEntries([])
   items = appendOptimisticLiveUserMessage(items, 'fix it', 'user:1')
