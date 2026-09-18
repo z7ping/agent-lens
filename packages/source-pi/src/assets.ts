@@ -21,6 +21,8 @@ interface PiSkillLoaderResult {
 
 type PiSkillLoader = (options: { dir: string; source: string }) => PiSkillLoaderResult
 
+const PI_PACKAGE_IDENTITY_COVERAGE_CHECKPOINT_KEY = 'assets:package-identity-coverage'
+
 async function safeStat(path: string) {
   try {
     return await stat(path)
@@ -351,6 +353,7 @@ export async function* discoverPiAssets(
 
   const resolved = await resolvePiResourceAssets(ctx)
   if (resolved) {
+    await ctx.checkpoint.set(PI_PACKAGE_IDENTITY_COVERAGE_CHECKPOINT_KEY, 'complete')
     for (const asset of resolved) {
       if (ctx.abortSignal.aborted) return
       yield asset
@@ -358,6 +361,7 @@ export async function* discoverPiAssets(
     return
   }
 
+  await ctx.checkpoint.set(PI_PACKAGE_IDENTITY_COVERAGE_CHECKPOINT_KEY, 'unavailable')
   const root = ctx.installation.configRoot
   if (!root) return
   const capturedAt = new Date().toISOString()
@@ -375,10 +379,20 @@ export async function* discoverPiAssets(
   }
 }
 
+export async function describePiAssetDiscoveryCoverage(
+  ctx: SourceExecutionContext,
+): Promise<{ packageIdentity: 'complete' | 'unknown' | 'unavailable' }> {
+  const packageIdentity = await ctx.checkpoint.get<'complete' | 'unavailable'>(
+    PI_PACKAGE_IDENTITY_COVERAGE_CHECKPOINT_KEY,
+  )
+  return { packageIdentity: packageIdentity ?? 'unknown' }
+}
+
 export const piAssetInternals = {
   walkPiSkillFiles,
   readSkillMetadata,
   extensionEntries,
   piManifestExtensions,
   loadSkillsWithInstalledPi,
+  PI_PACKAGE_IDENTITY_COVERAGE_CHECKPOINT_KEY,
 }
