@@ -236,6 +236,15 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       }
     }
   }
+  if (type === 'queue_update') {
+    const steering = Array.isArray(event.steering)
+      ? event.steering.filter((item): item is string => typeof item === 'string')
+      : []
+    const followUp = Array.isArray(event.followUp)
+      ? event.followUp.filter((item): item is string => typeof item === 'string')
+      : []
+    return { type: 'queue.update', steering, followUp }
+  }
   if (type === 'extension_ui_request') {
     const requestId = liveText(event.id)
     const method = liveText(event.method)
@@ -455,8 +464,13 @@ export class PiLiveAdapter implements LiveAdapter {
     )
   }
 
-  interrupt(runtimeSessionId: string): Promise<unknown> {
-    return this.service.abort(runtimeSessionId)
+  clearQueue(runtimeSessionId: string) {
+    return this.service.clearQueue(runtimeSessionId)
+  }
+
+  async interrupt(runtimeSessionId: string) {
+    const restoredQueue = await this.service.abort(runtimeSessionId)
+    return { restoredQueue }
   }
 
   terminate(runtimeSessionId: string): Promise<void> {
