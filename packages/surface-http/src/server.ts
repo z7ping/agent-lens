@@ -104,6 +104,7 @@ export interface HttpSurfaceOptions {
   localePackDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
   openHostPath?: (path: string) => Promise<'opened' | 'revealed'>
+  reviewQueryObserved?: (visibleCount: number) => void
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
 
@@ -551,7 +552,9 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/review') {
-        writeJson(response, 200, await review.query(parseReviewQuery(url.searchParams)))
+        const result = await review.query(parseReviewQuery(url.searchParams))
+        options.reviewQueryObserved?.(result.items.length)
+        writeJson(response, 200, result)
         return
       }
       if (url.pathname.startsWith('/api/v1/review/')) {
