@@ -84,7 +84,7 @@ function mapRuntimeStatus(value: unknown): SourceRuntimeStatus {
     ...(checkpointSummary === undefined ? {} : { checkpointSummary }),
     ...(packageIdentityCoverage === undefined
       ? {}
-      : { packageIdentityCoverage: packageIdentityCoverage as SourceRuntimeStatus['packageIdentityCoverage'] }),
+      : { packageIdentityCoverage: packageIdentityCoverage as NonNullable<SourceRuntimeStatus['packageIdentityCoverage']> }),
   }
 }
 
