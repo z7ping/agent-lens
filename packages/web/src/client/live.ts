@@ -11,6 +11,9 @@ import type {
   LiveProductDto,
   LiveProductsResponseDto,
   LiveQueueStateDto,
+  LiveRuntimeActionResultDto,
+  LiveRuntimeDisclosureContributionDto,
+  LiveRuntimeDisclosuresResponseDto,
   LiveRuntimeEventDto,
   LiveRuntimeRefDto,
   LiveRuntimeStateDto,
@@ -171,6 +174,25 @@ export const liveApi = {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ actionId, targetEntryId }),
       },
+    )
+  },
+
+  async runtimeDisclosures(
+    liveId: string,
+    runtimeSessionId: string,
+  ): Promise<LiveRuntimeDisclosureContributionDto[]> {
+    return (await requestJson<LiveRuntimeDisclosuresResponseDto>(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/runtime-disclosures')),
+    )).items
+  },
+  executeRuntimeAction(
+    liveId: string,
+    runtimeSessionId: string,
+    actionId: string,
+  ): Promise<LiveRuntimeActionResultDto> {
+    return requestJson(
+      livePath(liveId, runtimeSuffix(runtimeSessionId, '/runtime-actions')),
+      jsonRequest('POST', { actionId }),
     )
   },
 

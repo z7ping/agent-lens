@@ -122,3 +122,47 @@ test('Live message action reads are coalesced but executions are never coalesced
   ])
   assert.equal(calls, 2)
 })
+
+
+test('Live runtime disclosure reads coalesce while runtime action POSTs stay isolated', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+
+  let calls = 0
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    calls += 1
+    const path = String(input)
+    const method = (init?.method ?? 'GET').toUpperCase()
+    if (method === 'GET') {
+      await gate
+      assert.match(path, /\/runtime-disclosures$/)
+      return jsonResponse({ items: [] })
+    }
+    assert.equal(method, 'POST')
+    assert.match(path, /\/runtime-actions$/)
+    return jsonResponse({
+      runtime: {
+        runtimeSessionId: 'runtime-1',
+        status: 'initializing',
+        isStreaming: false,
+        pendingMessageCount: 0,
+      },
+    })
+  }) as typeof fetch
+
+  const reads = Array.from({ length: 100 }, () => liveApi.runtimeDisclosures('pi', 'runtime-1'))
+  assert.equal(calls, 1)
+  release()
+  await Promise.all(reads)
+  assert.equal(calls, 1)
+
+  calls = 0
+  await Promise.all([
+    liveApi.executeRuntimeAction('pi', 'runtime-1', 'pi.runtime.retry'),
+    liveApi.executeRuntimeAction('pi', 'runtime-1', 'pi.runtime.retry'),
+  ])
+  assert.equal(calls, 2)
+})

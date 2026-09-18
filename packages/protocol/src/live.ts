@@ -264,6 +264,49 @@ export interface LiveMessageActionResultDto {
   draftText?: string | undefined
 }
 
+
+export type LiveContributionToneDto = 'neutral' | 'info' | 'warning' | 'danger'
+export type LiveContributionActionToneDto = 'default' | 'primary' | 'danger'
+export type LiveRuntimeContributionFieldKindDto = 'text' | 'list' | 'code'
+
+export type LiveContributionValueDto = string | LiveContributionTextDto
+
+export interface LiveRuntimeContributionFieldDto {
+  label: LiveContributionTextDto
+  kind?: LiveRuntimeContributionFieldKindDto | undefined
+  value?: LiveContributionValueDto | undefined
+  values?: LiveContributionValueDto[] | undefined
+}
+
+export interface LiveRuntimeActionContributionDto {
+  actionId: string
+  label: LiveContributionTextDto
+  description?: LiveContributionTextDto | undefined
+  tone?: LiveContributionActionToneDto | undefined
+}
+
+export interface LiveRuntimeDisclosureContributionDto {
+  contributionId: string
+  title: LiveContributionTextDto
+  summary?: LiveContributionTextDto | undefined
+  tone?: LiveContributionToneDto | undefined
+  defaultExpanded?: boolean | undefined
+  fields: LiveRuntimeContributionFieldDto[]
+  actions?: LiveRuntimeActionContributionDto[] | undefined
+}
+
+export interface LiveRuntimeDisclosuresResponseDto {
+  items: LiveRuntimeDisclosureContributionDto[]
+}
+
+export interface LiveRuntimeActionRequestDto {
+  actionId: string
+}
+
+export interface LiveRuntimeActionResultDto {
+  runtime: LiveRuntimeStateDto
+}
+
 export interface LiveThinkingControlDto extends LiveControlDisplayInfoDto {
   capability: 'thinking-control'
   value: string

@@ -10,6 +10,8 @@ import type {
   LiveModelControlDto,
   LiveProductDto,
   LiveQueueStateDto,
+  LiveRuntimeActionContributionDto,
+  LiveRuntimeDisclosureContributionDto,
   LiveRuntimeEventDto,
   LiveRuntimeStateDto,
   LiveThinkingControlDto,
@@ -18,6 +20,7 @@ import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { LocalPathActions } from '../components/LocalPathActions'
+import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import {
   LiveMarkdownComposer,
@@ -327,7 +330,7 @@ function GenericLiveRound({
 }
 
 export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
-  const { t } = useTranslation('task')
+  const { t, i18n } = useTranslation('task')
   const location = useLocation()
   const navigate = useNavigate()
   const hostApi = useMemo(() => new AgentLensApi(), [])
@@ -342,6 +345,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
   const [messageActions, setMessageActions] = useState<LiveMessageActionContributionDto[]>([])
   const [messageActionPending, setMessageActionPending] = useState<string | null>(null)
+  const [runtimeDisclosures, setRuntimeDisclosures] = useState<LiveRuntimeDisclosureContributionDto[]>([])
+  const [runtimeActionPending, setRuntimeActionPending] = useState<string | null>(null)
   const [commands, setCommands] = useState<LiveCommandDto[]>([])
   const [modelControl, setModelControl] = useState<LiveModelControlDto | null>(null)
   const [thinking, setThinking] = useState<LiveThinkingControlDto | null>(null)
@@ -395,6 +400,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setItems([])
     setMessageActions([])
     setMessageActionPending(null)
+    setRuntimeDisclosures([])
+    setRuntimeActionPending(null)
     setCommands([])
     setModelControl(null)
     setThinking(null)
@@ -428,10 +435,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setProduct(matched)
       setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
-      const [runtime, snapshot, messageActionOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
+      const [runtime, snapshot, messageActionOptions, runtimeDisclosureOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
         liveApi.snapshot(current.liveId, current.runtimeSessionId),
         liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
+        liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         matched.capabilities.includes('command-discovery')
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
@@ -452,6 +460,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setItems(projectedItems)
       setInputHistory(projectLiveInputHistory(projectedItems))
       setMessageActions(messageActionOptions)
+      setRuntimeDisclosures(runtimeDisclosureOptions)
       setCommands(commandOptions)
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
@@ -473,17 +482,19 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const generation = ++recoveryGeneration
       try {
         const queueRevision = queueRevisionRef.current
-        const [snapshot, queueState] = await Promise.all([
+        const [snapshot, queueState, disclosureOptions] = await Promise.all([
           liveApi.snapshot(current.liveId, current.runtimeSessionId, leafIdRef.current),
           product.capabilities.includes('queue')
             ? liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
             : Promise.resolve(null),
+          liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         ])
         if (generation !== recoveryGeneration) return
         setState(snapshot.state)
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         setItems(previous => leafIdRef.current ? mergeLiveProjectionItems(previous, recovered) : recovered)
         leafIdRef.current = snapshot.leafId ?? leafIdRef.current
+        setRuntimeDisclosures(disclosureOptions)
         if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
       } catch (reason) {
         if (generation === recoveryGeneration) setError(reason instanceof Error ? reason.message : String(reason))
@@ -512,8 +523,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             return !accepted.includes(item.text)
           }))
         }
-        if (envelope.normalizedEvent?.type === 'status' && envelope.normalizedEvent.status === 'ready') {
-          void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+        if (envelope.normalizedEvent?.type === 'status') {
+          void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
+            setRuntimeDisclosures,
+            () => undefined,
+          )
+          if (envelope.normalizedEvent.status === 'ready') {
+            void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+          }
         }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
@@ -895,6 +912,30 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [current, messageActionPending, navigate, setComposerValue, state?.isStreaming])
 
+  const runRuntimeAction = useCallback(async (action: LiveRuntimeActionContributionDto) => {
+    if (!current || runtimeActionPending) return
+    setRuntimeActionPending(action.actionId)
+    setError('')
+    try {
+      const result = await liveApi.executeRuntimeAction(
+        current.liveId,
+        current.runtimeSessionId,
+        action.actionId,
+      )
+      setState(result.runtime)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, result.runtime))
+      const disclosures = await liveApi.runtimeDisclosures(
+        current.liveId,
+        current.runtimeSessionId,
+      ).catch(() => [])
+      setRuntimeDisclosures(disclosures)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setRuntimeActionPending(null)
+    }
+  }, [current, runtimeActionPending])
+
   const changeThinking = useCallback(async (value: string) => {
     if (!current || !thinking || busy) return
     setBusy(true)
@@ -1016,8 +1057,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         ]}
         actions={<>
           {canInterrupt && <Button size="small" variant="danger" disabled={busy} onClick={() => void interrupt()}>{t('live.interrupt')}</Button>}
-          <Button size="small" disabled={busy} onClick={() => void terminate()}>{t('live.terminate')}</Button>
+          <Button size="small" disabled={busy || runtimeActionPending !== null} onClick={() => void terminate()}>{t('live.terminate')}</Button>
         </>}
+      />
+
+      <LiveRuntimeDisclosures
+        items={runtimeDisclosures}
+        language={i18n.resolvedLanguage ?? i18n.language}
+        pendingAction={runtimeActionPending}
+        onAction={action => { void runRuntimeAction(action) }}
       />
 
       <div
