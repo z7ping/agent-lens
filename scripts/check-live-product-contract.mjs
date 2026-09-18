@@ -203,6 +203,11 @@ requireText(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ t
 requireText(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/, '图片发送前必须生成独立 Web 本地乐观预览')
 requireText(taskMessage, /previewUrl\?: string/, 'TaskMessage 本地表现模型必须允许 Web-only previewUrl')
 requireText(taskMessage, /URL\.revokeObjectURL\(attachment\.previewUrl\)/, 'TaskMessage 卸载或替换乐观图片时必须释放 blob URL')
+requireText(liveTask, /optimisticMessageAttachments\(message\)/, 'Live 正常发送必须为通用附件建立乐观表现')
+requireText(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: ['"]image['"] \| ['"]file['"] \}>/, '乐观附件必须显式收窄 image/file part')
+requireText(taskMessage, /attachment\.type === ['"]file['"]/, 'TaskMessage 必须展示通用文件附件，不能只显示图片')
+requireText(zhTaskLocale, /fileAttachment:\s*['"]文件附件['"]/, '缺少文件附件中文文案')
+requireText(enTaskLocale, /fileAttachment:\s*['"]File attachment['"]/, '缺少文件附件英文文案')
 
 
 /* Generic client/protocol remain the only product-level API vocabulary. */
