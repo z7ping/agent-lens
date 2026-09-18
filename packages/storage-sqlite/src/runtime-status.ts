@@ -5,6 +5,7 @@ import type { SqliteExecutor } from './executor'
 type RuntimeStatusRow = Record<string, unknown>
 const STAGES = ['detect', 'history', 'runtime', 'assets'] as const
 const STATES = ['idle', 'running', 'healthy', 'degraded', 'failed', 'disabled'] as const
+const PACKAGE_IDENTITY_COVERAGE = ['complete', 'partial', 'unknown', 'unavailable'] as const
 
 function statusId(status: SourceRuntimeStatus): string {
   return `source-status-${createHash('sha256')
@@ -62,6 +63,13 @@ function mapRuntimeStatus(value: unknown): SourceRuntimeStatus {
   const lastErrorAt = optionalString(row, 'last_error_at')
   const lastErrorSummary = optionalString(row, 'last_error_summary')
   const checkpointSummary = optionalString(row, 'checkpoint_summary')
+  const packageIdentityCoverage = optionalString(row, 'package_identity_coverage')
+  if (packageIdentityCoverage !== undefined
+    && !(PACKAGE_IDENTITY_COVERAGE as readonly string[]).includes(packageIdentityCoverage)) {
+    throw new TypeError(
+      `SQLite source runtime status field package_identity_coverage has unsupported value: ${packageIdentityCoverage}`,
+    )
+  }
   return {
     sourceId: requiredString(row, 'source_id'),
     installationId: requiredString(row, 'installation_id'),
@@ -74,6 +82,9 @@ function mapRuntimeStatus(value: unknown): SourceRuntimeStatus {
     errorCount: requiredNumber(row, 'error_count'),
     ...(lastErrorSummary === undefined ? {} : { lastErrorSummary }),
     ...(checkpointSummary === undefined ? {} : { checkpointSummary }),
+    ...(packageIdentityCoverage === undefined
+      ? {}
+      : { packageIdentityCoverage: packageIdentityCoverage as SourceRuntimeStatus['packageIdentityCoverage'] }),
   }
 }
 
@@ -86,8 +97,8 @@ export class SqliteSourceRuntimeStatusRepository {
         INSERT INTO source_runtime_status(
           id, source_id, installation_id, runtime_profile_id, stage, state,
           last_started_at, last_success_at, last_error_at, error_count,
-          last_error_summary, checkpoint_summary
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          last_error_summary, checkpoint_summary, package_identity_coverage
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
           state = excluded.state,
           last_started_at = COALESCE(excluded.last_started_at, source_runtime_status.last_started_at),
@@ -98,7 +109,8 @@ export class SqliteSourceRuntimeStatusRepository {
             ELSE source_runtime_status.error_count
           END,
           last_error_summary = COALESCE(excluded.last_error_summary, source_runtime_status.last_error_summary),
-          checkpoint_summary = COALESCE(excluded.checkpoint_summary, source_runtime_status.checkpoint_summary)
+          checkpoint_summary = COALESCE(excluded.checkpoint_summary, source_runtime_status.checkpoint_summary),
+          package_identity_coverage = excluded.package_identity_coverage
       `).run(
         statusId(status),
         status.sourceId,
@@ -112,6 +124,7 @@ export class SqliteSourceRuntimeStatusRepository {
         status.state === 'failed' ? 1 : 0,
         status.lastErrorSummary ?? null,
         status.checkpointSummary ?? null,
+        status.packageIdentityCoverage ?? null,
       )
     })
   }
@@ -120,7 +133,7 @@ export class SqliteSourceRuntimeStatusRepository {
     return this.executor.run(() => this.executor.db.prepare(`
       SELECT source_id, installation_id, runtime_profile_id, stage, state,
              last_started_at, last_success_at, last_error_at, error_count,
-             last_error_summary, checkpoint_summary
+             last_error_summary, checkpoint_summary, package_identity_coverage
       FROM source_runtime_status
       ORDER BY source_id, installation_id, stage
     `).all().map(mapRuntimeStatus))
