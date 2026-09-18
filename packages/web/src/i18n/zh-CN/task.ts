@@ -249,6 +249,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       runtimeStatus: {
         failed: '需要处理',
         initializing: '启动中',
+        terminating: '正在结束',
+        terminated: '已结束',
         streaming: '执行中',
         compacting: '压缩上下文',
         idle: '等待输入',
