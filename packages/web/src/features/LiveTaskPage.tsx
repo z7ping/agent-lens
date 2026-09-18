@@ -192,6 +192,17 @@ function mergeLiveProjectionItems(
   return [...items.values()]
 }
 
+function splitLiveProjectionItems(
+  items: LiveTaskProjectionItem[],
+  isStreaming: boolean,
+): { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] } {
+  const stableCount = liveTaskStableRoundPrefixLength(items, isStreaming)
+  return {
+    stable: items.slice(0, stableCount),
+    active: items.slice(stableCount),
+  }
+}
+
 function LiveExtensionPrompt({
   request,
   pending,
@@ -492,13 +503,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, effectiveRuntime))
       if (snapshotResult.ok) {
         const projectedItems = projectLiveSnapshotEntries(snapshotResult.snapshot.entries)
-        setItems(projectedItems)
-        setInputHistory(projectLiveInputHistory(projectedItems))
-        stableProjectionCountRef.current = projectedItems.length
-        projectionStableCountRef.current = liveTaskStableRoundPrefixLength(
+        const nextProjection = splitLiveProjectionItems(
           projectedItems,
           snapshotResult.snapshot.state.isStreaming,
         )
+        setProjection(nextProjection)
+        setInputHistory(projectLiveInputHistory(projectedItems))
+        snapshotBaseActiveCountRef.current = nextProjection.active.length
         leafIdRef.current = snapshotResult.snapshot.leafId ?? undefined
       } else {
         setSyncError(snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason))
@@ -529,7 +540,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       try {
         const queueRevision = queueRevisionRef.current
         const recoveryLeafId = leafIdRef.current
-        const stableProjectionCount = stableProjectionCountRef.current
+        const snapshotBaseActiveCount = snapshotBaseActiveCountRef.current
         const [snapshot, queueState, disclosureOptions] = await Promise.all([
           liveApi.snapshot(current.liveId, current.runtimeSessionId, recoveryLeafId),
           product.capabilities.includes('queue')
@@ -542,25 +553,30 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         if (!recoveryLeafId) {
-          setItems(recovered)
+          const nextProjection = splitLiveProjectionItems(recovered, snapshot.state.isStreaming)
+          setProjection(nextProjection)
           setInputHistory(projectLiveInputHistory(recovered))
-          stableProjectionCountRef.current = recovered.length
-          projectionStableCountRef.current = liveTaskStableRoundPrefixLength(
-            recovered,
-            snapshot.state.isStreaming,
-          )
+          snapshotBaseActiveCountRef.current = nextProjection.active.length
           leafIdRef.current = snapshot.leafId ?? undefined
         } else if (snapshot.state.isStreaming) {
-          // 重连中的增量快照只补已持久化片段，不推进稳定边界；
-          // 完成态会再次从旧 leaf 对账，从而替换乐观/流式临时节点。
-          setItems(previous => mergeLiveProjectionItems(previous, recovered))
+          // 重连中的增量快照只补当前活动轮的已持久化片段，不复制稳定历史；
+          // 完成态仍从旧 leaf 对账，替换活动轮中的乐观/流式临时节点。
+          setProjection(previous => ({
+            ...previous,
+            active: mergeLiveProjectionItems(previous.active, recovered),
+          }))
         } else if (recovered.length > 0) {
-          setItems(previous => [
-            ...previous.slice(0, stableProjectionCount),
-            ...recovered,
-          ])
-          stableProjectionCountRef.current = stableProjectionCount + recovered.length
-          projectionStableCountRef.current = stableProjectionCount + recovered.length
+          setProjection(previous => {
+            const reconciledActive = [
+              ...previous.active.slice(0, snapshotBaseActiveCount),
+              ...recovered,
+            ]
+            return {
+              stable: [...previous.stable, ...reconciledActive],
+              active: [],
+            }
+          })
+          snapshotBaseActiveCountRef.current = 0
           leafIdRef.current = snapshot.leafId ?? recoveryLeafId
         } else {
           leafIdRef.current = snapshot.leafId ?? recoveryLeafId
@@ -580,7 +596,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       envelope => {
         setConnected(true)
         if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
-          setItems(previous => reduceLiveTaskEvent(previous, envelope))
+          setProjection(previous => ({
+            ...previous,
+            active: reduceLiveTaskEvent(previous.active, envelope),
+          }))
           if (!followControllerRef.current.isFollowing) setNewRecords(true)
         }
         setState(previous => runtimeStateFromEvent(previous, envelope))
