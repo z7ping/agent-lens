@@ -6,7 +6,6 @@ import type {
   HubReadAvailability,
   HubReviewSessionSummaryDto,
   JsonValue,
-  LiveProductDto,
   ReviewDetailFilter,
   ReviewEventNodeDto,
   ReviewInteractionDto,
@@ -19,7 +18,7 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
-import { liveApi } from '../client/live'
+import { liveApi, type LiveProductMetadata } from '../client/live'
 import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -917,7 +916,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
-  const [liveProducts, setLiveProducts] = useState<LiveProductDto[]>([])
+  const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
   const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork'>('')
   const [historyInteractionError, setHistoryInteractionError] = useState('')
   const [pathError, setPathError] = useState('')
@@ -973,7 +972,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     let initialTimer: number | undefined
 
     const refreshLiveProducts = (allowRetry = true) => {
-      void liveApi.products().then(
+      void liveApi.productMetadata(detail.productId).then(
         products => {
           if (cancelled) return
           if (retryTimer !== undefined) {
