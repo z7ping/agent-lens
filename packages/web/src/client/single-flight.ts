@@ -23,10 +23,12 @@ export function waitForCaller<T>(pending: Promise<T>, signal?: AbortSignal): Pro
   if (signal.aborted) return Promise.reject(abortError())
 
   return new Promise<T>((resolve, reject) => {
-    const cleanup = () => signal.removeEventListener('abort', onAbort)
     const onAbort = () => {
       cleanup()
       reject(abortError())
+    }
+    function cleanup() {
+      signal.removeEventListener('abort', onAbort)
     }
     signal.addEventListener('abort', onAbort, { once: true })
     pending.then(
