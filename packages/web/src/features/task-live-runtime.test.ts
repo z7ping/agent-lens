@@ -13,7 +13,7 @@ function state(overrides: Partial<LiveRuntimeStateDto> = {}): LiveRuntimeStateDt
   }
 }
 
-test('Pi Live keeps the compatibility task route while other Live adapters use a generic route', () => {
+test('new Live links use the generic liveId route while legacy Pi links still parse', () => {
   const pi: LiveRuntimeRefDto = {
     liveId: 'pi',
     productId: 'pi',
@@ -27,7 +27,7 @@ test('Pi Live keeps the compatibility task route while other Live adapters use a
     state: state(),
   }
 
-  assert.equal(taskLiveRuntimeHref(pi), '/review/live/runtime%2F1')
+  assert.equal(taskLiveRuntimeHref(pi), '/review/live/pi/runtime%2F1')
   assert.equal(taskLiveRuntimeHref(hermes), '/review/live/hermes/runtime%2F1')
   assert.deepEqual(parseTaskLiveRuntimeLocation('/review/live/runtime%2F1'), {
     liveId: 'pi',
