@@ -46,6 +46,16 @@ test('Hermes Live preserves the generic task title in Runtime state', async () =
   await service.dispose()
 })
 
+test('Hermes Live maps task title updates into the generic Live event', () => {
+  assert.deepEqual(normalizeHermesLiveEvent({
+    event: 'task.title.updated',
+    title: 'Hermes task',
+  }), {
+    type: 'title.update',
+    title: 'Hermes task',
+  })
+})
+
 test('Hermes Live maps public run events into the same Live renderer vocabulary', () => {
   assert.deepEqual(normalizeHermesLiveEvent({
     event: 'assistant.delta',
