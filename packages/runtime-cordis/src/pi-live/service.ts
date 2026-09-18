@@ -655,10 +655,15 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!targetEntryId) throw new Error('Pi message action target entry id is required')
     const runtime = await this.readyRuntime(id)
     const snapshot = await runtime.handle!.snapshot()
+    if (snapshot.state.isStreaming) {
+      throw this.conflict('Pi message actions require an idle session')
+    }
     const target = piUserMessageEntry(snapshot.entries, targetEntryId)
 
     if (actionId === 'pi.edit-from-here') {
-      if (!runtime.handle?.navigateTree) throw new Error('Installed Pi SDK does not support Edit from here')
+      if (snapshot.state.capabilities?.treeNavigation !== true || !runtime.handle?.navigateTree) {
+        throw this.conflict('Installed Pi SDK does not support Edit from here')
+      }
       const result = await runtime.handle.navigateTree(target.entryId)
       if (result.cancelled) return { outcome: 'refresh-current' as const }
       return {
@@ -673,7 +678,10 @@ export class DefaultPiLiveService implements PiLiveService {
 
     if (actionId === 'pi.new-session-from-here') {
       const state = snapshot.state
-      if (!state.sessionFile) throw new Error('Pi session must be persisted before creating a new session from a message')
+      if (state.capabilities?.messageFork !== true) {
+        throw this.conflict('Installed Pi SDK does not support message-level session fork')
+      }
+      if (!state.sessionFile) throw this.conflict('Pi session must be persisted before creating a new session from a message')
       const nextInput: PiLiveStartInput = target.parentId
         ? {
             cwd: runtime.input.cwd,
