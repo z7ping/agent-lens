@@ -622,7 +622,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (state.isStreaming) return []
 
     const actions = []
-    if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation !== false) {
+    if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation === true) {
       actions.push({
         actionId: 'pi.edit-from-here',
         label: { default: 'Edit from here', zhCN: '从这里编辑', enUS: 'Edit from here' },
@@ -635,7 +635,7 @@ export class DefaultPiLiveService implements PiLiveService {
         requiresIdle: true,
       })
     }
-    if (state.sessionFile && state.capabilities?.messageFork !== false) {
+    if (state.sessionFile && state.capabilities?.messageFork === true) {
       actions.push({
         actionId: 'pi.new-session-from-here',
         label: { default: 'New session', zhCN: '从这里新建会话', enUS: 'New session' },
