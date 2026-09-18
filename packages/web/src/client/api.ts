@@ -33,6 +33,7 @@ import {
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
+import { shareInFlight } from './single-flight'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
@@ -52,6 +53,7 @@ let agentsInFlight: Promise<AgentOverviewResponseDto> | null = null
 let backupOverviewInFlight: Promise<BackupOverviewResponseDto> | null = null
 let backupOverviewCache: BackupOverviewResponseDto | null = null
 let reuseBackupOverviewOnce = false
+const managedAssetReadInFlight = new Map<string, Promise<unknown>>()
 
 function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
@@ -183,7 +185,12 @@ export class AgentLensApi {
     const params = new URLSearchParams({ installationId, root })
     if (path) params.set('path', path)
     if (bindingId) params.set('bindingId', bindingId)
-    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`)
+    const requestPath = `/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`
+    return shareInFlight(
+      managedAssetReadInFlight,
+      requestPath,
+      () => requestJson<ManagedAssetDirectoryResponseDto>(requestPath),
+    )
   }
   managedAssetFile(
     productId: string,
@@ -194,7 +201,12 @@ export class AgentLensApi {
   ): Promise<ManagedAssetFilePreviewResponseDto> {
     const params = new URLSearchParams({ installationId, root, path })
     if (bindingId) params.set('bindingId', bindingId)
-    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`)
+    const requestPath = `/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`
+    return shareInFlight(
+      managedAssetReadInFlight,
+      requestPath,
+      () => requestJson<ManagedAssetFilePreviewResponseDto>(requestPath),
+    )
   }
   integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     return requestJson('/api/v1/integrations/discovery')
