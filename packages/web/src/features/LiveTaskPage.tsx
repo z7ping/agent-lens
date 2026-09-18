@@ -259,6 +259,13 @@ function aggregateHistoryPage(blocks: readonly LiveHistoryPageBlock[]): NonNulla
     ...(first.before ? { before: first.before } : {}),
     ...(first.first ? { first: first.first } : {}),
     ...(last.last ? { last: last.last } : {}),
+    ...((first.rounds || last.rounds) ? {
+      rounds: {
+        total: Math.max(first.rounds?.total ?? 0, last.rounds?.total ?? 0),
+        ...(first.rounds?.firstOrdinal ? { firstOrdinal: first.rounds.firstOrdinal } : {}),
+        ...(last.rounds?.lastOrdinal ? { lastOrdinal: last.rounds.lastOrdinal } : {}),
+      },
+    } : {}),
     ...(last.hasLater ? { hasLater: true } : {}),
     ...(last.after ? { after: last.after } : {}),
   }
@@ -782,7 +789,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
           : Promise.resolve([]),
         matched.capabilities.includes('history-index')
-          ? liveApi.historyIndex(current.liveId, current.runtimeSessionId, 80).catch(() => null)
+          ? liveApi.historyIndex(current.liveId, current.runtimeSessionId, { limit: 0 }).catch(() => null)
           : Promise.resolve(null),
       ])
       if (cancelled) return
@@ -997,7 +1004,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('history-index')) {
-          void liveApi.historyIndex(current.liveId, current.runtimeSessionId, 80).then(setHistoryIndex, () => undefined)
+          void liveApi.historyIndex(current.liveId, current.runtimeSessionId, { limit: 0 }).then(setHistoryIndex, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
@@ -1655,14 +1662,24 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [busy, current, thinking])
 
   const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
-    if (!current || !item.cursor || historyLoading) return
+    if (!current || historyLoading) return
+    const targetOrdinal = item.ordinal
+    if (!item.cursor && !targetOrdinal) return
     setHistoryLoading(true)
     try {
+      const cursor = item.cursor ?? (
+        await liveApi.historyIndex(
+          current.liveId,
+          current.runtimeSessionId,
+          { fromOrdinal: targetOrdinal, limit: 1 },
+        )
+      ).items[0]?.cursor
+      if (!cursor) throw new Error(`Live round ${targetOrdinal ?? ''} was not found`)
       const snapshot = await liveApi.snapshot(
         current.liveId,
         current.runtimeSessionId,
         undefined,
-        { around: item.cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+        { around: cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
       )
       const projected = projectLiveSnapshotEntries(snapshot.entries)
       const atLatest = snapshot.page?.hasLater !== true
@@ -1694,35 +1711,30 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   )
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
   const turnRailItems = useMemo(() => {
-    const loaded = [...roundSegments.stable, ...roundSegments.active].map(round => ({
-      id: round.model.id,
-      semanticId: round.model.semanticId,
-      label: round.model.label,
-      preview: round.model.preview,
-      error: round.model.errorCount > 0,
-      state: round.model.state,
-      loaded: true,
-    } satisfies TaskTurnRailData))
-    if (!historyIndex?.items.length) return loaded
-
-    const loadedBySemanticId = new Map(
-      loaded.map(item => [item.semanticId ?? item.id, item] as const),
-    )
-    return historyIndex.items.map(indexItem => {
-      const semanticId = `live-round:${indexItem.cursor}`
-      const currentItem = loadedBySemanticId.get(semanticId)
+    const firstGlobalOrdinal = historyPage?.rounds?.firstOrdinal
+    return [...roundSegments.stable, ...roundSegments.active].map(round => {
+      const localOrdinal = round.model.ordinal
+      const ordinal = firstGlobalOrdinal && localOrdinal
+        ? firstGlobalOrdinal + localOrdinal - 1
+        : localOrdinal
+      const semanticId = round.model.semanticId ?? round.model.id
+      const cursor = semanticId.startsWith('live-round:')
+        ? semanticId.slice('live-round:'.length)
+        : undefined
       return {
-        id: semanticId,
+        id: round.model.id,
         semanticId,
-        cursor: indexItem.cursor,
-        loaded: Boolean(currentItem),
-        label: currentItem?.label ?? t('surface.roundOrdinal', { count: indexItem.ordinal }),
-        preview: currentItem?.preview ?? indexItem.preview,
-        error: currentItem?.error ?? false,
-        state: currentItem?.state ?? 'settled',
+        ...(cursor ? { cursor } : {}),
+        ...(ordinal ? { ordinal } : {}),
+        label: ordinal ? t('surface.roundOrdinal', { count: ordinal }) : round.model.label,
+        preview: round.model.preview,
+        error: round.model.errorCount > 0,
+        state: round.model.state,
+        loaded: true,
       } satisfies TaskTurnRailData
     })
-  }, [historyIndex, roundSegments, t])
+  }, [historyPage?.rounds?.firstOrdinal, roundSegments, t])
+  const turnRailTotal = historyPage?.rounds?.total ?? historyIndex?.total
   const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
@@ -1816,6 +1828,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onEnd: jumpLatest,
       }}
       turnRailItems={turnRailItems}
+      turnRailTotal={turnRailTotal}
       onTurnRailSelect={jumpToIndexedRound}
     >
       <TaskHeader
