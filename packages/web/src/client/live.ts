@@ -236,7 +236,7 @@ export type LiveProductMetadata = Pick<
 
 export const liveApi = {
   async products(): Promise<LiveProductDto[]> {
-    return (await requestJson<LiveProductsResponseDto>(LIVE_ROOT)).items
+    return (await requestJson<LiveProductsResponseDto>(`${LIVE_ROOT}/products`)).items
   },
 
   metadata(liveId: string): Promise<LiveProductMetadata> {
@@ -244,13 +244,7 @@ export const liveApi = {
   },
 
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
-    const products = await this.products()
-    return products.flatMap(product => product.runtimes.map(state => ({
-      liveId: product.liveId,
-      productId: product.productId,
-      displayName: product.displayName,
-      state,
-    })))
+    return (await requestJson<{ items: LiveRuntimeRefDto[] }>(`${LIVE_ROOT}/runtimes`)).items
   },
 
   availability(liveId: string): Promise<LiveAvailabilityDto> {
