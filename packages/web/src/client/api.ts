@@ -33,6 +33,7 @@ import {
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
+import { shareInFlight } from './single-flight'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
@@ -52,6 +53,8 @@ let agentsInFlight: Promise<AgentOverviewResponseDto> | null = null
 let backupOverviewInFlight: Promise<BackupOverviewResponseDto> | null = null
 let backupOverviewCache: BackupOverviewResponseDto | null = null
 let reuseBackupOverviewOnce = false
+const managedAssetReadInFlight = new Map<string, Promise<unknown>>()
+const aggregateReadInFlight = new Map<string, Promise<unknown>>()
 
 function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
@@ -69,6 +72,14 @@ function appendFilters(params: URLSearchParams, filters: QueryFilters): void {
   if (filters.projectId) params.set('projectId', filters.projectId)
   const from = rangeStart(filters.range)
   if (from) params.set('from', from)
+}
+
+function queryFilterKey(filters: QueryFilters): string {
+  return JSON.stringify({
+    sourceIds: filters.sourceIds === null ? null : [...filters.sourceIds].sort(),
+    projectId: filters.projectId,
+    range: filters.range,
+  })
 }
 
 function responseErrorMessage(value: unknown): string | undefined {
@@ -183,7 +194,12 @@ export class AgentLensApi {
     const params = new URLSearchParams({ installationId, root })
     if (path) params.set('path', path)
     if (bindingId) params.set('bindingId', bindingId)
-    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`)
+    const requestPath = `/api/v1/integrations/${encodeURIComponent(productId)}/assets/files?${params}`
+    return shareInFlight(
+      managedAssetReadInFlight,
+      requestPath,
+      () => requestJson<ManagedAssetDirectoryResponseDto>(requestPath),
+    )
   }
   managedAssetFile(
     productId: string,
@@ -194,7 +210,12 @@ export class AgentLensApi {
   ): Promise<ManagedAssetFilePreviewResponseDto> {
     const params = new URLSearchParams({ installationId, root, path })
     if (bindingId) params.set('bindingId', bindingId)
-    return requestJson(`/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`)
+    const requestPath = `/api/v1/integrations/${encodeURIComponent(productId)}/assets/file?${params}`
+    return shareInFlight(
+      managedAssetReadInFlight,
+      requestPath,
+      () => requestJson<ManagedAssetFilePreviewResponseDto>(requestPath),
+    )
   }
   integrationDiscovery(): Promise<IntegrationToolDiscoveryResponseDto> {
     return requestJson('/api/v1/integrations/discovery')
@@ -298,7 +319,12 @@ export class AgentLensApi {
     const params = new URLSearchParams()
     appendFilters(params, filters)
     params.set('limit', '500')
-    return requestJson(`/api/v1/usage?${params}`)
+    const requestPath = `/api/v1/usage?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `usage:${queryFilterKey(filters)}`,
+      () => requestJson<ToolAssetUsageResponseDto>(requestPath),
+    )
   }
 
   usageDetail(filters: QueryFilters, toolName: string): Promise<ToolAssetUsageResponseDto> {
@@ -306,13 +332,23 @@ export class AgentLensApi {
     appendFilters(params, filters)
     params.set('toolName', toolName)
     params.set('limit', '1')
-    return requestJson(`/api/v1/usage/detail?${params}`)
+    const requestPath = `/api/v1/usage/detail?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `usage-detail:${queryFilterKey(filters)}:${toolName}`,
+      () => requestJson<ToolAssetUsageResponseDto>(requestPath),
+    )
   }
 
   insights(filters: QueryFilters): Promise<InsightsResponseDto> {
     const params = new URLSearchParams()
     appendFilters(params, filters)
-    return requestJson(`/api/v1/insights?${params}`)
+    const requestPath = `/api/v1/insights?${params}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `insights:${queryFilterKey(filters)}`,
+      () => requestJson<InsightsResponseDto>(requestPath),
+    )
   }
 
   backupOverview(): Promise<BackupOverviewResponseDto> {

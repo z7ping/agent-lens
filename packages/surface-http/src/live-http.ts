@@ -16,6 +16,7 @@ const DEFAULT_START_CAPABILITIES: Readonly<LiveStartCapabilities> = {
   workspace: 'unsupported',
   title: 'unsupported',
 }
+const adapterReadInFlight = new WeakMap<LiveAdapter, Map<string, Promise<unknown>>>()
 
 function jsonValue(value: unknown, depth = 0): JsonValue {
   if (depth > 20) return '[max-depth]'
@@ -149,21 +150,44 @@ function liveDescriptor(adapter: LiveAdapter, availability: unknown, runtimes: u
   })
 }
 
+function shareAdapterRead<T>(
+  adapter: LiveAdapter,
+  key: string,
+  start: () => Promise<T>,
+): Promise<T> {
+  let reads = adapterReadInFlight.get(adapter)
+  if (!reads) {
+    reads = new Map()
+    adapterReadInFlight.set(adapter, reads)
+  }
+  const existing = reads.get(key)
+  if (existing) return existing as Promise<T>
+
+  let pending!: Promise<T>
+  pending = start().finally(() => {
+    if (reads!.get(key) === pending) reads!.delete(key)
+  })
+  reads.set(key, pending)
+  return pending
+}
+
 async function describeAdapter(adapter: LiveAdapter): Promise<JsonValue> {
-  const [availabilityResult, runtimesResult] = await Promise.allSettled([
-    adapter.availability(),
-    adapter.list(),
-  ])
-  const availability = availabilityResult.status === 'fulfilled'
-    ? availabilityResult.value
-    : {
-        available: false,
-        reason: availabilityResult.reason instanceof Error
-          ? availabilityResult.reason.message
-          : String(availabilityResult.reason),
-      }
-  const runtimes = runtimesResult.status === 'fulfilled' ? runtimesResult.value : []
-  return liveDescriptor(adapter, availability, runtimes)
+  return shareAdapterRead(adapter, 'descriptor', async () => {
+    const [availabilityResult, runtimesResult] = await Promise.allSettled([
+      shareAdapterRead(adapter, 'availability', () => adapter.availability()),
+      shareAdapterRead(adapter, 'runtimes', () => adapter.list()),
+    ])
+    const availability = availabilityResult.status === 'fulfilled'
+      ? availabilityResult.value
+      : {
+          available: false,
+          reason: availabilityResult.reason instanceof Error
+            ? availabilityResult.reason.message
+            : String(availabilityResult.reason),
+        }
+    const runtimes = runtimesResult.status === 'fulfilled' ? runtimesResult.value : []
+    return liveDescriptor(adapter, availability, runtimes)
+  })
 }
 
 function sendBehavior(value: unknown): 'normal' | 'steer' | 'follow-up' | undefined {
@@ -179,7 +203,7 @@ async function connectEvents(
   runtimeSessionId: string,
 ): Promise<void> {
   requireCapability(adapter, 'stream')
-  await adapter.state(runtimeSessionId)
+  await shareAdapterRead(adapter, `state:${runtimeSessionId}`, () => adapter.state(runtimeSessionId))
   response.statusCode = 200
   response.setHeader('content-type', 'text/event-stream; charset=utf-8')
   response.setHeader('cache-control', 'no-cache, no-transform')
@@ -276,11 +300,11 @@ export async function handleLiveRequest(
         return true
       }
       if (action === 'availability' && request.method === 'GET') {
-        writeJson(response, 200, jsonValue(await adapter.availability()))
+        writeJson(response, 200, jsonValue(await shareAdapterRead(adapter, 'availability', () => adapter.availability())))
         return true
       }
       if (action === 'runtimes' && request.method === 'GET') {
-        writeJson(response, 200, jsonValue(await adapter.list()))
+        writeJson(response, 200, jsonValue(await shareAdapterRead(adapter, 'runtimes', () => adapter.list())))
         return true
       }
       if (action === 'runtimes' && request.method === 'POST') {
@@ -306,7 +330,11 @@ export async function handleLiveRequest(
     const adapter = adapterFor(service, liveId)
 
     if (!action && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(await adapter.state(runtimeSessionId)))
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `state:${runtimeSessionId}`,
+        () => adapter.state(runtimeSessionId),
+      )))
       return true
     }
     if (!action && request.method === 'DELETE') {
@@ -315,11 +343,20 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'state' && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(await adapter.state(runtimeSessionId)))
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `state:${runtimeSessionId}`,
+        () => adapter.state(runtimeSessionId),
+      )))
       return true
     }
     if (action === 'snapshot' && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(await adapter.snapshot(runtimeSessionId, optionalString(url.searchParams.get('since')))))
+      const since = optionalString(url.searchParams.get('since'))
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `snapshot:${runtimeSessionId}:${since ?? ''}`,
+        () => adapter.snapshot(runtimeSessionId, since),
+      )))
       return true
     }
     if (action === 'events' && request.method === 'GET') {
@@ -352,7 +389,11 @@ export async function handleLiveRequest(
     if (action === 'model-control' && request.method === 'GET') {
       requireCapability(adapter, 'model-switching')
       if (!adapter.modelControl) throw httpError(409, `${adapter.manifest.displayName} does not expose model control`)
-      writeJson(response, 200, jsonValue(await adapter.modelControl(runtimeSessionId)))
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `model-control:${runtimeSessionId}`,
+        () => adapter.modelControl!(runtimeSessionId),
+      )))
       return true
     }
     if (action === 'model-control' && request.method === 'POST') {
@@ -365,7 +406,11 @@ export async function handleLiveRequest(
     if (action === 'thinking-control' && request.method === 'GET') {
       requireCapability(adapter, 'thinking-control')
       if (!adapter.thinkingControl) throw httpError(409, `${adapter.manifest.displayName} does not expose thinking control`)
-      writeJson(response, 200, jsonValue(await adapter.thinkingControl(runtimeSessionId)))
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `thinking-control:${runtimeSessionId}`,
+        () => adapter.thinkingControl!(runtimeSessionId),
+      )))
       return true
     }
     if (action === 'thinking-control' && request.method === 'POST') {

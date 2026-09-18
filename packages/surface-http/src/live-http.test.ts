@@ -43,16 +43,28 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
+  readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0 }
   private modelValue = 'model-a'
   private sequence = 0
 
-  constructor(private readonly failList = false) {}
+  constructor(
+    private readonly failList = false,
+    private readonly readDelayMs = 0,
+  ) {}
+
+  private async delayRead() {
+    if (this.readDelayMs > 0) await new Promise(resolve => setTimeout(resolve, this.readDelayMs))
+  }
 
   async availability() {
+    this.readCounts.availability += 1
+    await this.delayRead()
     return { available: true }
   }
 
   async list() {
+    this.readCounts.list += 1
+    await this.delayRead()
     if (this.failList) throw new Error('runtime list temporarily unavailable')
     return [...this.runtimes.values()]
   }
@@ -84,12 +96,16 @@ class FakeLiveAdapter implements LiveAdapter {
   }
 
   async state(runtimeSessionId: string) {
+    this.readCounts.state += 1
+    await this.delayRead()
     const state = this.runtimes.get(runtimeSessionId)
     if (!state) throw new Error(`Unknown Live runtime: ${runtimeSessionId}`)
     return state
   }
 
   async snapshot(runtimeSessionId: string): Promise<LiveSnapshot> {
+    this.readCounts.snapshot += 1
+    await this.delayRead()
     return { state: await this.state(runtimeSessionId), entries: [{ kind: 'snapshot' }] }
   }
 
@@ -157,6 +173,43 @@ class FakeLiveService implements LiveService {
     return liveId === this.adapter.manifest.liveId ? this.adapter : null
   }
 }
+
+test('generic Live HTTP surface coalesces concurrent identical adapter reads', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter(false, 20)
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const products = await Promise.all(
+      Array.from({ length: 100 }, () => fetch(`${base}/api/v1/live`)),
+    )
+    assert.equal(products.every(response => response.status === 200), true)
+    assert.equal(adapter.readCounts.availability, 1)
+    assert.equal(adapter.readCounts.list, 1)
+
+    const started = await fetch(`${base}/api/v1/live/test/runtimes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ input: {} }),
+    })
+    assert.equal(started.status, 201)
+
+    adapter.readCounts.state = 0
+    adapter.readCounts.snapshot = 0
+    const snapshots = await Promise.all(
+      Array.from({ length: 100 }, () =>
+        fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot`)),
+    )
+    assert.equal(snapshots.every(response => response.status === 200), true)
+    assert.equal(adapter.readCounts.snapshot, 1)
+    assert.equal(adapter.readCounts.state, 1)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
 
 test('generic Live HTTP surface controls an adapter without product-specific routes', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })

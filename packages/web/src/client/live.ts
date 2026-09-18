@@ -11,7 +11,9 @@ import type {
   LiveStartInputDto,
   LiveThinkingControlDto,
 } from '@agent-lens/protocol'
+import { shareInFlight } from './single-flight'
 
+const liveReadInFlight = new Map<string, Promise<unknown>>()
 const LIVE_ROOT = '/api/v1/live'
 
 function livePath(liveId: string, suffix = ''): string {
@@ -30,9 +32,15 @@ async function readError(response: Response): Promise<string> {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init)
-  if (!response.ok) throw new Error(await readError(response))
-  return await response.json() as T
+  const execute = async () => {
+    const response = await fetch(path, init)
+    if (!response.ok) throw new Error(await readError(response))
+    return await response.json() as T
+  }
+  const method = (init?.method ?? 'GET').toUpperCase()
+  return method === 'GET'
+    ? shareInFlight(liveReadInFlight, path, execute)
+    : execute()
 }
 
 function jsonRequest(method: string, body: unknown): RequestInit {

@@ -1,5 +1,8 @@
 import type { LaunchableProjectsResponseDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
+import { shareInFlight, waitForCaller } from './single-flight'
+
+const launchableProjectsInFlight = new Map<string, Promise<unknown>>()
 
 class LaunchableProjectsRequestError extends Error {
   constructor(message: string) {
@@ -29,16 +32,22 @@ export async function fetchLaunchableProjects(input: {
   if (input.cursor) params.set('cursor', input.cursor)
   params.set('limit', String(Math.max(1, Math.min(input.limit ?? 20, 50))))
 
-  try {
-    const response = await fetch(`/api/v1/projects/launchable?${params}`, {
-      headers: { accept: 'application/json' },
-      ...(input.signal ? { signal: input.signal } : {}),
-    })
-    if (!response.ok) throw await responseError(response)
-    return response.json() as Promise<LaunchableProjectsResponseDto>
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
-    if (error instanceof LaunchableProjectsRequestError) throw error
-    throw new LaunchableProjectsRequestError(translateProduct('errors:launchableProjectsFailed'))
-  }
+  const path = `/api/v1/projects/launchable?${params}`
+  const pending = shareInFlight(
+    launchableProjectsInFlight,
+    path,
+    async () => {
+      try {
+        const response = await fetch(path, {
+          headers: { accept: 'application/json' },
+        })
+        if (!response.ok) throw await responseError(response)
+        return await response.json() as LaunchableProjectsResponseDto
+      } catch (error) {
+        if (error instanceof LaunchableProjectsRequestError) throw error
+        throw new LaunchableProjectsRequestError(translateProduct('errors:launchableProjectsFailed'))
+      }
+    },
+  )
+  return waitForCaller(pending, input.signal)
 }
