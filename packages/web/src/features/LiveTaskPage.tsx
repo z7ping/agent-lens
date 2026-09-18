@@ -461,8 +461,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : Promise.resolve(null),
       ])
       if (cancelled) return
-      setState(runtime)
-      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
+      const effectiveRuntime = snapshotResult.ok ? snapshotResult.snapshot.state : runtime
+      setState(effectiveRuntime)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, effectiveRuntime))
       if (snapshotResult.ok) {
         const projectedItems = projectLiveSnapshotEntries(snapshotResult.snapshot.entries)
         setItems(projectedItems)
@@ -546,7 +547,23 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             () => undefined,
           )
           if (envelope.normalizedEvent.status === 'ready') {
+            void recover()
             void liveApi.messageActions(current.liveId, current.runtimeSessionId).then(setMessageActions, () => undefined)
+            if (product.capabilities.includes('command-discovery')) {
+              void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
+            }
+            if (product.capabilities.includes('model-switching')) {
+              void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(setModelControl, () => undefined)
+            }
+            if (product.capabilities.includes('thinking-control')) {
+              void liveApi.thinkingControl(current.liveId, current.runtimeSessionId).then(setThinking, () => undefined)
+            }
+            if (product.capabilities.includes('queue')) {
+              const queueRevision = queueRevisionRef.current
+              void liveApi.queueState(current.liveId, current.runtimeSessionId).then(queueState => {
+                if (queueRevisionRef.current === queueRevision) setQueue(queueState)
+              }, () => undefined)
+            }
           }
         }
         if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
