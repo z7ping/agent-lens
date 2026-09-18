@@ -52,6 +52,16 @@ test('AgentOverviewProjection keeps inventory state separate from observed usage
       assetId: 'asset:skill:review',
       installationId: installation.id,
       path: '/tmp/.codex/skills/review',
+      packageIdentity: 'npm:@example/review-skill',
+    })
+    await storage.sourceRuntimeStatus.put({
+      sourceId: 'codex',
+      installationId: installation.id,
+      stage: 'assets',
+      state: 'healthy',
+      lastSuccessAt: '2026-08-21T03:00:00.000Z',
+      errorCount: 0,
+      packageIdentityCoverage: 'complete',
     })
     await storage.repositories.assets.putState({
       id: 'state:skill:review:installed',
@@ -71,6 +81,8 @@ test('AgentOverviewProjection keeps inventory state separate from observed usage
     assert.equal(agent.assetInventoryStatus, 'available')
     assert.equal(agent.assetInventory.length, 1)
     assert.equal(agent.assetInventory[0]?.canonicalName, 'review')
+    assert.equal(agent.assetInventory[0]?.bindings[0]?.packageIdentity, 'npm:@example/review-skill')
+    assert.equal(agent.installations[0]?.packageIdentityCoverage, 'complete')
     assert.deepEqual(agent.assetInventory[0]?.bindings[0]?.states, [{
       state: 'installed',
       value: true,
