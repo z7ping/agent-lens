@@ -32,8 +32,16 @@ describe('projectReviewLiveInteraction', () => {
     })
   })
 
-  it('does not use source names and hides unavailable adapters', () => {
-    expect(projectReviewLiveInteraction({ productId: 'alpha' }, [product({ availability: { available: false } })])).toBeNull()
+  it('does not gate history capabilities on transient adapter availability', () => {
+    expect(projectReviewLiveInteraction(
+      { productId: 'alpha' },
+      [product({ availability: { available: false, reason: 'temporary probe failure' } })],
+    )).toEqual({
+      liveId: 'alpha-live',
+      displayName: 'Alpha',
+      canResume: true,
+      canFork: true,
+    })
     expect(projectReviewLiveInteraction({ productId: 'other' }, [product()])).toBeNull()
   })
 

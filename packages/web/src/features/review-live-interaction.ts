@@ -8,8 +8,9 @@ export interface ReviewLiveInteraction {
 }
 
 /**
- * Review interaction availability is a Product projection: historical facts
- * identify their product, while the active Live adapter advertises operations.
+ * Historical facts identify their Product while the Live adapter advertises
+ * operations. Capability presence decides whether resume/fork exists; a
+ * transient availability probe must not erase an operation the adapter owns.
  * Source ids never decide whether a control is shown.
  */
 export function projectReviewLiveInteraction(
@@ -19,7 +20,6 @@ export function projectReviewLiveInteraction(
   if (!session?.productId) return null
   const candidates = products.filter(product =>
     product.productId === session.productId
-    && product.availability.available
     && (product.capabilities.includes('resume') || product.capabilities.includes('fork')),
   )
   if (candidates.length !== 1) return null
