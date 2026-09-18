@@ -37,7 +37,9 @@ function liveEventType(value: LiveRuntimeEventDto): string {
 
 function liveCoalesceKey(value: LiveRuntimeEventDto, messageEpoch: number): string | undefined {
   const event = value.normalizedEvent
-  if (!event || (event.type !== 'text.delta' && event.type !== 'reasoning.delta')) return undefined
+  if (!event) return undefined
+  if (event.type === 'tool.output') return event.callId ? `tool.output:${event.callId}` : undefined
+  if (event.type !== 'text.delta' && event.type !== 'reasoning.delta') return undefined
   const messageId = 'messageId' in event && event.messageId ? event.messageId : `epoch-${messageEpoch}`
   const contentIndex = 'contentIndex' in event ? event.contentIndex ?? 0 : 0
   return `${event.type}:${messageId}:${contentIndex}`
@@ -46,8 +48,9 @@ function liveCoalesceKey(value: LiveRuntimeEventDto, messageEpoch: number): stri
 function mergeLiveCoalesced(previous: LiveRuntimeEventDto, next: LiveRuntimeEventDto): LiveRuntimeEventDto {
   const before = previous.normalizedEvent
   const after = next.normalizedEvent
-  if (!before || !after || before.type !== after.type
-    || (before.type !== 'text.delta' && before.type !== 'reasoning.delta')
+  if (!before || !after || before.type !== after.type) return next
+  if (before.type === 'tool.output' && after.type === 'tool.output') return next
+  if ((before.type !== 'text.delta' && before.type !== 'reasoning.delta')
     || (after.type !== 'text.delta' && after.type !== 'reasoning.delta')) return next
   return {
     ...next,
