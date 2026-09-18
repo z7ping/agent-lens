@@ -17,6 +17,8 @@ import type {
   LiveSnapshotDto,
   LiveStartInputDto,
   LiveThinkingControlDto,
+  LiveWorkspaceFileReferenceDto,
+  LiveWorkspaceFileReferencesResponseDto,
 } from '@agent-lens/protocol'
 import { shareInFlight } from './single-flight'
 
@@ -170,6 +172,21 @@ export const liveApi = {
         body: JSON.stringify({ actionId, targetEntryId }),
       },
     )
+  },
+
+  async workspaceFileReferences(
+    liveId: string,
+    runtimeSessionId: string,
+    query: string,
+    limit = 20,
+  ): Promise<LiveWorkspaceFileReferenceDto[]> {
+    const params = new URLSearchParams({
+      q: query,
+      limit: String(Math.max(1, Math.min(50, limit))),
+    })
+    return (await requestJson<LiveWorkspaceFileReferencesResponseDto>(
+      `${livePath(liveId, runtimeSuffix(runtimeSessionId, '/workspace-references'))}?${params}`,
+    )).items
   },
 
   queueState(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {
