@@ -1,4 +1,4 @@
-import type { LiveCommandDto, LiveMessageDto } from '@agent-lens/protocol'
+import type { LiveCommandDto, LiveMessageDto, LiveWorkspaceFileReferenceDto } from '@agent-lens/protocol'
 import { CodeNode } from '@lexical/code'
 import { LinkNode } from '@lexical/link'
 import { ListItemNode, ListNode } from '@lexical/list'
@@ -30,7 +30,9 @@ import {
   $getSelection,
   $insertNodes,
   $isElementNode,
+  $isRangeSelection,
   $isRootOrShadowRoot,
+  $isTextNode,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_HIGH,
   INSERT_PARAGRAPH_COMMAND,
@@ -101,6 +103,8 @@ export interface LiveMarkdownComposerProps {
   inputHistory?: readonly string[] | undefined
   /** Runtime-owned commands. Composer only filters and inserts the opaque value. */
   commands?: readonly LiveCommandDto[] | undefined
+  /** Runtime-bound workspace file lookup. Composer only inserts the Runtime-owned value. */
+  workspaceReferenceSearch?: ((query: string) => Promise<readonly LiveWorkspaceFileReferenceDto[]>) | undefined
   onSubmit(message: LiveMessageDto, mode: 'default' | 'followUp'): void
   onEscape: (() => void) | undefined
   canSubmit: boolean
@@ -289,6 +293,57 @@ function replacePlainTextDocument(editor: LexicalEditor, value: string): void {
     if (value) paragraph.append($createTextNode(value))
     root.append(paragraph)
     paragraph.selectEnd()
+  })
+}
+
+interface WorkspaceReferenceQuery {
+  query: string
+  nodeKey: string
+  startOffset: number
+  endOffset: number
+}
+
+function workspaceReferenceQueryFromEditor(editorState: EditorState): WorkspaceReferenceQuery | null {
+  let result: WorkspaceReferenceQuery | null = null
+  editorState.read(() => {
+    const selection = $getSelection()
+    if (!$isRangeSelection(selection) || !selection.isCollapsed()) return
+    const node = selection.anchor.getNode()
+    if (!$isTextNode(node)) return
+    const endOffset = selection.anchor.offset
+    const before = node.getTextContent().slice(0, endOffset)
+    const match = before.match(/(^|\s)@(?:"([^"\r\n]*)|([^\s@"\r\n]*))$/)
+    if (!match) return
+    const prefix = match[1] ?? ''
+    const tokenLength = match[0].length - prefix.length
+    result = {
+      query: match[2] ?? match[3] ?? '',
+      nodeKey: node.getKey(),
+      startOffset: endOffset - tokenLength,
+      endOffset,
+    }
+  })
+  return result
+}
+
+function insertWorkspaceReference(
+  editor: LexicalEditor,
+  query: WorkspaceReferenceQuery,
+  reference: LiveWorkspaceFileReferenceDto,
+): void {
+  editor.update(() => {
+    const node = $getNodeByKey(query.nodeKey)
+    if (!$isTextNode(node)) return
+    const text = node.getTextContent()
+    if (query.startOffset < 0 || query.endOffset > text.length || query.startOffset > query.endOffset) return
+    const current = text.slice(query.startOffset, query.endOffset)
+    if (!current.startsWith('@')) return
+    node.spliceText(
+      query.startOffset,
+      query.endOffset - query.startOffset,
+      `${reference.value} `,
+      true,
+    )
   })
 }
 
@@ -555,6 +610,186 @@ function ImagePastePlugin({
   return null
 }
 
+
+function WorkspaceReferenceMenuPlugin({
+  search,
+}: {
+  search?: ((query: string) => Promise<readonly LiveWorkspaceFileReferenceDto[]>) | undefined
+}) {
+  const { t } = useTranslation('task')
+  const [editor] = useLexicalComposerContext()
+  const menuId = useId()
+  const [query, setQuery] = useState<WorkspaceReferenceQuery | null>(null)
+  const [matches, setMatches] = useState<readonly LiveWorkspaceFileReferenceDto[]>([])
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [position, setPosition] = useState<CSSProperties | null>(null)
+  const requestIdRef = useRef(0)
+
+  useEffect(() => editor.registerUpdateListener(({ editorState }) => {
+    const next = workspaceReferenceQueryFromEditor(editorState)
+    setQuery(previous => {
+      if (!next && !previous) return previous
+      if (!next || !previous) return next
+      return next.query === previous.query
+        && next.nodeKey === previous.nodeKey
+        && next.startOffset === previous.startOffset
+        && next.endOffset === previous.endOffset
+        ? previous
+        : next
+    })
+  }), [editor])
+
+  useEffect(() => {
+    setActiveIndex(0)
+    const requestId = ++requestIdRef.current
+    if (!search || !query) {
+      setMatches([])
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void search(query.query).then(
+        items => {
+          if (requestId === requestIdRef.current) setMatches(items.slice(0, 20))
+        },
+        () => {
+          if (requestId === requestIdRef.current) setMatches([])
+        },
+      )
+    }, 90)
+    return () => window.clearTimeout(timer)
+  }, [query?.query, query?.nodeKey, query?.startOffset, query?.endOffset, search])
+
+  useEffect(() => {
+    setActiveIndex(index => Math.min(index, Math.max(0, matches.length - 1)))
+  }, [matches.length])
+
+  useEffect(() => {
+    if (!query || !matches.length) {
+      setPosition(null)
+      return
+    }
+    const update = () => {
+      const root = editor.getRootElement()
+      if (!root) return
+      const rect = root.getBoundingClientRect()
+      const width = Math.min(Math.max(300, rect.width), Math.max(176, window.innerWidth - 16))
+      const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
+      setPosition({
+        position: 'fixed',
+        left,
+        bottom: window.innerHeight - rect.top + 8,
+        width,
+      })
+    }
+    update()
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [editor, matches.length, query])
+
+  useEffect(() => {
+    if (!query || !matches.length) return
+    const eventAllowed = (event: KeyboardEvent) => !event.isComposing && event.keyCode !== 229
+    const choose = (index: number) => {
+      const reference = matches[index]
+      if (!reference) return
+      insertWorkspaceReference(editor, query, reference)
+      setQuery(null)
+      setMatches([])
+      requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+    }
+    const move = (delta: 1 | -1) => {
+      setActiveIndex(index => (index + delta + matches.length) % matches.length)
+    }
+
+    const unregisterUp = editor.registerCommand(
+      KEY_ARROW_UP_COMMAND,
+      event => {
+        if (!eventAllowed(event)) return false
+        event.preventDefault()
+        move(-1)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    const unregisterDown = editor.registerCommand(
+      KEY_ARROW_DOWN_COMMAND,
+      event => {
+        if (!eventAllowed(event)) return false
+        event.preventDefault()
+        move(1)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    const unregisterEnter = editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      event => {
+        if (!event || !eventAllowed(event)) return false
+        event.preventDefault()
+        choose(activeIndex)
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    const unregisterEscape = editor.registerCommand(
+      KEY_ESCAPE_COMMAND,
+      event => {
+        if (!eventAllowed(event)) return false
+        event.preventDefault()
+        setQuery(null)
+        setMatches([])
+        return true
+      },
+      COMMAND_PRIORITY_CRITICAL,
+    )
+    return () => {
+      unregisterUp()
+      unregisterDown()
+      unregisterEnter()
+      unregisterEscape()
+    }
+  }, [activeIndex, editor, matches, query])
+
+  if (!query || !matches.length || !position) return null
+
+  return createPortal(
+    <div
+      className="select-menu-popover live-workspace-reference-menu"
+      style={position}
+      role="listbox"
+      id={menuId}
+      aria-label={t('live.workspaceReferenceMenu.aria')}
+      onPointerDown={event => event.preventDefault()}
+    >
+      <div className="select-menu-options live-workspace-reference-menu-options">
+        {matches.map((reference, index) => <button
+          key={reference.path}
+          type="button"
+          role="option"
+          aria-selected={index === activeIndex}
+          className={`select-menu-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+          onMouseEnter={() => setActiveIndex(index)}
+          onClick={() => {
+            insertWorkspaceReference(editor, query, reference)
+            setQuery(null)
+            setMatches([])
+            requestAnimationFrame(() => editor.getRootElement()?.focus({ preventScroll: true }))
+          }}
+        >
+          <span>
+            <b>{reference.path}</b>
+            <small>{reference.value}</small>
+          </span>
+        </button>)}
+      </div>
+    </div>,
+    document.body,
+  )
+}
 
 function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandDto[] | undefined }) {
   const { t } = useTranslation('task')
@@ -864,6 +1099,7 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
   draftKey,
   inputHistory,
   commands,
+  workspaceReferenceSearch,
   onSubmit,
   onEscape,
   canSubmit,
@@ -908,6 +1144,7 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
       <DraftPersistencePlugin draftKey={draftKey}/>
       <ExternalDraftPlugin draft={draft}/>
       <EditablePlugin disabled={disabled}/>
+      <WorkspaceReferenceMenuPlugin search={workspaceReferenceSearch}/>
       <CommandMenuPlugin commands={commands}/>
       <KeyboardPlugin canSubmit={canSubmit} onSubmit={onSubmit} onEscape={onEscape} inputHistory={inputHistory}/>
       <ComposerRefPlugin forwardedRef={ref}/>

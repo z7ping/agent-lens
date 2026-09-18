@@ -88,6 +88,10 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       commandMenu: {
         aria: '可用命令',
       },
+
+      workspaceReferenceMenu: {
+        aria: '工作区文件',
+      },
       connected: '实时连接已建立',
       connecting: '正在连接实时任务',
       model: '模型',
