@@ -160,6 +160,7 @@ test('AssetBinding scope is metadata while scopeRoot follows path redaction', ()
       assetId: 'asset-1',
       installationId: 'install-1',
       scope: 'project',
+      packageIdentity: 'npm:@example/pi-tools',
       scopeRoot: '/Users/alice/work/agent-lens',
       path: '/Users/alice/work/agent-lens/AGENTS.md',
     },
@@ -169,6 +170,7 @@ test('AssetBinding scope is metadata while scopeRoot follows path redaction', ()
   })
 
   assert.deepEqual(result.body.scope, { state: 'value', value: 'project' })
+  assert.deepEqual(result.body.packageIdentity, { state: 'value', value: 'npm:@example/pi-tools' })
   assert.deepEqual(result.body.scopeRoot, { state: 'value', value: '/Users/[USER]/work/agent-lens' })
   assert.deepEqual(result.body.path, { state: 'value', value: '/Users/[USER]/work/agent-lens/AGENTS.md' })
 })
