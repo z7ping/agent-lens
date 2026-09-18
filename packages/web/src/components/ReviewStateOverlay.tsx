@@ -15,8 +15,9 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
   const { t } = useTranslation('review')
   const review = snapshot.review
   const response = review.response
-  const detectedCount = snapshot.agents?.items.filter(agent => agent.detected).length ?? 0
-  const enabledCount = snapshot.agents?.items.filter(agent => agent.supported && agent.enabled).length ?? 0
+  const lightweightAgents = snapshot.agentSummaries?.items ?? snapshot.facets?.agents ?? []
+  const detectedCount = lightweightAgents.filter(agent => agent.detected).length
+  const enabledCount = lightweightAgents.filter(agent => agent.supported && agent.enabled).length
   const serviceReady = snapshot.health?.status === 'ok' && snapshot.health.storage.ok
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected)
   const shellClass = `review-state-overlay ${hasSseBanner ? 'has-sse-banner' : ''}`
