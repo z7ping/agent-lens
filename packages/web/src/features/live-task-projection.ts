@@ -223,6 +223,27 @@ export function reduceLiveTaskEvent(
   return [...items]
 }
 
+export function projectLiveInputHistory(
+  items: readonly LiveTaskProjectionItem[],
+  limit = 100,
+): string[] {
+  const values = items.flatMap(item => item.kind === 'message' && item.role === 'user'
+    ? [item.text.trim()]
+    : [])
+    .filter(Boolean)
+  return values.slice(-Math.max(0, limit))
+}
+
+export function appendLiveInputHistory(
+  history: readonly string[],
+  value: string,
+  limit = 100,
+): string[] {
+  const text = value.trim()
+  if (!text) return [...history]
+  return [...history, text].slice(-Math.max(0, limit))
+}
+
 export function appendOptimisticLiveUserMessage(
   items: readonly LiveTaskProjectionItem[],
   textValue: string,
