@@ -136,6 +136,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   const state = await waitUntilReady(service, initializing.runtimeSessionId)
   assert.equal(state.nativeSessionId, 'native-session-1')
   assert.equal(state.sessionName, 'AgentLens task')
+  assert.equal(state.title, 'AgentLens task')
   assert.equal(state.processId, undefined)
   assert.equal(calls.includes('model:openai/gpt-test'), true)
   assert.deepEqual(state.startupResources?.skills, ['static-skill', 'extension-skill'])
@@ -241,6 +242,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(promptFinished, true, 'HTTP-facing prompt should resolve after SDK preflight, before the agent turn completes')
   assert.equal(streaming, true, 'agent turn should still be running after prompt acknowledgement')
   assert.equal(calls.includes('prompt:hello:followUp:rpc'), true)
+  assert.equal((await service.state(state.runtimeSessionId)).title, 'hello')
 
   await service.steer(state.runtimeSessionId, 'change direction')
   await service.followUp(state.runtimeSessionId, 'afterwards')
