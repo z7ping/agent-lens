@@ -46,11 +46,14 @@ class FakeLiveAdapter implements LiveAdapter {
   private modelValue = 'model-a'
   private sequence = 0
 
+  constructor(private readonly failList = false) {}
+
   async availability() {
     return { available: true }
   }
 
   async list() {
+    if (this.failList) throw new Error('runtime list temporarily unavailable')
     return [...this.runtimes.values()]
   }
 
@@ -259,6 +262,27 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     const terminated = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1`, { method: 'DELETE' })
     assert.equal(terminated.status, 200)
     assert.equal(adapter.runtimes.size, 0)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
+test('generic Live product discovery keeps adapter capabilities when runtime listing fails', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter(true)
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const response = await fetch(`${base}/api/v1/live`)
+    assert.equal(response.status, 200)
+    const body = await response.json() as { items: Array<{ capabilities: string[]; availability: { available: boolean }; runtimes: unknown[] }> }
+    assert.equal(body.items.length, 1)
+    assert.equal(body.items[0]?.availability.available, true)
+    assert.equal(body.items[0]?.capabilities.includes('resume'), true)
+    assert.deepEqual(body.items[0]?.runtimes, [])
   } finally {
     await surface.dispose()
     storage.close()
