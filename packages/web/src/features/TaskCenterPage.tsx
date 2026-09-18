@@ -175,13 +175,22 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const projects = snapshot.facets?.projects ?? []
 
   useEffect(() => {
+    if (mode !== 'history' || !review.response) {
+      setHubSessions([])
+      return
+    }
     let cancelled = false
-    void fetchHubReviewSessions(200).then(
-      value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
-      () => { if (!cancelled) setHubSessions([]) },
-    )
-    return () => { cancelled = true }
-  }, [review.response?.meta.generatedAt])
+    const timer = window.setTimeout(() => {
+      void fetchHubReviewSessions(200).then(
+        value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
+        () => { if (!cancelled) setHubSessions([]) },
+      )
+    }, 200)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [mode, review.response?.meta.generatedAt])
 
   useEffect(() => {
     if (mode !== 'new') return
