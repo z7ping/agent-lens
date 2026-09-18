@@ -45,6 +45,7 @@ import {
   liveTaskStableRoundPrefixLength,
   liveTaskRoundEstimate,
   liveEventChangesTaskTranscript,
+  mergeLiveActiveProjectionItems,
   reduceLiveTaskEvent,
   settleLiveTaskProjectionItems,
   type LiveTaskProjectionItem,
@@ -182,15 +183,6 @@ function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
 
 function queueTextMessage(text: string): LiveMessageDto {
   return { parts: [{ type: 'text', text }] }
-}
-
-function mergeLiveProjectionItems(
-  previous: LiveTaskProjectionItem[],
-  incoming: LiveTaskProjectionItem[],
-): LiveTaskProjectionItem[] {
-  const items = new Map(previous.map(item => [item.id, item] as const))
-  for (const item of incoming) items.set(item.id, item)
-  return [...items.values()]
 }
 
 function splitLiveProjectionItems(
@@ -568,7 +560,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           // 完成态仍从旧 leaf 对账，替换活动轮中的乐观/流式临时节点。
           setProjection(previous => ({
             ...previous,
-            active: mergeLiveProjectionItems(previous.active, recovered),
+            active: mergeLiveActiveProjectionItems(previous.active, recovered),
           }))
         } else if (recovered.length > 0) {
           setProjection(previous => {
