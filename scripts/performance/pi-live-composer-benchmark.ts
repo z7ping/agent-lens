@@ -33,7 +33,7 @@ for (let index = 0; index < historyRounds; index += 1) {
 const projector = new LiveTaskRoundProjector()
 const action = () => undefined
 const messageActions = []
-const stableRounds = projector.project(stableItems, stableItems.length)
+const stableRounds = projector.projectSegments(stableItems, [])
 const stableProps = stableRounds.map(projection => ({
   projection,
   agentLabel: 'Pi',
@@ -54,12 +54,11 @@ for (let index = 0; index < edits; index += 1) {
 if (gate.accept(false)) parentUpdates += 1
 
 for (let update = 0; update < streamingUpdates; update += 1) {
-  const currentItems: LiveTaskProjectionItem[] = [
-    ...stableItems,
+  const activeItems: LiveTaskProjectionItem[] = [
     { id: 'u-current', kind: 'message', role: 'user', text: 'current task', streaming: false },
     { id: 'a-current', kind: 'message', role: 'assistant', text: `stream-${update}`, streaming: true },
   ]
-  const nextRounds = projector.project(currentItems, stableItems.length)
+  const nextRounds = projector.projectSegments(stableItems, activeItems)
   for (let index = 0; index < stableProps.length; index += 1) {
     const before = stableProps[index]!
     const after = {
