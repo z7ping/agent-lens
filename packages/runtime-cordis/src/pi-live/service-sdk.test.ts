@@ -162,6 +162,10 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(events.some(event => event.type === 'tool_execution_start'), true)
 
   emit(agentListener, {
+    type: 'message_start',
+    message: { role: 'assistant', id: 'assistant-1' },
+  })
+  emit(agentListener, {
     type: 'message_update',
     message: { role: 'assistant', usage: { output: 7 } },
     assistantMessageEvent: {
@@ -175,6 +179,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(messageUpdate, {
     type: 'message_update',
     usage: { output: 7 },
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta: 'hello' },
   })
 
@@ -202,6 +207,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.deepEqual(toolCallUpdate, {
     type: 'message_update',
     usage: { output: 8 },
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'toolcall_start', contentIndex: 1, id: 'call-1', toolName: 'read' },
   })
 
