@@ -15,6 +15,7 @@ import {
   AGENT_LENS_PROTOCOL_VERSION,
   type AgentAssetInventoryDto,
   type AgentAssetStateDto,
+  type AgentCoverageResponseDto,
   type AgentDetailResponseDto,
   type AgentEnrichmentResponseDto,
   type AgentOverviewDto,
@@ -239,8 +240,11 @@ export class AgentOverviewProjection {
   private cachedResponseAt = 0
   private cachedSummary: AgentSummaryResponseDto | null = null
   private cachedSummaryAt = 0
+  private cachedCoverage: AgentCoverageResponseDto | null = null
+  private cachedCoverageAt = 0
   private queryInFlight: Promise<AgentOverviewResponseDto> | null = null
   private summaryInFlight: Promise<AgentSummaryResponseDto> | null = null
+  private coverageInFlight: Promise<AgentCoverageResponseDto> | null = null
   private readonly detailCache = new Map<string, { at: number; item: AgentOverviewDto }>()
   private readonly detailInFlight = new Map<string, Promise<AgentDetailResponseDto | null>>()
 
@@ -260,6 +264,8 @@ export class AgentOverviewProjection {
     this.cachedResponseAt = 0
     this.cachedSummary = null
     this.cachedSummaryAt = 0
+    this.cachedCoverage = null
+    this.cachedCoverageAt = 0
     this.detailCache.clear()
   }
 
@@ -291,6 +297,21 @@ export class AgentOverviewProjection {
       })
       .finally(() => { this.summaryInFlight = null })
     return this.summaryInFlight
+  }
+
+  queryCoverage(): Promise<AgentCoverageResponseDto> {
+    if (this.cachedCoverage && Date.now() - this.cachedCoverageAt < AGENT_OVERVIEW_CACHE_MS) {
+      return Promise.resolve(this.cachedCoverage)
+    }
+    if (this.coverageInFlight) return this.coverageInFlight
+    this.coverageInFlight = this.buildCoverage()
+      .then(response => {
+        this.cachedCoverage = response
+        this.cachedCoverageAt = Date.now()
+        return response
+      })
+      .finally(() => { this.coverageInFlight = null })
+    return this.coverageInFlight
   }
 
   get(sourceId: string): Promise<AgentDetailResponseDto | null> {
@@ -380,7 +401,7 @@ export class AgentOverviewProjection {
   private async buildDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
     const definition = (this.sources?.list() ?? []).find(item => item.manifest.sourceId === sourceId)
     if (!definition) return null
-    const item = await this.buildItem(definition, undefined, false)
+    const item = await this.buildItem(definition, undefined, 'core')
     return {
       item,
       meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
@@ -390,17 +411,20 @@ export class AgentOverviewProjection {
   private async buildItem(
     definition: ReturnType<SourceService['list']>[number],
     prefetchedAssets?: Awaited<ReturnType<ToolAssetUsageProjection['queryAssets']>>,
-    includeEnrichment = true,
+    mode: 'core' | 'coverage' | 'full' = 'full',
   ): Promise<AgentOverviewDto> {
+    const includeIntegration = mode === 'full'
+    const includeUsage = mode !== 'core'
+    const includeCapabilities = mode === 'full'
     const sourceStartedAt = performance.now()
     const installations = await this.storage.repositories.installations.listByProduct(definition.manifest.productId)
-    const integration = includeEnrichment && this.integrationStatus
+    const integration = includeIntegration && this.integrationStatus
       ? await this.integrationStatus(definition.manifest.productId)
       : null
     const usedAssets = new Map<string, AgentOverviewDto['usedAssets'][number]>()
     const inventory = new Map<string, AgentAssetInventoryDto>()
 
-    const assets = includeEnrichment
+    const assets = includeUsage
       ? (prefetchedAssets ?? await this.usage.queryAssets({ sourceId: definition.manifest.sourceId }))
       : []
     for (const asset of assets) {
@@ -485,7 +509,7 @@ export class AgentOverviewProjection {
         firstSeenAt: item.firstSeenAt,
         lastSeenAt: item.lastSeenAt,
       })),
-      capabilities: includeEnrichment
+      capabilities: includeCapabilities
         ? (this.capabilities?.listForSource(definition.manifest.sourceId) ?? []).map(item => ({
             name: item.name,
             status: item.status,
@@ -504,6 +528,43 @@ export class AgentOverviewProjection {
       inventoryAssets: assetInventory.length,
     })
     return item
+  }
+
+  private async buildCoverage(): Promise<AgentCoverageResponseDto> {
+    const startedAt = performance.now()
+    const definitions = this.sources?.list() ?? []
+    const sourceAssets = this.storage.toolUsageObservations?.aggregateAssetsBySource
+      ? await this.storage.toolUsageObservations.aggregateAssetsBySource({ detailLimit: 0 })
+      : null
+    const assetsBySource = new Map<string, NonNullable<typeof sourceAssets>>()
+    if (sourceAssets) {
+      for (const asset of sourceAssets) {
+        const sourceId = asset.sourceIds[0]
+        if (!sourceId) continue
+        const items = assetsBySource.get(sourceId) ?? []
+        items.push(asset)
+        assetsBySource.set(sourceId, items)
+      }
+    }
+
+    const items = await Promise.all(definitions.map(async definition => {
+      const item = await this.buildItem(
+        definition,
+        sourceAssets ? (assetsBySource.get(definition.manifest.sourceId) ?? []) : undefined,
+        'coverage',
+      )
+      return {
+        sourceId: item.sourceId,
+        productId: item.productId,
+        displayName: item.displayName,
+        detected: item.detected,
+        enabled: item.enabled,
+        assetInventory: item.assetInventory,
+        usedAssets: item.usedAssets,
+      }
+    }))
+    logSlowOverviewPhase('agent-coverage-total', startedAt, { sources: definitions.length, items: items.length })
+    return { items, meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() } }
   }
 
   private async buildResponse(): Promise<AgentOverviewResponseDto> {
