@@ -14,7 +14,7 @@ env:
 
 jobs:
   linux-performance:
-    if: github.head_ref == 'perf/253-read-path'
+    if: startsWith(github.head_ref, 'perf/253-read-path')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
