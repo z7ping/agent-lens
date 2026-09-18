@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { capturePolicyConfigurationPath } from '@agent-lens/capture-policy/configuration'
@@ -39,4 +40,13 @@ test('explicit path overrides stay opt-in and do not create release-specific sta
     integrationAuthorizationPath({ AGENT_LENS_INTEGRATION_AUTH_PATH: '/tmp/authorization.json' }),
     '/tmp/authorization.json',
   )
+})
+
+
+test('dev bundle refresh restores physical Integration install intent without resetting enabled state', () => {
+  const source = readFileSync(new URL('./main.ts', import.meta.url), 'utf8')
+  assert.match(source, /AGENT_LENS_DEV_REINSTALL_INTEGRATIONS/)
+  assert.match(source, /devReinstallIntegrationIds\.size > 0/)
+  assert.match(source, /\.\.\.legacySelected,[\s\S]*?\.\.\.devReinstallSelected/)
+  assert.match(source, /ensureLegacyPhysicalization\(physicalizationSelected\)/)
 })
