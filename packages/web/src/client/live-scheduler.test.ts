@@ -38,6 +38,31 @@ test('Live event scheduler coalesces ordered text and reasoning deltas before Re
   scheduler.dispose()
 })
 
+test('Live event scheduler never coalesces across an intervening fact boundary', () => {
+  const batches: LiveRuntimeEventDto[][] = []
+  const scheduler = new LiveEventScheduler(events => batches.push(events))
+
+  scheduler.push(event(1, { type: 'text.delta', messageId: 'a1', contentIndex: 0, delta: 'before' }))
+  scheduler.push(event(2, { type: 'tool.start', callId: 'tool-1', name: 'read' }))
+  scheduler.push(event(3, { type: 'text.delta', messageId: 'a1', contentIndex: 0, delta: 'after' }))
+  scheduler.flush()
+
+  const delivered = batches.flat()
+  assert.equal(delivered.length, 3)
+  assert.equal(delivered[0]?.normalizedEvent?.type, 'text.delta')
+  assert.equal(delivered[1]?.normalizedEvent?.type, 'tool.start')
+  assert.equal(delivered[2]?.normalizedEvent?.type, 'text.delta')
+  assert.equal(
+    delivered[0]?.normalizedEvent?.type === 'text.delta' ? delivered[0].normalizedEvent.delta : '',
+    'before',
+  )
+  assert.equal(
+    delivered[2]?.normalizedEvent?.type === 'text.delta' ? delivered[2].normalizedEvent.delta : '',
+    'after',
+  )
+  scheduler.dispose()
+})
+
 test('Live event scheduler keeps only the latest presentation value for one tool output', () => {
   const batches: LiveRuntimeEventDto[][] = []
   const scheduler = new LiveEventScheduler(events => batches.push(events))
