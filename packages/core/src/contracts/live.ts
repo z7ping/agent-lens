@@ -14,6 +14,7 @@ export type LiveCapabilityName =
   | 'thinking-control'
   | 'extension-ui'
   | 'command-discovery'
+  | 'workspace-file-reference'
   | 'recovery'
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
@@ -292,6 +293,14 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   group?: string | undefined
 }
 
+export interface LiveWorkspaceFileReference {
+  /** Workspace-relative path for display only. Never an arbitrary caller-supplied cwd. */
+  path: string
+  /** Runtime-owned text inserted into the composer, e.g. "@src/index.ts". */
+  value: string
+}
+
+
 export interface LiveThinkingControl extends LiveControlDisplayInfo {
   capability: 'thinking-control'
   /** Current effective Runtime value. */
@@ -373,6 +382,12 @@ export interface LiveAdapter {
   respondToExtension?(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   /** Present only when the adapter declares command-discovery. */
   commands?(runtimeSessionId: string): Promise<readonly LiveCommand[]>
+  /** Present only when the adapter declares workspace-file-reference. Query is evaluated inside the runtime workspace. */
+  workspaceFileReferences?(
+    runtimeSessionId: string,
+    query: string,
+    limit?: number,
+  ): Promise<readonly LiveWorkspaceFileReference[]>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   /** Present only when the adapter declares queue. Returns the current queued messages without mutation. */
