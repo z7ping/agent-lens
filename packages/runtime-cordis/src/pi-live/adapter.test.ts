@@ -24,6 +24,17 @@ const readyState: PiLiveRuntimeState = {
   pendingMessageCount: 0,
 }
 
+test('Pi Live Adapter maps task summary into generic title.update', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'task_summary',
+    taskSummary: '修复 Live 会话恢复',
+  }), {
+    type: 'title.update',
+    title: '修复 Live 会话恢复',
+  })
+  assert.equal(normalizePiLiveEvent({ type: 'task_summary', taskSummary: '   ' }), undefined)
+})
+
 test('Pi Live Adapter exposes thinking-control only through Runtime-provided opaque values', async () => {
   const changes: string[] = []
   let thinking = {
