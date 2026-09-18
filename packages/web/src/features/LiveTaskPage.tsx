@@ -580,6 +580,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
+        if (envelope.normalizedEvent?.type === 'runtime-disclosure.changed') {
+          void liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).then(
+            setRuntimeDisclosures,
+            () => undefined,
+          )
+        }
         if (envelope.normalizedEvent?.type === 'control.changed') {
           if (envelope.normalizedEvent.control === 'model' && product.capabilities.includes('model-switching')) {
             void liveApi.modelControl(current.liveId, current.runtimeSessionId).then(setModelControl, () => undefined)
