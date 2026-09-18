@@ -56,7 +56,7 @@ function mergeLiveCoalesced(previous: LiveRuntimeEventDto, next: LiveRuntimeEven
     ...next,
     normalizedEvent: {
       ...after,
-      delta: `${before.delta}${after.delta}`,
+      delta: `${before.delta ?? ''}${after.delta ?? ''}`,
     },
   }
 }
