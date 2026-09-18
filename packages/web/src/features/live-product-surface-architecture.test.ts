@@ -9,6 +9,8 @@ const productSurfaceFiles = [
   './ReviewPage.tsx',
 ].map(path => ({ path, source: readFileSync(new URL(path, import.meta.url), 'utf8') }))
 
+const liveComposer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
+
 test('统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面', () => {
   for (const file of productSurfaceFiles) {
     assert.doesNotMatch(file.source, /piLiveApi|PiLivePage|PiLiveCompatibilityPage/, file.path)
@@ -54,4 +56,24 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /liveApi\.snapshot\([^\n]+leafIdRef\.current/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
+})
+
+
+test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /liveComposerDraftKey\(current\.liveId, current\.runtimeSessionId\)/)
+  assert.match(liveTask, /readLiveComposerDraft\(composerDraftKey\)/)
+  assert.match(liveTask, /draftKey=\{composerDraftKey \|\| undefined\}/)
+  assert.match(liveTask, /inputHistory=\{inputHistory\}/)
+  assert.match(liveTask, /setInputHistory\(previous => appendLiveInputHistory\(previous, optimisticText\)\)/)
+  assert.match(liveTask, /composerRef\.current\?\.restoreMessage\(message\)/)
+
+  assert.match(liveComposer, /function DraftPersistencePlugin/)
+  assert.match(liveComposer, /writeLiveComposerDraft\(pending\.key, draftTextFromEditor\(pending\.state\)\)/)
+  assert.match(liveComposer, /KEY_ARROW_UP_COMMAND/)
+  assert.match(liveComposer, /KEY_ARROW_DOWN_COMMAND/)
+  assert.match(liveComposer, /event\.isComposing/)
+  assert.match(liveComposer, /event\.keyCode !== 229/)
+  assert.match(liveComposer, /restoreMessageBeforeCurrentDraft/)
+  assert.doesNotMatch(liveTask, /onDraftChange=/)
 })
