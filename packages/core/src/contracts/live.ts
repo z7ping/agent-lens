@@ -292,9 +292,17 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   group?: string | undefined
 }
 
-export interface LiveMessageActionContribution extends LiveControlDisplayInfo {
+export interface LiveContributionText {
+  default: string
+  zhCN?: string | undefined
+  enUS?: string | undefined
+}
+
+export interface LiveMessageActionContribution {
   /** Adapter-owned opaque action id. Product Surface must not interpret it. */
   actionId: string
+  label: LiveContributionText
+  description?: LiveContributionText | undefined
   /** Message roles where this action is meaningful. */
   roles: readonly ('user' | 'assistant')[]
   /** Mutating session actions are normally disabled while a run is streaming. */
