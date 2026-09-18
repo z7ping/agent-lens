@@ -350,6 +350,8 @@ export interface SessionRepository {
   getLogicalSession(id: LogicalSessionId): Promise<LogicalSession | null>
   putLogicalSession(session: LogicalSession): Promise<void>
   getSourceSession(id: SourceSessionId): Promise<SourceSession | null>
+  /** Fast path for projections that need all native sessions already attached to one logical Session. */
+  listSourceSessionsByLogicalSession?(logicalSessionId: LogicalSessionId): Promise<SourceSession[]>
   findSourceSession(
     sourceId: string,
     installationId: AgentInstallationId,
