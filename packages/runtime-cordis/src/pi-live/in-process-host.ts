@@ -17,6 +17,7 @@ import type {
   PiLivePackageUpdate,
   PiLivePackageUpdateCheckStatus,
   PiLiveQueueState,
+  PiLiveRuntimeCapabilities,
   PiLiveRuntimeState,
   PiLiveSnapshot,
   PiLiveStartInput,
@@ -145,17 +146,30 @@ function forkSessionManager(manager: PiSdkSessionManager, targetLeafId?: string)
 }
 
 class InProcessHandle implements PiRuntimeHandle {
+  readonly capabilities: PiLiveRuntimeCapabilities
+
   constructor(
     private readonly id: string,
     private readonly session: PiSdkSession,
     private readonly extensionUi: PiExtensionUiBridge,
     private readonly unsubscribe: () => void,
     private readonly packageUpdateState: PackageUpdateState,
-  ) {}
+  ) {
+    this.capabilities = {
+      protocolVersion: 1,
+      sessionRuntime: false,
+      modelSwitching: typeof session.setModel === 'function',
+      thinkingLevelControl: typeof session.setThinkingLevel === 'function'
+        && typeof session.getAvailableThinkingLevels === 'function',
+      extensionUi: typeof session.bindExtensions === 'function',
+      treeNavigation: typeof session.navigateTree === 'function',
+      messageFork: typeof session.sessionManager.createBranchedSession === 'function',
+    }
+  }
 
   async state(): Promise<PiLiveRuntimeState> {
     const resources = runtimeResourceSnapshot(this.session)
-    return { runtimeSessionId: this.id, status: 'ready', initializationStage: 'ready', nativeSessionId: this.session.sessionId,
+    return { runtimeSessionId: this.id, status: 'ready', initializationStage: 'ready', capabilities: this.capabilities, nativeSessionId: this.session.sessionId,
       ...(this.session.sessionFile ? { sessionFile: this.session.sessionFile } : {}), ...(this.session.sessionName ? { sessionName: this.session.sessionName } : {}),
       ...(this.session.model ? { model: this.session.model } : {}), thinkingLevel: this.session.thinkingLevel, isStreaming: this.session.isStreaming,
       isCompacting: this.session.isCompacting, pendingMessageCount: this.session.pendingMessageCount, leafId: this.session.sessionManager.getLeafId(),
