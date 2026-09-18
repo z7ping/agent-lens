@@ -11,6 +11,7 @@ import {
 } from '@lexical/markdown'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { ContentEditable } from '@lexical/react/LexicalContentEditable'
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary'
@@ -556,6 +557,7 @@ function ImagePastePlugin({
 
 
 function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandDto[] | undefined }) {
+  const { t } = useTranslation('task')
   const [editor] = useLexicalComposerContext()
   const menuId = useId()
   const [query, setQuery] = useState<string | null>(null)
@@ -686,7 +688,7 @@ function CommandMenuPlugin({ commands = [] }: { commands?: readonly LiveCommandD
       style={position}
       role="listbox"
       id={menuId}
-      aria-label="Live commands"
+      aria-label={t('live.commandMenu.aria')}
       onPointerDown={event => event.preventDefault()}
     >
       <div className="select-menu-options live-command-menu-options">
