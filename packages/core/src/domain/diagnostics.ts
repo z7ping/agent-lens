@@ -1,4 +1,5 @@
 import type { AgentInstallationId, RuntimeProfileId } from './common'
+import type { PackageIdentityCoverage } from './assets'
 
 export type SourceRuntimeStage = 'detect' | 'history' | 'runtime' | 'assets'
 export type SourceRuntimeState = 'idle' | 'running' | 'healthy' | 'degraded' | 'failed' | 'disabled'
@@ -15,6 +16,7 @@ export interface SourceRuntimeStatus {
   errorCount: number
   lastErrorSummary?: string
   checkpointSummary?: string
+  packageIdentityCoverage?: PackageIdentityCoverage
 }
 
 export type SourceRuntimeStatusInput = SourceRuntimeStatus
