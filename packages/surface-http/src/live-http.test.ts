@@ -381,11 +381,26 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
 
     const state = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/state`)
     assert.equal(state.status, 200)
-    assert.equal((await state.json() as LiveRuntimeState).status, 'ready')
+    assert.deepEqual(await state.json(), {
+      runtimeSessionId: 'runtime-1',
+      status: 'ready',
+      workspacePath: '/tmp/project',
+      isStreaming: false,
+      pendingMessageCount: 0,
+    })
 
     const snapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot`)
     assert.equal(snapshot.status, 200)
-    assert.deepEqual((await snapshot.json() as LiveSnapshot).entries, [{ kind: 'snapshot' }])
+    assert.deepEqual(await snapshot.json(), {
+      state: {
+        runtimeSessionId: 'runtime-1',
+        status: 'ready',
+        workspacePath: '/tmp/project',
+        isStreaming: false,
+        pendingMessageCount: 0,
+      },
+      entries: [{ kind: 'snapshot' }],
+    })
 
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',
