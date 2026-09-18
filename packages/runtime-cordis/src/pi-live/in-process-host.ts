@@ -183,13 +183,14 @@ class InProcessHandle implements PiRuntimeHandle {
     }
   }
 
-  private roundIndex(all = this.session.sessionManager.getEntries()): PiRoundIndexRow[] {
+  private roundIndex(all: readonly unknown[] = this.session.sessionManager.getEntries()): PiRoundIndexRow[] {
     const lastEntryId = all.length ? String(record(all.at(-1)).id ?? '') || undefined : undefined
     const leafId = this.session.sessionManager.getLeafId()
     const cached = this.roundIndexCache
     if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId && cached.leafId === leafId) return cached.rows
 
     const appendOnly = cached
+      && cached.leafId === leafId
       && all.length >= cached.entryCount
       && (cached.entryCount === 0
         || String(record(all[cached.entryCount - 1]).id ?? '') === cached.lastEntryId)
