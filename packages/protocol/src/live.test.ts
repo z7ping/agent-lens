@@ -93,6 +93,16 @@ test('Live protocol validates normalized streaming events without vendor payload
     type: 'completed',
     status: 'interrupted',
   })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'queue.update',
+    steering: ['先检查测试'],
+    followUp: ['完成后总结'],
+  }), {
+    type: 'queue.update',
+    steering: ['先检查测试'],
+    followUp: ['完成后总结'],
+  })
+  assert.equal(parseLiveEventDto({ type: 'queue.update', steering: ['ok'], followUp: [1] }), null)
   assert.equal(parseLiveEventDto({ type: 'completed', status: 'unknown' }), null)
 })
 
