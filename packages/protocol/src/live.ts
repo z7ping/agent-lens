@@ -57,6 +57,7 @@ export type LiveCapabilityNameDto =
   | 'thinking-control'
   | 'extension-ui'
   | 'command-discovery'
+  | 'workspace-file-reference'
   | 'recovery'
 
 export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
@@ -224,6 +225,18 @@ export interface LiveCommandDto extends LiveControlDisplayInfoDto {
 
 export interface LiveCommandsResponseDto {
   items: LiveCommandDto[]
+}
+
+export interface LiveWorkspaceFileCandidateDto {
+  path: string
+  isDirectory: boolean
+  insertText: string
+  cursorOffset: number
+}
+
+export interface LiveWorkspaceFileSearchResponseDto {
+  items: LiveWorkspaceFileCandidateDto[]
+  truncated: boolean
 }
 
 export interface LiveThinkingControlDto extends LiveControlDisplayInfoDto {
