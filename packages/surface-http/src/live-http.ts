@@ -621,6 +621,20 @@ export async function handleLiveRequest(
       return true
     }
 
+    if (url.pathname === '/api/v1/live/product-metadata') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const productId = optionalString(url.searchParams.get('productId'))
+      if (!productId) throw httpError(400, 'productId is required')
+      const items = service.list()
+        .filter(adapter => adapter.manifest.productId === productId)
+        .map(adapter => liveMetadata(adapter))
+      writeJson(response, 200, { items })
+      return true
+    }
+
     if (url.pathname === '/api/v1/live/runtimes') {
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'method_not_allowed' })
