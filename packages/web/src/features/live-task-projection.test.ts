@@ -4,6 +4,7 @@ import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
 import {
   appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
+  LIVE_TASK_ROUND_FACT_LIMIT,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
@@ -155,6 +156,27 @@ test('generic Live projection restores semantic rounds from user-message boundar
   assert.equal(rounds[1]?.model.preview, 'second task')
   assert.equal(rounds[1]?.model.state, 'running')
   assert.ok(liveTaskRoundEstimate(rounds[0]!) >= 180)
+})
+
+test('generic Live projection chunks oversized semantic rounds without splitting turn identity', () => {
+  const items = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'large turn', streaming: false },
+    ...Array.from({ length: LIVE_TASK_ROUND_FACT_LIMIT * 2 + 1 }, (_, index) => ({
+      id: `tool-${index}`,
+      kind: 'tool' as const,
+      callId: `call-${index}`,
+      name: 'read',
+      status: 'success' as const,
+    })),
+  ]
+
+  const rounds = projectLiveTaskRounds(items)
+  assert.equal(rounds.length, 3)
+  assert.ok(rounds.every(round => round.items.length <= LIVE_TASK_ROUND_FACT_LIMIT))
+  assert.ok(rounds.every(round => round.model.semanticId === 'live-round:u1'))
+  assert.notEqual(rounds[0]?.model.id, rounds[1]?.model.id)
+  assert.equal(rounds[0]?.model.ordinal, 1)
+  assert.equal(rounds[0]?.model.toolCount, LIVE_TASK_ROUND_FACT_LIMIT * 2 + 1)
 })
 
 test('generic Live projection preserves pre-user activity as a background round', () => {
