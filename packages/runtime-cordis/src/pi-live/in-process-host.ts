@@ -154,7 +154,13 @@ interface PiRoundIndexRow {
 
 class InProcessHandle implements PiRuntimeHandle {
   readonly capabilities: PiLiveRuntimeCapabilities
-  private roundIndexCache: { entryCount: number; lastEntryId?: string; leafId?: string | null; rows: PiRoundIndexRow[] } | undefined
+  private roundIndexCache: {
+    entryCount: number
+    lastEntryId?: string
+    leafId?: string | null
+    rows: PiRoundIndexRow[]
+    entryPositions: Map<string, number>
+  } | undefined
 
   constructor(
     private readonly id: string,
@@ -187,10 +193,12 @@ class InProcessHandle implements PiRuntimeHandle {
       && (cached.entryCount === 0
         || String(record(all[cached.entryCount - 1]).id ?? '') === cached.lastEntryId)
     const rows = appendOnly ? [...cached.rows] : []
+    const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map<string, number>()
     const start = appendOnly ? cached.entryCount : 0
 
     for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
       const entry = record(all[entryIndex])
+      if (typeof entry.id === 'string' && entry.id) entryPositions.set(entry.id, entryIndex)
       const message = record(entry.message)
       if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
       const content = message.content ?? entry.content
@@ -212,6 +220,7 @@ class InProcessHandle implements PiRuntimeHandle {
       ...(lastEntryId ? { lastEntryId } : {}),
       leafId,
       rows,
+      entryPositions,
     }
     return rows
   }
@@ -248,6 +257,11 @@ class InProcessHandle implements PiRuntimeHandle {
     const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
     const all = this.session.sessionManager.getEntries()
+    if (this.roundIndexCache) this.roundIndex(all)
+    const entryPosition = (cursor: string | undefined) => cursor
+      ? this.roundIndexCache?.entryPositions.get(cursor)
+        ?? entryPosition(cursor)
+      : -1
     const requested = window?.limit
     const limit = Number.isInteger(requested)
       ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested!))
@@ -257,7 +271,7 @@ class InProcessHandle implements PiRuntimeHandle {
     let end = all.length
     if (since || window?.after) {
       const cursor = since ?? window?.after
-      const index = all.findIndex(entry => record(entry).id === cursor)
+      const index = entryPosition(cursor)
       if (index < 0 && window?.after) throw new Error('Live snapshot after cursor was not found')
       start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
       end = Math.min(all.length, start + limit)
@@ -265,14 +279,14 @@ class InProcessHandle implements PiRuntimeHandle {
       start = 0
       end = Math.min(all.length, limit)
     } else if (window?.around) {
-      const aroundIndex = all.findIndex(entry => record(entry).id === window.around)
+      const aroundIndex = entryPosition(window.around)
       if (aroundIndex < 0) throw new Error('Live snapshot around cursor was not found')
       start = Math.max(0, aroundIndex - Math.floor(limit * .3))
       end = Math.min(all.length, start + limit)
       start = Math.max(0, end - limit)
     } else {
       if (window?.before) {
-        const beforeIndex = all.findIndex(entry => record(entry).id === window.before)
+        const beforeIndex = entryPosition(window.before)
         if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
         end = beforeIndex
       }
