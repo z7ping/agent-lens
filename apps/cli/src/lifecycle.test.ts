@@ -16,16 +16,20 @@ test('Windows 后台任务可独立于登录自启注册并继承托管环境', 
   const manual = windowsTaskScript({ ...options, platform: 'win32' }, false)
   const autostart = windowsTaskScript({ ...options, platform: 'win32' }, true)
   const command = lifecycleInternals.windowsManagedCommand({ ...options, platform: 'win32' })
+  const launcher = lifecycleInternals.windowsLauncherScript({ ...options, platform: 'win32' })
 
-  assert.match(manual, /powershell\.exe/)
-  assert.match(manual, /WindowStyle Hidden/)
-  assert.match(manual, /EncodedCommand/)
+  assert.match(manual, /wscript\.exe/)
+  assert.match(manual, /windows-service-launcher\.vbs/)
+  assert.match(manual, /WriteAllText\(\$launcherPath/)
   assert.doesNotMatch(manual, /New-ScheduledTaskTrigger/)
   assert.match(autostart, /New-ScheduledTaskTrigger -AtLogOn/)
   assert.match(autostart, /MultipleInstances IgnoreNew/)
   assert.match(command, /\$env:PATH = '\/home\/tester\/\.volta\/bin:\/opt\/with&sign\/bin:\/usr\/bin'/)
   assert.match(command, /\$env:PI_BIN = '\/home\/tester\/\.volta\/bin\/pi'/)
   assert.match(command, /& '\/usr\/local\/bin\/node' '\/opt\/agent-lens\/dist\/cli\.mjs' service run/)
+  assert.match(launcher, /^Set shell = CreateObject\("WScript\.Shell"\)\r?$/m)
+  assert.match(launcher, /shell\.Run "powershell\.exe -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand /)
+  assert.match(launcher, /, 0, False/)
 })
 
 test('Windows 后台任务把输出写入有界轮转日志', () => {
@@ -42,6 +46,8 @@ test('Windows 后台任务把输出写入有界轮转日志', () => {
 
 test('Windows 状态检查能识别隐藏窗口任务定义', () => {
   const script = lifecycleInternals.windowsStatusScript()
+  assert.match(script, /wscript\.exe/)
+  assert.match(script, /windows-service-launcher\\\.vbs/)
   assert.match(script, /WindowStyle\\s\+Hidden/)
   assert.match(script, /hidden = \$hidden/)
 })

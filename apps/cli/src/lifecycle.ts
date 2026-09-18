@@ -144,13 +144,29 @@ function windowsManagedArgument(options: LifecycleOptions): string {
   return `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
 }
 
+function windowsLauncherPath(options: LifecycleOptions): string {
+  return join(runtimeDir(options.homeDir), 'windows-service-launcher.vbs')
+}
+
+function windowsLauncherScript(options: LifecycleOptions): string {
+  return [
+    'Set shell = CreateObject("WScript.Shell")',
+    `shell.Run "powershell.exe ${windowsManagedArgument(options)}", 0, False`,
+  ].join('\r\n') + '\r\n'
+}
+
 export function windowsTaskScript(options: LifecycleOptions, autostart: boolean): string {
-  const argument = windowsManagedArgument(options)
+  const launcherPath = windowsLauncherPath(options)
+  const launcherScript = windowsLauncherScript(options)
   return [
     "$ErrorActionPreference = 'Stop'",
     `$taskName = ${psQuote(WINDOWS_TASK_NAME)}`,
     '$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name',
-    `$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ${psQuote(argument)}`,
+    `$launcherPath = ${psQuote(launcherPath)}`,
+    `$launcherScript = ${psQuote(launcherScript)}`,
+    'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $launcherPath) | Out-Null',
+    '[System.IO.File]::WriteAllText($launcherPath, $launcherScript, [System.Text.UTF8Encoding]::new($false))',
+    "$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument (\"`\"$launcherPath`\"\")",
     '$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)',
     '$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited',
     autostart
@@ -166,7 +182,7 @@ function windowsStatusScript(): string {
     "if ($null -eq $task) { [pscustomobject]@{ registered = $false; active = $false; autostart = $false; hidden = $false; state = 'Missing' } | ConvertTo-Json -Compress; exit 0 }",
     "$hasLogon = @($task.Triggers | Where-Object { $_.CimClass.CimClassName -eq 'MSFT_TaskLogonTrigger' -and $_.Enabled }).Count -gt 0",
     '$action = @($task.Actions)[0]',
-    "$hidden = $null -ne $action -and $action.Execute -ieq 'powershell.exe' -and $action.Arguments -match 'WindowStyle\\s+Hidden'",
+    "$hidden = $null -ne $action -and (($action.Execute -ieq 'wscript.exe' -and $action.Arguments -match 'windows-service-launcher\\.vbs') -or ($action.Execute -ieq 'powershell.exe' -and $action.Arguments -match 'WindowStyle\\s+Hidden'))",
     '[pscustomobject]@{ registered = $true; active = ($task.State -eq \'Running\'); autostart = $hasLogon; hidden = $hidden; state = [string]$task.State } | ConvertTo-Json -Compress',
   ].join('\n')
 }
@@ -457,6 +473,8 @@ export const lifecycleInternals = {
   managedEnvironment,
   windowsManagedCommand,
   windowsManagedArgument,
+  windowsLauncherPath,
+  windowsLauncherScript,
   windowsTaskScript,
   windowsStatusScript,
   systemdUnit,
