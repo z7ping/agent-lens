@@ -31,10 +31,8 @@ const LIVE_ROOT = '/api/v1/live'
 const LIVE_VISIBLE_FLUSH_MS = 48
 const LIVE_HIDDEN_FLUSH_MS = 250
 
-function liveEventType(value: LiveRuntimeEventDto): LiveRuntimeEventDto['normalizedEvent'] extends infer T
-  ? T extends { type: infer U } ? U : string
-  : string {
-  return (value.normalizedEvent?.type ?? '') as never
+function liveEventType(value: LiveRuntimeEventDto): string {
+  return value.normalizedEvent?.type ?? ''
 }
 
 function liveCoalesceKey(value: LiveRuntimeEventDto, messageEpoch: number): string | undefined {
