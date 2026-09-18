@@ -514,6 +514,10 @@ export async function startHttpSurface(
         writeJson(response, 200, await agents.querySummary())
         return
       }
+      if (url.pathname === '/api/v1/agents/coverage') {
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => agents.queryCoverage()))
+        return
+      }
       const agentEnrichmentMatch = url.pathname.match(/^\/api\/v1\/agents\/([^/]+)\/enrichment$/)
       if (agentEnrichmentMatch) {
         const sourceId = decodeURIComponent(agentEnrichmentMatch[1] ?? '')
