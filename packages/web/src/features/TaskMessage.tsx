@@ -111,17 +111,24 @@ export function TaskMessage({
         <span aria-hidden="true"/>
         <span aria-hidden="true"/>
       </div> : <>
-        {attachments.some(attachment => attachment.type === 'image' && (attachment.previewUrl || attachment.dataUrl)) && <div className="task-message-attachments">
-          {attachments.map((attachment, index) => attachment.type === 'image' && (attachment.previewUrl || attachment.dataUrl)
-            ? <img
-                key={`${attachment.type}:${attachment.name ?? index}:${index}`}
-                className="task-message-attachment-image"
-                src={attachment.previewUrl || attachment.dataUrl}
-                alt={attachment.name ?? t('message.imageAttachment')}
-                loading="lazy"
-                decoding="async"
-              />
-            : null)}
+        {attachments.some(attachment => attachment.type === 'image') && <div className="task-message-attachments">
+          {attachments.map((attachment, index) => {
+            if (attachment.type !== 'image') return null
+            const source = attachment.previewUrl || attachment.dataUrl
+            return source
+              ? <img
+                  key={`${attachment.type}:${attachment.name ?? index}:${index}`}
+                  className="task-message-attachment-image"
+                  src={source}
+                  alt={attachment.name ?? t('message.imageAttachment')}
+                  loading="lazy"
+                  decoding="async"
+                />
+              : <span
+                  key={`${attachment.type}:${attachment.name ?? index}:${index}`}
+                  className="task-message-attachment-placeholder"
+                >{attachment.name ?? t('message.imageAttachment')}</span>
+          })}
         </div>}
         {text && <div className="markdown-message task-message-content" data-view={view}>
           <div
