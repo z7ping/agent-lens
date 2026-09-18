@@ -4,7 +4,6 @@ import {
   LiveTaskRoundProjector,
   type LiveTaskProjectionItem,
 } from '../../packages/web/src/features/live-task-projection.js'
-import { sameStableLiveTaskRoundProps } from '../../packages/web/src/features/live-task-render-boundary.js'
 
 function argNumber(name: string, fallback: number): number {
   const prefix = `--${name}=`
@@ -19,7 +18,7 @@ const historyRounds = Math.floor(argNumber('history-rounds', 250))
 const streamingUpdates = Math.floor(argNumber('streaming-updates', 20_000))
 const budgetMs = argNumber('budget-ms', 800)
 const budgetParentUpdates = Math.floor(argNumber('budget-parent-updates', 2))
-const budgetHistoryInvalidations = Math.floor(argNumber('budget-history-invalidations', 1))
+const budgetHistoryInvalidations = Math.floor(argNumber('budget-history-invalidations', 0))
 
 const gate = new ComposerDraftPresenceGate()
 const stableItems: LiveTaskProjectionItem[] = []
@@ -31,18 +30,7 @@ for (let index = 0; index < historyRounds; index += 1) {
 }
 
 const projector = new LiveTaskRoundProjector()
-const action = () => undefined
-const messageActions = []
-const stableRounds = projector.projectSegments(stableItems, [])
-const stableProps = stableRounds.map(projection => ({
-  projection,
-  agentLabel: 'Pi',
-  eager: false,
-  messageActions,
-  actionPending: null,
-  runtimeStreaming: false,
-  onMessageAction: action,
-}))
+const stableRounds = projector.projectSegmented(stableItems, []).stable
 
 let parentUpdates = 0
 let historyRenderInvalidations = 0
@@ -58,15 +46,9 @@ for (let update = 0; update < streamingUpdates; update += 1) {
     { id: 'u-current', kind: 'message', role: 'user', text: 'current task', streaming: false },
     { id: 'a-current', kind: 'message', role: 'assistant', text: `stream-${update}`, streaming: true },
   ]
-  const nextRounds = projector.projectSegments(stableItems, activeItems)
-  for (let index = 0; index < stableProps.length; index += 1) {
-    const before = stableProps[index]!
-    const after = {
-      ...before,
-      projection: nextRounds[index]!,
-    }
-    if (!sameStableLiveTaskRoundProps(before, after)) historyRenderInvalidations += 1
-  }
+  const segments = projector.projectSegmented(stableItems, activeItems)
+  if (segments.stable !== stableRounds) historyRenderInvalidations += 1
+  if (!segments.active.length) throw new Error('Streaming update lost the active round')
 }
 
 const durationMs = performance.now() - startedAt
