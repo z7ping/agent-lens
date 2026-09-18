@@ -27,6 +27,22 @@ function event(sequence: number, normalizedEvent: NonNullable<LiveRuntimeEventDt
   }
 }
 
+test('optimistic projection keeps image-only user messages', () => {
+  const items = appendOptimisticLiveUserMessage([], '', 'user:image-only', [{
+    type: 'image',
+    name: 'shot.png',
+    mimeType: 'image/png',
+    sizeBytes: 12,
+    previewUrl: 'blob:agent-lens-preview',
+  }])
+
+  assert.equal(items.length, 1)
+  const item = items[0]
+  assert.ok(item?.kind === 'message')
+  assert.equal(item.text, '')
+  assert.equal(item.attachments?.[0]?.previewUrl, 'blob:agent-lens-preview')
+})
+
 test('snapshot projection keeps generic inline image attachments', () => {
   const items = projectLiveSnapshotEntries([
     {
