@@ -14,7 +14,7 @@ import {
 
 function runtimeTitle(item: LiveRuntimeRefDto, fallback: string): string {
   const workspace = workspaceDisplayName(item.state.workspacePath)
-  return workspace || fallback
+  return item.state.title?.trim() || workspace || fallback
 }
 
 function runtimeStatusBadge(
