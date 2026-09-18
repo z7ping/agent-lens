@@ -17,7 +17,7 @@ import type {
   SourceHistoryWindow,
   StorageService,
 } from '@agent-lens/core'
-import { SourceHistoryRunner, sourceRunnerInternals } from './source-runner'
+import { SourceAssetRunner, SourceHistoryRunner, sourceRunnerInternals } from './source-runner'
 
 const host: Host = {
   id: 'host-1',
@@ -95,6 +95,82 @@ test('后台来源处理达到时间预算后主动让出事件循环', async ()
   currentTime = 16
   assert.equal(await schedule(), true)
   assert.equal(yields, 2)
+})
+
+test('Asset Runner persists structured package identity and only marks coverage after a successful scan', async () => {
+  const bindingInputs: Array<Record<string, unknown>> = []
+  const runtimeStatuses: Array<Record<string, unknown>> = []
+  const source: SourceDefinition = {
+    manifest: {
+      pluginId: 'test-assets-plugin',
+      pluginVersion: '1.0.0',
+      apiVersion: '1.0',
+      pluginType: 'source',
+      displayName: 'Test Assets',
+      sourceId: 'test-source',
+      productId: 'test-product',
+      parserVersion: '1',
+    },
+    async detect() { return [detected] },
+    async declareCapabilities() { return [] },
+    async *discoverAssets() {
+      yield {
+        definition: { type: 'skill', canonicalName: 'reviewer' },
+        binding: {
+          source: 'opaque-native-source',
+          packageIdentity: 'npm:@example/pi-tools',
+          version: '2.1.0',
+        },
+        states: [],
+      }
+    },
+    async describeAssetDiscoveryCoverage() {
+      return { packageIdentity: 'complete' }
+    },
+    async normalize(value) { return normalized(value) },
+  }
+
+  const runner = new SourceAssetRunner(
+    {
+      sourceRuntimeStatus: {
+        async put(status: Record<string, unknown>) { runtimeStatuses.push(structuredClone(status)) },
+      },
+      checkpoints: {
+        async get() { return null },
+        async set() {},
+        async clear() {},
+      },
+    } as unknown as StorageService,
+    { async resolveInstallation() { return installation } } as unknown as IdentityService,
+    { registerSourceCapabilities() { return { dispose() {} } } } as unknown as CapabilityService,
+    {
+      async resolveDefinition(input: Record<string, unknown>) {
+        return { id: 'asset:reviewer', ...input }
+      },
+      async resolveBinding(input: Record<string, unknown>) {
+        bindingInputs.push(structuredClone(input))
+        return { id: 'binding:reviewer', ...input }
+      },
+      async recordState() { throw new Error('No states expected') },
+    } as any,
+    { async create() { throw new Error('No evidence expected') } } as any,
+    {
+      isEnabled() { return true },
+      sanitizeDiscoveredAsset(value: unknown) { return value },
+    } as unknown as CapturePolicyService,
+  )
+
+  await runner.scan({
+    source,
+    host,
+    detected,
+    abortSignal: new AbortController().signal,
+  })
+
+  assert.equal(bindingInputs[0]?.packageIdentity, 'npm:@example/pi-tools')
+  assert.equal(bindingInputs[0]?.source, 'opaque-native-source')
+  assert.equal(runtimeStatuses.at(-1)?.state, 'healthy')
+  assert.equal(runtimeStatuses.at(-1)?.packageIdentityCoverage, 'complete')
 })
 
 test('History Coverage 只覆盖 history 能力并引用首尾 Source Evidence', async () => {
