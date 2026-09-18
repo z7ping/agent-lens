@@ -24,41 +24,19 @@ interface LocalPackageInfo {
   versions: string[]
 }
 
-function npmPackageSource(bindingSource: string | undefined): string | undefined {
-  if (!bindingSource) return undefined
-  const marker = ':package:'
-  const markerIndex = bindingSource.indexOf(marker)
-  if (markerIndex < 0) return undefined
-  const packageSpec = bindingSource.slice(markerIndex + marker.length)
-  if (!packageSpec.startsWith('npm:')) return undefined
-
-  const npmSpec = packageSpec.slice('npm:'.length)
-  if (!npmSpec) return undefined
-  let versionIndex = -1
-  if (npmSpec.startsWith('@')) {
-    const slashIndex = npmSpec.indexOf('/')
-    if (slashIndex < 0) return undefined
-    versionIndex = npmSpec.indexOf('@', slashIndex + 1)
-  } else {
-    versionIndex = npmSpec.indexOf('@')
-  }
-  const packageName = (versionIndex >= 0 ? npmSpec.slice(0, versionIndex) : npmSpec).trim()
-  return packageName ? `npm:${packageName}` : undefined
-}
-
 function localPackages(agent: AgentOverviewDto): Map<string, LocalPackageInfo> {
   const collected = new Map<string, { assets: Map<string, AgentAssetInventoryDto>; versions: Set<string> }>()
   for (const asset of agent.assetInventory) {
     for (const binding of asset.bindings) {
-      const packageSource = npmPackageSource(binding.source)
-      if (!packageSource) continue
-      const current = collected.get(packageSource) ?? {
+      const packageIdentity = binding.packageIdentity
+      if (!packageIdentity) continue
+      const current = collected.get(packageIdentity) ?? {
         assets: new Map<string, AgentAssetInventoryDto>(),
         versions: new Set<string>(),
       }
       current.assets.set(asset.id, asset)
       if (binding.version) current.versions.add(binding.version)
-      collected.set(packageSource, current)
+      collected.set(packageIdentity, current)
     }
   }
   return new Map([...collected.entries()].map(([source, value]) => [source, {
@@ -68,10 +46,8 @@ function localPackages(agent: AgentOverviewDto): Map<string, LocalPackageInfo> {
 }
 
 function packageInventoryComplete(agent: AgentOverviewDto): boolean {
-  if (agent.assetInventoryStatus !== 'available') return false
-  return agent.capabilities.some(capability =>
-    capability.name === 'asset-discovery' && capability.status === 'available'
-  )
+  if (agent.assetInventoryStatus !== 'available' || agent.installations.length === 0) return false
+  return agent.installations.every(installation => installation.packageIdentityCoverage === 'complete')
 }
 
 function localPackageState(agent: AgentOverviewDto, localPackage: LocalPackageInfo | undefined): LocalPackageState {
@@ -261,7 +237,6 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
 }
 
 export const piEcosystemUiInternals = {
-  npmPackageSource,
   localPackages,
   packageInventoryComplete,
   localPackageState,
