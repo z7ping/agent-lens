@@ -155,17 +155,33 @@ class FakeLiveAdapter implements LiveAdapter {
 
   async messageActions(runtimeSessionId: string) {
     await this.state(runtimeSessionId)
-    return [{
-      actionId: 'test.rewind',
-      label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
-      roles: ['user'] as const,
-      requiresIdle: true,
-    }]
+    return [
+      {
+        actionId: 'test.rewind',
+        label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
+        roles: ['user'] as const,
+        requiresIdle: true,
+      },
+      {
+        actionId: 'test.open',
+        label: { default: 'Open', zhCN: '打开', enUS: 'Open' },
+        roles: ['user'] as const,
+        requiresIdle: true,
+      },
+    ]
   }
 
   async executeMessageAction(runtimeSessionId: string, actionId: string, targetEntryId: string) {
     await this.state(runtimeSessionId)
     this.messageActionExecutions.push({ runtimeSessionId, actionId, targetEntryId })
+    if (actionId === 'test.open') {
+      const state = await this.state(runtimeSessionId)
+      return {
+        outcome: 'open-runtime' as const,
+        runtime: { ...state, privateDiagnostic: 'must-not-cross-generic-http' },
+        draftText: 'new draft',
+      }
+    }
     return {
       outcome: 'refresh-current' as const,
       draftText: 'restored draft',
@@ -349,12 +365,20 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     const messageActions = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`)
     assert.equal(messageActions.status, 200)
     assert.deepEqual(await messageActions.json(), {
-      items: [{
-        actionId: 'test.rewind',
-        label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
-        roles: ['user'],
-        requiresIdle: true,
-      }],
+      items: [
+        {
+          actionId: 'test.rewind',
+          label: { default: 'Rewind', zhCN: '回到这里', enUS: 'Rewind' },
+          roles: ['user'],
+          requiresIdle: true,
+        },
+        {
+          actionId: 'test.open',
+          label: { default: 'Open', zhCN: '打开', enUS: 'Open' },
+          roles: ['user'],
+          requiresIdle: true,
+        },
+      ],
     })
 
     const executedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
@@ -373,6 +397,24 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       targetEntryId: 'entry-1',
     }])
 
+    const openedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ actionId: 'test.open', targetEntryId: 'entry-1' }),
+    })
+    assert.equal(openedMessageAction.status, 200)
+    assert.deepEqual(await openedMessageAction.json(), {
+      outcome: 'open-runtime',
+      runtime: {
+        runtimeSessionId: 'runtime-1',
+        status: 'ready',
+        workspacePath: '/tmp/project',
+        isStreaming: false,
+        pendingMessageCount: 0,
+      },
+      draftText: 'new draft',
+    })
+
     const rejectedMessageAction = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/message-actions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -386,7 +428,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
       body: JSON.stringify({ actionId: 'test.hidden', targetEntryId: 'entry-1' }),
     })
     assert.equal(hiddenMessageAction.status, 409)
-    assert.equal(adapter.messageActionExecutions.length, 1, 'undeclared action must never reach adapter execution')
+    assert.equal(adapter.messageActionExecutions.length, 2, 'undeclared action must never reach adapter execution')
 
     const queueState = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`)
     assert.equal(queueState.status, 200)
