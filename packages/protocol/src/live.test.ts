@@ -121,6 +121,24 @@ test('Live protocol preserves opaque model values without vendor fields', () => 
   assert.deepEqual(parsed.options.map(option => option.value), ['opaque:model-a', 'opaque:model-b'])
 })
 
+test('Live protocol validates control.changed events', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'control.changed',
+    control: 'model',
+  }), {
+    type: 'control.changed',
+    control: 'model',
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'control.changed',
+    control: 'thinking',
+  }), {
+    type: 'control.changed',
+    control: 'thinking',
+  })
+  assert.equal(parseLiveEventDto({ type: 'control.changed', control: 'unknown' }), null)
+})
+
 test('Live protocol validates and bounds title.update events', () => {
   assert.deepEqual(parseLiveEventDto({
     type: 'title.update',
