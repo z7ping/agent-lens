@@ -235,11 +235,7 @@ function currentIntegrationManagement(): IntegrationManagementService {
     ...(integrationPackages
       ? { packageState: (integrationId: string) => integrationPackages!.state(integrationId) }
       : {}),
-    reviewQueryObserved: count => {
-    startupSessionDiagnostics.markFirst('review.firstQuery')
-    if (count > 0) startupSessionDiagnostics.markFirst('review.firstSessionVisible', { visibleCount: count })
-  },
-  integrationStatus: productId => app.resolveIntegrationStatus(productId),
+    integrationStatus: productId => app.resolveIntegrationStatus(productId),
   })
   return integrationManagement
 }
@@ -317,6 +313,12 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
       error: failure.error instanceof Error ? failure.error.message : String(failure.error),
     })),
   }),
+  reviewQueryObserved: count => {
+    startupSessionDiagnostics.markFirst('review.firstQuery')
+    if (count > 0) {
+      startupSessionDiagnostics.markFirst('review.firstSessionVisible', { visibleCount: count })
+    }
+  },
   integrationStatus: productId => app.resolveIntegrationStatus(productId),
   ...(officialToolDiscovery
     ? {
