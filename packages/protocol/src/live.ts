@@ -90,6 +90,7 @@ export type LiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'termin
 
 export interface LiveRuntimeStateDto {
   runtimeSessionId: string
+  title?: string | undefined
   status: LiveRuntimeStatusDto
   nativeSessionId?: string | undefined
   workspacePath?: string | undefined
