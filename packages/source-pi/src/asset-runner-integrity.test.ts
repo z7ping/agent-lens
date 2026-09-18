@@ -66,6 +66,11 @@ test('Pi asset scan does not let SourceAssetRunner infer discoverable=true from 
     assert.equal(states.find(state => state.state === 'installed')?.value, true)
     assert.equal(states.find(state => state.state === 'discoverable')?.value, 'unknown')
     assert.equal(states.find(state => state.state === 'enabled'), undefined)
+
+    const runtimeStatus = (await storage.sourceRuntimeStatus.list())
+      .find(status => status.sourceId === 'pi' && status.stage === 'assets')
+    assert.equal(runtimeStatus?.state, 'healthy')
+    assert.equal(runtimeStatus?.packageIdentityCoverage, 'unavailable')
   } finally {
     storage.close()
     await rm(root, { recursive: true, force: true })
