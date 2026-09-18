@@ -619,7 +619,6 @@ export class DefaultPiLiveService implements PiLiveService {
   async messageActions(id: string) {
     const runtime = await this.readyRuntime(id)
     const state = await this.runtimeState(runtime)
-    if (state.isStreaming) return []
 
     const actions = []
     if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation === true) {
