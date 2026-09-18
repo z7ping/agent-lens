@@ -439,7 +439,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|message-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|workspace-references|message-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -509,6 +509,24 @@ export async function handleLiveRequest(
           adapter,
           `commands:${runtimeSessionId}`,
           () => adapter.commands!(runtimeSessionId),
+        )),
+      })
+      return true
+    }
+
+    if (action === 'workspace-references' && request.method === 'GET') {
+      requireCapability(adapter, 'workspace-file-reference')
+      if (!adapter.workspaceFileReferences) {
+        throw httpError(409, `${adapter.manifest.displayName} does not expose workspace file references`)
+      }
+      const query = url.searchParams.get('q') ?? ''
+      const requestedLimit = Number(url.searchParams.get('limit') ?? 20)
+      const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(50, requestedLimit)) : 20
+      writeJson(response, 200, {
+        items: jsonValue(await shareAdapterRead(
+          adapter,
+          `workspace-references:${runtimeSessionId}:${query}:${limit}`,
+          () => adapter.workspaceFileReferences!(runtimeSessionId, query, limit),
         )),
       })
       return true
