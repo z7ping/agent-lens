@@ -29,6 +29,8 @@ import {
   $isRootOrShadowRoot,
   COMMAND_PRIORITY_HIGH,
   INSERT_PARAGRAPH_COMMAND,
+  KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_UP_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
   PASTE_COMMAND,
@@ -39,6 +41,10 @@ import {
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, type ForwardedRef } from 'react'
 import { removeLiveAttachment, uploadLiveAttachment } from '../client/live-attachments'
 import { ComposerDraftPresenceGate } from './live-markdown-composer-state'
+import {
+  ComposerInputHistoryNavigator,
+  writeLiveComposerDraft,
+} from './live-composer-session-state'
 import {
   $createLiveImageNode,
   $isLiveImageNode,
@@ -71,6 +77,10 @@ export interface LiveMarkdownComposerHandle {
 export interface LiveMarkdownComposerProps {
   draft: LiveMarkdownComposerDraft
   onDraftPresenceChange(hasContent: boolean): void
+  /** Session-scoped browser draft key. Persistence stays inside the Composer. */
+  draftKey?: string | undefined
+  /** Oldest -> newest submitted textual inputs for ArrowUp/ArrowDown recall. */
+  inputHistory?: readonly string[] | undefined
   onSubmit(message: LiveMessageDto, mode: 'default' | 'followUp'): void
   onEscape: (() => void) | undefined
   canSubmit: boolean
@@ -228,11 +238,21 @@ function messageFromEditor(editorState: EditorState): LiveMessageDto {
 }
 
 function editorHasContent(editorState: EditorState): boolean {
-  let hasContent = false
-  editorState.read(() => {
-    hasContent = Boolean($getRoot().getTextContent().trim())
-  })
-  return hasContent
+  return messageHasContent(messageFromEditor(editorState))
+}
+
+function draftTextFromEditor(editorState: EditorState): string {
+  return messageFromEditor(editorState).parts
+    .flatMap(part => part.type === 'text' || part.type === 'large-text' ? [part.text] : [])
+    .join('\n\n')
+}
+
+function historyTextFromEditor(editorState: EditorState): string | null {
+  const message = messageFromEditor(editorState)
+  if (message.parts.some(part => part.type !== 'text' && part.type !== 'large-text')) return null
+  return message.parts
+    .flatMap(part => part.type === 'text' || part.type === 'large-text' ? [part.text] : [])
+    .join('\n\n')
 }
 
 function messageHasContent(message: LiveMessageDto): boolean {
@@ -287,6 +307,33 @@ function DraftPresencePlugin({ onChange }: { onChange(hasContent: boolean): void
       const hasContent = editorHasContent(editorState)
       if (!gate.current.accept(hasContent)) return
       onChange(hasContent)
+    }}
+  />
+}
+
+function DraftPersistencePlugin({ draftKey }: { draftKey?: string | undefined }) {
+  const pendingRef = useRef<{ key: string; state: EditorState } | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const flush = () => {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    const pending = pendingRef.current
+    pendingRef.current = null
+    if (pending) writeLiveComposerDraft(pending.key, draftTextFromEditor(pending.state))
+  }
+
+  useEffect(() => flush, [draftKey])
+
+  if (!draftKey) return null
+  return <OnChangePlugin
+    ignoreSelectionChange
+    onChange={editorState => {
+      pendingRef.current = { key: draftKey, state: editorState }
+      if (timerRef.current !== null) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(flush, 180)
     }}
   />
 }
@@ -408,19 +455,70 @@ function KeyboardPlugin({
   canSubmit,
   onSubmit,
   onEscape,
-}: Pick<LiveMarkdownComposerProps, 'canSubmit' | 'onSubmit' | 'onEscape'>) {
+  inputHistory = [],
+}: Pick<LiveMarkdownComposerProps, 'canSubmit' | 'onSubmit' | 'onEscape' | 'inputHistory'>) {
   const [editor] = useLexicalComposerContext()
   const canSubmitRef = useRef(canSubmit)
   const submitRef = useRef(onSubmit)
   const escapeRef = useRef(onEscape)
+  const inputHistoryRef = useRef<readonly string[]>(inputHistory)
+  const historyNavigatorRef = useRef(new ComposerInputHistoryNavigator())
+  const appliedHistoryRef = useRef<string | null>(null)
 
   useEffect(() => {
     canSubmitRef.current = canSubmit
     submitRef.current = onSubmit
     escapeRef.current = onEscape
-  }, [canSubmit, onEscape, onSubmit])
+    inputHistoryRef.current = inputHistory
+  }, [canSubmit, inputHistory, onEscape, onSubmit])
 
   useEffect(() => {
+    const applyHistory = (value: string) => {
+      appliedHistoryRef.current = value
+      replaceMarkdownDocument(editor, value)
+    }
+    const historyEventAllowed = (event: KeyboardEvent) => (
+      !event.isComposing
+      && event.keyCode !== 229
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.shiftKey
+    )
+
+    const unregisterArrowUp = editor.registerCommand(
+      KEY_ARROW_UP_COMMAND,
+      event => {
+        if (!historyEventAllowed(event)) return false
+        const current = historyTextFromEditor(editor.getEditorState())
+        if (current === null) return false
+        const value = historyNavigatorRef.current.previous(inputHistoryRef.current, current)
+        if (value === null) return false
+        event.preventDefault()
+        applyHistory(value)
+        return true
+      },
+      COMMAND_PRIORITY_HIGH,
+    )
+    const unregisterArrowDown = editor.registerCommand(
+      KEY_ARROW_DOWN_COMMAND,
+      event => {
+        if (!historyEventAllowed(event) || !historyNavigatorRef.current.isActive()) return false
+        const value = historyNavigatorRef.current.next(inputHistoryRef.current)
+        if (value === null) return false
+        event.preventDefault()
+        applyHistory(value)
+        return true
+      },
+      COMMAND_PRIORITY_HIGH,
+    )
+    const unregisterUpdate = editor.registerUpdateListener(({ editorState }) => {
+      if (!historyNavigatorRef.current.isActive()) return
+      const current = historyTextFromEditor(editorState)
+      if (current === appliedHistoryRef.current) return
+      historyNavigatorRef.current.reset()
+      appliedHistoryRef.current = null
+    })
     const unregisterEnter = editor.registerCommand(
       KEY_ENTER_COMMAND,
       event => {
@@ -433,7 +531,11 @@ function KeyboardPlugin({
         event.preventDefault()
         if (canSubmitRef.current) {
           const message = messageFromEditor(editor.getEditorState())
-          if (messageHasContent(message)) submitRef.current(message, event.altKey ? 'followUp' : 'default')
+          if (messageHasContent(message)) {
+            historyNavigatorRef.current.reset()
+            appliedHistoryRef.current = null
+            submitRef.current(message, event.altKey ? 'followUp' : 'default')
+          }
         }
         return true
       },
@@ -451,6 +553,9 @@ function KeyboardPlugin({
       COMMAND_PRIORITY_HIGH,
     )
     return () => {
+      unregisterArrowUp()
+      unregisterArrowDown()
+      unregisterUpdate()
       unregisterEnter()
       unregisterEscape()
     }
@@ -485,6 +590,8 @@ function ComposerRefPlugin({ forwardedRef }: { forwardedRef: ForwardedRef<LiveMa
 const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMarkdownComposerProps>(function LiveMarkdownComposer({
   draft,
   onDraftPresenceChange,
+  draftKey,
+  inputHistory,
   onSubmit,
   onEscape,
   canSubmit,
@@ -526,9 +633,10 @@ const LiveMarkdownComposerImpl = forwardRef<LiveMarkdownComposerHandle, LiveMark
       <LargePastePlugin/>
       <ImagePastePlugin onPendingChange={onAttachmentPendingChange} onError={onAttachmentError}/>
       <DraftPresencePlugin onChange={onDraftPresenceChange}/>
+      <DraftPersistencePlugin draftKey={draftKey}/>
       <ExternalDraftPlugin draft={draft}/>
       <EditablePlugin disabled={disabled}/>
-      <KeyboardPlugin canSubmit={canSubmit} onSubmit={onSubmit} onEscape={onEscape}/>
+      <KeyboardPlugin canSubmit={canSubmit} onSubmit={onSubmit} onEscape={onEscape} inputHistory={inputHistory}/>
       <ComposerRefPlugin forwardedRef={ref}/>
     </div>
   </LexicalComposer>
