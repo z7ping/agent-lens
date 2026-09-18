@@ -489,6 +489,17 @@ export async function startHttpSurface(
         writeJson(response, 200, await readLaunchableProjects(storage, url.searchParams))
         return
       }
+      if (url.pathname === '/api/v1/agents/summary') {
+        writeJson(response, 200, await agents.querySummary())
+        return
+      }
+      if (url.pathname.startsWith('/api/v1/agents/')) {
+        const sourceId = decodeURIComponent(url.pathname.slice('/api/v1/agents/'.length))
+        if (!sourceId) throw badRequest('sourceId is required')
+        const detail = await agents.get(sourceId)
+        writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
+        return
+      }
       if (url.pathname === '/api/v1/agents') {
         writeJson(response, 200, await agents.query())
         return
