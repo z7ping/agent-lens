@@ -10,7 +10,7 @@ export interface StableLiveTaskRoundProps {
   projection: LiveTaskRoundProjection
   agentLabel: string
   eager: boolean
-  messageActions: LiveMessageActionContributionDto[]
+  messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
   onMessageAction: (
