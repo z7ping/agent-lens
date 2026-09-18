@@ -526,7 +526,10 @@ export async function startPiRuntimeCapture(
     fallbackReconcileLimit: 20,
     reconcilePollMs: 60_000,
     reconcileLimit: 20,
-    initialReconcileLimit: 1,
+    // Existing history belongs to the generic startup History Sync. Runtime Capture
+    // owns changes from now on; keeping an initial reconcile here would duplicate the
+    // same latest-file enumeration and ingestion during every AgentLens startup.
+    initialReconcileLimit: 0,
     onError: error => {
       console.error('[AgentLens] Pi history reconcile failed', error)
     },
