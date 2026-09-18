@@ -1,4 +1,5 @@
 import type {
+  AgentCoverageResponseDto,
   AgentDetailResponseDto,
   AgentEnrichmentResponseDto,
   AgentOverviewResponseDto,
@@ -35,6 +36,7 @@ export interface ClientSnapshot {
   health: HealthResponseDto | null
   facets: FacetResponseDto | null
   agentSummaries: AgentSummaryResponseDto | null
+  agentCoverage: AgentCoverageResponseDto | null
   agents: AgentOverviewResponseDto | null
   agentDetailLoadingSourceId: string
   agentDetailError: string
@@ -246,6 +248,7 @@ export class AgentLensClientModel {
     health: null,
     facets: null,
     agentSummaries: null,
+    agentCoverage: null,
     agents: null,
     agentDetailLoadingSourceId: '',
     agentDetailError: '',
@@ -575,11 +578,10 @@ export class AgentLensClientModel {
   }
 
   refreshAgentCoverage(): Promise<void> {
-    const summaryCount = this.snapshot.agentSummaries?.items.length ?? 0
-    if (summaryCount > 0 && (this.snapshot.agents?.items.length ?? 0) >= summaryCount) return Promise.resolve()
+    if (this.snapshot.agentCoverage) return Promise.resolve()
     if (this.agentCoverageInFlight) return this.agentCoverageInFlight
-    const pending = this.api.agents().then(agents => {
-      this.patch({ agents })
+    const pending = this.api.agentCoverage().then(agentCoverage => {
+      this.patch({ agentCoverage })
     }).finally(() => {
       if (this.agentCoverageInFlight === pending) this.agentCoverageInFlight = null
     })
@@ -597,6 +599,7 @@ export class AgentLensClientModel {
           this.patch({
             agents: result.agents,
             agentSummaries: summariesFromOverview(result.agents),
+            agentCoverage: null,
             facets: result.facets,
             agentsLoading: false,
             agentsHasNewData: false,
