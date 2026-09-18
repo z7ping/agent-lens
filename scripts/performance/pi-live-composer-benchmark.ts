@@ -1,6 +1,10 @@
 import { performance } from 'node:perf_hooks'
 import { ComposerDraftPresenceGate } from '../../packages/web/src/components/live-markdown-composer-state.js'
-import { sameStablePiLiveHistoryRoundProps } from '../../packages/web/src/features/pi-live-render-boundary.js'
+import {
+  LiveTaskRoundProjector,
+  type LiveTaskProjectionItem,
+} from '../../packages/web/src/features/live-task-projection.js'
+import { sameStableLiveTaskRoundProps } from '../../packages/web/src/features/live-task-render-boundary.js'
 
 function argNumber(name: string, fallback: number): number {
   const prefix = `--${name}=`
@@ -13,40 +17,62 @@ function argNumber(name: string, fallback: number): number {
 const edits = Math.floor(argNumber('edits', 100_000))
 const historyRounds = Math.floor(argNumber('history-rounds', 250))
 const streamingUpdates = Math.floor(argNumber('streaming-updates', 20_000))
-const budgetMs = argNumber('budget-ms', 500)
+const budgetMs = argNumber('budget-ms', 800)
 const budgetParentUpdates = Math.floor(argNumber('budget-parent-updates', 2))
 const budgetHistoryInvalidations = Math.floor(argNumber('budget-history-invalidations', 1))
 
 const gate = new ComposerDraftPresenceGate()
-const projections = Array.from({ length: historyRounds }, (_, index) => ({ id: `round-${index}` }))
-const stableRoundProps = projections.map(projection => ({
+const stableItems: LiveTaskProjectionItem[] = []
+for (let index = 0; index < historyRounds; index += 1) {
+  stableItems.push(
+    { id: `u-${index}`, kind: 'message', role: 'user', text: `task ${index}`, streaming: false },
+    { id: `a-${index}`, kind: 'message', role: 'assistant', text: 'done', streaming: false },
+  )
+}
+
+const projector = new LiveTaskRoundProjector()
+const action = () => undefined
+const messageActions = []
+const stableRounds = projector.project(stableItems, stableItems.length)
+const stableProps = stableRounds.map(projection => ({
   projection,
-  showAllEvents: true,
+  agentLabel: 'Pi',
   eager: false,
-  estimate: 220,
+  messageActions,
+  actionPending: null,
+  runtimeStreaming: false,
+  onMessageAction: action,
 }))
+
 let parentUpdates = 0
 let historyRenderInvalidations = 0
 const startedAt = performance.now()
 
 for (let index = 0; index < edits; index += 1) {
-  // Represents local Lexical edits while the draft remains non-empty.
   if (gate.accept(true)) parentUpdates += 1
 }
 if (gate.accept(false)) parentUpdates += 1
 
-// Simulate the parent work that may occur at draft boundaries and while the
-// current round keeps streaming. Settled history props remain referentially
-// stable, so React.memo must keep those rounds out of the render path.
-for (let update = 0; update < parentUpdates + streamingUpdates; update += 1) {
-  for (const props of stableRoundProps) {
-    if (!sameStablePiLiveHistoryRoundProps(props, props)) historyRenderInvalidations += 1
+for (let update = 0; update < streamingUpdates; update += 1) {
+  const currentItems: LiveTaskProjectionItem[] = [
+    ...stableItems,
+    { id: 'u-current', kind: 'message', role: 'user', text: 'current task', streaming: false },
+    { id: 'a-current', kind: 'message', role: 'assistant', text: `stream-${update}`, streaming: true },
+  ]
+  const nextRounds = projector.project(currentItems, stableItems.length)
+  for (let index = 0; index < stableProps.length; index += 1) {
+    const before = stableProps[index]!
+    const after = {
+      ...before,
+      projection: nextRounds[index]!,
+    }
+    if (!sameStableLiveTaskRoundProps(before, after)) historyRenderInvalidations += 1
   }
 }
 
 const durationMs = performance.now() - startedAt
 const result = {
-  benchmark: 'pi-live-composer-draft-boundary',
+  benchmark: 'generic-live-composer-render-boundary',
   edits,
   historyRounds,
   streamingUpdates,
@@ -59,7 +85,7 @@ const result = {
   budgetHistoryInvalidations,
 }
 
-console.log(`[AgentLens perf] Pi Live Composer edits=${edits} historyRounds=${historyRounds} streamingUpdates=${streamingUpdates} parentUpdates=${parentUpdates} historyInvalidations=${historyRenderInvalidations} duration=${durationMs.toFixed(2)}ms updates/edit=${result.updatesPerEdit.toFixed(6)}`)
+console.log(`[AgentLens perf] Live Composer edits=${edits} historyRounds=${historyRounds} streamingUpdates=${streamingUpdates} parentUpdates=${parentUpdates} historyInvalidations=${historyRenderInvalidations} duration=${durationMs.toFixed(2)}ms updates/edit=${result.updatesPerEdit.toFixed(6)}`)
 console.log(JSON.stringify(result))
 
 if (parentUpdates > budgetParentUpdates) {
@@ -69,5 +95,5 @@ if (historyRenderInvalidations > budgetHistoryInvalidations) {
   throw new Error(`Composer/Streaming 导致稳定历史轮次失效 ${historyRenderInvalidations} 次，超过预算 ${budgetHistoryInvalidations}`)
 }
 if (durationMs > budgetMs) {
-  throw new Error(`Composer 草稿与历史隔离基准 ${durationMs.toFixed(2)}ms 超过预算 ${budgetMs}ms`)
+  throw new Error(`Composer 与通用 Live 历史隔离基准 ${durationMs.toFixed(2)}ms 超过预算 ${budgetMs}ms`)
 }
