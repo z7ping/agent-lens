@@ -47,6 +47,10 @@ const [
   readFile(new URL('../packages/web/src/i18n/zh-CN/task.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/i18n/en-US/task.ts', import.meta.url), 'utf8'),
 ])
+const liveRuntimeDisclosures = await readFile(
+  new URL('../packages/web/src/components/LiveRuntimeDisclosures.tsx', import.meta.url),
+  'utf8',
+)
 
 const failures = []
 const requireText = (source, pattern, label) => {
@@ -122,6 +126,13 @@ forbidText(liveTask, /\bpiLiveApi\b|\bPiLivePage\b|current\.liveId\s*={2,3}\s*['
 requireText(liveTask, /liveApi\.messageActions\(current\.liveId, current\.runtimeSessionId\)/, 'LiveTaskPage 必须通过通用 Contribution 读取消息动作')
 requireText(liveTask, /liveApi\.executeMessageAction\(/, 'LiveTaskPage 必须通过通用 Contribution 执行消息动作')
 forbidText(liveTask, /pi\.edit-from-here|pi\.new-session-from-here|navigateTree|createBranchedSession/, 'LiveTaskPage 不得理解 Pi 私有消息分支语义')
+requireText(liveTask, /liveApi\.runtimeDisclosures\(current\.liveId, current\.runtimeSessionId\)/, 'LiveTaskPage 必须通过通用 Contribution 读取 Runtime diagnostics')
+requireText(liveTask, /liveApi\.executeRuntimeAction\(/, 'LiveTaskPage 必须通过通用 Contribution 执行 Runtime action')
+requireText(liveTask, /<LiveRuntimeDisclosures/, 'LiveTaskPage 必须使用 AgentLens-owned Runtime Disclosure renderer')
+forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
+requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')
+requireText(liveRuntimeDisclosures, /<Disclosure/, 'Runtime diagnostics 必须使用受控 Disclosure placement')
+forbidText(liveRuntimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/, 'Runtime Disclosure renderer 不得识别 Pi 私有语义')
 
 requireText(liveStyles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/, 'Live 页面桌面壳层必须保留会话栏 + 主区两列')
 requireText(liveTask, /<aside className="pi-live-sessions"/, 'LiveTaskPage 两列壳层必须实际渲染通用会话栏')
@@ -150,6 +161,8 @@ requireText(liveClient, /queueState\(liveId: string, runtimeSessionId: string\)/
 requireText(liveClient, /async commands\(liveId: string, runtimeSessionId: string\): Promise<LiveCommandDto\[]>/, 'Live Client 必须提供通用 command discovery')
 requireText(liveClient, /async messageActions\([\s\S]{0,180}LiveMessageActionContributionDto\[]>/, 'Live Client 必须提供受控消息动作 Contribution 读取')
 requireText(liveClient, /executeMessageAction\([\s\S]{0,260}actionId: string[\s\S]{0,260}targetEntryId: string/, 'Live Client 必须用 opaque actionId + stable targetEntryId 执行消息动作')
+requireText(liveClient, /async runtimeDisclosures\([\s\S]{0,180}LiveRuntimeDisclosureContributionDto\[]>/, 'Live Client 必须提供受控 Runtime Disclosure 读取')
+requireText(liveClient, /executeRuntimeAction\([\s\S]{0,220}actionId: string/, 'Live Client Runtime action 必须只回传 opaque actionId')
 requireText(liveClient, /clearQueue\(liveId: string, runtimeSessionId: string\)/, 'Live Client 必须提供通用 queue control')
 
 for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'steer', 'model-switching', 'thinking-control', 'extension-ui', 'command-discovery', 'recovery', 'resume', 'fork']) {
@@ -158,6 +171,8 @@ for (const capability of ['create', 'send', 'stream', 'interrupt', 'queue', 'ste
 requireText(liveProtocol, /export interface LiveCommandDto[\s\S]{0,220}value:\s*string[\s\S]{0,220}group\?:\s*string/, 'LiveCommandDto 必须保持 Runtime-owned value 与可选 group')
 requireText(liveProtocol, /export interface LiveMessageActionContributionDto[\s\S]{0,420}actionId:\s*string[\s\S]{0,420}roles:\s*Array<['"]user['"] \| ['"]assistant['"]>/, '受控消息动作必须保持 opaque actionId + role 声明')
 requireText(liveProtocol, /export interface LiveMessageActionResultDto[\s\S]{0,300}outcome:\s*['"]refresh-current['"] \| ['"]open-runtime['"]/, '消息动作结果只能返回受控导航结果')
+requireText(liveProtocol, /export interface LiveRuntimeDisclosureContributionDto[\s\S]{0,520}contributionId:\s*string[\s\S]{0,520}fields:\s*LiveRuntimeContributionFieldDto\[]/, 'Runtime Disclosure 必须保持声明式字段契约')
+requireText(liveProtocol, /export interface LiveRuntimeActionResultDto[\s\S]{0,180}runtime:\s*LiveRuntimeStateDto/, 'Runtime action 只能返回通用 Runtime state')
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
 
 /* Live input/composer behavior is product-level, not Pi-specific. */
@@ -221,6 +236,11 @@ requireText(architectureTest, /LiveTask 高级交互只消费通用 capability �
 /* Slash command discovery crosses generic HTTP/adapter boundaries only. */
 requireText(liveHttp, /action === 'message-actions' && request\.method === 'GET'/, 'Live HTTP 缺少声明式 message-actions GET')
 requireText(liveHttp, /action === 'message-actions' && request\.method === 'POST'/, 'Live HTTP 缺少受控 message-actions POST')
+requireText(liveHttp, /action === 'runtime-disclosures' && request\.method === 'GET'/, 'Live HTTP 缺少声明式 runtime-disclosures GET')
+requireText(liveHttp, /action === 'runtime-actions' && request\.method === 'POST'/, 'Live HTTP 缺少受控 runtime-actions POST')
+requireText(liveHttp, /normalizeRuntimeDisclosures/, 'Live HTTP 必须归一化并限制 Runtime Contributions')
+requireText(liveHttp, /normalizePublicRuntimeState/, '通用 Live HTTP 必须过滤 Adapter 私有 Runtime state')
+requireText(liveHttp, /Live runtime action is not currently declared by this adapter/, 'Runtime action 执行前必须重新检查 Adapter 当前声明')
 requireText(liveHttp, /action === 'commands' && request\.method === 'GET'/, 'Live HTTP 缺少通用 commands GET')
 requireText(liveHttp, /requireCapability\(adapter, 'command-discovery'\)/, 'Live commands HTTP 必须由 command-discovery capability 驱动')
 requireText(piLiveAdapter, /'command-discovery'/, 'Pi Live Adapter 必须显式声明 command-discovery')
