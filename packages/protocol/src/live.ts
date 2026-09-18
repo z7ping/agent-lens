@@ -407,15 +407,12 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     }
   }
   if (type === 'queue.update') {
-    const steering = Array.isArray(event.steering)
-      ? event.steering.filter((item): item is string => typeof item === 'string')
-      : null
-    const followUp = Array.isArray(event.followUp)
-      ? event.followUp.filter((item): item is string => typeof item === 'string')
-      : null
-    if (!steering || !followUp || steering.length !== event.steering.length || followUp.length !== event.followUp.length) {
-      return null
-    }
+    const rawSteering = event.steering
+    const rawFollowUp = event.followUp
+    if (!Array.isArray(rawSteering) || !Array.isArray(rawFollowUp)) return null
+    const steering = rawSteering.filter((item): item is string => typeof item === 'string')
+    const followUp = rawFollowUp.filter((item): item is string => typeof item === 'string')
+    if (steering.length !== rawSteering.length || followUp.length !== rawFollowUp.length) return null
     return { type, steering, followUp }
   }
   if (type === 'ui.request') {
