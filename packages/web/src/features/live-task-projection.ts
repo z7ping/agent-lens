@@ -89,33 +89,166 @@ function messageAttachments(
 }
 
 /**
- * Snapshot entries stay adapter/native-owned. The Product Surface only consumes
- * stable message-shaped fields when they are present and ignores unknown rows.
+ * Snapshot entries remain adapter/native-owned for compatibility, but the
+ * Product Surface only consumes agent-neutral structural shapes: messages,
+ * reasoning blocks and tool calls/results. No agent id/name branches belong
+ * here.
  */
 export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTaskProjectionItem[] {
-  return entries.flatMap((value, index) => {
+  const projected: LiveTaskProjectionItem[] = []
+  const tools = new Map<string, number>()
+
+  const pushTool = (item: Extract<LiveTaskProjectionItem, { kind: 'tool' }>) => {
+    const existingIndex = tools.get(item.callId)
+    if (existingIndex === undefined) {
+      tools.set(item.callId, projected.length)
+      projected.push(item)
+      return
+    }
+    const current = projected[existingIndex]
+    if (!current || current.kind !== 'tool') return
+    projected[existingIndex] = {
+      ...current,
+      ...item,
+      inputPreview: item.inputPreview ?? current.inputPreview,
+      output: item.output ?? current.output,
+    }
+  }
+
+  entries.forEach((value, entryIndex) => {
     const item = record(value)
     const nested = record(item.message)
-    const role = messageRole(item.role) ?? messageRole(nested.role)
-    if (!role) return []
-    const body = contentText(item.content)
-      || contentText(item.text)
-      || contentText(nested.content)
-      || contentText(nested.text)
-    const attachments = messageAttachments(item, nested)
-    if (!body && !attachments.length) return []
-    const id = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-message-${index}`
+    const rawRole = text(item.role) || text(nested.role)
+    const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
-    return [{
-      id,
-      kind: 'message' as const,
-      role,
-      text: body,
-      ...(attachments.length ? { attachments } : {}),
-      streaming: false,
-      ...(at ? { at } : {}),
-    }]
+    const content = Array.isArray(nested.content)
+      ? nested.content
+      : Array.isArray(item.content)
+        ? item.content
+        : undefined
+
+    const toolResult = rawRole === 'toolResult' || rawRole === 'tool_result'
+    if (toolResult) {
+      const callId = text(nested.toolCallId) || text(nested.tool_call_id) || text(item.toolCallId) || text(item.tool_call_id)
+      if (!callId) return
+      const output = contentText(nested.content) || contentText(item.content) || text(nested.output) || text(item.output)
+      pushTool({
+        id: `tool:${callId}`,
+        kind: 'tool',
+        callId,
+        name: text(nested.toolName) || text(nested.tool_name) || text(item.toolName) || text(item.tool_name) || 'tool',
+        status: nested.isError === true || item.isError === true ? 'error' : 'success',
+        ...(output ? { output } : {}),
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+
+    const role = messageRole(rawRole)
+    if (!role) return
+
+    if (role === 'user') {
+      const body = contentText(item.content)
+        || contentText(item.text)
+        || contentText(nested.content)
+        || contentText(nested.text)
+      const attachments = messageAttachments(item, nested)
+      if (!body && !attachments.length) return
+      projected.push({
+        id: baseId,
+        kind: 'message',
+        role,
+        text: body,
+        ...(attachments.length ? { attachments } : {}),
+        streaming: false,
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+
+    if (!content) {
+      const body = contentText(item.content)
+        || contentText(item.text)
+        || contentText(nested.content)
+        || contentText(nested.text)
+      if (!body) return
+      projected.push({
+        id: baseId,
+        kind: 'message',
+        role: 'assistant',
+        text: body,
+        streaming: false,
+        ...(at ? { at } : {}),
+      })
+      return
+    }
+
+    content.forEach((rawPart, contentIndex) => {
+      if (typeof rawPart === 'string') {
+        if (!rawPart) return
+        projected.push({
+          id: `${baseId}:content:${contentIndex}`,
+          kind: 'message',
+          role: 'assistant',
+          text: rawPart,
+          streaming: false,
+          ...(at ? { at } : {}),
+        })
+        return
+      }
+
+      const part = record(rawPart)
+      const type = text(part.type)
+      if (type === 'text') {
+        const value = text(part.text) || text(part.content) || text(part.value)
+        if (!value) return
+        projected.push({
+          id: `${baseId}:content:${contentIndex}`,
+          kind: 'message',
+          role: 'assistant',
+          text: value,
+          streaming: false,
+          ...(at ? { at } : {}),
+        })
+        return
+      }
+
+      if (type === 'thinking' || type === 'reasoning') {
+        const value = text(part.thinking) || text(part.reasoning) || text(part.text) || text(part.content)
+        if (!value) return
+        projected.push({
+          id: `${baseId}:thinking:${contentIndex}`,
+          kind: 'thinking',
+          text: value,
+          streaming: false,
+          ...(at ? { at } : {}),
+        })
+        return
+      }
+
+      if (type === 'toolCall' || type === 'tool_call' || type === 'tool-use' || type === 'tool_use') {
+        const callId = text(part.id) || text(part.callId) || text(part.call_id) || `${baseId}:tool:${contentIndex}`
+        const name = text(part.name) || text(part.toolName) || text(part.tool_name) || 'tool'
+        const input = part.arguments ?? part.input ?? part.params
+        let inputPreview = ''
+        if (typeof input === 'string') inputPreview = input
+        else if (input !== undefined) {
+          try { inputPreview = JSON.stringify(input) } catch { inputPreview = String(input) }
+        }
+        pushTool({
+          id: `tool:${callId}`,
+          kind: 'tool',
+          callId,
+          name,
+          ...(inputPreview ? { inputPreview } : {}),
+          status: 'running',
+          ...(at ? { at } : {}),
+        })
+      }
+    })
   })
+
+  return projected
 }
 
 function contentId(event: LiveEventDto, kind: 'message' | 'thinking', fallback: string): string {
