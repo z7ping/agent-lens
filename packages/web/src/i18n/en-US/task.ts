@@ -125,6 +125,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       send: 'Send',
       messageActionPending: 'Working…',
+      syncWarning: 'Session content sync is temporarily unavailable; the live task can keep running: {{message}}',
       unsupportedInput: 'This agent does not support {{type}} input.',
       input: {
         largeText: 'large text',
