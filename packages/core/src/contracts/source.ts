@@ -151,6 +151,7 @@ export interface DiscoveredAssetBindingHint {
   scopeRoot?: string
   path?: string
   source?: string
+  packageIdentity?: string
   version?: string
 }
 
