@@ -4,6 +4,7 @@ import type {
   AssetDefinitionHint,
   AssetScope,
   AssetState,
+  PackageIdentityCoverage,
 } from '../domain/assets'
 import type {
   EvidenceCandidate,
@@ -168,11 +169,16 @@ export interface DiscoveredAsset {
   states?: DiscoveredAssetStateHint[]
 }
 
+export interface SourceAssetDiscoveryCoverage {
+  packageIdentity?: PackageIdentityCoverage
+}
+
 export interface SourceDefinition {
   manifest: SourcePluginManifest
   detect(ctx: SourceDetectionContext): Promise<DetectedSource[]>
   declareCapabilities(detected: DetectedSource): Promise<ObservationCapability[]>
   discoverAssets?(ctx: SourceExecutionContext): AsyncIterable<DiscoveredAsset>
+  describeAssetDiscoveryCoverage?(ctx: SourceExecutionContext): Promise<SourceAssetDiscoveryCoverage>
   ingestHistory?(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord>
   startCapture?(ctx: SourceExecutionContext, emit: SourceRecordEmitter): Promise<Disposable>
   rawRecovery?: SourceRawRecoveryPolicy
