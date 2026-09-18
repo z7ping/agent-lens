@@ -30,7 +30,7 @@ function runtimeStatusBadge(
   return { label: labels.idle, tone: 'warning' }
 }
 
-export function TaskLiveRuntimeList() {
+export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
   const { t } = useTranslation('task')
   const location = useLocation()
   const navigate = useNavigate()
@@ -69,7 +69,7 @@ export function TaskLiveRuntimeList() {
       }
     }
 
-    schedule(150)
+    schedule(deferMs)
     const onVisibility = () => { if (!document.hidden) schedule(0) }
     const onLiveStateChanged = () => schedule(100)
     document.addEventListener('visibilitychange', onVisibility)
@@ -83,7 +83,7 @@ export function TaskLiveRuntimeList() {
       window.removeEventListener('agent-lens:live-state-changed', onLiveStateChanged)
       window.removeEventListener('agent-lens:pi-live-state-changed', onLiveStateChanged)
     }
-  }, [])
+  }, [deferMs])
 
   if (!runtimes.length) return null
 
