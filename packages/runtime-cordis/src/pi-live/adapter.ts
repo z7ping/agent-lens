@@ -281,9 +281,17 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ...(liveText(event.prefill) ? { prefill: liveText(event.prefill) } : {}),
     }
   }
-  if (type === 'runtime_exit' || type === 'extension_error') {
+  if (type === 'runtime_exit') {
     const message = liveText(event.errorMessage) || liveText(event.error)
-    return { type: 'error', message: message || 'Pi Live runtime failed' }
+    return {
+      type: 'status',
+      status: 'failed',
+      message: message || 'Pi Live runtime exited',
+    }
+  }
+  if (type === 'extension_error') {
+    const message = liveText(event.errorMessage) || liveText(event.error)
+    return { type: 'error', message: message || 'Pi Live extension failed' }
   }
   return undefined
 }
