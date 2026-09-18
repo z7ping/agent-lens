@@ -20,10 +20,16 @@ import {
   type LiveMarkdownComposerHandle,
 } from '../components/LiveMarkdownComposer'
 import { MarkdownContent } from '../components/MarkdownContent'
+import {
+  liveComposerDraftKey,
+  readLiveComposerDraft,
+} from '../components/live-composer-session-state'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import {
+  appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
+  projectLiveInputHistory,
   projectLiveSnapshotEntries,
   reduceLiveTaskEvent,
   type LiveTaskProjectionItem,
@@ -213,6 +219,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const location = useLocation()
   const navigate = useNavigate()
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
+  const composerDraftKey = useMemo(
+    () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
+    [current?.liveId, current?.runtimeSessionId],
+  )
   const [product, setProduct] = useState<LiveProductDto | null>(null)
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
@@ -230,6 +240,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [error, setError] = useState('')
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [composerAttachmentPending, setComposerAttachmentPending] = useState(false)
+  const [inputHistory, setInputHistory] = useState<string[]>([])
   const [draft, setDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
@@ -241,8 +252,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [])
 
   const clearComposer = useCallback(() => {
-    setComposerValue('')
+    if (composerRef.current) composerRef.current.clear()
+    else setComposerValue('')
   }, [setComposerValue])
+
+  useEffect(() => {
+    setComposerValue(composerDraftKey ? readLiveComposerDraft(composerDraftKey) : '')
+  }, [composerDraftKey, setComposerValue])
 
   useEffect(() => {
     let cancelled = false
@@ -260,6 +276,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     leafIdRef.current = undefined
     setConnected(false)
     setError('')
+    setInputHistory([])
 
     if (!current) {
       setError(t('live.invalidRuntime'))
@@ -286,8 +303,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : Promise.resolve(null),
       ])
       if (cancelled) return
+      const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
       setState(runtime)
-      setItems(projectLiveSnapshotEntries(snapshot.entries))
+      setItems(projectedItems)
+      setInputHistory(projectLiveInputHistory(projectedItems))
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
@@ -397,27 +416,30 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : 'steer' as const
       : 'normal' as const
     const optimisticText = messageText(message)
+    const optimisticId = behavior === 'normal' && optimisticText
+      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
+      : null
     const pending = behavior !== 'normal' && optimisticText
       ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
       : null
 
     setBusy(true)
     setError('')
-    if (behavior === 'normal' && optimisticText) {
-      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText))
+    if (behavior === 'normal' && optimisticText && optimisticId) {
+      setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText, optimisticId))
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
     try {
       await liveApi.send(current.liveId, current.runtimeSessionId, message, behavior)
+      if (optimisticText) setInputHistory(previous => appendLiveInputHistory(previous, optimisticText))
       if (behavior === 'normal') {
         setState(previous => previous ? { ...previous, isStreaming: true } : previous)
       }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
-      if (optimisticText && message.parts.every(part => part.type === 'text' || part.type === 'large-text')) {
-        setComposerValue(optimisticText)
-      }
+      if (optimisticId) setItems(previous => previous.filter(item => item.id !== optimisticId))
+      composerRef.current?.restoreMessage(message)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       if (pending) setPendingQueue(previous => previous.filter(item => item.id !== pending.id))
@@ -639,6 +661,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             <LiveMarkdownComposer
               ref={composerRef}
               draft={draft}
+              draftKey={composerDraftKey || undefined}
+              inputHistory={inputHistory}
               onDraftPresenceChange={setComposerHasContent}
               canSubmit={canSubmit}
               onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}

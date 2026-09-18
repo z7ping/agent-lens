@@ -2,7 +2,9 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
 import {
+  appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
+  projectLiveInputHistory,
   projectLiveSnapshotEntries,
   reduceLiveTaskEvent,
 } from './live-task-projection'
@@ -44,4 +46,18 @@ test('normalized Live events drive shared message reasoning and tool projections
     { id: 'thinking:content:1', kind: 'thinking', text: 'inspect repo', streaming: true, at: '2026-09-17T12:00:03.000Z' },
     { id: 'tool:tool-1', kind: 'tool', callId: 'tool-1', name: 'read', inputPreview: 'src/index.ts', output: 'ok', status: 'success', durationMs: 12, at: '2026-09-17T12:00:04.000Z' },
   ])
+})
+
+
+test('Live input history comes from submitted user messages and keeps chronological duplicates', () => {
+  const items = projectLiveSnapshotEntries([
+    { id: 'u1', role: 'user', content: 'first' },
+    { id: 'a1', role: 'assistant', content: 'reply' },
+    { id: 'u2', role: 'user', content: 'second' },
+    { id: 'u3', role: 'user', content: 'second' },
+  ])
+
+  assert.deepEqual(projectLiveInputHistory(items), ['first', 'second', 'second'])
+  assert.deepEqual(appendLiveInputHistory(['first'], ' second '), ['first', 'second'])
+  assert.deepEqual(appendLiveInputHistory(['a', 'b'], 'c', 2), ['b', 'c'])
 })
