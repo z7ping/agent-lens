@@ -163,7 +163,8 @@ class InProcessHandle implements PiRuntimeHandle {
         && typeof session.getAvailableThinkingLevels === 'function',
       extensionUi: typeof session.bindExtensions === 'function',
       treeNavigation: typeof session.navigateTree === 'function',
-      messageFork: typeof session.sessionManager.createBranchedSession === 'function',
+      messageFork: typeof session.sessionManager.createBranchedSession === 'function'
+        && typeof session.sessionManager.newSession === 'function',
     }
   }
 
@@ -229,10 +230,20 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
     const installed = await this.loadSdk(input.executable)
     const sessionDir = resolvePiLiveRuntimeSessionDir(input.cwd, input.sessionDir)
     let manager = input.sessionPath ? installed.module.SessionManager.open(input.sessionPath, sessionDir, input.cwd) : installed.module.SessionManager.create(input.cwd, sessionDir)
-    if (input.sessionPath && input.historyAction === 'fork') manager = forkSessionManager(
-      manager,
-      typeof input.branchFromEntryId === 'string' ? input.branchFromEntryId : undefined,
-    )
+    if (input.sessionPath && input.historyAction === 'fork') {
+      if (Object.hasOwn(input, 'branchFromEntryId') && input.branchFromEntryId === null) {
+        manager = installed.module.SessionManager.create(input.cwd, sessionDir)
+        if (typeof manager.newSession !== 'function') {
+          throw new Error('Installed Pi SDK does not support root message fork')
+        }
+        manager.newSession({ parentSession: input.sessionPath })
+      } else {
+        manager = forkSessionManager(
+          manager,
+          typeof input.branchFromEntryId === 'string' ? input.branchFromEntryId : undefined,
+        )
+      }
+    }
     const created = await installed.module.createAgentSession({ cwd: input.cwd, sessionManager: manager })
     assertPiSdkSession(created.session, installed.sdkEntry, installed.version)
     const session = created.session
