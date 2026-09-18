@@ -189,3 +189,35 @@
   border-color: transparent;
   background: transparent;
 }
+
+
+/*
+ * Slash 命令面板复用 SelectMenu 的浮层与选项视觉，只补 Composer 触发场景的尺寸/层级。
+ * 通过 Portal 渲染到 body，避免被 Live Composer 编辑区 overflow 截断。
+ */
+.live-command-menu {
+  z-index: 1300;
+  max-height: min(320px, calc(100vh - 24px));
+}
+.live-command-menu-options {
+  max-height: min(300px, calc(100vh - 36px));
+}
+.live-command-menu .select-menu-option {
+  min-height: 42px;
+}
+.live-command-menu .select-menu-option > span:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.live-command-menu .select-menu-option b {
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 767.98px) {
+  .live-command-menu {
+    max-height: min(280px, calc(100vh - 16px));
+  }
+  .live-command-menu-options {
+    max-height: min(260px, calc(100vh - 28px));
+  }
+}
