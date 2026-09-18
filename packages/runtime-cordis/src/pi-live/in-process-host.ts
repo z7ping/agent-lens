@@ -179,37 +179,37 @@ class InProcessHandle implements PiRuntimeHandle {
       ...(this.packageUpdateState.updates.length ? { packageUpdates: [...this.packageUpdateState.updates] } : {}) }
   }
   async snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
-    if (since && window?.before) throw new Error('Live snapshot cannot combine since and before cursors')
+    const selectors = [since, window?.before, window?.after, window?.edge].filter(Boolean)
+    if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
     const all = this.session.sessionManager.getEntries()
     const requested = window?.limit
     const limit = Number.isInteger(requested)
       ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested!))
       : LIVE_SNAPSHOT_DEFAULT_LIMIT
-    if (since) {
-      const index = all.findIndex(entry => record(entry).id === since)
-      const start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
-      const end = Math.min(all.length, start + limit)
-      const entries = all.slice(start, end)
-      const after = end < all.length ? record(entries.at(-1)).id : undefined
-      return {
-        state: await this.state(),
-        entries,
-        leafId: this.session.sessionManager.getLeafId(),
-        page: {
-          hasEarlier: index < 0 && start > 0,
-          ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
-        },
-      }
-    }
+
+    let start = 0
     let end = all.length
-    if (window?.before) {
-      const beforeIndex = all.findIndex(entry => record(entry).id === window.before)
-      if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
-      end = beforeIndex
+    if (since || window?.after) {
+      const cursor = since ?? window?.after
+      const index = all.findIndex(entry => record(entry).id === cursor)
+      if (index < 0 && window?.after) throw new Error('Live snapshot after cursor was not found')
+      start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+      end = Math.min(all.length, start + limit)
+    } else if (window?.edge === 'earliest') {
+      start = 0
+      end = Math.min(all.length, limit)
+    } else {
+      if (window?.before) {
+        const beforeIndex = all.findIndex(entry => record(entry).id === window.before)
+        if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
+        end = beforeIndex
+      }
+      start = Math.max(0, end - limit)
     }
-    const start = Math.max(0, end - limit)
+
     const entries = all.slice(start, end)
     const before = start > 0 ? record(entries[0]).id : undefined
+    const after = end < all.length ? record(entries.at(-1)).id : undefined
     return {
       state: await this.state(),
       entries,
@@ -217,6 +217,7 @@ class InProcessHandle implements PiRuntimeHandle {
       page: {
         hasEarlier: start > 0,
         ...(start > 0 && typeof before === 'string' ? { before } : {}),
+        ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
       },
     }
   }

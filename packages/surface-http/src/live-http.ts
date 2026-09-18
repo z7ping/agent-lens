@@ -765,7 +765,12 @@ export async function handleLiveRequest(
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
       const before = optionalString(url.searchParams.get('before'))
-      if (since && before) throw httpError(400, 'Live snapshot cannot combine since and before cursors')
+      const after = optionalString(url.searchParams.get('after'))
+      const rawEdge = optionalString(url.searchParams.get('edge'))
+      const edge = rawEdge === 'earliest' || rawEdge === 'latest' ? rawEdge : undefined
+      if (rawEdge && !edge) throw httpError(400, 'Live snapshot edge must be earliest or latest')
+      const selectors = [since, before, after, edge].filter(Boolean)
+      if (selectors.length > 1) throw httpError(400, 'Live snapshot accepts only one cursor or edge selector')
       const rawLimit = url.searchParams.get('limit')
       const requestedLimit = rawLimit === null ? LIVE_SNAPSHOT_DEFAULT_LIMIT : Number(rawLimit)
       if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
@@ -774,11 +779,13 @@ export async function handleLiveRequest(
       const limit = Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit)
       const window: LiveSnapshotWindow = {
         ...(before ? { before } : {}),
+        ...(after ? { after } : {}),
+        ...(edge ? { edge } : {}),
         limit,
       }
       const snapshot = normalizePublicSnapshot(await shareAdapterRead(
         adapter,
-        `snapshot:${runtimeSessionId}:${since ?? ''}:${before ?? ''}:${limit}`,
+        `snapshot:${runtimeSessionId}:${since ?? ''}:${before ?? ''}:${after ?? ''}:${edge ?? ''}:${limit}`,
         () => adapter.snapshot(runtimeSessionId, since, window),
       ))
       markRuntimeValidated(adapter, runtimeSessionId)

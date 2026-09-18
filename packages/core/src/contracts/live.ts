@@ -149,6 +149,10 @@ export const LIVE_SNAPSHOT_MAX_LIMIT = 500
 export interface LiveSnapshotWindow {
   /** Exclusive cursor for loading older native entries. */
   before?: string | undefined
+  /** Exclusive cursor for loading newer native entries during history browsing. */
+  after?: string | undefined
+  /** Directly select an edge window without traversing intermediate pages. */
+  edge?: 'earliest' | 'latest' | undefined
   /** Entry budget. Adapters must clamp omitted/oversized values to the shared limits above. */
   limit?: number | undefined
 }

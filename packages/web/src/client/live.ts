@@ -236,6 +236,8 @@ async function historyInteraction(
 
 export interface LiveSnapshotWindowRequest {
   before?: string | undefined
+  after?: string | undefined
+  edge?: 'earliest' | 'latest' | undefined
   limit?: number | undefined
 }
 
@@ -311,6 +313,8 @@ export const liveApi = {
     const params = new URLSearchParams()
     if (since) params.set('since', since)
     if (window?.before) params.set('before', window.before)
+    if (window?.after) params.set('after', window.after)
+    if (window?.edge) params.set('edge', window.edge)
     if (window?.limit !== undefined) params.set('limit', String(window.limit))
     const search = params.size ? `?${params}` : ''
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)

@@ -378,40 +378,42 @@ function entryId(value) {
 
 function beginSnapshotTransfer(since, window) {
   const requestedWindow = record(window)
-  if (since && typeof requestedWindow.before === 'string' && requestedWindow.before) {
-    throw new Error('Live snapshot cannot combine since and before cursors')
-  }
+  const before = typeof requestedWindow.before === 'string' ? requestedWindow.before : ''
+  const afterCursor = typeof requestedWindow.after === 'string' ? requestedWindow.after : ''
+  const edge = requestedWindow.edge === 'earliest' || requestedWindow.edge === 'latest' ? requestedWindow.edge : ''
+  const selectors = [since, before, afterCursor, edge].filter(Boolean)
+  if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
 
   const all = session.sessionManager.getEntries()
   const limit = snapshotLimit(requestedWindow)
-  let entries
-  let page
+  let start = 0
+  let end = all.length
 
-  if (since) {
-    const index = all.findIndex(entry => entryId(entry) === since)
-    const start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
-    const end = Math.min(all.length, start + limit)
-    entries = all.slice(start, end)
-    const after = end < all.length ? entryId(entries.at(-1)) : undefined
-    page = {
-      hasEarlier: index < 0 && start > 0,
-      ...(end < all.length ? { hasLater: true, ...(after ? { after } : {}) } : {}),
-    }
+  if (since || afterCursor) {
+    const cursor = since || afterCursor
+    const index = all.findIndex(entry => entryId(entry) === cursor)
+    if (index < 0 && afterCursor) throw new Error('Live snapshot after cursor was not found')
+    start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+    end = Math.min(all.length, start + limit)
+  } else if (edge === 'earliest') {
+    start = 0
+    end = Math.min(all.length, limit)
   } else {
-    let end = all.length
-    const before = typeof requestedWindow.before === 'string' ? requestedWindow.before : ''
     if (before) {
       const beforeIndex = all.findIndex(entry => entryId(entry) === before)
       if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
       end = beforeIndex
     }
-    const start = Math.max(0, end - limit)
-    entries = all.slice(start, end)
-    const olderCursor = start > 0 ? entryId(entries[0]) : undefined
-    page = {
-      hasEarlier: start > 0,
-      ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
-    }
+    start = Math.max(0, end - limit)
+  }
+
+  const entries = all.slice(start, end)
+  const olderCursor = start > 0 ? entryId(entries[0]) : undefined
+  const newerCursor = end < all.length ? entryId(entries.at(-1)) : undefined
+  const page = {
+    hasEarlier: start > 0,
+    ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
+    ...(end < all.length ? { hasLater: true, ...(newerCursor ? { after: newerCursor } : {}) } : {}),
   }
 
   const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId(), page }

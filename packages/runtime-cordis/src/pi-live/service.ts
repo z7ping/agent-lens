@@ -829,13 +829,16 @@ export class DefaultPiLiveService implements PiLiveService {
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
-    if (since && window?.before) throw new Error('Live snapshot cannot combine since and before cursors')
+    const selectors = [since, window?.before, window?.after, window?.edge].filter(Boolean)
+    if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
     const requestedLimit = window?.limit
     const limit = Number.isInteger(requestedLimit)
       ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit!))
       : LIVE_SNAPSHOT_DEFAULT_LIMIT
     const boundedWindow: LiveSnapshotWindow = {
       ...(window?.before ? { before: window.before } : {}),
+      ...(window?.after ? { after: window.after } : {}),
+      ...(window?.edge ? { edge: window.edge } : {}),
       limit,
     }
     const snapshot = await runtime.handle.snapshot(since, boundedWindow)
