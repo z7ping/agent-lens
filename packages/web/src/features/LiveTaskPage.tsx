@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type {
+  LiveCommandDto,
   LiveEventDto,
   LiveInputCapabilitiesDto,
   LiveMessageDto,
@@ -226,6 +227,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [product, setProduct] = useState<LiveProductDto | null>(null)
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
+  const [commands, setCommands] = useState<LiveCommandDto[]>([])
   const [modelControl, setModelControl] = useState<LiveModelControlDto | null>(null)
   const [thinking, setThinking] = useState<LiveThinkingControlDto | null>(null)
   const [extension, setExtension] = useState<LiveUiRequest | null>(null)
@@ -265,6 +267,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setProduct(null)
     setState(null)
     setItems([])
+    setCommands([])
     setModelControl(null)
     setThinking(null)
     setExtension(null)
@@ -289,9 +292,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (!matched) throw new Error(t('live.productUnavailable'))
       setProduct(matched)
       const queueRevision = queueRevisionRef.current
-      const [runtime, snapshot, model, thinkingControl, queueState] = await Promise.all([
+      const [runtime, snapshot, commandOptions, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
         liveApi.snapshot(current.liveId, current.runtimeSessionId),
+        matched.capabilities.includes('command-discovery')
+          ? liveApi.commands(current.liveId, current.runtimeSessionId).catch(() => [])
+          : Promise.resolve([]),
         matched.capabilities.includes('model-switching')
           ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => null)
           : Promise.resolve(null),
@@ -307,6 +313,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setState(runtime)
       setItems(projectedItems)
       setInputHistory(projectLiveInputHistory(projectedItems))
+      setCommands(commandOptions)
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
@@ -364,6 +371,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             const accepted = item.mode === 'steer' ? nextQueue.steering : nextQueue.followUp
             return !accepted.includes(item.text)
           }))
+        }
+        if (envelope.normalizedEvent?.type === 'completed' && product.capabilities.includes('command-discovery')) {
+          void liveApi.commands(current.liveId, current.runtimeSessionId).then(setCommands, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
@@ -663,6 +673,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               draft={draft}
               draftKey={composerDraftKey || undefined}
               inputHistory={inputHistory}
+              commands={commands}
               onDraftPresenceChange={setComposerHasContent}
               canSubmit={canSubmit}
               onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
