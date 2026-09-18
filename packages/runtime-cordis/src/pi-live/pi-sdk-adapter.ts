@@ -39,8 +39,8 @@ export interface PiSdkModelRuntime {
 
 export interface PiSdkRuntimeResourceLoader {
   getExtensions?(): unknown
-  getSkills?(): ReturnType<AgentSession['resourceLoader']['getSkills']>
-  getPrompts?(): ReturnType<AgentSession['resourceLoader']['getPrompts']>
+  getSkills?(): unknown
+  getPrompts?(): unknown
   getThemes?(): unknown
   getAgentsFiles?(): unknown
 }
@@ -103,8 +103,10 @@ export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
     })
   }
 
-  const skills = session.resourceLoader?.getSkills?.().skills ?? []
-  for (const skill of skills) {
+  const skillsResult = record(session.resourceLoader?.getSkills?.())
+  const skills = Array.isArray(skillsResult.skills) ? skillsResult.skills : []
+  for (const item of skills) {
+    const skill = record(item)
     const rawName = typeof skill.name === 'string' ? skill.name.trim() : ''
     if (!rawName) continue
     commands.push({
