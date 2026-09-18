@@ -22,7 +22,12 @@ test('ordinary request timeout does not recycle the shared Worker', async () => 
       client.request('diagnostic.block', { durationMs: 120 }, 20),
       /request timed out/,
     )
+    // The promise has timed out, but the synchronous Worker work is still running.
+    // Keep it counted as pending so the Reader pool cannot treat this Worker as idle.
+    assert.equal(client.snapshot().pending, 1)
     await new Promise(resolve => setTimeout(resolve, 150))
+    assert.equal(client.snapshot().pending, 0)
+    assert.equal(client.snapshot().lateReplies, 1)
     assert.equal(client.state(), 'ready')
     await client.request('ping', undefined, 1_000)
     assert.equal(client.snapshot().livenessFailures, 0)
@@ -45,6 +50,7 @@ test('request that expires while queued is skipped before worker execution', asy
       client.request('diagnostic.block', { durationMs: 160 }, 25),
       /request timed out/,
     )
+    assert.equal(client.snapshot().pending, 2)
 
     await first
     const startedAt = performance.now()
