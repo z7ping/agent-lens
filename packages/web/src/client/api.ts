@@ -30,6 +30,8 @@ import {
   type ManagedAssetRoot,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
+  type ReviewMessageAttachmentDto,
+  type ReviewMessageAttachmentsResponseDto,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
@@ -329,6 +331,15 @@ export class AgentLensApi {
     if (cursor) params.set('cursor', cursor)
     params.set('limit', String(Math.max(1, Math.min(limit, 500))))
     return requestJson<ReviewResponseDto>(`/api/v1/review?${params}`, signal ? { signal } : {})
+  }
+
+  reviewAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]> {
+    const requestPath = `/api/v1/review/observations/${encodeURIComponent(observationId)}/attachments`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `review-attachments:${observationId}`,
+      () => requestJson<ReviewMessageAttachmentsResponseDto>(requestPath).then(result => result.items),
+    )
   }
 
   reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
