@@ -191,7 +191,12 @@ export class SqliteStorageService implements StorageService {
     this.db.pragma('foreign_keys = ON')
     this.db.pragma('busy_timeout = 5000')
     if (!this.db.memory && !this.db.readonly) {
-      this.db.pragma('journal_mode = WAL')
+      // Reapplying `journal_mode = WAL` to an already-WAL database can force
+      // expensive journal work during every Data Runtime Worker startup.  The
+      // Writer owns this transition, but normal restarts only need to retain
+      // the existing mode.
+      const journalMode = String(this.db.pragma('journal_mode', { simple: true })).toLowerCase()
+      if (journalMode !== 'wal') this.db.pragma('journal_mode = WAL')
     }
 
     this.executor = new SqliteExecutor(this.db)

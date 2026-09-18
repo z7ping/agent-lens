@@ -149,17 +149,22 @@ export class DataRuntimeClient {
       execArgv: [],
     })
     this.worker = worker
+    let workerFailure: Error | undefined
     worker.on('message', value => this.handleMessage(value))
-    worker.on('error', error => this.markDegraded(error))
+    worker.on('error', error => {
+      workerFailure = error
+      this.markDegraded(error)
+    })
     worker.on('exit', code => {
       this.stopHeartbeat()
       if (this.worker === worker) this.worker = null
+      const unavailableError = workerFailure ?? new Error(`Data Runtime ${this.role} worker exited unexpectedly with code ${code}`)
       if (this.stopping) {
         this.stateValue = 'stopped'
       } else {
-        this.markDegraded(new Error(`Data Runtime ${this.role} worker exited unexpectedly with code ${code}`))
+        this.markDegraded(unavailableError)
       }
-      this.rejectAll(new Error(`Data Runtime ${this.role} worker is unavailable`))
+      this.rejectAll(unavailableError)
     })
 
     try {

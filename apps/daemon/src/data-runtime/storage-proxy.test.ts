@@ -128,6 +128,41 @@ test('foreground reader pool applies bounded backpressure at saturation without 
   }
 })
 
+test('foreground reads retry a transient healthy-pool admission timeout', async () => {
+  let attempts = 0
+  const reader = {
+    role: 'reader',
+    state: () => 'ready' as const,
+    snapshot: () => ({
+      state: 'ready' as const,
+      role: 'reader' as const,
+      protocolVersion: 1,
+      pending: 0,
+      maxPending: 0,
+      requests: 0,
+      completed: 0,
+      timeouts: 0,
+      livenessFailures: 0,
+      durationMs: { last: 0, max: 0, p50: 0, p95: 0, p99: 0 },
+    }),
+    async request() {
+      attempts += 1
+      if (attempts === 1) throw new Error('Data Runtime reader pool queue wait timed out')
+      return null
+    },
+    async shutdown() {},
+  } as unknown as DataRuntimeClient
+  const writer = { ...reader, role: 'writer' as const } as DataRuntimeClient
+  const runtime = createDataRuntimeStorage(writer, [reader], reader)
+
+  try {
+    assert.equal(await runtime.storage.repositories.hosts.get('missing'), null)
+    assert.equal(attempts, 2)
+  } finally {
+    await runtime.dataRuntime.shutdown()
+  }
+})
+
 test('Data Runtime exposes launchable project discovery through the foreground reader namespace', async () => {
   const runtime = await fixture()
   try {

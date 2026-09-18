@@ -27,6 +27,8 @@ const FOREGROUND_QUEUE_WAIT_MS = 1_500
 const FOREGROUND_QUEUE_POLL_MS = 2
 const SLOW_READER_QUEUE_LOG_MS = 100
 const SLOW_WRITER_QUEUE_LOG_MS = 100
+const READER_ADMISSION_RETRY_ATTEMPTS = 3
+const READER_ADMISSION_RETRY_DELAY_MS = 75
 
 const READ_PREFIXES = [
   'get',
@@ -90,6 +92,10 @@ function logicalReaderSnapshot(client: DataRuntimeClient): DataRuntimeClientSnap
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function isReaderAdmissionTimeout(error: unknown): boolean {
+  return error instanceof Error && error.message === 'Data Runtime reader pool queue wait timed out'
 }
 
 function readerRequestContext(
@@ -250,7 +256,7 @@ class RemoteStorageExecutor {
       if (options.maintenanceRead || isMaintenanceReadPath(path)) {
         return this.maintenanceReader.request<T>('storage.call', params, timeoutFor(path, true))
       }
-      return this.foregroundReaders.request<T>('storage.call', params, timeoutFor(path, true))
+      return this.requestForegroundRead<T>(params, timeoutFor(path, true))
     }
 
     return this.enqueueWriter(
@@ -308,6 +314,31 @@ class RemoteStorageExecutor {
       foregroundPending: this.foregroundWriterPendingValue,
       maintenancePending: this.maintenanceWriterPendingValue,
     }
+  }
+
+  private async requestForegroundRead<T>(params: Record<string, unknown>, timeoutMs: number): Promise<T> {
+    for (let attempt = 1; attempt <= READER_ADMISSION_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.foregroundReaders.request<T>('storage.call', params, timeoutMs)
+      } catch (error) {
+        // A full, healthy pool is transient backpressure: the slow request owns
+        // a Reader, while this independent foreground read has not begun. Retry
+        // only this admission failure; Worker degradation and SQL failures keep
+        // their original error behavior.
+        if (
+          !isReaderAdmissionTimeout(error)
+          || this.foregroundReaders.readyCount() === 0
+          || attempt === READER_ADMISSION_RETRY_ATTEMPTS
+        ) throw error
+        logDataRuntimeDebug('[AgentLens] Data Runtime reader admission retry', {
+          ...readerRequestContext('storage.call', params),
+          attempt,
+          delayMs: READER_ADMISSION_RETRY_DELAY_MS * attempt,
+        })
+        await delay(READER_ADMISSION_RETRY_DELAY_MS * attempt)
+      }
+    }
+    throw new Error('Data Runtime reader admission retry exhausted')
   }
 
   private enqueueWriter<T>(operation: () => Promise<T>, workClass: WriterWorkClass, path: string): Promise<T> {
