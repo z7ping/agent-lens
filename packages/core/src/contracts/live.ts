@@ -166,6 +166,11 @@ export interface LiveStatusEvent {
   message?: string | undefined
 }
 
+export interface LiveTitleUpdateEvent {
+  type: 'title.update'
+  title: string
+}
+
 export interface LiveMessageBoundaryEvent {
   type: 'message.start' | 'message.end'
   role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
@@ -242,6 +247,7 @@ export interface LiveUiRequestEvent {
 
 export type LiveEvent =
   | LiveStatusEvent
+  | LiveTitleUpdateEvent
   | LiveMessageBoundaryEvent
   | LiveContentEvent
   | LiveToolStartEvent
