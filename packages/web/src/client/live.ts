@@ -38,6 +38,7 @@ function liveEventType(value: LiveRuntimeEventDto): string {
 function liveCoalesceKey(value: LiveRuntimeEventDto, messageEpoch: number): string | undefined {
   const event = value.normalizedEvent
   if (!event) return undefined
+  if (event.type === 'runtime-disclosure.changed') return 'runtime-disclosure.changed'
   if (event.type === 'tool.output') return event.callId ? `tool.output:${event.callId}` : undefined
   if (event.type !== 'text.delta' && event.type !== 'reasoning.delta') return undefined
   const messageId = 'messageId' in event && event.messageId ? event.messageId : `epoch-${messageEpoch}`
@@ -49,6 +50,7 @@ function mergeLiveCoalesced(previous: LiveRuntimeEventDto, next: LiveRuntimeEven
   const before = previous.normalizedEvent
   const after = next.normalizedEvent
   if (!before || !after || before.type !== after.type) return next
+  if (before.type === 'runtime-disclosure.changed' && after.type === 'runtime-disclosure.changed') return next
   if (before.type === 'tool.output' && after.type === 'tool.output') return next
   if ((before.type !== 'text.delta' && before.type !== 'reasoning.delta')
     || (after.type !== 'text.delta' && after.type !== 'reasoning.delta')) return next
@@ -63,7 +65,10 @@ function mergeLiveCoalesced(previous: LiveRuntimeEventDto, next: LiveRuntimeEven
 
 function isLivePriorityEvent(value: LiveRuntimeEventDto): boolean {
   const type = liveEventType(value)
-  return type !== 'text.delta' && type !== 'reasoning.delta' && type !== 'tool.output'
+  return type !== 'text.delta'
+    && type !== 'reasoning.delta'
+    && type !== 'tool.output'
+    && type !== 'runtime-disclosure.changed'
 }
 
 export interface LiveEventSchedulerDiagnostics {
