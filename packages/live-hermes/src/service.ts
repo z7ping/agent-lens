@@ -141,7 +141,13 @@ export class DefaultHermesLiveService {
     }
     if (!runtime.nativeSessionId) throw new Error('Hermes Live runtime has no native session id')
     if (!message.trim()) throw new Error('Hermes Live message cannot be empty')
-    if (!runtime.title) runtime.title = message.replace(/\s+/g, ' ').trim().slice(0, 240)
+    if (!runtime.title) {
+      runtime.title = message.replace(/\s+/g, ' ').trim().slice(0, 240)
+      runtime.events.publish({
+        event: 'task.title.updated',
+        title: runtime.title,
+      })
+    }
 
     await this.refreshActiveRun(runtime)
     if (runtime.activeRunId) {
