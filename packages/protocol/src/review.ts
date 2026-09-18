@@ -261,6 +261,7 @@ export interface ReviewSessionDetailDto extends ReviewSessionSummaryDto {
 export interface ReviewDetailQueryDto {
   cursor?: string
   ordinal?: number
+  afterOrdinal?: number
   limit?: number
   direction?: ReviewDetailDirection
   filter?: ReviewDetailFilter
