@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import type {
+  LiveContributionText,
+  LiveRuntimeContributionField,
+  LiveRuntimeDisclosureContribution,
+} from '@agent-lens/core'
 import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
@@ -58,7 +63,7 @@ function taskSummary(message: string): string | undefined {
 }
 
 
-function contributionText(defaultText: string, zhCN: string) {
+function contributionText(defaultText: string, zhCN: string): LiveContributionText {
   return {
     default: defaultText,
     localizations: {
@@ -97,8 +102,8 @@ function runtimeStatusLabel(status: PiLiveRuntimeState['status']): { en: string;
   return { en: 'Ready', zh: '就绪' }
 }
 
-function runtimeDisclosureFields(state: PiLiveRuntimeState) {
-  const fields = []
+function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContributionField[] {
+  const fields: LiveRuntimeContributionField[] = []
   const currentStage = stageLabel(state.initializationStage)
   if (currentStage) {
     fields.push({
@@ -753,7 +758,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
 
-  async runtimeDisclosures(id: string) {
+  async runtimeDisclosures(id: string): Promise<LiveRuntimeDisclosureContribution[]> {
     const state = await this.state(id)
     const status = runtimeStatusLabel(state.status)
     const elapsed = state.initializationElapsedMs
