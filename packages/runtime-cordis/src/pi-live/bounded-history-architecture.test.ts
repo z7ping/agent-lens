@@ -28,11 +28,14 @@ test('Pi Live Snapshot 在 Service 与 Worker 双边都保持固定上限', () =
 })
 
 
-test('Pi Live 全会话轮次索引有界且 around 直接定位目标窗口', () => {
-  assert.match(serviceSource, /LIVE_HISTORY_INDEX_MAX_LIMIT/)
-  assert.match(workerSource, /LIVE_HISTORY_INDEX_MAX_LIMIT\s*=\s*80/)
-  assert.match(workerSource, /function historyIndex\(limitValue\)/)
-  assert.match(workerSource, /Math\.round\(slot \* \(rounds\.length - 1\) \/ \(limit - 1\)\)/)
+test('Pi Live 轮次索引保留全量语义但单次查询有界', () => {
+  assert.match(serviceSource, /LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT/)
+  assert.match(workerSource, /LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT\s*=\s*120/)
+  assert.match(workerSource, /function roundIndex\(/)
+  assert.match(workerSource, /roundIndexCache/)
+  assert.match(workerSource, /if \(limit === 0\) return \{ total: rows\.length, items: \[\] \}/)
+  assert.match(workerSource, /fromOrdinal/)
+  assert.match(workerSource, /cursor/)
   assert.match(workerSource, /aroundIndex - Math\.floor\(limit \* \.3\)/)
-  assert.doesNotMatch(workerSource, /historyIndex[\s\S]{0,1200}serialize\(rounds\)/)
+  assert.doesNotMatch(workerSource, /Math\.round\(slot \* \(rounds\.length - 1\)/)
 })
