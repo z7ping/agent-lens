@@ -109,7 +109,7 @@ test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
   assert.match(liveTaskProjection, /messageAttachments\(item, nested\)/)
   assert.match(liveTask, /attachments=\{item\.attachments\}/)
   assert.match(liveTask, /optimisticMessageAttachments\(message\)/)
-  assert.match(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: 'image' \}>/)
+  assert.match(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: 'image' \| 'file' \}>/)
   assert.match(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/)
   assert.match(taskMessage, /previewUrl\?: string/)
   assert.match(taskMessage, /URL\.revokeObjectURL\(attachment\.previewUrl\)/)
