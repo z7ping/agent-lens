@@ -269,11 +269,13 @@ export type LiveContributionToneDto = 'neutral' | 'info' | 'warning' | 'danger'
 export type LiveContributionActionToneDto = 'default' | 'primary' | 'danger'
 export type LiveRuntimeContributionFieldKindDto = 'text' | 'list' | 'code'
 
+export type LiveContributionValueDto = string | LiveContributionTextDto
+
 export interface LiveRuntimeContributionFieldDto {
   label: LiveContributionTextDto
   kind?: LiveRuntimeContributionFieldKindDto | undefined
-  value?: string | undefined
-  values?: string[] | undefined
+  value?: LiveContributionValueDto | undefined
+  values?: LiveContributionValueDto[] | undefined
 }
 
 export interface LiveRuntimeActionContributionDto {
