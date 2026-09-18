@@ -404,6 +404,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const startupSendingRef = useRef(false)
   const leafIdRef = useRef<string | undefined>(undefined)
   const snapshotBaseActiveCountRef = useRef(0)
+  const liveTurnRevisionRef = useRef(0)
   const roundProjectorRef = useRef(new LiveTaskRoundProjector())
   const queueRevisionRef = useRef(0)
 
@@ -442,6 +443,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
     snapshotBaseActiveCountRef.current = 0
+    liveTurnRevisionRef.current = 0
     roundProjectorRef.current.reset()
     setConnected(false)
     setActivityStatus(null)
@@ -544,6 +546,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const queueRevision = queueRevisionRef.current
         const recoveryLeafId = leafIdRef.current
         const snapshotBaseActiveCount = snapshotBaseActiveCountRef.current
+        const recoveryTurnRevision = liveTurnRevisionRef.current
         const [snapshot, queueState, disclosureOptions] = await Promise.all([
           liveApi.snapshot(current.liveId, current.runtimeSessionId, recoveryLeafId),
           product.capabilities.includes('queue')
@@ -552,6 +555,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         ])
         if (!recoveryActive || generation !== recoveryGeneration) return
+        if (liveTurnRevisionRef.current !== recoveryTurnRevision) return
         setState(snapshot.state)
         setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
@@ -672,6 +676,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (envelope.normalizedEvent?.type === 'status') {
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
+          }
+          if (envelope.normalizedEvent.status === 'running') {
+            liveTurnRevisionRef.current += 1
           }
           if (envelope.normalizedEvent.status === 'running'
             || envelope.normalizedEvent.status === 'compacting'
@@ -888,6 +895,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
     setBusy(true)
     setError('')
+    if (behavior === 'normal') liveTurnRevisionRef.current += 1
     if (behavior === 'normal' && optimisticText && optimisticId) {
       setProjection(previous => ({
         ...previous,
@@ -927,6 +935,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       : null
 
     startupSendingRef.current = true
+    liveTurnRevisionRef.current += 1
     setBusy(true)
     setError('')
     setStartupQueued(currentMessage => currentMessage === message ? null : currentMessage)
