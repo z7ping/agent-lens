@@ -85,6 +85,15 @@ export const englishTaskMessages: LocaleMessagesDto = {
       streamingMode: 'Streaming message mode',
       steer: 'Steer now',
       followUp: 'Queue follow-up',
+      newRecords: 'New activity',
+      sidebar: {
+        title: 'Live sessions',
+        closeKeepsRunning: 'Leaving this page does not end tasks',
+        newTask: 'New task',
+        empty: 'No live sessions.',
+        history: 'View task history',
+        pending: '{{count}} queued',
+      },
       queue: {
         edit: 'Edit',
         withdraw: 'Withdraw',
