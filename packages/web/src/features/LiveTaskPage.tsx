@@ -358,6 +358,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [restoredQueue, setRestoredQueue] = useState<RestoredQueueDraft[]>([])
   const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
+  const [bootstrapReady, setBootstrapReady] = useState(false)
+  const [syncError, setSyncError] = useState('')
   const [newRecords, setNewRecords] = useState(false)
   const [composerExpanded, setComposerExpanded] = useState(false)
   const [startupQueued, setStartupQueued] = useState<LiveMessageDto | null>(null)
@@ -413,6 +415,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
     setConnected(false)
+    setBootstrapReady(false)
+    setSyncError('')
     setNewRecords(false)
     setComposerExpanded(false)
     setStartupQueued(null)
@@ -435,9 +439,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setProduct(matched)
       setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
-      const [runtime, snapshot, messageActionOptions, runtimeDisclosureOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
+      const [runtime, snapshotResult, messageActionOptions, runtimeDisclosureOptions, commandOptions, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
-        liveApi.snapshot(current.liveId, current.runtimeSessionId),
+        liveApi.snapshot(current.liveId, current.runtimeSessionId).then(
+          snapshot => ({ ok: true as const, snapshot }),
+          reason => ({ ok: false as const, reason }),
+        ),
         liveApi.messageActions(current.liveId, current.runtimeSessionId).catch(() => []),
         liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId).catch(() => []),
         matched.capabilities.includes('command-discovery')
@@ -454,18 +461,23 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : Promise.resolve(null),
       ])
       if (cancelled) return
-      const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
       setState(runtime)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
-      setItems(projectedItems)
-      setInputHistory(projectLiveInputHistory(projectedItems))
+      if (snapshotResult.ok) {
+        const projectedItems = projectLiveSnapshotEntries(snapshotResult.snapshot.entries)
+        setItems(projectedItems)
+        setInputHistory(projectLiveInputHistory(projectedItems))
+        leafIdRef.current = snapshotResult.snapshot.leafId ?? undefined
+      } else {
+        setSyncError(snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason))
+      }
       setMessageActions(messageActionOptions)
       setRuntimeDisclosures(runtimeDisclosureOptions)
       setCommands(commandOptions)
-      leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
       setThinking(thinkingControl)
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
+      setBootstrapReady(true)
     }).catch(reason => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
     })
@@ -474,8 +486,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [current?.liveId, current?.runtimeSessionId, t])
 
   useEffect(() => {
-    if (!current || !product?.capabilities.includes('stream')) return
-    let opened = false
+    if (!current || !bootstrapReady || !product?.capabilities.includes('stream')) return
     let recoveryGeneration = 0
     const recover = async () => {
       if (!product.capabilities.includes('recovery')) return
@@ -495,9 +506,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setItems(previous => leafIdRef.current ? mergeLiveProjectionItems(previous, recovered) : recovered)
         leafIdRef.current = snapshot.leafId ?? leafIdRef.current
         setRuntimeDisclosures(disclosureOptions)
+        setSyncError('')
         if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
       } catch (reason) {
-        if (generation === recoveryGeneration) setError(reason instanceof Error ? reason.message : String(reason))
+        if (generation === recoveryGeneration) {
+          setSyncError(reason instanceof Error ? reason.message : String(reason))
+        }
       }
     }
     const unsubscribe = liveApi.subscribe(
@@ -553,15 +567,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       () => setConnected(false),
       () => {
         setConnected(true)
-        if (opened) void recover()
-        opened = true
+        void recover()
       },
     )
     return () => {
       recoveryGeneration += 1
       unsubscribe()
     }
-  }, [current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities])
+  }, [bootstrapReady, current?.liveId, current?.runtimeSessionId, product?.liveId, product?.capabilities])
 
 
   useEffect(() => {
@@ -1095,6 +1108,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             onMessageAction={runMessageAction}
           />)}
           {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
+          {syncError && <div className="pi-live-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
           {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
         </div>
