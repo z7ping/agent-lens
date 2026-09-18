@@ -1,53 +1,54 @@
-import assert from 'node:assert/strict'
-import test from 'node:test'
+import { describe, expect, it } from 'vitest'
 import type { LiveProductDto } from '@agent-lens/protocol'
 import { projectReviewLiveInteraction } from './review-live-interaction'
 
-function liveProduct(overrides: Partial<LiveProductDto> = {}): LiveProductDto {
+function product(overrides: Partial<LiveProductDto> = {}): LiveProductDto {
   return {
-    liveId: 'pi',
-    productId: 'pi',
-    displayName: 'Pi Live',
+    liveId: 'alpha-live',
+    productId: 'alpha',
+    displayName: 'Alpha',
     capabilities: ['resume', 'fork'],
     inputCapabilities: {
       text: 'native',
-      largeText: 'transform',
-      image: 'native',
+      largeText: 'native',
+      image: 'unsupported',
       file: 'unsupported',
       multiline: 'native',
     },
-    startCapabilities: {
-      workspace: 'required',
-      title: 'optional',
-    },
+    startCapabilities: { workspace: 'unsupported', title: 'optional' },
     availability: { available: true },
     runtimes: [],
     ...overrides,
   }
 }
 
-test('history interaction capability is not erased by a transient Live availability failure', () => {
-  const interaction = projectReviewLiveInteraction(
-    { productId: 'pi' },
-    [liveProduct({ availability: { available: false, reason: 'temporary probe failure' } })],
-  )
-
-  assert.deepEqual(interaction, {
-    liveId: 'pi',
-    displayName: 'Pi Live',
-    canResume: true,
-    canFork: true,
+describe('projectReviewLiveInteraction', () => {
+  it('matches by product id and returns advertised operations', () => {
+    expect(projectReviewLiveInteraction({ productId: 'alpha' }, [product({ capabilities: ['resume'] })])).toEqual({
+      liveId: 'alpha-live',
+      displayName: 'Alpha',
+      canResume: true,
+      canFork: false,
+    })
   })
-})
 
-test('history interaction still requires a matching product capability', () => {
-  assert.equal(projectReviewLiveInteraction(
-    { productId: 'pi' },
-    [liveProduct({ productId: 'other' })],
-  ), null)
+  it('does not gate history capabilities on transient adapter availability', () => {
+    expect(projectReviewLiveInteraction(
+      { productId: 'alpha' },
+      [product({ availability: { available: false, reason: 'temporary probe failure' } })],
+    )).toEqual({
+      liveId: 'alpha-live',
+      displayName: 'Alpha',
+      canResume: true,
+      canFork: true,
+    })
+    expect(projectReviewLiveInteraction({ productId: 'other' }, [product()])).toBeNull()
+  })
 
-  assert.equal(projectReviewLiveInteraction(
-    { productId: 'pi' },
-    [liveProduct({ capabilities: ['create'] })],
-  ), null)
+  it('rejects ambiguous product mappings instead of guessing an adapter', () => {
+    expect(projectReviewLiveInteraction({ productId: 'alpha' }, [
+      product(),
+      product({ liveId: 'alpha-live-2' }),
+    ])).toBeNull()
+  })
 })
