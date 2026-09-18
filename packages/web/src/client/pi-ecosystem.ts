@@ -7,6 +7,36 @@ import type {
 import { AgentLensRequestError } from './api'
 import { translateProduct } from '../i18n/runtime'
 
+const searchInFlight = new Map<string, Promise<PiEcosystemSearchResponseDto>>()
+const detailsInFlight = new Map<string, Promise<PiEcosystemPackageDetailsResponseDto>>()
+
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted.', 'AbortError')
+}
+
+function waitForCaller<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return pending
+  if (signal.aborted) return Promise.reject(abortError())
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup()
+      reject(abortError())
+    }
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+    signal.addEventListener('abort', onAbort, { once: true })
+    pending.then(
+      value => {
+        cleanup()
+        resolve(value)
+      },
+      error => {
+        cleanup()
+        reject(error)
+      },
+    )
+  })
+}
+
 function responseErrorMessage(value: unknown): string | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const message = Reflect.get(value, 'message')
@@ -39,7 +69,7 @@ async function readResponse<T>(path: string, signal?: AbortSignal): Promise<T> {
   }
 }
 
-export async function searchPiEcosystem(
+export function searchPiEcosystem(
   request: PiEcosystemSearchRequestDto = {},
   signal?: AbortSignal,
 ): Promise<PiEcosystemSearchResponseDto> {
@@ -50,13 +80,19 @@ export async function searchPiEcosystem(
   if (request.sort) params.set('sort', request.sort)
   if (request.limit) params.set('limit', String(request.limit))
   const suffix = params.size ? `?${params}` : ''
-  return readResponse<PiEcosystemSearchResponseDto>(
-    `/api/v1/integrations/pi/ecosystem${suffix}`,
-    signal,
-  )
+  const path = `/api/v1/integrations/pi/ecosystem${suffix}`
+  let pending = searchInFlight.get(path)
+  if (!pending) {
+    pending = readResponse<PiEcosystemSearchResponseDto>(path)
+      .finally(() => {
+        if (searchInFlight.get(path) === pending) searchInFlight.delete(path)
+      })
+    searchInFlight.set(path, pending)
+  }
+  return waitForCaller(pending, signal)
 }
 
-export async function loadPiEcosystemPackageDetails(
+export function loadPiEcosystemPackageDetails(
   request: PiEcosystemPackageDetailsRequestDto,
   signal?: AbortSignal,
 ): Promise<PiEcosystemPackageDetailsResponseDto> {
@@ -64,8 +100,14 @@ export async function loadPiEcosystemPackageDetails(
     name: request.packageName,
     version: request.version,
   })
-  return readResponse<PiEcosystemPackageDetailsResponseDto>(
-    `/api/v1/integrations/pi/ecosystem/package?${params}`,
-    signal,
-  )
+  const path = `/api/v1/integrations/pi/ecosystem/package?${params}`
+  let pending = detailsInFlight.get(path)
+  if (!pending) {
+    pending = readResponse<PiEcosystemPackageDetailsResponseDto>(path)
+      .finally(() => {
+        if (detailsInFlight.get(path) === pending) detailsInFlight.delete(path)
+      })
+    detailsInFlight.set(path, pending)
+  }
+  return waitForCaller(pending, signal)
 }
