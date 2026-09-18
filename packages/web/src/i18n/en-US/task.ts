@@ -249,6 +249,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
       runtimeStatus: {
         failed: 'Needs attention',
         initializing: 'Starting',
+        terminating: 'Stopping',
+        terminated: 'Stopped',
         streaming: 'Running',
         compacting: 'Compacting context',
         idle: 'Waiting for input',
