@@ -242,6 +242,14 @@ function prependUniqueLiveProjectionItems(
   return [...older.filter(item => !currentIds.has(item.id)), ...current]
 }
 
+function appendUniqueLiveProjectionItems(
+  current: readonly LiveTaskProjectionItem[],
+  newer: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const currentIds = new Set(current.map(item => item.id))
+  return [...current, ...newer.filter(item => !currentIds.has(item.id))]
+}
+
 async function loadBoundedRecoverySnapshot(
   liveId: string,
   runtimeSessionId: string,
@@ -476,6 +484,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [historyPage, setHistoryPage] = useState<LiveSnapshotDto['page'] | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyPagingArmed, setHistoryPagingArmed] = useState(false)
+  const [historyPagingDirection, setHistoryPagingDirection] = useState<'older' | 'newer' | null>(null)
   const [messageActions, setMessageActions] = useState<LiveMessageActionContributionDto[]>([])
   const [messageActionPending, setMessageActionPending] = useState<string | null>(null)
   const [runtimeDisclosures, setRuntimeDisclosures] = useState<LiveRuntimeDisclosureContributionDto[]>([])
@@ -508,6 +517,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
   const readerRef = useRef<HTMLDivElement>(null)
   const historyLoadSentinelRef = useRef<HTMLDivElement>(null)
+  const historyNewerSentinelRef = useRef<HTMLDivElement>(null)
+  const lastReaderScrollTopRef = useRef(0)
   const followControllerRef = useRef(new LiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
@@ -541,6 +552,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setHistoryPage(null)
     setHistoryLoading(false)
     setHistoryPagingArmed(false)
+    setHistoryPagingDirection(null)
+    lastReaderScrollTopRef.current = 0
     setMessageActions([])
     setMessageActionPending(null)
     setRuntimeDisclosures([])
@@ -937,32 +950,75 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     followControllerRef.current.endProgrammaticScroll()
   }, [])
 
-  const markReaderUserIntent = useCallback(() => {
+  const markReaderUserIntent = useCallback((direction?: 'older' | 'newer') => {
     followControllerRef.current.markUserIntent()
     setHistoryPagingArmed(true)
+    if (direction) setHistoryPagingDirection(direction)
   }, [])
 
   const onReaderScroll = useCallback(() => {
     const reader = readerRef.current
     if (!reader) return
+    const previousTop = lastReaderScrollTopRef.current
+    if (historyPagingArmed && Math.abs(reader.scrollTop - previousTop) > 1) {
+      setHistoryPagingDirection(reader.scrollTop < previousTop ? 'older' : 'newer')
+    }
+    lastReaderScrollTopRef.current = reader.scrollTop
     const distance = Math.max(0, reader.scrollHeight - reader.clientHeight - reader.scrollTop)
     const following = followControllerRef.current.observeScroll(distance)
     if (following) setNewRecords(false)
-  }, [])
+  }, [historyPagingArmed])
 
-  const jumpLatest = useCallback(() => {
+  const replaceHistoryWindow = useCallback(async (edge: 'earliest' | 'latest') => {
+    if (!current || historyLoading) return
     const reader = readerRef.current
-    if (!reader) return
-    followControllerRef.current.restore()
-    followControllerRef.current.beginProgrammaticScroll()
-    followControllerRef.current.recordScrollWrite()
-    reader.scrollTop = Math.max(0, reader.scrollHeight - reader.clientHeight)
-    followControllerRef.current.endProgrammaticScroll()
-    setNewRecords(false)
-  }, [])
+    setHistoryLoading(true)
+    try {
+      const snapshot = await liveApi.snapshot(
+        current.liveId,
+        current.runtimeSessionId,
+        undefined,
+        { edge, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+      )
+      const projected = projectLiveSnapshotEntries(snapshot.entries)
+      const nextProjection = splitLiveProjectionItems(projected, snapshot.state.isStreaming)
+      roundProjectorRef.current.reset()
+      setProjection(nextProjection)
+      setHistoryPage(snapshot.page ?? { hasEarlier: false })
+      setState(snapshot.state)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
+      setInputHistory(projectLiveInputHistory(projected))
+      snapshotBaseActiveCountRef.current = nextProjection.active.length
+      leafIdRef.current = snapshot.leafId ?? undefined
+      setSyncError('')
+      if (edge === 'latest') {
+        followControllerRef.current.restore()
+        setNewRecords(false)
+      } else {
+        followControllerRef.current.markUserIntent()
+      }
+      window.requestAnimationFrame(() => {
+        const currentReader = readerRef.current
+        if (!currentReader || currentReader !== reader) return
+        currentReader.scrollTop = edge === 'earliest'
+          ? 0
+          : Math.max(0, currentReader.scrollHeight - currentReader.clientHeight)
+        lastReaderScrollTopRef.current = currentReader.scrollTop
+      })
+    } catch (reason) {
+      setSyncError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setHistoryLoading(false)
+      setHistoryPagingArmed(false)
+      setHistoryPagingDirection(null)
+    }
+  }, [current, historyLoading])
+
+  const jumpEarliest = useCallback(() => replaceHistoryWindow('earliest'), [replaceHistoryWindow])
+  const jumpLatest = useCallback(() => replaceHistoryWindow('latest'), [replaceHistoryWindow])
 
   const loadEarlier = useCallback(async () => {
-    if (!current || !historyPagingArmed || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
+    if (!current || !historyPagingArmed || historyPagingDirection !== 'older' || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
     const reader = readerRef.current
     const previousScrollHeight = reader?.scrollHeight ?? 0
     const previousScrollTop = reader?.scrollTop ?? 0
@@ -980,7 +1036,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         stable: prependUniqueLiveProjectionItems(older, previous.stable),
         active: previous.active,
       }))
-      setHistoryPage(snapshot.page ?? { hasEarlier: false })
+      setHistoryPage(previous => ({
+        hasEarlier: snapshot.page?.hasEarlier ?? false,
+        ...(snapshot.page?.before ? { before: snapshot.page.before } : {}),
+        ...(previous?.hasLater ? { hasLater: true } : {}),
+        ...(previous?.after ? { after: previous.after } : {}),
+      }))
       setState(snapshot.state)
       setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
       setSyncError('')
@@ -989,25 +1050,72 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (!currentReader || currentReader !== reader) return
         const addedHeight = Math.max(0, currentReader.scrollHeight - previousScrollHeight)
         currentReader.scrollTop = previousScrollTop + addedHeight
+        lastReaderScrollTopRef.current = currentReader.scrollTop
       })
     } catch (reason) {
       setSyncError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setHistoryLoading(false)
       setHistoryPagingArmed(false)
+      setHistoryPagingDirection(null)
     }
-  }, [current, historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed])
+  }, [current, historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed, historyPagingDirection])
+
+  const loadNewer = useCallback(async () => {
+    if (!current || !historyPagingArmed || historyPagingDirection !== 'newer' || historyLoading || !historyPage?.hasLater || !historyPage.after) return
+    setHistoryLoading(true)
+    try {
+      const snapshot = await liveApi.snapshot(
+        current.liveId,
+        current.runtimeSessionId,
+        undefined,
+        { after: historyPage.after, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
+      )
+      const newer = projectLiveSnapshotEntries(snapshot.entries)
+      roundProjectorRef.current.reset()
+      setProjection(previous => ({
+        stable: appendUniqueLiveProjectionItems(previous.stable, newer),
+        active: previous.active,
+      }))
+      setHistoryPage(previous => ({
+        hasEarlier: previous?.hasEarlier ?? false,
+        ...(previous?.before ? { before: previous.before } : {}),
+        ...(snapshot.page?.hasLater ? { hasLater: true } : {}),
+        ...(snapshot.page?.after ? { after: snapshot.page.after } : {}),
+      }))
+      setState(snapshot.state)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
+      setSyncError('')
+    } catch (reason) {
+      setSyncError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setHistoryLoading(false)
+      setHistoryPagingArmed(false)
+      setHistoryPagingDirection(null)
+    }
+  }, [current, historyLoading, historyPage?.after, historyPage?.hasLater, historyPagingArmed, historyPagingDirection])
 
   useEffect(() => {
     const sentinel = historyLoadSentinelRef.current
     const reader = readerRef.current
-    if (!sentinel || !reader || !historyPagingArmed || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
+    if (!sentinel || !reader || !historyPagingArmed || historyPagingDirection !== 'older' || historyLoading || !historyPage?.hasEarlier || !historyPage.before) return
     const observer = new IntersectionObserver(entries => {
       if (entries.some(entry => entry.isIntersecting)) void loadEarlier()
     }, { root: reader, rootMargin: '360px 0px 0px' })
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed, loadEarlier])
+  }, [historyLoading, historyPage?.before, historyPage?.hasEarlier, historyPagingArmed, historyPagingDirection, loadEarlier])
+
+  useEffect(() => {
+    const sentinel = historyNewerSentinelRef.current
+    const reader = readerRef.current
+    if (!sentinel || !reader || !historyPagingArmed || historyPagingDirection !== 'newer' || historyLoading || !historyPage?.hasLater || !historyPage.after) return
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) void loadNewer()
+    }, { root: reader, rootMargin: '0px 0px 360px 0px' })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [historyLoading, historyPage?.after, historyPage?.hasLater, historyPagingArmed, historyPagingDirection, loadNewer])
 
   const canQueueWhileStreaming = Boolean(
     product?.capabilities.includes('steer') || product?.capabilities.includes('queue'),
@@ -1461,7 +1569,16 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       </div>
     </aside>}
 
-    <TaskSurface mode="live" className="pi-live-workspace live-task-workspace">
+    <TaskSurface
+      mode="live"
+      className="pi-live-workspace live-task-workspace"
+      boundaryNavigation={{
+        startDisabled: historyLoading,
+        endDisabled: historyLoading,
+        onStart: jumpEarliest,
+        onEnd: jumpLatest,
+      }}
+    >
       <TaskHeader
         marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
         agent={agentLabel}
@@ -1496,9 +1613,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         ref={readerRef}
         className="pi-live-reader live-task-reader"
         onScroll={onReaderScroll}
-        onWheel={markReaderUserIntent}
-        onTouchStart={markReaderUserIntent}
-        onPointerDown={markReaderUserIntent}
+        onWheel={event => markReaderUserIntent(event.deltaY < 0 ? 'older' : 'newer')}
+        onTouchStart={() => markReaderUserIntent()}
+        onPointerDown={() => markReaderUserIntent()}
       >
         <div className="pi-live-document live-task-document">
           {historyPage?.hasEarlier && <div
@@ -1538,6 +1655,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             runtimeStreaming={state?.isStreaming ?? false}
             onMessageAction={runMessageAction}
           />)}
+          {historyPage?.hasLater && <div
+            ref={historyNewerSentinelRef}
+            className={`live-task-history-sentinel live-task-history-sentinel-newer ${historyLoading ? 'is-loading' : ''}`}
+            aria-hidden="true"
+          />}
           {!itemCount && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
           {syncError && <div className="pi-live-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
