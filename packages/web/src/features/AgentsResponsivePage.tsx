@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import type { AgentLensClientModel } from '../client/model'
@@ -22,6 +23,19 @@ export function AgentsResponsivePage({
   const snapshot = useClientSnapshot(model)
   const [searchParams, setSearchParams] = useSearchParams()
   const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
+
+  useEffect(() => {
+    if (!sourceId) return
+    void model.ensureAgentDetail(sourceId).catch(() => undefined)
+  }, [model, sourceId])
+
+  useEffect(() => {
+    if (!hasSelectedOverview) return
+    const timer = window.setTimeout(() => {
+      void model.refreshAgentCoverage().catch(() => undefined)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [hasSelectedOverview, model, sourceId])
   const isPi = sourceId === 'pi'
   const activeView: PiAgentView = isPi && searchParams.get('view') === 'ecosystem'
     ? 'ecosystem'
