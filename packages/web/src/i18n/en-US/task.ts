@@ -75,6 +75,13 @@ export const englishTaskMessages: LocaleMessagesDto = {
       empty: 'Waiting for task input.',
       composerPlaceholder: 'Enter a task or follow-up…',
       composerAria: 'Live task input',
+      composerToolbarAria: 'Composer toolbar',
+      composerExpand: 'Expand composer',
+      composerShrink: 'Collapse composer',
+      startupWaitingReady: 'Send automatically when ready',
+      startupAttachmentRequiresReady: 'Wait until the agent is ready before sending images or files.',
+      interruptedTitle: 'Interrupted',
+      interruptedDescription: 'The current run has stopped. You can send a new task.',
       commandMenu: {
         aria: 'Available commands',
       },
