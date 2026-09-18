@@ -177,19 +177,23 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_update',
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'text_delta', delta: 'hello', contentIndex: 0 },
   }), {
     type: 'text.delta',
     delta: 'hello',
     contentIndex: 0,
+    messageId: 'assistant-1',
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_update',
+    messageId: 'assistant-1',
     assistantMessageEvent: { type: 'thinking_delta', delta: 'reason', contentIndex: 1 },
   }), {
     type: 'reasoning.delta',
     delta: 'reason',
     contentIndex: 1,
+    messageId: 'assistant-1',
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'tool_execution_start',
