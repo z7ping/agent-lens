@@ -18,6 +18,7 @@ import type {
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
+import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
@@ -48,6 +49,7 @@ import {
   mergeLiveActiveProjectionItems,
   reduceLiveTaskEvent,
   settleLiveTaskProjectionItems,
+  type LiveTaskProjectionAttachment,
   type LiveTaskProjectionItem,
   type LiveTaskRoundProjection,
 } from './live-task-projection'
@@ -71,6 +73,28 @@ function messageText(message: LiveMessageDto): string {
 
 function messageHasAttachments(message: LiveMessageDto): boolean {
   return message.parts.some(part => part.type === 'image' || part.type === 'file')
+}
+
+async function optimisticImageAttachments(
+  message: LiveMessageDto,
+): Promise<LiveTaskProjectionAttachment[]> {
+  const images = message.parts.filter(part => part.type === 'image')
+  return Promise.all(images.map(async part => {
+    const attachment: LiveTaskProjectionAttachment = {
+      type: 'image',
+      ...(part.name ? { name: part.name } : {}),
+      ...(part.mimeType ? { mimeType: part.mimeType } : {}),
+      ...(part.sizeBytes !== undefined ? { sizeBytes: part.sizeBytes } : {}),
+    }
+    try {
+      const response = await fetch(liveAttachmentPreviewUrl(part.attachmentId))
+      if (!response.ok) return attachment
+      const previewUrl = URL.createObjectURL(await response.blob())
+      return { ...attachment, previewUrl }
+    } catch {
+      return attachment
+    }
+  }))
 }
 
 function unsupportedInput(
@@ -894,20 +918,28 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : 'steer' as const
       : 'normal' as const
     const optimisticText = messageText(message)
-    const optimisticId = behavior === 'normal' && optimisticText
-      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
-      : null
     const pending = behavior !== 'normal' && optimisticText
       ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
       : null
 
     setBusy(true)
     setError('')
+    const optimisticAttachments = behavior === 'normal'
+      ? await optimisticImageAttachments(message)
+      : []
+    const optimisticId = behavior === 'normal' && (optimisticText || optimisticAttachments.length)
+      ? `user:${Date.now()}-${Math.random().toString(36).slice(2)}`
+      : null
     if (behavior === 'normal') liveTurnRevisionRef.current += 1
-    if (behavior === 'normal' && optimisticText && optimisticId) {
+    if (behavior === 'normal' && optimisticId) {
       setProjection(previous => ({
         ...previous,
-        active: appendOptimisticLiveUserMessage(previous.active, optimisticText, optimisticId),
+        active: appendOptimisticLiveUserMessage(
+          previous.active,
+          optimisticText,
+          optimisticId,
+          optimisticAttachments,
+        ),
       }))
     }
     if (pending) setPendingQueue(previous => [...previous, pending])
