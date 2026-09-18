@@ -104,6 +104,21 @@ function emptyLiveQueue(): LiveQueueStateDto {
   return { steering: [], followUp: [] }
 }
 
+function mergeRuntimeState(
+  runtimes: LiveRuntimeStateDto[],
+  runtime: LiveRuntimeStateDto,
+): LiveRuntimeStateDto[] {
+  const index = runtimes.findIndex(item => item.runtimeSessionId === runtime.runtimeSessionId)
+  if (index < 0) return [runtime, ...runtimes]
+  const next = [...runtimes]
+  next[index] = runtime
+  return next
+}
+
+function runtimeSessionTitle(runtime: LiveRuntimeStateDto): string {
+  return workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
+}
+
 function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
   const stamp = Date.now()
   return [
@@ -214,6 +229,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   const [product, setProduct] = useState<LiveProductDto | null>(null)
+  const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [items, setItems] = useState<LiveTaskProjectionItem[]>([])
   const [modelControl, setModelControl] = useState<LiveModelControlDto | null>(null)
@@ -247,6 +263,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     let cancelled = false
     setProduct(null)
+    setRuntimes([])
     setState(null)
     setItems([])
     setModelControl(null)
@@ -271,6 +288,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       const matched = products.find(item => item.liveId === current.liveId)
       if (!matched) throw new Error(t('live.productUnavailable'))
       setProduct(matched)
+      setRuntimes(matched.runtimes)
       const queueRevision = queueRevisionRef.current
       const [runtime, snapshot, model, thinkingControl, queueState] = await Promise.all([
         liveApi.state(current.liveId, current.runtimeSessionId),
@@ -287,6 +305,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       ])
       if (cancelled) return
       setState(runtime)
+      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
       setItems(projectLiveSnapshotEntries(snapshot.entries))
       leafIdRef.current = snapshot.leafId ?? undefined
       setModelControl(model)
@@ -298,6 +317,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
     return () => { cancelled = true }
   }, [current?.liveId, current?.runtimeSessionId, t])
+
+  useEffect(() => {
+    if (!state) return
+    setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, state))
+  }, [state])
 
   useEffect(() => {
     if (!current || !product?.capabilities.includes('stream')) return
@@ -548,7 +572,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [busy, current, thinking])
 
   if (!current) {
-    return <main className={`pi-live-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
+    return <main className="pi-live-page pi-live-page-embedded">
       <div className="pi-live-error" role="alert">{error || t('live.invalidRuntime')}</div>
     </main>
   }
@@ -582,6 +606,49 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   ]
 
   return <main className={`pi-live-page live-task-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
+    {!embedded && <aside className="pi-live-sessions" aria-label={t('live.sidebar.title')}>
+      <div className="pi-live-sessions-head">
+        <div>
+          <b>{t('live.sidebar.title')}</b>
+          <small>{t('live.sidebar.closeKeepsRunning')}</small>
+        </div>
+        <Button size="small" onClick={() => navigate('/review/new')}>{t('live.sidebar.newTask')}</Button>
+      </div>
+      <div className="pi-live-session-scroll">
+        {runtimes.map(runtime => {
+          const active = runtime.runtimeSessionId === current.runtimeSessionId
+          const runtimeLabel = statusLabel(runtime, t)
+          return <button
+            type="button"
+            key={runtime.runtimeSessionId}
+            className={`pi-live-session ${active ? 'active' : ''}`}
+            onClick={() => navigate(`/review/live/${encodeURIComponent(current.liveId)}/${encodeURIComponent(runtime.runtimeSessionId)}`)}
+          >
+            <div className="pi-live-session-top">
+              <span className={runtime.isStreaming || runtime.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'} aria-hidden="true"/>
+              <span>{agentLabel}</span>
+              <span>{runtimeLabel}</span>
+            </div>
+            <div className="pi-live-session-title" title={runtime.workspacePath || runtime.runtimeSessionId}>
+              {runtimeSessionTitle(runtime)}
+            </div>
+            <div className="pi-live-session-foot">
+              <span title={runtime.runtimeSessionId}>{runtime.runtimeSessionId}</span>
+              {runtime.pendingMessageCount > 0 && <span>{t('live.sidebar.pending', { count: runtime.pendingMessageCount })}</span>}
+            </div>
+          </button>
+        })}
+        {!runtimes.length && <div className="pi-live-side-empty">{t('live.sidebar.empty')}</div>}
+        <button
+          type="button"
+          className="pi-live-review-link"
+          onClick={() => navigate(product ? `/review?source=${encodeURIComponent(product.productId)}` : '/review')}
+        >
+          {t('live.sidebar.history')} <UiIcon name="arrow-right" size={14}/>
+        </button>
+      </div>
+    </aside>}
+
     <TaskSurface mode="live" className="pi-live-workspace live-task-workspace">
       <TaskHeader
         marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
