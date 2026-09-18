@@ -20,21 +20,6 @@ function agent(input: Partial<AgentOverviewDto> = {}): AgentOverviewDto {
   }
 }
 
-test('Pi ecosystem local identity parser extracts exact npm package from Pi package source', () => {
-  assert.equal(
-    piEcosystemUiInternals.npmPackageSource('pi:resource:user:package:npm:pi-demo@^1.0.0'),
-    'npm:pi-demo',
-  )
-  assert.equal(
-    piEcosystemUiInternals.npmPackageSource('pi:resource:user:package:npm:@example/pi-tools@~2.0.0'),
-    'npm:@example/pi-tools',
-  )
-  assert.equal(
-    piEcosystemUiInternals.npmPackageSource('pi:resource:user:auto:/tmp/skill'),
-    undefined,
-  )
-})
-
 test('Pi ecosystem local package matching groups assets by exact npm identity', () => {
   const value = agent({
     assetInventory: [{
@@ -44,7 +29,8 @@ test('Pi ecosystem local package matching groups assets by exact npm identity', 
       bindings: [{
         id: 'binding:skill:reviewer',
         installationId: 'installation:pi',
-        source: 'pi:resource:user:package:npm:@example/pi-tools@^2',
+        source: 'opaque-pi-resource-source',
+        packageIdentity: 'npm:@example/pi-tools',
         version: '2.1.0',
         states: [],
       }],
@@ -55,7 +41,8 @@ test('Pi ecosystem local package matching groups assets by exact npm identity', 
       bindings: [{
         id: 'binding:extension:tools',
         installationId: 'installation:pi',
-        source: 'pi:resource:user:package:npm:@example/pi-tools@^2',
+        source: 'opaque-pi-resource-source',
+        packageIdentity: 'npm:@example/pi-tools',
         version: '2.1.0',
         states: [],
       }],
@@ -69,25 +56,41 @@ test('Pi ecosystem local package matching groups assets by exact npm identity', 
   assert.deepEqual(local.versions, ['2.1.0'])
 })
 
-test('Pi ecosystem only claims not-installed when local asset discovery is complete', () => {
+test('Pi ecosystem only claims not-installed when every installation has complete package identity coverage', () => {
   const complete = agent({
-    capabilities: [{
-      name: 'asset-discovery',
-      status: 'available',
-      captureModes: ['static-scan'],
+    installations: [{
+      id: 'installation:pi',
+      packageIdentityCoverage: 'complete',
+      firstSeenAt: '2026-09-18T00:00:00.000Z',
+      lastSeenAt: '2026-09-18T00:00:00.000Z',
     }],
   })
   const partial = agent({
-    capabilities: [{
-      name: 'asset-discovery',
-      status: 'partial',
-      captureModes: ['static-scan'],
+    installations: [{
+      id: 'installation:pi',
+      packageIdentityCoverage: 'partial',
+      firstSeenAt: '2026-09-18T00:00:00.000Z',
+      lastSeenAt: '2026-09-18T00:00:00.000Z',
+    }],
+  })
+  const mixed = agent({
+    installations: [{
+      id: 'installation:pi-a',
+      packageIdentityCoverage: 'complete',
+      firstSeenAt: '2026-09-18T00:00:00.000Z',
+      lastSeenAt: '2026-09-18T00:00:00.000Z',
+    }, {
+      id: 'installation:pi-b',
+      packageIdentityCoverage: 'unknown',
+      firstSeenAt: '2026-09-18T00:00:00.000Z',
+      lastSeenAt: '2026-09-18T00:00:00.000Z',
     }],
   })
 
   assert.equal(piEcosystemUiInternals.packageInventoryComplete(complete), true)
   assert.equal(piEcosystemUiInternals.localPackageState(complete, undefined), 'not-installed')
   assert.equal(piEcosystemUiInternals.packageInventoryComplete(partial), false)
+  assert.equal(piEcosystemUiInternals.packageInventoryComplete(mixed), false)
   assert.equal(piEcosystemUiInternals.localPackageState(partial, undefined), 'unknown')
   assert.equal(
     piEcosystemUiInternals.localPackageState(agent({ assetInventoryStatus: 'unavailable' }), undefined),
