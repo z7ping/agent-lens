@@ -124,6 +124,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         submit: '提交',
       },
       send: '发送',
+      messageActionPending: '操作中…',
       unsupportedInput: '当前智能体不支持{{type}}输入。',
       input: {
         largeText: '大段文本',
