@@ -18,7 +18,6 @@ import type {
   TimelineEvidenceDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
-import { LIVE_RECONNECTED_EVENT } from '../client/api'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi } from '../client/live'
 import { useClientSnapshot } from '../App'
@@ -996,13 +995,11 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     const handleLiveStateChanged = () => refreshLiveProducts()
     initialTimer = window.setTimeout(() => refreshLiveProducts(), 100)
     window.addEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
-    window.addEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
     return () => {
       cancelled = true
       if (initialTimer !== undefined) window.clearTimeout(initialTimer)
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       window.removeEventListener('agent-lens:live-state-changed', handleLiveStateChanged)
-      window.removeEventListener(LIVE_RECONNECTED_EVENT, handleLiveStateChanged)
     }
   }, [detail?.id])
 
