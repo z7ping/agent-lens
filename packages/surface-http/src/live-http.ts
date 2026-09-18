@@ -3,9 +3,13 @@ import type {
   LiveAdapter,
   LiveCapabilityName,
   LiveContributionText,
+  LiveContributionValue,
   LiveMessageActionContribution,
   LiveMessageActionResult,
+  LiveRuntimeActionResult,
+  LiveRuntimeDisclosureContribution,
   LiveRuntimeState,
+  LiveSnapshot,
   LiveService,
   LiveStartCapabilities,
   LiveStartInput,
@@ -19,6 +23,11 @@ const MAX_LIVE_MESSAGE_ACTIONS = 16
 const MAX_LIVE_MESSAGE_ACTION_ID = 128
 const MAX_LIVE_CONTRIBUTION_LABEL = 120
 const MAX_LIVE_CONTRIBUTION_DESCRIPTION = 600
+const MAX_LIVE_RUNTIME_DISCLOSURES = 8
+const MAX_LIVE_RUNTIME_FIELDS = 40
+const MAX_LIVE_RUNTIME_ACTIONS = 16
+const MAX_LIVE_CONTRIBUTION_VALUES = 80
+const MAX_LIVE_CONTRIBUTION_VALUE = 4_000
 const SSE_HEARTBEAT_MS = 15_000
 const DEFAULT_START_CAPABILITIES: Readonly<LiveStartCapabilities> = {
   workspace: 'unsupported',
@@ -90,6 +99,117 @@ function contributionText(value: unknown, maxLength: number): LiveContributionTe
   }
 }
 
+
+function contributionValue(value: unknown): LiveContributionValue | null {
+  if (typeof value === 'string' && value.trim()) return value.trim().slice(0, MAX_LIVE_CONTRIBUTION_VALUE)
+  return contributionText(value, MAX_LIVE_CONTRIBUTION_VALUE)
+}
+
+function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContribution[] {
+  if (!Array.isArray(value)) return []
+  const result: LiveRuntimeDisclosureContribution[] = []
+  const contributionIds = new Set<string>()
+  const actionIds = new Set<string>()
+  let actionCount = 0
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+    const row = candidate as Record<string, unknown>
+    const contributionId = typeof row.contributionId === 'string' ? row.contributionId : ''
+    if (!contributionId
+      || contributionId !== contributionId.trim()
+      || contributionId.length > 128
+      || contributionIds.has(contributionId)) continue
+
+    const title = contributionText(row.title, MAX_LIVE_CONTRIBUTION_LABEL)
+    if (!title || !Array.isArray(row.fields)) continue
+    const summary = row.summary === undefined
+      ? undefined
+      : contributionText(row.summary, MAX_LIVE_CONTRIBUTION_DESCRIPTION)
+    if (row.summary !== undefined && !summary) continue
+
+    const tone = row.tone
+    if (tone !== undefined
+      && tone !== 'neutral'
+      && tone !== 'info'
+      && tone !== 'warning'
+      && tone !== 'danger') continue
+    if (row.defaultExpanded !== undefined && typeof row.defaultExpanded !== 'boolean') continue
+
+    const fields = []
+    for (const fieldCandidate of row.fields) {
+      if (!fieldCandidate || typeof fieldCandidate !== 'object' || Array.isArray(fieldCandidate)) continue
+      const field = fieldCandidate as Record<string, unknown>
+      const label = contributionText(field.label, MAX_LIVE_CONTRIBUTION_LABEL)
+      if (!label) continue
+      const kind = field.kind
+      if (kind !== undefined && kind !== 'text' && kind !== 'list' && kind !== 'code') continue
+      const normalizedValue = field.value === undefined ? undefined : contributionValue(field.value)
+      const normalizedValues = Array.isArray(field.values)
+        ? field.values
+            .slice(0, MAX_LIVE_CONTRIBUTION_VALUES)
+            .map(contributionValue)
+            .filter((item): item is LiveContributionValue => item !== null)
+        : undefined
+      if (field.value !== undefined && normalizedValue === null) continue
+      if (!normalizedValue && !normalizedValues?.length) continue
+      fields.push({
+        label,
+        ...(kind ? { kind } : {}),
+        ...(normalizedValue ? { value: normalizedValue } : {}),
+        ...(normalizedValues?.length ? { values: normalizedValues } : {}),
+      })
+      if (fields.length >= MAX_LIVE_RUNTIME_FIELDS) break
+    }
+
+    const actions = []
+    if (Array.isArray(row.actions)) {
+      for (const actionCandidate of row.actions) {
+        if (actionCount >= MAX_LIVE_RUNTIME_ACTIONS) break
+        if (!actionCandidate || typeof actionCandidate !== 'object' || Array.isArray(actionCandidate)) continue
+        const action = actionCandidate as Record<string, unknown>
+        const actionId = typeof action.actionId === 'string' ? action.actionId : ''
+        if (!actionId
+          || actionId !== actionId.trim()
+          || actionId.length > MAX_LIVE_MESSAGE_ACTION_ID
+          || actionIds.has(actionId)) continue
+        const label = contributionText(action.label, MAX_LIVE_CONTRIBUTION_LABEL)
+        if (!label) continue
+        const description = action.description === undefined
+          ? undefined
+          : contributionText(action.description, MAX_LIVE_CONTRIBUTION_DESCRIPTION)
+        if (action.description !== undefined && !description) continue
+        const actionTone = action.tone
+        if (actionTone !== undefined
+          && actionTone !== 'default'
+          && actionTone !== 'primary'
+          && actionTone !== 'danger') continue
+        actionIds.add(actionId)
+        actionCount += 1
+        actions.push({
+          actionId,
+          label,
+          ...(description ? { description } : {}),
+          ...(actionTone ? { tone: actionTone } : {}),
+        })
+      }
+    }
+
+    contributionIds.add(contributionId)
+    result.push({
+      contributionId,
+      title,
+      ...(summary ? { summary } : {}),
+      ...(tone ? { tone } : {}),
+      ...(typeof row.defaultExpanded === 'boolean' ? { defaultExpanded: row.defaultExpanded } : {}),
+      fields,
+      ...(actions.length ? { actions } : {}),
+    })
+    if (result.length >= MAX_LIVE_RUNTIME_DISCLOSURES) break
+  }
+  return result
+}
+
 function normalizeMessageActions(value: unknown): LiveMessageActionContribution[] {
   if (!Array.isArray(value)) return []
   const result: LiveMessageActionContribution[] = []
@@ -123,26 +243,26 @@ function normalizeMessageActions(value: unknown): LiveMessageActionContribution[
 
 function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw httpError(500, 'Live message action returned an invalid runtime')
+    throw httpError(500, 'Live adapter returned an invalid runtime')
   }
   const row = value as Record<string, unknown>
   const runtimeSessionId = typeof row.runtimeSessionId === 'string' ? row.runtimeSessionId.trim() : ''
   const status = row.status
   if (!runtimeSessionId || runtimeSessionId.length > 512) {
-    throw httpError(500, 'Live message action returned an invalid runtime identity')
+    throw httpError(500, 'Live adapter returned an invalid runtime identity')
   }
   if (status !== 'initializing'
     && status !== 'ready'
     && status !== 'failed'
     && status !== 'terminating'
     && status !== 'terminated') {
-    throw httpError(500, 'Live message action returned an invalid runtime status')
+    throw httpError(500, 'Live adapter returned an invalid runtime status')
   }
   if (typeof row.isStreaming !== 'boolean'
     || typeof row.pendingMessageCount !== 'number'
     || !Number.isSafeInteger(row.pendingMessageCount)
     || row.pendingMessageCount < 0) {
-    throw httpError(500, 'Live message action returned an invalid runtime state')
+    throw httpError(500, 'Live adapter returned an invalid runtime state')
   }
   const nativeSessionId = typeof row.nativeSessionId === 'string' && row.nativeSessionId.trim()
     ? row.nativeSessionId.trim().slice(0, 512)
@@ -179,6 +299,32 @@ function normalizeMessageActionResult(value: unknown): LiveMessageActionResult {
     ...(runtime ? { runtime } : {}),
     ...(typeof row.draftText === 'string' ? { draftText: row.draftText } : {}),
   }
+}
+
+
+function normalizePublicSnapshot(value: unknown): LiveSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(500, 'Live adapter returned an invalid snapshot')
+  }
+  const row = value as Record<string, unknown>
+  if (!Array.isArray(row.entries)) throw httpError(500, 'Live adapter snapshot entries must be an array')
+  const leafId = row.leafId
+  if (leafId !== undefined && leafId !== null && typeof leafId !== 'string') {
+    throw httpError(500, 'Live adapter returned an invalid snapshot leaf id')
+  }
+  return {
+    state: normalizePublicRuntimeState(row.state),
+    entries: row.entries,
+    ...(leafId !== undefined ? { leafId: leafId as string | null } : {}),
+  }
+}
+
+function normalizeRuntimeActionResult(value: unknown): LiveRuntimeActionResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(500, 'Live runtime action returned an invalid result')
+  }
+  const row = value as Record<string, unknown>
+  return { runtime: normalizePublicRuntimeState(row.runtime) }
 }
 
 function startCapabilities(adapter: LiveAdapter): Readonly<LiveStartCapabilities> {
@@ -267,7 +413,7 @@ function liveDescriptor(adapter: LiveAdapter, availability: unknown, runtimes: u
     inputCapabilities: adapter.inputCapabilities,
     startCapabilities: startCapabilities(adapter),
     availability,
-    runtimes,
+    runtimes: Array.isArray(runtimes) ? runtimes.map(normalizePublicRuntimeState) : [],
   })
 }
 
@@ -406,7 +552,7 @@ export async function handleLiveRequest(
       requireCapability(adapter, action)
       const handler = action === 'resume' ? adapter.resume : adapter.fork
       if (!handler) throw httpError(409, `${adapter.manifest.displayName} does not expose Live ${action}`)
-      writeJson(response, 201, jsonValue(await handler.call(adapter, logicalSessionId)))
+      writeJson(response, 201, jsonValue(normalizePublicRuntimeState(await handler.call(adapter, logicalSessionId))))
       return true
     }
 
@@ -425,21 +571,23 @@ export async function handleLiveRequest(
         return true
       }
       if (action === 'runtimes' && request.method === 'GET') {
-        writeJson(response, 200, jsonValue(await shareAdapterRead(adapter, 'runtimes', () => adapter.list())))
+        writeJson(response, 200, jsonValue(
+          (await shareAdapterRead(adapter, 'runtimes', () => adapter.list())).map(normalizePublicRuntimeState),
+        ))
         return true
       }
       if (action === 'runtimes' && request.method === 'POST') {
         requireCapability(adapter, 'create')
         const body = objectBody(await readJson(request))
         const input = parseStartInput(adapter, Object.hasOwn(body, 'input') ? body.input : {})
-        writeJson(response, 201, jsonValue(await adapter.start(input)))
+        writeJson(response, 201, jsonValue(normalizePublicRuntimeState(await adapter.start(input))))
         return true
       }
       writeJson(response, 405, { error: 'method_not_allowed' })
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|workspace-references|message-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|workspace-references|message-actions|runtime-disclosures|runtime-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -451,11 +599,11 @@ export async function handleLiveRequest(
     const adapter = adapterFor(service, liveId)
 
     if (!action && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(await shareAdapterRead(
+      writeJson(response, 200, jsonValue(normalizePublicRuntimeState(await shareAdapterRead(
         adapter,
         `state:${runtimeSessionId}`,
         () => adapter.state(runtimeSessionId),
-      )))
+      ))))
       return true
     }
     if (!action && request.method === 'DELETE') {
@@ -464,20 +612,20 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'state' && request.method === 'GET') {
-      writeJson(response, 200, jsonValue(await shareAdapterRead(
+      writeJson(response, 200, jsonValue(normalizePublicRuntimeState(await shareAdapterRead(
         adapter,
         `state:${runtimeSessionId}`,
         () => adapter.state(runtimeSessionId),
-      )))
+      ))))
       return true
     }
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
-      writeJson(response, 200, jsonValue(await shareAdapterRead(
+      writeJson(response, 200, jsonValue(normalizePublicSnapshot(await shareAdapterRead(
         adapter,
         `snapshot:${runtimeSessionId}:${since ?? ''}`,
         () => adapter.snapshot(runtimeSessionId, since),
-      )))
+      ))))
       return true
     }
     if (action === 'events' && request.method === 'GET') {
@@ -569,6 +717,34 @@ export async function handleLiveRequest(
       writeJson(response, 200, jsonValue(result))
       return true
     }
+
+    if (action === 'runtime-disclosures' && request.method === 'GET') {
+      writeJson(response, 200, {
+        items: jsonValue(normalizeRuntimeDisclosures(adapter.runtimeDisclosures
+          ? await shareAdapterRead(
+              adapter,
+              `runtime-disclosures:${runtimeSessionId}`,
+              () => adapter.runtimeDisclosures!(runtimeSessionId),
+            )
+          : [])),
+      })
+      return true
+    }
+    if (action === 'runtime-actions' && request.method === 'POST') {
+      if (!adapter.executeRuntimeAction || !adapter.runtimeDisclosures) {
+        throw httpError(409, `${adapter.manifest.displayName} does not expose Live runtime actions`)
+      }
+      const body = objectBody(await readJson(request))
+      const actionId = optionalString(body.actionId)
+      if (!actionId) throw httpError(400, 'actionId is required')
+      if (actionId.length > MAX_LIVE_MESSAGE_ACTION_ID) throw httpError(400, 'actionId is too long')
+      const declared = normalizeRuntimeDisclosures(await adapter.runtimeDisclosures(runtimeSessionId))
+      const allowed = declared.some(item => item.actions?.some(action => action.actionId === actionId))
+      if (!allowed) throw httpError(409, 'Live runtime action is not currently declared by this adapter')
+      const result = normalizeRuntimeActionResult(await adapter.executeRuntimeAction(runtimeSessionId, actionId))
+      writeJson(response, 200, jsonValue(result))
+      return true
+    }
     if (action === 'queue' && request.method === 'GET') {
       requireCapability(adapter, 'queue')
       if (!adapter.queueState) throw httpError(409, `${adapter.manifest.displayName} does not expose Live queue state`)
@@ -605,7 +781,9 @@ export async function handleLiveRequest(
       requireCapability(adapter, 'model-switching')
       if (!adapter.setModelControl) throw httpError(409, `${adapter.manifest.displayName} does not expose model control`)
       const body = objectBody(await readJson(request))
-      writeJson(response, 200, jsonValue(await adapter.setModelControl(runtimeSessionId, nonEmpty(body.value, 'value'))))
+      writeJson(response, 200, jsonValue(normalizePublicRuntimeState(
+        await adapter.setModelControl(runtimeSessionId, nonEmpty(body.value, 'value')),
+      )))
       return true
     }
     if (action === 'thinking-control' && request.method === 'GET') {
@@ -622,7 +800,9 @@ export async function handleLiveRequest(
       requireCapability(adapter, 'thinking-control')
       if (!adapter.setThinkingControl) throw httpError(409, `${adapter.manifest.displayName} does not expose thinking control`)
       const body = objectBody(await readJson(request))
-      writeJson(response, 200, jsonValue(await adapter.setThinkingControl(runtimeSessionId, nonEmpty(body.value, 'value'))))
+      writeJson(response, 200, jsonValue(normalizePublicRuntimeState(
+        await adapter.setThinkingControl(runtimeSessionId, nonEmpty(body.value, 'value')),
+      )))
       return true
     }
     if (action === 'extension-response' && request.method === 'POST') {
