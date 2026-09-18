@@ -28,6 +28,18 @@ export function createProgressiveHistoryStages(startedAt: number): ProgressiveHi
   ]
 }
 
+export function startupHistoryStage(
+  stages: readonly ProgressiveHistoryStage[],
+): ProgressiveHistoryStage | undefined {
+  return stages.find(stage => stage.id === 'latest')
+}
+
+export function deferredHistoryStages(
+  stages: readonly ProgressiveHistoryStage[],
+): ProgressiveHistoryStage[] {
+  return stages.filter(stage => stage.id !== 'latest')
+}
+
 export function createParserReplayMaintenanceStages(startedAt: number): ParserReplayStage[] {
   const activeSince = new Date(startedAt - HOT_HISTORY_WINDOW_MS).toISOString()
   return [

@@ -55,9 +55,11 @@ import {
 import {
   createProgressiveHistoryStages,
   createParserReplayMaintenanceStages,
+  deferredHistoryStages,
   parserReplayMaintenanceStagesAllowedByCapacity,
   stagesAllowedByCapacity,
   storageCapacityState,
+  startupHistoryStage,
   yieldToForeground,
 } from './history-sync-plan.js'
 import {
@@ -79,6 +81,7 @@ import {
 import { createProjectDirectoryPicker } from './project-directory-picker.js'
 import { openLocalPath } from './local-path-opener.js'
 import { readRuntimeStorageFootprint } from './storage-runtime-footprint.js'
+import { StartupSessionDiagnostics } from './startup-session-diagnostics.js'
 import {
   captureStorageDiagnosticSnapshot,
   STORAGE_DIAGNOSTIC_SNAPSHOT_INITIAL_DELAY_MS,
@@ -116,6 +119,7 @@ const daemonMode = process.env.AGENT_LENS_DAEMON_MODE === 'managed' ? 'managed' 
 const developmentApiPort = process.env.AGENT_LENS_DEV_API_PORT
 const interactiveTerminal = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 const startedAt = Date.now()
+const startupSessionDiagnostics = new StartupSessionDiagnostics(startedAt)
 const INITIAL_BACKGROUND_SYNC_DELAY_MS = 2_000
 const DATA_RUNTIME_RECOVERY_POLL_MS = 500
 let foregroundGate: ForegroundActivityGate | null = null
@@ -289,6 +293,7 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
     runtimeFootprint: await readRuntimeStorageFootprint(dataRoot, storageBudget.policy),
   }),
   healthDetails: () => ({
+    startupSessionPath: startupSessionDiagnostics.snapshot(),
     ...(foregroundGate ? { maintenanceGate: foregroundGate.snapshot() } : {}),
     ...(officialToolDiscovery
       ? {
@@ -308,6 +313,12 @@ const httpSurfaceConfig: HttpSurfacePluginConfig = {
       error: failure.error instanceof Error ? failure.error.message : String(failure.error),
     })),
   }),
+  reviewQueryObserved: count => {
+    startupSessionDiagnostics.markFirst('review.firstQuery')
+    if (count > 0) {
+      startupSessionDiagnostics.markFirst('review.firstSessionVisible', { visibleCount: count })
+    }
+  },
   integrationStatus: productId => app.resolveIntegrationStatus(productId),
   ...(officialToolDiscovery
     ? {
@@ -468,6 +479,19 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 
 try {
   await app.start()
+  startupSessionDiagnostics.markFirst('runtime.ready')
+  app.context.on('observation/committed', () => {
+    startupSessionDiagnostics.markFirst('observation.firstCommitted')
+  })
+  app.context.on('projection/rebuilt', event => {
+    if (
+      event.projectionId === SESSION_SUMMARY_PROJECTION_ID
+      && event.subjectType === 'logical-session'
+      && event.subjectId
+    ) {
+      startupSessionDiagnostics.markFirst('sessionSummary.firstReady')
+    }
+  })
   if (officialToolDiscovery) {
     void officialToolDiscovery.rescan()
       .then(snapshot => {
@@ -509,8 +533,15 @@ try {
     console.info('[AgentLens] local source capture disabled by runtime profile')
   }
 
-  reuseSessionSummaryProjection = await beginSessionSummaryProjectionRun(app.context.storage)
+  const sessionSummaryRunState = await beginSessionSummaryProjectionRun(app.context.storage)
+  startupSessionDiagnostics.markFirst('projection.run.dirty')
+  reuseSessionSummaryProjection = sessionSummaryRunState.materialized
+    && sessionSummaryRunState.cleanBeforeRun
+    && !sessionSummaryRunState.needsRepair
   sessionSummaryProjectionReady = reuseSessionSummaryProjection
+  if (sessionSummaryRunState.materialized && sessionSummaryRunState.needsRepair) {
+    console.info('[AgentLens] dirty session summary projection remains readable while background repair is pending')
+  }
 
   replicationMaintenancePromise = runReplicationMaintenanceLoop({
     storage: app.context.storage as DataRuntimeStorageService,
@@ -565,13 +596,11 @@ try {
   })()
 
   syncPromise = (async () => {
-    await abortableDelay(INITIAL_BACKGROUND_SYNC_DELAY_MS, runtimeController.signal)
     if (!await waitForDataRuntime(runtimeController.signal)) return
 
-    const initialStorageHealth = await app.context.storage.health()
-    const initialCapacityState = storageCapacityState(initialStorageHealth.details)
-
+    startupSessionDiagnostics.markFirst('source.prepare.started')
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
+    startupSessionDiagnostics.markFirst('source.prepare.completed')
     logSourceFailures(prepared.failures)
     if (runtimeController.signal.aborted) return
 
@@ -581,11 +610,49 @@ try {
       prepared.targets,
     )
     captureHandles = capture.results
+    startupSessionDiagnostics.markFirst('source.capture.started')
     logSourceFailures(capture.failures)
     for (const handle of captureHandles) {
       console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
     }
     if (runtimeController.signal.aborted) return
+
+    const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
+    const latestStage = startupHistoryStage(plannedHistoryStages)
+    if (latestStage) {
+      startupSessionDiagnostics.markFirst('history.latest.started')
+      console.info(`[AgentLens] startup history sync started: ${latestStage.label}`)
+      const latestHistory = await syncRegisteredSourceHistory(
+        app.context,
+        runtimeController.signal,
+        prepared.targets,
+        latestStage.window,
+        { cooperate: () => yieldToForeground(runtimeController.signal) },
+      )
+      logSourceFailures(latestHistory.failures)
+      for (const result of latestHistory.results) {
+        startupSessionDiagnostics.mark('history.latest.source.completed', {
+          sourceId: result.sourceId,
+          records: result.records,
+        })
+        console.info(
+          `[AgentLens] history synced: stage=${latestStage.id} source=${result.sourceId} records=${result.records} created=${result.observationsCreated} merged=${result.observationsMerged} unchanged=${result.observationsUnchanged}`,
+        )
+      }
+      // Make Canonical commits from the startup latest pass visible through the
+      // existing materialized Session Summary before any background repair begins.
+      await app.context.projections.flush(SESSION_SUMMARY_PROJECTION_ID)
+      startupSessionDiagnostics.markFirst('history.latest.completed')
+    }
+    if (runtimeController.signal.aborted) return
+
+    // Only deferred work keeps the historical startup grace period. Source
+    // detection, Runtime Capture and latest-session recovery are already online.
+    await abortableDelay(INITIAL_BACKGROUND_SYNC_DELAY_MS, runtimeController.signal)
+    if (!await waitForDataRuntime(runtimeController.signal)) return
+
+    const initialStorageHealth = await app.context.storage.health()
+    const initialCapacityState = storageCapacityState(initialStorageHealth.details)
 
     if (reuseSessionSummaryProjection) {
       console.info('[AgentLens] session summary projection reused from clean shutdown')
@@ -633,11 +700,11 @@ try {
 
     const storageHealth = await app.context.storage.health()
     const capacityState = storageCapacityState(storageHealth.details)
-    const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
-    const historyStages = stagesAllowedByCapacity(plannedHistoryStages, capacityState)
-    if (historyStages.length < plannedHistoryStages.length) {
+    const plannedDeferredStages = deferredHistoryStages(plannedHistoryStages)
+    const historyStages = stagesAllowedByCapacity(plannedDeferredStages, capacityState)
+    if (historyStages.length < plannedDeferredStages.length) {
       const allowed = new Set(historyStages.map(stage => stage.id))
-      const paused = plannedHistoryStages.filter(stage => !allowed.has(stage.id)).map(stage => stage.label)
+      const paused = plannedDeferredStages.filter(stage => !allowed.has(stage.id)).map(stage => stage.label)
       console.warn(`[AgentLens] history stages paused: ${paused.join(', ')}; storage capacity=${capacityState}`)
     }
     for (const stage of historyStages) {

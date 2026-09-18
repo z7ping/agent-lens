@@ -27,30 +27,42 @@ function checkpoints(initial?: unknown) {
 
 test('clean previous shutdown may reuse a materialized projection and immediately marks this run dirty', async () => {
   const state = checkpoints({ version: 1, clean: true, markedAt: '2026-08-26T00:00:00.000Z' })
-  const reusable = await beginSessionSummaryProjectionRun({
+  const readiness = await beginSessionSummaryProjectionRun({
     checkpoints: state.repository,
     sessionSummaryProjection: { async isMaterialized() { return true } },
   })
-  assert.equal(reusable, true)
+  assert.deepEqual(readiness, {
+    materialized: true,
+    cleanBeforeRun: true,
+    needsRepair: false,
+  })
   assert.equal(state.values.has(state.id), false)
 })
 
-test('unclean previous shutdown forces rebuild', async () => {
+test('unclean previous shutdown keeps materialized summaries readable while requiring repair', async () => {
   const state = checkpoints()
-  const reusable = await beginSessionSummaryProjectionRun({
+  const readiness = await beginSessionSummaryProjectionRun({
     checkpoints: state.repository,
     sessionSummaryProjection: { async isMaterialized() { return true } },
   })
-  assert.equal(reusable, false)
+  assert.deepEqual(readiness, {
+    materialized: true,
+    cleanBeforeRun: false,
+    needsRepair: true,
+  })
 })
 
 test('clean marker cannot reuse a missing projection', async () => {
   const state = checkpoints({ version: 1, clean: true, markedAt: '2026-08-26T00:00:00.000Z' })
-  const reusable = await beginSessionSummaryProjectionRun({
+  const readiness = await beginSessionSummaryProjectionRun({
     checkpoints: state.repository,
     sessionSummaryProjection: { async isMaterialized() { return false } },
   })
-  assert.equal(reusable, false)
+  assert.deepEqual(readiness, {
+    materialized: false,
+    cleanBeforeRun: true,
+    needsRepair: true,
+  })
   assert.equal(state.values.has(state.id), false)
 })
 

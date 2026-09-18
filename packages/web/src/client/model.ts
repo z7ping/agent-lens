@@ -178,6 +178,7 @@ export class AgentLensClientModel {
   private readonly listeners = new Set<Listener>()
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private reviewRefreshDueAt: number | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
   private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
   private integrationDiscoveryTimer: ReturnType<typeof setTimeout> | null = null
@@ -268,6 +269,7 @@ export class AgentLensClientModel {
     this.unsubscribeLive?.()
     this.unsubscribeLive = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    this.reviewRefreshDueAt = null
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
     if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
@@ -642,6 +644,7 @@ export class AgentLensClientModel {
     if (!active) {
       if (this.refreshTimer) clearTimeout(this.refreshTimer)
       this.refreshTimer = null
+      this.reviewRefreshDueAt = null
       return
     }
     if (this.reviewLiveDirty) this.scheduleReviewRefresh(0)
@@ -651,10 +654,15 @@ export class AgentLensClientModel {
     this.reviewLiveDirty = true
     if (!this.reviewActive) return
     if (typeof document !== 'undefined' && document.hidden) return
-    if (this.refreshTimer) clearTimeout(this.refreshTimer)
     const wait = delay ?? 800
+    const dueAt = Date.now() + wait
+    // Never let a slower fallback postpone an already scheduled summary-ready refresh.
+    if (this.refreshTimer && this.reviewRefreshDueAt !== null && this.reviewRefreshDueAt <= dueAt) return
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    this.reviewRefreshDueAt = dueAt
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null
+      this.reviewRefreshDueAt = null
       if (!this.reviewActive || !this.reviewLiveDirty) return
       this.reviewLiveDirty = false
       void this.refreshReview({ preserveDetail: true })
@@ -885,6 +893,7 @@ export class AgentLensClientModel {
   async refreshReview(options: { preserveDetail?: boolean } = {}): Promise<void> {
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     this.refreshTimer = null
+    this.reviewRefreshDueAt = null
     this.reviewLiveDirty = false
     this.reviewGeneration += 1
     if (this.reviewInFlight) {
@@ -1087,16 +1096,25 @@ export class AgentLensClientModel {
   private onLiveEvent(event: LiveUpdateEventDto): void {
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
-      const updatesSelectedSession = this.reviewActive
-        && event.type === 'observation.committed'
-        && Boolean(event.logicalSessionId)
-        && event.logicalSessionId === this.snapshot.review.selectedId
-      if (updatesSelectedSession) {
-        if (this.detailTimer) clearTimeout(this.detailTimer)
-        this.detailTimer = setTimeout(() => {
-          this.detailTimer = null
-          if (this.reviewActive) void this.refreshSelectedTailIncremental()
-        }, 160)
+      if (event.type === 'session.updated') {
+        // Session Summary is materialized now; only a short coalescing window is
+        // needed before refreshing the Task Center list.
+        this.scheduleReviewRefresh(100)
+      } else if (event.type === 'observation.committed') {
+        const updatesSelectedSession = this.reviewActive
+          && Boolean(event.logicalSessionId)
+          && event.logicalSessionId === this.snapshot.review.selectedId
+        if (updatesSelectedSession) {
+          if (this.detailTimer) clearTimeout(this.detailTimer)
+          this.detailTimer = setTimeout(() => {
+            this.detailTimer = null
+            if (this.reviewActive) void this.refreshSelectedTailIncremental()
+          }, 160)
+        }
+        // Summary-ready normally arrives first and replaces this timer with the
+        // 100ms path. Keep a bounded fallback so projection failure cannot leave
+        // the list stale forever.
+        this.scheduleReviewRefresh(2_000)
       } else {
         this.scheduleReviewRefresh()
       }

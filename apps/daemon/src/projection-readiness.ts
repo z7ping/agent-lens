@@ -19,26 +19,45 @@ export interface ProjectionReadinessStorage {
   sessionSummaryProjection?: Pick<SessionSummaryProjectionStore, 'isMaterialized'>
 }
 
+export interface SessionSummaryProjectionRunState {
+  /** Existing materialized rows may be served immediately even when they need repair. */
+  materialized: boolean
+  /** Previous process reached a controlled flush + clean checkpoint. */
+  cleanBeforeRun: boolean
+  /** Background repair is required before this process can mark the projection clean. */
+  needsRepair: boolean
+}
+
 export async function beginSessionSummaryProjectionRun(
   storage: ProjectionReadinessStorage,
-): Promise<boolean> {
+): Promise<SessionSummaryProjectionRunState> {
   try {
     const marker = await storage.checkpoints.get<SessionSummaryCleanMarker>(
       CHECKPOINT_SCOPE,
       CHECKPOINT_KEY,
     )
+    const cleanBeforeRun = marker?.version === 1 && marker.clean === true
 
     // Mark this process dirty before any source can commit new Canonical data. A crash
-    // anywhere after this point therefore forces a conservative rebuild next start.
+    // anywhere after this point therefore requires repair, but existing materialized
+    // rows remain a usable derived read model while that repair runs in the background.
     await storage.checkpoints.clear(CHECKPOINT_SCOPE, CHECKPOINT_KEY)
 
-    if (marker?.version !== 1 || marker.clean !== true) return false
     const projection = storage.sessionSummaryProjection
-    return projection ? projection.isMaterialized() : false
+    const materialized = projection ? await projection.isMaterialized() : false
+    return {
+      materialized,
+      cleanBeforeRun,
+      needsRepair: !cleanBeforeRun || !materialized,
+    }
   } catch {
     // Data Runtime may be recovering while the control plane is already online.
     // Treat projection readiness as unknown/dirty rather than taking Daemon down.
-    return false
+    return {
+      materialized: false,
+      cleanBeforeRun: false,
+      needsRepair: true,
+    }
   }
 }
 
