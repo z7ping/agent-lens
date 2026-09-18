@@ -163,6 +163,8 @@ requireText(liveTaskProjection, /LIVE_TASK_ROUND_FACT_LIMIT\s*=\s*8/, 'Live 长�
 requireText(liveTaskProjection, /class LiveTaskRoundProjector/, 'Live 投影必须缓存稳定历史，不能每个流式批次重算全部会话')
 requireText(liveTaskProjection, /projectSegments\([\s\S]{0,260}stableItems[\s\S]{0,260}activeItems/, 'Live Round Projector 必须支持稳定历史 / 活动轮分段输入')
 requireText(liveTaskProjection, /for \(let index = items\.length - 1; index >= 0; index -= 1\)/, 'Live 活动轮更新必须从尾部定位当前流式节点')
+requireText(liveTaskProjection, /function mergeLiveActiveProjectionItems[\s\S]{0,500}if \(indexes\.has\(item\.id\)\) continue/, '重连 Snapshot 不得覆盖同 ID 的更新实时节点')
+requireText(liveTaskProjection, /candidate\.id\.startsWith\(['"]user:['"]\)[\s\S]{0,140}candidate\.text === item\.text/, '重连 Snapshot 必须把持久化用户消息与乐观占位对账')
 requireText(liveTask, /settleLiveTaskProjectionItems\(previous\.active\)/, '手动 Stop 后必须立即收束活动轮展示状态')
 requireText(liveTaskProjection, /liveTaskStableRoundPrefixLength/, 'Live 必须区分稳定历史与当前流式语义轮次')
 requireText(liveTaskProjection, /liveEventChangesTaskTranscript/, 'Live 必须区分正文事件与控制事件，避免无意义正文重算')
