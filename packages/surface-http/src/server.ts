@@ -19,6 +19,7 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
+  reviewMessageAttachmentsFromPayload,
   type AgentRescanResponseDto,
   type AgentRescanSummaryDto,
   type HealthResponseDto,
@@ -26,6 +27,7 @@ import {
   type PiEcosystemQueryService,
   type RuntimeModeDto,
   type RuntimeOwnerDto,
+  type ReviewMessageAttachmentsResponseDto,
   type SourceRecordResponseDto,
   type SourceRecordsResponseDto,
   type StorageDiagnosticsResponseDto,
@@ -635,6 +637,27 @@ export async function startHttpSurface(
         writeJson(response, 200, result)
         return
       }
+      const reviewAttachmentMatch = url.pathname.match(/^\/api\/v1\/review\/observations\/([^/]+)\/attachments$/)
+      if (reviewAttachmentMatch) {
+        const observationId = decodeURIComponent(reviewAttachmentMatch[1] ?? '')
+        if (!observationId) throw badRequest('observationId is required')
+        const observation = await withReadPriority(
+          storage,
+          'opportunistic',
+          () => storage.repositories.observations.get(observationId),
+        )
+        if (!observation) {
+          writeJson(response, 404, { error: 'not_found' })
+          return
+        }
+        const body: ReviewMessageAttachmentsResponseDto = {
+          observationId,
+          items: reviewMessageAttachmentsFromPayload(observation.payload),
+        }
+        writeJson(response, 200, body)
+        return
+      }
+
       const reviewSummaryMatch = url.pathname.match(/^\/api\/v1\/review\/([^/]+)\/summary$/)
       if (reviewSummaryMatch) {
         const id = decodeURIComponent(reviewSummaryMatch[1] ?? '')
