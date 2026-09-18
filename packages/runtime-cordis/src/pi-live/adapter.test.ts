@@ -43,6 +43,16 @@ test('Pi Live Adapter maps native control and compaction changes into generic ev
   })
 })
 
+test('Pi Live Adapter invalidates Runtime Disclosure for private diagnostic updates', () => {
+  for (const event of [
+    { type: 'runtime_resources', resources: {} },
+    { type: 'package_updates', status: 'complete', updates: [] },
+    { type: 'runtime_output', message: 'loading resource' },
+  ]) {
+    assert.deepEqual(normalizePiLiveEvent(event), { type: 'runtime-disclosure.changed' })
+  }
+})
+
 test('Pi Live Adapter maps task summary into generic title.update', () => {
   assert.deepEqual(normalizePiLiveEvent({
     type: 'task_summary',
