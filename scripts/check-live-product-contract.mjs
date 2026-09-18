@@ -98,7 +98,7 @@ forbidText(liveNewTask, /\bpiLiveApi\b|\bliveId\s*===\s*['"]pi['"]|\bproductId\s
 /* Live Task controls are capability-driven. */
 requireText(liveTask, /void liveApi\.products\(\)/, 'LiveTaskPage 必须读取通用 Live Product catalog')
 requireText(liveTask, /products\.find\(item => item\.liveId === current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 匹配产品')
-for (const capability of ['stream', 'recovery', 'extension-ui', 'command-discovery', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
+for (const capability of ['stream', 'recovery', 'extension-ui', 'command-discovery', 'workspace-file-reference', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
   requireText(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), `LiveTaskPage 缺少 capability 驱动：${capability}`)
 }
 requireText(liveTask, /unsupportedInput\(message, product\.inputCapabilities\)/, 'Live 输入必须由 inputCapabilities 拒绝不支持的输入类型')
@@ -108,6 +108,10 @@ requireText(liveTask, /liveApi\.interrupt\(current\.liveId, current\.runtimeSess
 requireText(liveTask, /liveApi\.queueState\(current\.liveId, current\.runtimeSessionId\)/, 'Live queue 恢复必须走通用 Live API')
 requireText(liveTask, /liveApi\.commands\(current\.liveId, current\.runtimeSessionId\)/, 'Live command discovery 必须走通用 Live API')
 requireText(liveTask, /commands=\{commands\}/, 'LiveTaskPage 必须把通用命令目录交给 Composer')
+requireText(liveTask, /liveApi\.workspaceFileReferences\(current\.liveId, current\.runtimeSessionId, query, 20\)/, 'Live @文件搜索必须绑定当前 liveId/runtimeSessionId')
+requireText(liveTask, /workspaceReferenceSearch=/, 'LiveTaskPage 必须把 Runtime-bound @文件搜索交给 Composer')
+requireText(liveComposer, /function WorkspaceReferenceMenuPlugin/, 'Live Composer 必须实现通用 @文件菜单')
+requireText(liveComposer, /insertWorkspaceReference/, 'Live Composer @文件必须只插入 Runtime-owned value')
 requireText(liveTask, /liveApi\.clearQueue\(current\.liveId, current\.runtimeSessionId\)/, 'Live queue 控制必须走通用 Live API')
 requireText(liveTask, /normalizedEvent\?\.type === ['"]queue\.update['"]/, 'Live Queue 状态必须消费通用 queue.update 事件')
 forbidText(liveTask, /\bqueue_update\b/, 'LiveTaskPage 不得解析 Pi 原生 queue_update')
