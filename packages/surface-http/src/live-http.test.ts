@@ -25,9 +25,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -43,6 +43,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly runtimes = new Map<string, LiveRuntimeState>()
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
+  readonly queueState = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0 }
   private modelValue = 'model-a'
   private sequence = 0
@@ -143,9 +144,25 @@ class FakeLiveAdapter implements LiveAdapter {
     return () => undefined
   }
 
+  async clearQueue(runtimeSessionId: string) {
+    await this.state(runtimeSessionId)
+    const current = {
+      steering: [...this.queueState.steering],
+      followUp: [...this.queueState.followUp],
+    }
+    this.queueState.steering.splice(0)
+    this.queueState.followUp.splice(0)
+    return current
+  }
+
   async interrupt(runtimeSessionId: string) {
     await this.state(runtimeSessionId)
-    return { interrupted: true }
+    return {
+      restoredQueue: {
+        steering: [...this.queueState.steering],
+        followUp: [...this.queueState.followUp],
+      },
+    }
   }
 
   async terminate(runtimeSessionId: string) {
@@ -226,7 +243,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -284,6 +301,16 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     })
     assert.equal(unsupportedSteer.status, 409)
 
+    const clearedQueue = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/queue`, { method: 'DELETE' })
+    assert.equal(clearedQueue.status, 200)
+    assert.deepEqual(await clearedQueue.json(), {
+      steering: ['queued steer'],
+      followUp: ['queued follow-up'],
+    })
+
+    adapter.queueState.steering.push('restored steer')
+    adapter.queueState.followUp.push('restored follow-up')
+
     const modelControl = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/model-control`)
     assert.equal(modelControl.status, 200)
     assert.equal((await modelControl.json() as LiveModelControl).value, 'model-a')
@@ -310,7 +337,12 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
 
     const interrupted = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/interrupt`, { method: 'POST' })
     assert.equal(interrupted.status, 200)
-    assert.deepEqual(await interrupted.json(), { interrupted: true })
+    assert.deepEqual(await interrupted.json(), {
+      restoredQueue: {
+        steering: ['restored steer'],
+        followUp: ['restored follow-up'],
+      },
+    })
 
     const terminated = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1`, { method: 'DELETE' })
     assert.equal(terminated.status, 200)
