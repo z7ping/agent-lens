@@ -190,6 +190,33 @@ test('source runtime status preserves last error and accumulates failures', asyn
   } finally { storage.close() }
 })
 
+test('source runtime status persists package identity coverage and clears stale coverage', async () => {
+  const storage = await createStorage()
+  try {
+    const now = '2026-09-18T00:00:00.000Z'
+    await storage.repositories.hosts.put({ id: 'host-package', name: 'local', platform: 'linux', arch: 'x64', createdAt: now, lastSeenAt: now })
+    await storage.repositories.installations.putProduct({ id: 'pi', name: 'Pi' })
+    await storage.repositories.installations.put({ id: 'install-pi', hostId: 'host-package', productId: 'pi', firstSeenAt: now, lastSeenAt: now })
+    const base = { sourceId: 'pi', installationId: 'install-pi', stage: 'assets' as const, errorCount: 0 }
+
+    await storage.sourceRuntimeStatus.put({
+      ...base,
+      state: 'healthy',
+      lastSuccessAt: now,
+      packageIdentityCoverage: 'complete',
+    })
+    assert.equal((await storage.sourceRuntimeStatus.list())[0]?.packageIdentityCoverage, 'complete')
+
+    await storage.sourceRuntimeStatus.put({
+      ...base,
+      state: 'failed',
+      lastErrorAt: '2026-09-18T00:01:00.000Z',
+      lastErrorSummary: 'scan failed',
+    })
+    assert.equal((await storage.sourceRuntimeStatus.list())[0]?.packageIdentityCoverage, undefined)
+  } finally { storage.close() }
+})
+
 test('source checkpoints persist values independently by scope', async () => {
   const storage = await createStorage()
   try {
