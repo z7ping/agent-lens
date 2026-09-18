@@ -437,6 +437,7 @@ export function mapAssetBinding(value: unknown): AssetBinding {
   const scopeRoot = optionalString(row, 'scope_root')
   const path = optionalString(row, 'path')
   const source = optionalString(row, 'source')
+  const packageIdentity = optionalString(row, 'package_identity')
   const version = optionalString(row, 'version')
   return {
     id: requiredString(row, 'id'),
@@ -447,6 +448,7 @@ export function mapAssetBinding(value: unknown): AssetBinding {
     ...(scopeRoot === undefined ? {} : { scopeRoot }),
     ...(path === undefined ? {} : { path }),
     ...(source === undefined ? {} : { source }),
+    ...(packageIdentity === undefined ? {} : { packageIdentity }),
     ...(version === undefined ? {} : { version }),
   }
 }
