@@ -1277,7 +1277,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private captureTaskSummary(runtime: OwnedRuntime, message: string): void {
-    if (runtime.taskSummary) return
+    if (runtime.taskSummary || runtime.input.name?.trim()) return
     const summary = taskSummary(message)
     if (!summary) return
     runtime.taskSummary = summary
