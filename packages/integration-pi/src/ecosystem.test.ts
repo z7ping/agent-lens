@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { NpmPiEcosystemProvider, piEcosystemInternals } from './ecosystem'
+import { PiDevEcosystemProvider, piEcosystemInternals } from './ecosystem'
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -9,183 +9,149 @@ function jsonResponse(value: unknown, status = 200): Response {
   })
 }
 
-function searchObject(name: string, version: string, date: string, description = name) {
-  return {
-    package: {
-      name,
-      version,
-      description,
-      keywords: ['pi-package'],
-      date,
-      links: { npm: `https://www.npmjs.com/package/${name}` },
-    },
-  }
+function htmlResponse(value: string, status = 200): Response {
+  return new Response(value, {
+    status,
+    headers: { 'content-type': 'text/html' },
+  })
 }
 
-test('Pi ecosystem manifest parsing only claims explicitly declared resource types', () => {
-  assert.deepEqual(piEcosystemInternals.resourceTypesFromManifest({
-    pi: {
-      extensions: ['./extensions'],
-      skills: ['./skills'],
-      prompts: './prompts',
-      themes: [],
-    },
-  }), ['extension', 'skill', 'prompt'])
-  assert.deepEqual(piEcosystemInternals.resourceTypesFromManifest({}), [])
+function catalogHtml(): string {
+  return `<!doctype html><html><body>
+    <div class="packages-count">1-2 / 2</div>
+    <article data-package-card="true"
+      data-package-name="pi-mcp-adapter"
+      data-package-types="extension skill"
+      data-package-downloads="761442"
+      data-package-date="1788297067693">
+      <h3 class="packages-name"><a href="/packages/pi-mcp-adapter?type=extension">pi-mcp-adapter</a></h3>
+      <p class="packages-desc">MCP adapter &amp; tools</p>
+      <a href="https://www.npmjs.com/package/pi-mcp-adapter">npm</a>
+      <a href="https://github.com/example/pi-mcp-adapter">repo</a>
+      <a href="https://github.com/earendil-works/pi/issues/new?package-name=pi-mcp-adapter&amp;package-version=2.32.1">report</a>
+    </article>
+    <article data-package-card="true"
+      data-package-name="@example/pi-theme"
+      data-package-types="theme"
+      data-package-downloads="123"
+      data-package-date="1788000000000">
+      <h3 class="packages-name"><a href="/packages/%40example/pi-theme?type=theme">@example/pi-theme</a></h3>
+      <p class="packages-desc">Theme</p>
+      <a href="https://www.npmjs.com/package/@example/pi-theme">npm</a>
+      <a href="https://github.com/example/pi-theme">repo</a>
+      <a href="https://github.com/earendil-works/pi/issues/new?package-name=%40example%2Fpi-theme&amp;package-version=1.4.0">report</a>
+    </article>
+  </body></html>`
+}
+
+test('Pi official catalog parser extracts list fields including embedded package version', () => {
+  const parsed = piEcosystemInternals.parsePiCatalogHtml(catalogHtml())
+
+  assert.equal(parsed.total, 2)
+  assert.deepEqual(parsed.items[0], {
+    packageSource: 'npm:pi-mcp-adapter',
+    packageName: 'pi-mcp-adapter',
+    version: '2.32.1',
+    description: 'MCP adapter & tools',
+    keywords: [],
+    resourceTypes: ['extension', 'skill'],
+    monthlyDownloads: 761442,
+    npmUrl: 'https://www.npmjs.com/package/pi-mcp-adapter',
+    officialUrl: 'https://pi.dev/packages/pi-mcp-adapter?type=extension',
+    repositoryUrl: 'https://github.com/example/pi-mcp-adapter',
+    installCommand: 'pi install npm:pi-mcp-adapter',
+    publishedAt: new Date(1788297067693).toISOString(),
+  })
+  assert.equal(parsed.items[1]?.version, '1.4.0')
 })
 
-test('Pi official package URL preserves scoped package path segments', () => {
+test('Pi official catalog URL delegates search, type and sort to pi.dev', () => {
   assert.equal(
-    piEcosystemInternals.piPackageUrl('@example/pi-tools'),
-    'https://pi.dev/packages/%40example/pi-tools',
+    piEcosystemInternals.catalogUrl('mcp', 'extension', 'downloads'),
+    'https://pi.dev/packages?name=mcp&type=extension',
+  )
+  assert.equal(
+    piEcosystemInternals.catalogUrl('', undefined, 'recent'),
+    'https://pi.dev/packages?sort=recent',
   )
 })
 
-test('Pi ecosystem catalog defaults to objective monthly-download ordering without blocking on manifests', async () => {
+test('Pi ecosystem search uses one official Catalog request and no npm search/download APIs', async () => {
   const requested: string[] = []
   const fetcher = (async (input: string | URL | Request) => {
-    const url = String(input)
-    requested.push(url)
-    if (url.includes('/-/v1/search')) {
-      return jsonResponse({
-        total: 3,
-        objects: [
-          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
-          searchObject('pi-b', '2.0.0', '2026-09-10T00:00:00.000Z'),
-          searchObject('pi-c', '3.0.0', '2026-09-17T00:00:00.000Z'),
-        ],
-      })
-    }
-    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
-      return jsonResponse({
-        'pi-a': { downloads: 120, package: 'pi-a' },
-        'pi-b': { downloads: 980, package: 'pi-b' },
-        'pi-c': { downloads: 450, package: 'pi-c' },
-      })
-    }
-    throw new Error(`unexpected request: ${url}`)
+    requested.push(String(input))
+    return htmlResponse(catalogHtml())
   }) as typeof fetch
 
-  const provider = new NpmPiEcosystemProvider(fetcher, () => Date.parse('2026-09-18T00:00:00.000Z'))
-  const response = await provider.search()
+  const provider = new PiDevEcosystemProvider(fetcher, () => Date.parse('2026-09-18T00:00:00.000Z'))
+  const response = await provider.search({ sort: 'downloads', limit: 20 })
 
-  assert.equal(response.sort, 'downloads')
-  assert.equal(response.upstreamTotal, 3)
-  assert.deepEqual(response.items.map(item => item.packageName), ['pi-b', 'pi-c', 'pi-a'])
-  assert.deepEqual(response.items.map(item => item.monthlyDownloads), [980, 450, 120])
-  assert.deepEqual(response.items.map(item => item.resourceTypes), [[], [], []])
-  assert.equal(requested.some(url => url.includes('registry.npmjs.org/pi-a/1.0.0')), false)
-
-  const search = new URL(requested[0]!)
-  assert.equal(search.searchParams.get('text'), 'keywords:pi-package')
-  assert.equal(search.searchParams.get('size'), '250')
-  assert.equal(search.searchParams.get('from'), '0')
+  assert.equal(response.source, 'pi-dev')
+  assert.equal(response.upstreamTotal, 2)
+  assert.equal(response.items.length, 2)
+  assert.equal(response.stale, false)
+  assert.deepEqual(requested, ['https://pi.dev/packages'])
+  assert.equal(requested.some(url => url.includes('registry.npmjs.org/-/v1/search')), false)
+  assert.equal(requested.some(url => url.includes('api.npmjs.org/downloads')), false)
 })
 
-test('Pi ecosystem catalog can sort by most recently published while retaining download counts', async () => {
-  const fetcher = (async (input: string | URL | Request) => {
-    const url = String(input)
-    if (url.includes('/-/v1/search')) {
-      return jsonResponse({
-        total: 3,
-        objects: [
-          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
-          searchObject('pi-b', '2.0.0', '2026-09-10T00:00:00.000Z'),
-          searchObject('pi-c', '3.0.0', '2026-09-17T00:00:00.000Z'),
-        ],
-      })
-    }
-    return jsonResponse({
-      'pi-a': { downloads: 120, package: 'pi-a' },
-      'pi-b': { downloads: 980, package: 'pi-b' },
-      'pi-c': { downloads: 450, package: 'pi-c' },
-    })
+test('Pi ecosystem concurrent identical catalog search is single-flight', async () => {
+  let calls = 0
+  const fetcher = (async () => {
+    calls += 1
+    await new Promise(resolve => setTimeout(resolve, 10))
+    return htmlResponse(catalogHtml())
   }) as typeof fetch
 
-  const provider = new NpmPiEcosystemProvider(fetcher)
-  const response = await provider.search({ sort: 'recent' })
-  assert.equal(response.sort, 'recent')
-  assert.deepEqual(response.items.map(item => item.packageName), ['pi-c', 'pi-a', 'pi-b'])
+  const provider = new PiDevEcosystemProvider(fetcher)
+  const [first, second] = await Promise.all([
+    provider.search({ sort: 'downloads', limit: 20 }),
+    provider.search({ sort: 'downloads', limit: 20 }),
+  ])
+
+  assert.deepEqual(second, first)
+  assert.equal(calls, 1)
 })
 
-test('Pi ecosystem typed filtering walks ranked candidates and fetches exact-version manifests only as needed', async () => {
-  const requested: string[] = []
-  const fetcher = (async (input: string | URL | Request) => {
-    const url = String(input)
-    requested.push(url)
-    if (url.includes('/-/v1/search')) {
-      return jsonResponse({
-        total: 3,
-        objects: [
-          searchObject('pi-a', '1.0.0', '2026-09-15T00:00:00.000Z'),
-          searchObject('@example/pi-tools', '1.2.3', '2026-09-10T00:00:00.000Z'),
-          searchObject('pi-c', '3.0.0', '2026-09-17T00:00:00.000Z'),
-        ],
-      })
-    }
-    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
-      return jsonResponse({
-        'pi-a': { downloads: 1_000, package: 'pi-a' },
-        '@example/pi-tools': { downloads: 800, package: '@example/pi-tools' },
-        'pi-c': { downloads: 100, package: 'pi-c' },
-      })
-    }
-    if (url.endsWith('/pi-a/1.0.0')) {
-      return jsonResponse({ name: 'pi-a', version: '1.0.0', pi: { extensions: ['./extension.ts'] } })
-    }
-    if (url.includes('%40example%2Fpi-tools/1.2.3')) {
-      return jsonResponse({
-        name: '@example/pi-tools',
-        version: '1.2.3',
-        repository: { url: 'git+https://github.com/example/pi-tools.git' },
-        pi: { extensions: ['./extensions'], skills: ['./skills'] },
-      })
-    }
-    if (url.endsWith('/pi-c/3.0.0')) {
-      return jsonResponse({ name: 'pi-c', version: '3.0.0', pi: { themes: ['./themes'] } })
-    }
-    throw new Error(`unexpected request: ${url}`)
+test('Pi ecosystem reuses fresh catalog cache and falls back to last good result', async () => {
+  let now = 0
+  let calls = 0
+  let fail = false
+  const fetcher = (async () => {
+    calls += 1
+    if (fail) throw new Error('pi.dev unavailable')
+    return htmlResponse(catalogHtml())
   }) as typeof fetch
 
-  const provider = new NpmPiEcosystemProvider(fetcher)
-  const response = await provider.search({ query: 'tools', type: 'skill', sort: 'downloads', limit: 10 })
+  const provider = new PiDevEcosystemProvider(fetcher, () => now)
+  const first = await provider.search()
+  const cached = await provider.search()
+  assert.equal(calls, 1)
+  assert.equal(cached.stale, false)
 
-  assert.equal(response.items.length, 1)
-  assert.deepEqual(response.items[0], {
-    packageSource: 'npm:@example/pi-tools',
-    packageName: '@example/pi-tools',
-    version: '1.2.3',
-    description: '@example/pi-tools',
-    keywords: ['pi-package'],
-    resourceTypes: ['extension', 'skill'],
-    monthlyDownloads: 800,
-    npmUrl: 'https://www.npmjs.com/package/@example/pi-tools',
-    officialUrl: 'https://pi.dev/packages/%40example/pi-tools',
-    repositoryUrl: 'https://github.com/example/pi-tools',
-    installCommand: 'pi install npm:@example/pi-tools',
-    publishedAt: '2026-09-10T00:00:00.000Z',
-  })
-
-  const search = new URL(requested[0]!)
-  assert.equal(search.searchParams.get('text'), 'keywords:pi-package tools')
-  assert.ok(requested.some(url => url.includes('%40example%2Fpi-tools/1.2.3')))
+  now = piEcosystemInternals.CATALOG_CACHE_TTL_MS + 1
+  fail = true
+  const stale = await provider.search()
+  assert.equal(calls, 2)
+  assert.equal(stale.stale, true)
+  assert.equal(stale.fetchedAt, first.fetchedAt)
 })
 
-test('Pi ecosystem package details use exact version endpoint and reuse detail cache', async () => {
-  let detailCalls = 0
+test('Pi ecosystem package details still use exact npm version only on demand', async () => {
+  let calls = 0
   const fetcher = (async (input: string | URL | Request) => {
+    calls += 1
     const url = String(input)
-    detailCalls += 1
     assert.ok(url.endsWith('/pi-demo/1.2.3'))
     return jsonResponse({
       name: 'pi-demo',
       version: '1.2.3',
       repository: 'https://github.com/example/pi-demo.git',
-      pi: { prompts: './prompts' },
+      pi: { prompts: ['./prompts'] },
     })
   }) as typeof fetch
 
-  const provider = new NpmPiEcosystemProvider(fetcher)
+  const provider = new PiDevEcosystemProvider(fetcher)
   const first = await provider.packageDetails({ packageName: 'pi-demo', version: '1.2.3' })
   const second = await provider.packageDetails({ packageName: 'pi-demo', version: '1.2.3' })
 
@@ -197,120 +163,17 @@ test('Pi ecosystem package details use exact version endpoint and reuse detail c
     repositoryUrl: 'https://github.com/example/pi-demo',
   })
   assert.deepEqual(second, first)
-  assert.equal(detailCalls, 1)
-})
-
-test('Pi ecosystem provider coalesces concurrent identical search before cache is populated', async () => {
-  let searchCalls = 0
-  let downloadCalls = 0
-  const fetcher = (async (input: string | URL | Request) => {
-    const url = String(input)
-    if (url.includes('/-/v1/search')) {
-      searchCalls += 1
-      await new Promise(resolve => setTimeout(resolve, 10))
-      return jsonResponse({
-        total: 1,
-        objects: [searchObject('pi-demo', '1.0.0', '2026-09-01T00:00:00.000Z')],
-      })
-    }
-    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
-      downloadCalls += 1
-      return jsonResponse({ downloads: 42, package: 'pi-demo' })
-    }
-    throw new Error(`unexpected request: ${url}`)
-  }) as typeof fetch
-
-  const provider = new NpmPiEcosystemProvider(fetcher)
-  const [first, second] = await Promise.all([
-    provider.search({ sort: 'downloads', limit: 20 }),
-    provider.search({ sort: 'downloads', limit: 20 }),
-  ])
-
-  assert.deepEqual(second, first)
-  assert.equal(searchCalls, 1)
-  assert.equal(downloadCalls, 1)
-})
-
-test('Pi ecosystem provider coalesces concurrent exact-version package details', async () => {
-  let calls = 0
-  const fetcher = (async (input: string | URL | Request) => {
-    calls += 1
-    const url = String(input)
-    assert.ok(url.endsWith('/pi-demo/1.0.0'))
-    await new Promise(resolve => setTimeout(resolve, 10))
-    return jsonResponse({
-      name: 'pi-demo',
-      version: '1.0.0',
-      pi: { skills: ['./skills'] },
-    })
-  }) as typeof fetch
-
-  const provider = new NpmPiEcosystemProvider(fetcher)
-  const [first, second] = await Promise.all([
-    provider.packageDetails({ packageName: 'pi-demo', version: '1.0.0' }),
-    provider.packageDetails({ packageName: 'pi-demo', version: '1.0.0' }),
-  ])
-
-  assert.deepEqual(second, first)
   assert.equal(calls, 1)
 })
 
-test('Pi ecosystem provider reuses short search cache and falls back to bounded last-good result', async () => {
-  let now = 0
-  let searchCalls = 0
-  const fetcher = (async (input: string | URL | Request) => {
-    const url = String(input)
-    if (url.includes('/-/v1/search')) {
-      searchCalls += 1
-      if (searchCalls > 1) throw new Error('offline')
-      return jsonResponse({
-        total: 1,
-        objects: [searchObject('pi-demo', '1.0.0', '2026-09-01T00:00:00.000Z')],
-      })
-    }
-    if (url.includes('api.npmjs.org/downloads/point/last-month')) {
-      return jsonResponse({ downloads: 42, package: 'pi-demo' })
-    }
-    throw new Error(`unexpected request: ${url}`)
-  }) as typeof fetch
-
-  const provider = new NpmPiEcosystemProvider(fetcher, () => now)
-  const first = await provider.search({ query: 'demo' })
-  const cached = await provider.search({ query: 'demo' })
-  assert.equal(searchCalls, 1)
-  assert.equal(cached.stale, false)
-
-  now = 60_001
-  const stale = await provider.search({ query: 'demo' })
-  assert.equal(searchCalls, 2)
-  assert.equal(stale.stale, true)
-  assert.equal(stale.fetchedAt, first.fetchedAt)
-})
-
-test('Pi ecosystem detail enrichment preserves order while bounding concurrency', async () => {
-  let active = 0
-  let maxActive = 0
-  const values = Array.from({ length: 20 }, (_, index) => index)
-  const result = await piEcosystemInternals.mapWithConcurrency(
-    values,
-    piEcosystemInternals.PACKAGE_DETAIL_CONCURRENCY,
-    async value => {
-      active += 1
-      maxActive = Math.max(maxActive, active)
-      await new Promise(resolve => setTimeout(resolve, 1))
-      active -= 1
-      return value * 2
-    },
-  )
-
-  assert.deepEqual(result, values.map(value => value * 2))
-  assert.ok(maxActive <= piEcosystemInternals.PACKAGE_DETAIL_CONCURRENCY)
-})
-
-test('bounded cache helper evicts the oldest entry', () => {
-  const cache = new Map<string, number>()
-  piEcosystemInternals.setBounded(cache, 'a', 1, 2)
-  piEcosystemInternals.setBounded(cache, 'b', 2, 2)
-  piEcosystemInternals.setBounded(cache, 'c', 3, 2)
-  assert.deepEqual([...cache.entries()], [['b', 2], ['c', 3]])
+test('official catalog parser tolerates cards without report version metadata', () => {
+  const parsed = piEcosystemInternals.parsePiCatalogHtml(`
+    <div class="packages-count">1-1 / 1</div>
+    <article data-package-card="true" data-package-name="pi-demo" data-package-types="skill">
+      <h3 class="packages-name"><a href="/packages/pi-demo">pi-demo</a></h3>
+      <p class="packages-desc">Demo</p>
+    </article>
+  `)
+  assert.equal(parsed.items.length, 1)
+  assert.equal(parsed.items[0]?.version, undefined)
 })
