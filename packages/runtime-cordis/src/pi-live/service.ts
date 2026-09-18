@@ -1098,6 +1098,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.error ? { error: runtime.error } : {}),
       ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
+      ...((runtime.taskSummary || runtime.input.name) ? { title: runtime.taskSummary || runtime.input.name } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
@@ -1128,6 +1129,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
+      ...((runtime.taskSummary || safeState.sessionName || runtime.input.name)
+        ? { title: runtime.taskSummary || safeState.sessionName || runtime.input.name }
+        : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
