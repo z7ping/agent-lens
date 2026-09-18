@@ -1,4 +1,6 @@
 import type { LiveEventDto, LiveRuntimeEventDto } from '@agent-lens/protocol'
+import { agentLensI18n } from '../i18n/runtime'
+import type { TaskRoundModel } from './task-detail-model'
 
 export type LiveTaskProjectionItem =
   | {
@@ -221,6 +223,105 @@ export function reduceLiveTaskEvent(
 
   if (event.type === 'completed') return settle(items)
   return [...items]
+}
+
+
+export interface LiveTaskRoundProjection {
+  model: TaskRoundModel
+  items: LiveTaskProjectionItem[]
+}
+
+function compactRoundPreview(value: string, max = 120): string {
+  const text = value.replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
+function roundTiming(items: readonly LiveTaskProjectionItem[]): { durationMs: number; startedAtMs?: number } {
+  const times = items
+    .flatMap(item => item.at ? [Date.parse(item.at)] : [])
+    .filter(Number.isFinite)
+  if (!times.length) return { durationMs: 0 }
+  const startedAtMs = Math.min(...times)
+  const endedAtMs = Math.max(...times)
+  return { durationMs: Math.max(0, endedAtMs - startedAtMs), startedAtMs }
+}
+
+function buildRoundModel(
+  items: readonly LiveTaskProjectionItem[],
+  ordinal: number | undefined,
+  id: string,
+  background = false,
+): TaskRoundModel {
+  const timing = roundTiming(items)
+  const previewSource = items.find(item => item.kind === 'message' && item.role === 'user')
+    ?? items.find(item => item.kind === 'message')
+  const toolCount = items.filter(item => item.kind === 'tool').length
+  const errorCount = items.filter(item => item.kind === 'tool' && item.status === 'error').length
+  const running = items.some(item =>
+    (item.kind === 'message' || item.kind === 'thinking') ? item.streaming : item.status === 'running',
+  )
+  return {
+    id,
+    semanticId: id,
+    ...(ordinal !== undefined ? { ordinal } : {}),
+    label: background
+      ? agentLensI18n.t('task:surface.backgroundActivity')
+      : agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal ?? 1 }),
+    state: running ? 'running' : 'settled',
+    ...(previewSource ? { preview: compactRoundPreview(previewSource.text) } : {}),
+    toolCount,
+    errorCount,
+    durationMs: timing.durationMs,
+    highLatency: false,
+  }
+}
+
+/**
+ * Product-level round projection. A user message starts a new semantic round;
+ * following assistant/thinking/tool items stay in that round until the next
+ * user message. Items before the first user message are kept as background
+ * activity so TaskSurface can still expose them without inventing agent logic.
+ */
+export function projectLiveTaskRounds(
+  items: readonly LiveTaskProjectionItem[],
+): LiveTaskRoundProjection[] {
+  const raw: Array<{ id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] }> = []
+  let current: { id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] } | undefined
+  let ordinal = 0
+
+  for (const item of items) {
+    const startsRound = item.kind === 'message' && item.role === 'user'
+    if (startsRound) {
+      ordinal += 1
+      current = {
+        id: `live-round:${item.id}`,
+        ordinal,
+        background: false,
+        items: [],
+      }
+      raw.push(current)
+    } else if (!current) {
+      current = {
+        id: 'live-round:background',
+        background: true,
+        items: [],
+      }
+      raw.push(current)
+    }
+    current.items.push(item)
+  }
+
+  return raw.map(round => ({
+    model: buildRoundModel(round.items, round.ordinal, round.id, round.background),
+    items: round.items,
+  }))
+}
+
+export function liveTaskRoundEstimate(round: LiveTaskRoundProjection): number {
+  const messageCount = round.items.filter(item => item.kind === 'message').length
+  const thinkingCount = round.items.filter(item => item.kind === 'thinking').length
+  const toolCount = round.items.filter(item => item.kind === 'tool').length
+  return Math.max(180, Math.min(1200, 120 + messageCount * 120 + thinkingCount * 150 + toolCount * 110))
 }
 
 export function projectLiveInputHistory(
