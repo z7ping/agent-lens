@@ -58,6 +58,7 @@ export type LiveCapabilityNameDto =
   | 'extension-ui'
   | 'command-discovery'
   | 'workspace-file-reference'
+  | 'history-index'
   | 'recovery'
 
 export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
@@ -110,6 +111,17 @@ export interface LiveSnapshotDto {
     hasLater?: boolean | undefined
     after?: string | undefined
   } | undefined
+}
+
+export interface LiveHistoryIndexItemDto {
+  cursor: string
+  ordinal: number
+  preview?: string | undefined
+}
+
+export interface LiveHistoryIndexDto {
+  total: number
+  items: LiveHistoryIndexItemDto[]
 }
 
 export interface LiveQueueStateDto {

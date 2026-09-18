@@ -2,6 +2,7 @@ import type {
   LiveAvailabilityDto,
   LiveCommandsResponseDto,
   LiveCommandDto,
+  LiveHistoryIndexDto,
   LiveInterruptResultDto,
   LiveMessageActionContributionDto,
   LiveMessageActionResultDto,
@@ -238,6 +239,7 @@ export interface LiveSnapshotWindowRequest {
   before?: string | undefined
   after?: string | undefined
   edge?: 'earliest' | 'latest' | undefined
+  around?: string | undefined
   limit?: number | undefined
 }
 
@@ -315,9 +317,15 @@ export const liveApi = {
     if (window?.before) params.set('before', window.before)
     if (window?.after) params.set('after', window.after)
     if (window?.edge) params.set('edge', window.edge)
+    if (window?.around) params.set('around', window.around)
     if (window?.limit !== undefined) params.set('limit', String(window.limit))
     const search = params.size ? `?${params}` : ''
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
+  },
+
+  historyIndex(liveId: string, runtimeSessionId: string, limit = 80): Promise<LiveHistoryIndexDto> {
+    const params = new URLSearchParams({ limit: String(Math.max(1, Math.min(80, limit))) })
+    return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}?${params}`)
   },
 
   async send(

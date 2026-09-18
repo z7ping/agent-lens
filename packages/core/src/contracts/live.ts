@@ -15,6 +15,7 @@ export type LiveCapabilityName =
   | 'extension-ui'
   | 'command-discovery'
   | 'workspace-file-reference'
+  | 'history-index'
   | 'recovery'
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
@@ -153,6 +154,8 @@ export interface LiveSnapshotWindow {
   after?: string | undefined
   /** Directly select an edge window without traversing intermediate pages. */
   edge?: 'earliest' | 'latest' | undefined
+  /** Inclusive cursor centered near the shared reading anchor. */
+  around?: string | undefined
   /** Entry budget. Adapters must clamp omitted/oversized values to the shared limits above. */
   limit?: number | undefined
 }
@@ -173,6 +176,19 @@ export interface LiveSnapshot {
   entries: unknown[]
   leafId?: string | null
   page?: LiveSnapshotPage | undefined
+}
+
+export const LIVE_HISTORY_INDEX_MAX_LIMIT = 80
+
+export interface LiveHistoryIndexItem {
+  cursor: string
+  ordinal: number
+  preview?: string | undefined
+}
+
+export interface LiveHistoryIndex {
+  total: number
+  items: readonly LiveHistoryIndexItem[]
 }
 
 export type LiveEventStatus =
@@ -483,6 +499,8 @@ export interface LiveAdapter {
    * "return the complete transcript".
    */
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot>
+  /** Lightweight bounded round anchors for full-session navigation. */
+  historyIndex?(runtimeSessionId: string, limit?: number): Promise<LiveHistoryIndex>
   /** Present only when the adapter declares model-switching. */
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */
