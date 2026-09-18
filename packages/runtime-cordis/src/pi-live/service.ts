@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type {
+import {
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
   type LiveContributionText,
