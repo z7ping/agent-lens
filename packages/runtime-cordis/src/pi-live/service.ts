@@ -564,6 +564,7 @@ export class DefaultPiLiveService implements PiLiveService {
       if (this.disposed) return
       if (this.runtimes.has(item.id)) continue
       const runtime = this.createRuntime(item.id, item.input, true, item.createdAt)
+      runtime.taskSummary = item.taskSummary
       this.runtimes.set(runtime.id, runtime)
       void this.initialize(runtime, runtime.generation)
     }
@@ -584,6 +585,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const value: PiLiveRecoveryRecord = {
       id: runtime.id,
       input: recoveryInput(runtime.input, sessionPath),
+      ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
       createdAt: runtime.createdAt,
       updatedAt: new Date().toISOString(),
     }
@@ -621,6 +623,21 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!nextPath) return
     this.adoptRuntimeSession(runtime, nextPath)
     this.persistRuntimeBestEffort(runtime)
+  }
+
+  private persistRuntimeMetadataBestEffort(runtime: OwnedRuntime): void {
+    if (!this.recoveryStore || !runtime.input.sessionPath?.trim()) return
+    const previous = runtime.recoveryCheckpointTask
+    let checkpoint: Promise<void>
+    checkpoint = (async () => {
+      await previous?.catch(() => undefined)
+      await this.persistRuntime(runtime)
+    })().catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live recovery metadata checkpoint failed', error)
+    }).finally(() => {
+      if (runtime.recoveryCheckpointTask === checkpoint) runtime.recoveryCheckpointTask = undefined
+    })
+    runtime.recoveryCheckpointTask = checkpoint
   }
 
   private async refreshWorkspaceContext(runtime: OwnedRuntime): Promise<void> {
@@ -1265,6 +1282,7 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!summary) return
     runtime.taskSummary = summary
     this.publish(runtime, { type: 'task_summary', taskSummary: summary })
+    this.persistRuntimeMetadataBestEffort(runtime)
   }
 
   private publish(runtime: OwnedRuntime, event: Record<string, unknown>): void {
