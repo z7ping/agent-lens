@@ -310,6 +310,58 @@ test('session.updated 的快速刷新不会被后续 Observation 兜底延后', 
   model.stop()
 })
 
+test('高频 Observation 与 Summary Ready 只合并为一次任务列表刷新', async () => {
+  let reviewCalls = 0
+
+  class BurstRefreshApi extends AgentLensApi {
+    override review(_filters: ReviewFilters, limit = 40): Promise<ReviewResponseDto> {
+      reviewCalls += 1
+      return Promise.resolve(response(limit))
+    }
+
+    override reviewDetail(): Promise<ReviewSessionDetailDto> {
+      return Promise.resolve({
+        ...summary(1),
+        interactions: [],
+        page: { count: 0, hasMore: false, direction: 'backward', filter: 'all' },
+      })
+    }
+
+    override relationships(): Promise<SessionRelationshipResponseDto> {
+      return Promise.resolve({
+        items: [],
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: '2026-09-01T00:00:00.000Z' },
+      })
+    }
+  }
+
+  const model = new AgentLensClientModel(new BurstRefreshApi())
+  await model.refreshReview()
+  model.setReviewActive(true)
+  const emit = (event: LiveUpdateEventDto) =>
+    (model as unknown as { onLiveEvent(event: LiveUpdateEventDto): void }).onLiveEvent(event)
+
+  for (let index = 0; index < 1_000; index += 1) {
+    emit({
+      type: 'observation.committed',
+      observationId: `burst-${index}`,
+      logicalSessionId: 'session-2',
+      affected: ['review'],
+      emittedAt: '2026-09-01T00:00:01.000Z',
+    })
+  }
+  emit({
+    type: 'session.updated',
+    logicalSessionId: 'session-2',
+    affected: ['review'],
+    emittedAt: '2026-09-01T00:00:01.500Z',
+  })
+
+  await new Promise(resolve => setTimeout(resolve, 180))
+  assert.equal(reviewCalls, 2)
+  model.stop()
+})
+
 test('后台刷新不会把摘要窗口外的当前阅读会话切回第一条', async () => {
   let detailCalls = 0
 
