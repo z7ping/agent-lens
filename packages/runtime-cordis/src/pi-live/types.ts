@@ -1,4 +1,4 @@
-import type { LiveAvailability, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
+import type { LiveAvailability, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 
@@ -40,6 +40,9 @@ export interface PiLiveRuntimeCapabilities {
   modelSwitching: boolean
   thinkingLevelControl: boolean
   extensionUi: boolean
+  /** Pi-private support flags used only to decide whether controlled message actions are offered. */
+  treeNavigation?: boolean | undefined
+  messageFork?: boolean | undefined
 }
 
 export interface PiLiveStartInput {
@@ -51,6 +54,8 @@ export interface PiLiveStartInput {
   name?: string | undefined
   sessionDir?: string | undefined
   sessionPath?: string | undefined
+  /** Internal-only branch target for a detached new Runtime. Never accepted from the public start endpoint. */
+  branchFromEntryId?: string | null | undefined
   /** Internal-only action for a server-resolved Pi history JSONL. Never accepted from the generic public start endpoint. */
   historyAction?: PiLiveHistoryAction | undefined
 }
@@ -144,6 +149,12 @@ export interface PiLiveService {
   snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot>
   commands(runtimeSessionId: string): Promise<PiLiveCommand[]>
   workspaceFileReferences(runtimeSessionId: string, query: string, limit?: number): Promise<LiveWorkspaceFileReference[]>
+  messageActions(runtimeSessionId: string): Promise<LiveMessageActionContribution[]>
+  executeMessageAction(
+    runtimeSessionId: string,
+    actionId: string,
+    targetEntryId: string,
+  ): Promise<LiveMessageActionResult>
   controls(runtimeSessionId: string): Promise<PiLiveControls>
   setModel(runtimeSessionId: string, provider: string, modelId: string): Promise<PiLiveRuntimeState>
   setThinkingLevel(runtimeSessionId: string, level: string): Promise<PiLiveRuntimeState>
