@@ -5,6 +5,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
 import {
   assertPiSdkSession,
+  piSdkCommands,
   resolvePiSdkPackageUpdateApi,
   type PiSdkSessionManager,
 } from './pi-sdk-adapter'
@@ -174,6 +175,7 @@ class InProcessHandle implements PiRuntimeHandle {
     }
     return isLiveThinkingControl(candidate) ? candidate : undefined
   }
+  async commands() { return piSdkCommands(this.session) }
   async controls(): Promise<PiLiveControls> {
     const thinking = this.thinkingControl()
     return {
