@@ -682,14 +682,12 @@ export class DefaultPiLiveService implements PiLiveService {
         throw this.conflict('Installed Pi SDK does not support message-level session fork')
       }
       if (!state.sessionFile) throw this.conflict('Pi session must be persisted before creating a new session from a message')
-      const nextInput: PiLiveStartInput = target.parentId
-        ? {
-            cwd: runtime.input.cwd,
-            sessionPath: state.sessionFile,
-            historyAction: 'fork',
-            branchFromEntryId: target.parentId,
-          }
-        : { cwd: runtime.input.cwd }
+      const nextInput: PiLiveStartInput = {
+        cwd: runtime.input.cwd,
+        sessionPath: state.sessionFile,
+        historyAction: 'fork',
+        branchFromEntryId: target.parentId,
+      }
       const next = await this.start(nextInput)
       return {
         outcome: 'open-runtime' as const,
