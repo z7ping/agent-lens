@@ -10,6 +10,7 @@ const productSurfaceFiles = [
 ].map(path => ({ path, source: readFileSync(new URL(path, import.meta.url), 'utf8') }))
 
 const liveComposer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
+const runtimeDisclosures = readFileSync(new URL('../components/LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
 
 test('统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面', () => {
   for (const file of productSurfaceFiles) {
@@ -73,6 +74,23 @@ test('@文件补全保持 Runtime-bound 通用 Live Product 边界', () => {
   assert.match(liveComposer, /event\.isComposing/)
   assert.match(liveComposer, /event\.keyCode !== 229/)
   assert.doesNotMatch(liveComposer, /\bpi\b|Pi Live/)
+})
+
+test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污染任务正文', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /liveApi\.runtimeDisclosures\(current\.liveId, current\.runtimeSessionId\)/)
+  assert.match(liveTask, /liveApi\.executeRuntimeAction\(/)
+  assert.match(liveTask, /<LiveRuntimeDisclosures/)
+  assert.ok(
+    liveTask.indexOf('<LiveRuntimeDisclosures') < liveTask.indexOf('className="pi-live-reader'),
+    'runtime disclosures must stay outside the ordinary task reader',
+  )
+
+  assert.match(runtimeDisclosures, /AgentLens-owned|LiveRuntimeDisclosureContributionDto/)
+  assert.match(runtimeDisclosures, /<Disclosure/)
+  assert.match(runtimeDisclosures, /<CopyableCodeBlock/)
+  assert.doesNotMatch(runtimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/)
+  assert.doesNotMatch(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/)
 })
 
 test('消息级私有动作通过受控 Contribution 暴露，不提升为 Pi 专属 Product 分支', () => {
