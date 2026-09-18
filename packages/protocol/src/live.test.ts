@@ -121,6 +121,21 @@ test('Live protocol preserves opaque model values without vendor fields', () => 
   assert.deepEqual(parsed.options.map(option => option.value), ['opaque:model-a', 'opaque:model-b'])
 })
 
+test('Live protocol validates and bounds title.update events', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'title.update',
+    title: '  Live task title  ',
+  }), {
+    type: 'title.update',
+    title: 'Live task title',
+  })
+  assert.equal(parseLiveEventDto({ type: 'title.update', title: '   ' }), null)
+  assert.equal(
+    (parseLiveEventDto({ type: 'title.update', title: 'x'.repeat(300) }) as { title?: string } | null)?.title?.length,
+    240,
+  )
+})
+
 test('Live protocol validates normalized extension UI requests', () => {
   assert.deepEqual(parseLiveEventDto({
     type: 'ui.request',
