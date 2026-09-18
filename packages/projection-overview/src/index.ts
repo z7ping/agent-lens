@@ -8,6 +8,7 @@ import type {
   SessionSummaryFacetScope,
   SourceService,
   StorageService,
+  type ToolUsageAggregateAssetRecord,
 } from '@agent-lens/core'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
@@ -410,7 +411,7 @@ export class AgentOverviewProjection {
 
   private async buildItem(
     definition: ReturnType<SourceService['list']>[number],
-    prefetchedAssets?: Awaited<ReturnType<ToolAssetUsageProjection['queryAssets']>>,
+    prefetchedAssets?: readonly (Awaited<ReturnType<ToolAssetUsageProjection['queryAssets']>>[number] | ToolUsageAggregateAssetRecord)[],
     mode: 'core' | 'coverage' | 'full' = 'full',
   ): Promise<AgentOverviewDto> {
     const includeIntegration = mode === 'full'
