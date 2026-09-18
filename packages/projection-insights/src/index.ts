@@ -229,7 +229,8 @@ async function loadSessions(storage: StorageService, query: InsightsQueryDto): P
       ...(query.from ? { from: query.from } : {}),
       ...(after ? { after } : {}),
     })
-    for (const item of response.items) {
+    for (let index = 0; index < response.items.length; index += 1) {
+      const item = response.items[index]!
       // SessionSummaryQuery.to uses endedAt, while Insights intentionally treats a session
       // as in-range when its interval overlaps the requested upper boundary. Keep that
       // final overlap check here rather than narrowing the storage query incorrectly.
@@ -237,7 +238,7 @@ async function loadSessions(storage: StorageService, query: InsightsQueryDto): P
       if (items.length >= SESSION_SAMPLE_LIMIT) {
         return {
           items: items.slice(0, SESSION_SAMPLE_LIMIT),
-          sampled: response.hasMore || response.items.length > items.length,
+          sampled: response.hasMore || index < response.items.length - 1,
         }
       }
     }
