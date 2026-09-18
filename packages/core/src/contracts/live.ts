@@ -13,6 +13,7 @@ export type LiveCapabilityName =
   | 'model-switching'
   | 'thinking-control'
   | 'extension-ui'
+  | 'command-discovery'
   | 'recovery'
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
@@ -284,6 +285,13 @@ export interface LiveControlOption extends LiveControlDisplayInfo {
   value: string
 }
 
+export interface LiveCommand extends LiveControlDisplayInfo {
+  /** Runtime-owned text inserted into the composer, e.g. "/skill:review". */
+  value: string
+  /** Optional runtime-owned grouping key such as extension / prompt / skill. */
+  group?: string | undefined
+}
+
 export interface LiveThinkingControl extends LiveControlDisplayInfo {
   capability: 'thinking-control'
   /** Current effective Runtime value. */
@@ -363,6 +371,8 @@ export interface LiveAdapter {
   setThinkingControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
   /** Present only when the adapter declares extension-ui. */
   respondToExtension?(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
+  /** Present only when the adapter declares command-discovery. */
+  commands?(runtimeSessionId: string): Promise<readonly LiveCommand[]>
   send(runtimeSessionId: string, message: LiveMessageInput, options?: LiveSendOptions): Promise<void>
   subscribe(runtimeSessionId: string, listener: (event: LiveRuntimeEvent) => void): () => void
   /** Present only when the adapter declares queue. Returns the current queued messages without mutation. */
