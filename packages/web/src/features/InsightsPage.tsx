@@ -81,9 +81,9 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
   const insights = useSyncExternalStore(insightsModel.subscribe, insightsModel.getSnapshot, insightsModel.getSnapshot)
 
   useEffect(() => {
-    void insightsModel.start()
+    void insightsModel.start(listener => model.subscribeLiveEvents(listener))
     return () => insightsModel.stop()
-  }, [insightsModel])
+  }, [insightsModel, model])
 
   const data = insights.response
   const agents = useOrderedAgents(appSnapshot.facets?.agents ?? [])
