@@ -41,7 +41,8 @@ import {
   appendOptimisticLiveUserMessage,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
-  projectLiveTaskRounds,
+  LiveTaskRoundProjector,
+  liveTaskStableRoundPrefixLength,
   liveTaskRoundEstimate,
   liveEventChangesTaskTranscript,
   reduceLiveTaskEvent,
@@ -410,6 +411,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const startupSendingRef = useRef(false)
   const leafIdRef = useRef<string | undefined>(undefined)
   const stableProjectionCountRef = useRef(0)
+  const projectionStableCountRef = useRef(0)
+  const roundProjectorRef = useRef(new LiveTaskRoundProjector())
   const queueRevisionRef = useRef(0)
 
   const setComposerValue = useCallback((value: string) => {
@@ -447,6 +450,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     queueRevisionRef.current += 1
     leafIdRef.current = undefined
     stableProjectionCountRef.current = 0
+    projectionStableCountRef.current = 0
+    roundProjectorRef.current.reset()
     setConnected(false)
     setBootstrapTarget(null)
     setSyncError('')
@@ -502,6 +507,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setItems(projectedItems)
         setInputHistory(projectLiveInputHistory(projectedItems))
         stableProjectionCountRef.current = projectedItems.length
+        projectionStableCountRef.current = liveTaskStableRoundPrefixLength(
+          projectedItems,
+          snapshotResult.snapshot.state.isStreaming,
+        )
         leafIdRef.current = snapshotResult.snapshot.leafId ?? undefined
       } else {
         setSyncError(snapshotResult.reason instanceof Error ? snapshotResult.reason.message : String(snapshotResult.reason))
@@ -548,6 +557,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           setItems(recovered)
           setInputHistory(projectLiveInputHistory(recovered))
           stableProjectionCountRef.current = recovered.length
+          projectionStableCountRef.current = liveTaskStableRoundPrefixLength(
+            recovered,
+            snapshot.state.isStreaming,
+          )
           leafIdRef.current = snapshot.leafId ?? undefined
         } else if (snapshot.state.isStreaming) {
           // 重连中的增量快照只补已持久化片段，不推进稳定边界；
@@ -559,6 +572,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             ...recovered,
           ])
           stableProjectionCountRef.current = stableProjectionCount + recovered.length
+          projectionStableCountRef.current = stableProjectionCount + recovered.length
           leafIdRef.current = snapshot.leafId ?? recoveryLeafId
         } else {
           leafIdRef.current = snapshot.leafId ?? recoveryLeafId
@@ -990,6 +1004,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setItems(projected)
       setInputHistory(projectLiveInputHistory(projected))
       stableProjectionCountRef.current = projected.length
+      projectionStableCountRef.current = liveTaskStableRoundPrefixLength(
+        projected,
+        snapshot.state.isStreaming,
+      )
       leafIdRef.current = snapshot.leafId ?? undefined
       if (typeof result.draftText === 'string') setComposerValue(result.draftText)
       composerRef.current?.focus({ preventScroll: true })
@@ -1040,7 +1058,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [busy, current, thinking])
 
-  const rounds = useMemo(() => projectLiveTaskRounds(items), [items])
+  const projectionStableCount = Math.min(projectionStableCountRef.current, items.length)
+  const rounds = useMemo(
+    () => roundProjectorRef.current.project(items, projectionStableCount),
+    [items, projectionStableCount],
+  )
 
   if (!current) {
     return <main className="pi-live-page pi-live-page-embedded">
