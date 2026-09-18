@@ -3,10 +3,15 @@ import { useTranslation } from 'react-i18next'
 import type {
   AgentAssetInventoryDto,
   AgentOverviewDto,
+  PiEcosystemPackageDetailsResponseDto,
   PiEcosystemResourceTypeDto,
   PiEcosystemSearchResponseDto,
+  PiEcosystemSortDto,
 } from '@agent-lens/protocol'
-import { searchPiEcosystem } from '../client/pi-ecosystem'
+import {
+  loadPiEcosystemPackageDetails,
+  searchPiEcosystem,
+} from '../client/pi-ecosystem'
 import {
   Button,
   Disclosure,
@@ -18,6 +23,7 @@ import {
 type TypeFilter = 'all' | PiEcosystemResourceTypeDto
 
 type LocalPackageState = 'installed' | 'not-installed' | 'unknown'
+type PackageDetailState = 'loading' | 'loaded' | 'failed'
 
 interface LocalPackageInfo {
   assets: AgentAssetInventoryDto[]
@@ -69,8 +75,10 @@ function localPackages(agent: AgentOverviewDto): Map<string, LocalPackageInfo> {
 
 function packageInventoryComplete(agent: AgentOverviewDto): boolean {
   if (agent.assetInventoryStatus !== 'available') return false
+  // Generic asset discovery coverage is not Package identity coverage. Until #248 supplies an
+  // explicit package-identity capability, absence of a local match must remain unknown.
   return agent.capabilities.some(capability =>
-    capability.name === 'asset-discovery' && capability.status === 'available'
+    capability.name === 'package-identity-discovery' && capability.status === 'available'
   )
 }
 
@@ -86,27 +94,38 @@ function localAssetType(asset: AgentAssetInventoryDto): PiEcosystemResourceTypeD
   return 'other'
 }
 
+function formatMonthlyDownloads(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
 export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
-  const { t } = useTranslation('piEcosystem')
+  const { t, i18n } = useTranslation('piEcosystem')
   const [queryDraft, setQueryDraft] = useState('')
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [sort, setSort] = useState<PiEcosystemSortDto>('downloads')
   const [requestNonce, setRequestNonce] = useState(0)
   const [response, setResponse] = useState<PiEcosystemSearchResponseDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [actionError, setActionError] = useState('')
   const [copiedPackage, setCopiedPackage] = useState('')
+  const [details, setDetails] = useState<Record<string, PiEcosystemPackageDetailsResponseDto>>({})
+  const [detailStates, setDetailStates] = useState<Record<string, PackageDetailState>>({})
   const local = useMemo(() => localPackages(agent), [agent])
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setLoadError('')
-    setResponse(null)
     void searchPiEcosystem({
       query,
       ...(typeFilter === 'all' ? {} : { type: typeFilter }),
+      sort,
       limit: 20,
     }, controller.signal).then(result => {
       setResponse(result)
@@ -117,7 +136,49 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
       if (!controller.signal.aborted) setLoading(false)
     })
     return () => controller.abort()
-  }, [query, requestNonce, typeFilter])
+  }, [query, requestNonce, sort, typeFilter])
+
+  useEffect(() => {
+    if (!response?.items.length) return
+    const targets = response.items.filter(pkg =>
+      pkg.resourceTypes.length === 0
+      && details[pkg.packageSource]?.version !== pkg.version
+    )
+    if (!targets.length) return
+
+    const controller = new AbortController()
+    setDetailStates(current => {
+      const next = { ...current }
+      for (const pkg of targets) next[pkg.packageSource] = 'loading'
+      return next
+    })
+
+    let nextIndex = 0
+    const worker = async () => {
+      while (nextIndex < targets.length && !controller.signal.aborted) {
+        const pkg = targets[nextIndex]
+        nextIndex += 1
+        if (!pkg) continue
+        try {
+          const detail = await loadPiEcosystemPackageDetails({
+            packageName: pkg.packageName,
+            version: pkg.version,
+          }, controller.signal)
+          setDetails(current => ({ ...current, [pkg.packageSource]: detail }))
+          setDetailStates(current => ({ ...current, [pkg.packageSource]: 'loaded' }))
+        } catch (cause) {
+          if (cause instanceof DOMException && cause.name === 'AbortError') return
+          setDetailStates(current => ({ ...current, [pkg.packageSource]: 'failed' }))
+        }
+      }
+    }
+
+    void Promise.all(Array.from(
+      { length: Math.min(4, targets.length) },
+      () => worker(),
+    ))
+    return () => controller.abort()
+  }, [response])
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -144,13 +205,22 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
     { value: 'prompt', label: t('type.prompt') },
     { value: 'theme', label: t('type.theme') },
   ]
+  const sortOptions = [
+    { value: 'downloads', label: t('sort.downloads') },
+    { value: 'recent', label: t('sort.recent') },
+  ]
+  const visibleCount = typeFilter === 'all'
+    ? response?.upstreamTotal ?? response?.items.length ?? 0
+    : response?.items.length ?? 0
 
   return <section className="pi-ecosystem-section">
     <div className="section-heading-row">
       <div><h3>{t('title')}</h3></div>
-      {response?.stale
-        ? <StatusBadge tone="warning">{t('stale')}</StatusBadge>
-        : response && <span className="section-total">{response.items.length}</span>}
+      <div className="pi-ecosystem-heading-status">
+        {loading && <StatusBadge tone="accent">{t(response ? 'refreshing' : 'loading')}</StatusBadge>}
+        {!loading && response?.stale && <StatusBadge tone="warning">{t('stale')}</StatusBadge>}
+        {response && <span className="section-total" title={t('catalogCount', { count: visibleCount })}>{visibleCount}</span>}
+      </div>
     </div>
 
     <form className="pi-ecosystem-controls" onSubmit={submit}>
@@ -162,7 +232,7 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         aria-label={t('searchPlaceholder')}
       />
       <SelectMenu
-        ariaLabel={t('type.all')}
+        ariaLabel={t('typeFilter')}
         value={typeFilter}
         options={typeOptions}
         variant="toolbar"
@@ -173,7 +243,21 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
           setTypeFilter(value as TypeFilter)
         }}
       />
-      <Button type="submit" size="small" loading={loading}>{t('search')}</Button>
+      <SelectMenu
+        ariaLabel={t('sort.label')}
+        value={sort}
+        options={sortOptions}
+        variant="toolbar"
+        className="pi-ecosystem-sort-filter"
+        menuWidth={180}
+        onChange={value => {
+          setActionError('')
+          setSort(value as PiEcosystemSortDto)
+        }}
+      />
+      <Button type="submit" size="small" aria-busy={loading || undefined}>
+        {loading ? t('searching') : t('search')}
+      </Button>
     </form>
 
     {loadError && <div className="agent-path-error pi-ecosystem-error" role="alert"><b>{t('loadFailed')}</b> · {loadError}</div>}
@@ -189,9 +273,16 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
           : localState === 'not-installed'
             ? t('notInstalled')
             : t('localUnknown')
-        const typeLabels = pkg.resourceTypes.length
-          ? pkg.resourceTypes.map(type => ({ type, label: t(`type.${type}`) }))
-          : [{ type: 'unknown', label: t('typeUnknown') }]
+        const detail = details[pkg.packageSource]?.version === pkg.version
+          ? details[pkg.packageSource]
+          : undefined
+        const resourceTypes = pkg.resourceTypes.length ? pkg.resourceTypes : detail?.resourceTypes ?? []
+        const typeLabels = resourceTypes.length
+          ? resourceTypes.map(type => ({ type, label: t(`type.${type}`) }))
+          : [{
+              type: 'unknown',
+              label: detailStates[pkg.packageSource] === 'loading' ? t('typeLoading') : t('typeUnknown'),
+            }]
         return <Disclosure
           key={pkg.packageSource}
           className="pi-package-item"
@@ -205,6 +296,12 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
             {pkg.description && <span className="pi-package-summary-description">{pkg.description}</span>}
           </span>}
           summaryMeta={<span className="pi-package-summary-meta">
+            <span className="pi-package-downloads">
+              <small>{t('monthlyDownloads')}</small>
+              <strong>{pkg.monthlyDownloads === undefined
+                ? '—'
+                : formatMonthlyDownloads(pkg.monthlyDownloads, locale)}</strong>
+            </span>
             <span className="pi-package-version"><small>{t('version')}</small><code>{pkg.version}</code></span>
             {localPackage?.versions.length
               ? <span className="pi-package-local-version"><small>{t('localVersion')}</small><code>{localPackage.versions.join(' · ')}</code></span>
@@ -225,9 +322,19 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
                 </div>
               </div>
               <div className="pi-package-detail-row">
+                <span>{t('monthlyDownloads')}</span>
+                <strong>{pkg.monthlyDownloads === undefined
+                  ? t('downloadsUnknown')
+                  : t('downloadsPerMonth', { count: formatMonthlyDownloads(pkg.monthlyDownloads, locale) })}</strong>
+              </div>
+              <div className="pi-package-detail-row">
                 <span>{t('version')}</span>
                 <code>{pkg.version}</code>
               </div>
+              {pkg.publishedAt && <div className="pi-package-detail-row">
+                <span>{t('publishedAt')}</span>
+                <span>{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(pkg.publishedAt))}</span>
+              </div>}
               {localPackage?.versions.length ? <div className="pi-package-detail-row">
                 <span>{t('localVersion')}</span>
                 <code>{localPackage.versions.join(' · ')}</code>
@@ -265,4 +372,5 @@ export const piEcosystemUiInternals = {
   localPackages,
   packageInventoryComplete,
   localPackageState,
+  formatMonthlyDownloads,
 }
