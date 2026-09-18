@@ -1326,6 +1326,34 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     followingTailRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180
   }
 
+  useEffect(() => {
+    if (
+      !review.detailHasNewData
+      || !followingTailRef.current
+      || roundFilter !== 'all'
+      || review.detailLoading
+      || review.detailLoadingMore
+    ) return
+
+    let cancelled = false
+    void model.refreshReviewTailIncremental().then(() => {
+      if (cancelled || !followingTailRef.current) return
+      window.requestAnimationFrame(() => {
+        const pane = readerPaneRef.current
+        if (!pane || !followingTailRef.current) return
+        pane.scrollTop = pane.scrollHeight
+      })
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [
+    model,
+    review.detailHasNewData,
+    review.detail?.interactions.length,
+    review.detailLoading,
+    review.detailLoadingMore,
+    roundFilter,
+  ])
+
   const emptyLabel = roundFilter === 'errors'
     ? t('local.interaction.noErrors')
     : roundFilter === 'latency'
