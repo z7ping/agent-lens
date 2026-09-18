@@ -273,6 +273,8 @@ function compactHistoryBlocks(
     const removed = direction === 'older' ? next.pop() : next.shift()
     for (const id of removed?.itemIds ?? []) removedIds.add(id)
   }
+  const retainedIds = new Set(next.flatMap(block => block.itemIds))
+  for (const id of retainedIds) removedIds.delete(id)
   return { blocks: next, removedIds }
 }
 
