@@ -27,6 +27,10 @@ import { shareInFlight } from './single-flight'
 
 const liveReadInFlight = new Map<string, Promise<unknown>>()
 const LIVE_ROOT = '/api/v1/live'
+const LIVE_PRODUCT_CACHE_MS = 2_000
+const LIVE_RUNTIME_LIST_CACHE_MS = 1_000
+let liveProductCache: { at: number; items: LiveProductDto[] } | null = null
+let liveRuntimeListCache: { at: number; items: LiveRuntimeRefDto[] } | null = null
 
 const LIVE_VISIBLE_FLUSH_MS = 48
 const LIVE_HIDDEN_FLUSH_MS = 250
@@ -211,6 +215,7 @@ function runtimeSuffix(runtimeSessionId: string, action = ''): string {
 }
 
 function notifyLiveStateChanged(liveId: string, runtimeSessionId?: string): void {
+  liveRuntimeListCache = null
   window.dispatchEvent(new CustomEvent('agent-lens:live-state-changed', {
     detail: { liveId, ...(runtimeSessionId ? { runtimeSessionId } : {}) },
   }))
@@ -236,7 +241,12 @@ export type LiveProductMetadata = Pick<
 
 export const liveApi = {
   async products(): Promise<LiveProductDto[]> {
-    return (await requestJson<LiveProductsResponseDto>(`${LIVE_ROOT}/products`)).items
+    if (liveProductCache && Date.now() - liveProductCache.at < LIVE_PRODUCT_CACHE_MS) {
+      return liveProductCache.items
+    }
+    const items = (await requestJson<LiveProductsResponseDto>(`${LIVE_ROOT}/products`)).items
+    liveProductCache = { at: Date.now(), items }
+    return items
   },
 
   metadata(liveId: string): Promise<LiveProductMetadata> {
@@ -244,7 +254,12 @@ export const liveApi = {
   },
 
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
-    return (await requestJson<{ items: LiveRuntimeRefDto[] }>(`${LIVE_ROOT}/runtimes`)).items
+    if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
+      return liveRuntimeListCache.items
+    }
+    const items = (await requestJson<{ items: LiveRuntimeRefDto[] }>(`${LIVE_ROOT}/runtimes`)).items
+    liveRuntimeListCache = { at: Date.now(), items }
+    return items
   },
 
   availability(liveId: string): Promise<LiveAvailabilityDto> {
