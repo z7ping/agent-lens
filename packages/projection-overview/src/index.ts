@@ -4,8 +4,10 @@ import type {
   CapabilityService,
   CapturePolicyService,
   ObservationCursor,
+  PackageIdentityCoverage,
   SessionSummaryCursor,
   SessionSummaryFacetScope,
+  SourceRuntimeStatus,
   SourceService,
   StorageService,
 } from '@agent-lens/core'
@@ -229,6 +231,31 @@ export class FacetProjection {
   }
 }
 
+function packageIdentityCoverageForInstallation(
+  statuses: readonly SourceRuntimeStatus[],
+  sourceId: string,
+  installationId: string,
+): PackageIdentityCoverage | undefined {
+  const assetStatuses = statuses.filter(status =>
+    status.sourceId === sourceId
+    && status.installationId === installationId
+    && status.stage === 'assets'
+  )
+  if (!assetStatuses.length) return undefined
+  if (assetStatuses.some(status => status.packageIdentityCoverage === undefined)) return 'unknown'
+
+  const rank: Record<PackageIdentityCoverage, number> = {
+    complete: 0,
+    partial: 1,
+    unknown: 2,
+    unavailable: 3,
+  }
+  return assetStatuses.reduce<PackageIdentityCoverage>((worst, status) => {
+    const value = status.packageIdentityCoverage ?? 'unknown'
+    return rank[value] > rank[worst] ? value : worst
+  }, 'complete')
+}
+
 export class AgentOverviewProjection {
   private readonly usage: ToolAssetUsageProjection
   private cachedResponse: AgentOverviewResponseDto | null = null
@@ -269,6 +296,9 @@ export class AgentOverviewProjection {
   private async buildResponse(): Promise<AgentOverviewResponseDto> {
     const startedAt = performance.now()
     const definitions = this.sources?.list() ?? []
+    const sourceRuntimeStatuses = this.storage.sourceRuntimeStatus
+      ? await this.storage.sourceRuntimeStatus.list()
+      : []
     const sourceAssets = this.storage.toolUsageObservations?.aggregateAssetsBySource
       ? await this.storage.toolUsageObservations.aggregateAssetsBySource({ detailLimit: 0 })
       : null
@@ -335,6 +365,7 @@ export class AgentOverviewProjection {
             ...(entry.binding.scopeRoot ? { scopeRoot: entry.binding.scopeRoot } : {}),
             ...(entry.binding.path ? { path: entry.binding.path } : {}),
             ...(entry.binding.source ? { source: entry.binding.source } : {}),
+            ...(entry.binding.packageIdentity ? { packageIdentity: entry.binding.packageIdentity } : {}),
             ...(entry.binding.version ? { version: entry.binding.version } : {}),
             states,
           })
@@ -373,6 +404,17 @@ export class AgentOverviewProjection {
           ...(item.executable ? { executable: item.executable } : {}),
           ...(item.configRoot ? { configRoot: item.configRoot } : {}),
           ...(item.dataRoot ? { dataRoot: item.dataRoot } : {}),
+          ...(packageIdentityCoverageForInstallation(
+            sourceRuntimeStatuses,
+            definition.manifest.sourceId,
+            item.id,
+          ) ? {
+              packageIdentityCoverage: packageIdentityCoverageForInstallation(
+                sourceRuntimeStatuses,
+                definition.manifest.sourceId,
+                item.id,
+              )!,
+            } : {}),
           firstSeenAt: item.firstSeenAt,
           lastSeenAt: item.lastSeenAt,
         })),
@@ -441,4 +483,5 @@ export const projectionOverviewInternals = {
   CURRENT_ASSET_PRESENCE_STATES,
   bindingIsCurrent,
   fastFacetScope,
+  packageIdentityCoverageForInstallation,
 }
