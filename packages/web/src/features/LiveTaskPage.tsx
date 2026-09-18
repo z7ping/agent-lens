@@ -78,7 +78,9 @@ function messageHasAttachments(message: LiveMessageDto): boolean {
 async function optimisticImageAttachments(
   message: LiveMessageDto,
 ): Promise<LiveTaskProjectionAttachment[]> {
-  const images = message.parts.filter(part => part.type === 'image')
+  const images = message.parts.filter(
+    (part): part is Extract<LiveMessageDto['parts'][number], { type: 'image' }> => part.type === 'image',
+  )
   return Promise.all(images.map(async part => {
     const attachment: LiveTaskProjectionAttachment = {
       type: 'image',
@@ -381,6 +383,37 @@ const GenericLiveRound = memo(function GenericLiveRound({
     </TaskRound>
   </VirtualRoundMount>
 }, sameStableLiveTaskRoundProps)
+
+const StableLiveRounds = memo(function StableLiveRounds({
+  rounds,
+  agentLabel,
+  eagerTailCount,
+  messageActions,
+  actionPending,
+  runtimeStreaming,
+  onMessageAction,
+}: {
+  rounds: readonly LiveTaskRoundProjection[]
+  agentLabel: string
+  eagerTailCount: number
+  messageActions: readonly LiveMessageActionContributionDto[]
+  actionPending: string | null
+  runtimeStreaming: boolean
+  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
+}) {
+  return <>
+    {rounds.map((round, index) => <GenericLiveRound
+      key={round.model.id}
+      projection={round}
+      agentLabel={agentLabel}
+      eager={index >= rounds.length - eagerTailCount}
+      messageActions={messageActions}
+      actionPending={actionPending}
+      runtimeStreaming={runtimeStreaming}
+      onMessageAction={onMessageAction}
+    />)}
+  </>
+})
 
 export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation('task')
@@ -1215,10 +1248,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [busy, current, thinking])
 
-  const rounds = useMemo(
-    () => roundProjectorRef.current.projectSegments(projection.stable, projection.active),
+  const roundSegments = useMemo(
+    () => roundProjectorRef.current.projectSegmented(projection.stable, projection.active),
     [projection.stable, projection.active],
   )
+  const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
   const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
@@ -1355,11 +1389,20 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               description={t('live.loadingDescription')}
             />
           </div>}
-          {rounds.map((round, index) => <GenericLiveRound
+          <StableLiveRounds
+            rounds={roundSegments.stable}
+            agentLabel={agentLabel}
+            eagerTailCount={stableEagerTailCount}
+            messageActions={messageActions}
+            actionPending={messageActionPending}
+            runtimeStreaming={state?.isStreaming ?? false}
+            onMessageAction={runMessageAction}
+          />
+          {roundSegments.active.map((round, index) => <GenericLiveRound
             key={round.model.id}
             projection={round}
             agentLabel={agentLabel}
-            eager={round.model.state === 'running' || index >= rounds.length - 2}
+            eager={round.model.state === 'running' || index >= roundSegments.active.length - 2}
             messageActions={messageActions}
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
