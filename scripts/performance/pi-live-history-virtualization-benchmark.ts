@@ -28,7 +28,7 @@ if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error('Cannot resol
 if (!Number.isFinite(rootMargin) || rootMargin < 0) throw new Error('Cannot resolve virtual mount root margin')
 if (!/rootSelector="\.pi-live-reader"/.test(page)) throw new Error('Live task virtualization is not mounted against .pi-live-reader')
 if (!/rounds\.map/.test(page) || !/<VirtualRoundMount/.test(page) || !/LiveTaskRoundProjector/.test(page)) throw new Error('Generic Live semantic round virtualization is missing')
-if (!/roundProjectorRef\.current\.project\(items, projectionStableCount\)/.test(page)) throw new Error('Live streaming must reuse stable round projections')
+if (!/roundProjectorRef\.current\.projectSegments\(projection\.stable, projection\.active\)/.test(page)) throw new Error('Live streaming must keep stable history separate from the active turn')
 if (!/class LiveTaskRoundProjector/.test(projection)) throw new Error('Generic Live incremental round projector is missing')
 if (!/liveTaskStableRoundPrefixLength/.test(projection)) throw new Error('Generic Live stable/current round boundary is missing')
 if (!/sharedVirtualObservers\s*=\s*new WeakMap/.test(mount)) throw new Error('VirtualRoundMount must share IntersectionObserver per scroll root')
