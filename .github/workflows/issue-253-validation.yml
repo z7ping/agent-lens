@@ -128,3 +128,5 @@ jobs:
           name: issue-253-windows-performance
           path: performance-artifacts/
           if-no-files-found: warn
+
+# validation-trigger: 2026-09-18 issue-253 final acceptance
