@@ -120,6 +120,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         submit: 'Submit',
       },
       send: 'Send',
+      messageActionPending: 'Working…',
       unsupportedInput: 'This agent does not support {{type}} input.',
       input: {
         largeText: 'large text',
