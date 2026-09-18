@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { LIVE_HISTORY_INDEX_MAX_LIMIT, LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveHistoryIndex, type LiveSnapshotWindow } from '@agent-lens/core'
+import { LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveHistoryIndex, type LiveHistoryIndexQuery, type LiveSnapshotWindow } from '@agent-lens/core'
 import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
@@ -145,8 +145,16 @@ function forkSessionManager(manager: PiSdkSessionManager, targetLeafId?: string)
   return manager
 }
 
+interface PiRoundIndexRow {
+  cursor: string
+  ordinal: number
+  entryIndex: number
+  preview?: string
+}
+
 class InProcessHandle implements PiRuntimeHandle {
   readonly capabilities: PiLiveRuntimeCapabilities
+  private roundIndexCache: { entryCount: number; lastEntryId?: string; rows: PiRoundIndexRow[] } | undefined
 
   constructor(
     private readonly id: string,
@@ -165,6 +173,57 @@ class InProcessHandle implements PiRuntimeHandle {
       treeNavigation: typeof session.navigateTree === 'function',
       messageFork: typeof session.sessionManager.createBranchedSession === 'function'
         && typeof session.sessionManager.newSession === 'function',
+    }
+  }
+
+  private roundIndex(all = this.session.sessionManager.getEntries()): PiRoundIndexRow[] {
+    const lastEntryId = all.length ? String(record(all.at(-1)).id ?? '') || undefined : undefined
+    const cached = this.roundIndexCache
+    if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId) return cached.rows
+
+    const appendOnly = cached
+      && all.length >= cached.entryCount
+      && (cached.entryCount === 0
+        || String(record(all[cached.entryCount - 1]).id ?? '') === cached.lastEntryId)
+    const rows = appendOnly ? [...cached.rows] : []
+    const start = appendOnly ? cached.entryCount : 0
+
+    for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
+      const entry = record(all[entryIndex])
+      const message = record(entry.message)
+      if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
+      const content = message.content ?? entry.content
+      const preview = Array.isArray(content)
+        ? content.map(part => typeof part === 'string'
+          ? part
+          : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
+        : typeof content === 'string' ? content : ''
+      rows.push({
+        cursor: entry.id,
+        ordinal: rows.length + 1,
+        entryIndex,
+        ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+      })
+    }
+
+    this.roundIndexCache = { entryCount: all.length, ...(lastEntryId ? { lastEntryId } : {}), rows }
+    return rows
+  }
+
+  private roundPage(all: unknown[], start: number, end: number) {
+    const rows = this.roundIndex(all)
+    let first: PiRoundIndexRow | undefined
+    let last: PiRoundIndexRow | undefined
+    for (const row of rows) {
+      if (row.entryIndex < start) continue
+      if (row.entryIndex >= end) break
+      first ??= row
+      last = row
+    }
+    return {
+      total: rows.length,
+      ...(first ? { firstOrdinal: first.ordinal } : {}),
+      ...(last ? { lastOrdinal: last.ordinal } : {}),
     }
   }
 
@@ -227,40 +286,31 @@ class InProcessHandle implements PiRuntimeHandle {
         ...(start > 0 && typeof before === 'string' ? { before } : {}),
         ...(typeof first === 'string' ? { first } : {}),
         ...(typeof last === 'string' ? { last } : {}),
+        rounds: this.roundPage(all, start, end),
         ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
       },
     }
   }
-  async historyIndex(limit = LIVE_HISTORY_INDEX_MAX_LIMIT): Promise<LiveHistoryIndex> {
-    const boundedLimit = Math.max(2, Math.min(
-      LIVE_HISTORY_INDEX_MAX_LIMIT,
-      Number.isInteger(limit) ? limit : LIVE_HISTORY_INDEX_MAX_LIMIT,
-    ))
-    const rounds: Array<{ cursor: string; ordinal: number; preview?: string }> = []
-    for (const raw of this.session.sessionManager.getEntries()) {
-      const entry = record(raw)
-      const message = record(entry.message)
-      if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
-      const content = message.content ?? entry.content
-      const preview = Array.isArray(content)
-        ? content.map(part => typeof part === 'string'
-          ? part
-          : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
-        : typeof content === 'string' ? content : ''
-      rounds.push({
-        cursor: entry.id,
-        ordinal: rounds.length + 1,
-        ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
-      })
+  async historyIndex(query: LiveHistoryIndexQuery = {}): Promise<LiveHistoryIndex> {
+    const rows = this.roundIndex()
+    const cursor = query.cursor?.trim()
+    if (cursor) {
+      const row = rows.find(item => item.cursor === cursor)
+      return { total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
     }
-    if (rounds.length <= boundedLimit) return { total: rounds.length, items: rounds }
-    const indexes = new Set<number>()
-    for (let slot = 0; slot < boundedLimit; slot += 1) {
-      indexes.add(Math.round(slot * (rounds.length - 1) / (boundedLimit - 1)))
-    }
+
+    const limit = Number.isInteger(query.limit)
+      ? Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, query.limit!))
+      : 0
+    if (limit === 0) return { total: rows.length, items: [] }
+
+    const fromOrdinal = Number.isInteger(query.fromOrdinal) && query.fromOrdinal! > 0
+      ? query.fromOrdinal!
+      : 1
+    const start = Math.min(rows.length, fromOrdinal - 1)
     return {
-      total: rounds.length,
-      items: [...indexes].sort((a, b) => a - b).map(index => rounds[index]!),
+      total: rows.length,
+      items: rows.slice(start, start + limit).map(({ entryIndex: _entryIndex, ...item }) => item),
     }
   }
 
