@@ -103,8 +103,7 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState) {
   if (currentStage) {
     fields.push({
       label: contributionText('Current stage', '当前阶段'),
-      value: currentStage.en,
-      values: undefined,
+      value: contributionText(currentStage.en, currentStage.zh),
     })
   }
 
@@ -122,8 +121,11 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState) {
       label: contributionText('Initialization stages', '初始化阶段'),
       kind: 'list' as const,
       values: state.initializationTimings.map(item => {
-        const label = stageLabel(item.stage)?.en ?? item.stage
-        return `${label} · ${contributionDuration(item.durationMs)}`
+        const label = stageLabel(item.stage)
+        const duration = contributionDuration(item.durationMs)
+        return label
+          ? contributionText(`${label.en} · ${duration}`, `${label.zh} · ${duration}`)
+          : `${item.stage} · ${duration}`
       }),
     })
   }
@@ -138,7 +140,9 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState) {
   if (state.runtimeMode) {
     fields.push({
       label: contributionText('Runtime mode', '运行时模式'),
-      value: state.runtimeMode === 'session_runtime' ? 'Session Runtime' : 'Compatibility',
+      value: state.runtimeMode === 'session_runtime'
+        ? contributionText('Session Runtime', 'Session Runtime')
+        : contributionText('Compatibility', '兼容模式'),
     })
   }
   if (state.processId !== undefined) {
@@ -175,7 +179,7 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState) {
   if (state.packageUpdateCheck === 'failed') {
     fields.push({
       label: contributionText('Package update check', '包更新检查'),
-      value: 'Failed',
+      value: contributionText('Failed', '失败'),
     })
   }
   if (resources?.diagnostics.length) {
