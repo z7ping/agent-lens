@@ -12,6 +12,7 @@ import type {
   LiveSendOptions,
   LiveService,
   LiveSnapshot,
+  LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { startHttpSurface } from './server'
@@ -45,6 +46,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly messageActionExecutions: Array<{ runtimeSessionId: string; actionId: string; targetEntryId: string }> = []
   readonly runtimeActionExecutions: Array<{ runtimeSessionId: string; actionId: string }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
+  readonly snapshotWindows: Array<{ since?: string | undefined; window?: LiveSnapshotWindow | undefined }> = []
   readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0, disclosures: 0 }
   private modelValue = 'model-a'
@@ -111,10 +113,15 @@ class FakeLiveAdapter implements LiveAdapter {
     return state
   }
 
-  async snapshot(runtimeSessionId: string): Promise<LiveSnapshot> {
+  async snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot> {
     this.readCounts.snapshot += 1
+    this.snapshotWindows.push({ ...(since ? { since } : {}), ...(window ? { window } : {}) })
     await this.delayRead()
-    return { state: await this.state(runtimeSessionId), entries: [{ kind: 'snapshot' }] }
+    return {
+      state: await this.state(runtimeSessionId),
+      entries: [{ kind: 'snapshot' }],
+      page: { hasEarlier: true, before: 'entry-0', hasLater: true, after: 'entry-9' },
+    }
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl> {
@@ -407,7 +414,14 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         pendingMessageCount: 0,
       },
       entries: [{ kind: 'snapshot' }],
+      page: { hasEarlier: true, before: 'entry-0', hasLater: true, after: 'entry-9' },
     })
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { limit: 120 })
+
+    const olderSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?before=entry-0&limit=25`)
+    assert.equal(olderSnapshot.status, 200)
+    await olderSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { before: 'entry-0', limit: 25 })
 
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',

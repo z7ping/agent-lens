@@ -202,3 +202,17 @@ test('LiveTask session sidebar stays agent-neutral', () => {
   assert.match(liveTask, /product\.productId/)
   assert.doesNotMatch(liveTask, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
 })
+
+
+test('Live 首屏与旧历史只能通过有界 Snapshot 窗口读取', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveClient = readFileSync(new URL('../client/live.ts', import.meta.url), 'utf8')
+
+  assert.match(liveTask, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
+  assert.match(liveTask, /\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/)
+  assert.match(liveTask, /before: historyPage\.before, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
+  assert.match(liveTask, /historyLoadSentinelRef/)
+  assert.match(liveTask, /historyPagingArmed/)
+  assert.match(liveClient, /if \(window\?\.before\) params\.set\('before', window\.before\)/)
+  assert.match(liveClient, /if \(window\?\.limit !== undefined\) params\.set\('limit', String\(window\.limit\)\)/)
+})
