@@ -119,7 +119,11 @@ test('Pi message actions are declared only for verified idle runtimes', async ()
     )
 
     host.isStreaming = true
-    assert.deepEqual(await service.messageActions(original.runtimeSessionId), [])
+    assert.deepEqual(
+      (await service.messageActions(original.runtimeSessionId)).map(action => action.actionId),
+      ['pi.edit-from-here', 'pi.new-session-from-here'],
+      'descriptors stay stable; requiresIdle is enforced by UI and server execution',
+    )
   } finally {
     await service.dispose()
   }
