@@ -178,6 +178,7 @@ export class AgentLensClientModel {
   private readonly listeners = new Set<Listener>()
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
+  private reviewRefreshDueAt: number | null = null
   private detailTimer: ReturnType<typeof setTimeout> | null = null
   private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
   private integrationDiscoveryTimer: ReturnType<typeof setTimeout> | null = null
@@ -268,6 +269,7 @@ export class AgentLensClientModel {
     this.unsubscribeLive?.()
     this.unsubscribeLive = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    this.reviewRefreshDueAt = null
     if (this.detailTimer) clearTimeout(this.detailTimer)
     if (this.reviewSearchTimer) clearTimeout(this.reviewSearchTimer)
     if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
@@ -642,6 +644,7 @@ export class AgentLensClientModel {
     if (!active) {
       if (this.refreshTimer) clearTimeout(this.refreshTimer)
       this.refreshTimer = null
+      this.reviewRefreshDueAt = null
       return
     }
     if (this.reviewLiveDirty) this.scheduleReviewRefresh(0)
@@ -651,10 +654,15 @@ export class AgentLensClientModel {
     this.reviewLiveDirty = true
     if (!this.reviewActive) return
     if (typeof document !== 'undefined' && document.hidden) return
-    if (this.refreshTimer) clearTimeout(this.refreshTimer)
     const wait = delay ?? 800
+    const dueAt = Date.now() + wait
+    // Never let a slower fallback postpone an already scheduled summary-ready refresh.
+    if (this.refreshTimer && this.reviewRefreshDueAt !== null && this.reviewRefreshDueAt <= dueAt) return
+    if (this.refreshTimer) clearTimeout(this.refreshTimer)
+    this.reviewRefreshDueAt = dueAt
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null
+      this.reviewRefreshDueAt = null
       if (!this.reviewActive || !this.reviewLiveDirty) return
       this.reviewLiveDirty = false
       void this.refreshReview({ preserveDetail: true })
@@ -885,6 +893,7 @@ export class AgentLensClientModel {
   async refreshReview(options: { preserveDetail?: boolean } = {}): Promise<void> {
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
     this.refreshTimer = null
+    this.reviewRefreshDueAt = null
     this.reviewLiveDirty = false
     this.reviewGeneration += 1
     if (this.reviewInFlight) {
