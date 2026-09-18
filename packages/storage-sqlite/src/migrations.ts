@@ -44,6 +44,7 @@ const migrations: readonly Migration[] = [
     requiresForeignKeysOff: true,
     requiresLegacyAlterTable: true,
   },
+  { version: 29, name: 'package-identity-provenance', fileName: '029-package-identity-provenance.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
