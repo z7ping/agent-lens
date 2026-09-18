@@ -92,31 +92,39 @@ function runtimeStateFromEvent(
   if (!current || !envelope.normalizedEvent) return current
   const event = envelope.normalizedEvent
   if (event.type === 'title.update') {
-    return { ...current, title: event.title }
+    return current.title === event.title ? current : { ...current, title: event.title }
   }
   if (event.type === 'status') {
     if (event.status === 'initializing' || event.status === 'ready' || event.status === 'failed'
       || event.status === 'terminating' || event.status === 'terminated') {
+      const terminal = event.status === 'failed' || event.status === 'terminating' || event.status === 'terminated'
+      const nextStreaming = terminal ? false : current.isStreaming
+      if (current.status === event.status && current.isStreaming === nextStreaming) return current
       return {
         ...current,
         status: event.status,
-        ...((event.status === 'failed' || event.status === 'terminating' || event.status === 'terminated')
-          ? { isStreaming: false }
-          : {}),
+        ...(terminal ? { isStreaming: false } : {}),
       }
     }
-    if (event.status === 'running') return { ...current, isStreaming: true }
-    if (event.status === 'idle') return { ...current, isStreaming: false }
+    if (event.status === 'running') return current.isStreaming ? current : { ...current, isStreaming: true }
+    if (event.status === 'idle') return current.isStreaming ? { ...current, isStreaming: false } : current
   }
   if (event.type === 'text.start' || event.type === 'text.delta'
     || event.type === 'reasoning.start' || event.type === 'reasoning.delta'
     || event.type === 'tool.start') {
-    return { ...current, isStreaming: true }
+    return current.isStreaming ? current : { ...current, isStreaming: true }
   }
   if (event.type === 'queue.update') {
-    return { ...current, pendingMessageCount: event.steering.length + event.followUp.length }
+    const pendingMessageCount = event.steering.length + event.followUp.length
+    return current.pendingMessageCount === pendingMessageCount
+      ? current
+      : { ...current, pendingMessageCount }
   }
-  if (event.type === 'completed') return { ...current, isStreaming: false, pendingMessageCount: 0 }
+  if (event.type === 'completed') {
+    return !current.isStreaming && current.pendingMessageCount === 0
+      ? current
+      : { ...current, isStreaming: false, pendingMessageCount: 0 }
+  }
   return current
 }
 
