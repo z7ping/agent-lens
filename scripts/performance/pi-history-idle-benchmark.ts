@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import type { SourceHistoryExecutionContext } from '../../packages/core/src/index'
-import { ingestPiHistory, type PiHistoryScanDiagnostics } from '../../packages/source-pi/src/index'
+import { ingestPiHistory, type PiHistoryScanDiagnostics } from '../../packages/source-pi/src/session'
 import { percentile, readPositiveInt } from './benchmark-utils'
 
 const files = readPositiveInt('files', 500)
