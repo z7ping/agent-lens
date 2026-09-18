@@ -169,16 +169,30 @@ export class AgentLensApi {
   health(): Promise<HealthResponseDto> { return requestJson('/api/v1/health') }
   facets(): Promise<FacetResponseDto> { return requestJson('/api/v1/facets') }
   agentSummaries(): Promise<AgentSummaryResponseDto> {
-    return requestJson('/api/v1/agents/summary')
+    return shareInFlight(
+      aggregateReadInFlight,
+      'agent-summaries',
+      () => requestJson('/api/v1/agents/summary'),
+    )
   }
   agentDetail(sourceId: string): Promise<AgentDetailResponseDto | null> {
-    return requestJson<AgentDetailResponseDto>(`/api/v1/agents/${encodeURIComponent(sourceId)}`)
-      .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
+    const requestPath = `/api/v1/agents/${encodeURIComponent(sourceId)}`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `agent-detail:${sourceId}`,
+      () => requestJson<AgentDetailResponseDto>(requestPath)
+        .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error)),
+    )
   }
 
   agentEnrichment(sourceId: string): Promise<AgentEnrichmentResponseDto | null> {
-    return requestJson<AgentEnrichmentResponseDto>(`/api/v1/agents/${encodeURIComponent(sourceId)}/enrichment`)
-      .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
+    const requestPath = `/api/v1/agents/${encodeURIComponent(sourceId)}/enrichment`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `agent-enrichment:${sourceId}`,
+      () => requestJson<AgentEnrichmentResponseDto>(requestPath)
+        .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error)),
+    )
   }
 
   agents(): Promise<AgentOverviewResponseDto> {
