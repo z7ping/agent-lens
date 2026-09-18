@@ -397,6 +397,13 @@ export class PiLiveAdapter implements LiveAdapter {
       group: command.source,
     }))
   }
+  messageActions(runtimeSessionId: string) {
+    return this.service.messageActions(runtimeSessionId)
+  }
+
+  executeMessageAction(runtimeSessionId: string, actionId: string, targetEntryId: string) {
+    return this.service.executeMessageAction(runtimeSessionId, actionId, targetEntryId)
+  }
 
   workspaceFileReferences(runtimeSessionId: string, query: string, limit?: number) {
     return this.service.workspaceFileReferences(runtimeSessionId, query, limit)
