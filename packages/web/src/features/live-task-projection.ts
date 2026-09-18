@@ -475,10 +475,11 @@ function buildRoundModel(
  */
 export function projectLiveTaskRounds(
   items: readonly LiveTaskProjectionItem[],
+  ordinalOffset = 0,
 ): LiveTaskRoundProjection[] {
   const raw: Array<{ id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] }> = []
   let current: { id: string; ordinal?: number; background: boolean; items: LiveTaskProjectionItem[] } | undefined
-  let ordinal = 0
+  let ordinal = ordinalOffset
 
   for (const item of items) {
     const startsRound = item.kind === 'message' && item.role === 'user'
@@ -527,6 +528,55 @@ export function projectLiveTaskRounds(
       }
     })
   })
+}
+
+export function liveTaskStableRoundPrefixLength(
+  items: readonly LiveTaskProjectionItem[],
+  isStreaming: boolean,
+): number {
+  if (!isStreaming) return items.length
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (item?.kind === 'message' && item.role === 'user') return index
+  }
+  return 0
+}
+
+export class LiveTaskRoundProjector {
+  private stableCount = -1
+  private stableTail: LiveTaskProjectionItem | undefined
+  private stableRounds: LiveTaskRoundProjection[] = []
+  private stableOrdinal = 0
+
+  project(
+    items: readonly LiveTaskProjectionItem[],
+    requestedStableCount: number,
+  ): LiveTaskRoundProjection[] {
+    const stableCount = Math.max(0, Math.min(items.length, requestedStableCount))
+    const stableTail = stableCount > 0 ? items[stableCount - 1] : undefined
+    if (this.stableCount !== stableCount || this.stableTail !== stableTail) {
+      this.stableCount = stableCount
+      this.stableTail = stableTail
+      this.stableRounds = projectLiveTaskRounds(items.slice(0, stableCount))
+      this.stableOrdinal = this.stableRounds.reduce(
+        (max, round) => Math.max(max, round.model.ordinal ?? 0),
+        0,
+      )
+    }
+
+    if (stableCount >= items.length) return this.stableRounds
+    return [
+      ...this.stableRounds,
+      ...projectLiveTaskRounds(items.slice(stableCount), this.stableOrdinal),
+    ]
+  }
+
+  reset(): void {
+    this.stableCount = -1
+    this.stableTail = undefined
+    this.stableRounds = []
+    this.stableOrdinal = 0
+  }
 }
 
 export function liveTaskRoundEstimate(round: LiveTaskRoundProjection): number {
