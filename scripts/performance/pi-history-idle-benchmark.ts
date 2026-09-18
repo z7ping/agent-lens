@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import type { SourceHistoryExecutionContext } from '../../packages/core/src/index'
-import { ingestPiHistory } from '../../packages/source-pi/src/index'
+import { ingestPiHistory, type PiHistoryScanDiagnostics } from '../../packages/source-pi/src/session'
 import { percentile, readPositiveInt } from './benchmark-utils'
 
 const files = readPositiveInt('files', 500)
@@ -57,30 +57,81 @@ const ctx: SourceHistoryExecutionContext = {
   },
 }
 
-async function drain(): Promise<number> {
-  let count = 0
-  for await (const _record of ingestPiHistory(ctx)) count += 1
-  return count
+const scanDiagnostics: PiHistoryScanDiagnostics[] = []
+const originalDebug = console.debug
+console.debug = (...args: unknown[]) => {
+  if (
+    args[0] === '[AgentLens] Pi history scan'
+    && args[1]
+    && typeof args[1] === 'object'
+    && !Array.isArray(args[1])
+  ) {
+    const value = args[1] as PiHistoryScanDiagnostics
+    scanDiagnostics.push({
+      enumeratedFiles: value.enumeratedFiles,
+      statFiles: value.statFiles,
+      unchangedFiles: value.unchangedFiles,
+      changedFiles: value.changedFiles,
+      parsedFiles: value.parsedFiles,
+      bytesRead: value.bytesRead,
+    })
+  }
+  originalDebug(...args)
+}
+
+async function drain(): Promise<{ records: number; diagnostics: PiHistoryScanDiagnostics }> {
+  const before = scanDiagnostics.length
+  let records = 0
+  for await (const _record of ingestPiHistory(ctx)) records += 1
+  const diagnostics = scanDiagnostics.at(-1)
+  if (!diagnostics || scanDiagnostics.length === before) throw new Error('Pi scan diagnostics were not emitted')
+  return { records, diagnostics }
 }
 
 try {
   const initialStart = performance.now()
-  const initialRecords = await drain()
+  const initial = await drain()
   const initialMs = performance.now() - initialStart
   const expectedRecords = files * (recordsPerFile + 1)
-  if (initialRecords !== expectedRecords) throw new Error(`initial record mismatch: ${initialRecords} !== ${expectedRecords}`)
+  if (initial.records !== expectedRecords) throw new Error(`initial record mismatch: ${initial.records} !== ${expectedRecords}`)
 
   const idleSamples: number[] = []
+  let lastIdleDiagnostics: PiHistoryScanDiagnostics | null = null
   for (let index = 0; index < samples; index += 1) {
     const started = performance.now()
-    const idleRecords = await drain()
+    const idle = await drain()
     idleSamples.push(performance.now() - started)
-    if (idleRecords !== 0) throw new Error(`idle scan emitted ${idleRecords} records`)
+    lastIdleDiagnostics = idle.diagnostics
+    if (idle.records !== 0) throw new Error(`idle scan emitted ${idle.records} records`)
+    if (idle.diagnostics.parsedFiles !== 0 || idle.diagnostics.changedFiles !== 0 || idle.diagnostics.bytesRead !== 0) {
+      throw new Error(`idle scan re-read unchanged content: ${JSON.stringify(idle.diagnostics)}`)
+    }
+    if (idle.diagnostics.unchangedFiles !== files) {
+      throw new Error(`idle scan did not reuse every unchanged file: ${JSON.stringify(idle.diagnostics)}`)
+    }
+  }
+
+  const changedPath = join(sessionsDir, 'session-000000.jsonl')
+  appendFileSync(changedPath, `${JSON.stringify({
+    type: 'message',
+    id: 'message-appended-after-idle',
+    timestamp: new Date(Date.UTC(2026, 7, 2)).toISOString(),
+    message: { role: 'assistant', content: 'incremental' },
+  })}\n`)
+  const incremental = await drain()
+  if (incremental.records !== 1) throw new Error(`incremental append emitted ${incremental.records} records instead of 1`)
+  if (incremental.diagnostics.changedFiles !== 1 || incremental.diagnostics.parsedFiles !== 1) {
+    throw new Error(`incremental scan touched more than one changed file: ${JSON.stringify(incremental.diagnostics)}`)
+  }
+  if (incremental.diagnostics.unchangedFiles !== files - 1 || incremental.diagnostics.bytesRead <= 0) {
+    throw new Error(`incremental scan did not reuse unchanged files: ${JSON.stringify(incremental.diagnostics)}`)
   }
 
   console.log(JSON.stringify({
     fixture: { files, recordsPerFile, payloadBytes, expectedRecords },
     initialMs: Number(initialMs.toFixed(2)),
+    idleDiagnostics: lastIdleDiagnostics,
+    incrementalDiagnostics: incremental.diagnostics,
     idle: {
       minMs: Number(Math.min(...idleSamples).toFixed(2)),
       p50Ms: Number(percentile(idleSamples, 0.5).toFixed(2)),
@@ -89,5 +140,6 @@ try {
     },
   }, null, 2))
 } finally {
+  console.debug = originalDebug
   rmSync(root, { recursive: true, force: true })
 }

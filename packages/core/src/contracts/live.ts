@@ -142,10 +142,21 @@ export interface LiveRuntimeState {
   pendingMessageCount: number
 }
 
+export interface LiveSnapshotWindow {
+  before?: string | undefined
+  limit?: number | undefined
+}
+
+export interface LiveSnapshotPage {
+  hasEarlier: boolean
+  before?: string | undefined
+}
+
 export interface LiveSnapshot {
   state: LiveRuntimeState
   entries: unknown[]
   leafId?: string | null
+  page?: LiveSnapshotPage | undefined
 }
 
 export type LiveEventStatus =
@@ -451,7 +462,7 @@ export interface LiveAdapter {
   /** Present only when the adapter declares fork. Logical session ids stay AgentLens-owned. */
   fork?(logicalSessionId: string): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
-  snapshot(runtimeSessionId: string, since?: string): Promise<LiveSnapshot>
+  snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot>
   /** Present only when the adapter declares model-switching. */
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */

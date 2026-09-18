@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
@@ -92,6 +92,65 @@ test('Pi history does not consume an unterminated partial JSONL entry', async ()
       assert.equal(users.length, 1)
       assert.equal(users[0]?.nativeEventId, 'pi-user-partial')
       assert.equal((users[0]?.payload as { text?: string }).text, 'hello')
+    })
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Pi history resets checkpoint after truncation or physical file replacement', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-pi-reset-'))
+  const agentDir = join(root, 'agent')
+  const transcript = join(agentDir, 'sessions', 'reset', 'session.jsonl')
+  await mkdir(dirname(transcript), { recursive: true })
+
+  const user = (id: string, text: string, timestamp: string) => JSON.stringify({
+    type: 'message',
+    id,
+    timestamp,
+    message: { role: 'user', content: [{ type: 'text', text }] },
+  })
+
+  await writeFile(transcript, [
+    sessionLine('pi-reset-session'),
+    user('pi-user-before-reset', 'before reset '.repeat(40), '2026-09-10T00:00:01.000Z'),
+    '',
+  ].join('\n'), 'utf8')
+
+  try {
+    await withHistoryRunner(agentDir, async ({ storage, history, host, detected }) => {
+      const sync = () => history.sync({
+        source: piSourceDefinition,
+        host,
+        detected,
+        abortSignal: new AbortController().signal,
+      })
+
+      assert.equal((await sync()).records, 2)
+
+      // Truncate the same physical path below the previous checkpoint offset.
+      await writeFile(transcript, [
+        sessionLine('pi-reset-session'),
+        user('pi-user-after-truncate', 'after truncate', '2026-09-10T00:00:02.000Z'),
+        '',
+      ].join('\n'), 'utf8')
+      assert.equal((await sync()).records, 2)
+
+      // Replace the physical file while keeping the same path. A changed file identity
+      // must reset offset/sequence instead of treating the replacement as an append.
+      const previous = `${transcript}.previous`
+      await rename(transcript, previous)
+      await writeFile(transcript, [
+        sessionLine('pi-reset-session'),
+        user('pi-user-after-replace', 'after replace', '2026-09-10T00:00:03.000Z'),
+        '',
+      ].join('\n'), 'utf8')
+      assert.equal((await sync()).records, 2)
+
+      const users = await storage.repositories.observations.query({ kind: 'message.user', limit: 20 })
+      assert.ok(users.some(item => item.nativeEventId === 'pi-user-before-reset'))
+      assert.ok(users.some(item => item.nativeEventId === 'pi-user-after-truncate'))
+      assert.ok(users.some(item => item.nativeEventId === 'pi-user-after-replace'))
     })
   } finally {
     await rm(root, { recursive: true, force: true })

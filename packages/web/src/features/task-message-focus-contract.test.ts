@@ -11,8 +11,8 @@ test('Assistant 隐藏操作在 hover 与 keyboard focus 下都可见且保持 o
 })
 
 test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 Agent', () => {
-  assert.match(taskMessageSource, /attachments\?: readonly ReviewMessageAttachmentDto\[\]/)
-  assert.match(taskMessageSource, /attachment\.type === 'image' && attachment\.dataUrl/)
+  assert.match(taskMessageSource, /attachments\?: readonly TaskMessageAttachment\[\]/)
+  assert.match(taskMessageSource, /attachment\.previewUrl \|\| attachment\.dataUrl/)
   assert.doesNotMatch(taskMessageSource, /sourceId\s*===\s*['"]pi['"]/)
   assert.match(taskDetailCss, /\.task-message-attachment-image \{[\s\S]*?object-fit: contain;/)
 })

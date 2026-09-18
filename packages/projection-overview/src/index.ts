@@ -35,6 +35,14 @@ const SLOW_OVERVIEW_PHASE_MS = 500
 const CURRENT_ASSET_PRESENCE_STATES = new Set(['installed', 'configured', 'enabled', 'discoverable', 'exposed'])
 
 type FastFacetScope = SessionSummaryFacetScope
+type AgentUsageAsset = {
+  type: AgentOverviewDto['usedAssets'][number]['type']
+  canonicalName: string
+  callCount: number
+  firstUsedAt: string
+  lastUsedAt: string
+  confidence?: 'high' | 'medium' | 'low' | undefined
+}
 export type SourceDetectionResolver = (sourceId: string) => boolean | undefined
 export type IntegrationStatusResolver = (
   productId: string,
@@ -410,7 +418,7 @@ export class AgentOverviewProjection {
 
   private async buildItem(
     definition: ReturnType<SourceService['list']>[number],
-    prefetchedAssets?: Awaited<ReturnType<ToolAssetUsageProjection['queryAssets']>>,
+    prefetchedAssets?: readonly AgentUsageAsset[],
     mode: 'core' | 'coverage' | 'full' = 'full',
   ): Promise<AgentOverviewDto> {
     const includeIntegration = mode === 'full'

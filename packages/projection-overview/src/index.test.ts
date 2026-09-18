@@ -89,7 +89,7 @@ test('Agent Core Detail 不读取 Integration / Usage / Capability enrichment', 
       undefined,
       async () => {
         integrationReads += 1
-        return { availability: 'available', capabilities: [] }
+        return { integrationId: 'test', productId: 'product-codex', enabled: true, availability: 'available', capabilities: [] }
       },
     )
     const detail = await projection.get('codex')
@@ -116,7 +116,7 @@ test('Agent Coverage 不读取 Integration / Capability，只返回覆盖分析�
       undefined,
       async () => {
         integrationReads += 1
-        return { availability: 'available', capabilities: [] }
+        return { integrationId: 'test', productId: 'product-codex', enabled: true, availability: 'available', capabilities: [] }
       },
     )
     const coverage = await projection.queryCoverage()
