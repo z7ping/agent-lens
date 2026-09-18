@@ -113,7 +113,7 @@ test('Pi history resets checkpoint after truncation or physical file replacement
 
   await writeFile(transcript, [
     sessionLine('pi-reset-session'),
-    user('pi-user-before-reset', 'before reset', '2026-09-10T00:00:01.000Z'),
+    user('pi-user-before-reset', 'before reset '.repeat(40), '2026-09-10T00:00:01.000Z'),
     '',
   ].join('\n'), 'utf8')
 
