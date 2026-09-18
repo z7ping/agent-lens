@@ -138,6 +138,7 @@ requireText(liveTask, /snapshotBaseActiveCountRef/, 'Live 完成态必须保留 
 requireText(liveTask, /active:\s*reduceLiveTaskEvent\(previous\.active, envelope\)/, 'Live 高频 SSE 只能更新当前活动轮，不能复制稳定历史')
 requireText(liveTask, /active:\s*appendOptimisticLiveUserMessage\(previous\.active, optimisticText, optimisticId\)/, '新一轮发送必须追加到活动尾部，避免未完成对账时错误推进稳定边界')
 requireText(liveTask, /mode === ['"]settle['"] && snapshot\.state\.isStreaming/, '上一轮完成对账返回时若下一轮已开始，必须丢弃旧投影结果并保留原 leaf')
+requireText(liveTask, /if \(product\.capabilities\.includes\(['"]recovery['"]\)\)[\s\S]{0,180}recover\(['"]settle['"]\)[\s\S]{0,260}else[\s\S]{0,220}stable:[\s\S]{0,120}previous\.active/, '没有 recovery capability 的 Live 产品完成后必须直接稳定活动轮')
 requireText(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须优先使用稳定 leaf 增量快照')
 forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
