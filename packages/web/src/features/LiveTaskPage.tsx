@@ -86,6 +86,9 @@ function runtimeStateFromEvent(
 ): LiveRuntimeStateDto | null {
   if (!current || !envelope.normalizedEvent) return current
   const event = envelope.normalizedEvent
+  if (event.type === 'title.update') {
+    return { ...current, title: event.title }
+  }
   if (event.type === 'status') {
     if (event.status === 'initializing' || event.status === 'ready' || event.status === 'failed'
       || event.status === 'terminating' || event.status === 'terminated') {
