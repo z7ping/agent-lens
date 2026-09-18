@@ -81,6 +81,7 @@ export interface ClientSnapshot {
 }
 
 type Listener = () => void
+type LiveEventListener = (event: LiveUpdateEventDto) => void
 const initialQuery: QueryFilters = { sourceIds: null, projectId: '', range: '7d' }
 const INITIAL_REVIEW_LIMIT = 20
 const REVIEW_PAGE_SIZE = 20
@@ -270,6 +271,7 @@ export class AgentLensClientModel {
     },
   }
   private readonly listeners = new Set<Listener>()
+  private readonly liveEventListeners = new Set<LiveEventListener>()
   private notifyQueued = false
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private reviewRefreshDueAt: number | null = null
@@ -292,6 +294,7 @@ export class AgentLensClientModel {
   private integrationPreferencesInFlight: Promise<void> | null = null
   private integrationManagementInFlight: Promise<void> | null = null
   private integrationDiscoveryPolls = 0
+  private integrationDiscoveryActive = false
   private visibilityListener: (() => void) | null = null
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
@@ -331,6 +334,11 @@ export class AgentLensClientModel {
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  subscribeLiveEvents = (listener: LiveEventListener): (() => void) => {
+    this.liveEventListeners.add(listener)
+    return () => this.liveEventListeners.delete(listener)
   }
 
   private publish(next: ClientSnapshot): void {
@@ -382,6 +390,8 @@ export class AgentLensClientModel {
     this.reviewSummaryPatchTimer = null
     this.integrationDiscoveryTimer = null
     this.integrationDiscoveryPolls = 0
+    this.integrationDiscoveryActive = false
+    this.liveEventListeners.clear()
     this.visibilityListener = null
     this.reviewActive = false
   }
@@ -558,8 +568,19 @@ export class AgentLensClientModel {
     return pending
   }
 
+  setIntegrationDiscoveryActive(active: boolean): void {
+    this.integrationDiscoveryActive = active
+    if (!active) {
+      if (this.integrationDiscoveryTimer) clearTimeout(this.integrationDiscoveryTimer)
+      this.integrationDiscoveryTimer = null
+      return
+    }
+    const status = this.snapshot.integrationDiscovery?.status
+    if (status === 'idle' || status === 'scanning') this.scheduleIntegrationDiscoveryRefresh()
+  }
+
   private scheduleIntegrationDiscoveryRefresh(): void {
-    if (this.integrationDiscoveryTimer || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS) return
+    if (!this.integrationDiscoveryActive || this.integrationDiscoveryTimer || this.integrationDiscoveryPolls >= INTEGRATION_DISCOVERY_MAX_POLLS) return
     this.integrationDiscoveryTimer = setTimeout(() => {
       this.integrationDiscoveryTimer = null
       this.integrationDiscoveryPolls += 1
@@ -1425,6 +1446,7 @@ export class AgentLensClientModel {
   }
 
   private onLiveEvent(event: LiveUpdateEventDto): void {
+    for (const listener of this.liveEventListeners) listener(event)
     const affected: readonly LiveUpdateArea[] = event.affected
     if (affected.includes('review')) {
       if (event.type === 'session.updated') {
