@@ -52,3 +52,24 @@ test('insights 会先把项目范围下推 Session Summary，而不是从全局�
   assert.equal(result.agents[0]?.sessionCount, 2)
   assert.equal(result.meta.sampled, false)
 })
+
+
+test('insights 大库只读取首个 500 Session Summary 样本，不继续遍历全库', async () => {
+  const page = Array.from({ length: 500 }, (_, index) => session(index + 1, 'large-project', 1))
+  let queries = 0
+  const storage = {
+    sessionSummaries: {
+      query: async (_input: SessionSummaryQuery) => {
+        queries += 1
+        return { items: page, hasMore: true }
+      },
+    },
+    repositories: { observations: { query: async () => [] } },
+  } as unknown as StorageService
+
+  const result = await new UsageInsightsProjection(storage).query({})
+
+  assert.equal(queries, 1)
+  assert.equal(result.summary.sessionCount, 500)
+  assert.equal(result.meta.sampled, true)
+})
