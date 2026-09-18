@@ -7,6 +7,7 @@ import type {
   LiveMessageDto,
   LiveModelControlDto,
   LiveProductDto,
+  LiveQueueStateDto,
   LiveRuntimeEventDto,
   LiveRuntimeStateDto,
   LiveThinkingControlDto,
@@ -73,6 +74,9 @@ function runtimeStateFromEvent(
     || event.type === 'tool.start') {
     return { ...current, isStreaming: true }
   }
+  if (event.type === 'queue.update') {
+    return { ...current, pendingMessageCount: event.steering.length + event.followUp.length }
+  }
   if (event.type === 'completed') return { ...current, isStreaming: false, pendingMessageCount: 0 }
   return current
 }
@@ -84,6 +88,33 @@ function statusLabel(state: LiveRuntimeStateDto | null, t: ReturnType<typeof use
 }
 
 type LiveUiRequest = Extract<LiveEventDto, { type: 'ui.request' }>
+type LiveQueueMode = 'steer' | 'follow-up'
+type PendingQueueSubmission = { id: string; mode: LiveQueueMode; text: string }
+type RestoredQueueDraft = { id: string; mode: LiveQueueMode; text: string }
+type LiveQueueListItem = {
+  id: string
+  mode: LiveQueueMode
+  text: string
+  active: boolean
+  pending?: boolean | undefined
+  queueIndex?: number | undefined
+}
+
+function emptyLiveQueue(): LiveQueueStateDto {
+  return { steering: [], followUp: [] }
+}
+
+function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
+  const stamp = Date.now()
+  return [
+    ...queue.steering.map((text, index) => ({ id: `steer-${stamp}-${index}`, mode: 'steer' as const, text })),
+    ...queue.followUp.map((text, index) => ({ id: `follow-${stamp}-${index}`, mode: 'follow-up' as const, text })),
+  ]
+}
+
+function queueTextMessage(text: string): LiveMessageDto {
+  return { parts: [{ type: 'text', text }] }
+}
 
 function mergeLiveProjectionItems(
   previous: LiveTaskProjectionItem[],
@@ -189,7 +220,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [thinking, setThinking] = useState<LiveThinkingControlDto | null>(null)
   const [extension, setExtension] = useState<LiveUiRequest | null>(null)
   const [extensionPending, setExtensionPending] = useState(false)
-  const [streamingBehavior, setStreamingBehavior] = useState<'steer' | 'follow-up'>('steer')
+  const [streamingBehavior, setStreamingBehavior] = useState<LiveQueueMode>('steer')
+  const [queue, setQueue] = useState<LiveQueueStateDto>(() => emptyLiveQueue())
+  const [pendingQueue, setPendingQueue] = useState<PendingQueueSubmission[]>([])
+  const [restoredQueue, setRestoredQueue] = useState<RestoredQueueDraft[]>([])
+  const [queueMutationPending, setQueueMutationPending] = useState(false)
   const [connected, setConnected] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -199,10 +234,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
 
-  const clearComposer = useCallback(() => {
-    setDraft(currentDraft => ({ revision: currentDraft.revision + 1, value: '' }))
-    setComposerHasContent(false)
+  const setComposerValue = useCallback((value: string) => {
+    setDraft(currentDraft => ({ revision: currentDraft.revision + 1, value }))
+    setComposerHasContent(Boolean(value.trim()))
   }, [])
+
+  const clearComposer = useCallback(() => {
+    setComposerValue('')
+  }, [setComposerValue])
 
   useEffect(() => {
     let cancelled = false
@@ -212,6 +251,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setModelControl(null)
     setThinking(null)
     setExtension(null)
+    setQueue(emptyLiveQueue())
+    setPendingQueue([])
+    setRestoredQueue([])
+    setQueueMutationPending(false)
     leafIdRef.current = undefined
     setConnected(false)
     setError('')
@@ -277,6 +320,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
+        if (envelope.normalizedEvent?.type === 'queue.update') {
+          const nextQueue = {
+            steering: [...envelope.normalizedEvent.steering],
+            followUp: [...envelope.normalizedEvent.followUp],
+          }
+          setQueue(nextQueue)
+          setPendingQueue(previous => previous.filter(item => {
+            const accepted = item.mode === 'steer' ? nextQueue.steering : nextQueue.followUp
+            return !accepted.includes(item.text)
+          }))
+        }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
       () => setConnected(false),
@@ -301,13 +355,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     && state?.status === 'ready'
     && (!state.isStreaming || canQueueWhileStreaming)
     && !busy
+    && !queueMutationPending
     && !composerAttachmentPending,
   )
   const canInterrupt = Boolean(
     current
     && state?.isStreaming
     && product?.capabilities.includes('interrupt')
-    && !busy,
+    && !busy
+    && !queueMutationPending,
   )
 
   const send = useCallback(async (message: LiveMessageDto) => {
@@ -317,37 +373,52 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setError(t('live.unsupportedInput', { type: t(`live.input.${unsupported}`) }))
       return
     }
+    const behavior = state.isStreaming
+      ? streamingBehavior === 'steer' && product.capabilities.includes('steer')
+        ? 'steer' as const
+        : product.capabilities.includes('queue')
+          ? 'follow-up' as const
+          : 'steer' as const
+      : 'normal' as const
     const optimisticText = messageText(message)
+    const pending = behavior !== 'normal' && optimisticText
+      ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
+      : null
+
     setBusy(true)
     setError('')
-    if (optimisticText) {
+    if (behavior === 'normal' && optimisticText) {
       setItems(previous => appendOptimisticLiveUserMessage(previous, optimisticText))
     }
+    if (pending) setPendingQueue(previous => [...previous, pending])
     clearComposer()
     try {
-      const behavior = state.isStreaming
-        ? streamingBehavior === 'steer' && product.capabilities.includes('steer')
-          ? 'steer' as const
-          : product.capabilities.includes('queue')
-            ? 'follow-up' as const
-            : 'steer' as const
-        : 'normal' as const
       await liveApi.send(current.liveId, current.runtimeSessionId, message, behavior)
-      setState(previous => previous ? { ...previous, isStreaming: true } : previous)
+      if (behavior === 'normal') {
+        setState(previous => previous ? { ...previous, isStreaming: true } : previous)
+      }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
+      if (optimisticText && message.parts.every(part => part.type === 'text' || part.type === 'large-text')) {
+        setComposerValue(optimisticText)
+      }
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
+      if (pending) setPendingQueue(previous => previous.filter(item => item.id !== pending.id))
       setBusy(false)
     }
-  }, [canSubmit, clearComposer, current, product, state, streamingBehavior, t])
+  }, [canSubmit, clearComposer, current, product, setComposerValue, state, streamingBehavior, t])
 
   const interrupt = useCallback(async () => {
     if (!current || !canInterrupt) return
     setBusy(true)
     setError('')
     try {
-      await liveApi.interrupt(current.liveId, current.runtimeSessionId)
+      const result = await liveApi.interrupt(current.liveId, current.runtimeSessionId)
+      const restored = result.restoredQueue ? restoredQueueDrafts(result.restoredQueue) : []
+      setRestoredQueue(restored)
+      setQueue(emptyLiveQueue())
+      setPendingQueue([])
       setState(previous => previous ? { ...previous, isStreaming: false, pendingMessageCount: 0 } : previous)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -356,6 +427,49 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       composerRef.current?.focus({ preventScroll: true })
     }
   }, [canInterrupt, current])
+
+  const removeQueued = useCallback(async (mode: LiveQueueMode, queueIndex: number, text: string) => {
+    if (!current || !product?.capabilities.includes('queue') || queueMutationPending) return
+    setQueueMutationPending(true)
+    setError('')
+    try {
+      const cleared = await liveApi.clearQueue(current.liveId, current.runtimeSessionId)
+      const steering = [...cleared.steering]
+      const followUp = [...cleared.followUp]
+      const target = mode === 'steer' ? steering : followUp
+      const resolvedIndex = target[queueIndex] === text ? queueIndex : target.indexOf(text)
+      if (resolvedIndex >= 0) target.splice(resolvedIndex, 1)
+
+      setQueue(emptyLiveQueue())
+      for (const message of steering) {
+        await liveApi.send(current.liveId, current.runtimeSessionId, queueTextMessage(message), 'steer')
+      }
+      for (const message of followUp) {
+        await liveApi.send(current.liveId, current.runtimeSessionId, queueTextMessage(message), 'follow-up')
+      }
+      setQueue({ steering, followUp })
+      setState(previous => previous
+        ? { ...previous, pendingMessageCount: steering.length + followUp.length }
+        : previous)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setQueueMutationPending(false)
+      composerRef.current?.focus({ preventScroll: true })
+    }
+  }, [current, product?.capabilities, queueMutationPending])
+
+  const editRestoredQueue = useCallback((item: RestoredQueueDraft) => {
+    setComposerValue(item.text)
+    setStreamingBehavior(item.mode)
+    setRestoredQueue(previous => previous.filter(candidate => candidate.id !== item.id))
+    requestAnimationFrame(() => composerRef.current?.focus({ preventScroll: true }))
+  }, [setComposerValue])
+
+  const removeRestoredQueue = useCallback((id: string) => {
+    setRestoredQueue(previous => previous.filter(item => item.id !== id))
+    composerRef.current?.focus({ preventScroll: true })
+  }, [])
 
   const terminate = useCallback(async () => {
     if (!current || busy) return
@@ -432,6 +546,25 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     if (message) void send(message)
   }
 
+  const queueItems: LiveQueueListItem[] = [
+    ...pendingQueue.map(item => ({ ...item, active: true, pending: true })),
+    ...queue.steering.map((text, index) => ({
+      id: `active-steer-${index}`,
+      mode: 'steer' as const,
+      text,
+      active: true,
+      queueIndex: index,
+    })),
+    ...queue.followUp.map((text, index) => ({
+      id: `active-follow-${index}`,
+      mode: 'follow-up' as const,
+      text,
+      active: true,
+      queueIndex: index,
+    })),
+    ...restoredQueue.map(item => ({ ...item, active: false })),
+  ]
+
   return <main className={`pi-live-page live-task-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
     <TaskSurface mode="live" className="pi-live-workspace live-task-workspace">
       <TaskHeader
@@ -460,7 +593,31 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       </div>
 
       <div className="pi-live-compose-wrap live-task-compose-wrap">
-        {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
+        <div className="pi-live-float-stack">
+          {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">
+            {queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
+              <span>{item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
+              <b>{item.text}</b>
+              {item.active
+                ? item.pending
+                  ? <small>{t('live.queue.joining')}</small>
+                  : <div>
+                      <small>{t('live.queue.queued')}</small>
+                      {item.queueIndex !== undefined && <Button
+                        size="small"
+                        className="pi-live-queue-action"
+                        disabled={queueMutationPending}
+                        onClick={() => { void removeQueued(item.mode, item.queueIndex!, item.text) }}
+                      >{t('live.queue.withdraw')}</Button>}
+                    </div>
+                : <div>
+                    <Button size="small" className="pi-live-queue-action" onClick={() => editRestoredQueue(item)}>{t('live.queue.edit')}</Button>
+                    <Button size="small" className="pi-live-queue-action" onClick={() => removeRestoredQueue(item.id)}>{t('live.queue.withdraw')}</Button>
+                  </div>}
+            </div>)}
+          </div>}
+          {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
+        </div>
         <div className="pi-live-composer">
           <div className="pi-live-editor">
             <LiveMarkdownComposer
