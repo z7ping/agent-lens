@@ -846,6 +846,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
   }, [current, extension, extensionPending])
 
+  const searchWorkspaceReferences = useCallback((query: string) => {
+    if (!current || !product?.capabilities.includes('workspace-file-reference')) {
+      return Promise.resolve([])
+    }
+    return liveApi.workspaceFileReferences(current.liveId, current.runtimeSessionId, query, 20)
+  }, [current, product])
+
   const runMessageAction = useCallback(async (
     action: LiveMessageActionContributionDto,
     item: Extract<LiveTaskProjectionItem, { kind: 'message' }>,
@@ -1103,6 +1110,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               draftKey={composerDraftKey || undefined}
               inputHistory={inputHistory}
               commands={commands}
+              workspaceReferenceSearch={product?.capabilities.includes('workspace-file-reference')
+                ? searchWorkspaceReferences
+                : undefined}
               onDraftPresenceChange={setComposerHasContent}
               canSubmit={canSubmit}
               onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
