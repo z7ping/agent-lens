@@ -203,19 +203,27 @@ export function BackupPage({
   useEffect(() => {
     if (!overview?.index?.refreshing) return
     let disposed = false
-    const timer = window.setInterval(() => {
-      void api.backupOverview().then(next => {
+    let timer: number | undefined
+
+    const poll = async () => {
+      try {
+        const next = await api.backupOverview()
         if (disposed) return
         applyOverview(next)
-        if (next.index?.refreshing === false) window.clearInterval(timer)
-      }).catch(reason => {
+        if (next.index?.refreshing !== false) {
+          timer = window.setTimeout(() => { void poll() }, 1500)
+        }
+      } catch (reason) {
         if (disposed) return
         setError(reason instanceof Error ? reason.message : String(reason))
-      })
-    }, 1500)
+        timer = window.setTimeout(() => { void poll() }, 3000)
+      }
+    }
+
+    timer = window.setTimeout(() => { void poll() }, 1500)
     return () => {
       disposed = true
-      window.clearInterval(timer)
+      if (timer !== undefined) window.clearTimeout(timer)
     }
   }, [api, overview?.index?.refreshing])
   useEffect(() => {
