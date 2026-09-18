@@ -474,6 +474,41 @@ async function describeAdapter(adapter: LiveAdapter): Promise<JsonValue> {
   })
 }
 
+async function describeProduct(adapter: LiveAdapter): Promise<JsonValue> {
+  const availabilityResult = await Promise.resolve(
+    shareAdapterRead(adapter, 'availability', () => adapter.availability()),
+  ).then(
+    value => ({ ok: true as const, value }),
+    reason => ({ ok: false as const, reason }),
+  )
+  const availability = availabilityResult.ok
+    ? availabilityResult.value
+    : {
+        available: false,
+        reason: availabilityResult.reason instanceof Error
+          ? availabilityResult.reason.message
+          : String(availabilityResult.reason),
+      }
+  return liveDescriptor(adapter, availability, [])
+}
+
+async function listKnownRuntimes(service: LiveService): Promise<JsonValue> {
+  const groups = await Promise.all(service.list().map(async adapter => {
+    try {
+      const runtimes = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
+      return runtimes.map(state => ({
+        liveId: adapter.manifest.liveId,
+        productId: adapter.manifest.productId,
+        displayName: adapter.manifest.displayName,
+        state: normalizePublicRuntimeState(state),
+      }))
+    } catch {
+      return []
+    }
+  }))
+  return jsonValue({ items: groups.flat() })
+}
+
 function sendBehavior(value: unknown): 'normal' | 'steer' | 'follow-up' | undefined {
   if (value === undefined) return undefined
   if (value === 'normal' || value === 'steer' || value === 'follow-up') return value
@@ -553,6 +588,25 @@ export async function handleLiveRequest(
       }
       const items = await Promise.all(service.list().map(describeAdapter))
       writeJson(response, 200, { items })
+      return true
+    }
+
+    if (url.pathname === '/api/v1/live/products') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const items = await Promise.all(service.list().map(describeProduct))
+      writeJson(response, 200, { items })
+      return true
+    }
+
+    if (url.pathname === '/api/v1/live/runtimes') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      writeJson(response, 200, await listKnownRuntimes(service))
       return true
     }
 
