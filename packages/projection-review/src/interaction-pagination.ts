@@ -119,15 +119,13 @@ export class ReviewInteractionPager {
     }
   }
 
-  private async forwardBounded(
+  private async forwardFromOrdinal(
     logicalSessionId: string,
     query: ReviewDetailQueryDto,
     summary: ReviewSessionSummaryDto,
+    startingOrdinal: number,
   ): Promise<ReviewInteractionPage> {
     const limit = requestedLimit(query)
-    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
-    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'forward')) throw new Error('Invalid review cursor')
-    const startingOrdinal = decoded?.ordinal ?? 1
     const descriptors = await this.descriptors.structureCached(summary)
     const candidates = descriptors.filter(item => item.ordinal >= startingOrdinal)
     const selected: InteractionDescriptor[] = []
@@ -166,6 +164,16 @@ export class ReviewInteractionPager {
         filter: 'all',
       },
     }
+  }
+
+  private async forwardBounded(
+    logicalSessionId: string,
+    query: ReviewDetailQueryDto,
+    summary: ReviewSessionSummaryDto,
+  ): Promise<ReviewInteractionPage> {
+    const decoded = query.cursor ? decodeReviewCursor(query.cursor) : null
+    if (decoded && (decoded.mode !== 'timeline' || decoded.direction !== 'forward')) throw new Error('Invalid review cursor')
+    return this.forwardFromOrdinal(logicalSessionId, query, summary, decoded?.ordinal ?? 1)
   }
 
   async backward(
@@ -312,6 +320,14 @@ export class ReviewInteractionPager {
         page: { count: target ? 1 : 0, hasMore: false, direction: 'forward', filter: 'all' },
       }
       mode = 'ordinal'
+    } else if (query.afterOrdinal !== undefined) {
+      result = await this.forwardFromOrdinal(
+        logicalSessionId,
+        { ...query, direction: 'forward' },
+        summary,
+        query.afterOrdinal,
+      )
+      mode = 'tail'
     } else {
       const filter = query.filter ?? 'all'
       if (filter === 'errors' || filter === 'latency') {
