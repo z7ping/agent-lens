@@ -220,12 +220,14 @@ function GenericLiveItem({
   agentLabel,
   messageActions,
   actionPending,
+  runtimeStreaming,
   onMessageAction,
 }: {
   item: LiveTaskProjectionItem
   agentLabel: string
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
+  runtimeStreaming: boolean
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t, i18n } = useTranslation('task')
@@ -242,7 +244,7 @@ function GenericLiveItem({
       actions={actions.length
         ? actions.map(action => {
             const key = `${action.actionId}:${item.entryId}`
-            const disabled = actionPending !== null || (action.requiresIdle === true && item.streaming)
+            const disabled = actionPending !== null || (action.requiresIdle === true && runtimeStreaming)
             const description = action.description ? contributionText(action.description, i18n.language) : undefined
             return <Button
               key={action.actionId}
@@ -292,6 +294,7 @@ function GenericLiveRound({
   eager,
   messageActions,
   actionPending,
+  runtimeStreaming,
   onMessageAction,
 }: {
   projection: LiveTaskRoundProjection
@@ -299,6 +302,7 @@ function GenericLiveRound({
   eager: boolean
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
+  runtimeStreaming: boolean
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   return <VirtualRoundMount
@@ -314,6 +318,7 @@ function GenericLiveRound({
         agentLabel={agentLabel}
         messageActions={messageActions}
         actionPending={actionPending}
+        runtimeStreaming={runtimeStreaming}
         onMessageAction={onMessageAction}
       />)}
     </TaskRound>
@@ -1023,6 +1028,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             eager={round.model.state === 'running' || index >= rounds.length - 2}
             messageActions={messageActions}
             actionPending={messageActionPending}
+            runtimeStreaming={state?.isStreaming ?? false}
             onMessageAction={runMessageAction}
           />)}
           {!items.length && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
