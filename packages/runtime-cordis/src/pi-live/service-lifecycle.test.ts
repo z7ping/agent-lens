@@ -322,13 +322,19 @@ test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 
     },
   }
   const first = new DefaultPiLiveService(firstHost, store)
-  const started = await first.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
+  const started = await first.start({
+    cwd: '/workspace',
+    sessionPath: originalPath,
+    historyAction: 'fork',
+    logicalSessionId: 'logical-parent',
+  })
   const forkSubscription = first.subscribe(started.runtimeSessionId, () => {})
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal((await first.state(started.runtimeSessionId)).status, 'ready')
   assert.equal(firstInput?.historyAction, 'fork')
   assert.equal(store.values.get(started.runtimeSessionId)?.input.sessionPath, forkedPath)
   assert.equal(store.values.get(started.runtimeSessionId)?.input.historyAction, 'continue')
+  assert.equal(store.values.get(started.runtimeSessionId)?.input.logicalSessionId, undefined)
   forkSubscription()
   await first.dispose()
 
