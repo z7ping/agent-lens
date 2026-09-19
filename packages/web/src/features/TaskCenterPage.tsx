@@ -261,6 +261,26 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     }
   }, [launchablePage?.nextCursor, mode, projectLoading, projectLoadingMore, projectSearch])
 
+  useEffect(() => {
+    if (mode !== 'new'
+      || projectLoading
+      || projectLoadingMore
+      || projectDiscoveryError
+      || launchableProjects.length > 0
+      || !launchablePage?.nextCursor) return
+    // A bounded server page may contain only stale paths. Keep advancing in
+    // separate requests until the first usable project appears or pagination ends.
+    void loadMoreProjects()
+  }, [
+    launchablePage?.nextCursor,
+    launchableProjects.length,
+    loadMoreProjects,
+    mode,
+    projectDiscoveryError,
+    projectLoading,
+    projectLoadingMore,
+  ])
+
   const localSessions = review.response?.items ?? []
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t)), [hubSessions, review, t])
