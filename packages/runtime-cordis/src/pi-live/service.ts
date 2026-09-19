@@ -1061,6 +1061,19 @@ export class DefaultPiLiveService implements PiLiveService {
     }
   }
 
+  async sessionTree(id: string) {
+    const runtime = await this.readyRuntime(id)
+    if (!runtime.handle?.sessionTree) {
+      return {
+        activeLeafId: null,
+        nodes: [],
+        branchPointIds: [],
+        capabilities: { switchBranch: false, fork: false, clone: false, branchSummary: false },
+      }
+    }
+    return runtime.handle.sessionTree()
+  }
+
   async historyIndex(id: string, query: LiveHistoryIndexQuery = {}) {
     const runtime = await this.readyRuntime(id)
     const requestedLimit = Number.isInteger(query.limit) ? query.limit! : 0
