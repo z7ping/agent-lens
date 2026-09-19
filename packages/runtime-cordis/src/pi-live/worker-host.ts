@@ -78,7 +78,7 @@ export interface PiRuntimeHandle {
 }
 
 export interface PiRuntimeHost {
-  /** 在没有任务数据的空闲 Worker 中提前导入 SDK；失败不影响后续冷启动。 */
+  /** 在无任务数据的空闲 Worker 中预热 SDK + ModelRuntime；不创建 cwd 资源或 Session。 */
   preload?(): Promise<void>
   dispose?(): Promise<void>
   start(
