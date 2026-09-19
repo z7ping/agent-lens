@@ -738,6 +738,11 @@ async function initialize(input) {
   warmWorkerStatus = ['hit', 'miss', 'not_ready', 'sdk_mismatch'].includes(agentLensStartup.warmWorkerStatus)
     ? agentLensStartup.warmWorkerStatus
     : undefined
+  for (const metric of prewarmMetrics) {
+    if (typeof metric?.name === 'string' && typeof metric?.durationMs === 'number') {
+      recordStartupMetric(metric.name, metric.durationMs, { prewarm: true })
+    }
+  }
   if (Array.isArray(agentLensStartup.metrics)) {
     for (const value of agentLensStartup.metrics) {
       const metric = record(value)
@@ -762,7 +767,6 @@ async function initialize(input) {
   const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof loadedSdk[name] === 'function')
   if (hasSessionRuntime) {
     runtimeMode = 'session_runtime'
-    const modelRuntimeStartedAt = Date.now()
     const createdBaseMetric = await ensureBaseRuntime(loadedSdk)
     recordStartupMetric('model_runtime_create_ms', createdBaseMetric ? createdBaseMetric.durationMs : 0)
     const agentDir = baseAgentDir ?? loadedSdk.getAgentDir()
