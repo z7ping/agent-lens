@@ -69,3 +69,17 @@ test('external disk-ahead detection schedules restart only after bounded Snapsho
   assert.ok(detect >= 0 && read > detect)
   assert.ok(restart > read, 'Worker refresh must not sit in front of the foreground Snapshot read')
 })
+
+
+test('foreground Runtime state never waits for git workspace discovery', () => {
+  const state = section('private async runtimeState(runtime:', 'private decorateReadyState')
+  assert.match(state, /this\.refreshWorkspaceContextBestEffort\(runtime\)/)
+  assert.doesNotMatch(state, /await this\.refreshWorkspaceContext/)
+})
+
+test('workspace git metadata refresh is single-flight and TTL bounded', () => {
+  const refresh = section('private refreshWorkspaceContextBestEffort', 'private advanceInitialization')
+  assert.match(refresh, /runtime\.workspaceContextTask/)
+  assert.match(refresh, /WORKSPACE_CONTEXT_REFRESH_MS/)
+  assert.match(refresh, /resolveWorkspaceContext\(runtime\.input\.cwd\)/)
+})
