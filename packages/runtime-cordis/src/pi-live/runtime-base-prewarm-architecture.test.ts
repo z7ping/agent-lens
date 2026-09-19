@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const worker = await readFile(new URL('./worker-entry.mjs', import.meta.url), 'utf8')
 const host = await readFile(new URL('./worker-host.ts', import.meta.url), 'utf8')
+const service = await readFile(new URL('./service.ts', import.meta.url), 'utf8')
 const plugin = await readFile(new URL('./plugin.ts', import.meta.url), 'utf8')
 
 function section(source: string, start: string, end: string): string {
@@ -88,12 +89,9 @@ test('Pi Live plugin still starts prewarm eagerly in the background', () => {
 
 
 test('history Resume/Fork verifies initialize handshake session identity before any follow-up state IPC', () => {
-  const serviceSource = readFile(new URL('./service.ts', import.meta.url), 'utf8')
-  return serviceSource.then(source => {
-    const initialize = section(source, 'private async initialize(runtime:', 'private workerExited(')
-    const handshakeIdentity = initialize.indexOf('handle.initialSessionFile')
-    const fallbackState = initialize.indexOf('await handle.state()', handshakeIdentity)
-    assert.ok(handshakeIdentity >= 0, 'initialize must consume the session identity captured by the Worker handshake')
-    assert.ok(fallbackState > handshakeIdentity, 'state IPC may only remain as a compatibility fallback when handshake identity is unavailable')
-  })
+  const initialize = section(service, 'private async initialize(runtime:', 'private workerExited(')
+  const handshakeIdentity = initialize.indexOf('handle.initialSessionFile')
+  const fallbackState = initialize.indexOf('await handle.state()', handshakeIdentity)
+  assert.ok(handshakeIdentity >= 0, 'initialize must consume the session identity captured by the Worker handshake')
+  assert.ok(fallbackState > handshakeIdentity, 'state IPC may only remain as a compatibility fallback when handshake identity is unavailable')
 })
