@@ -237,3 +237,15 @@ test('session tree stays a generic opt-in data capability and does not replace t
   assert.match(page, /onTurnRailSelect/)
   assert.doesNotMatch(page, /liveApi\.sessionTree\(/)
 })
+
+
+test('新建 Live 任务按 startCapabilities 呈现工作区或直接启动布局', () => {
+  const newTask = productSurfaceFiles.find(file => file.path === './LiveNewTaskPanel.tsx')!.source
+  const styles = readFileSync(new URL('../task-center.css', import.meta.url), 'utf8')
+
+  assert.match(newTask, /startCapabilities\.workspace !== 'unsupported'/)
+  assert.match(newTask, /className="task-center-direct-start"/)
+  assert.match(newTask, /center\.newTask\.directStartDescription/)
+  assert.match(styles, /\.task-center-direct-start\s*\{/)
+  assert.doesNotMatch(newTask, /(?:liveId|productId|agentId)\s*={2,3}\s*['"](?:pi|hermes)['"]/)
+})

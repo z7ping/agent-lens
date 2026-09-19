@@ -210,6 +210,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
         noLiveAgents: 'No agent currently supports creating a live task.',
         openExisting: 'Open existing project',
         startAgent: 'Create task',
+        directStartTitle: 'No working directory required',
+        directStartDescription: '{{agent}} can create a live task directly. Enter the task content after opening it.',
       },
       history: {
         taskSuffix: '{{name}} task',
