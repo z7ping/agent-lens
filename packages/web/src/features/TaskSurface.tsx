@@ -176,15 +176,6 @@ function roundAnchorY(viewportRect: DOMRect): number {
   )
 }
 
-function sessionRailLeft(root: HTMLElement, fallback: DOMRect): number {
-  const document = root.querySelector<HTMLElement>('.task-session-document')
-  const documentRect = document?.getBoundingClientRect()
-  const contentLeft = document && documentRect && documentRect.width > 0
-    ? documentRect.left + cssPixelValue(document, 'padding-left')
-    : fallback.left
-  return Math.max(16, contentLeft - 34)
-}
-
 function sessionRailFrame(root: HTMLElement, fallback: DOMRect): RailFrameRect {
   const surface = root.getBoundingClientRect()
   const header = Array.from(root.children).find(child => child instanceof HTMLElement && child.classList.contains('task-header'))
@@ -509,7 +500,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     const railFrame = sessionMode ? sessionRailFrame(root, viewportRect) : viewportRect
     const boundary = sessionBoundaryPosition(root, railFrame, viewportRect)
     const nextPosition = {
-      left: sessionMode ? sessionRailLeft(root, viewportRect) : railFrame.left + 10,
+      left: railFrame.left + 10,
       top: railFrame.top + railFrame.height / 2,
       maxHeight: Math.max(96, railFrame.height - 24),
       boundaryBottom: boundary.bottom,
@@ -688,15 +679,6 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         }
       : undefined)
 
-  const jumpToRailPosition = (clientY: number, railElement: HTMLElement | null) => {
-    if (!railElement || !Number.isInteger(turnRailTotal) || turnRailTotal! <= 0) return
-    const rect = railElement.getBoundingClientRect()
-    if (rect.height <= 0) return
-    const ratio = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
-    const ordinal = 1 + Math.round(ratio * Math.max(0, turnRailTotal! - 1))
-    jumpToRound(virtualTurnRailItem(ordinal))
-  }
-
   const renderedRailItems = renderTurnRailItems(railItems, activeRoundId, turnRailTotal)
   const rail = renderedRailItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
@@ -704,33 +686,19 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
           aria-label={t('surface.turnRail')}
           style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
-          onClick={event => {
-            if (event.target !== event.currentTarget) return
-            jumpToRailPosition(event.clientY, event.currentTarget)
-          }}
         >
-          {renderedRailItems.map((item, index) => {
+          {renderedRailItems.map(item => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
             const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : ''].filter(Boolean).join(' · ')
-            const position = Number.isInteger(turnRailTotal) && turnRailTotal! > 1 && item.ordinal
-              ? (item.ordinal - 1) / (turnRailTotal! - 1)
-              : renderedRailItems.length > 1 ? index / (renderedRailItems.length - 1) : .5
             return <button
               key={item.id}
               type="button"
               className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
-              style={{ top: `${Math.max(0, Math.min(1, position)) * 100}%` }}
               data-tip={tip}
               aria-label={t('surface.jumpTo', { tip })}
               aria-current={active ? 'step' : undefined}
-              onClick={event => {
-                if (event.detail > 0) {
-                  jumpToRailPosition(event.clientY, event.currentTarget.parentElement)
-                  return
-                }
-                jumpToRound(item)
-              }}
+              onClick={() => jumpToRound(item)}
             ><i/></button>
           })}
         </nav>,
