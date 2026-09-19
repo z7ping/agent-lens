@@ -593,7 +593,17 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
         metrics: hostStartupMetrics,
       },
     }
-    const handle = new WorkerPiRuntimeHandle(child, runtimeSessionId, onEvent, onExit)
+    let replenished = false
+    const forwardEvent = (event: Record<string, unknown>) => {
+      onEvent(event)
+      if (replenished || event.type !== 'runtime_extension_binding') return
+      if (event.status !== 'ready' && event.status !== 'failed') return
+      replenished = true
+      // Session Core is already available; wait until extension binding settles
+      // before consuming CPU/disk on the next Runtime Base Worker.
+      void this.preloadFor(input.executable).catch(() => undefined)
+    }
+    const handle = new WorkerPiRuntimeHandle(child, runtimeSessionId, forwardEvent, onExit)
     const abort = () => { if (child.exitCode === null && child.signalCode === null) child.kill() }
     signal.addEventListener('abort', abort, { once: true })
     const handshake = await new Promise<unknown>((resolve, reject) => {
@@ -642,10 +652,6 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     })
     handle.applyHandshake(handshake)
     signal.removeEventListener('abort', abort)
-    // Do not import another SDK / create another ModelRuntime in parallel with the
-    // foreground Runtime's ResourceLoader and Extension startup. On Windows this
-    // contention can make the very task we are trying to accelerate slower.
-    void this.preloadFor(input.executable).catch(() => undefined)
     return handle
   }
 }
