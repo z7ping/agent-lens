@@ -115,14 +115,14 @@
 }
 .review-page:not(.review-page-embedded) .session-load-more:hover:not(:disabled) { background: var(--al-soft); color: var(--al-ink-2); }
 
-/* Pi 会话树属于 Review 关系数据，不属于 TaskRound。 */
-.pi-session-tree { margin-top: 10px; overflow: hidden; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
-.pi-session-tree > summary { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; list-style: none; color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
-.pi-session-tree > summary::marker { content: ''; }
-.pi-session-tree > summary::-webkit-details-marker { display: none; }
-.pi-session-tree-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
-.pi-session-tree[open] > summary > .pi-session-tree-chevron { transform: rotate(90deg); }
-.pi-session-tree > div > div { padding: 7px 10px; border-top: 1px solid var(--al-line); color: var(--al-muted); font: 12px/1.5 var(--font-mono); }
+/* Session 关系树属于 Review 关系数据，不属于 TaskRound。 */
+.session-relationship-tree { margin-top: 10px; overflow: hidden; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
+.session-relationship-tree > summary { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; list-style: none; color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.session-relationship-tree > summary::marker { content: ''; }
+.session-relationship-tree > summary::-webkit-details-marker { display: none; }
+.session-relationship-tree-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
+.session-relationship-tree[open] > summary > .session-relationship-tree-chevron { transform: rotate(90deg); }
+.session-relationship-tree > div > div { padding: 7px 10px; border-top: 1px solid var(--al-line); color: var(--al-muted); font: 12px/1.5 var(--font-mono); }
 
 /* Evidence 是 Review 的来源/可信度语义；完整详情统一进入 Inspector。 */
 .evidence-inline-list { display: inline-flex; min-width: 0; flex-wrap: nowrap; align-items: center; gap: 3px; }
@@ -193,6 +193,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pi-session-tree-chevron,
+  .session-relationship-tree-chevron,
   .raw-event-group-chevron { transition: none; }
 }
