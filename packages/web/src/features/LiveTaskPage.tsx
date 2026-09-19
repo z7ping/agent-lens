@@ -925,6 +925,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
     let reconcileEpoch = 0
     let runtimeActive = false
+    let runtimeCompacting = false
     const reconcileState = async (forceRecovery = false) => {
       const epoch = ++reconcileEpoch
       try {
@@ -936,8 +937,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           || previous?.pendingMessageCount !== runtime.pendingMessageCount
         runtimeStateRef.current = runtime
         setState(runtime)
-        runtimeActive = runtime.isStreaming
-        setActivityStatus(runtime.isStreaming ? 'running' : runtime.status === 'ready' ? 'idle' : null)
+        runtimeActive = runtime.isStreaming || runtimeCompacting
+        setActivityStatus(runtimeCompacting
+          ? 'compacting'
+          : runtime.isStreaming
+            ? 'running'
+            : runtime.status === 'ready'
+              ? 'idle'
+              : null)
         if ((changed || forceRecovery) && product.capabilities.includes('recovery')) {
           void recover(runtime.isStreaming ? 'live' : 'settle')
         }
@@ -1013,12 +1020,22 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }))
         }
         if (envelope.normalizedEvent?.type === 'status') {
-          if (envelope.normalizedEvent.status === 'running'
-            || envelope.normalizedEvent.status === 'compacting') runtimeActive = true
-          if (envelope.normalizedEvent.status === 'idle'
+          if (envelope.normalizedEvent.status === 'compacting') {
+            runtimeCompacting = true
+            runtimeActive = true
+          } else if (envelope.normalizedEvent.status === 'running') {
+            runtimeCompacting = false
+            runtimeActive = true
+          } else if (envelope.normalizedEvent.status === 'ready') {
+            runtimeCompacting = false
+            runtimeActive = runtimeStateRef.current?.isStreaming ?? false
+          } else if (envelope.normalizedEvent.status === 'idle'
             || envelope.normalizedEvent.status === 'failed'
             || envelope.normalizedEvent.status === 'terminating'
-            || envelope.normalizedEvent.status === 'terminated') runtimeActive = false
+            || envelope.normalizedEvent.status === 'terminated') {
+            runtimeCompacting = false
+            runtimeActive = false
+          }
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
           }
@@ -1074,6 +1091,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
+          runtimeCompacting = false
           runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
