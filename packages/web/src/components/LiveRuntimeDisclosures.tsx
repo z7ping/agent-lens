@@ -445,7 +445,6 @@ function RuntimeDisclosure({
   onAction(action: LiveRuntimeActionContributionDto): void
 }) {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
-  const title = contributionText(item.title, language)
   const fields = prepareFields(item, language)
 
   return <>
