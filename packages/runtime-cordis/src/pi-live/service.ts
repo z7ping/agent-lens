@@ -152,8 +152,8 @@ function runtimeDisclosureSummary(
   }
 
   return contributionText(
-    `${status.en} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
-    `${status.zh} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
+    `${status.en} · ${fallbackDuration} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
+    `${status.zh} · ${fallbackDuration} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
   )
 }
 
@@ -222,6 +222,16 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     })
   }
   if (state.startupMetrics?.length) {
+    const mainCosts = state.startupMetrics
+      .filter(item => !item.name.startsWith('prewarm_') && item.name !== 'ready_ms' && item.durationMs > 0)
+      .sort((left, right) => right.durationMs - left.durationMs)
+      .slice(0, 2)
+    if (mainCosts.length) {
+      fields.push({
+        label: contributionText('Main costs', '主要耗时'),
+        value: mainCosts.map(item => `${item.name} · ${contributionDuration(item.durationMs)}`).join(' · '),
+      })
+    }
     fields.push({
       label: contributionText('Startup metrics', '启动耗时明细'),
       kind: 'list' as const,
