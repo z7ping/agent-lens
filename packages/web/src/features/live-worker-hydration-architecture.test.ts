@@ -46,6 +46,8 @@ test('ready event restores transcript and controls in place without renavigation
   const readyBlock = page.slice(ready, effectEnd)
 
   assert.match(readyBlock, /void recover\(\)/)
+  const recovery = page.slice(page.indexOf("const recoverOnce = async"), page.indexOf("const recover =", page.indexOf("const recoverOnce = async")))
+  assert.match(recovery, /setInputHistory\(projectLiveInputHistory\(/)
   assert.match(readyBlock, /liveApi\.modelControl/)
   assert.match(readyBlock, /liveApi\.thinkingControl/)
   assert.match(readyBlock, /liveApi\.queueState/)
