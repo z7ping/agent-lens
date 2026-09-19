@@ -471,3 +471,34 @@ test('Pi Live Adapter exposes full-session history index through bounded queries
     query: { fromOrdinal: 2, limit: 1 },
   }])
 })
+
+
+test('Pi Live Adapter exposes native session tree only through the generic session-tree capability', async () => {
+  const tree = {
+    activeLeafId: 'entry-2',
+    nodes: [
+      { id: 'entry-1', parentId: null, type: 'message' as const, role: 'user' as const, preview: 'hello', activePath: true, childCount: 1 },
+      { id: 'entry-2', parentId: 'entry-1', type: 'branch-summary' as const, summary: 'summary', activePath: true, childCount: 0 },
+    ],
+    branchPointIds: [],
+    capabilities: {
+      switchBranch: true,
+      fork: true,
+      clone: false,
+      branchSummary: true,
+    },
+  }
+  const calls: string[] = []
+  const service = {
+    sessionTree: async (runtimeSessionId: string) => {
+      calls.push(runtimeSessionId)
+      return tree
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.equal(adapter.capabilities.has('session-tree'), true)
+  assert.deepEqual(await adapter.sessionTree('runtime-1'), tree)
+  assert.deepEqual(calls, ['runtime-1'])
+  assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
+})
