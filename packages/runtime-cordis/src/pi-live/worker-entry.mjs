@@ -849,7 +849,7 @@ function beginExtensionBinding(input) {
   send('event', { type: 'runtime_extension_binding', status: 'binding' })
   const startedAt = Date.now()
 
-  extensionBindingPromise = session.bindExtensions({
+  extensionBindingPromise = Promise.resolve().then(() => session.bindExtensions({
     uiContext: extensionUi.context,
     mode: 'rpc',
     abortHandler: () => { void session.abort() },
@@ -857,7 +857,7 @@ function beginExtensionBinding(input) {
       type: 'extension_error',
       error: diagnostic(record(value).error ?? 'Unknown extension error'),
     }),
-  }).then(() => {
+  })).then(() => {
     recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
     extensionBindingStatus = 'ready'
     const finalResourceLoader = record(session).resourceLoader
