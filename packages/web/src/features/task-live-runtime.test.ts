@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
-import { parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
+import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
 
 function state(overrides: Partial<LiveRuntimeStateDto> = {}): LiveRuntimeStateDto {
   return {
@@ -46,4 +46,21 @@ test('generic task runtime status follows shared Live state', () => {
   assert.equal(taskLiveRuntimeStatus(state({ status: 'terminated', isStreaming: true })), 'terminated')
   assert.equal(taskLiveRuntimeStatus(state({ isStreaming: true })), 'streaming')
   assert.equal(taskLiveRuntimeStatus(state()), 'idle')
+})
+
+
+test('runtime list refresh replaces healthy adapters but preserves failed adapter lanes', () => {
+  const previous: LiveRuntimeRefDto[] = [
+    { liveId: 'pi', productId: 'pi', displayName: 'Pi', state: state({ runtimeSessionId: 'pi-old' }) },
+    { liveId: 'hermes', productId: 'hermes', displayName: 'Hermes', state: state({ runtimeSessionId: 'hermes-old' }) },
+  ]
+  const incoming: LiveRuntimeRefDto[] = [
+    { liveId: 'hermes', productId: 'hermes', displayName: 'Hermes', state: state({ runtimeSessionId: 'hermes-new' }) },
+  ]
+
+  assert.deepEqual(
+    mergeTaskLiveRuntimes(previous, incoming, ['pi']).map(item => [item.liveId, item.state.runtimeSessionId]),
+    [['hermes', 'hermes-new'], ['pi', 'pi-old']],
+  )
+  assert.deepEqual(mergeTaskLiveRuntimes(previous, [], []), [])
 })
