@@ -32,6 +32,7 @@ test('Pi Live recovery store 只持久化可继续的原生 Session 身份并可
       name: '任务',
       sessionPath: '/sessions/live.jsonl',
       historyAction: 'fork',
+      logicalSessionId: 'logical-1',
     },
     taskSummary: '  自动任务标题  ',
     createdAt: '2026-09-08T00:00:00.000Z',
@@ -43,6 +44,7 @@ test('Pi Live recovery store 只持久化可继续的原生 Session 身份并可
   assert.equal(saved?.input.cwd, '/workspace')
   assert.equal(saved?.input.sessionPath, '/sessions/live.jsonl')
   assert.equal(saved?.input.historyAction, 'continue')
+  assert.equal(saved?.input.logicalSessionId, 'logical-1')
   assert.equal(saved?.input.executable, undefined)
   assert.equal(saved?.input.provider, undefined)
   assert.equal(saved?.input.model, undefined)
