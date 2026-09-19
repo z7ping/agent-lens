@@ -166,3 +166,40 @@ test('Live runtime disclosure reads coalesce while runtime action POSTs stay iso
   ])
   assert.equal(calls, 2)
 })
+
+
+test('Live message open-runtime action invalidates the runtime list immediately', async t => {
+  const originalFetch = globalThis.fetch
+  const originalWindow = globalThis.window
+  const events: Event[] = []
+  const fakeWindow = {
+    dispatchEvent: (event: Event) => {
+      events.push(event)
+      return true
+    },
+  } as unknown as Window & typeof globalThis
+
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: fakeWindow })
+  t.after(() => {
+    globalThis.fetch = originalFetch
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow })
+  })
+
+  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    assert.equal(init?.method, 'POST')
+    return jsonResponse({
+      outcome: 'open-runtime',
+      runtime: {
+        runtimeSessionId: 'runtime-fork',
+        status: 'initializing',
+        isStreaming: false,
+        pendingMessageCount: 0,
+      },
+    })
+  }) as typeof fetch
+
+  const result = await liveApi.executeMessageAction('pi', 'runtime-1', 'pi.new-session-from-here', 'entry-1')
+  assert.equal(result.outcome, 'open-runtime')
+  assert.equal(events.length, 1)
+  assert.equal(events[0]?.type, 'agent-lens:live-state-changed')
+})
