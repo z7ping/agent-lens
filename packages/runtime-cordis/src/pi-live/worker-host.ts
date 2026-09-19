@@ -2,7 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
-import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSnapshotWindow } from '@agent-lens/core'
+import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSessionTree, LiveSnapshotWindow } from '@agent-lens/core'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
@@ -29,7 +29,7 @@ const WORKER_TERMINATE_GRACE_MS = 1_000
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
   | 'navigateTree'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
@@ -68,6 +68,7 @@ export interface PiRuntimeHandle {
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
   historyIndex?(query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
+  sessionTree?(): Promise<LiveSessionTree>
   entry?(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
@@ -366,6 +367,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
     return collectSnapshotTransfer((command, payload) => this.request(command, payload), since, window)
   }
   historyIndex(query: LiveHistoryIndexQuery = {}): Promise<LiveHistoryIndex> { return this.request('historyIndex', query) }
+  sessionTree(): Promise<LiveSessionTree> { return this.request('sessionTree') }
   entry(entryId: string): Promise<unknown | null> { return this.request('entry', { entryId }) }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
