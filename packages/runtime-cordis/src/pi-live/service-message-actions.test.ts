@@ -105,14 +105,18 @@ async function startOriginal(service: DefaultPiLiveService) {
     sessionPath: '/sessions/original.jsonl',
     historyAction: 'continue',
   })
-  return waitForReady(service, initial.runtimeSessionId)
+  const unsubscribe = service.subscribe(initial.runtimeSessionId, () => {})
+  return {
+    state: await waitForReady(service, initial.runtimeSessionId),
+    unsubscribe,
+  }
 }
 
 test('Pi message actions are declared only for verified idle runtimes', async () => {
   const host = new MessageActionHost()
   const service = new DefaultPiLiveService(host)
   try {
-    const original = await startOriginal(service)
+    const { state: original, unsubscribe } = await startOriginal(service)
     assert.deepEqual(
       (await service.messageActions(original.runtimeSessionId)).map(action => action.actionId),
       ['pi.edit-from-here', 'pi.new-session-from-here'],
@@ -124,6 +128,7 @@ test('Pi message actions are declared only for verified idle runtimes', async ()
       ['pi.edit-from-here', 'pi.new-session-from-here'],
       'descriptors stay stable; requiresIdle is enforced by UI and server execution',
     )
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -133,7 +138,7 @@ test('Edit from here navigates the current Pi session to the exact persisted use
   const host = new MessageActionHost()
   const service = new DefaultPiLiveService(host)
   try {
-    const original = await startOriginal(service)
+    const { state: original, unsubscribe } = await startOriginal(service)
     const result = await service.executeMessageAction(
       original.runtimeSessionId,
       'pi.edit-from-here',
@@ -146,6 +151,7 @@ test('Edit from here navigates the current Pi session to the exact persisted use
     })
     assert.deepEqual(host.navigated, ['u-2'])
     assert.equal(host.starts.length, 1, 'Edit from here must not create another Runtime')
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -155,7 +161,7 @@ test('New session forks before the selected user message without mutating the cu
   const host = new MessageActionHost()
   const service = new DefaultPiLiveService(host)
   try {
-    const original = await startOriginal(service)
+    const { state: original, unsubscribe } = await startOriginal(service)
     const result = await service.executeMessageAction(
       original.runtimeSessionId,
       'pi.new-session-from-here',
@@ -167,9 +173,11 @@ test('New session forks before the selected user message without mutating the cu
     assert.ok(result.runtime)
     assert.notEqual(result.runtime.runtimeSessionId, original.runtimeSessionId)
 
-    for (let index = 0; index < 100 && host.starts.length < 2; index += 1) {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    }
+    assert.equal(result.runtime.status, 'initializing')
+    assert.equal(host.starts.length, 1, 'fork Worker must wait for the new Live page subscription')
+
+    const forkUnsubscribe = service.subscribe(result.runtime.runtimeSessionId, () => {})
+    await waitForReady(service, result.runtime.runtimeSessionId)
     assert.equal(host.starts.length, 2)
     assert.deepEqual(host.starts[1]?.input, {
       cwd: '/workspace',
@@ -177,9 +185,11 @@ test('New session forks before the selected user message without mutating the cu
       historyAction: 'fork',
       branchFromEntryId: 'a-1',
     })
+    forkUnsubscribe()
 
     const current = await service.state(original.runtimeSessionId)
     assert.equal(current.sessionFile, '/sessions/original.jsonl')
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -189,19 +199,22 @@ test('New session from the first user message preserves a root-fork marker', asy
   const host = new MessageActionHost()
   const service = new DefaultPiLiveService(host)
   try {
-    const original = await startOriginal(service)
-    await service.executeMessageAction(
+    const { state: original, unsubscribe } = await startOriginal(service)
+    const result = await service.executeMessageAction(
       original.runtimeSessionId,
       'pi.new-session-from-here',
       'u-root',
     )
 
-    for (let index = 0; index < 100 && host.starts.length < 2; index += 1) {
-      await new Promise(resolve => setTimeout(resolve, 0))
-    }
+    assert.ok(result.runtime)
+    assert.equal(host.starts.length, 1)
+    const forkUnsubscribe = service.subscribe(result.runtime!.runtimeSessionId, () => {})
+    await waitForReady(service, result.runtime!.runtimeSessionId)
     assert.equal(host.starts[1]?.input.branchFromEntryId, null)
     assert.equal(host.starts[1]?.input.sessionPath, '/sessions/original.jsonl')
     assert.equal(host.starts[1]?.input.historyAction, 'fork')
+    forkUnsubscribe()
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -211,7 +224,7 @@ test('Pi message action execution rejects streaming and non-user targets server-
   const host = new MessageActionHost()
   const service = new DefaultPiLiveService(host)
   try {
-    const original = await startOriginal(service)
+    const { state: original, unsubscribe } = await startOriginal(service)
     host.isStreaming = true
     await assert.rejects(
       () => service.executeMessageAction(original.runtimeSessionId, 'pi.new-session-from-here', 'u-2'),
@@ -223,6 +236,7 @@ test('Pi message action execution rejects streaming and non-user targets server-
       () => service.executeMessageAction(original.runtimeSessionId, 'pi.edit-from-here', 'a-1'),
       /persisted user message entry/,
     )
+    unsubscribe()
   } finally {
     await service.dispose()
   }
