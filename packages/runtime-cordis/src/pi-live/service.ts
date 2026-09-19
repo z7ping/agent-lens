@@ -502,14 +502,14 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   /**
-   * SDK 只在空闲 Worker 内预热；失败时保留冷启动路径。Recovery 不依赖预热成功。
+   * Runtime Base 只在空闲 Worker 内预热；失败时保留冷启动路径。Recovery 不依赖预热成功。
    */
   async preload(): Promise<void> {
     await Promise.all([
       this.availability(),
       this.ensureRecoveryLoaded(),
       this.host.preload?.().catch(error => {
-        console.warn('[AgentLens] Pi Live SDK Worker 预热失败；新建任务将按冷启动路径继续', error)
+        console.warn('[AgentLens] Pi Live Runtime Base Worker 预热失败；新建任务将按冷启动路径继续', error)
       }),
     ])
   }
