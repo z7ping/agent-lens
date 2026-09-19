@@ -806,7 +806,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|history-index|events|messages|commands|workspace-references|message-actions|runtime-disclosures|runtime-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|history-index|session-tree|events|messages|commands|workspace-references|message-actions|runtime-disclosures|runtime-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -906,6 +906,17 @@ export async function handleLiveRequest(
       writeJson(response, 200, jsonValue(index))
       return true
     }
+    if (action === 'session-tree' && request.method === 'GET') {
+      requireCapability(adapter, 'session-tree')
+      if (!adapter.sessionTree) throw httpError(409, `${adapter.manifest.displayName} does not expose Live session tree`)
+      writeJson(response, 200, jsonValue(await shareAdapterRead(
+        adapter,
+        `session-tree:${runtimeSessionId}`,
+        () => adapter.sessionTree!(runtimeSessionId),
+      )))
+      return true
+    }
+
     if (action === 'events' && request.method === 'GET') {
       await connectEvents(request, response, adapter, runtimeSessionId)
       return true
