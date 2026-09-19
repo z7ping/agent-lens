@@ -197,8 +197,9 @@ test('persisted runtimes stay logical until selected and idle workers rehydrate 
     assert.equal(suspended[0]?.processId, undefined)
     assert.equal(host.starts, 1)
 
-    await service.state('runtime-1')
-    assert.equal(host.starts, 2)
+    const rehydrate = service.subscribe('runtime-1', () => {})
+    await waitFor(() => host.starts === 2, 'selected Runtime did not rehydrate after subscribe')
+    rehydrate()
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
