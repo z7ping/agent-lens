@@ -158,17 +158,13 @@ function runtimeLifecycle(state: PiLiveRuntimeState) {
         { groupId: 'themes', label: contributionText('Themes', '主题'), values: resources.themes },
       ].filter(group => group.values.length > 0)
     : undefined
+  const lifecycleMessage = state.status === 'failed'
+    ? state.error || state.initializationMessage
+    : state.initializationMessage
   return {
     status: state.status,
     elapsedMs: elapsed,
-    ...((state.status === 'failed' ? state.error || state.initializationMessage : state.initializationMessage)
-      ? {
-          message: contributionText(
-            state.status === 'failed' ? state.error || state.initializationMessage! : state.initializationMessage!,
-            state.status === 'failed' ? state.error || state.initializationMessage! : state.initializationMessage!,
-          ),
-        }
-      : {}),
+    ...(lifecycleMessage ? { message: contributionText(lifecycleMessage, lifecycleMessage) } : {}),
     stages,
     ...(resourceGroups?.length ? { resources: resourceGroups } : {}),
   }
