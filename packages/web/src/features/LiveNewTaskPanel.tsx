@@ -183,7 +183,7 @@ export function LiveNewTaskPanel({
       </header>
 
       <div className="task-center-new-fields">
-        <label>
+        <label className="task-center-new-agent-field">
           <span>{t('center.newTask.agent')}</span>
           <SelectMenu
             variant="field"
@@ -257,10 +257,12 @@ export function LiveNewTaskPanel({
                   {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
                 </div>}
               </section>}
-        </> : <section className="task-center-launch-panel" aria-label={t('center.newTask.startAgent')}>
-          <div className="task-center-launch-panel-actions">
-            <Button variant="primary" loading={starting} disabled={!available} onClick={() => void start(undefined, selectedProduct?.displayName)}>{t('center.newTask.startAgent')} <UiIcon name="arrow-right" size={14}/></Button>
+        </> : <section className="task-center-direct-start" aria-label={t('center.newTask.startAgent')}>
+          <div className="task-center-direct-start-copy">
+            <strong>{t('center.newTask.directStartTitle')}</strong>
+            <span>{t('center.newTask.directStartDescription', { agent: selectedProduct?.displayName ?? t('center.newTask.agent') })}</span>
           </div>
+          <Button variant="primary" loading={starting} disabled={!available} onClick={() => void start(undefined, selectedProduct?.displayName)}>{t('center.newTask.startAgent')} <UiIcon name="arrow-right" size={14}/></Button>
         </section>}
       </div>
 
