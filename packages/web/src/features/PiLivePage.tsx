@@ -193,6 +193,14 @@ function modelLabel(state: PiLiveStateDto | null): string {
   return [provider, id].filter(Boolean).join(' / ') || 'Pi'
 }
 
+function assistantModelLabel(state: PiLiveStateDto | null): string | undefined {
+  if (!state?.model) return undefined
+  const model = record(state.model)
+  const provider = stringValue(model.provider)
+  const id = stringValue(model.id || model.modelId || model.name)
+  return [provider, id].filter(Boolean).join(' / ') || undefined
+}
+
 function modelCompactLabel(state: PiLiveStateDto | null): string {
   if (!state?.model) return agentLensI18n.t('piLive:common.model')
   const model = record(state.model)
@@ -1346,6 +1354,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             items={currentItems}
             showAllEvents={showAllEvents}
             pendingMessageCount={visiblePendingCount}
+            assistantModelLabel={assistantModelLabel(state)}
           />}
           {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">{t('empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}

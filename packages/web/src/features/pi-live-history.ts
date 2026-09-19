@@ -11,7 +11,7 @@ import { translateProduct } from '../i18n/runtime'
 export type PiLiveItemState = 'running' | 'settled'
 
 export type PiLiveHistoryItem =
-  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
+  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; modelLabel?: string | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'thinking'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; at: string; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
@@ -77,6 +77,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
   for (const fact of facts) if (fact.kind === 'tool-result' && fact.callId) results.set(fact.callId, fact)
   const consumedResults = new Set<string>()
   const items: PiLiveHistoryItem[] = []
+  let activeModelLabel: string | undefined
 
   for (const fact of facts) {
     if (fact.kind === 'message') {
@@ -88,6 +89,12 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
           role: fact.role,
           text: presentation.text,
           ...(presentation.attachments.length ? { attachments: presentation.attachments } : {}),
+          ...(fact.role === 'assistant'
+            ? (() => {
+                const modelLabel = [fact.provider, fact.model].filter(Boolean).join(' / ') || activeModelLabel
+                return modelLabel ? { modelLabel } : {}
+              })()
+            : {}),
           at: fact.at,
           ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
         })
@@ -144,6 +151,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
       continue
     }
     if (fact.kind === 'event') {
+      if (fact.event === 'model.changed' && fact.detail.trim()) activeModelLabel = fact.detail.trim()
       items.push({ id: fact.id, kind: 'lifecycle', event: fact.event, label: fact.label, detail: fact.detail, at: fact.at, nativeType: fact.nativeType, ...(fact.parentId ? { parentId: fact.parentId } : {}), raw: fact.raw })
       continue
     }
