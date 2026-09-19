@@ -224,10 +224,10 @@ test('Live 首屏与旧历史只能通过有界 Snapshot 窗口读取', () => {
 })
 
 
-test('session tree stays a generic opt-in data capability and does not replace turn rail UI', async () => {
-  const core = await readFile(new URL('../../../core/src/contracts/live.ts', import.meta.url), 'utf8')
-  const client = await readFile(new URL('../client/live.ts', import.meta.url), 'utf8')
-  const page = await readFile(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+test('session tree stays a generic opt-in data capability and does not replace turn rail UI', () => {
+  const core = readFileSync(new URL('../../../core/src/contracts/live.ts', import.meta.url), 'utf8')
+  const client = readFileSync(new URL('../client/live.ts', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 
   assert.match(core, /\| 'session-tree'/)
   assert.match(core, /sessionTree\?\(runtimeSessionId: string\)/)
