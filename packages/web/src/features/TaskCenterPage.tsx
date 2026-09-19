@@ -209,10 +209,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     // search/filter transitions look successful while actually showing stale projects.
     setLaunchableProjects([])
     setLaunchablePage(null)
+    setProjectLoading(true)
+    setProjectLoadingMore(false)
+    setProjectDiscoveryError('')
     const timer = window.setTimeout(() => {
-      setProjectLoading(true)
-      setProjectLoadingMore(false)
-      setProjectDiscoveryError('')
       void fetchLaunchableProjects({
         search: projectSearch,
         limit: 20,
