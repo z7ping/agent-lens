@@ -213,3 +213,74 @@ test('Pi Runtime Disclosure stays visible while extension binding is pending or 
     }
   }
 })
+
+
+test('Runtime resource summary hides zero categories and updates in place after resource discovery', async () => {
+  let emit: ((event: Record<string, unknown>) => void) | undefined
+
+  class ResourceSummaryHost implements PiRuntimeHost {
+    async start(
+      runtimeSessionId: string,
+      _input: PiLiveStartInput,
+      _signal: AbortSignal,
+      onEvent: (event: Record<string, unknown>) => void,
+      _onExit: (error: Error) => void,
+    ): Promise<PiRuntimeHandle> {
+      emit = onEvent
+      const state = (): PiLiveRuntimeState => ({
+        runtimeSessionId,
+        status: 'ready',
+        extensionBindingStatus: 'binding',
+        isStreaming: false,
+        isCompacting: false,
+        pendingMessageCount: 0,
+      })
+      return {
+        state: async () => state(),
+        snapshot: async () => ({ state: state(), entries: [], leafId: null }),
+        controls: async () => ({ models: [] }),
+        setModel: async () => state(),
+        setThinkingLevel: async () => state(),
+        prompt: async () => {},
+        steer: async () => {},
+        followUp: async () => {},
+        clearQueue: async () => ({ steering: [], followUp: [] }),
+        abort: async () => ({ steering: [], followUp: [] }),
+        respondToExtension: async () => {},
+        terminate: async () => {},
+      }
+    }
+  }
+
+  const service = new DefaultPiLiveService(new ResourceSummaryHost())
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+
+    const before = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
+    assert.ok(before?.summary)
+    assert.equal(before.summary.default.includes('Contexts 0'), false)
+    assert.equal(before.summary.default.includes('Skills 0'), false)
+    assert.equal(before.summary.default.includes('Extensions 0'), false)
+
+    emit?.({
+      type: 'runtime_resources',
+      resources: {
+        contexts: ['AGENTS.md', 'PROJECT.md'],
+        skills: ['review'],
+        prompts: [],
+        extensions: ['ext-a', 'ext-b'],
+        themes: ['dark'],
+        diagnostics: [],
+      },
+    })
+    emit?.({ type: 'runtime_extension_binding', status: 'ready' })
+
+    const after = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
+    assert.equal(after?.summary?.default, 'Ready · Contexts 2 · Skills 1 · Extensions 2')
+    assert.equal(after?.summary?.localizations?.['zh-CN'], '就绪 · 上下文 2 · 技能 1 · 扩展 2')
+    assert.equal(after?.summary?.default.includes('Themes'), false)
+  } finally {
+    await service.dispose()
+  }
+})
