@@ -254,11 +254,12 @@ export async function canonicalPiLiveSnapshot(
     ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit!))
     : LIVE_SNAPSHOT_DEFAULT_LIMIT
   const before = window.before
-  const after = window.after ?? since
+  const after = window.after
   const edge = window.edge
   const around = window.around
-  const selectors = [before, after, edge, around].filter(Boolean)
+  const selectors = [since, before, after, edge, around].filter(Boolean)
   if (selectors.length > 1) throw new Error('Canonical Live history accepts only one cursor or edge selector')
+  const forwardCursor = after ?? since
 
   if (around) {
     const pivot = await boundaryObservation(storage, logicalSessionId, around)
@@ -295,12 +296,16 @@ export async function canonicalPiLiveSnapshot(
 
   if (before) {
     boundary = await boundaryObservation(storage, logicalSessionId, before)
-    if (!boundary) throw new Error('Canonical Live history before cursor was not found')
+    if (!boundary || !sourceSessionIds.has(boundary.sourceSessionId) || !RENDERABLE_KINDS.has(boundary.kind)) {
+      throw new Error('Canonical Live history before cursor was not found')
+    }
     direction = 'desc'
     hasLaterBase = true
-  } else if (after) {
-    boundary = await boundaryObservation(storage, logicalSessionId, after)
-    if (!boundary) throw new Error('Canonical Live history after cursor was not found')
+  } else if (forwardCursor) {
+    boundary = await boundaryObservation(storage, logicalSessionId, forwardCursor)
+    if (!boundary || !sourceSessionIds.has(boundary.sourceSessionId) || !RENDERABLE_KINDS.has(boundary.kind)) {
+      throw new Error('Canonical Live history after cursor was not found')
+    }
     direction = 'asc'
     hasEarlierBase = true
   } else if (edge === 'earliest') {
