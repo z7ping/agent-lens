@@ -1121,6 +1121,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     if (!pane || review.detailLoadingMore) return
     const saved = captureReviewReaderPosition(pane)
     const userRevision = readerUserRevisionRef.current
+    // 每页只消费一次用户滚动意图，避免短会话在 sentinel 持续可见时自动吞完整段历史。
+    detailAutoLoadBaselineRef.current = userRevision
     await model.loadMoreReviewDetail()
     window.requestAnimationFrame(() => {
       const current = readerPaneRef.current
@@ -1141,6 +1143,47 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
       restoreReviewReaderPosition(current, saved)
     })
   }, [model, review.detailLoadingMore])
+
+  useEffect(() => {
+    const sentinel = detailLoadSentinelRef.current
+    if (
+      !sentinel
+      || !detail?.page.hasMore
+      || detail.page.direction !== 'backward'
+      || detail.page.filter !== 'all'
+      || review.detailLoadingMore
+      || review.error
+    ) return
+    const root = sentinel.closest('.review-reader-pane') as HTMLElement | null
+    if (!root) return
+    let pending = false
+    const maybeLoadOlder = () => {
+      if (pending || readerUserRevisionRef.current <= detailAutoLoadBaselineRef.current) return
+      const rootBounds = root.getBoundingClientRect()
+      const sentinelBounds = sentinel.getBoundingClientRect()
+      if (sentinelBounds.top > rootBounds.bottom + 360 || sentinelBounds.bottom < rootBounds.top - 360) return
+      pending = true
+      void loadOlder().finally(() => { pending = false })
+    }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) maybeLoadOlder()
+    }, { root, rootMargin: '360px 0px' })
+    observer.observe(sentinel)
+    root.addEventListener('scroll', maybeLoadOlder, { passive: true })
+    return () => {
+      observer.disconnect()
+      root.removeEventListener('scroll', maybeLoadOlder)
+    }
+  }, [
+    detail?.id,
+    detail?.page.hasMore,
+    detail?.page.nextCursor,
+    detail?.page.direction,
+    detail?.page.filter,
+    review.detailLoadingMore,
+    review.error,
+    loadOlder,
+  ])
 
   useEffect(() => {
     const sentinel = detailLoadSentinelRef.current
@@ -1562,7 +1605,11 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
 
             <div className="review-flow">
               {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">
-                {review.detailLoadingMore ? t('local.roundNav.loadingOlder') : review.error ? <button onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</button> : <button onClick={() => void loadOlder()}>{t('local.roundNav.loadOlder')}</button>}
+                {review.detailLoadingMore
+                  ? t('local.roundNav.loadingOlder')
+                  : review.error
+                    ? <button onClick={() => void loadOlder()}>{t('local.roundNav.loadFailedRetry')}</button>
+                    : null}
               </div>}
               {annotatedInteractions.map((item, index) => <VirtualRoundMount
                 key={item.round.id}
