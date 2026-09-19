@@ -32,7 +32,11 @@ const LIVE_ROOT = '/api/v1/live'
 const LIVE_PRODUCT_CACHE_MS = 2_000
 const LIVE_RUNTIME_LIST_CACHE_MS = 1_000
 let liveProductCache: { at: number; items: LiveProductDto[] } | null = null
-let liveRuntimeListCache: { at: number; items: LiveRuntimeRefDto[] } | null = null
+export interface LiveRuntimeListSnapshot {
+  items: LiveRuntimeRefDto[]
+  failedLiveIds: string[]
+}
+let liveRuntimeListCache: { at: number; snapshot: LiveRuntimeListSnapshot } | null = null
 
 const LIVE_VISIBLE_FLUSH_MS = 48
 const LIVE_HIDDEN_FLUSH_MS = 250
@@ -268,13 +272,23 @@ export const liveApi = {
     return requestJson<{ items: LiveProductMetadata[] }>(`${LIVE_ROOT}/product-metadata?${params}`).then(result => result.items)
   },
 
-  async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
+  async knownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
     if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
-      return liveRuntimeListCache.items
+      return liveRuntimeListCache.snapshot
     }
-    const items = (await requestJson<{ items: LiveRuntimeRefDto[] }>(`${LIVE_ROOT}/runtimes`)).items
-    liveRuntimeListCache = { at: Date.now(), items }
-    return items
+    const raw = await requestJson<{ items: LiveRuntimeRefDto[]; failedLiveIds?: string[] }>(`${LIVE_ROOT}/runtimes`)
+    const snapshot = {
+      items: raw.items,
+      failedLiveIds: Array.isArray(raw.failedLiveIds)
+        ? raw.failedLiveIds.filter(value => typeof value === 'string' && value)
+        : [],
+    }
+    liveRuntimeListCache = { at: Date.now(), snapshot }
+    return snapshot
+  },
+
+  async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
+    return (await this.knownRuntimeSnapshot()).items
   },
 
   availability(liveId: string): Promise<LiveAvailabilityDto> {
@@ -363,13 +377,13 @@ export const liveApi = {
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/message-actions')),
     )).items
   },
-  executeMessageAction(
+  async executeMessageAction(
     liveId: string,
     runtimeSessionId: string,
     actionId: string,
     targetEntryId: string,
   ): Promise<LiveMessageActionResultDto> {
-    return requestJson(
+    const result = await requestJson<LiveMessageActionResultDto>(
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/message-actions')),
       {
         method: 'POST',
@@ -377,6 +391,10 @@ export const liveApi = {
         body: JSON.stringify({ actionId, targetEntryId }),
       },
     )
+    if (result.outcome === 'open-runtime' && result.runtime) {
+      notifyLiveStateChanged(liveId, result.runtime.runtimeSessionId)
+    }
+    return result
   },
 
   async runtimeDisclosures(
