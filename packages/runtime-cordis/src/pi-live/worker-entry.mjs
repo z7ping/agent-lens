@@ -37,6 +37,7 @@ let runtimeMode = 'compatibility'
 let capabilities
 let packageUpdateCheck = 'checking'
 let packageUpdates = []
+let currentStartupResources
 let roundIndexCache
 let initializationStartedAt = 0
 let currentInitializationStage
@@ -218,6 +219,12 @@ function startupResourceSnapshot(resourceLoader, cwd, extraDiagnostics, fallback
       ...diagnosticMessages(agentsResult),
     ], 80),
   }
+}
+
+function publishStartupResources(resources) {
+  if (!resources) return
+  currentStartupResources = resources
+  send('event', { type: 'runtime_resources', resources })
 }
 
 function isCoalescibleEnvelope(envelope) {
@@ -796,7 +803,7 @@ async function initialize(input) {
       })
       recordStartupMetric('cwd_services_create_ms', Date.now() - resourcesStartedAt)
       const resources = startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics)
-      if (resources) send('event', { type: 'runtime_resources', resources })
+      publishStartupResources(resources)
 
       progress('creating_session', '正在创建 Pi Session')
       const sessionStartedAt = Date.now()
@@ -818,7 +825,7 @@ async function initialize(input) {
     recordStartupMetric('agent_session_create_ms', Date.now() - compatibilitySessionStartedAt)
     const compatibilityLoader = record(created).resourceLoader ?? record(record(created).services).resourceLoader
     const compatibilityResources = startupResourceSnapshot(compatibilityLoader, input.cwd, record(created).diagnostics, record(created).extensionsResult)
-    if (compatibilityResources) send('event', { type: 'runtime_resources', resources: compatibilityResources })
+    publishStartupResources(compatibilityResources)
     session = created.session
     runtime = { dispose: async () => session.dispose() }
   }
@@ -862,7 +869,7 @@ function beginExtensionBinding(input) {
     extensionBindingStatus = 'ready'
     const finalResourceLoader = record(session).resourceLoader
     const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
-    if (finalResources) send('event', { type: 'runtime_resources', resources: finalResources })
+    publishStartupResources(finalResources)
     send('event', { type: 'runtime_extension_binding', status: 'ready' })
   }).catch(error => {
     recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
@@ -890,7 +897,6 @@ async function waitForExtensionBinding() {
 }
 
 function state() {
-  const resources = startupResourceSnapshot(record(session).resourceLoader, runtimeCwd)
   return {
     runtimeSessionId, status: 'ready', initializationStage: 'ready', initializationMessage: `Pi Runtime 已就绪 · ${formatElapsed(handshakeDiagnostics().initializationElapsedMs)}`,
     ...handshakeDiagnostics(),
@@ -900,7 +906,7 @@ function state() {
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
     ...(extensionBindingStatus ? { extensionBindingStatus } : {}),
     ...(extensionBindingError ? { extensionBindingError } : {}),
-    ...(resources ? { startupResources: resources } : {}),
+    ...(currentStartupResources ? { startupResources: currentStartupResources } : {}),
     packageUpdateCheck,
     ...(packageUpdates.length ? { packageUpdates } : {}),
   }
