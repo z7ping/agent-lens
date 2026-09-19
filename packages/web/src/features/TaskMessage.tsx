@@ -3,6 +3,8 @@ import type { ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { copyText } from '../client/clipboard'
+import { IconButton, UiIcon } from '../components/ui'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
@@ -18,6 +20,7 @@ export interface TaskMessageProps {
   text: string
   attachments?: readonly TaskMessageAttachment[] | undefined
   author?: string
+  modelLabel?: string | undefined
   time?: string | undefined
   meta?: ReactNode
   actions?: ReactNode
@@ -34,6 +37,7 @@ export function TaskMessage({
   text,
   attachments = EMPTY_TASK_MESSAGE_ATTACHMENTS,
   author,
+  modelLabel,
   time,
   meta,
   actions,
@@ -50,13 +54,28 @@ export function TaskMessage({
   const [expanded, setExpanded] = useState(() => !user)
   const [canCollapse, setCanCollapse] = useState(false)
   const [collapsedHeight, setCollapsedHeight] = useState<number>()
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const surfaceRef = useRef<HTMLDivElement>(null)
+  const copyResetTimer = useRef<number | undefined>(undefined)
 
   useEffect(() => () => {
     for (const attachment of attachments) {
       if (attachment.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(attachment.previewUrl)
     }
   }, [attachments])
+
+  useEffect(() => () => window.clearTimeout(copyResetTimer.current), [])
+
+  const copyMessage = async () => {
+    window.clearTimeout(copyResetTimer.current)
+    try {
+      await copyText(text)
+      setCopyState('copied')
+    } catch {
+      setCopyState('error')
+    }
+    copyResetTimer.current = window.setTimeout(() => setCopyState('idle'), 1800)
+  }
 
   const measure = useCallback(() => {
     const element = surfaceRef.current
@@ -99,9 +118,13 @@ export function TaskMessage({
     data-task-message-role={role}
     data-streaming={streaming ? 'true' : undefined}
     data-pending={pending ? 'true' : undefined}
+    data-model-label={modelLabel || undefined}
     aria-busy={streaming || pending || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
+      {!user && modelLabel && <div className="task-message-model-meta">
+        <b>{resolvedAuthor}</b><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span>{time && <time>{time}</time>}
+      </div>}
       <div className="task-message-meta"><b>{resolvedAuthor}</b>{meta}{time && <time>{time}</time>}</div>
       {pending && !user ? <div
         className="task-message-response-pending"
@@ -147,8 +170,16 @@ export function TaskMessage({
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
           {(canCollapse || !user) && <div className="markdown-message-actions">
+            {!user && <IconButton
+              size="small"
+              className="task-message-copy-action"
+              data-copy-state={copyState}
+              aria-label={copyState === 'copied' ? t('message.copied') : copyState === 'error' ? t('message.copyFailed') : t('message.copy')}
+              title={copyState === 'copied' ? t('message.copied') : copyState === 'error' ? t('message.copyFailed') : t('message.copy')}
+              onClick={() => void copyMessage()}
+            ><UiIcon name={copyState === 'copied' ? 'check' : 'copy'} size={14}/></IconButton>}
             {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
-            {!user && <button type="button" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+            {!user && <button type="button" className="task-message-source-action" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
               {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
             </button>}
           </div>}
