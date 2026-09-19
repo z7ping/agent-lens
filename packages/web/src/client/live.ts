@@ -19,6 +19,7 @@ import type {
   LiveRuntimeEventDto,
   LiveRuntimeRefDto,
   LiveRuntimeStateDto,
+  LiveSessionTreeDto,
   LiveSnapshotDto,
   LiveStartInputDto,
   LiveThinkingControlDto,
@@ -340,6 +341,10 @@ export const liveApi = {
     if (window?.limit !== undefined) params.set('limit', String(window.limit))
     const search = params.size ? `?${params}` : ''
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
+  },
+
+  sessionTree(liveId: string, runtimeSessionId: string): Promise<LiveSessionTreeDto> {
+    return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/session-tree')))
   },
 
   historyIndex(
