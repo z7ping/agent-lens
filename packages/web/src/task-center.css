@@ -230,7 +230,7 @@
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
 .task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
 
-/* 新建任务：聚焦的 Pi 启动卡片。 */
+/* 新建任务：按 Live Product capability 呈现启动上下文。 */
 .task-center-new {
   display: grid;
   height: 100%;
@@ -261,6 +261,7 @@
 .task-center-new-readiness[data-state='unavailable'] i { background: var(--al-danger); }
 .task-center-new-fields { margin-top: 24px; }
 .task-center-new-fields label { display: grid; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 650; }
+.task-center-new-agent-field { margin-bottom: 12px; }
 .task-center-new-task-title { margin-bottom: 12px; }
 .task-center-launch-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .task-center-launch-choice.btn {
@@ -280,6 +281,20 @@
 .task-center-launch-choice small { color: var(--al-muted); font-size: 12px; font-weight: 500; line-height: 1.35; }
 .task-center-launch-panel { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--al-line); border-radius: var(--radius-md); background: var(--al-soft-2); }
 .task-center-launch-panel-actions { display: flex; justify-content: flex-end; }
+.task-center-direct-start {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+  background: var(--al-soft-2);
+}
+.task-center-direct-start-copy { display: grid; min-width: 0; gap: 3px; }
+.task-center-direct-start-copy strong { color: var(--al-ink-2); font-size: 13px; font-weight: 700; }
+.task-center-direct-start-copy span { color: var(--al-muted); font-size: 12px; line-height: 1.45; }
+.task-center-direct-start > .btn { flex: 0 0 auto; }
 .task-center-new-directory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .task-center-new-manual-directory { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .task-center-new-directory-hint { grid-column: 1 / -1; margin: 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
@@ -301,4 +316,6 @@
   .task-center-new-manual-directory { grid-template-columns: minmax(0, 1fr); }
   .task-center-new-manual-directory .btn { width: 100%; }
   .task-center-launch-panel-actions .btn { width: 100%; }
+  .task-center-direct-start { align-items: stretch; flex-direction: column; }
+  .task-center-direct-start > .btn { width: 100%; }
 }
