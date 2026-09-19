@@ -15,6 +15,12 @@ function section(source: string, start: string, end: string): string {
   return source.slice(from, to)
 }
 
+test('runtime disclosure summary keeps total elapsed beside resource counts', () => {
+  const summary = section(service, 'function runtimeDisclosureSummary', 'function runtimeDisclosureFields')
+  assert.match(summary, /\$\{status\.en\} · \$\{fallbackDuration\} ·/)
+  assert.match(summary, /\$\{status\.zh\} · \$\{fallbackDuration\} ·/)
+})
+
 test('prewarm builds only a cross-task Runtime Base', () => {
   const base = section(worker, 'async function ensureBaseRuntime', 'function rememberRequestId')
   const prewarm = section(worker, "if (envelope.type === 'prewarm')", "if (!runtimeSessionId) runtimeSessionId")
