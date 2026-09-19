@@ -415,12 +415,20 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   padding-top: 16px;
   border-top: 1px solid var(--al-line);
 }
-.live-runtime-diagnostic-section > h3 {
+.live-runtime-diagnostic-section > h3,
+.live-runtime-diagnostic-section-head > h3 {
   margin: 0;
   color: var(--al-ink);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
+}
+.live-runtime-diagnostic-section-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .live-runtime-diagnostic-rows {
   display: grid;
@@ -452,6 +460,55 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+.live-runtime-diagnostic-stages {
+  display: grid;
+  max-width: 720px;
+}
+.live-runtime-diagnostic-stage {
+  display: grid;
+  min-height: 32px;
+  grid-template-columns: 18px minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--al-line);
+}
+.live-runtime-diagnostic-stage:first-child {
+  border-top: 0;
+}
+.live-runtime-diagnostic-stage > span {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 50%;
+  color: transparent;
+}
+.live-runtime-diagnostic-stage > span.is-done {
+  border-color: color-mix(in srgb, var(--al-success) 65%, var(--al-line));
+  background: var(--al-success);
+  color: var(--al-on-accent);
+}
+.live-runtime-diagnostic-stage > span.is-active {
+  border-color: var(--al-accent);
+  background: color-mix(in srgb, var(--al-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 4px var(--al-surface);
+}
+.live-runtime-diagnostic-stage > span.is-failed {
+  border-color: var(--al-danger);
+  background: var(--al-danger);
+  color: var(--al-on-accent);
+}
+.live-runtime-diagnostic-stage > b {
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.live-runtime-diagnostic-stage > code {
+  color: var(--al-muted);
+  font: 12px/1.45 var(--font-mono);
+  white-space: nowrap;
+}
 .live-runtime-diagnostic-metrics {
   display: grid;
   max-width: 720px;
@@ -479,20 +536,36 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   font: 600 12px/1.45 var(--font-mono);
   white-space: nowrap;
 }
-.live-runtime-diagnostic-resource-list {
+.live-runtime-diagnostic-resource-groups {
   display: grid;
-  gap: 5px;
+  gap: 14px;
 }
-.live-runtime-diagnostic-disclosure {
-  border-radius: 8px;
+.live-runtime-diagnostic-resource-group {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
 }
-.live-runtime-diagnostic-disclosure > summary {
-  min-height: 34px;
+.live-runtime-diagnostic-resource-group > header {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.live-runtime-diagnostic-resource-group > header > b {
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 650;
+}
+.live-runtime-diagnostic-resource-group > header > span {
+  color: var(--al-muted);
+  font: 12px/1 var(--font-mono);
 }
 .live-runtime-diagnostic-values {
   display: grid;
+  max-height: 210px;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 5px 16px;
+  overflow: auto;
+  padding-right: 4px;
 }
 .live-runtime-diagnostic-values > span {
   min-width: 0;
@@ -503,7 +576,7 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 }
 .live-runtime-diagnostic-code-groups {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 .live-runtime-diagnostic-code-groups > section {
   display: grid;
