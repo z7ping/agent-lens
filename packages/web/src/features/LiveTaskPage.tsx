@@ -703,12 +703,28 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       return () => { cancelled = true }
     }
 
+    // The page shell and SSE must not wait for Worker-backed Snapshot.
+    // State returns the Logical Runtime immediately and may only trigger
+    // background hydration; Snapshot fills the transcript independently.
+    setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
+
     const metadataRequest = liveApi.metadata(current.liveId).then(metadata => {
       if (!cancelled) setProduct(metadata)
       return metadata
     })
 
-    const criticalRequest = liveApi.snapshot(
+    const stateRequest = liveApi.state(current.liveId, current.runtimeSessionId).then(
+      runtime => {
+        if (!cancelled) setState(runtime)
+        return runtime
+      },
+      reason => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : String(reason))
+        throw reason
+      },
+    )
+
+    void liveApi.snapshot(
       current.liveId,
       current.runtimeSessionId,
       undefined,
@@ -727,19 +743,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         setInputHistory(projectLiveInputHistory(projectedItems))
         snapshotBaseActiveCountRef.current = nextProjection.active.length
         leafIdRef.current = snapshot.leafId ?? undefined
-        setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
       },
-      async snapshotError => {
-        if (cancelled) return
-        setSyncError(snapshotError instanceof Error ? snapshotError.message : String(snapshotError))
-        const runtime = await liveApi.state(current.liveId, current.runtimeSessionId)
-        if (cancelled) return
-        setState(runtime)
-        setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
+      snapshotError => {
+        if (!cancelled) setSyncError(snapshotError instanceof Error ? snapshotError.message : String(snapshotError))
       },
     )
 
-    void Promise.all([criticalRequest, metadataRequest]).then(async ([, matched]) => {
+    void Promise.all([stateRequest, metadataRequest]).then(async ([, matched]) => {
       if (cancelled) return
       const queueRevision = queueRevisionRef.current
 
