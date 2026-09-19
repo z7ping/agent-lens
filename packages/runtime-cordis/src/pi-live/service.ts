@@ -131,6 +131,32 @@ function runtimeStatusLabel(status: PiLiveRuntimeState['status']): { en: string;
   return { en: 'Ready', zh: '就绪' }
 }
 
+function runtimeDisclosureSummary(
+  state: PiLiveRuntimeState,
+  status: { en: string; zh: string },
+  fallbackDuration: string,
+): LiveContributionText {
+  const resources = state.startupResources
+  const groups = [
+    { count: resources?.contexts.length ?? 0, en: 'Contexts', zh: '上下文' },
+    { count: resources?.skills.length ?? 0, en: 'Skills', zh: '技能' },
+    { count: resources?.prompts.length ?? 0, en: 'Prompts', zh: '提示词' },
+    { count: resources?.extensions.length ?? 0, en: 'Extensions', zh: '扩展' },
+  ].filter(item => item.count > 0)
+
+  if (!groups.length) {
+    return contributionText(
+      `${status.en} · ${fallbackDuration}`,
+      `${status.zh} · ${fallbackDuration}`,
+    )
+  }
+
+  return contributionText(
+    `${status.en} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
+    `${status.zh} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
+  )
+}
+
 function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContributionField[] {
   const fields: LiveRuntimeContributionField[] = []
   const currentStage = stageLabel(state.initializationStage)
@@ -976,11 +1002,8 @@ export class DefaultPiLiveService implements PiLiveService {
     const duration = contributionDuration(elapsed)
     return [{
       contributionId: 'pi.runtime.diagnostics',
-      title: contributionText('Runtime diagnostics', '运行时诊断'),
-      summary: contributionText(
-        `${status.en} · ${duration}`,
-        `${status.zh} · ${duration}`,
-      ),
+      title: contributionText('This run', '本次运行'),
+      summary: runtimeDisclosureSummary(state, status, duration),
       tone: state.status === 'failed' || state.extensionBindingStatus === 'failed'
         ? 'danger' as const
         : state.status === 'initializing' || state.extensionBindingStatus === 'binding'
