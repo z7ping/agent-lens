@@ -27,3 +27,13 @@ test('initialization diagnostics are requested before ready-only controls', () =
   assert.ok(state >= 0 && disclosure > state)
   assert.ok(controls > disclosure, 'runtime initialization diagnostics must not wait for ready-only controls')
 })
+
+
+test('Live task keeps a prominent initialization progress while background hydration runs', () => {
+  assert.match(
+    page,
+    /\(!state \|\| state\.status === 'initializing'\)[\s\S]{0,260}<OperationProgress/,
+  )
+  assert.match(page, /statusLabel=\{runtimeStatus\}/)
+  assert.match(page, /<LiveRuntimeDisclosures/)
+})
