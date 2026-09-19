@@ -24,7 +24,6 @@ test('Review 与 Live 导轨由轮次数据驱动，不依赖全树 MutationObse
 
 test('超长轮次导轨限制真实 DOM tick 数量', () => {
   assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS\s*=\s*80/)
-  assert.match(taskSurface, /TASK_TURN_RAIL_MAX_TICKS\s*=\s*80/)
   assert.match(taskSurface, /renderedRailItems = renderTurnRailItems/)
   assert.match(taskSurface, /sampledRoundOrdinals/)
   assert.match(taskSurface, /renderedRailItems\.map/)
@@ -48,7 +47,7 @@ test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
 })
 
 test('轮次导轨逻辑覆盖全量轮次，80 只属于视觉 DOM 上限', () => {
-  assert.match(liveTask, /historyIndex\(current\.liveId, current\.runtimeSessionId, \{ limit: 0 \}\)/)
+  assert.match(liveTask, /historyIndexAnchorCursorRef\.current[\s\S]{0,260}\? \{ cursor: historyIndexAnchorCursorRef\.current \}[\s\S]{0,120}: \{ limit: 0 \}/)
   assert.match(liveTask, /fromOrdinal: targetOrdinal, limit: 1/)
   assert.match(liveTask, /around: cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
   assert.match(liveTask, /turnRailTotal=\{turnRailTotal\}/)
