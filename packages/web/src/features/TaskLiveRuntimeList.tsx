@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/ui'
 import { sessionListTitle } from './task-center'
 import { workspaceDisplayName } from './task-detail-model'
 import {
+  mergeTaskLiveRuntimes,
   parseTaskLiveRuntimeLocation,
   taskLiveRuntimeHref,
   taskLiveRuntimeStatus,
@@ -59,10 +60,17 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
       inFlight = true
       dirty = false
       try {
-        const next = await liveApi.knownRuntimes()
-        if (!disposed) setRuntimes(next)
+        const snapshot = await liveApi.knownRuntimeSnapshot()
+        if (!disposed) {
+          setRuntimes(previous => mergeTaskLiveRuntimes(
+            previous,
+            snapshot.items,
+            snapshot.failedLiveIds,
+          ))
+        }
       } catch {
-        if (!disposed) setRuntimes([])
+        // A transient transport failure is not proof that every Runtime ended.
+        // Keep the last known list until a successful authoritative refresh.
       } finally {
         inFlight = false
         if (dirty && !disposed) schedule(100)
