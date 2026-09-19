@@ -26,6 +26,7 @@ export interface TaskHeaderProps {
   submeta?: ReactNode
   metrics?: TaskHeaderMetric[]
   infoItems?: TaskHeaderInfoItem[]
+  infoContent?: ReactNode
   actions?: ReactNode
   className?: string
 }
@@ -81,7 +82,7 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
-export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], infoContent, actions, className = '' }: TaskHeaderProps) {
   const { t } = useTranslation('task')
   const resolvedStatus = status ?? t('header.completed')
   const resolvedContext = context === t('header.noProject') ? t('header.unlinkedProject') : context
@@ -94,7 +95,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
   const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
-  const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0)
+  const hasCompactInfo = Boolean(infoItems.length > 0 || infoContent || resolvedContext || submeta || metrics.length > 0)
 
   useLayoutEffect(() => {
     const documentRoot = readonlySessionDocument(headerRef.current)
@@ -199,6 +200,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
           </>}
       </section>
+      {infoContent && <div className="task-header-info-content">{infoContent}</div>}
     </Drawer>
   </>
 }
