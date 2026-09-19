@@ -786,6 +786,8 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.handle = handle
       runtime.capabilities = handle.capabilities ?? runtime.capabilities
       if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
+      if (handle.startupMetrics?.length) runtime.startupMetrics = [...handle.startupMetrics]
+      runtime.warmWorkerStatus = handle.warmWorkerStatus ?? runtime.warmWorkerStatus
 
       const requestedSessionPath = runtime.input.sessionPath?.trim()
       let readyState: PiLiveRuntimeState | undefined
