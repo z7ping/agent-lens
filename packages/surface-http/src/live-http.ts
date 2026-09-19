@@ -15,6 +15,8 @@ import type {
   LiveRuntimeActionResult,
   LiveRuntimeContributionField,
   LiveRuntimeDisclosureContribution,
+  LiveRuntimeLifecycleContribution,
+  LiveRuntimeLifecycleResourceGroupContribution,
   LiveRuntimeState,
   LiveSnapshot,
   LiveService,
@@ -34,6 +36,8 @@ const MAX_LIVE_CONTRIBUTION_DESCRIPTION = 600
 const MAX_LIVE_RUNTIME_DISCLOSURES = 8
 const MAX_LIVE_RUNTIME_FIELDS = 40
 const MAX_LIVE_RUNTIME_ACTIONS = 16
+const MAX_LIVE_RUNTIME_LIFECYCLE_STAGES = 16
+const MAX_LIVE_RUNTIME_LIFECYCLE_RESOURCE_GROUPS = 16
 const MAX_LIVE_CONTRIBUTION_VALUES = 80
 const MAX_LIVE_CONTRIBUTION_VALUE = 4_000
 const SSE_HEARTBEAT_MS = 15_000
@@ -130,6 +134,79 @@ function contributionValue(value: unknown): LiveContributionValue | null {
   return contributionText(value, MAX_LIVE_CONTRIBUTION_VALUE)
 }
 
+function normalizeRuntimeLifecycle(value: unknown): LiveRuntimeLifecycleContribution | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const row = value as Record<string, unknown>
+  const status = row.status
+  if (status !== 'initializing' && status !== 'ready' && status !== 'failed') return null
+  const elapsedMs = row.elapsedMs === undefined
+    ? undefined
+    : typeof row.elapsedMs === 'number' && Number.isFinite(row.elapsedMs) && row.elapsedMs >= 0
+      ? row.elapsedMs
+      : null
+  if (elapsedMs === null) return null
+  const message = row.message === undefined
+    ? undefined
+    : contributionText(row.message, MAX_LIVE_CONTRIBUTION_DESCRIPTION)
+  if (row.message !== undefined && !message) return null
+  if (!Array.isArray(row.stages)) return null
+
+  const stages: LiveRuntimeLifecycleContribution['stages'][number][] = []
+  const stageIds = new Set<string>()
+  for (const candidate of row.stages.slice(0, MAX_LIVE_RUNTIME_LIFECYCLE_STAGES)) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+    const stage = candidate as Record<string, unknown>
+    const stageId = typeof stage.stageId === 'string' ? stage.stageId.trim() : ''
+    if (!stageId || stageId.length > 128 || stageIds.has(stageId)) continue
+    const label = contributionText(stage.label, MAX_LIVE_CONTRIBUTION_LABEL)
+    const stageStatus = stage.status
+    if (!label
+      || (stageStatus !== 'pending' && stageStatus !== 'active' && stageStatus !== 'done' && stageStatus !== 'failed')) continue
+    const durationMs = stage.durationMs === undefined
+      ? undefined
+      : typeof stage.durationMs === 'number' && Number.isFinite(stage.durationMs) && stage.durationMs >= 0
+        ? stage.durationMs
+        : null
+    if (durationMs === null) continue
+    stageIds.add(stageId)
+    stages.push({
+      stageId,
+      label,
+      status: stageStatus,
+      ...(durationMs !== undefined ? { durationMs } : {}),
+    })
+  }
+  if (!stages.length) return null
+
+  const resources: LiveRuntimeLifecycleResourceGroupContribution[] = []
+  const groupIds = new Set<string>()
+  if (Array.isArray(row.resources)) {
+    for (const candidate of row.resources.slice(0, MAX_LIVE_RUNTIME_LIFECYCLE_RESOURCE_GROUPS)) {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+      const group = candidate as Record<string, unknown>
+      const groupId = typeof group.groupId === 'string' ? group.groupId.trim() : ''
+      if (!groupId || groupId.length > 128 || groupIds.has(groupId)) continue
+      const label = contributionText(group.label, MAX_LIVE_CONTRIBUTION_LABEL)
+      if (!label || !Array.isArray(group.values)) continue
+      const values = group.values
+        .slice(0, MAX_LIVE_CONTRIBUTION_VALUES)
+        .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+        .map(item => item.trim().slice(0, MAX_LIVE_CONTRIBUTION_VALUE))
+      if (!values.length) continue
+      groupIds.add(groupId)
+      resources.push({ groupId, label, values })
+    }
+  }
+
+  return {
+    status,
+    ...(elapsedMs !== undefined ? { elapsedMs } : {}),
+    ...(message ? { message } : {}),
+    stages,
+    ...(resources.length ? { resources } : {}),
+  }
+}
+
 function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContribution[] {
   if (!Array.isArray(value)) return []
   const result: LiveRuntimeDisclosureContribution[] = []
@@ -160,6 +237,8 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
       && tone !== 'warning'
       && tone !== 'danger') continue
     if (row.defaultExpanded !== undefined && typeof row.defaultExpanded !== 'boolean') continue
+    const lifecycle = row.lifecycle === undefined ? undefined : normalizeRuntimeLifecycle(row.lifecycle)
+    if (row.lifecycle !== undefined && !lifecycle) continue
 
     const fields: LiveRuntimeContributionField[] = []
     for (const fieldCandidate of row.fields) {
@@ -227,6 +306,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
       ...(summary ? { summary } : {}),
       ...(tone ? { tone } : {}),
       ...(typeof row.defaultExpanded === 'boolean' ? { defaultExpanded: row.defaultExpanded } : {}),
+      ...(lifecycle ? { lifecycle } : {}),
       fields,
       ...(actions.length ? { actions } : {}),
     })

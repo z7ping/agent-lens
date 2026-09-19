@@ -258,6 +258,20 @@ class FakeLiveAdapter implements LiveAdapter {
       summary: { default: 'Ready', localizations: { 'zh-CN': '就绪' } },
       tone: 'neutral' as const,
       defaultExpanded: false,
+      lifecycle: {
+        status: 'ready' as const,
+        elapsedMs: 8_600,
+        stages: [
+          { stageId: 'starting_worker', label: { default: 'Starting worker', localizations: { 'zh-CN': '启动 Worker' } }, status: 'done' as const, durationMs: 320 },
+          { stageId: 'loading_sdk', label: { default: 'Loading SDK', localizations: { 'zh-CN': '加载 SDK' } }, status: 'done' as const, durationMs: 890 },
+          { stageId: 'loading_resources', label: { default: 'Loading resources', localizations: { 'zh-CN': '加载资源' } }, status: 'done' as const, durationMs: 7_600 },
+        ],
+        resources: [{
+          groupId: 'skills',
+          label: { default: 'Skills', localizations: { 'zh-CN': '技能' } },
+          values: ['council-mode', 'pi-subagents'],
+        }],
+      },
       fields: [{
         label: { default: 'SDK' },
         value: '1.0.0',
@@ -553,6 +567,20 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         summary: { default: 'Ready', localizations: { 'zh-CN': '就绪' } },
         tone: 'neutral',
         defaultExpanded: false,
+        lifecycle: {
+          status: 'ready',
+          elapsedMs: 8600,
+          stages: [
+            { stageId: 'starting_worker', label: { default: 'Starting worker', localizations: { 'zh-CN': '启动 Worker' } }, status: 'done', durationMs: 320 },
+            { stageId: 'loading_sdk', label: { default: 'Loading SDK', localizations: { 'zh-CN': '加载 SDK' } }, status: 'done', durationMs: 890 },
+            { stageId: 'loading_resources', label: { default: 'Loading resources', localizations: { 'zh-CN': '加载资源' } }, status: 'done', durationMs: 7600 },
+          ],
+          resources: [{
+            groupId: 'skills',
+            label: { default: 'Skills', localizations: { 'zh-CN': '技能' } },
+            values: ['council-mode', 'pi-subagents'],
+          }],
+        },
         fields: [{ label: { default: 'SDK' }, value: '1.0.0' }],
         actions: [{
           actionId: 'test.retry',
