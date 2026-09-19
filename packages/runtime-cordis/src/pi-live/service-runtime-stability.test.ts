@@ -137,6 +137,7 @@ test('mount snapshot reloads an idle runtime after another Pi process appends th
   const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
   try {
     const started = await service.start({ cwd: dir, sessionPath: file, historyAction: 'continue' })
+    const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
     await waitForReady(service, started.runtimeSessionId)
     const before = await service.snapshot(started.runtimeSessionId)
     assert.equal(host.starts, 1)
@@ -152,6 +153,7 @@ test('mount snapshot reloads an idle runtime after another Pi process appends th
     await waitForReady(service, started.runtimeSessionId)
     const refreshed = await service.snapshot(started.runtimeSessionId)
     assert.ok(refreshed.entries.some(entry => (entry as Record<string, unknown>).id === 'entry-2'))
+    unsubscribe()
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
@@ -164,11 +166,13 @@ test('external append does not rebuild a streaming runtime', async () => {
   const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
   try {
     const started = await service.start({ cwd: dir, sessionPath: file, historyAction: 'continue' })
+    const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
     await waitForReady(service, started.runtimeSessionId)
     host.streaming = true
     await appendFile(file, JSON.stringify({ type: 'message', id: 'entry-2' }) + '\n')
     await service.snapshot(started.runtimeSessionId)
     assert.equal(host.starts, 1)
+    unsubscribe()
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
@@ -221,8 +225,8 @@ test('an SSE subscriber prevents idle suspension until it disconnects', async ()
   const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 25 })
   try {
     const started = await service.start({ cwd: dir, sessionPath: file, historyAction: 'continue' })
-    await waitForReady(service, started.runtimeSessionId)
     const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+    await waitForReady(service, started.runtimeSessionId)
     await new Promise(resolve => setTimeout(resolve, 60))
     assert.equal(host.terminations, 0)
 
