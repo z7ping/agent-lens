@@ -53,3 +53,27 @@ test('ready event restores transcript and controls in place without renavigation
   assert.match(readyBlock, /liveApi\.queueState/)
   assert.doesNotMatch(readyBlock, /navigate\(/)
 })
+
+
+test('Generic Live reconciler corrects SSE with visible online and active polling', () => {
+  assert.match(page, /let reconcileEpoch = 0/)
+  assert.match(page, /const reconcileState = async/)
+  assert.match(page, /epoch !== reconcileEpoch/)
+  assert.match(page, /document\.addEventListener\('visibilitychange', onVisible\)/)
+  assert.match(page, /window\.addEventListener\('online', onOnline\)/)
+  assert.match(page, /window\.setInterval\([\s\S]*5_000/)
+  assert.match(page, /if \(runtimeActive/)
+  assert.match(page, /void reconcileState\(true\)/)
+  assert.match(page, /reconcileEpoch \+= 1/)
+  assert.match(page, /window\.clearInterval\(reconcileTimer\)/)
+})
+
+test('Generic Live reconciler only escalates to bounded recovery on drift or explicit recovery boundaries', () => {
+  const start = page.indexOf('const reconcileState = async')
+  const end = page.indexOf('const onVisible', start)
+  const block = page.slice(start, end)
+  assert.match(block, /liveApi\.state/)
+  assert.match(block, /changed \|\| forceRecovery/)
+  assert.match(block, /recover\(runtime\.isStreaming \? 'live' : 'settle'\)/)
+  assert.doesNotMatch(block, /loadBoundedRecoverySnapshot/)
+})
