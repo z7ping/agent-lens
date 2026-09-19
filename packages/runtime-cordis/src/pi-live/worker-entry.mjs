@@ -28,6 +28,9 @@ let runtime
 let session
 let unsubscribe = () => {}
 let extensionUi
+let extensionBindingPromise
+let extensionBindingStatus
+let extensionBindingError
 let terminating = false
 let sdkVersion
 let runtimeMode = 'compatibility'
@@ -724,6 +727,8 @@ function handshakeDiagnostics() {
     initializationTimings,
     ...(startupMetrics.length ? { startupMetrics } : {}),
     ...(warmWorkerStatus ? { warmWorkerStatus } : {}),
+    ...(extensionBindingStatus ? { extensionBindingStatus } : {}),
+    ...(extensionBindingError ? { extensionBindingError } : {}),
     ...(session?.sessionFile ? { sessionFile: session.sessionFile } : {}),
   }
 }
@@ -821,26 +826,67 @@ async function initialize(input) {
   send('event', { type: 'runtime_capabilities', capabilities })
   extensionUi = createExtensionUi()
   unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
-  progress('binding_extensions', '正在绑定扩展界面')
-  const extensionBindStartedAt = Date.now()
-  await session.bindExtensions({
+  if (input.name) session.setSessionName(input.name)
+  if (input.provider || input.model) await selectModel(input.provider, input.model)
+
+  // Match Pi Web lifecycle semantics: Session Core becomes usable first;
+  // extension session_start/resources_discover binding continues in background.
+  progress('binding_extensions', '正在后台绑定扩展')
+  beginExtensionBinding(input)
+  recordStartupMetric('ready_ms', Math.max(0, Date.now() - initializationStartedAt))
+  progress('ready', 'Pi Runtime 核心已就绪')
+  // Package update IO waits until extension binding settles so it never competes
+  // with the foreground-critical extension startup path.
+  void extensionBindingPromise.finally(() => {
+    if (!terminating) startPackageUpdateCheck(input.cwd)
+  }).catch(() => undefined)
+}
+
+function beginExtensionBinding(input) {
+  if (extensionBindingPromise) return extensionBindingPromise
+  extensionBindingStatus = 'binding'
+  extensionBindingError = undefined
+  send('event', { type: 'runtime_extension_binding', status: 'binding' })
+  const startedAt = Date.now()
+
+  extensionBindingPromise = session.bindExtensions({
     uiContext: extensionUi.context,
     mode: 'rpc',
     abortHandler: () => { void session.abort() },
-    onError: value => send('event', { type: 'extension_error', error: diagnostic(record(value).error ?? 'Unknown extension error') }),
+    onError: value => send('event', {
+      type: 'extension_error',
+      error: diagnostic(record(value).error ?? 'Unknown extension error'),
+    }),
+  }).then(() => {
+    recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
+    extensionBindingStatus = 'ready'
+    const finalResourceLoader = record(session).resourceLoader
+    const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
+    if (finalResources) send('event', { type: 'runtime_resources', resources: finalResources })
+    send('event', { type: 'runtime_extension_binding', status: 'ready' })
+  }).catch(error => {
+    recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
+    extensionBindingStatus = 'failed'
+    extensionBindingError = diagnostic(error instanceof Error ? error.message : error)
+    send('event', {
+      type: 'runtime_extension_binding',
+      status: 'failed',
+      error: extensionBindingError,
+    })
+    throw error
   })
-  recordStartupMetric('extension_bind_ms', Date.now() - extensionBindStartedAt)
-  // resources_discover runs during bindExtensions() and may extend skills/prompts/themes.
-  // Emit a post-bind snapshot so the service sees the actual runtime resource set rather than
-  // only the pre-session loader state.
-  const finalResourceLoader = record(session).resourceLoader
-  const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
-  if (finalResources) send('event', { type: 'runtime_resources', resources: finalResources })
-  if (input.name) session.setSessionName(input.name)
-  if (input.provider || input.model) await selectModel(input.provider, input.model)
-  recordStartupMetric('ready_ms', Math.max(0, Date.now() - initializationStartedAt))
-  progress('ready', 'Pi Runtime 已就绪')
-  startPackageUpdateCheck(input.cwd)
+
+  // Binding failure must remain observable but never become an unhandled Worker rejection.
+  void extensionBindingPromise.catch(() => undefined)
+  return extensionBindingPromise
+}
+
+async function waitForExtensionBinding() {
+  if (!extensionBindingPromise) return
+  await extensionBindingPromise
+  if (extensionBindingStatus === 'failed') {
+    throw new Error(extensionBindingError || 'Pi extension binding failed')
+  }
 }
 
 function state() {
@@ -852,6 +898,8 @@ function state() {
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
+    ...(extensionBindingStatus ? { extensionBindingStatus } : {}),
+    ...(extensionBindingError ? { extensionBindingError } : {}),
     ...(resources ? { startupResources: resources } : {}),
     packageUpdateCheck,
     ...(packageUpdates.length ? { packageUpdates } : {}),
@@ -943,6 +991,14 @@ function thinkingControl() {
 
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
+  const needsExtensions = name === 'commands'
+    || name === 'navigateTree'
+    || name === 'setModel'
+    || name === 'setThinkingLevel'
+    || name === 'prompt'
+    || name === 'steer'
+    || name === 'followUp'
+  if (needsExtensions) await waitForExtensionBinding()
   if (name === 'state') return state()
   if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since, value.window)
   if (name === 'snapshotChunk') {
