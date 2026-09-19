@@ -808,22 +808,26 @@ export class DefaultPiLiveService implements PiLiveService {
       const requestedSessionPath = runtime.input.sessionPath?.trim()
       let readyState: PiLiveRuntimeState | undefined
       if (runtime.input.historyAction === 'fork' && requestedSessionPath) {
-        const forkedState = await handle.state()
-        if (!forkedState.sessionFile || sessionPathKey(forkedState.sessionFile) === sessionPathKey(requestedSessionPath)) {
+        const sessionFile = handle.initialSessionFile
+        const forkedState = sessionFile ? undefined : await handle.state()
+        const actualSessionFile = sessionFile ?? forkedState?.sessionFile
+        if (!actualSessionFile || sessionPathKey(actualSessionFile) === sessionPathKey(requestedSessionPath)) {
           await handle.terminate().catch(() => undefined)
           runtime.handle = undefined
           throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
         }
-        this.adoptRuntimeSession(runtime, forkedState.sessionFile)
+        this.adoptRuntimeSession(runtime, actualSessionFile)
         readyState = forkedState
       } else if (runtime.input.historyAction === 'continue' && requestedSessionPath) {
-        const continuedState = await handle.state()
-        if (!continuedState.sessionFile || sessionPathKey(continuedState.sessionFile) !== sessionPathKey(requestedSessionPath)) {
+        const sessionFile = handle.initialSessionFile
+        const continuedState = sessionFile ? undefined : await handle.state()
+        const actualSessionFile = sessionFile ?? continuedState?.sessionFile
+        if (!actualSessionFile || sessionPathKey(actualSessionFile) !== sessionPathKey(requestedSessionPath)) {
           await handle.terminate().catch(() => undefined)
           runtime.handle = undefined
           throw new Error('Pi 继续 Runtime 未保持目标 Session，已拒绝继续')
         }
-        this.adoptRuntimeSession(runtime, continuedState.sessionFile)
+        this.adoptRuntimeSession(runtime, actualSessionFile)
         readyState = continuedState
       }
 
