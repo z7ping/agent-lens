@@ -15,9 +15,11 @@ test('轮次导轨使用统一阅读锚点且锚定 Session Document', () => {
   assert.match(taskSurface, /\.task-session-document/)
 })
 
-test('Review 与 Live 导轨由轮次数据驱动，不依赖全树 MutationObserver 扫描', () => {
+test('Review 与 Live 导轨由轮次数据驱动，并在数据到达后释放 fallback MutationObserver', () => {
   assert.match(taskSurface, /turnRailItems\?: readonly TaskTurnRailData\[]/)
-  assert.match(taskSurface, /if \(providedTurnRailItems\) return/)
+  assert.match(taskSurface, /const hasProvidedTurnRailItems = providedTurnRailItems !== undefined/)
+  assert.match(taskSurface, /if \(hasProvidedTurnRailItems\) return/)
+  assert.match(taskSurface, /\[hasProvidedTurnRailItems, scanRounds, scheduleRailViewport\]/)
   assert.match(liveTask, /turnRailItems=\{turnRailItems\}/)
   assert.match(review, /turnRailItems=\{detail \? turnRailItems : undefined\}/)
 })
