@@ -494,7 +494,10 @@ export const liveApi = {
     const scheduler = new LiveEventScheduler(events => {
       for (const value of events) {
         listener(value)
-        if (value.normalizedEvent?.type === 'title.update') {
+        const type = value.normalizedEvent?.type
+        if (type === 'title.update' || type === 'status' || type === 'completed') {
+          // Runtime list refreshes only on low-frequency lifecycle boundaries;
+          // streaming text/tool deltas never invalidate the list.
           notifyLiveStateChanged(liveId, runtimeSessionId)
         }
       }
