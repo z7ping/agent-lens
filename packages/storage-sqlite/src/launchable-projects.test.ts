@@ -30,6 +30,7 @@ function seedSession(storage: SqliteStorageService, input: {
   workspacePath: string
   sessionId: string
   endedAt: string
+  summary?: boolean
 }): void {
   storage.db.prepare(`
     INSERT OR IGNORE INTO projects(id, name, repository_identity, created_at, last_seen_at)
@@ -56,20 +57,22 @@ function seedSession(storage: SqliteStorageService, input: {
     INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, started_at, ended_at)
     VALUES (?, 'install-pi', ?, ?, ?, ?)
   `).run(input.sessionId, input.projectId, input.workspaceId, input.endedAt, input.endedAt)
-  storage.db.prepare(`
-    INSERT INTO session_summary_projection(
-      logical_session_id,
-      installation_id,
-      started_at,
-      ended_at,
-      observation_count,
-      user_message_count,
-      tool_count,
-      error_count,
-      source_ids_json,
-      rebuilt_at
-    ) VALUES (?, 'install-pi', ?, ?, 1, 1, 0, 0, '["pi"]', ?)
-  `).run(input.sessionId, input.endedAt, input.endedAt, input.endedAt)
+  if (input.summary !== false) {
+    storage.db.prepare(`
+      INSERT INTO session_summary_projection(
+        logical_session_id,
+        installation_id,
+        started_at,
+        ended_at,
+        observation_count,
+        user_message_count,
+        tool_count,
+        error_count,
+        source_ids_json,
+        rebuilt_at
+      ) VALUES (?, 'install-pi', ?, ?, 1, 1, 0, 0, '["pi"]', ?)
+    `).run(input.sessionId, input.endedAt, input.endedAt, input.endedAt)
+  }
 }
 
 test('launchable project reader is independent of the old recent-20 review window and paginates stably', async () => {
@@ -192,6 +195,37 @@ test('launchable project reader searches the same server-side project name repos
       (await storage.launchableProjects.query({ limit: 10, search: 'observability' })).items.map(item => item.projectId),
       ['agent-lens'],
     )
+  } finally {
+    storage.close()
+  }
+})
+
+
+test('launchable project reader does not hide canonical sessions while summary projection is missing', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'canonical-only',
+      projectName: 'Canonical Only',
+      repositoryIdentity: 'z7ping/canonical-only',
+      workspaceId: 'workspace-canonical-only',
+      workspacePath: '/workspace/canonical-only',
+      sessionId: 'session-canonical-only',
+      endedAt: isoMinute(9),
+      summary: false,
+    })
+
+    assert.equal(
+      storage.db.prepare('SELECT COUNT(*) AS count FROM session_summary_projection').get().count,
+      0,
+    )
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.deepEqual(result.items.map(item => item.projectId), ['canonical-only'])
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/canonical-only')
+    assert.equal(result.items[0]?.lastSeenAt, isoMinute(9))
   } finally {
     storage.close()
   }
