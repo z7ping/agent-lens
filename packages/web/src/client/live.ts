@@ -227,6 +227,21 @@ function notifyLiveStateChanged(liveId: string, runtimeSessionId?: string): void
   }))
 }
 
+async function readKnownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
+  if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
+    return liveRuntimeListCache.snapshot
+  }
+  const raw = await requestJson<{ items: LiveRuntimeRefDto[]; failedLiveIds?: string[] }>(`${LIVE_ROOT}/runtimes`)
+  const snapshot: LiveRuntimeListSnapshot = {
+    items: raw.items,
+    failedLiveIds: Array.isArray(raw.failedLiveIds)
+      ? raw.failedLiveIds.filter(value => typeof value === 'string' && value)
+      : [],
+  }
+  liveRuntimeListCache = { at: Date.now(), snapshot }
+  return snapshot
+}
+
 async function historyInteraction(
   liveId: string,
   logicalSessionId: string,
@@ -272,23 +287,12 @@ export const liveApi = {
     return requestJson<{ items: LiveProductMetadata[] }>(`${LIVE_ROOT}/product-metadata?${params}`).then(result => result.items)
   },
 
-  async knownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
-    if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
-      return liveRuntimeListCache.snapshot
-    }
-    const raw = await requestJson<{ items: LiveRuntimeRefDto[]; failedLiveIds?: string[] }>(`${LIVE_ROOT}/runtimes`)
-    const snapshot = {
-      items: raw.items,
-      failedLiveIds: Array.isArray(raw.failedLiveIds)
-        ? raw.failedLiveIds.filter(value => typeof value === 'string' && value)
-        : [],
-    }
-    liveRuntimeListCache = { at: Date.now(), snapshot }
-    return snapshot
+  knownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
+    return readKnownRuntimeSnapshot()
   },
 
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
-    return (await this.knownRuntimeSnapshot()).items
+    return (await readKnownRuntimeSnapshot()).items
   },
 
   availability(liveId: string): Promise<LiveAvailabilityDto> {
