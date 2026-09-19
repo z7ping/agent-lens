@@ -21,6 +21,15 @@ test('runtime disclosure summary keeps total elapsed beside resource counts', ()
   assert.match(summary, /\$\{status\.zh\} · \$\{fallbackDuration\} ·/)
 })
 
+test('runtime disclosure main costs ignore background prewarm and aggregate ready metric', () => {
+  const fields = section(service, 'function runtimeDisclosureFields', 'interface PiUserMessageEntryTarget')
+  assert.match(fields, /label: contributionText\('Main costs', '主要耗时'\)/)
+  assert.match(fields, /!item\.name\.startsWith\('prewarm_'\)/)
+  assert.match(fields, /item\.name !== 'ready_ms'/)
+  assert.match(fields, /\.sort\(\(left, right\) => right\.durationMs - left\.durationMs\)/)
+  assert.match(fields, /\.slice\(0, 2\)/)
+})
+
 test('prewarm builds only a cross-task Runtime Base', () => {
   const base = section(worker, 'async function ensureBaseRuntime', 'function rememberRequestId')
   const prewarm = section(worker, "if (envelope.type === 'prewarm')", "if (!runtimeSessionId) runtimeSessionId")
