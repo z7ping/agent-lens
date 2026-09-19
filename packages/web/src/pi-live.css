@@ -352,75 +352,99 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 }
 
 
-.live-runtime-failure-notice {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 12px;
-  margin: 2px 0 10px;
-  padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--al-danger) 30%, var(--al-line));
-  border-radius: 9px;
-  background: var(--al-danger-soft);
-}
-.live-runtime-failure-copy {
+.live-runtime-disclosures {
   display: grid;
-  min-width: 0;
-  flex: 1 1 auto;
-  gap: 3px;
+  width: 100%;
+  margin: 2px 0 10px;
+  gap: 6px;
 }
-.live-runtime-failure-copy > b {
-  color: var(--al-danger);
-  font-size: 13px;
-  font-weight: 700;
+.live-runtime-lifecycle {
+  margin: 0;
 }
-.live-runtime-failure-copy > span {
-  min-width: 0;
-  color: var(--al-ink-2);
+.live-runtime-lifecycle-message {
+  margin-top: 6px;
+  color: var(--al-muted);
   font-size: 12px;
   line-height: 1.45;
-  overflow-wrap: anywhere;
 }
-
-.live-runtime-task-info {
-  display: grid;
-  gap: 14px;
+.live-runtime-lifecycle-actions {
+  align-items: center;
 }
-.live-runtime-info-section {
-  display: grid;
+.live-runtime-summary-fallback {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: var(--al-surface);
+}
+.live-runtime-summary-fallback > span {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: baseline;
   gap: 7px;
 }
-.live-runtime-info-section + .live-runtime-info-section {
-  padding-top: 12px;
-  border-top: 1px solid var(--al-line);
-}
-.live-runtime-info-section > h3 {
-  margin: 0;
+.live-runtime-summary-fallback b {
   color: var(--al-ink);
   font-size: 13px;
+}
+.live-runtime-summary-fallback small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-runtime-diagnostics-dialog .ui-overlay-body {
+  padding: 16px 18px 20px;
+}
+.live-runtime-diagnostics {
+  display: grid;
+  gap: 18px;
+}
+.live-runtime-diagnostic-section {
+  display: grid;
+  gap: 8px;
+}
+.live-runtime-diagnostic-section + .live-runtime-diagnostic-section {
+  padding-top: 16px;
+  border-top: 1px solid var(--al-line);
+}
+.live-runtime-diagnostic-section > h3 {
+  margin: 0;
+  color: var(--al-ink);
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
 }
-.live-runtime-info-rows {
+.live-runtime-diagnostic-rows {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 28px;
 }
-.live-runtime-info-row {
+.live-runtime-diagnostic-row {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  min-width: 0;
+  grid-template-columns: 116px minmax(0, 1fr);
   align-items: baseline;
   gap: 10px;
   padding: 6px 0;
   border-top: 1px solid var(--al-line);
 }
-.live-runtime-info-row:first-child {
+.live-runtime-diagnostic-row:nth-child(-n + 2) {
   border-top: 0;
 }
-.live-runtime-info-row > span {
+.live-runtime-diagnostic-row > span {
   color: var(--al-muted);
   font-size: 12px;
   line-height: 1.45;
 }
-.live-runtime-info-row > b {
+.live-runtime-diagnostic-row > b {
   min-width: 0;
   color: var(--al-ink-2);
   font-size: 13px;
@@ -428,99 +452,91 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.live-runtime-info-subgroup {
+.live-runtime-diagnostic-metrics {
   display: grid;
-  gap: 5px;
+  max-width: 720px;
 }
-.live-runtime-info-subtitle {
-  color: var(--al-muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-.live-runtime-info-metrics {
+.live-runtime-diagnostic-metric {
   display: grid;
-}
-.live-runtime-info-metric {
-  display: grid;
-  min-width: 0;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: baseline;
-  gap: 12px;
+  gap: 20px;
   padding: 5px 0;
   border-top: 1px solid var(--al-line);
 }
-.live-runtime-info-metric:first-child {
+.live-runtime-diagnostic-metric:first-child {
   border-top: 0;
 }
-.live-runtime-info-metric > span {
+.live-runtime-diagnostic-metric > span {
   min-width: 0;
   color: var(--al-ink-2);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.live-runtime-info-metric > b {
+.live-runtime-diagnostic-metric > b {
   color: var(--al-ink-2);
   font: 600 12px/1.45 var(--font-mono);
   white-space: nowrap;
 }
-.live-runtime-info-resource-list {
+.live-runtime-diagnostic-resource-list {
   display: grid;
   gap: 5px;
 }
-.live-runtime-info-disclosure {
+.live-runtime-diagnostic-disclosure {
   border-radius: 8px;
 }
-.live-runtime-info-disclosure > summary {
-  min-height: 32px;
+.live-runtime-diagnostic-disclosure > summary {
+  min-height: 34px;
 }
-.live-runtime-info-values {
+.live-runtime-diagnostic-values {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 14px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 5px 16px;
 }
-.live-runtime-info-values > span {
+.live-runtime-diagnostic-values > span {
   min-width: 0;
   color: var(--al-ink-2);
   font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.live-runtime-info-code-groups {
+.live-runtime-diagnostic-code-groups {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
-.live-runtime-info-code-groups > section {
+.live-runtime-diagnostic-code-groups > section {
   display: grid;
   gap: 5px;
 }
-.live-runtime-info-code-groups > section > b {
+.live-runtime-diagnostic-code-groups > section > b {
   color: var(--al-muted);
   font-size: 12px;
   font-weight: 650;
 }
-.live-runtime-info-code-groups .copyable-code-block {
+.live-runtime-diagnostic-code-groups .copyable-code-block {
   margin: 0;
 }
-.live-runtime-info-code-groups .copyable-code-block pre {
-  max-height: 220px;
+.live-runtime-diagnostic-code-groups .copyable-code-block pre {
+  max-height: 260px;
   overflow: auto;
 }
-.live-runtime-info-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
+
+@media (max-width: 991.98px) {
+  .live-runtime-diagnostic-rows {
+    grid-template-columns: 1fr;
+  }
+  .live-runtime-diagnostic-row:nth-child(2) {
+    border-top: 1px solid var(--al-line);
+  }
 }
 
 @media (max-width: 767.98px) {
-  .live-runtime-failure-notice {
-    align-items: stretch;
+  .live-runtime-summary-fallback {
+    align-items: flex-start;
     flex-direction: column;
   }
-  .live-runtime-info-row {
-    grid-template-columns: 96px minmax(0, 1fr);
-  }
-  .live-runtime-info-values {
+  .live-runtime-diagnostic-values {
     grid-template-columns: 1fr;
   }
 }

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type {
   LiveContributionTextDto,
   LiveContributionValueDto,
@@ -5,7 +6,7 @@ import type {
   LiveRuntimeDisclosureContributionDto,
 } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
-import { Button, Disclosure } from './ui'
+import { Button, Dialog, Disclosure, UiIcon } from './ui'
 
 function contributionText(value: LiveContributionTextDto, language: string): string {
   const normalized = language.replace(/_/g, '-').toLowerCase()
@@ -18,12 +19,20 @@ function contributionValue(value: LiveContributionValueDto, language: string): s
   return typeof value === 'string' ? value : contributionText(value, language)
 }
 
-function actionVariant(action: LiveRuntimeActionContributionDto): 'default' | 'primary' | 'danger' {
-  return action.tone === 'primary' || action.tone === 'danger' ? action.tone : 'default'
-}
-
 function localText(language: string, zh: string, en: string): string {
   return language.replace(/_/g, '-').toLowerCase().startsWith('zh') ? zh : en
+}
+
+function duration(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '—'
+  const ms = Math.max(0, value)
+  if (ms < 1) return '<1ms'
+  if (ms < 1_000) return `${Math.round(ms)}ms`
+  return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)}s`
+}
+
+function actionVariant(action: LiveRuntimeActionContributionDto): 'default' | 'primary' | 'danger' {
+  return action.tone === 'primary' || action.tone === 'danger' ? action.tone : 'default'
 }
 
 interface PreparedField {
@@ -34,11 +43,8 @@ interface PreparedField {
   values: string[]
 }
 
-function prepareFields(
-  items: readonly LiveRuntimeDisclosureContributionDto[],
-  language: string,
-): PreparedField[] {
-  return items.flatMap(item => item.fields.flatMap((field, index) => {
+function prepareFields(item: LiveRuntimeDisclosureContributionDto, language: string): PreparedField[] {
+  return item.fields.flatMap((field, index) => {
     const values = [
       ...(field.value !== undefined ? [field.value] : []),
       ...(field.values ?? []),
@@ -51,7 +57,7 @@ function prepareFields(
       kind: field.kind ?? (values.length > 1 ? 'list' : 'text'),
       values,
     }]
-  }))
+  })
 }
 
 function fieldSection(field: PreparedField): 'status' | 'performance' | 'resources' | 'advanced' {
@@ -70,7 +76,7 @@ function fieldSection(field: PreparedField): 'status' | 'performance' | 'resourc
   return 'status'
 }
 
-function RuntimeDisclosureActions({
+function RuntimeActions({
   item,
   language,
   pendingAction,
@@ -82,7 +88,7 @@ function RuntimeDisclosureActions({
   onAction(action: LiveRuntimeActionContributionDto): void
 }) {
   if (!item.actions?.length) return null
-  return <div className="live-runtime-info-actions">
+  return <>
     {item.actions.map(action => <Button
       key={action.actionId}
       size="small"
@@ -93,17 +99,116 @@ function RuntimeDisclosureActions({
     >
       {contributionText(action.label, language)}
     </Button>)}
-  </div>
+  </>
 }
 
-function RuntimeInfoRows({ fields }: { fields: readonly PreparedField[] }) {
-  if (!fields.length) return null
-  return <div className="live-runtime-info-rows">
-    {fields.map(field => <div className="live-runtime-info-row" key={field.key}>
-      <span>{field.label}</span>
-      <b title={field.values[0]}>{field.values[0]}</b>
-    </div>)}
-  </div>
+function RuntimeLifecycle({
+  item,
+  language,
+  pendingAction,
+  onAction,
+  onDiagnostics,
+}: {
+  item: LiveRuntimeDisclosureContributionDto
+  language: string
+  pendingAction: string | null
+  onAction(action: LiveRuntimeActionContributionDto): void
+  onDiagnostics(): void
+}) {
+  const lifecycle = item.lifecycle
+  const [expanded, setExpanded] = useState(lifecycle?.status !== 'ready')
+
+  useEffect(() => {
+    if (!lifecycle) return
+    setExpanded(lifecycle.status !== 'ready')
+  }, [item.contributionId, lifecycle?.status])
+
+  if (!lifecycle) {
+    return <div className="live-runtime-summary-fallback">
+      <span><b>{contributionText(item.title, language)}</b>{item.summary && <small>{contributionText(item.summary, language)}</small>}</span>
+      <Button size="small" onClick={onDiagnostics}>{localText(language, '运行诊断', 'Runtime diagnostics')}</Button>
+    </div>
+  }
+
+  const title = contributionText(item.title, language)
+  const statusLabel = lifecycle.status === 'ready'
+    ? localText(language, '已就绪', 'Ready')
+    : lifecycle.status === 'failed'
+      ? localText(language, '启动失败', 'Failed')
+      : localText(language, '正在准备', 'Preparing')
+  const resourceSummary = (lifecycle.resources ?? [])
+    .map(group => `${contributionText(group.label, language)} ${group.values.length}`)
+    .join(' · ')
+
+  return <details
+    className={`pi-startup-disclosure live-runtime-lifecycle is-${lifecycle.status}`}
+    open={expanded}
+    onToggle={event => setExpanded(event.currentTarget.open)}
+  >
+    <summary>
+      <span className="pi-startup-summary-state" aria-hidden="true"/>
+      <span className="pi-startup-summary-copy">
+        <b>{title}</b>
+        <small>{[statusLabel, resourceSummary].filter(Boolean).join(' · ')}</small>
+      </span>
+      <span className="pi-startup-summary-time">{duration(lifecycle.elapsedMs)}</span>
+      <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
+    </summary>
+
+    <div className="pi-startup-body">
+      <div className="pi-startup-steps" aria-label={localText(language, '运行时启动阶段', 'Runtime startup stages')}>
+        {lifecycle.stages.map(stage => <div
+          key={stage.stageId}
+          className={`pi-startup-step is-${stage.status}`}
+        >
+          <span className="pi-startup-step-dot" aria-hidden="true">
+            {stage.status === 'done'
+              ? <UiIcon name="check" size={12}/>
+              : stage.status === 'failed'
+                ? <UiIcon name="exclamation" size={12}/>
+                : null}
+          </span>
+          <span className="pi-startup-step-copy"><b>{contributionText(stage.label, language)}</b></span>
+          <span className="pi-startup-step-time">
+            {stage.status === 'pending'
+              ? localText(language, '等待', 'Waiting')
+              : stage.status === 'active'
+                ? `${duration(stage.durationMs)}+`
+                : duration(stage.durationMs)}
+          </span>
+        </div>)}
+      </div>
+
+      {(lifecycle.resources?.length ?? 0) > 0 && <details className="pi-startup-resource-details">
+        <summary>
+          {resourceSummary}
+          <UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/>
+        </summary>
+        <div className="pi-startup-resources" aria-label={localText(language, '运行资源', 'Runtime resources')}>
+          {lifecycle.resources!.map(group => <div className="pi-startup-resource-row" key={group.groupId}>
+            <b>[{contributionText(group.label, language)}]</b>
+            <span>{group.values.join(', ')}</span>
+          </div>)}
+        </div>
+      </details>}
+
+      {lifecycle.message && lifecycle.status !== 'ready' && <div className="live-runtime-lifecycle-message">
+        {contributionText(lifecycle.message, language)}
+      </div>}
+
+      <div className="pi-startup-actions live-runtime-lifecycle-actions">
+        <Button size="small" onClick={event => { event.preventDefault(); onDiagnostics() }}>
+          {localText(language, '运行诊断', 'Runtime diagnostics')}
+        </Button>
+        <RuntimeActions
+          item={item}
+          language={language}
+          pendingAction={pendingAction}
+          onAction={onAction}
+        />
+      </div>
+    </div>
+  </details>
 }
 
 function metricParts(value: string): { label: string; duration?: string } {
@@ -113,11 +218,11 @@ function metricParts(value: string): { label: string; duration?: string } {
     : { label: value }
 }
 
-function RuntimeMetricList({ values }: { values: readonly string[] }) {
-  return <div className="live-runtime-info-metrics">
+function MetricRows({ values }: { values: readonly string[] }) {
+  return <div className="live-runtime-diagnostic-metrics">
     {values.map((value, index) => {
       const metric = metricParts(value)
-      return <div className="live-runtime-info-metric" key={`${index}:${value}`}>
+      return <div className="live-runtime-diagnostic-metric" key={`${index}:${value}`}>
         <span>{metric.label}</span>
         {metric.duration && <b>{metric.duration}</b>}
       </div>
@@ -125,65 +230,114 @@ function RuntimeMetricList({ values }: { values: readonly string[] }) {
   </div>
 }
 
-function RuntimePerformance({ fields, language }: { fields: readonly PreparedField[]; language: string }) {
-  if (!fields.length) return null
-  const mainCosts = fields.find(field => field.id === 'Main costs')
-  const details = fields.filter(field => field.id !== 'Main costs')
-  return <section className="live-runtime-info-section">
-    <h3>{localText(language, '启动性能', 'Startup performance')}</h3>
-    {mainCosts && <div className="live-runtime-info-subgroup">
-      <b className="live-runtime-info-subtitle">{mainCosts.label}</b>
-      <RuntimeMetricList values={mainCosts.values}/>
-    </div>}
-    {details.map(field => <Disclosure
-      className="live-runtime-info-disclosure"
-      key={field.key}
-      summary={<b>{field.label}</b>}
-      summaryMeta={String(field.values.length)}
-    >
-      <RuntimeMetricList values={field.values}/>
-    </Disclosure>)}
-  </section>
-}
+function RuntimeDiagnostics({
+  item,
+  language,
+}: {
+  item: LiveRuntimeDisclosureContributionDto
+  language: string
+}) {
+  const fields = prepareFields(item, language)
+  const statusFields = fields.filter(field => fieldSection(field) === 'status')
+  const performanceFields = fields.filter(field => fieldSection(field) === 'performance')
+  const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
+  const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
+  const mainCosts = performanceFields.find(field => field.id === 'Main costs')
+  const performanceDetails = performanceFields.filter(field => field.id !== 'Main costs')
 
-function RuntimeResources({ fields, language }: { fields: readonly PreparedField[]; language: string }) {
-  if (!fields.length) return null
-  return <section className="live-runtime-info-section">
-    <h3>{localText(language, '运行资源', 'Runtime resources')}</h3>
-    <div className="live-runtime-info-resource-list">
-      {fields.map(field => <Disclosure
-        className="live-runtime-info-disclosure"
+  return <div className="live-runtime-diagnostics">
+    {statusFields.length > 0 && <section className="live-runtime-diagnostic-section">
+      <h3>{localText(language, '运行概况', 'Runtime overview')}</h3>
+      <div className="live-runtime-diagnostic-rows">
+        {statusFields.map(field => <div className="live-runtime-diagnostic-row" key={field.key}>
+          <span>{field.label}</span>
+          <b>{field.values[0]}</b>
+        </div>)}
+      </div>
+    </section>}
+
+    {performanceFields.length > 0 && <section className="live-runtime-diagnostic-section">
+      <h3>{localText(language, '启动性能', 'Startup performance')}</h3>
+      {mainCosts && <MetricRows values={mainCosts.values}/>}
+      {performanceDetails.map(field => <Disclosure
+        className="live-runtime-diagnostic-disclosure"
         key={field.key}
         summary={<b>{field.label}</b>}
         summaryMeta={String(field.values.length)}
       >
-        <div className="live-runtime-info-values">
-          {field.values.map((value, index) => <span key={`${field.key}:${index}:${value}`}>{value}</span>)}
-        </div>
+        <MetricRows values={field.values}/>
       </Disclosure>)}
-    </div>
-  </section>
-}
+    </section>}
 
-function RuntimeAdvanced({ fields, language }: { fields: readonly PreparedField[]; language: string }) {
-  if (!fields.length) return null
-  return <section className="live-runtime-info-section">
-    <Disclosure
-      className="live-runtime-info-disclosure live-runtime-info-advanced"
-      summary={<b>{localText(language, '高级诊断', 'Advanced diagnostics')}</b>}
-      summaryMeta={String(fields.length)}
-    >
-      <div className="live-runtime-info-code-groups">
-        {fields.map(field => <section key={field.key}>
-          <b>{field.label}</b>
-          <CopyableCodeBlock copyValue={field.values.join('\n')}>{field.values.join('\n')}</CopyableCodeBlock>
-        </section>)}
+    {resourceFields.length > 0 && <section className="live-runtime-diagnostic-section">
+      <h3>{localText(language, '运行资源', 'Runtime resources')}</h3>
+      <div className="live-runtime-diagnostic-resource-list">
+        {resourceFields.map(field => <Disclosure
+          className="live-runtime-diagnostic-disclosure"
+          key={field.key}
+          summary={<b>{field.label}</b>}
+          summaryMeta={String(field.values.length)}
+        >
+          <div className="live-runtime-diagnostic-values">
+            {field.values.map((value, index) => <span key={`${field.key}:${index}:${value}`}>{value}</span>)}
+          </div>
+        </Disclosure>)}
       </div>
-    </Disclosure>
-  </section>
+    </section>}
+
+    {advancedFields.length > 0 && <section className="live-runtime-diagnostic-section">
+      <Disclosure
+        className="live-runtime-diagnostic-disclosure"
+        summary={<b>{localText(language, '高级诊断', 'Advanced diagnostics')}</b>}
+        summaryMeta={String(advancedFields.length)}
+      >
+        <div className="live-runtime-diagnostic-code-groups">
+          {advancedFields.map(field => <section key={field.key}>
+            <b>{field.label}</b>
+            <CopyableCodeBlock copyValue={field.values.join('\n')}>{field.values.join('\n')}</CopyableCodeBlock>
+          </section>)}
+        </div>
+      </Disclosure>
+    </section>}
+  </div>
 }
 
-export function LiveRuntimeTaskInfo({
+function RuntimeDisclosure({
+  item,
+  language,
+  pendingAction,
+  onAction,
+}: {
+  item: LiveRuntimeDisclosureContributionDto
+  language: string
+  pendingAction: string | null
+  onAction(action: LiveRuntimeActionContributionDto): void
+}) {
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
+  const title = contributionText(item.title, language)
+
+  return <>
+    <RuntimeLifecycle
+      item={item}
+      language={language}
+      pendingAction={pendingAction}
+      onAction={onAction}
+      onDiagnostics={() => setDiagnosticsOpen(true)}
+    />
+    <Dialog
+      open={diagnosticsOpen}
+      onClose={() => setDiagnosticsOpen(false)}
+      size="xlarge"
+      className="live-runtime-diagnostics-dialog"
+      title={localText(language, '运行诊断', 'Runtime diagnostics')}
+      description={item.summary ? contributionText(item.summary, language) : title}
+    >
+      <RuntimeDiagnostics item={item} language={language}/>
+    </Dialog>
+  </>
+}
+
+export function LiveRuntimeDisclosures({
   items,
   language,
   pendingAction,
@@ -194,61 +348,14 @@ export function LiveRuntimeTaskInfo({
   pendingAction: string | null
   onAction(action: LiveRuntimeActionContributionDto): void
 }) {
-  const fields = prepareFields(items, language)
-  if (!fields.length && !items.some(item => item.actions?.length)) return null
-  const statusFields = fields.filter(field => fieldSection(field) === 'status')
-  const performanceFields = fields.filter(field => fieldSection(field) === 'performance')
-  const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
-  const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
-
-  return <div className="live-runtime-task-info">
-    {statusFields.length > 0 && <section className="live-runtime-info-section">
-      <h3>{localText(language, '运行状态', 'Runtime status')}</h3>
-      <RuntimeInfoRows fields={statusFields}/>
-    </section>}
-    <RuntimePerformance fields={performanceFields} language={language}/>
-    <RuntimeResources fields={resourceFields} language={language}/>
-    <RuntimeAdvanced fields={advancedFields} language={language}/>
-    {items.map(item => <RuntimeDisclosureActions
-      key={`${item.contributionId}:actions`}
+  if (!items.length) return null
+  return <section className="live-runtime-disclosures">
+    {items.map(item => <RuntimeDisclosure
+      key={item.contributionId}
       item={item}
       language={language}
       pendingAction={pendingAction}
       onAction={onAction}
     />)}
-  </div>
-}
-
-export function LiveRuntimeFailureNotice({
-  items,
-  language,
-  pendingAction,
-  onAction,
-}: {
-  items: readonly LiveRuntimeDisclosureContributionDto[]
-  language: string
-  pendingAction: string | null
-  onAction(action: LiveRuntimeActionContributionDto): void
-}) {
-  const item = items.find(candidate => candidate.tone === 'danger' || candidate.actions?.length)
-  if (!item) return null
-  const fields = prepareFields([item], language)
-  const error = fields.find(field => field.id === 'Runtime error')
-    ?? fields.find(field => field.id === 'Extension binding error')
-    ?? fields.find(field => field.kind === 'code')
-
-  return <section className="live-runtime-failure-notice" role="alert">
-    <div className="live-runtime-failure-copy">
-      <b>{localText(language, '运行失败', 'Runtime failed')}</b>
-      {error?.values[0]
-        ? <span>{error.values[0]}</span>
-        : item.summary && <span>{contributionText(item.summary, language)}</span>}
-    </div>
-    <RuntimeDisclosureActions
-      item={item}
-      language={language}
-      pendingAction={pendingAction}
-      onAction={onAction}
-    />
   </section>
 }
