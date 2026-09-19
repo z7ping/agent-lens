@@ -158,11 +158,42 @@ function RuntimeLifecycle({
   onDiagnostics(): void
 }) {
   const lifecycle = item.lifecycle
+  const activeStage = lifecycle?.stages.find(stage => stage.status === 'active')
   const [expanded, setExpanded] = useState(lifecycle?.status !== 'ready')
+  const [clock, setClock] = useState(() => Date.now())
+  const timingBaseline = useRef({
+    elapsedMs: lifecycle?.elapsedMs ?? 0,
+    activeStageId: activeStage?.stageId,
+    activeDurationMs: activeStage?.durationMs ?? 0,
+    at: Date.now(),
+  })
 
   useEffect(() => {
     if (!lifecycle) return
     setExpanded(lifecycle.status !== 'ready')
+  }, [item.contributionId, lifecycle?.status])
+
+  useEffect(() => {
+    const now = Date.now()
+    timingBaseline.current = {
+      elapsedMs: lifecycle?.elapsedMs ?? 0,
+      activeStageId: activeStage?.stageId,
+      activeDurationMs: activeStage?.durationMs ?? 0,
+      at: now,
+    }
+    setClock(now)
+  }, [
+    item.contributionId,
+    lifecycle?.status,
+    lifecycle?.elapsedMs,
+    activeStage?.stageId,
+    activeStage?.durationMs,
+  ])
+
+  useEffect(() => {
+    if (lifecycle?.status !== 'initializing') return
+    const timer = window.setInterval(() => setClock(Date.now()), 250)
+    return () => window.clearInterval(timer)
   }, [item.contributionId, lifecycle?.status])
 
   if (!lifecycle) {
@@ -181,6 +212,19 @@ function RuntimeLifecycle({
   const resourceSummary = (lifecycle.resources ?? [])
     .map(group => `${contributionText(group.label, language)} ${group.values.length}`)
     .join(' · ')
+  const liveDeltaMs = lifecycle.status === 'initializing'
+    ? Math.max(0, clock - timingBaseline.current.at)
+    : 0
+  const elapsedMs = lifecycle.status === 'initializing'
+    ? Math.max(lifecycle.elapsedMs ?? 0, timingBaseline.current.elapsedMs + liveDeltaMs)
+    : lifecycle.elapsedMs
+  const stageDuration = (stage: NonNullable<typeof lifecycle>['stages'][number]) => (
+    lifecycle.status === 'initializing'
+    && stage.status === 'active'
+    && stage.stageId === timingBaseline.current.activeStageId
+      ? Math.max(stage.durationMs ?? 0, timingBaseline.current.activeDurationMs + liveDeltaMs)
+      : stage.durationMs
+  )
 
   return <details
     className={`pi-startup-disclosure live-runtime-lifecycle is-${lifecycle.status}`}
@@ -193,7 +237,7 @@ function RuntimeLifecycle({
         <b>{title}</b>
         <small>{[statusLabel, resourceSummary].filter(Boolean).join(' · ')}</small>
       </span>
-      <span className="pi-startup-summary-time">{duration(lifecycle.elapsedMs)}</span>
+      <span className="pi-startup-summary-time">{duration(elapsedMs)}</span>
       <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
     </summary>
 
@@ -215,7 +259,7 @@ function RuntimeLifecycle({
             {stage.status === 'pending'
               ? localText(language, '等待', 'Waiting')
               : stage.status === 'active'
-                ? `${duration(stage.durationMs)}+`
+                ? `${duration(stageDuration(stage))}+`
                 : duration(stage.durationMs)}
           </span>
         </div>)}
