@@ -161,8 +161,13 @@ function runtimeLifecycle(state: PiLiveRuntimeState) {
   return {
     status: state.status,
     elapsedMs: elapsed,
-    ...(state.initializationMessage
-      ? { message: contributionText(state.initializationMessage, state.initializationMessage) }
+    ...((state.status === 'failed' ? state.error || state.initializationMessage : state.initializationMessage)
+      ? {
+          message: contributionText(
+            state.status === 'failed' ? state.error || state.initializationMessage! : state.initializationMessage!,
+            state.status === 'failed' ? state.error || state.initializationMessage! : state.initializationMessage!,
+          ),
+        }
       : {}),
     stages,
     ...(resourceGroups?.length ? { resources: resourceGroups } : {}),
@@ -1091,6 +1096,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const elapsed = state.initializationElapsedMs
       ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
     const duration = contributionDuration(elapsed)
+    const lifecycle = runtimeLifecycle(state)
     return [{
       contributionId: 'pi.runtime.diagnostics',
       title: contributionText('This run', '本次运行'),
@@ -1104,7 +1110,7 @@ export class DefaultPiLiveService implements PiLiveService {
         || state.status === 'initializing'
         || state.extensionBindingStatus === 'binding'
         || state.extensionBindingStatus === 'failed',
-      ...(runtimeLifecycle(state) ? { lifecycle: runtimeLifecycle(state) } : {}),
+      ...(lifecycle ? { lifecycle } : {}),
       fields: runtimeDisclosureFields(state),
       ...(state.status === 'failed'
         ? {
