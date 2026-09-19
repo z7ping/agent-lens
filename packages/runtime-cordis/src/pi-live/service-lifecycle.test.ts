@@ -374,3 +374,36 @@ test('URL 指向未知 runtimeSessionId 且无 Recovery 时明确不存在，不
   assert.equal(startCalls, 0)
   await service.dispose()
 })
+
+
+test('同一历史会话正在结束时拒绝新的继续请求', async () => {
+  let releaseTerminate!: () => void
+  const terminateGate = new Promise<void>(resolve => { releaseTerminate = resolve })
+  const service = new DefaultPiLiveService({
+    start: async id => ({
+      ...handle(id, '/sessions/ending.jsonl'),
+      terminate: async () => { await terminateGate },
+    }),
+  })
+
+  const started = await service.start({
+    cwd: '/workspace',
+    sessionPath: '/sessions/ending.jsonl',
+    historyAction: 'continue',
+  })
+
+  const ending = service.terminate(started.runtimeSessionId)
+  await new Promise(resolve => setTimeout(resolve, 0))
+
+  await assert.rejects(
+    () => service.start({
+      cwd: '/workspace',
+      sessionPath: '/sessions/ending.jsonl',
+      historyAction: 'continue',
+    }),
+    /session is ending/,
+  )
+
+  releaseTerminate()
+  await ending
+})
