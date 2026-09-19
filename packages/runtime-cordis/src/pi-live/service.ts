@@ -19,7 +19,7 @@ import { latestPiSessionEntryId } from './session-disk-tail'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
-import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -38,6 +38,10 @@ interface OwnedRuntime {
   stageStartedAt: number
   initializationElapsedMs: number
   initializationTimings: PiLiveInitializationTiming[]
+  startupMetrics: PiLiveStartupMetric[]
+  warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  extensionBindingStatus?: PiLiveExtensionBindingStatus | undefined
+  extensionBindingError?: string | undefined
   startupResources?: PiLiveStartupResources | undefined
   startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
@@ -48,8 +52,12 @@ interface OwnedRuntime {
   workspacePath: string
   projectName: string
   gitBranch?: string | undefined
+  workspaceContextUpdatedAt?: number | undefined
+  workspaceContextTask?: Promise<void> | undefined
   taskSummary?: string | undefined
   activeAssistantMessageId?: string | undefined
+  isStreaming: boolean
+  isCompacting: boolean
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -76,6 +84,7 @@ interface PiLiveRuntimeLifecycleOptions {
 }
 
 const DEFAULT_PI_LIVE_IDLE_TIMEOUT_MS = 10 * 60_000
+const WORKSPACE_CONTEXT_REFRESH_MS = 30_000
 
 function taskSummary(message: string): string | undefined {
   const normalized = message.replace(/\s+/g, ' ').trim()
@@ -122,6 +131,32 @@ function runtimeStatusLabel(status: PiLiveRuntimeState['status']): { en: string;
   return { en: 'Ready', zh: '就绪' }
 }
 
+function runtimeDisclosureSummary(
+  state: PiLiveRuntimeState,
+  status: { en: string; zh: string },
+  fallbackDuration: string,
+): LiveContributionText {
+  const resources = state.startupResources
+  const groups = [
+    { count: resources?.contexts.length ?? 0, en: 'Contexts', zh: '上下文' },
+    { count: resources?.skills.length ?? 0, en: 'Skills', zh: '技能' },
+    { count: resources?.prompts.length ?? 0, en: 'Prompts', zh: '提示词' },
+    { count: resources?.extensions.length ?? 0, en: 'Extensions', zh: '扩展' },
+  ].filter(item => item.count > 0)
+
+  if (!groups.length) {
+    return contributionText(
+      `${status.en} · ${fallbackDuration}`,
+      `${status.zh} · ${fallbackDuration}`,
+    )
+  }
+
+  return contributionText(
+    `${status.en} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
+    `${status.zh} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
+  )
+}
+
 function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContributionField[] {
   const fields: LiveRuntimeContributionField[] = []
   const currentStage = stageLabel(state.initializationStage)
@@ -152,6 +187,45 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
           ? contributionText(`${label.en} · ${duration}`, `${label.zh} · ${duration}`)
           : `${item.stage} · ${duration}`
       }),
+    })
+  }
+  if (state.warmWorkerStatus) {
+    const warmLabels: Record<PiLiveWarmWorkerStatus, { en: string; zh: string }> = {
+      hit: { en: 'Hit', zh: '命中' },
+      miss: { en: 'Miss', zh: '未命中' },
+      not_ready: { en: 'Not ready', zh: '预热未完成' },
+      sdk_mismatch: { en: 'SDK mismatch', zh: 'SDK 不匹配' },
+    }
+    const warm = warmLabels[state.warmWorkerStatus]
+    fields.push({
+      label: contributionText('Warm worker', '预热 Worker'),
+      value: contributionText(warm.en, warm.zh),
+    })
+  }
+  if (state.extensionBindingStatus) {
+    const labels: Record<PiLiveExtensionBindingStatus, { en: string; zh: string }> = {
+      binding: { en: 'Binding', zh: '绑定中' },
+      ready: { en: 'Ready', zh: '已就绪' },
+      failed: { en: 'Failed', zh: '失败' },
+    }
+    const binding = labels[state.extensionBindingStatus]
+    fields.push({
+      label: contributionText('Extensions', '扩展绑定'),
+      value: contributionText(binding.en, binding.zh),
+    })
+  }
+  if (state.extensionBindingError) {
+    fields.push({
+      label: contributionText('Extension binding error', '扩展绑定错误'),
+      kind: 'code' as const,
+      values: [state.extensionBindingError],
+    })
+  }
+  if (state.startupMetrics?.length) {
+    fields.push({
+      label: contributionText('Startup metrics', '启动耗时明细'),
+      kind: 'list' as const,
+      values: state.startupMetrics.map(item => `${item.name} · ${contributionDuration(item.durationMs)}`),
     })
   }
 
@@ -352,6 +426,23 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
   }
 }
 
+function startupMetric(value: unknown): PiLiveStartupMetric | undefined {
+  const item = record(value)
+  if (typeof item.name !== 'string' || !item.name.trim()) return undefined
+  if (typeof item.durationMs !== 'number' || !Number.isFinite(item.durationMs)) return undefined
+  return { name: item.name.trim().slice(0, 80), durationMs: Math.max(0, item.durationMs) }
+}
+
+function warmWorkerStatus(value: unknown): PiLiveWarmWorkerStatus | undefined {
+  return value === 'hit' || value === 'miss' || value === 'not_ready' || value === 'sdk_mismatch'
+    ? value
+    : undefined
+}
+
+function extensionBindingStatus(value: unknown): PiLiveExtensionBindingStatus | undefined {
+  return value === 'binding' || value === 'ready' || value === 'failed' ? value : undefined
+}
+
 function packageUpdates(value: unknown): PiLivePackageUpdate[] {
   if (!Array.isArray(value)) return []
   const updates: PiLivePackageUpdate[] = []
@@ -467,21 +558,23 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   /**
-   * SDK 只在空闲 Worker 内预热；失败时保留冷启动路径。Recovery 不依赖预热成功。
+   * Runtime Base 只在空闲 Worker 内预热；失败时保留冷启动路径。Recovery 不依赖预热成功。
    */
   async preload(): Promise<void> {
     await Promise.all([
       this.availability(),
       this.ensureRecoveryLoaded(),
       this.host.preload?.().catch(error => {
-        console.warn('[AgentLens] Pi Live SDK Worker 预热失败；新建任务将按冷启动路径继续', error)
+        console.warn('[AgentLens] Pi Live Runtime Base Worker 预热失败；新建任务将按冷启动路径继续', error)
       }),
     ])
   }
 
   async list(): Promise<PiLiveRuntimeState[]> {
     await this.ensureRecoveryLoaded()
-    return Promise.all([...this.runtimes.values()].map(runtime => this.runtimeState(runtime)))
+    // Task Center session listing must never synchronously probe every Worker.
+    // One slow/stuck Runtime must not make the whole list disappear or stall.
+    return [...this.runtimes.values()].map(runtime => this.runtimeListState(runtime))
   }
 
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
@@ -495,6 +588,11 @@ export class DefaultPiLiveService implements PiLiveService {
         && runtime.status !== 'terminated')
       // “继续”同一份历史不是创建第二个 Runtime，而是回到已经存在的那个。
       // 这让重复点击和前端跳转中断都保持幂等；“分叉”仍需保留新 Runtime。
+      // 结束中的 Runtime 不能作为 Resume 目标，否则返回的 ID 会在响应后立即被删除；
+      // 同时也不能在旧 Worker 尚未退出时创建第二个 Worker 读写同一 JSONL。
+      if (duplicate?.status === 'terminating') {
+        throw this.conflict('Pi Live session is ending; retry after termination completes')
+      }
       if (duplicate) return this.state(duplicate.id)
     }
     const runtime = this.createRuntime(randomUUID(), input, false)
@@ -531,6 +629,10 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
+    runtime.startupMetrics = []
+    runtime.warmWorkerStatus = undefined
+    runtime.extensionBindingStatus = undefined
+    runtime.extensionBindingError = undefined
     runtime.startupResources = undefined
     runtime.startupAuditResources = undefined
     runtime.startupResourcesCapturedAt = undefined
@@ -547,6 +649,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
     runtime.activeAssistantMessageId = undefined
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
     this.scheduleInitialize(runtime, runtime.generation)
@@ -576,8 +680,11 @@ export class DefaultPiLiveService implements PiLiveService {
       stageStartedAt: now,
       initializationElapsedMs: 0,
       initializationTimings: [],
+      startupMetrics: [],
       startupOutput: [],
       packageUpdates: [],
+      isStreaming: false,
+      isCompacting: false,
       queue: { steering: [], followUp: [] },
       subscriberCount: 0,
       lastActiveAt: now,
@@ -620,7 +727,18 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!nextPath) return
     const currentPath = runtime.input.sessionPath?.trim()
     if (currentPath && sessionPathKey(currentPath) === sessionPathKey(nextPath) && runtime.input.historyAction === 'continue') return
+
+    const forkedFromLogicalSession = runtime.input.historyAction === 'fork'
+      ? runtime.input.logicalSessionId
+      : undefined
     runtime.input = recoveryInput(runtime.input, nextPath)
+    if (forkedFromLogicalSession) {
+      // The source logical id is only a temporary read-only history anchor while
+      // the fork Worker hydrates. Once Pi creates the detached session, carrying
+      // the parent id into Recovery would render parent Canonical history after
+      // a Daemon restart.
+      delete runtime.input.logicalSessionId
+    }
   }
 
   private async persistRuntime(runtime: OwnedRuntime): Promise<void> {
@@ -685,11 +803,24 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.recoveryCheckpointTask = checkpoint
   }
 
-  private async refreshWorkspaceContext(runtime: OwnedRuntime): Promise<void> {
-    const context = await resolveWorkspaceContext(runtime.input.cwd)
-    runtime.workspacePath = context.workspacePath
-    runtime.projectName = context.projectName
-    runtime.gitBranch = context.gitBranch
+  private refreshWorkspaceContextBestEffort(runtime: OwnedRuntime, now = Date.now()): void {
+    if (runtime.workspaceContextTask) return
+    if (runtime.workspaceContextUpdatedAt !== undefined
+      && now - runtime.workspaceContextUpdatedAt < WORKSPACE_CONTEXT_REFRESH_MS) return
+
+    let task: Promise<void>
+    task = resolveWorkspaceContext(runtime.input.cwd).then(context => {
+      runtime.workspacePath = context.workspacePath
+      runtime.projectName = context.projectName
+      runtime.gitBranch = context.gitBranch
+      runtime.workspaceContextUpdatedAt = Date.now()
+    }).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live workspace context refresh failed', error)
+      runtime.workspaceContextUpdatedAt = Date.now()
+    }).finally(() => {
+      if (runtime.workspaceContextTask === task) runtime.workspaceContextTask = undefined
+    })
+    runtime.workspaceContextTask = task
   }
 
   private advanceInitialization(runtime: OwnedRuntime, stage: PiLiveInitializationStage, now = Date.now()): void {
@@ -713,6 +844,32 @@ export class DefaultPiLiveService implements PiLiveService {
             this.advanceInitialization(runtime, stage as PiLiveInitializationStage)
           }
           if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
+        } else if (event.type === 'runtime_startup_metric') {
+          const metric = startupMetric(event.metric)
+          if (metric) {
+            runtime.startupMetrics = [
+              ...runtime.startupMetrics.filter(item => item.name !== metric.name),
+              metric,
+            ]
+          }
+          runtime.warmWorkerStatus = warmWorkerStatus(event.warmWorkerStatus) ?? runtime.warmWorkerStatus
+        } else if (event.type === 'runtime_extension_binding') {
+          runtime.extensionBindingStatus = extensionBindingStatus(event.status) ?? runtime.extensionBindingStatus
+          runtime.extensionBindingError = typeof event.error === 'string' && event.error.trim()
+            ? event.error.trim().slice(0, 1_000)
+            : runtime.extensionBindingStatus === 'failed'
+              ? runtime.extensionBindingError
+              : undefined
+          if (runtime.status === 'ready') {
+            runtime.message = runtime.extensionBindingStatus === 'binding'
+              ? 'Pi Runtime 核心已就绪 · 扩展后台绑定中'
+              : runtime.extensionBindingStatus === 'failed'
+                ? 'Pi Runtime 核心已就绪 · 扩展绑定失败'
+                : 'Pi Runtime 已就绪'
+            if (runtime.extensionBindingStatus === 'ready' || runtime.extensionBindingStatus === 'failed') {
+              this.scheduleStartupAuditProbe(runtime, generation)
+            }
+          }
         } else if (event.type === 'runtime_resources') {
           const resources = startupResources(event.resources)
           if (resources) {
@@ -739,34 +896,45 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.handle = handle
       runtime.capabilities = handle.capabilities ?? runtime.capabilities
       if (!runtime.initializationTimings.length && handle.initializationTimings?.length) runtime.initializationTimings = [...handle.initializationTimings]
+      if (handle.startupMetrics?.length) runtime.startupMetrics = [...handle.startupMetrics]
+      runtime.warmWorkerStatus = handle.warmWorkerStatus ?? runtime.warmWorkerStatus
 
       const requestedSessionPath = runtime.input.sessionPath?.trim()
       let readyState: PiLiveRuntimeState | undefined
       if (runtime.input.historyAction === 'fork' && requestedSessionPath) {
-        const forkedState = await handle.state()
-        if (!forkedState.sessionFile || sessionPathKey(forkedState.sessionFile) === sessionPathKey(requestedSessionPath)) {
+        const sessionFile = handle.initialSessionFile
+        const forkedState = sessionFile ? undefined : await handle.state()
+        const actualSessionFile = sessionFile ?? forkedState?.sessionFile
+        if (!actualSessionFile || sessionPathKey(actualSessionFile) === sessionPathKey(requestedSessionPath)) {
           await handle.terminate().catch(() => undefined)
           runtime.handle = undefined
           throw new Error('Pi 分叉 Runtime 未切换到新的 Session，已拒绝继续')
         }
-        this.adoptRuntimeSession(runtime, forkedState.sessionFile)
+        this.adoptRuntimeSession(runtime, actualSessionFile)
         readyState = forkedState
       } else if (runtime.input.historyAction === 'continue' && requestedSessionPath) {
-        const continuedState = await handle.state()
-        if (!continuedState.sessionFile || sessionPathKey(continuedState.sessionFile) !== sessionPathKey(requestedSessionPath)) {
+        const sessionFile = handle.initialSessionFile
+        const continuedState = sessionFile ? undefined : await handle.state()
+        const actualSessionFile = sessionFile ?? continuedState?.sessionFile
+        if (!actualSessionFile || sessionPathKey(actualSessionFile) !== sessionPathKey(requestedSessionPath)) {
           await handle.terminate().catch(() => undefined)
           runtime.handle = undefined
           throw new Error('Pi 继续 Runtime 未保持目标 Session，已拒绝继续')
         }
-        this.adoptRuntimeSession(runtime, continuedState.sessionFile)
+        this.adoptRuntimeSession(runtime, actualSessionFile)
         readyState = continuedState
       }
 
       this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
-      runtime.message = runtime.restored
-        ? `Pi Runtime 已恢复 · ${formatElapsed(runtime.initializationElapsedMs)}`
-        : `Pi Runtime 已就绪 · ${formatElapsed(runtime.initializationElapsedMs)}`
+      const readyPrefix = runtime.extensionBindingStatus === 'binding'
+        ? 'Pi Runtime 核心已就绪 · 扩展后台绑定中'
+        : runtime.extensionBindingStatus === 'failed'
+          ? 'Pi Runtime 核心已就绪 · 扩展绑定失败'
+          : runtime.restored
+            ? 'Pi Runtime 已恢复'
+            : 'Pi Runtime 已就绪'
+      runtime.message = `${readyPrefix} · ${formatElapsed(runtime.initializationElapsedMs)}`
       this.publish(runtime, {
         type: 'runtime_status',
         status: 'ready',
@@ -776,33 +944,26 @@ export class DefaultPiLiveService implements PiLiveService {
         initializationTimings: runtime.initializationTimings,
         ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       })
+      this.refreshWorkspaceContextBestEffort(runtime)
 
       if (readyState) {
         this.persistSessionIfChanged(runtime, readyState)
         this.updateRuntimeResources(runtime, readyState)
         this.persistStartupAuditBestEffort(runtime, readyState)
         this.persistPackageUpdatesBestEffort(runtime, generation)
-      } else {
-        let probe: Promise<void>
-        probe = handle.state().then(state => {
-          if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
-          this.persistSessionIfChanged(runtime, state)
-          this.updateRuntimeResources(runtime, state)
-          this.persistStartupAuditBestEffort(runtime, state)
-          this.persistPackageUpdatesBestEffort(runtime, generation)
-        }).catch(error => {
-          if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
-          this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
-        }).finally(() => {
-          if (runtime.startupAuditProbeTask === probe) runtime.startupAuditProbeTask = undefined
-        })
-        runtime.startupAuditProbeTask = probe
+      } else if (runtime.extensionBindingStatus !== 'binding') {
+        // When extension binding is still running, the final binding event owns
+        // the audit probe so resources_discover additions cannot race with a
+        // pre-binding snapshot.
+        this.scheduleStartupAuditProbe(runtime, generation)
       }
       this.scheduleIdleCheck(runtime)
     } catch (error) {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
       runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
       runtime.status = 'failed'
+      runtime.isStreaming = false
+      runtime.isCompacting = false
       runtime.error = formatLiveError(error)
       runtime.message = runtime.restored
         ? `Pi Runtime 恢复失败 · ${formatElapsed(runtime.initializationElapsedMs)}`
@@ -816,6 +977,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.handle = undefined
     runtime.initializationElapsedMs = Math.max(runtime.initializationElapsedMs, Date.now() - runtime.initializationStartedAt)
     runtime.status = 'failed'
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     runtime.error = formatLiveError(error)
     runtime.message = 'Pi Runtime Worker 已退出'
     this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error, initializationElapsedMs: runtime.initializationElapsedMs, initializationTimings: runtime.initializationTimings })
@@ -839,17 +1002,17 @@ export class DefaultPiLiveService implements PiLiveService {
     const duration = contributionDuration(elapsed)
     return [{
       contributionId: 'pi.runtime.diagnostics',
-      title: contributionText('Runtime diagnostics', '运行时诊断'),
-      summary: contributionText(
-        `${status.en} · ${duration}`,
-        `${status.zh} · ${duration}`,
-      ),
-      tone: state.status === 'failed'
+      title: contributionText('This run', '本次运行'),
+      summary: runtimeDisclosureSummary(state, status, duration),
+      tone: state.status === 'failed' || state.extensionBindingStatus === 'failed'
         ? 'danger' as const
-        : state.status === 'initializing'
+        : state.status === 'initializing' || state.extensionBindingStatus === 'binding'
           ? 'info' as const
           : 'neutral' as const,
-      defaultExpanded: state.status === 'failed' || state.status === 'initializing',
+      defaultExpanded: state.status === 'failed'
+        || state.status === 'initializing'
+        || state.extensionBindingStatus === 'binding'
+        || state.extensionBindingStatus === 'failed',
       fields: runtimeDisclosureFields(state),
       ...(state.status === 'failed'
         ? {
@@ -919,6 +1082,19 @@ export class DefaultPiLiveService implements PiLiveService {
         this.scheduleRuntimeRestart(runtime, externalState, '检测到外部 Pi 会话更新，正在重新加载')
       }
     }
+  }
+
+  async sessionTree(id: string) {
+    const runtime = await this.readyRuntime(id)
+    if (!runtime.handle?.sessionTree) {
+      return {
+        activeLeafId: null,
+        nodes: [],
+        branchPointIds: [],
+        capabilities: { switchBranch: false, fork: false, clone: false, branchSummary: false },
+      }
+    }
+    return runtime.handle.sessionTree()
   }
 
   async historyIndex(id: string, query: LiveHistoryIndexQuery = {}) {
@@ -1125,21 +1301,13 @@ export class DefaultPiLiveService implements PiLiveService {
     await this.ensureRecoveryLoaded()
     const runtime = this.runtimes.get(id)
     if (runtime) {
-      await runtime.startupAuditProbeTask?.catch(() => undefined)
-      if (runtime.status === 'ready' && runtime.handle) {
-        const state = await runtime.handle.state().catch(() => undefined)
-        if (state) {
-          this.persistSessionIfChanged(runtime, state)
-          this.updateRuntimeResources(runtime, state)
-          this.persistStartupAuditBestEffort(runtime, state)
-          this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
-        }
-      }
-      await runtime.startupAuditTask?.catch(() => undefined)
-      await runtime.startupPackageAuditTask?.catch(() => undefined)
+      // Explicit termination is a foreground lifecycle action. Startup audit,
+      // package audit and diagnostic state probes are best-effort observability
+      // work and must never sit in front of ending the task.
       await this.terminateRuntime(runtime, true)
-      await runtime.recoveryCheckpointTask?.catch(() => undefined)
     }
+    // Recovery deletion remains authoritative: once DELETE returns, this
+    // Logical Runtime must not be resurrected by the next Daemon generation.
     await this.recoveryStore?.remove(id)
   }
 
@@ -1178,6 +1346,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.initialization.abort()
     if (explicit) {
       runtime.status = 'terminating'
+      runtime.isStreaming = false
+      runtime.isCompacting = false
       runtime.message = '正在结束 Pi Runtime'
       this.publish(runtime, { type: 'runtime_status', status: 'terminating', stage: runtime.stage, message: runtime.message })
     }
@@ -1222,6 +1392,7 @@ export class DefaultPiLiveService implements PiLiveService {
     return !state.isStreaming
       && !state.isCompacting
       && state.pendingMessageCount === 0
+      && runtime.extensionBindingStatus !== 'binding'
       && !runtime.activeAssistantMessageId
       && runtime.queue.steering.length === 0
       && runtime.queue.followUp.length === 0
@@ -1259,6 +1430,10 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
+    runtime.startupMetrics = []
+    runtime.warmWorkerStatus = undefined
+    runtime.extensionBindingStatus = undefined
+    runtime.extensionBindingError = undefined
     runtime.startupResources = undefined
     runtime.startupAuditResources = undefined
     runtime.startupResourcesCapturedAt = undefined
@@ -1275,6 +1450,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
     runtime.activeAssistantMessageId = undefined
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     runtime.pendingExtensionRequestIds.clear()
     runtime.queue = { steering: [], followUp: [] }
     runtime.lastActiveAt = now
@@ -1337,6 +1514,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stage = 'ready'
     runtime.message = 'Pi Runtime 已挂起，可自动恢复'
     runtime.activeAssistantMessageId = undefined
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     runtime.pendingExtensionRequestIds.clear()
     runtime.queue = { steering: [], followUp: [] }
     this.clearIdleTimer(runtime)
@@ -1413,6 +1592,38 @@ export class DefaultPiLiveService implements PiLiveService {
     return runtime
   }
 
+  private runtimeListState(runtime: OwnedRuntime): PiLiveRuntimeState {
+    const elapsed = runtime.status === 'initializing'
+      ? Math.max(0, Date.now() - runtime.initializationStartedAt)
+      : runtime.initializationElapsedMs
+    const cached = runtime.cachedState ? { ...runtime.cachedState } : {}
+    delete cached.processId
+    return {
+      ...cached,
+      runtimeSessionId: runtime.id,
+      startedAt: runtime.createdAt,
+      status: runtime.status,
+      initializationStage: runtime.stage,
+      initializationMessage: runtime.message,
+      initializationElapsedMs: elapsed,
+      ...(runtime.error ? { error: runtime.error } : {}),
+      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
+      ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
+      ...((runtime.taskSummary || runtime.input.name || cached.sessionName)
+        ? { title: runtime.taskSummary || runtime.input.name || cached.sessionName }
+        : {}),
+      ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
+      workspacePath: runtime.workspacePath,
+      projectName: runtime.projectName,
+      ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
+      isStreaming: runtime.isStreaming,
+      isCompacting: runtime.isCompacting,
+      pendingMessageCount: runtime.queue.steering.length + runtime.queue.followUp.length,
+      ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
+    }
+  }
+
   private async foregroundRuntimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
     const state = await this.runtimeState(runtime)
     if (!runtime.suspended) return state
@@ -1429,15 +1640,22 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
-    await this.refreshWorkspaceContext(runtime)
+    // During initialization keep filesystem pressure focused on the Pi Worker.
+    // cwd + basename are already available synchronously from createRuntime;
+    // Git root/branch metadata can refresh after Ready.
+    if (runtime.status !== 'initializing') this.refreshWorkspaceContextBestEffort(runtime)
     if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
+      runtime.isStreaming = state.isStreaming
+      runtime.isCompacting = state.isCompacting
       this.persistSessionIfChanged(runtime, state)
       this.updateRuntimeResources(runtime, state)
       this.persistStartupAuditBestEffort(runtime, state)
       this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
-      return this.decorateReadyState(runtime, state)
+      const decorated = this.decorateReadyState(runtime, state)
+      runtime.cachedState = decorated
+      return decorated
     }
     return {
       runtimeSessionId: runtime.id,
@@ -1447,6 +1665,10 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
+      ...(runtime.startupMetrics.length ? { startupMetrics: runtime.startupMetrics } : {}),
+      ...(runtime.warmWorkerStatus ? { warmWorkerStatus: runtime.warmWorkerStatus } : {}),
+      ...(runtime.extensionBindingStatus ? { extensionBindingStatus: runtime.extensionBindingStatus } : {}),
+      ...(runtime.extensionBindingError ? { extensionBindingError: runtime.extensionBindingError } : {}),
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
@@ -1482,6 +1704,10 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
+      ...(runtime.startupMetrics.length ? { startupMetrics: runtime.startupMetrics } : {}),
+      ...(runtime.warmWorkerStatus ? { warmWorkerStatus: runtime.warmWorkerStatus } : {}),
+      ...(runtime.extensionBindingStatus ? { extensionBindingStatus: runtime.extensionBindingStatus } : {}),
+      ...(runtime.extensionBindingError ? { extensionBindingError: runtime.extensionBindingError } : {}),
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
@@ -1522,6 +1748,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private persistStartupAuditBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    if (runtime.extensionBindingStatus === 'binding') return
     if (!this.startupAudit || !runtime.startupAuditResources) return
     const nativeSessionId = state.nativeSessionId?.trim()
     if (!nativeSessionId) return
@@ -1565,6 +1792,25 @@ export class DefaultPiLiveService implements PiLiveService {
       if (runtime.startupAuditTask === task) runtime.startupAuditTask = undefined
     })
     runtime.startupAuditTask = task
+  }
+
+  private scheduleStartupAuditProbe(runtime: OwnedRuntime, generation: number): void {
+    if (runtime.startupAuditProbeTask || runtime.status !== 'ready' || !runtime.handle) return
+    const handle = runtime.handle
+    let probe: Promise<void>
+    probe = handle.state().then(state => {
+      if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+      this.persistSessionIfChanged(runtime, state)
+      this.updateRuntimeResources(runtime, state)
+      this.persistStartupAuditBestEffort(runtime, state)
+      this.persistPackageUpdatesBestEffort(runtime, generation)
+    }).catch(error => {
+      if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+      this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
+    }).finally(() => {
+      if (runtime.startupAuditProbeTask === probe) runtime.startupAuditProbeTask = undefined
+    })
+    runtime.startupAuditProbeTask = probe
   }
 
   private persistPackageUpdatesBestEffort(runtime: OwnedRuntime, generation: number): void {
@@ -1637,8 +1883,12 @@ export class DefaultPiLiveService implements PiLiveService {
     const messageId = typeof message?.id === 'string' ? message.id : ''
     runtime.lastActiveAt = Date.now()
 
+    if (type === 'agent_start') runtime.isStreaming = true
+    if (type === 'compaction_start') runtime.isCompacting = true
+    if (type === 'compaction_end') runtime.isCompacting = false
     if (type === 'message_start' && messageRole === 'assistant') {
       runtime.activeAssistantMessageId = messageId || undefined
+      runtime.isStreaming = true
     }
     if (type === 'extension_ui_request') {
       const requestId = typeof event.id === 'string'
@@ -1661,15 +1911,20 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     runtime.events.publish(publishedEvent)
 
-    const settled = (type === 'message_end' && messageRole === 'assistant')
-      || type === 'agent_settled'
-      || type === 'agent_end'
-      || type === 'runtime_exit'
-    if (settled) {
+    // message_end closes one assistant message but not necessarily the whole
+    // logical run. agent_end closes one low-level Pi run and can still be followed
+    // by retry, compaction or queued continuation. Only agent_settled (or a terminal
+    // Worker exit) may collapse the Logical Runtime back to idle.
+    if (type === 'message_end' && messageRole === 'assistant') {
       runtime.activeAssistantMessageId = undefined
-      if (type === 'agent_settled' || type === 'agent_end' || type === 'runtime_exit') {
-        runtime.pendingExtensionRequestIds.clear()
-      }
+    }
+
+    const logicalSettled = type === 'agent_settled' || type === 'runtime_exit'
+    if (logicalSettled) {
+      runtime.activeAssistantMessageId = undefined
+      runtime.isStreaming = false
+      runtime.isCompacting = false
+      runtime.pendingExtensionRequestIds.clear()
       if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
     }
   }

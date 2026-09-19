@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const service = await readFile(new URL('./service.ts', import.meta.url), 'utf8')
+const adapter = await readFile(new URL('./adapter.ts', import.meta.url), 'utf8')
+const liveTaskPage = await readFile(new URL('../../../web/src/features/LiveTaskPage.tsx', import.meta.url), 'utf8')
 const tailProbe = await readFile(new URL('./session-disk-tail.ts', import.meta.url), 'utf8')
 
 function section(start: string, end: string): string {
@@ -40,6 +42,8 @@ test('idle Worker suspension requires no subscribers and preserves logical Runti
   const scheduler = section('private scheduleIdleCheck', 'private runtimeIsQuiescent')
   const suspend = section('private async suspendIdleRuntime', 'private async restartRuntimeWorker')
   assert.match(scheduler, /runtime\.subscriberCount > 0/)
+  const quiescent = section('private runtimeIsQuiescent', 'private async checkpointRuntimeState')
+  assert.match(quiescent, /runtime\.extensionBindingStatus !== 'binding'/)
   assert.match(suspend, /runtime\.suspended = true/)
   assert.match(suspend, /runtime\.status = 'ready'/)
   assert.doesNotMatch(suspend, /this\.runtimes\.delete/)
@@ -68,4 +72,82 @@ test('external disk-ahead detection schedules restart only after bounded Snapsho
 
   assert.ok(detect >= 0 && read > detect)
   assert.ok(restart > read, 'Worker refresh must not sit in front of the foreground Snapshot read')
+})
+
+
+test('foreground Runtime state never waits for git workspace discovery', () => {
+  const state = section('private async runtimeState(runtime:', 'private decorateReadyState')
+  assert.match(state, /runtime\.status !== 'initializing'\) this\.refreshWorkspaceContextBestEffort\(runtime\)/)
+  assert.doesNotMatch(state, /await this\.refreshWorkspaceContext/)
+})
+
+test('workspace git metadata refresh is single-flight and TTL bounded', () => {
+  const refresh = section('private refreshWorkspaceContextBestEffort', 'private advanceInitialization')
+  assert.match(refresh, /runtime\.workspaceContextTask/)
+  assert.match(refresh, /WORKSPACE_CONTEXT_REFRESH_MS/)
+  assert.match(refresh, /resolveWorkspaceContext\(runtime\.input\.cwd\)/)
+})
+
+
+test('Pi initialization does not compete with git workspace discovery', () => {
+  const initialize = section('private async initialize(runtime:', 'private workerExited(')
+  const ready = initialize.indexOf("runtime.status = 'ready'")
+  const refresh = initialize.indexOf('this.refreshWorkspaceContextBestEffort(runtime)')
+  assert.ok(ready >= 0 && refresh > ready, 'git metadata refresh must start only after the Pi Runtime is ready')
+})
+
+
+test('Runtime list is a logical-memory read and never probes every Worker', () => {
+  const list = section('async list():', 'async start(')
+  const listState = section('private runtimeListState', 'private async foregroundRuntimeState')
+  assert.match(list, /runtimeListState/)
+  assert.doesNotMatch(list, /runtimeState|handle\.state|Promise\.all/)
+  assert.doesNotMatch(listState, /handle\.state|await /)
+  assert.match(listState, /runtime\.isStreaming/)
+  assert.match(listState, /runtime\.input\.logicalSessionId/)
+})
+
+
+test('explicit termination does not wait for diagnostic state or audit work', () => {
+  const terminate = section('async terminate(id:', 'async dispose()')
+  assert.match(terminate, /terminateRuntime\(runtime, true\)/)
+  assert.match(terminate, /recoveryStore\?\.remove\(id\)/)
+  assert.doesNotMatch(terminate, /handle\.state|startupAuditTask|startupAuditProbeTask|startupPackageAuditTask/)
+})
+
+test('Worker termination has a fixed graceful shutdown budget before force kill', async () => {
+  const host = await readFile(new URL('./worker-host.ts', import.meta.url), 'utf8')
+  assert.match(host, /WORKER_TERMINATE_GRACE_MS = 1_000/)
+  const from = host.indexOf('async terminate(): Promise<void>')
+  const to = host.indexOf('\n  }\n}\n\nexport class WorkerPiRuntimeHost', from)
+  assert.ok(from >= 0 && to > from)
+  const terminate = host.slice(from, to)
+  assert.match(terminate, /Promise\.race/)
+  assert.match(terminate, /this\.child\.kill\(\)/)
+})
+
+
+test('Pi logical settlement never treats agent_end or assistant message_end as terminal', () => {
+  const publish = section('private publish(runtime:', '\n  }\n}')
+  assert.match(publish, /logicalSettled = type === 'agent_settled' \|\| type === 'runtime_exit'/)
+  assert.doesNotMatch(publish, /logicalSettled[^\n]*agent_end/)
+  assert.doesNotMatch(publish, /logicalSettled[^\n]*message_end/)
+  assert.match(publish, /type === 'message_end' && messageRole === 'assistant'/)
+})
+
+
+test('Generic Live completion can only originate from Pi agent_settled', () => {
+  const normalizeStart = adapter.indexOf('export function normalizePiLiveEvent')
+  const normalizeEnd = adapter.indexOf('export function normalizePiLiveRuntimeEvent', normalizeStart)
+  assert.ok(normalizeStart >= 0 && normalizeEnd > normalizeStart)
+  const normalize = adapter.slice(normalizeStart, normalizeEnd)
+  assert.match(normalize, /type === 'agent_settled'/)
+  assert.doesNotMatch(normalize, /type === 'agent_settled' \|\| type === 'agent_end'/)
+  assert.doesNotMatch(normalize, /type === 'agent_end'[^\n]*completed/)
+})
+
+test('LiveTaskPage final reconciliation stays bound to normalized completed', () => {
+  assert.match(liveTaskPage, /normalizedEvent\?\.type === 'completed'/)
+  assert.doesNotMatch(liveTaskPage, /agent_end/)
+  assert.doesNotMatch(liveTaskPage, /agent_settled/)
 })

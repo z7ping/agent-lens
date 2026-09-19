@@ -59,6 +59,7 @@ export type LiveCapabilityNameDto =
   | 'command-discovery'
   | 'workspace-file-reference'
   | 'history-index'
+  | 'session-tree'
   | 'recovery'
 
 export type LiveInputSupportDto = 'native' | 'transform' | 'unsupported'
@@ -133,6 +134,39 @@ export interface LiveHistoryIndexQueryDto {
 export interface LiveHistoryIndexDto {
   total: number
   items: LiveHistoryIndexItemDto[]
+}
+
+export type LiveSessionTreeNodeTypeDto =
+  | 'message'
+  | 'branch-summary'
+  | 'compaction'
+  | 'control'
+  | 'custom'
+  | 'other'
+
+export interface LiveSessionTreeNodeDto {
+  id: string
+  parentId: string | null
+  type: LiveSessionTreeNodeTypeDto
+  timestamp?: string | undefined
+  role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
+  preview?: string | undefined
+  label?: string | undefined
+  summary?: string | undefined
+  activePath: boolean
+  childCount: number
+}
+
+export interface LiveSessionTreeDto {
+  activeLeafId: string | null
+  nodes: LiveSessionTreeNodeDto[]
+  branchPointIds: string[]
+  capabilities: {
+    switchBranch: boolean
+    fork: boolean
+    clone: boolean
+    branchSummary: boolean
+  }
 }
 
 export interface LiveQueueStateDto {

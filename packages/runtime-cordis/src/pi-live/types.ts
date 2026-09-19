@@ -1,4 +1,4 @@
-import type { LiveAvailability, LiveHistoryIndex, LiveHistoryIndexQuery, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeActionResult, LiveRuntimeDisclosureContribution, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveSnapshotWindow, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
+import type { LiveAvailability, LiveHistoryIndex, LiveHistoryIndexQuery, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeActionResult, LiveRuntimeDisclosureContribution, LiveRuntimeEvent, LiveRuntimeState, LiveSessionTree, LiveSnapshot, LiveSnapshotWindow, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 
@@ -13,6 +13,14 @@ export type PiLiveHistoryAction = 'continue' | 'fork'
 
 export interface PiLiveInitializationTiming {
   stage: PiLiveInitializationStage
+  durationMs: number
+}
+
+export type PiLiveWarmWorkerStatus = 'hit' | 'miss' | 'not_ready' | 'sdk_mismatch'
+export type PiLiveExtensionBindingStatus = 'binding' | 'ready' | 'failed'
+
+export interface PiLiveStartupMetric {
+  name: string
   durationMs: number
 }
 
@@ -90,6 +98,12 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   initializationMessage?: string | undefined
   initializationElapsedMs?: number | undefined
   initializationTimings?: PiLiveInitializationTiming[] | undefined
+  /** Fine-grained startup timings for diagnostics; product progress keeps using initializationStage. */
+  startupMetrics?: PiLiveStartupMetric[] | undefined
+  warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  /** Session Core can be ready while extension session_start/resources_discover binding continues in background. */
+  extensionBindingStatus?: PiLiveExtensionBindingStatus | undefined
+  extensionBindingError?: string | undefined
   /** Current Pi runtime resource snapshot. Field name is retained for API compatibility. */
   startupResources?: PiLiveStartupResources | undefined
   packageUpdates?: PiLivePackageUpdate[] | undefined
@@ -152,6 +166,7 @@ export interface PiLiveService {
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
   historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
+  sessionTree(runtimeSessionId: string): Promise<LiveSessionTree>
   commands(runtimeSessionId: string): Promise<PiLiveCommand[]>
   workspaceFileReferences(runtimeSessionId: string, query: string, limit?: number): Promise<LiveWorkspaceFileReference[]>
   messageActions(runtimeSessionId: string): Promise<LiveMessageActionContribution[]>

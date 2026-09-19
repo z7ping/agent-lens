@@ -19,6 +19,7 @@ import type {
   LiveRuntimeEventDto,
   LiveRuntimeRefDto,
   LiveRuntimeStateDto,
+  LiveSessionTreeDto,
   LiveSnapshotDto,
   LiveStartInputDto,
   LiveThinkingControlDto,
@@ -32,7 +33,11 @@ const LIVE_ROOT = '/api/v1/live'
 const LIVE_PRODUCT_CACHE_MS = 2_000
 const LIVE_RUNTIME_LIST_CACHE_MS = 1_000
 let liveProductCache: { at: number; items: LiveProductDto[] } | null = null
-let liveRuntimeListCache: { at: number; items: LiveRuntimeRefDto[] } | null = null
+export interface LiveRuntimeListSnapshot {
+  items: LiveRuntimeRefDto[]
+  failedLiveIds: string[]
+}
+let liveRuntimeListCache: { at: number; snapshot: LiveRuntimeListSnapshot } | null = null
 
 const LIVE_VISIBLE_FLUSH_MS = 48
 const LIVE_HIDDEN_FLUSH_MS = 250
@@ -223,6 +228,21 @@ function notifyLiveStateChanged(liveId: string, runtimeSessionId?: string): void
   }))
 }
 
+async function readKnownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
+  if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
+    return liveRuntimeListCache.snapshot
+  }
+  const raw = await requestJson<{ items: LiveRuntimeRefDto[]; failedLiveIds?: string[] }>(`${LIVE_ROOT}/runtimes`)
+  const snapshot: LiveRuntimeListSnapshot = {
+    items: raw.items,
+    failedLiveIds: Array.isArray(raw.failedLiveIds)
+      ? raw.failedLiveIds.filter(value => typeof value === 'string' && value)
+      : [],
+  }
+  liveRuntimeListCache = { at: Date.now(), snapshot }
+  return snapshot
+}
+
 async function historyInteraction(
   liveId: string,
   logicalSessionId: string,
@@ -268,13 +288,12 @@ export const liveApi = {
     return requestJson<{ items: LiveProductMetadata[] }>(`${LIVE_ROOT}/product-metadata?${params}`).then(result => result.items)
   },
 
+  knownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
+    return readKnownRuntimeSnapshot()
+  },
+
   async knownRuntimes(): Promise<LiveRuntimeRefDto[]> {
-    if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
-      return liveRuntimeListCache.items
-    }
-    const items = (await requestJson<{ items: LiveRuntimeRefDto[] }>(`${LIVE_ROOT}/runtimes`)).items
-    liveRuntimeListCache = { at: Date.now(), items }
-    return items
+    return (await readKnownRuntimeSnapshot()).items
   },
 
   availability(liveId: string): Promise<LiveAvailabilityDto> {
@@ -324,6 +343,10 @@ export const liveApi = {
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
   },
 
+  sessionTree(liveId: string, runtimeSessionId: string): Promise<LiveSessionTreeDto> {
+    return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/session-tree')))
+  },
+
   historyIndex(
     liveId: string,
     runtimeSessionId: string,
@@ -363,13 +386,13 @@ export const liveApi = {
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/message-actions')),
     )).items
   },
-  executeMessageAction(
+  async executeMessageAction(
     liveId: string,
     runtimeSessionId: string,
     actionId: string,
     targetEntryId: string,
   ): Promise<LiveMessageActionResultDto> {
-    return requestJson(
+    const result = await requestJson<LiveMessageActionResultDto>(
       livePath(liveId, runtimeSuffix(runtimeSessionId, '/message-actions')),
       {
         method: 'POST',
@@ -377,6 +400,10 @@ export const liveApi = {
         body: JSON.stringify({ actionId, targetEntryId }),
       },
     )
+    if (result.outcome === 'open-runtime' && result.runtime) {
+      notifyLiveStateChanged(liveId, result.runtime.runtimeSessionId)
+    }
+    return result
   },
 
   async runtimeDisclosures(
@@ -476,7 +503,10 @@ export const liveApi = {
     const scheduler = new LiveEventScheduler(events => {
       for (const value of events) {
         listener(value)
-        if (value.normalizedEvent?.type === 'title.update') {
+        const type = value.normalizedEvent?.type
+        if (type === 'title.update' || type === 'status' || type === 'completed') {
+          // Runtime list refreshes only on low-frequency lifecycle boundaries;
+          // streaming text/tool deltas never invalidate the list.
           notifyLiveStateChanged(liveId, runtimeSessionId)
         }
       }

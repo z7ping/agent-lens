@@ -19,16 +19,25 @@ let runtimeSessionId = ''
 let runtimeCwd = ''
 let sdk
 let loadedSdkEntry
+let baseAgentDir
+let baseModelRuntime
+let prewarmMetrics = []
+let startupMetrics = []
+let warmWorkerStatus
 let runtime
 let session
 let unsubscribe = () => {}
 let extensionUi
+let extensionBindingPromise
+let extensionBindingStatus
+let extensionBindingError
 let terminating = false
 let sdkVersion
 let runtimeMode = 'compatibility'
 let capabilities
 let packageUpdateCheck = 'checking'
 let packageUpdates = []
+let currentStartupResources
 let roundIndexCache
 let initializationStartedAt = 0
 let currentInitializationStage
@@ -212,6 +221,12 @@ function startupResourceSnapshot(resourceLoader, cwd, extraDiagnostics, fallback
   }
 }
 
+function publishStartupResources(resources) {
+  if (!resources) return
+  currentStartupResources = resources
+  send('event', { type: 'runtime_resources', resources })
+}
+
 function isCoalescibleEnvelope(envelope) {
   if (envelope.type !== 'event') return false
   const payload = record(envelope.payload)
@@ -319,6 +334,39 @@ function progress(stage, message) {
     elapsedMs,
     timings: initializationTimings,
   })
+}
+
+function recordStartupMetric(name, durationMs, options = {}) {
+  const metric = {
+    name,
+    durationMs: Math.max(0, Number.isFinite(durationMs) ? durationMs : 0),
+  }
+  startupMetrics = [...startupMetrics.filter(item => item.name !== name), metric]
+  if (runtimeSessionId) {
+    send('event', {
+      type: 'runtime_startup_metric',
+      metric,
+      ...(warmWorkerStatus ? { warmWorkerStatus } : {}),
+      ...(options.prewarm === true ? { prewarm: true } : {}),
+    })
+  }
+  return metric
+}
+
+async function ensureBaseRuntime(loadedSdk) {
+  if (baseModelRuntime) return false
+  if (typeof loadedSdk.ModelRuntime?.create !== 'function') return false
+  baseAgentDir = typeof loadedSdk.getAgentDir === 'function' ? loadedSdk.getAgentDir() : undefined
+  const startedAt = Date.now()
+  baseModelRuntime = await loadedSdk.ModelRuntime.create({
+    ...(baseAgentDir ? {
+      authPath: join(baseAgentDir, 'auth.json'),
+      modelsPath: join(baseAgentDir, 'models.json'),
+    } : {}),
+    allowModelNetwork: false,
+  })
+  const metric = { name: 'model_runtime_create_ms', durationMs: Math.max(0, Date.now() - startedAt) }
+  return metric
 }
 
 function rememberRequestId(requestId) {
@@ -544,6 +592,113 @@ function historyIndex(queryValue) {
   }
 }
 
+function sessionTreePreview(entry) {
+  const row = record(entry)
+  if (row.type === 'message') {
+    const message = record(row.message)
+    const content = message.content ?? row.content
+    const text = Array.isArray(content)
+      ? content.map(part => typeof part === 'string'
+        ? part
+        : typeof record(part).text === 'string'
+          ? String(record(part).text)
+          : '').join(' ')
+      : typeof content === 'string' ? content : ''
+    return text.replace(/\s+/g, ' ').trim().slice(0, 120)
+  }
+  if (row.type === 'branch_summary' || row.type === 'compaction') {
+    return typeof row.summary === 'string' ? row.summary.replace(/\s+/g, ' ').trim().slice(0, 120) : ''
+  }
+  if (row.type === 'custom_message') {
+    const content = row.content
+    const text = Array.isArray(content)
+      ? content.map(part => typeof part === 'string' ? part : String(record(part).text ?? '')).join(' ')
+      : typeof content === 'string' ? content : ''
+    return text.replace(/\s+/g, ' ').trim().slice(0, 120)
+  }
+  return ''
+}
+
+function sessionTreeNodeType(entry) {
+  const type = record(entry).type
+  if (type === 'message') return 'message'
+  if (type === 'branch_summary') return 'branch-summary'
+  if (type === 'compaction') return 'compaction'
+  if (type === 'model_change' || type === 'thinking_level_change' || type === 'session_info' || type === 'label') return 'control'
+  if (type === 'custom' || type === 'custom_message') return 'custom'
+  return 'other'
+}
+
+function sessionTree() {
+  const manager = session?.sessionManager
+  if (!manager || typeof manager.getTree !== 'function') {
+    return {
+      activeLeafId: manager?.getLeafId?.() ?? null,
+      nodes: [],
+      branchPointIds: [],
+      capabilities: { switchBranch: false, fork: false, clone: false, branchSummary: false },
+    }
+  }
+
+  const activePath = new Set(
+    typeof manager.getBranch === 'function'
+      ? manager.getBranch().map(entryId).filter(Boolean)
+      : [],
+  )
+  const roots = manager.getTree()
+  const nodes = []
+  const branchPointIds = []
+  const stack = Array.isArray(roots) ? [...roots].reverse() : []
+  let branchSummarySupported = typeof manager.branchWithSummary === 'function'
+
+  while (stack.length) {
+    const node = record(stack.pop())
+    const entry = record(node.entry)
+    const id = entryId(entry)
+    if (!id) continue
+    const children = Array.isArray(node.children) ? node.children : []
+    if (children.length > 1) branchPointIds.push(id)
+    if (entry.type === 'branch_summary') branchSummarySupported = true
+
+    const message = record(entry.message)
+    const rawRole = typeof message.role === 'string' ? message.role : ''
+    const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
+      ? rawRole
+      : rawRole ? 'unknown' : undefined
+    const preview = sessionTreePreview(entry)
+    const label = typeof node.label === 'string' && node.label.trim() ? node.label.trim().slice(0, 120) : undefined
+    const summary = entry.type === 'branch_summary' && typeof entry.summary === 'string'
+      ? entry.summary.trim().slice(0, 500)
+      : undefined
+
+    nodes.push({
+      id,
+      parentId: typeof entry.parentId === 'string' && entry.parentId ? entry.parentId : null,
+      type: sessionTreeNodeType(entry),
+      ...(typeof entry.timestamp === 'string' ? { timestamp: entry.timestamp } : {}),
+      ...(role ? { role } : {}),
+      ...(preview ? { preview } : {}),
+      ...(label ? { label } : {}),
+      ...(summary ? { summary } : {}),
+      activePath: activePath.has(id),
+      childCount: children.length,
+    })
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index])
+  }
+
+  return {
+    activeLeafId: manager.getLeafId?.() ?? null,
+    nodes,
+    branchPointIds,
+    capabilities: {
+      switchBranch: capabilities?.treeNavigation === true,
+      fork: capabilities?.messageFork === true,
+      clone: false,
+      branchSummary: branchSummarySupported,
+    },
+  }
+}
+
 function resolvedRuntimeSessionDir(cwd, value) {
   if (typeof value !== 'string' || !value.trim()) return undefined
   const raw = value.trim()
@@ -684,6 +839,11 @@ function handshakeDiagnostics() {
     ...(capabilities ? { capabilities } : {}),
     initializationElapsedMs: initializationStartedAt ? Math.max(0, Date.now() - initializationStartedAt) : 0,
     initializationTimings,
+    ...(startupMetrics.length ? { startupMetrics } : {}),
+    ...(warmWorkerStatus ? { warmWorkerStatus } : {}),
+    ...(extensionBindingStatus ? { extensionBindingStatus } : {}),
+    ...(extensionBindingError ? { extensionBindingError } : {}),
+    ...(session?.sessionFile ? { sessionFile: session.sessionFile } : {}),
   }
 }
 
@@ -693,22 +853,73 @@ async function initialize(input) {
   currentInitializationStage = undefined
   currentStageStartedAt = initializationStartedAt
   initializationTimings = []
+  startupMetrics = []
+  const agentLensStartup = record(input.agentLensStartup)
+  warmWorkerStatus = ['hit', 'miss', 'not_ready', 'sdk_mismatch'].includes(agentLensStartup.warmWorkerStatus)
+    ? agentLensStartup.warmWorkerStatus
+    : undefined
+  for (const metric of prewarmMetrics) {
+    if (typeof metric?.name === 'string' && typeof metric?.durationMs === 'number') {
+      recordStartupMetric(metric.name, metric.durationMs, { prewarm: true })
+    }
+  }
+  if (Array.isArray(agentLensStartup.metrics)) {
+    for (const value of agentLensStartup.metrics) {
+      const metric = record(value)
+      if (typeof metric.name === 'string' && typeof metric.durationMs === 'number') {
+        recordStartupMetric(metric.name, metric.durationMs)
+      }
+    }
+  }
   packageUpdateCheck = 'checking'
   packageUpdates = []
+
   progress('loading_sdk', '正在加载 Pi SDK')
+  const sdkWasLoaded = Boolean(sdk)
+  const sdkStartedAt = Date.now()
   const loadedSdk = await loadSdk(record(input.sdk))
+  recordStartupMetric('sdk_import_ms', sdkWasLoaded ? 0 : Date.now() - sdkStartedAt)
+
+  const sessionManagerStartedAt = Date.now()
   const sessionManager = await createSessionManager(loadedSdk, input)
+  recordStartupMetric('session_manager_ms', Date.now() - sessionManagerStartedAt)
+
   const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof loadedSdk[name] === 'function')
   if (hasSessionRuntime) {
     runtimeMode = 'session_runtime'
-    const agentDir = loadedSdk.getAgentDir()
+    const createdBaseMetric = await ensureBaseRuntime(loadedSdk)
+    recordStartupMetric('model_runtime_create_ms', createdBaseMetric ? createdBaseMetric.durationMs : 0)
+    const agentDir = baseAgentDir ?? loadedSdk.getAgentDir()
     const createRuntime = async options => {
       progress('loading_resources', '正在加载配置、扩展与上下文')
-      const services = await loadedSdk.createAgentSessionServices({ cwd: options.cwd, agentDir: options.agentDir, modelRuntimeSignal: AbortSignal.timeout(15_000) })
+      let settingsManager
+      const settingsStartedAt = Date.now()
+      if (typeof loadedSdk.SettingsManager?.create === 'function') {
+        settingsManager = loadedSdk.SettingsManager.create(options.cwd, options.agentDir)
+      }
+      recordStartupMetric('settings_manager_ms', Date.now() - settingsStartedAt)
+
+      const resourcesStartedAt = Date.now()
+      const services = await loadedSdk.createAgentSessionServices({
+        cwd: options.cwd,
+        agentDir: options.agentDir,
+        ...(settingsManager ? { settingsManager } : {}),
+        ...(baseModelRuntime
+          ? { modelRuntime: baseModelRuntime }
+          : { modelRuntimeSignal: AbortSignal.timeout(15_000) }),
+      })
+      recordStartupMetric('cwd_services_create_ms', Date.now() - resourcesStartedAt)
       const resources = startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics)
-      if (resources) send('event', { type: 'runtime_resources', resources })
+      publishStartupResources(resources)
+
       progress('creating_session', '正在创建 Pi Session')
-      const created = await loadedSdk.createAgentSessionFromServices({ services, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent })
+      const sessionStartedAt = Date.now()
+      const created = await loadedSdk.createAgentSessionFromServices({
+        services,
+        sessionManager: options.sessionManager,
+        sessionStartEvent: options.sessionStartEvent,
+      })
+      recordStartupMetric('agent_session_create_ms', Date.now() - sessionStartedAt)
       return { ...created, services, diagnostics: services.diagnostics }
     }
     runtime = await loadedSdk.createAgentSessionRuntime(createRuntime, { cwd: input.cwd, agentDir, sessionManager })
@@ -716,10 +927,12 @@ async function initialize(input) {
   } else {
     progress('loading_resources', '正在使用兼容模式加载 Pi 配置与扩展')
     progress('creating_session', '正在创建 Pi Session')
+    const compatibilitySessionStartedAt = Date.now()
     const created = await loadedSdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    recordStartupMetric('agent_session_create_ms', Date.now() - compatibilitySessionStartedAt)
     const compatibilityLoader = record(created).resourceLoader ?? record(record(created).services).resourceLoader
     const compatibilityResources = startupResourceSnapshot(compatibilityLoader, input.cwd, record(created).diagnostics, record(created).extensionsResult)
-    if (compatibilityResources) send('event', { type: 'runtime_resources', resources: compatibilityResources })
+    publishStartupResources(compatibilityResources)
     session = created.session
     runtime = { dispose: async () => session.dispose() }
   }
@@ -727,27 +940,70 @@ async function initialize(input) {
   send('event', { type: 'runtime_capabilities', capabilities })
   extensionUi = createExtensionUi()
   unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
-  progress('binding_extensions', '正在绑定扩展界面')
-  await session.bindExtensions({
+  if (input.name) session.setSessionName(input.name)
+  if (input.provider || input.model) await selectModel(input.provider, input.model)
+
+  // Match Pi Web lifecycle semantics: Session Core becomes usable first;
+  // extension session_start/resources_discover binding continues in background.
+  progress('binding_extensions', '正在后台绑定扩展')
+  beginExtensionBinding(input)
+  recordStartupMetric('ready_ms', Math.max(0, Date.now() - initializationStartedAt))
+  progress('ready', 'Pi Runtime 核心已就绪')
+  // Package update IO waits until extension binding settles so it never competes
+  // with the foreground-critical extension startup path.
+  void extensionBindingPromise.finally(() => {
+    if (!terminating) startPackageUpdateCheck(input.cwd)
+  }).catch(() => undefined)
+}
+
+function beginExtensionBinding(input) {
+  if (extensionBindingPromise) return extensionBindingPromise
+  extensionBindingStatus = 'binding'
+  extensionBindingError = undefined
+  send('event', { type: 'runtime_extension_binding', status: 'binding' })
+  const startedAt = Date.now()
+
+  extensionBindingPromise = Promise.resolve().then(() => session.bindExtensions({
     uiContext: extensionUi.context,
     mode: 'rpc',
     abortHandler: () => { void session.abort() },
-    onError: value => send('event', { type: 'extension_error', error: diagnostic(record(value).error ?? 'Unknown extension error') }),
+    onError: value => send('event', {
+      type: 'extension_error',
+      error: diagnostic(record(value).error ?? 'Unknown extension error'),
+    }),
+  })).then(() => {
+    recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
+    extensionBindingStatus = 'ready'
+    const finalResourceLoader = record(session).resourceLoader
+    const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
+    publishStartupResources(finalResources)
+    send('event', { type: 'runtime_extension_binding', status: 'ready' })
+  }).catch(error => {
+    recordStartupMetric('extension_bind_ms', Date.now() - startedAt)
+    extensionBindingStatus = 'failed'
+    extensionBindingError = diagnostic(error instanceof Error ? error.message : error)
+    send('event', {
+      type: 'runtime_extension_binding',
+      status: 'failed',
+      error: extensionBindingError,
+    })
+    throw error
   })
-  // resources_discover runs during bindExtensions() and may extend skills/prompts/themes.
-  // Emit a post-bind snapshot so the service sees the actual runtime resource set rather than
-  // only the pre-session loader state.
-  const finalResourceLoader = record(session).resourceLoader
-  const finalResources = startupResourceSnapshot(finalResourceLoader, input.cwd)
-  if (finalResources) send('event', { type: 'runtime_resources', resources: finalResources })
-  if (input.name) session.setSessionName(input.name)
-  if (input.provider || input.model) await selectModel(input.provider, input.model)
-  progress('ready', 'Pi Runtime 已就绪')
-  startPackageUpdateCheck(input.cwd)
+
+  // Binding failure must remain observable but never become an unhandled Worker rejection.
+  void extensionBindingPromise.catch(() => undefined)
+  return extensionBindingPromise
+}
+
+async function waitForExtensionBinding() {
+  if (!extensionBindingPromise) return
+  await extensionBindingPromise
+  if (extensionBindingStatus === 'failed') {
+    throw new Error(extensionBindingError || 'Pi extension binding failed')
+  }
 }
 
 function state() {
-  const resources = startupResourceSnapshot(record(session).resourceLoader, runtimeCwd)
   return {
     runtimeSessionId, status: 'ready', initializationStage: 'ready', initializationMessage: `Pi Runtime 已就绪 · ${formatElapsed(handshakeDiagnostics().initializationElapsedMs)}`,
     ...handshakeDiagnostics(),
@@ -755,7 +1011,9 @@ function state() {
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
-    ...(resources ? { startupResources: resources } : {}),
+    ...(extensionBindingStatus ? { extensionBindingStatus } : {}),
+    ...(extensionBindingError ? { extensionBindingError } : {}),
+    ...(currentStartupResources ? { startupResources: currentStartupResources } : {}),
     packageUpdateCheck,
     ...(packageUpdates.length ? { packageUpdates } : {}),
   }
@@ -846,6 +1104,14 @@ function thinkingControl() {
 
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
+  const needsExtensions = name === 'commands'
+    || name === 'navigateTree'
+    || name === 'setModel'
+    || name === 'setThinkingLevel'
+    || name === 'prompt'
+    || name === 'steer'
+    || name === 'followUp'
+  if (needsExtensions) await waitForExtensionBinding()
   if (name === 'state') return state()
   if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since, value.window)
   if (name === 'snapshotChunk') {
@@ -857,6 +1123,7 @@ async function command(name, value = {}) {
     return session.sessionManager.getEntries().find(entry => entryId(entry) === value.entryId) ?? null
   }
   if (name === 'historyIndex') return historyIndex(value)
+  if (name === 'sessionTree') return sessionTree()
   if (name === 'commands') return slashCommands()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
@@ -921,8 +1188,17 @@ process.on('message', async value => {
     if (runtimeSessionId || typeof envelope.requestId !== 'string') return
     if (!rememberRequestId(envelope.requestId)) return
     try {
-      await loadSdk(record(record(envelope.payload).sdk))
-      send('response', { sdkVersion }, envelope.requestId, true)
+      prewarmMetrics = []
+      const sdkStartedAt = Date.now()
+      const loadedSdk = await loadSdk(record(record(envelope.payload).sdk))
+      prewarmMetrics.push({ name: 'prewarm_sdk_import_ms', durationMs: Math.max(0, Date.now() - sdkStartedAt) })
+      const baseMetric = await ensureBaseRuntime(loadedSdk)
+      if (baseMetric) {
+        prewarmMetrics.push({ name: 'prewarm_model_runtime_create_ms', durationMs: baseMetric.durationMs })
+      } else if (baseModelRuntime) {
+        prewarmMetrics.push({ name: 'prewarm_model_runtime_create_ms', durationMs: 0 })
+      }
+      send('response', { sdkVersion, prewarmMetrics }, envelope.requestId, true)
     } catch (error) {
       send('response', undefined, envelope.requestId, false, error instanceof Error ? error.message : String(error))
     }

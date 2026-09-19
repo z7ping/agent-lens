@@ -27,9 +27,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -147,6 +147,19 @@ class FakeLiveAdapter implements LiveAdapter {
     if (limit <= 0) return { total: all.length, items: [] }
     const start = Math.max(0, (query.fromOrdinal ?? 1) - 1)
     return { total: all.length, items: all.slice(start, start + limit) }
+  }
+
+  async sessionTree(runtimeSessionId: string) {
+    await this.state(runtimeSessionId)
+    return {
+      activeLeafId: 'entry-2',
+      nodes: [
+        { id: 'entry-1', parentId: null, type: 'message' as const, role: 'user' as const, preview: 'hello', activePath: true, childCount: 1 },
+        { id: 'entry-2', parentId: 'entry-1', type: 'message' as const, role: 'assistant' as const, preview: 'hi', activePath: true, childCount: 0 },
+      ],
+      branchPointIds: [],
+      capabilities: { switchBranch: true, fork: true, clone: false, branchSummary: false },
+    }
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl> {
@@ -381,7 +394,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -502,6 +515,18 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
 
     const invalidHistoryIndex = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?from=2&cursor=entry-user-2`)
     assert.equal(invalidHistoryIndex.status, 400)
+
+    const sessionTree = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/session-tree`)
+    assert.equal(sessionTree.status, 200)
+    assert.deepEqual(await sessionTree.json(), {
+      activeLeafId: 'entry-2',
+      nodes: [
+        { id: 'entry-1', parentId: null, type: 'message', role: 'user', preview: 'hello', activePath: true, childCount: 1 },
+        { id: 'entry-2', parentId: 'entry-1', type: 'message', role: 'assistant', preview: 'hi', activePath: true, childCount: 0 },
+      ],
+      branchPointIds: [],
+      capabilities: { switchBranch: true, fork: true, clone: false, branchSummary: false },
+    })
 
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',
@@ -768,6 +793,27 @@ test('generic Live HTTP surface reports unavailable LiveService without falling 
     const response = await fetch(`${base}/api/v1/live`)
     assert.equal(response.status, 503)
     assert.deepEqual(await response.json(), { error: 'live_unavailable' })
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
+
+test('generic Live runtime list marks failed adapter lanes instead of reporting an authoritative empty list', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter(true)
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const response = await fetch(`${base}/api/v1/live/runtimes`)
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), {
+      items: [],
+      failedLiveIds: ['test'],
+    })
   } finally {
     await surface.dispose()
     storage.close()

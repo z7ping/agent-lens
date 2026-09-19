@@ -122,3 +122,15 @@ test('Live event scheduler dispose drops queued presentation work', () => {
   scheduler.flush()
   assert.equal(delivered, 0)
 })
+
+
+test('lifecycle status events remain priority boundaries and are never coalesced with stream deltas', () => {
+  const delivered: LiveRuntimeEventDto[][] = []
+  const scheduler = new LiveEventScheduler(events => delivered.push(events))
+  scheduler.push({ runtimeSessionId: 'r1', event: {}, normalizedEvent: { type: 'text.delta', delta: 'a' } } as LiveRuntimeEventDto)
+  scheduler.push({ runtimeSessionId: 'r1', event: {}, normalizedEvent: { type: 'status', status: 'running' } } as LiveRuntimeEventDto)
+  scheduler.flush()
+  assert.equal(delivered.flat().length, 2)
+  assert.equal(delivered.flat()[1]?.normalizedEvent?.type, 'status')
+  scheduler.dispose()
+})

@@ -629,6 +629,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const historyBlocksRef = useRef<LiveHistoryPageBlock[]>([])
   const projectionRef = useRef(projection)
   projectionRef.current = projection
+  const runtimeStateRef = useRef<LiveRuntimeStateDto | null>(state)
+  runtimeStateRef.current = state
   const followControllerRef = useRef(new LiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
@@ -715,7 +717,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
     const stateRequest = liveApi.state(current.liveId, current.runtimeSessionId).then(
       runtime => {
-        if (!cancelled) setState(runtime)
+        if (!cancelled) {
+          runtimeStateRef.current = runtime
+          setState(runtime)
+        }
         return runtime
       },
       reason => {
@@ -743,6 +748,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     ).then(
       snapshot => {
         if (cancelled) return
+        runtimeStateRef.current = snapshot.state
         setState(snapshot.state)
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
@@ -917,6 +923,50 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       return task
     }
 
+    let reconcileEpoch = 0
+    let runtimeActive = false
+    let runtimeCompacting = false
+    const reconcileState = async (forceRecovery = false) => {
+      const epoch = ++reconcileEpoch
+      try {
+        const runtime = await liveApi.state(current.liveId, current.runtimeSessionId)
+        if (!recoveryActive || epoch !== reconcileEpoch) return
+        const previous = runtimeStateRef.current
+        const changed = previous?.status !== runtime.status
+          || previous?.isStreaming !== runtime.isStreaming
+          || previous?.pendingMessageCount !== runtime.pendingMessageCount
+        runtimeStateRef.current = runtime
+        setState(runtime)
+        runtimeActive = runtime.isStreaming || runtimeCompacting
+        setActivityStatus(runtimeCompacting
+          ? 'compacting'
+          : runtime.isStreaming
+            ? 'running'
+            : runtime.status === 'ready'
+              ? 'idle'
+              : null)
+        const canRecover = runtime.status === 'ready' || runtime.status === 'initializing'
+        if ((changed || forceRecovery) && canRecover && product.capabilities.includes('recovery')) {
+          const mode = runtime.status === 'ready' && !runtime.isStreaming ? 'settle' : 'live'
+          void recover(mode)
+        }
+      } catch {
+        // SSE remains the primary channel. State reconciliation is best-effort.
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reconcileState(true)
+    }
+    const onOnline = () => { void reconcileState(true) }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
+    if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
+    const reconcileTimer = window.setInterval(() => {
+      if (runtimeActive && (typeof document === 'undefined' || document.visibilityState !== 'hidden')) {
+        void reconcileState(false)
+      }
+    }, 5_000)
+
     const unsubscribe = liveApi.subscribe(
       current.liveId,
       current.runtimeSessionId,
@@ -931,7 +981,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }
           if (!historyAtLatestRef.current || !followControllerRef.current.isFollowing) setNewRecords(true)
         }
-        setState(previous => runtimeStateFromEvent(previous, envelope))
+        setState(previous => {
+          const next = runtimeStateFromEvent(previous, envelope)
+          runtimeStateRef.current = next
+          return next
+        })
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
@@ -968,6 +1022,22 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }))
         }
         if (envelope.normalizedEvent?.type === 'status') {
+          if (envelope.normalizedEvent.status === 'compacting') {
+            runtimeCompacting = true
+            runtimeActive = true
+          } else if (envelope.normalizedEvent.status === 'running') {
+            runtimeCompacting = false
+            runtimeActive = true
+          } else if (envelope.normalizedEvent.status === 'ready') {
+            runtimeCompacting = false
+            runtimeActive = runtimeStateRef.current?.isStreaming ?? false
+          } else if (envelope.normalizedEvent.status === 'idle'
+            || envelope.normalizedEvent.status === 'failed'
+            || envelope.normalizedEvent.status === 'terminating'
+            || envelope.normalizedEvent.status === 'terminated') {
+            runtimeCompacting = false
+            runtimeActive = false
+          }
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
           }
@@ -1023,6 +1093,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
+          runtimeCompacting = false
+          runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
           }
@@ -1045,13 +1117,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       () => setConnected(false),
       () => {
         setConnected(true)
-        void recover()
+        void reconcileState(true)
       },
     )
     return () => {
       recoveryActive = false
       recoveryGeneration += 1
+      reconcileEpoch += 1
       pendingRecoveryMode = null
+      window.clearInterval(reconcileTimer)
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible)
+      if (typeof window !== 'undefined') window.removeEventListener('online', onOnline)
       unsubscribe()
     }
   }, [

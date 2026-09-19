@@ -53,3 +53,47 @@ test('ready event restores transcript and controls in place without renavigation
   assert.match(readyBlock, /liveApi\.queueState/)
   assert.doesNotMatch(readyBlock, /navigate\(/)
 })
+
+
+test('Generic Live reconciler corrects SSE with visible online and active polling', () => {
+  assert.match(page, /let reconcileEpoch = 0/)
+  assert.match(page, /const reconcileState = async/)
+  assert.match(page, /epoch !== reconcileEpoch/)
+  assert.match(page, /document\.addEventListener\('visibilitychange', onVisible\)/)
+  assert.match(page, /window\.addEventListener\('online', onOnline\)/)
+  assert.match(page, /const onVisible = \(\) => \{[\s\S]{0,120}reconcileState\(false\)/)
+  assert.match(page, /const onOnline = \(\) => \{ void reconcileState\(false\) \}/)
+  assert.match(page, /window\.setInterval\([\s\S]*5_000/)
+  assert.match(page, /if \(runtimeActive/)
+  assert.match(page, /setConnected\(true\)[\s\S]{0,100}reconcileState\(true\)/)
+  assert.match(page, /reconcileEpoch \+= 1/)
+  assert.match(page, /window\.clearInterval\(reconcileTimer\)/)
+})
+
+test('Generic Live reconciler only escalates to bounded recovery on drift or explicit recovery boundaries', () => {
+  const start = page.indexOf('const reconcileState = async')
+  const end = page.indexOf('const onVisible', start)
+  const block = page.slice(start, end)
+  assert.match(block, /liveApi\.state/)
+  assert.match(block, /changed \|\| forceRecovery/)
+  assert.match(block, /runtime\.status === 'ready' \|\| runtime\.status === 'initializing'/)
+  assert.match(block, /runtime\.status === 'ready' && !runtime\.isStreaming \? 'settle' : 'live'/)
+  assert.doesNotMatch(block, /loadBoundedRecoverySnapshot/)
+})
+
+
+test('Runtime reconciler preserves SSE compacting activity until compaction ends', () => {
+  assert.match(page, /let runtimeCompacting = false/)
+  assert.match(page, /status === 'compacting'[\s\S]{0,120}runtimeCompacting = true/)
+  assert.match(page, /runtimeActive = runtime\.isStreaming \|\| runtimeCompacting/)
+  assert.match(page, /runtimeCompacting\s*\? 'compacting'/)
+  assert.match(page, /status === 'ready'[\s\S]{0,120}runtimeCompacting = false/)
+  assert.match(page, /normalizedEvent\?\.type === 'completed'[\s\S]{0,120}runtimeCompacting = false/)
+})
+
+
+test('visibility and online recovery force one bounded transcript reconcile even when state fields are unchanged', () => {
+  assert.match(page, /document\.visibilityState === 'visible'\) void reconcileState\(true\)/)
+  assert.match(page, /const onOnline = \(\) => \{ void reconcileState\(true\) \}/)
+  assert.match(page, /const reconcileTimer = window\.setInterval\([\s\S]*reconcileState\(false\)/)
+})

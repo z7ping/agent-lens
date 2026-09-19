@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveAttachmentService } from '@agent-lens/core'
-import { normalizePiLiveEvent, PiLiveAdapter } from './adapter'
+import { normalizePiLiveEvent, normalizePiLiveRuntimeEvent, PiLiveAdapter } from './adapter'
 import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
 
 function attachmentService(overrides: Partial<LiveAttachmentService> = {}): LiveAttachmentService {
@@ -65,10 +65,15 @@ test('Pi Live Adapter invalidates Runtime Disclosure for private diagnostic upda
   for (const event of [
     { type: 'runtime_resources', resources: {} },
     { type: 'package_updates', status: 'complete', updates: [] },
-    { type: 'runtime_output', message: 'loading resource' },
+    { type: 'runtime_extension_binding', status: 'ready' },
   ]) {
     assert.deepEqual(normalizePiLiveEvent(event), { type: 'runtime-disclosure.changed' })
   }
+
+  // Fine-grained startup telemetry stays on the SSE stream but must not trigger
+  // one extra HTTP disclosure read per metric/log line.
+  assert.equal(normalizePiLiveEvent({ type: 'runtime_startup_metric', metric: { name: 'sdk_import_ms', durationMs: 1 } }), undefined)
+  assert.equal(normalizePiLiveEvent({ type: 'runtime_output', message: 'loading resource' }), undefined)
 })
 
 test('Pi Live Adapter maps task summary into generic title.update', () => {
@@ -286,10 +291,21 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
     steering: ['先检查测试'],
     followUp: ['完成后总结'],
   })
+  assert.equal(normalizePiLiveEvent({ type: 'agent_end' }), undefined)
   assert.deepEqual(normalizePiLiveEvent({ type: 'agent_settled' }), {
     type: 'completed',
     status: 'completed',
   })
+  assert.deepEqual(
+    normalizePiLiveRuntimeEvent({
+      runtimeSessionId: 'runtime-1',
+      event: { type: 'agent_end' },
+    }),
+    {
+      runtimeSessionId: 'runtime-1',
+      event: { type: 'agent_end' },
+    },
+  )
 })
 
 test('Pi Live Adapter exposes queue control and restores queued messages on interrupt', async () => {
@@ -454,4 +470,35 @@ test('Pi Live Adapter exposes full-session history index through bounded queries
     runtimeSessionId: 'runtime-1',
     query: { fromOrdinal: 2, limit: 1 },
   }])
+})
+
+
+test('Pi Live Adapter exposes native session tree only through the generic session-tree capability', async () => {
+  const tree = {
+    activeLeafId: 'entry-2',
+    nodes: [
+      { id: 'entry-1', parentId: null, type: 'message' as const, role: 'user' as const, preview: 'hello', activePath: true, childCount: 1 },
+      { id: 'entry-2', parentId: 'entry-1', type: 'branch-summary' as const, summary: 'summary', activePath: true, childCount: 0 },
+    ],
+    branchPointIds: [],
+    capabilities: {
+      switchBranch: true,
+      fork: true,
+      clone: false,
+      branchSummary: true,
+    },
+  }
+  const calls: string[] = []
+  const service = {
+    sessionTree: async (runtimeSessionId: string) => {
+      calls.push(runtimeSessionId)
+      return tree
+    },
+  } as unknown as PiLiveService
+
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  assert.equal(adapter.capabilities.has('session-tree'), true)
+  assert.deepEqual(await adapter.sessionTree('runtime-1'), tree)
+  assert.deepEqual(calls, ['runtime-1'])
+  assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
 })

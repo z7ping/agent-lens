@@ -322,13 +322,19 @@ test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 
     },
   }
   const first = new DefaultPiLiveService(firstHost, store)
-  const started = await first.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
+  const started = await first.start({
+    cwd: '/workspace',
+    sessionPath: originalPath,
+    historyAction: 'fork',
+    logicalSessionId: 'logical-parent',
+  })
   const forkSubscription = first.subscribe(started.runtimeSessionId, () => {})
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal((await first.state(started.runtimeSessionId)).status, 'ready')
   assert.equal(firstInput?.historyAction, 'fork')
   assert.equal(store.values.get(started.runtimeSessionId)?.input.sessionPath, forkedPath)
   assert.equal(store.values.get(started.runtimeSessionId)?.input.historyAction, 'continue')
+  assert.equal(store.values.get(started.runtimeSessionId)?.input.logicalSessionId, undefined)
   forkSubscription()
   await first.dispose()
 
@@ -367,4 +373,95 @@ test('URL 指向未知 runtimeSessionId 且无 Recovery 时明确不存在，不
   await assert.rejects(() => service.state('missing-runtime'), /Unknown Pi Live runtime session/)
   assert.equal(startCalls, 0)
   await service.dispose()
+})
+
+
+test('同一历史会话正在结束时拒绝新的继续请求', async () => {
+  let releaseTerminate!: () => void
+  const terminateGate = new Promise<void>(resolve => { releaseTerminate = resolve })
+  const service = new DefaultPiLiveService({
+    start: async id => ({
+      ...handle(id, '/sessions/ending.jsonl'),
+      terminate: async () => { await terminateGate },
+    }),
+  })
+
+  const started = await service.start({
+    cwd: '/workspace',
+    sessionPath: '/sessions/ending.jsonl',
+    historyAction: 'continue',
+  })
+  const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+  for (let index = 0; index < 20; index += 1) {
+    if ((await service.state(started.runtimeSessionId)).status === 'ready') break
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal((await service.state(started.runtimeSessionId)).status, 'ready')
+
+  const ending = service.terminate(started.runtimeSessionId)
+  await new Promise(resolve => setTimeout(resolve, 0))
+
+  await assert.rejects(
+    () => service.start({
+      cwd: '/workspace',
+      sessionPath: '/sessions/ending.jsonl',
+      historyAction: 'continue',
+    }),
+    /session is ending/,
+  )
+
+  releaseTerminate()
+  await ending
+  unsubscribe()
+})
+
+
+test('agent_end 不会提前结束 Logical Run，只有 agent_settled 才回到 idle', async () => {
+  let emit: ((event: Record<string, unknown>) => void) | undefined
+  const service = new DefaultPiLiveService({
+    start: async (id, _input, _signal, onEvent) => {
+      emit = onEvent
+      return handle(id, '/sessions/settled.jsonl')
+    },
+  })
+
+  const started = await service.start({ cwd: '/workspace' })
+  const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+  for (let index = 0; index < 20; index += 1) {
+    if ((await service.state(started.runtimeSessionId)).status === 'ready') break
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal((await service.state(started.runtimeSessionId)).status, 'ready')
+
+  emit?.({ type: 'agent_start' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
+  emit?.({ type: 'message_start', message: { id: 'assistant-1', role: 'assistant' } })
+  emit?.({ type: 'message_end', message: { id: 'assistant-1', role: 'assistant' } })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
+  emit?.({ type: 'queue_update', steering: [], followUp: ['继续第二轮'] })
+  emit?.({ type: 'agent_end' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+  assert.equal((await service.list())[0]?.pendingMessageCount, 1)
+
+  emit?.({ type: 'agent_start' }) // retry / queued continuation starts another low-level run
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
+  emit?.({ type: 'compaction_start' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+  assert.equal((await service.list())[0]?.isCompacting, true)
+
+  emit?.({ type: 'compaction_end' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+  assert.equal((await service.list())[0]?.isCompacting, false)
+
+  emit?.({ type: 'queue_update', steering: [], followUp: [] })
+  emit?.({ type: 'agent_settled' })
+  assert.equal((await service.list())[0]?.isStreaming, false)
+  assert.equal((await service.list())[0]?.isCompacting, false)
+  assert.equal((await service.list())[0]?.pendingMessageCount, 0)
+
+  unsubscribe()
+  await service.terminate(started.runtimeSessionId)
 })

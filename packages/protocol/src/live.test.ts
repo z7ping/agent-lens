@@ -179,3 +179,42 @@ test('Live protocol validates normalized extension UI requests', () => {
   assert.equal(parseLiveEventDto({ type: 'ui.request', requestId: '', method: 'confirm' }), null)
   assert.equal(parseLiveEventDto({ type: 'ui.request', requestId: 'x', method: 'unknown' }), null)
 })
+
+
+test('Live session tree DTO stays agent-neutral and flat', () => {
+  const tree = {
+    activeLeafId: 'entry-2',
+    nodes: [
+      {
+        id: 'entry-1',
+        parentId: null,
+        type: 'message' as const,
+        role: 'user' as const,
+        preview: 'hello',
+        activePath: true,
+        childCount: 1,
+      },
+      {
+        id: 'entry-2',
+        parentId: 'entry-1',
+        type: 'branch-summary' as const,
+        summary: 'summary',
+        activePath: true,
+        childCount: 0,
+      },
+    ],
+    branchPointIds: [],
+    capabilities: {
+      switchBranch: true,
+      fork: true,
+      clone: false,
+      branchSummary: true,
+    },
+  }
+
+  assert.deepEqual(tree.nodes.map(node => [node.id, node.parentId, node.type]), [
+    ['entry-1', null, 'message'],
+    ['entry-2', 'entry-1', 'branch-summary'],
+  ])
+  assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
+})

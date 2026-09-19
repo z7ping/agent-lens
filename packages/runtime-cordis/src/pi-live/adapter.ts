@@ -47,6 +47,7 @@ const CAPABILITIES = [
   'command-discovery',
   'workspace-file-reference',
   'history-index',
+  'session-tree',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
@@ -184,10 +185,16 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   if (type === 'model_changed') return { type: 'control.changed', control: 'model' }
   if (type === 'thinking_level_changed') return { type: 'control.changed', control: 'thinking' }
-  if (type === 'runtime_resources' || type === 'package_updates' || type === 'runtime_output') {
+  if (type === 'runtime_resources'
+    || type === 'package_updates'
+    || type === 'runtime_extension_binding') {
     return { type: 'runtime-disclosure.changed' }
   }
-  if (type === 'agent_settled' || type === 'agent_end') {
+  // Pi distinguishes a low-level agent run ending from the whole logical
+  // turn settling. agent_end can be followed by retry, auto-compaction or queued
+  // continuation, so only agent_settled may cross the Generic Live boundary as
+  // completed.
+  if (type === 'agent_settled') {
     return { type: 'completed', status: 'completed' }
   }
   if (type === 'message_start' || type === 'message_end') {
@@ -387,6 +394,10 @@ export class PiLiveAdapter implements LiveAdapter {
 
   historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery) {
     return this.service.historyIndex(runtimeSessionId, query)
+  }
+
+  sessionTree(runtimeSessionId: string) {
+    return this.service.sessionTree(runtimeSessionId)
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {

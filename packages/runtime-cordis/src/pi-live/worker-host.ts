@@ -2,7 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
-import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSnapshotWindow } from '@agent-lens/core'
+import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSessionTree, LiveSnapshotWindow } from '@agent-lens/core'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
@@ -14,18 +14,22 @@ import type {
   PiLiveRuntimeState,
   PiLiveSnapshot,
   PiLiveStartInput,
+  PiLiveStartupMetric,
   PiLiveStreamingBehavior,
+  PiLiveWarmWorkerStatus,
 } from './types'
 
 const PROTOCOL_VERSION = 1
 const MAX_PENDING_REQUESTS = 128
 const MAX_STDERR_TAIL = 64 * 1024
 const MAX_STARTUP_OUTPUT_LINES = 80
+const WARM_CLAIM_GRACE_MS = 250
+const WORKER_TERMINATE_GRACE_MS = 1_000
 
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
   | 'navigateTree'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
@@ -57,9 +61,14 @@ export interface PiRuntimeHandle {
   readonly capabilities?: PiLiveRuntimeCapabilities | undefined
   readonly initializationElapsedMs?: number | undefined
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
+  readonly startupMetrics?: PiLiveStartupMetric[] | undefined
+  readonly warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  /** Session identity captured by the initialize handshake, avoiding an immediate follow-up state IPC. */
+  readonly initialSessionFile?: string | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
   historyIndex?(query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
+  sessionTree?(): Promise<LiveSessionTree>
   entry?(entryId: string): Promise<unknown | null>
   commands?(): Promise<PiLiveCommand[]>
   navigateTree?(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }>
@@ -76,7 +85,7 @@ export interface PiRuntimeHandle {
 }
 
 export interface PiRuntimeHost {
-  /** 在没有任务数据的空闲 Worker 中提前导入 SDK；失败不影响后续冷启动。 */
+  /** 在无任务数据的空闲 Worker 中预热 SDK + ModelRuntime；不创建 cwd 资源或 Session。 */
   preload?(): Promise<void>
   dispose?(): Promise<void>
   start(
@@ -96,6 +105,11 @@ interface PiSdkDescriptor {
 interface WarmWorker {
   child: ChildProcess
   sdk: PiSdkDescriptor
+}
+
+interface WarmWorkerClaim {
+  child?: ChildProcess | undefined
+  status: PiLiveWarmWorkerStatus
 }
 
 function sanitizeDiagnostic(value: string): string {
@@ -179,6 +193,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   private handshakeCapabilities?: PiLiveRuntimeCapabilities | undefined
   private handshakeElapsedMs?: number | undefined
   private handshakeTimings?: PiLiveInitializationTiming[] | undefined
+  private handshakeStartupMetrics?: PiLiveStartupMetric[] | undefined
+  private handshakeWarmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  private handshakeSessionFile?: string | undefined
 
   constructor(
     private readonly child: ChildProcess,
@@ -233,6 +250,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   get capabilities(): PiLiveRuntimeCapabilities | undefined { return this.handshakeCapabilities }
   get initializationElapsedMs(): number | undefined { return this.handshakeElapsedMs }
   get initializationTimings(): PiLiveInitializationTiming[] | undefined { return this.handshakeTimings }
+  get startupMetrics(): PiLiveStartupMetric[] | undefined { return this.handshakeStartupMetrics }
+  get warmWorkerStatus(): PiLiveWarmWorkerStatus | undefined { return this.handshakeWarmWorkerStatus }
+  get initialSessionFile(): string | undefined { return this.handshakeSessionFile }
 
   applyHandshake(value: unknown): void {
     const payload = record(value)
@@ -250,6 +270,24 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
           ? [{ stage: timing.stage, durationMs: Math.max(0, timing.durationMs) } as PiLiveInitializationTiming]
           : []
       })
+    }
+    if (Array.isArray(payload.startupMetrics)) {
+      this.handshakeStartupMetrics = payload.startupMetrics.flatMap(item => {
+        const metric = record(item)
+        return typeof metric.name === 'string'
+          && metric.name.trim()
+          && typeof metric.durationMs === 'number'
+          && Number.isFinite(metric.durationMs)
+          ? [{ name: metric.name.trim().slice(0, 80), durationMs: Math.max(0, metric.durationMs) }]
+          : []
+      })
+    }
+    const warm = payload.warmWorkerStatus
+    if (warm === 'hit' || warm === 'miss' || warm === 'not_ready' || warm === 'sdk_mismatch') {
+      this.handshakeWarmWorkerStatus = warm
+    }
+    if (typeof payload.sessionFile === 'string' && payload.sessionFile.trim()) {
+      this.handshakeSessionFile = payload.sessionFile
     }
     this.finishStartupOutput()
   }
@@ -329,6 +367,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
     return collectSnapshotTransfer((command, payload) => this.request(command, payload), since, window)
   }
   historyIndex(query: LiveHistoryIndexQuery = {}): Promise<LiveHistoryIndex> { return this.request('historyIndex', query) }
+  sessionTree(): Promise<LiveSessionTree> { return this.request('sessionTree') }
   entry(entryId: string): Promise<unknown | null> { return this.request('entry', { entryId }) }
   commands(): Promise<PiLiveCommand[]> { return this.request('commands') }
   navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
@@ -346,7 +385,20 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
 
   async terminate(): Promise<void> {
     if (this.exited) return
-    await this.request<void>('terminate').catch(() => undefined)
+
+    // Extension shutdown is best-effort. A wedged Worker must never make the
+    // user-facing "End session" request wait forever.
+    let timer: NodeJS.Timeout | undefined
+    const graceful = this.request<void>('terminate').catch(() => undefined)
+    await Promise.race([
+      graceful,
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, WORKER_TERMINATE_GRACE_MS)
+        timer.unref?.()
+      }),
+    ])
+    if (timer) clearTimeout(timer)
+
     if (this.exited) return
     this.exited = true
     const error = new Error('Pi Runtime Worker terminated')
@@ -360,6 +412,8 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
 export class WorkerPiRuntimeHost implements PiRuntimeHost {
   private warmWorker?: WarmWorker | undefined
   private warming?: Promise<void> | undefined
+  private warmingChild?: ChildProcess | undefined
+  private warmingExecutable?: string | undefined
 
   private workerEntry(): string {
     return fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
@@ -383,13 +437,21 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     return normalize(left.sdkEntry) === normalize(right.sdkEntry) && left.version === right.version
   }
 
-  /** 预热 Worker 不读取任务 cwd、不创建 Session，只导入 Host 已验证的 SDK。 */
+  /** 预热 Worker 只持有跨任务安全的 Runtime Base；不读取 cwd、不创建 Session/ResourceLoader。 */
   async preload(): Promise<void> {
-    if (this.warmWorker || this.warming) return this.warming
+    await this.preloadFor()
+  }
+
+  private async preloadFor(executable?: string): Promise<void> {
+    if (this.warmWorker) return
+    if (this.warming) return this.warming
+    const normalizedExecutable = executable?.trim() || undefined
+    this.warmingExecutable = normalizedExecutable
     this.warming = (async () => {
-      const discovered = await discoverInstalledPiSdk()
+      const discovered = await discoverInstalledPiSdk(normalizedExecutable)
       const sdk: PiSdkDescriptor = { sdkEntry: discovered.sdkEntry, ...(discovered.version ? { version: discovered.version } : {}) }
       const child = this.forkWorker(process.cwd())
+      this.warmingChild = child
       try {
         await new Promise<void>((resolve, reject) => {
           const cleanup = () => {
@@ -401,16 +463,16 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
           const failed = (error: Error) => { cleanup(); reject(error) }
           const exited = (code: number | null, signal: NodeJS.Signals | null) => {
             cleanup()
-            reject(new Error(`Pi SDK prewarm Worker exited (code=${code ?? 'null'}, signal=${signal ?? 'none'})`))
+            reject(new Error(`Pi Runtime Base prewarm Worker exited (code=${code ?? 'null'}, signal=${signal ?? 'none'})`))
           }
-          const timeout = setTimeout(() => { cleanup(); reject(new Error('Pi SDK prewarm timed out')) }, 120_000)
+          const timeout = setTimeout(() => { cleanup(); reject(new Error('Pi Runtime Base prewarm timed out')) }, 120_000)
           timeout.unref?.()
           const message = (value: unknown) => {
             const envelope = record(value) as unknown as WorkerEnvelope & { ok?: boolean; error?: string }
             if (envelope.version !== PROTOCOL_VERSION || envelope.runtimeSessionId !== '' || envelope.type !== 'response' || envelope.requestId !== 'prewarm') return
             cleanup()
             if (envelope.ok) resolve()
-            else reject(new Error(envelope.error || 'Pi SDK prewarm failed'))
+            else reject(new Error(envelope.error || 'Pi Runtime Base prewarm failed'))
           }
           child.on('message', message)
           child.once('error', failed)
@@ -421,7 +483,7 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
             reject(error)
           })
         })
-        if (child.exitCode !== null || child.signalCode !== null || !child.connected) throw new Error('Pi SDK prewarm Worker disconnected')
+        if (child.exitCode !== null || child.signalCode !== null || !child.connected) throw new Error('Pi Runtime Base prewarm Worker disconnected')
         const warm: WarmWorker = { child, sdk }
         this.warmWorker = warm
         child.once('close', () => { if (this.warmWorker === warm) this.warmWorker = undefined })
@@ -430,19 +492,80 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
         if (child.exitCode === null && child.signalCode === null) child.kill()
         throw error
       }
-    })().finally(() => { this.warming = undefined })
+    })().finally(() => {
+      this.warming = undefined
+      this.warmingChild = undefined
+      this.warmingExecutable = undefined
+    })
     return this.warming
   }
 
-  private takeWarmWorker(sdk: PiSdkDescriptor): ChildProcess | undefined {
+  private cancelWarming(): void {
+    const child = this.warmingChild
+    if (!child) return
+    if (child.connected) child.disconnect()
+    if (child.exitCode === null && child.signalCode === null) child.kill()
+  }
+
+  private async claimWarmWorker(
+    sdk: PiSdkDescriptor,
+    executable?: string,
+  ): Promise<{ claim: WarmWorkerClaim; waitedMs: number }> {
+    let claim = this.takeWarmWorker(sdk)
+    if (claim.child || claim.status !== 'not_ready') return { claim, waitedMs: 0 }
+
+    const warming = this.warming
+    const normalizedExecutable = executable?.trim() || undefined
+    if (!warming || this.warmingExecutable !== normalizedExecutable) {
+      this.cancelWarming()
+      await warming?.catch(() => undefined)
+      return { claim, waitedMs: 0 }
+    }
+
+    const startedAt = Date.now()
+    let timer: NodeJS.Timeout | undefined
+    const settled = await Promise.race([
+      warming.then(() => true, () => true),
+      new Promise<boolean>(resolve => {
+        timer = setTimeout(() => resolve(false), WARM_CLAIM_GRACE_MS)
+        timer.unref?.()
+      }),
+    ])
+    if (timer) clearTimeout(timer)
+    const waitedMs = Math.max(0, Date.now() - startedAt)
+
+    if (settled) {
+      claim = this.takeWarmWorker(sdk)
+      if (claim.child) return { claim, waitedMs }
+      return { claim, waitedMs }
+    }
+
+    // Foreground startup wins after a short grace period. Kill the still-warming
+    // background Worker so cold start does not compete for CPU/disk on Windows.
+    this.cancelWarming()
+    await warming.catch(() => undefined)
+    return { claim: { status: 'not_ready' }, waitedMs }
+  }
+
+  private takeWarmWorker(sdk: PiSdkDescriptor): WarmWorkerClaim {
     const warm = this.warmWorker
-    if (!warm || !this.sameSdk(warm.sdk, sdk)) return undefined
+    if (!warm) return { status: this.warming ? 'not_ready' : 'miss' }
     this.warmWorker = undefined
-    if (warm.child.exitCode !== null || warm.child.signalCode !== null || !warm.child.connected) return undefined
-    return warm.child
+    if (warm.child.exitCode !== null || warm.child.signalCode !== null || !warm.child.connected) {
+      return { status: 'miss' }
+    }
+    if (!this.sameSdk(warm.sdk, sdk)) {
+      if (warm.child.connected) warm.child.disconnect()
+      if (warm.child.exitCode === null && warm.child.signalCode === null) warm.child.kill()
+      return { status: 'sdk_mismatch' }
+    }
+    return { child: warm.child, status: 'hit' }
   }
 
   async dispose(): Promise<void> {
+    const warming = this.warming
+    this.cancelWarming()
+    await warming?.catch(() => undefined)
     const warm = this.warmWorker
     this.warmWorker = undefined
     if (!warm) return
@@ -459,19 +582,44 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
   ): Promise<PiRuntimeHandle> {
     // 可执行文件、npm shim 与 SDK 包只能在一个位置解析。Worker 只接收已经
     // 验证的 SDK 入口，避免父/子进程分别维护一套 PATH 与 shim 规则。
+    const discoveryStartedAt = Date.now()
     const sdk = await discoverInstalledPiSdk(input.executable)
+    const sdkDiscoveryMs = Math.max(0, Date.now() - discoveryStartedAt)
     const sdkDescriptor: PiSdkDescriptor = {
       sdkEntry: sdk.sdkEntry,
       ...(sdk.version ? { version: sdk.version } : {}),
     }
+    // 只领取从未创建 Session 的空闲 Base Worker。若 Daemon 预热尚未完成，
+    // 最多给一个极短命中窗口；随后前台优先，取消后台预热以避免双 Worker 争抢。
+    const claimed = await this.claimWarmWorker(sdkDescriptor, input.executable)
+    const claim = claimed.claim
+    const spawnStartedAt = Date.now()
+    const child = claim.child ?? this.forkWorker(input.cwd)
+    const workerSpawnMs = claim.child ? 0 : Math.max(0, Date.now() - spawnStartedAt)
+    const hostStartupMetrics: PiLiveStartupMetric[] = [
+      { name: 'sdk_discovery_ms', durationMs: sdkDiscoveryMs },
+      { name: 'worker_spawn_ms', durationMs: workerSpawnMs },
+      { name: 'warm_worker_wait_ms', durationMs: claimed.waitedMs },
+    ]
     const workerInput = {
       ...input,
       sdk: sdkDescriptor,
+      agentLensStartup: {
+        warmWorkerStatus: claim.status,
+        metrics: hostStartupMetrics,
+      },
     }
-    // 只领取从未创建 Session 的空闲 Worker。领取后立即尝试补位，失败则让下一次继续冷启动。
-    const child = this.takeWarmWorker(sdkDescriptor) ?? this.forkWorker(input.cwd)
-    void this.preload().catch(() => undefined)
-    const handle = new WorkerPiRuntimeHandle(child, runtimeSessionId, onEvent, onExit)
+    let replenished = false
+    const forwardEvent = (event: Record<string, unknown>) => {
+      onEvent(event)
+      if (replenished || event.type !== 'runtime_extension_binding') return
+      if (event.status !== 'ready' && event.status !== 'failed') return
+      replenished = true
+      // Session Core is already available; wait until extension binding settles
+      // before consuming CPU/disk on the next Runtime Base Worker.
+      void this.preloadFor(input.executable).catch(() => undefined)
+    }
+    const handle = new WorkerPiRuntimeHandle(child, runtimeSessionId, forwardEvent, onExit)
     const abort = () => { if (child.exitCode === null && child.signalCode === null) child.kill() }
     signal.addEventListener('abort', abort, { once: true })
     const handshake = await new Promise<unknown>((resolve, reject) => {
@@ -514,6 +662,8 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     }).catch(async error => {
       signal.removeEventListener('abort', abort)
       await handle.terminate()
+      // Replenish only after the foreground Runtime has stopped consuming startup resources.
+      void this.preloadFor(input.executable).catch(() => undefined)
       throw error
     })
     handle.applyHandshake(handshake)
