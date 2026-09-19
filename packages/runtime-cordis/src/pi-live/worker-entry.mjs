@@ -807,7 +807,9 @@ async function initialize(input) {
   } else {
     progress('loading_resources', '正在使用兼容模式加载 Pi 配置与扩展')
     progress('creating_session', '正在创建 Pi Session')
+    const compatibilitySessionStartedAt = Date.now()
     const created = await loadedSdk.createAgentSession({ cwd: input.cwd, sessionManager })
+    recordStartupMetric('agent_session_create_ms', Date.now() - compatibilitySessionStartedAt)
     const compatibilityLoader = record(created).resourceLoader ?? record(record(created).services).resourceLoader
     const compatibilityResources = startupResourceSnapshot(compatibilityLoader, input.cwd, record(created).diagnostics, record(created).extensionsResult)
     if (compatibilityResources) send('event', { type: 'runtime_resources', resources: compatibilityResources })
