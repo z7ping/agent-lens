@@ -22,6 +22,12 @@ test('新建 Pi 任务复用任务中心 rail，并从统一服务端项目发�
   assert.match(page, /createPortal\(taskRail, sidebarHost\)/)
 
   assert.match(page, /fetchLaunchableProjects\(/)
+  assert.match(page, /setLaunchableProjects\(\[\]\)/)
+  assert.match(page, /setLaunchableProjects\(value\.items\)/)
+  assert.match(page, /setLaunchableProjects\(current => mergeLaunchableProjects\(current, value\.items\)\)/)
+  assert.match(page, /launchableProjects\.length > 0[\s\S]{0,180}launchablePage\?\.nextCursor/)
+  assert.match(page, /void loadMoreProjects\(\)/)
+  assert.match(newTaskPanel, /options\.some\(option => option\.key === current\)/)
   assert.match(newTaskPanel, /onSearchChange=\{onProjectSearch\}/)
   assert.match(newTaskPanel, /onLoadMore=\{onProjectLoadMore\}/)
   assert.doesNotMatch(page, /fetchLocalReviewSessions/)

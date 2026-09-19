@@ -11,7 +11,7 @@ import { parseLimit } from './query-params'
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 const QUERY_BATCH_SIZE = 40
-const MAX_SCAN_PER_REQUEST = 200
+const VALIDATION_CONCURRENCY = 4
 const MAX_SEARCH_LENGTH = 200
 
 function encodeCursor(cursor: LaunchableProjectCursor): string {
@@ -45,13 +45,18 @@ function searchValue(params: URLSearchParams): string | undefined {
   return value
 }
 
-async function launchableWorkspace(candidate: LaunchableProjectCandidate): Promise<LaunchableProjectDto | undefined> {
+type WorkspaceValidator = (workspacePath: string) => Promise<string>
+
+async function launchableWorkspace(
+  candidate: LaunchableProjectCandidate,
+  validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
+): Promise<LaunchableProjectDto | undefined> {
   // Workspace candidates are already newest-first. Validate lazily and stop at the first
   // launchable path so a project with years of historical worktrees does not fan out dozens of
   // filesystem probes on every dropdown request.
   for (const workspace of candidate.workspaces) {
     try {
-      const workspacePath = await validatePiWorkingDirectory(workspace.workspacePath)
+      const workspacePath = await validateWorkspace(workspace.workspacePath)
       return {
         key: candidate.key,
         ...(candidate.projectId ? { projectId: candidate.projectId } : {}),
@@ -73,46 +78,43 @@ async function launchableWorkspace(candidate: LaunchableProjectCandidate): Promi
 export async function readLaunchableProjects(
   storage: StorageService,
   params: URLSearchParams,
+  validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
 ): Promise<LaunchableProjectsResponseDto> {
   const reader = storage.launchableProjects
   if (!reader) throw httpError(503, '本机项目发现暂不可用')
 
   const limit = parseLimit(params, MAX_LIMIT) ?? DEFAULT_LIMIT
   const search = searchValue(params)
-  let after = decodeCursor(params.get('cursor'))
-  let hasMore = true
-  let scanned = 0
+  const after = decodeCursor(params.get('cursor'))
+  const batchLimit = Math.max(limit, Math.min(QUERY_BATCH_SIZE, limit * 2))
+  const page = await reader.query({
+    limit: batchLimit,
+    ...(search ? { search } : {}),
+    ...(after ? { after } : {}),
+  })
+
   const items: LaunchableProjectDto[] = []
+  let processed = 0
 
-  while (items.length < limit && hasMore && scanned < MAX_SCAN_PER_REQUEST) {
-    const batchLimit = Math.min(QUERY_BATCH_SIZE, MAX_SCAN_PER_REQUEST - scanned)
-    const page = await reader.query({
-      limit: batchLimit,
-      ...(search ? { search } : {}),
-      ...(after ? { after } : {}),
-    })
-    if (!page.items.length) {
-      hasMore = false
-      break
-    }
+  // One request reads one bounded candidate page only. Filesystem checks are
+  // parallelized in small waves; slow/stale paths no longer serialize the whole
+  // dropdown and the endpoint never scans 200 candidates just to fill 20 rows.
+  for (let offset = 0; offset < page.items.length && items.length < limit; offset += VALIDATION_CONCURRENCY) {
+    const chunk = page.items.slice(offset, offset + VALIDATION_CONCURRENCY)
+    const resolved = await Promise.all(
+      chunk.map(candidate => launchableWorkspace(candidate, validateWorkspace)),
+    )
 
-    let processed = 0
-    for (const candidate of page.items) {
+    for (let index = 0; index < chunk.length; index += 1) {
       processed += 1
-      scanned += 1
-      after = { lastSeenAt: candidate.lastSeenAt, key: candidate.key }
-      const project = await launchableWorkspace(candidate)
+      const project = resolved[index]
       if (project) items.push(project)
-
-      if (items.length >= limit || scanned >= MAX_SCAN_PER_REQUEST) {
-        hasMore = page.hasMore || processed < page.items.length
-        break
-      }
+      if (items.length >= limit) break
     }
-
-    if (items.length >= limit || scanned >= MAX_SCAN_PER_REQUEST) break
-    hasMore = page.hasMore
   }
+
+  const lastProcessed = processed > 0 ? page.items[processed - 1] : undefined
+  const hasMore = page.hasMore || processed < page.items.length
 
   return {
     items,
@@ -120,7 +122,12 @@ export async function readLaunchableProjects(
       protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
       count: items.length,
       hasMore,
-      ...(hasMore && after ? { nextCursor: encodeCursor(after) } : {}),
+      ...(hasMore && lastProcessed ? {
+        nextCursor: encodeCursor({
+          lastSeenAt: lastProcessed.lastSeenAt,
+          key: lastProcessed.key,
+        }),
+      } : {}),
       generatedAt: new Date().toISOString(),
     },
   }
@@ -130,7 +137,7 @@ export const launchableProjectHttpInternals = {
   DEFAULT_LIMIT,
   MAX_LIMIT,
   QUERY_BATCH_SIZE,
-  MAX_SCAN_PER_REQUEST,
+  VALIDATION_CONCURRENCY,
   encodeCursor,
   decodeCursor,
   searchValue,

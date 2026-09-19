@@ -205,10 +205,14 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     if (mode !== 'new') return
     const generation = ++projectRequestGenerationRef.current
     const controller = new AbortController()
+    // A new query owns a new result set. Keeping previous rows here makes
+    // search/filter transitions look successful while actually showing stale projects.
+    setLaunchableProjects([])
+    setLaunchablePage(null)
+    setProjectLoading(true)
+    setProjectLoadingMore(false)
+    setProjectDiscoveryError('')
     const timer = window.setTimeout(() => {
-      setProjectLoading(true)
-      setProjectLoadingMore(false)
-      setProjectDiscoveryError('')
       void fetchLaunchableProjects({
         search: projectSearch,
         limit: 20,
@@ -216,7 +220,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       }).then(
         value => {
           if (generation !== projectRequestGenerationRef.current) return
-          setLaunchableProjects(current => mergeLaunchableProjects(current, value.items))
+          setLaunchableProjects(value.items)
           setLaunchablePage(value.meta)
         },
         reason => {
@@ -256,6 +260,26 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       if (generation === projectRequestGenerationRef.current) setProjectLoadingMore(false)
     }
   }, [launchablePage?.nextCursor, mode, projectLoading, projectLoadingMore, projectSearch])
+
+  useEffect(() => {
+    if (mode !== 'new'
+      || projectLoading
+      || projectLoadingMore
+      || projectDiscoveryError
+      || launchableProjects.length > 0
+      || !launchablePage?.nextCursor) return
+    // A bounded server page may contain only stale paths. Keep advancing in
+    // separate requests until the first usable project appears or pagination ends.
+    void loadMoreProjects()
+  }, [
+    launchablePage?.nextCursor,
+    launchableProjects.length,
+    loadMoreProjects,
+    mode,
+    projectDiscoveryError,
+    projectLoading,
+    projectLoadingMore,
+  ])
 
   const localSessions = review.response?.items ?? []
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])

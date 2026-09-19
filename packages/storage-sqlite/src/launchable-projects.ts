@@ -39,10 +39,8 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
         logical.project_id AS project_id,
         project.name AS project_name,
         project.repository_identity AS repository_identity,
-        MAX(summary.ended_at) AS last_seen_at
-      FROM session_summary_projection AS summary
-      JOIN logical_sessions AS logical
-        ON logical.id = summary.logical_session_id
+        MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
+      FROM logical_sessions AS logical
       JOIN workspaces AS workspace
         ON workspace.id = logical.workspace_id
       LEFT JOIN projects AS project
@@ -58,10 +56,8 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
         NULL AS project_id,
         NULL AS project_name,
         NULL AS repository_identity,
-        MAX(summary.ended_at) AS last_seen_at
-      FROM session_summary_projection AS summary
-      JOIN logical_sessions AS logical
-        ON logical.id = summary.logical_session_id
+        MAX(COALESCE(logical.ended_at, logical.started_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
+      FROM logical_sessions AS logical
       JOIN workspaces AS workspace
         ON workspace.id = logical.workspace_id
       WHERE logical.project_id IS NULL
@@ -110,12 +106,12 @@ function projectWorkspacesSql(projectId: boolean): string {
     SELECT
       workspace.id AS workspace_id,
       workspace.path AS workspace_path,
-      MAX(summary.ended_at) AS last_seen_at
-    FROM session_summary_projection AS summary
-    JOIN logical_sessions AS logical
-      ON logical.id = summary.logical_session_id
+      MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
+    FROM logical_sessions AS logical
     JOIN workspaces AS workspace
       ON workspace.id = logical.workspace_id
+    LEFT JOIN projects AS project
+      ON project.id = logical.project_id
     WHERE TRIM(workspace.path) <> ''
       AND ${projectId ? 'logical.project_id = ?' : 'logical.project_id IS NULL AND workspace.id = ?'}
     GROUP BY workspace.id, workspace.path
@@ -134,12 +130,11 @@ function mapWorkspace(value: unknown): LaunchableWorkspaceCandidate {
 }
 
 /**
- * Lightweight read model over the existing Session Summary projection.
+ * Lightweight read model over Canonical Project / Workspace / Logical Session rows.
  *
- * No second project truth is persisted here: project identity/workspace paths come from Canonical
- * Project/Workspace rows and recency comes from session_summary_projection. The filesystem is not
- * consulted by this reader; the HTTP Runtime decides which candidate path is actually launchable
- * on the current host.
+ * Launchability must not depend on Session Summary projection catch-up: a Session already visible
+ * in Review must also be eligible for task launch discovery. The filesystem is not consulted by
+ * this reader; the HTTP Runtime decides which candidate path is actually launchable on this host.
  */
 export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
   constructor(private readonly executor: SqliteExecutor) {}

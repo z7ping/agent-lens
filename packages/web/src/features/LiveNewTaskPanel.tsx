@@ -82,7 +82,10 @@ export function LiveNewTaskPanel({
 
   useEffect(() => {
     const preferred = pickTaskProject(options, preferredProjectId)
-    setSelectedKey(current => current || preferred?.key || '')
+    setSelectedKey(current => {
+      if (current && options.some(option => option.key === current)) return current
+      return preferred?.key ?? options[0]?.key ?? ''
+    })
   }, [options, preferredProjectId])
 
   const selectedProduct = products.find(item => item.liveId === selectedLiveId)
