@@ -816,6 +816,9 @@ export class DefaultPiLiveService implements PiLiveService {
               : runtime.extensionBindingStatus === 'failed'
                 ? 'Pi Runtime 核心已就绪 · 扩展绑定失败'
                 : 'Pi Runtime 已就绪'
+            if (runtime.extensionBindingStatus === 'ready' || runtime.extensionBindingStatus === 'failed') {
+              this.scheduleStartupAuditProbe(runtime, generation)
+            }
           }
         } else if (event.type === 'runtime_resources') {
           const resources = startupResources(event.resources)
@@ -899,20 +902,7 @@ export class DefaultPiLiveService implements PiLiveService {
         this.persistStartupAuditBestEffort(runtime, readyState)
         this.persistPackageUpdatesBestEffort(runtime, generation)
       } else {
-        let probe: Promise<void>
-        probe = handle.state().then(state => {
-          if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
-          this.persistSessionIfChanged(runtime, state)
-          this.updateRuntimeResources(runtime, state)
-          this.persistStartupAuditBestEffort(runtime, state)
-          this.persistPackageUpdatesBestEffort(runtime, generation)
-        }).catch(error => {
-          if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
-          this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
-        }).finally(() => {
-          if (runtime.startupAuditProbeTask === probe) runtime.startupAuditProbeTask = undefined
-        })
-        runtime.startupAuditProbeTask = probe
+        this.scheduleStartupAuditProbe(runtime, generation)
       }
       this.scheduleIdleCheck(runtime)
     } catch (error) {
@@ -1657,6 +1647,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private persistStartupAuditBestEffort(runtime: OwnedRuntime, state: PiLiveRuntimeState): void {
+    if (runtime.extensionBindingStatus === 'binding') return
     if (!this.startupAudit || !runtime.startupAuditResources) return
     const nativeSessionId = state.nativeSessionId?.trim()
     if (!nativeSessionId) return
@@ -1700,6 +1691,25 @@ export class DefaultPiLiveService implements PiLiveService {
       if (runtime.startupAuditTask === task) runtime.startupAuditTask = undefined
     })
     runtime.startupAuditTask = task
+  }
+
+  private scheduleStartupAuditProbe(runtime: OwnedRuntime, generation: number): void {
+    if (runtime.startupAuditProbeTask || runtime.status !== 'ready' || !runtime.handle) return
+    const handle = runtime.handle
+    let probe: Promise<void>
+    probe = handle.state().then(state => {
+      if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+      this.persistSessionIfChanged(runtime, state)
+      this.updateRuntimeResources(runtime, state)
+      this.persistStartupAuditBestEffort(runtime, state)
+      this.persistPackageUpdatesBestEffort(runtime, generation)
+    }).catch(error => {
+      if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
+      this.recoveryDiagnostic(runtime, 'Pi Live recovery state probe failed', error)
+    }).finally(() => {
+      if (runtime.startupAuditProbeTask === probe) runtime.startupAuditProbeTask = undefined
+    })
+    runtime.startupAuditProbeTask = probe
   }
 
   private persistPackageUpdatesBestEffort(runtime: OwnedRuntime, generation: number): void {
