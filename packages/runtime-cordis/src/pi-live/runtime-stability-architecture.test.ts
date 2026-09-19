@@ -40,6 +40,8 @@ test('idle Worker suspension requires no subscribers and preserves logical Runti
   const scheduler = section('private scheduleIdleCheck', 'private runtimeIsQuiescent')
   const suspend = section('private async suspendIdleRuntime', 'private async restartRuntimeWorker')
   assert.match(scheduler, /runtime\.subscriberCount > 0/)
+  const quiescent = section('private runtimeIsQuiescent', 'private async checkpointRuntimeState')
+  assert.match(quiescent, /runtime\.extensionBindingStatus !== 'binding'/)
   assert.match(suspend, /runtime\.suspended = true/)
   assert.match(suspend, /runtime\.status = 'ready'/)
   assert.doesNotMatch(suspend, /this\.runtimes\.delete/)
