@@ -810,12 +810,10 @@ export class DefaultPiLiveService implements PiLiveService {
   async state(id: string): Promise<PiLiveRuntimeState> {
     const runtime = await this.runtime(id)
     this.markRuntimeActive(runtime)
-    // State is a foreground/control-plane read. It may trigger lazy hydration,
-    // but must never wait for SDK/Resource/Session initialization to finish.
-    void this.ensureRuntimeHydrated(runtime).catch(error => {
-      this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
-    })
-    return this.runtimeState(runtime)
+    // Foreground state is observational only. A suspended Logical Runtime is
+    // presented as initializing, but Worker hydration starts only after an SSE
+    // subscriber is attached (or an operation explicitly requires readiness).
+    return this.foregroundRuntimeState(runtime)
   }
 
 
@@ -865,13 +863,10 @@ export class DefaultPiLiveService implements PiLiveService {
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
     this.markRuntimeActive(runtime)
-    // Snapshot is allowed to be partial while a suspended Worker hydrates.
-    // Returning the logical Runtime immediately keeps page mount/reconnect
-    // independent from cold Worker startup; a ready event triggers recovery.
-    void this.ensureRuntimeHydrated(runtime).catch(error => {
-      this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
-    })
-    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
+    // Snapshot is an observational foreground read too. A suspended Worker
+    // returns a partial empty window immediately; the subscribed Live channel
+    // starts hydration and the ready event triggers bounded recovery.
+    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.foregroundRuntimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
     const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
 
@@ -1375,6 +1370,21 @@ export class DefaultPiLiveService implements PiLiveService {
     const runtime = this.runtimes.get(id)
     if (!runtime) throw new Error(`Unknown Pi Live runtime session: ${id}`)
     return runtime
+  }
+
+  private async foregroundRuntimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
+    const state = await this.runtimeState(runtime)
+    if (!runtime.suspended) return state
+    return {
+      ...state,
+      status: 'initializing',
+      initializationStage: 'starting_worker',
+      initializationMessage: '正在恢复 Pi Runtime',
+      initializationElapsedMs: 0,
+      isStreaming: false,
+      isCompacting: false,
+      pendingMessageCount: 0,
+    }
   }
 
   private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
