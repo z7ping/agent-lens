@@ -187,9 +187,13 @@ test('persisted runtimes stay logical until selected and idle workers rehydrate 
     assert.equal(listed[0]?.sessionFile, file)
 
     const active = await service.state('runtime-1')
-    assert.ok(active.status === 'initializing' || active.status === 'ready')
+    assert.equal(active.status, 'initializing')
+    assert.equal(host.starts, 0)
+
+    const firstSubscription = service.subscribe('runtime-1', () => {})
     await waitForReady(service, 'runtime-1')
     assert.equal(host.starts, 1)
+    firstSubscription()
 
     await waitFor(() => host.terminations >= 1, 'idle worker was not suspended')
     const suspended = await service.list()
