@@ -58,6 +58,8 @@ export interface PiLiveStartInput {
   branchFromEntryId?: string | null | undefined
   /** Internal-only action for a server-resolved Pi history JSONL. Never accepted from the generic public start endpoint. */
   historyAction?: PiLiveHistoryAction | undefined
+  /** AgentLens logical history identity used only for read-only canonical history while Worker hydrates. */
+  logicalSessionId?: string | undefined
 }
 
 export interface PiLiveAvailability extends LiveAvailability {
@@ -102,6 +104,8 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   sessionName?: string | undefined
   /** 首条用户任务的简要文本，用于在列表中识别 Pi Live 会话。 */
   taskSummary?: string | undefined
+  /** Internal AgentLens history identity. Generic HTTP Runtime state intentionally strips this field. */
+  logicalSessionId?: string | undefined
   /** Public working-directory context. Native Pi session-file paths remain private. */
   workspacePath?: string
   projectName?: string | undefined
