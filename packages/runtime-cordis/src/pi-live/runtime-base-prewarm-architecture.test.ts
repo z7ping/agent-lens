@@ -21,6 +21,23 @@ test('runtime disclosure summary keeps total elapsed beside resource counts', ()
   assert.match(summary, /\$\{status\.zh\} · \$\{fallbackDuration\} ·/)
 })
 
+test('runtime disclosure exposes structured lifecycle stages and resources', () => {
+  const lifecycle = section(service, 'function runtimeLifecycle', 'const PI_STARTUP_METRIC_LABELS')
+  const disclosures = section(service, 'async runtimeDisclosures(id: string)', 'async executeRuntimeAction')
+  for (const stage of ['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions']) {
+    assert.match(lifecycle, new RegExp(stage))
+  }
+  assert.match(lifecycle, /status: failed \? 'failed' as const : active \? 'active' as const : done \? 'done' as const : 'pending' as const/)
+  assert.match(lifecycle, /groupId: 'contexts'/)
+  assert.match(lifecycle, /groupId: 'skills'/)
+  assert.match(lifecycle, /groupId: 'prompts'/)
+  assert.match(lifecycle, /groupId: 'extensions'/)
+  assert.match(lifecycle, /groupId: 'themes'/)
+  assert.match(lifecycle, /state\.status === 'failed' \? state\.error \|\| state\.initializationMessage/)
+  assert.match(disclosures, /const lifecycle = runtimeLifecycle\(state\)/)
+  assert.match(disclosures, /\.\.\.\(lifecycle \? \{ lifecycle \} : \{\}\)/)
+})
+
 test('runtime disclosure main costs use readable labels while raw metrics remain available', () => {
   const labels = section(service, 'const PI_STARTUP_METRIC_LABELS', 'function stageLabel')
   const fields = section(service, 'function runtimeDisclosureFields', 'interface PiUserMessageEntryTarget')
