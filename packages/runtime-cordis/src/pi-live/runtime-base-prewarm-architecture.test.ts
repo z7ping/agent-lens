@@ -38,7 +38,8 @@ test('task initialization reuses prewarmed ModelRuntime but creates cwd services
   assert.match(initialize, /createAgentSessionServices/)
   assert.match(initialize, /createAgentSessionFromServices/)
   assert.match(initialize, /sessionManager:\s*options\.sessionManager/)
-  assert.match(initialize, /session\.bindExtensions/)
+  assert.match(initialize, /beginExtensionBinding\(input\)/)
+  assert.doesNotMatch(initialize, /await session\.bindExtensions/)
 })
 
 test('startup diagnostics split fixed and cwd-bound costs without changing product stages', () => {
@@ -79,8 +80,12 @@ test('warm worker mismatch is evicted and replenishment stays single-flight', ()
   assert.match(host, /private async claimWarmWorker/)
   assert.match(host, /this\.cancelWarming\(\)/)
   const handshake = start.indexOf('handle.applyHandshake(handshake)')
-  const replenish = start.lastIndexOf('void this.preloadFor(input.executable)')
-  assert.ok(handshake >= 0 && replenish > handshake, 'warm replenishment must wait until foreground initialization completes')
+  const successTail = start.slice(handshake)
+  assert.ok(handshake >= 0)
+  assert.doesNotMatch(successTail, /void this\.preloadFor\(input\.executable\)/)
+  assert.match(start, /event\.type !== 'runtime_extension_binding'/)
+  assert.match(start, /event\.status !== 'ready' && event\.status !== 'failed'/)
+  assert.match(start, /void this\.preloadFor\(input\.executable\)/)
   assert.match(start, /warmWorkerStatus:\s*claim\.status/)
   assert.match(start, /sdk_discovery_ms/)
   assert.match(start, /worker_spawn_ms/)
@@ -97,4 +102,34 @@ test('history Resume/Fork verifies initialize handshake session identity before 
   const fallbackState = initialize.indexOf('await handle.state()', handshakeIdentity)
   assert.ok(handshakeIdentity >= 0, 'initialize must consume the session identity captured by the Worker handshake')
   assert.ok(fallbackState > handshakeIdentity, 'state IPC may only remain as a compatibility fallback when handshake identity is unavailable')
+})
+
+
+test('Session Core readiness does not await extension binding', () => {
+  const initialize = section(worker, 'async function initialize(input)', 'function state()')
+  const bind = initialize.indexOf('beginExtensionBinding(input)')
+  const ready = initialize.indexOf("progress('ready'", bind)
+  assert.ok(bind >= 0 && ready > bind)
+  assert.doesNotMatch(initialize.slice(bind, ready), /await extensionBindingPromise|await session\.bindExtensions/)
+})
+
+test('extension-sensitive commands wait for background binding while observational reads stay available', () => {
+  const command = section(worker, 'async function command(name, value = {})', 'async function dispose()')
+  assert.match(command, /if \(needsExtensions\) await waitForExtensionBinding\(\)/)
+  for (const name of ['commands', 'navigateTree', 'setModel', 'setThinkingLevel', 'prompt', 'steer', 'followUp']) {
+    assert.match(command, new RegExp(`name === '${name}'`))
+  }
+  const waitIndex = command.indexOf('if (needsExtensions) await waitForExtensionBinding()')
+  const stateIndex = command.indexOf("if (name === 'state') return state()")
+  assert.ok(waitIndex >= 0 && stateIndex > waitIndex)
+  assert.doesNotMatch(command.slice(0, waitIndex), /state.*waitForExtensionBinding/)
+})
+
+test('package update IO and warm replenishment wait until extension binding settles', () => {
+  const initialize = section(worker, 'async function initialize(input)', 'function state()')
+  assert.match(initialize, /extensionBindingPromise\.finally/)
+  assert.match(initialize, /startPackageUpdateCheck\(input\.cwd\)/)
+  const start = section(host, 'async start(', 'export const piLiveWorkerHostInternals')
+  assert.match(start, /runtime_extension_binding/)
+  assert.match(start, /event\.status !== 'ready' && event\.status !== 'failed'/)
 })
