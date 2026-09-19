@@ -228,7 +228,8 @@ if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
 if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
 if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
 
-if (!css.review.includes('AgentLens 1.0 Review 页面所有者') || !css.review.includes('.evidence-inline') || !css.review.includes('.raw-event-group') || !css.review.includes('.pi-session-tree') || !css.review.includes('.review-inspector-overlay')) throw new Error('review.css 必须只持有 Review 页面/证据/Inspector 业务内容')
+if (!css.review.includes('AgentLens 1.0 Review 页面所有者') || !css.review.includes('.evidence-inline') || !css.review.includes('.raw-event-group') || !css.review.includes('.session-relationship-tree') || !css.review.includes('.review-inspector-overlay')) throw new Error('review.css 必须只持有 Review 页面/关系树/证据/Inspector 业务内容')
+if (css.review.includes('.pi-session-tree')) throw new Error('Review 样式不得恢复 Pi 专属关系树命名')
 if (/\.inspector-panel\b|\.inspector-head\b|\.inspector-title\b/.test(css.review)) throw new Error('Review Inspector 外壳必须由统一 Drawer 持有，不得恢复页面自建抽屉')
 if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话导航与虚拟挂载能力')
 if (!css.taskTurnRail.includes('.task-turn-rail') || !css.taskTurnRail.includes('.turn-tick')) throw new Error('task-turn-rail.css 必须持有共享轮次导轨能力')
