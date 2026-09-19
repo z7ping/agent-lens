@@ -19,7 +19,7 @@ import { latestPiSessionEntryId } from './session-disk-tail'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
-import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupResources, PiLiveStreamingBehavior } from './types'
+import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -38,6 +38,8 @@ interface OwnedRuntime {
   stageStartedAt: number
   initializationElapsedMs: number
   initializationTimings: PiLiveInitializationTiming[]
+  startupMetrics: PiLiveStartupMetric[]
+  warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
   startupResources?: PiLiveStartupResources | undefined
   startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
@@ -152,6 +154,26 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
           ? contributionText(`${label.en} · ${duration}`, `${label.zh} · ${duration}`)
           : `${item.stage} · ${duration}`
       }),
+    })
+  }
+  if (state.warmWorkerStatus) {
+    const warmLabels: Record<PiLiveWarmWorkerStatus, { en: string; zh: string }> = {
+      hit: { en: 'Hit', zh: '命中' },
+      miss: { en: 'Miss', zh: '未命中' },
+      not_ready: { en: 'Not ready', zh: '预热未完成' },
+      sdk_mismatch: { en: 'SDK mismatch', zh: 'SDK 不匹配' },
+    }
+    const warm = warmLabels[state.warmWorkerStatus]
+    fields.push({
+      label: contributionText('Warm worker', '预热 Worker'),
+      value: contributionText(warm.en, warm.zh),
+    })
+  }
+  if (state.startupMetrics?.length) {
+    fields.push({
+      label: contributionText('Startup metrics', '启动耗时明细'),
+      kind: 'list' as const,
+      values: state.startupMetrics.map(item => `${item.name} · ${contributionDuration(item.durationMs)}`),
     })
   }
 
@@ -352,6 +374,19 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
   }
 }
 
+function startupMetric(value: unknown): PiLiveStartupMetric | undefined {
+  const item = record(value)
+  if (typeof item.name !== 'string' || !item.name.trim()) return undefined
+  if (typeof item.durationMs !== 'number' || !Number.isFinite(item.durationMs)) return undefined
+  return { name: item.name.trim().slice(0, 80), durationMs: Math.max(0, item.durationMs) }
+}
+
+function warmWorkerStatus(value: unknown): PiLiveWarmWorkerStatus | undefined {
+  return value === 'hit' || value === 'miss' || value === 'not_ready' || value === 'sdk_mismatch'
+    ? value
+    : undefined
+}
+
 function packageUpdates(value: unknown): PiLivePackageUpdate[] {
   if (!Array.isArray(value)) return []
   const updates: PiLivePackageUpdate[] = []
@@ -531,6 +566,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
+    runtime.startupMetrics = []
+    runtime.warmWorkerStatus = undefined
     runtime.startupResources = undefined
     runtime.startupAuditResources = undefined
     runtime.startupResourcesCapturedAt = undefined
@@ -576,6 +613,7 @@ export class DefaultPiLiveService implements PiLiveService {
       stageStartedAt: now,
       initializationElapsedMs: 0,
       initializationTimings: [],
+      startupMetrics: [],
       startupOutput: [],
       packageUpdates: [],
       queue: { steering: [], followUp: [] },
@@ -713,6 +751,15 @@ export class DefaultPiLiveService implements PiLiveService {
             this.advanceInitialization(runtime, stage as PiLiveInitializationStage)
           }
           if (typeof event.message === 'string') runtime.message = event.message.slice(0, 500)
+        } else if (event.type === 'runtime_startup_metric') {
+          const metric = startupMetric(event.metric)
+          if (metric) {
+            runtime.startupMetrics = [
+              ...runtime.startupMetrics.filter(item => item.name !== metric.name),
+              metric,
+            ]
+          }
+          runtime.warmWorkerStatus = warmWorkerStatus(event.warmWorkerStatus) ?? runtime.warmWorkerStatus
         } else if (event.type === 'runtime_resources') {
           const resources = startupResources(event.resources)
           if (resources) {
@@ -1447,6 +1494,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
+      ...(runtime.startupMetrics.length ? { startupMetrics: runtime.startupMetrics } : {}),
+      ...(runtime.warmWorkerStatus ? { warmWorkerStatus: runtime.warmWorkerStatus } : {}),
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
@@ -1482,6 +1531,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: runtime.initializationElapsedMs,
       initializationTimings: runtime.initializationTimings,
+      ...(runtime.startupMetrics.length ? { startupMetrics: runtime.startupMetrics } : {}),
+      ...(runtime.warmWorkerStatus ? { warmWorkerStatus: runtime.warmWorkerStatus } : {}),
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
