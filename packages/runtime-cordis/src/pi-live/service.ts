@@ -920,6 +920,8 @@ export class DefaultPiLiveService implements PiLiveService {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
       runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
       runtime.status = 'failed'
+      runtime.isStreaming = false
+      runtime.isCompacting = false
       runtime.error = formatLiveError(error)
       runtime.message = runtime.restored
         ? `Pi Runtime 恢复失败 · ${formatElapsed(runtime.initializationElapsedMs)}`
@@ -933,6 +935,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.handle = undefined
     runtime.initializationElapsedMs = Math.max(runtime.initializationElapsedMs, Date.now() - runtime.initializationStartedAt)
     runtime.status = 'failed'
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     runtime.error = formatLiveError(error)
     runtime.message = 'Pi Runtime Worker 已退出'
     this.publish(runtime, { type: 'runtime_status', status: 'failed', stage: runtime.stage, message: runtime.message, error: runtime.error, initializationElapsedMs: runtime.initializationElapsedMs, initializationTimings: runtime.initializationTimings })
@@ -1290,6 +1294,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.initialization.abort()
     if (explicit) {
       runtime.status = 'terminating'
+      runtime.isStreaming = false
+      runtime.isCompacting = false
       runtime.message = '正在结束 Pi Runtime'
       this.publish(runtime, { type: 'runtime_status', status: 'terminating', stage: runtime.stage, message: runtime.message })
     }
