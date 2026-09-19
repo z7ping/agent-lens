@@ -133,3 +133,11 @@ test('package update IO and warm replenishment wait until extension binding sett
   assert.match(start, /runtime_extension_binding/)
   assert.match(start, /event\.status !== 'ready' && event\.status !== 'failed'/)
 })
+
+
+test('Runtime state returns cached resource disclosure instead of rescanning ResourceLoader', () => {
+  const state = section(worker, 'function state()', 'function modelSnapshot')
+  assert.match(state, /currentStartupResources/)
+  assert.doesNotMatch(state, /startupResourceSnapshot/)
+  assert.doesNotMatch(state, /getExtensions|getSkills|getPrompts|getThemes|getAgentsFiles/)
+})
