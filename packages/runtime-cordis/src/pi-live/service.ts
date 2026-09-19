@@ -807,7 +807,10 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   async state(id: string): Promise<PiLiveRuntimeState> {
-    return this.runtimeState(await this.runtime(id))
+    const runtime = await this.runtime(id)
+    this.markRuntimeActive(runtime)
+    await this.ensureRuntimeHydrated(runtime)
+    return this.runtimeState(runtime)
   }
 
 
@@ -856,9 +859,18 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
+    this.markRuntimeActive(runtime)
+    await this.ensureRuntimeHydrated(runtime)
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
     const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
+
+    // Only mount/recovery reads probe disk. Pagination and rail jumps stay purely
+    // in-memory so a long Session cannot turn into repeated filesystem work.
+    const mountOrRecoveryRead = !window?.before && !window?.after && !window?.edge && !window?.around
+    if (mountOrRecoveryRead) await this.refreshExternallyUpdatedSession(runtime)
+    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
+
     const requestedLimit = window?.limit
     const limit = Number.isInteger(requestedLimit)
       ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit!))
@@ -1053,12 +1065,27 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.activeAssistantMessageId = undefined
     return queue
   }
-  async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> { if (!requestId) throw new Error('Pi extension request id is required'); await (await this.readyRuntime(id)).handle!.respondToExtension(requestId, response) }
+  async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> {
+    if (!requestId) throw new Error('Pi extension request id is required')
+    const runtime = await this.readyRuntime(id)
+    await runtime.handle!.respondToExtension(requestId, response)
+    runtime.pendingExtensionRequestIds.delete(requestId)
+    this.markRuntimeActive(runtime)
+  }
 
-  /** HTTP events calls state() before subscribe(), so lazy recovery is complete before this synchronous registration. */
+  /** HTTP events calls state() before subscribe(), so lazy recovery is normally complete before registration. */
   subscribe(id: string, listener: PiLiveRuntimeListener): () => void {
     const runtime = this.requireRuntime(id)
-    return runtime.events.subscribe(listener)
+    runtime.subscriberCount += 1
+    this.markRuntimeActive(runtime)
+    void this.ensureRuntimeHydrated(runtime)
+    const unsubscribe = runtime.events.subscribe(listener)
+    return () => {
+      unsubscribe()
+      runtime.subscriberCount = Math.max(0, runtime.subscriberCount - 1)
+      runtime.lastActiveAt = Date.now()
+      this.scheduleIdleCheck(runtime)
+    }
   }
 
   async terminate(id: string): Promise<void> {
@@ -1113,6 +1140,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private async terminateRuntime(runtime: OwnedRuntime, explicit: boolean): Promise<void> {
+    this.clearIdleTimer(runtime)
     runtime.generation += 1
     runtime.initialization.abort()
     if (explicit) {
@@ -1141,6 +1169,8 @@ export class DefaultPiLiveService implements PiLiveService {
 
   private async readyRuntime(id: string): Promise<OwnedRuntime> {
     const runtime = await this.runtime(id)
+    this.markRuntimeActive(runtime)
+    await this.ensureRuntimeHydrated(runtime)
     if (runtime.status !== 'ready' || !runtime.handle) throw this.conflict(`Pi Live runtime is not ready: ${runtime.status}`)
     return runtime
   }
@@ -1177,6 +1207,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
       ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
       ...((runtime.taskSummary || runtime.input.name) ? { title: runtime.taskSummary || runtime.input.name } : {}),
       workspacePath: runtime.workspacePath,
