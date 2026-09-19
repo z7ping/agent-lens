@@ -108,6 +108,14 @@
 .task-center-live-group .task-center-group-title { position: static; color: var(--al-muted); }
 .task-center-group-title span:last-child { font-variant-numeric: tabular-nums; font-weight: 520; }
 .task-center-empty { padding: 18px 9px; color: var(--al-muted-2); font-size: 12px; line-height: 1.55; }
+.task-center-list-skeleton { display: grid; gap: 7px; padding: 8px 1px 10px; }
+.task-center-list-skeleton span {
+  display: block;
+  height: 50px;
+  border: 1px solid color-mix(in srgb, var(--al-line) 55%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 58%, transparent);
+}
 .task-live-item { --session-source: var(--al-accent); }
 .task-live-item .session-item-meta time { color: var(--al-muted-2); font-weight: 400; }
 
