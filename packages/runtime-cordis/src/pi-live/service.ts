@@ -845,6 +845,7 @@ export class DefaultPiLiveService implements PiLiveService {
         initializationTimings: runtime.initializationTimings,
         ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       })
+      this.refreshWorkspaceContextBestEffort(runtime)
 
       if (readyState) {
         this.persistSessionIfChanged(runtime, readyState)
@@ -1498,7 +1499,10 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
-    this.refreshWorkspaceContextBestEffort(runtime)
+    // During initialization keep filesystem pressure focused on the Pi Worker.
+    // cwd + basename are already available synchronously from createRuntime;
+    // Git root/branch metadata can refresh after Ready.
+    if (runtime.status !== 'initializing') this.refreshWorkspaceContextBestEffort(runtime)
     if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
