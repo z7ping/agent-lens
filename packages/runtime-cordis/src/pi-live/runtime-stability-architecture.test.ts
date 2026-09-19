@@ -104,3 +104,22 @@ test('Runtime list is a logical-memory read and never probes every Worker', () =
   assert.match(listState, /runtime\.isStreaming/)
   assert.match(listState, /runtime\.input\.logicalSessionId/)
 })
+
+
+test('explicit termination does not wait for diagnostic state or audit work', () => {
+  const terminate = section('async terminate(id:', 'async dispose()')
+  assert.match(terminate, /terminateRuntime\(runtime, true\)/)
+  assert.match(terminate, /recoveryStore\?\.remove\(id\)/)
+  assert.doesNotMatch(terminate, /handle\.state|startupAuditTask|startupAuditProbeTask|startupPackageAuditTask/)
+})
+
+test('Worker termination has a fixed graceful shutdown budget before force kill', async () => {
+  const host = await readFile(new URL('./worker-host.ts', import.meta.url), 'utf8')
+  assert.match(host, /WORKER_TERMINATE_GRACE_MS = 1_000/)
+  const from = host.indexOf('async terminate(): Promise<void>')
+  const to = host.indexOf('\n  }\n}\n\nexport class WorkerPiRuntimeHost', from)
+  assert.ok(from >= 0 && to > from)
+  const terminate = host.slice(from, to)
+  assert.match(terminate, /Promise\.race/)
+  assert.match(terminate, /this\.child\.kill\(\)/)
+})
