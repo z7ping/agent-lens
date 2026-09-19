@@ -106,15 +106,10 @@ export async function readLaunchableProjects(
     )
 
     for (let index = 0; index < chunk.length; index += 1) {
-      const candidate = chunk[index]!
       processed += 1
       const project = resolved[index]
       if (project) items.push(project)
       if (items.length >= limit) break
-
-      // Keep cursor ownership tied to the exact candidate order returned by
-      // storage; validation completion order must never affect pagination.
-      void candidate
     }
   }
 
