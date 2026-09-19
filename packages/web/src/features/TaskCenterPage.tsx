@@ -205,6 +205,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     if (mode !== 'new') return
     const generation = ++projectRequestGenerationRef.current
     const controller = new AbortController()
+    // A new query owns a new result set. Keeping previous rows here makes
+    // search/filter transitions look successful while actually showing stale projects.
+    setLaunchableProjects([])
+    setLaunchablePage(null)
     const timer = window.setTimeout(() => {
       setProjectLoading(true)
       setProjectLoadingMore(false)
@@ -216,7 +220,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       }).then(
         value => {
           if (generation !== projectRequestGenerationRef.current) return
-          setLaunchableProjects(current => mergeLaunchableProjects(current, value.items))
+          setLaunchableProjects(value.items)
           setLaunchablePage(value.meta)
         },
         reason => {
