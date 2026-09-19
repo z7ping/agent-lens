@@ -152,8 +152,8 @@ function runtimeDisclosureSummary(
   }
 
   return contributionText(
-    `${status.en} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
-    `${status.zh} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
+    `${status.en} · ${fallbackDuration} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
+    `${status.zh} · ${fallbackDuration} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
   )
 }
 
