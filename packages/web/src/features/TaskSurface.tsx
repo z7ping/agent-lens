@@ -459,6 +459,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   const [activeRoundId, setActiveRoundId] = useState('')
   const [railPosition, setRailPosition] = useState<TaskTurnRailPosition | null>(null)
   const sessionMode = mode === 'review' || mode === 'live'
+  const hasProvidedTurnRailItems = providedTurnRailItems !== undefined
   const providedRailIdentity = useMemo(
     () => providedTurnRailItems
       ? JSON.stringify(providedTurnRailItems.map(item => [
@@ -596,7 +597,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
   }, [providedRailIdentity, syncProvidedRailItems])
 
   useEffect(() => {
-    if (providedTurnRailItems) return
+    if (hasProvidedTurnRailItems) return
     const root = rootRef.current
     if (!root || typeof MutationObserver === 'undefined') return
     scanRounds()
@@ -618,7 +619,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       frameRef.current = null
       railViewportRef.current = null
     }
-  }, [scanRounds, scheduleRailViewport])
+  }, [hasProvidedTurnRailItems, scanRounds, scheduleRailViewport])
 
   const scrollRailItemToAnchor = useCallback((item: TaskTurnRailItem) => {
     if (!item.element || !rootRef.current) return false
