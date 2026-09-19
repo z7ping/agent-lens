@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const reviewPage = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
-const piLivePage = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
+const liveTaskPage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const taskSessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
