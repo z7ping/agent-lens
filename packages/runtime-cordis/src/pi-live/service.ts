@@ -56,6 +56,8 @@ interface OwnedRuntime {
   workspaceContextTask?: Promise<void> | undefined
   taskSummary?: string | undefined
   activeAssistantMessageId?: string | undefined
+  isStreaming: boolean
+  isCompacting: boolean
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -544,7 +546,9 @@ export class DefaultPiLiveService implements PiLiveService {
 
   async list(): Promise<PiLiveRuntimeState[]> {
     await this.ensureRecoveryLoaded()
-    return Promise.all([...this.runtimes.values()].map(runtime => this.runtimeState(runtime)))
+    // Task Center session listing must never synchronously probe every Worker.
+    // One slow/stuck Runtime must not make the whole list disappear or stall.
+    return [...this.runtimes.values()].map(runtime => this.runtimeListState(runtime))
   }
 
   async start(input: PiLiveStartInput): Promise<PiLiveRuntimeState> {
@@ -614,6 +618,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
     runtime.activeAssistantMessageId = undefined
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
     const initialState = await this.runtimeState(runtime)
     this.scheduleInitialize(runtime, runtime.generation)
@@ -646,6 +652,8 @@ export class DefaultPiLiveService implements PiLiveService {
       startupMetrics: [],
       startupOutput: [],
       packageUpdates: [],
+      isStreaming: false,
+      isCompacting: false,
       queue: { steering: [], followUp: [] },
       subscriberCount: 0,
       lastActiveAt: now,
@@ -1392,6 +1400,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdatesCheckedAt = undefined
     runtime.capabilities = undefined
     runtime.activeAssistantMessageId = undefined
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     runtime.pendingExtensionRequestIds.clear()
     runtime.queue = { steering: [], followUp: [] }
     runtime.lastActiveAt = now
@@ -1454,6 +1464,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stage = 'ready'
     runtime.message = 'Pi Runtime 已挂起，可自动恢复'
     runtime.activeAssistantMessageId = undefined
+    runtime.isStreaming = false
+    runtime.isCompacting = false
     runtime.pendingExtensionRequestIds.clear()
     runtime.queue = { steering: [], followUp: [] }
     this.clearIdleTimer(runtime)
@@ -1530,6 +1542,38 @@ export class DefaultPiLiveService implements PiLiveService {
     return runtime
   }
 
+  private runtimeListState(runtime: OwnedRuntime): PiLiveRuntimeState {
+    const elapsed = runtime.status === 'initializing'
+      ? Math.max(0, Date.now() - runtime.initializationStartedAt)
+      : runtime.initializationElapsedMs
+    const cached = runtime.cachedState ? { ...runtime.cachedState } : {}
+    delete cached.processId
+    return {
+      ...cached,
+      runtimeSessionId: runtime.id,
+      startedAt: runtime.createdAt,
+      status: runtime.status,
+      initializationStage: runtime.stage,
+      initializationMessage: runtime.message,
+      initializationElapsedMs: elapsed,
+      ...(runtime.error ? { error: runtime.error } : {}),
+      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
+      ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
+      ...((runtime.taskSummary || runtime.input.name || cached.sessionName)
+        ? { title: runtime.taskSummary || runtime.input.name || cached.sessionName }
+        : {}),
+      ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
+      workspacePath: runtime.workspacePath,
+      projectName: runtime.projectName,
+      ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
+      isStreaming: runtime.isStreaming,
+      isCompacting: runtime.isCompacting,
+      pendingMessageCount: runtime.queue.steering.length + runtime.queue.followUp.length,
+      ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
+    }
+  }
+
   private async foregroundRuntimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
     const state = await this.runtimeState(runtime)
     if (!runtime.suspended) return state
@@ -1553,11 +1597,15 @@ export class DefaultPiLiveService implements PiLiveService {
     if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
+      runtime.isStreaming = state.isStreaming
+      runtime.isCompacting = state.isCompacting
       this.persistSessionIfChanged(runtime, state)
       this.updateRuntimeResources(runtime, state)
       this.persistStartupAuditBestEffort(runtime, state)
       this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
-      return this.decorateReadyState(runtime, state)
+      const decorated = this.decorateReadyState(runtime, state)
+      runtime.cachedState = decorated
+      return decorated
     }
     return {
       runtimeSessionId: runtime.id,
@@ -1785,8 +1833,12 @@ export class DefaultPiLiveService implements PiLiveService {
     const messageId = typeof message?.id === 'string' ? message.id : ''
     runtime.lastActiveAt = Date.now()
 
+    if (type === 'agent_start') runtime.isStreaming = true
+    if (type === 'compaction_start') runtime.isCompacting = true
+    if (type === 'compaction_end') runtime.isCompacting = false
     if (type === 'message_start' && messageRole === 'assistant') {
       runtime.activeAssistantMessageId = messageId || undefined
+      runtime.isStreaming = true
     }
     if (type === 'extension_ui_request') {
       const requestId = typeof event.id === 'string'
@@ -1816,6 +1868,8 @@ export class DefaultPiLiveService implements PiLiveService {
     if (settled) {
       runtime.activeAssistantMessageId = undefined
       if (type === 'agent_settled' || type === 'agent_end' || type === 'runtime_exit') {
+        runtime.isStreaming = false
+        runtime.isCompacting = false
         runtime.pendingExtensionRequestIds.clear()
       }
       if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
