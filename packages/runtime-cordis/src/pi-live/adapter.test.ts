@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveAttachmentService } from '@agent-lens/core'
-import { normalizePiLiveEvent, PiLiveAdapter } from './adapter'
+import { normalizePiLiveEvent, normalizePiLiveRuntimeEvent, PiLiveAdapter } from './adapter'
 import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
 
 function attachmentService(overrides: Partial<LiveAttachmentService> = {}): LiveAttachmentService {
@@ -291,10 +291,21 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
     steering: ['先检查测试'],
     followUp: ['完成后总结'],
   })
+  assert.equal(normalizePiLiveEvent({ type: 'agent_end' }), undefined)
   assert.deepEqual(normalizePiLiveEvent({ type: 'agent_settled' }), {
     type: 'completed',
     status: 'completed',
   })
+  assert.deepEqual(
+    normalizePiLiveRuntimeEvent({
+      runtimeSessionId: 'runtime-1',
+      event: { type: 'agent_end' },
+    }),
+    {
+      runtimeSessionId: 'runtime-1',
+      event: { type: 'agent_end' },
+    },
+  )
 })
 
 test('Pi Live Adapter exposes queue control and restores queued messages on interrupt', async () => {
