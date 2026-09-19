@@ -5,14 +5,15 @@ import test from 'node:test'
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
 const liveTask = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 'utf8')
 
-test('轮次导轨使用统一阅读锚点且锚定 Session Document', () => {
+test('轮次导轨保持旧版共享阅读锚点与 Rail Frame 位置', () => {
   assert.match(taskSurface, /TASK_ROUND_ANCHOR_RATIO\s*=\s*\.3/)
   assert.match(taskSurface, /roundAnchorY\(viewportRect\)/)
   assert.match(taskSurface, /delta = item\.element\.getBoundingClientRect\(\)\.top - roundAnchorY\(viewportRect\)/)
   assert.doesNotMatch(taskSurface, /scrollIntoView\(\{[^}]*block:\s*['"]center['"]/)
-  assert.match(taskSurface, /sessionRailLeft/)
-  assert.match(taskSurface, /\.task-session-document/)
+  assert.match(taskSurface, /left:\s*railFrame\.left \+ 10/)
+  assert.doesNotMatch(taskSurface, /sessionRailLeft/)
 })
 
 test('Review 与 Live 导轨由轮次数据驱动，并在数据到达后释放 fallback MutationObserver', () => {
@@ -48,16 +49,16 @@ test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
   assert.match(liveTask, /historyBlocksRef/)
 })
 
-test('轮次导轨逻辑覆盖全量轮次，80 只属于视觉 DOM 上限', () => {
+test('轮次导轨保留全量语义与有界按 ordinal 定位，但视觉恢复旧版流式布局', () => {
   assert.match(liveTask, /historyIndexAnchorCursorRef\.current[\s\S]{0,260}\? \{ cursor: historyIndexAnchorCursorRef\.current \}[\s\S]{0,120}: \{ limit: 0 \}/)
   assert.match(liveTask, /fromOrdinal: targetOrdinal, limit: 1/)
   assert.match(liveTask, /around: cursor, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
   assert.match(liveTask, /turnRailTotal=\{turnRailTotal\}/)
   assert.match(taskSurface, /turnRailTotal\?: number/)
-  assert.match(taskSurface, /ratio \* Math\.max\(0, turnRailTotal! - 1\)/)
-  assert.match(taskSurface, /style=\{\{ top:/)
   assert.match(taskSurface, /pendingTurnRailTargetRef/)
   assert.doesNotMatch(liveTask, /historyIndex\(current\.liveId, current\.runtimeSessionId, 80\)/)
+  assert.doesNotMatch(taskSurface, /style=\{\{ top:/)
+  assert.doesNotMatch(taskSurface, /jumpToRailPosition/)
 })
 
 
@@ -70,9 +71,10 @@ test('80 只限制导轨 DOM，不限制全会话轮次数据语义', () => {
 })
 
 
-test('导轨任意指针位置映射真实 ordinal，而不是只能点击采样刻度', () => {
-  assert.match(taskSurface, /const jumpToRailPosition = \(clientY: number/)
-  assert.match(taskSurface, /ratio \* Math\.max\(0, turnRailTotal! - 1\)/)
-  assert.match(taskSurface, /event\.detail > 0/)
-  assert.match(taskSurface, /jumpToRailPosition\(event\.clientY, event\.currentTarget\.parentElement\)/)
+test('轮次导轨视觉锁定 #283 前经典样式，不允许恢复绝对比例刻度', () => {
+  assert.match(railCss, /\.task-turn-rail\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?align-items:\s*center;[\s\S]*?justify-content:\s*center;/)
+  assert.match(railCss, /\.task-turn-rail\s+\.turn-tick\s*\{[\s\S]*?position:\s*relative;[\s\S]*?flex:\s*0 1 9px;/)
+  assert.doesNotMatch(railCss, /\.task-turn-rail\s+\.turn-tick\s*\{[^}]*position:\s*absolute;/s)
+  assert.doesNotMatch(taskSurface, /jumpToRailPosition/)
+  assert.doesNotMatch(taskSurface, /style=\{\{ top:/)
 })
