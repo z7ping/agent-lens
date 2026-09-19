@@ -1245,21 +1245,13 @@ export class DefaultPiLiveService implements PiLiveService {
     await this.ensureRecoveryLoaded()
     const runtime = this.runtimes.get(id)
     if (runtime) {
-      await runtime.startupAuditProbeTask?.catch(() => undefined)
-      if (runtime.status === 'ready' && runtime.handle) {
-        const state = await runtime.handle.state().catch(() => undefined)
-        if (state) {
-          this.persistSessionIfChanged(runtime, state)
-          this.updateRuntimeResources(runtime, state)
-          this.persistStartupAuditBestEffort(runtime, state)
-          this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
-        }
-      }
-      await runtime.startupAuditTask?.catch(() => undefined)
-      await runtime.startupPackageAuditTask?.catch(() => undefined)
+      // Explicit termination is a foreground lifecycle action. Startup audit,
+      // package audit and diagnostic state probes are best-effort observability
+      // work and must never sit in front of ending the task.
       await this.terminateRuntime(runtime, true)
-      await runtime.recoveryCheckpointTask?.catch(() => undefined)
     }
+    // Recovery deletion remains authoritative: once DELETE returns, this
+    // Logical Runtime must not be resurrected by the next Daemon generation.
     await this.recoveryStore?.remove(id)
   }
 
