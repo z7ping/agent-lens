@@ -60,6 +60,9 @@ const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<
 if (!fromStartBody.includes("direction: 'forward'")) throw new Error('从头查看必须显式请求 forward 窗口')
 if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('pane.scrollTop = pane.scrollHeight') || !reviewPage.includes('followingTailRef.current = true')) throw new Error('默认最新窗口必须渲染后定位到底部并进入跟随状态')
 if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) throw new Error('阅读历史时不得抢滚动位置')
+if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('void loadOlder().finally')) throw new Error('Review 更早轮次必须由滚动 sentinel 自动加载')
+if (!reviewPage.includes('detailAutoLoadBaselineRef.current = userRevision')) throw new Error('Review 每次向前加载后必须重新等待新的用户滚动意图')
+if (reviewPage.includes("t('local.roundNav.loadOlder')")) throw new Error('Review 不得恢复“加载更早”分页按钮；失败时只保留重试')
 
 if (!reviewPage.includes('className="review-reader-pane"') || !reviewPage.includes('className="review-reader"')) throw new Error('Review 必须保留分页/滚动行为钩子，由 TaskSurface 归一为 Session 槽位')
 if (!taskSurface.includes("'review-reader-pane'") || !taskSurface.includes("'live-task-reader'")) throw new Error('TaskSurface 必须识别 Review / 通用 Live Reader 行为钩子')
