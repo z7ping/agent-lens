@@ -61,6 +61,8 @@ export interface PiRuntimeHandle {
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
   readonly startupMetrics?: PiLiveStartupMetric[] | undefined
   readonly warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  /** Session identity captured by the initialize handshake, avoiding an immediate follow-up state IPC. */
+  readonly initialSessionFile?: string | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
   historyIndex?(query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
@@ -190,6 +192,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   private handshakeTimings?: PiLiveInitializationTiming[] | undefined
   private handshakeStartupMetrics?: PiLiveStartupMetric[] | undefined
   private handshakeWarmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  private handshakeSessionFile?: string | undefined
 
   constructor(
     private readonly child: ChildProcess,
@@ -246,6 +249,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   get initializationTimings(): PiLiveInitializationTiming[] | undefined { return this.handshakeTimings }
   get startupMetrics(): PiLiveStartupMetric[] | undefined { return this.handshakeStartupMetrics }
   get warmWorkerStatus(): PiLiveWarmWorkerStatus | undefined { return this.handshakeWarmWorkerStatus }
+  get initialSessionFile(): string | undefined { return this.handshakeSessionFile }
 
   applyHandshake(value: unknown): void {
     const payload = record(value)
@@ -278,6 +282,9 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
     const warm = payload.warmWorkerStatus
     if (warm === 'hit' || warm === 'miss' || warm === 'not_ready' || warm === 'sdk_mismatch') {
       this.handshakeWarmWorkerStatus = warm
+    }
+    if (typeof payload.sessionFile === 'string' && payload.sessionFile.trim()) {
+      this.handshakeSessionFile = payload.sessionFile
     }
     this.finishStartupOutput()
   }
