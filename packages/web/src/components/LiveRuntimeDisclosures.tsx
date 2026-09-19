@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type {
   LiveContributionTextDto,
   LiveContributionValueDto,
@@ -158,6 +158,7 @@ function RuntimeLifecycle({
   onDiagnostics(): void
 }) {
   const lifecycle = item.lifecycle
+  const bodyId = useId()
   const [expanded, setExpanded] = useState(lifecycle?.status !== 'ready')
 
   useEffect(() => {
@@ -182,12 +183,17 @@ function RuntimeLifecycle({
     .map(group => `${contributionText(group.label, language)} ${group.values.length}`)
     .join(' · ')
 
-  return <details
+  return <section
     className={`pi-startup-disclosure live-runtime-lifecycle is-${lifecycle.status}`}
-    open={expanded}
-    onToggle={event => setExpanded(event.currentTarget.open)}
+    data-expanded={expanded ? 'true' : 'false'}
   >
-    <summary>
+    <button
+      type="button"
+      className="pi-startup-disclosure-toggle"
+      aria-expanded={expanded}
+      aria-controls={bodyId}
+      onClick={() => setExpanded(value => !value)}
+    >
       <span className="pi-startup-summary-state" aria-hidden="true"/>
       <span className="pi-startup-summary-copy">
         <b>{title}</b>
@@ -195,9 +201,9 @@ function RuntimeLifecycle({
       </span>
       <span className="pi-startup-summary-time">{duration(lifecycle.elapsedMs)}</span>
       <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
-    </summary>
+    </button>
 
-    <div className="pi-startup-body">
+    {expanded && <div className="pi-startup-body" id={bodyId}>
       <div className="pi-startup-steps" aria-label={localText(language, '运行时启动阶段', 'Runtime startup stages')}>
         {lifecycle.stages.map(stage => <div
           key={stage.stageId}
@@ -249,8 +255,8 @@ function RuntimeLifecycle({
           onAction={onAction}
         />
       </div>
-    </div>
-  </details>
+    </div>}
+  </section>
 }
 
 function metricParts(value: string): { label: string; duration?: string } {
