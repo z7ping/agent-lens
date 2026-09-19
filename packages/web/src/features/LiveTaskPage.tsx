@@ -629,6 +629,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const historyBlocksRef = useRef<LiveHistoryPageBlock[]>([])
   const projectionRef = useRef(projection)
   projectionRef.current = projection
+  const runtimeStateRef = useRef<LiveRuntimeStateDto | null>(state)
+  runtimeStateRef.current = state
   const followControllerRef = useRef(new LiveFollowController())
   const followFrameRef = useRef<number | null>(null)
   const followReleaseFrameRef = useRef<number | null>(null)
@@ -715,7 +717,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
     const stateRequest = liveApi.state(current.liveId, current.runtimeSessionId).then(
       runtime => {
-        if (!cancelled) setState(runtime)
+        if (!cancelled) {
+          runtimeStateRef.current = runtime
+          setState(runtime)
+        }
         return runtime
       },
       reason => {
@@ -743,6 +748,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     ).then(
       snapshot => {
         if (cancelled) return
+        runtimeStateRef.current = snapshot.state
         setState(snapshot.state)
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
@@ -924,13 +930,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       try {
         const runtime = await liveApi.state(current.liveId, current.runtimeSessionId)
         if (!recoveryActive || epoch !== reconcileEpoch) return
-        let changed = false
-        setState(previous => {
-          changed = previous?.status !== runtime.status
-            || previous?.isStreaming !== runtime.isStreaming
-            || previous?.pendingMessageCount !== runtime.pendingMessageCount
-          return runtime
-        })
+        const previous = runtimeStateRef.current
+        const changed = previous?.status !== runtime.status
+          || previous?.isStreaming !== runtime.isStreaming
+          || previous?.pendingMessageCount !== runtime.pendingMessageCount
+        runtimeStateRef.current = runtime
+        setState(runtime)
         runtimeActive = runtime.isStreaming
         setActivityStatus(runtime.isStreaming ? 'running' : runtime.status === 'ready' ? 'idle' : null)
         if ((changed || forceRecovery) && product.capabilities.includes('recovery')) {
@@ -967,7 +972,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }
           if (!historyAtLatestRef.current || !followControllerRef.current.isFollowing) setNewRecords(true)
         }
-        setState(previous => runtimeStateFromEvent(previous, envelope))
+        setState(previous => {
+          const next = runtimeStateFromEvent(previous, envelope)
+          runtimeStateRef.current = next
+          return next
+        })
         if (product.capabilities.includes('extension-ui') && envelope.normalizedEvent?.type === 'ui.request') {
           setExtension(envelope.normalizedEvent)
         }
