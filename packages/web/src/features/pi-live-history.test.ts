@@ -234,3 +234,26 @@ test('Pi Live persisted history keeps user images as message attachments instead
   assert.equal(item.attachments?.[0]?.type, 'image')
   assert.equal(item.attachments?.[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
 })
+
+
+test('Pi Live 可用真实 model_change 补齐后续回复模型，但不倒填之前回复', () => {
+  const items = projectPiLiveHistory(snapshot([
+    {
+      type: 'message',
+      id: 'assistant-before',
+      timestamp: '2026-09-01T00:00:00.000Z',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'before' }] },
+    },
+    { type: 'model_change', id: 'model-change', provider: 'anthropic', modelId: 'claude-sonnet-4.5' },
+    {
+      type: 'message',
+      id: 'assistant-after',
+      timestamp: '2026-09-01T00:00:02.000Z',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'after' }] },
+    },
+  ]))
+
+  const messages = items.filter((item): item is Extract<PiLiveHistoryItem, { kind: 'message' }> => item.kind === 'message')
+  assert.equal(messages[0]?.modelLabel, undefined)
+  assert.equal(messages[1]?.modelLabel, 'anthropic / claude-sonnet-4.5')
+})
