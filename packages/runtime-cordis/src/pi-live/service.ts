@@ -1875,17 +1875,20 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     runtime.events.publish(publishedEvent)
 
-    const settled = (type === 'message_end' && messageRole === 'assistant')
-      || type === 'agent_settled'
-      || type === 'agent_end'
-      || type === 'runtime_exit'
-    if (settled) {
+    // message_end closes one assistant message but not necessarily the whole
+    // logical run. agent_end closes one low-level Pi run and can still be followed
+    // by retry, compaction or queued continuation. Only agent_settled (or a terminal
+    // Worker exit) may collapse the Logical Runtime back to idle.
+    if (type === 'message_end' && messageRole === 'assistant') {
       runtime.activeAssistantMessageId = undefined
-      if (type === 'agent_settled' || type === 'agent_end' || type === 'runtime_exit') {
-        runtime.isStreaming = false
-        runtime.isCompacting = false
-        runtime.pendingExtensionRequestIds.clear()
-      }
+    }
+
+    const logicalSettled = type === 'agent_settled' || type === 'runtime_exit'
+    if (logicalSettled) {
+      runtime.activeAssistantMessageId = undefined
+      runtime.isStreaming = false
+      runtime.isCompacting = false
+      runtime.pendingExtensionRequestIds.clear()
       if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
     }
   }
