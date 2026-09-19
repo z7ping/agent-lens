@@ -1573,9 +1573,18 @@ export class DefaultPiLiveService implements PiLiveService {
       : undefined
     const messageRole = typeof message?.role === 'string' ? message.role : ''
     const messageId = typeof message?.id === 'string' ? message.id : ''
+    runtime.lastActiveAt = Date.now()
 
     if (type === 'message_start' && messageRole === 'assistant') {
       runtime.activeAssistantMessageId = messageId || undefined
+    }
+    if (type === 'extension_ui_request') {
+      const requestId = typeof event.id === 'string'
+        ? event.id
+        : typeof event.requestId === 'string'
+          ? event.requestId
+          : ''
+      if (requestId) runtime.pendingExtensionRequestIds.add(requestId)
     }
 
     const publishedEvent = type === 'message_update' && runtime.activeAssistantMessageId
@@ -1590,11 +1599,16 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     runtime.events.publish(publishedEvent)
 
-    if ((type === 'message_end' && messageRole === 'assistant')
+    const settled = (type === 'message_end' && messageRole === 'assistant')
       || type === 'agent_settled'
       || type === 'agent_end'
-      || type === 'runtime_exit') {
+      || type === 'runtime_exit'
+    if (settled) {
       runtime.activeAssistantMessageId = undefined
+      if (type === 'agent_settled' || type === 'agent_end' || type === 'runtime_exit') {
+        runtime.pendingExtensionRequestIds.clear()
+      }
+      if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
     }
   }
 }
