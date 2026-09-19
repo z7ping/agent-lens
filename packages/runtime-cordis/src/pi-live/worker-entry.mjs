@@ -19,6 +19,11 @@ let runtimeSessionId = ''
 let runtimeCwd = ''
 let sdk
 let loadedSdkEntry
+let baseAgentDir
+let baseModelRuntime
+let prewarmMetrics = []
+let startupMetrics = []
+let warmWorkerStatus
 let runtime
 let session
 let unsubscribe = () => {}
@@ -319,6 +324,39 @@ function progress(stage, message) {
     elapsedMs,
     timings: initializationTimings,
   })
+}
+
+function recordStartupMetric(name, durationMs, options = {}) {
+  const metric = {
+    name,
+    durationMs: Math.max(0, Number.isFinite(durationMs) ? durationMs : 0),
+  }
+  startupMetrics = [...startupMetrics.filter(item => item.name !== name), metric]
+  if (runtimeSessionId) {
+    send('event', {
+      type: 'runtime_startup_metric',
+      metric,
+      ...(warmWorkerStatus ? { warmWorkerStatus } : {}),
+      ...(options.prewarm === true ? { prewarm: true } : {}),
+    })
+  }
+  return metric
+}
+
+async function ensureBaseRuntime(loadedSdk) {
+  if (baseModelRuntime) return false
+  if (typeof loadedSdk.ModelRuntime?.create !== 'function') return false
+  baseAgentDir = typeof loadedSdk.getAgentDir === 'function' ? loadedSdk.getAgentDir() : undefined
+  const startedAt = Date.now()
+  baseModelRuntime = await loadedSdk.ModelRuntime.create({
+    ...(baseAgentDir ? {
+      authPath: join(baseAgentDir, 'auth.json'),
+      modelsPath: join(baseAgentDir, 'models.json'),
+    } : {}),
+    allowModelNetwork: false,
+  })
+  const metric = { name: 'model_runtime_create_ms', durationMs: Math.max(0, Date.now() - startedAt) }
+  return metric
 }
 
 function rememberRequestId(requestId) {
@@ -684,6 +722,8 @@ function handshakeDiagnostics() {
     ...(capabilities ? { capabilities } : {}),
     initializationElapsedMs: initializationStartedAt ? Math.max(0, Date.now() - initializationStartedAt) : 0,
     initializationTimings,
+    ...(startupMetrics.length ? { startupMetrics } : {}),
+    ...(warmWorkerStatus ? { warmWorkerStatus } : {}),
   }
 }
 
@@ -693,22 +733,69 @@ async function initialize(input) {
   currentInitializationStage = undefined
   currentStageStartedAt = initializationStartedAt
   initializationTimings = []
+  startupMetrics = []
+  const agentLensStartup = record(input.agentLensStartup)
+  warmWorkerStatus = ['hit', 'miss', 'not_ready', 'sdk_mismatch'].includes(agentLensStartup.warmWorkerStatus)
+    ? agentLensStartup.warmWorkerStatus
+    : undefined
+  if (Array.isArray(agentLensStartup.metrics)) {
+    for (const value of agentLensStartup.metrics) {
+      const metric = record(value)
+      if (typeof metric.name === 'string' && typeof metric.durationMs === 'number') {
+        recordStartupMetric(metric.name, metric.durationMs)
+      }
+    }
+  }
   packageUpdateCheck = 'checking'
   packageUpdates = []
+
   progress('loading_sdk', '正在加载 Pi SDK')
+  const sdkWasLoaded = Boolean(sdk)
+  const sdkStartedAt = Date.now()
   const loadedSdk = await loadSdk(record(input.sdk))
+  recordStartupMetric('sdk_import_ms', sdkWasLoaded ? 0 : Date.now() - sdkStartedAt)
+
+  const sessionManagerStartedAt = Date.now()
   const sessionManager = await createSessionManager(loadedSdk, input)
+  recordStartupMetric('session_manager_ms', Date.now() - sessionManagerStartedAt)
+
   const hasSessionRuntime = ['createAgentSessionServices', 'createAgentSessionRuntime', 'createAgentSessionFromServices'].every(name => typeof loadedSdk[name] === 'function')
   if (hasSessionRuntime) {
     runtimeMode = 'session_runtime'
-    const agentDir = loadedSdk.getAgentDir()
+    const modelRuntimeStartedAt = Date.now()
+    const createdBaseMetric = await ensureBaseRuntime(loadedSdk)
+    recordStartupMetric('model_runtime_create_ms', createdBaseMetric ? createdBaseMetric.durationMs : 0)
+    const agentDir = baseAgentDir ?? loadedSdk.getAgentDir()
     const createRuntime = async options => {
       progress('loading_resources', '正在加载配置、扩展与上下文')
-      const services = await loadedSdk.createAgentSessionServices({ cwd: options.cwd, agentDir: options.agentDir, modelRuntimeSignal: AbortSignal.timeout(15_000) })
+      let settingsManager
+      const settingsStartedAt = Date.now()
+      if (typeof loadedSdk.SettingsManager?.create === 'function') {
+        settingsManager = loadedSdk.SettingsManager.create(options.cwd, options.agentDir)
+      }
+      recordStartupMetric('settings_manager_ms', Date.now() - settingsStartedAt)
+
+      const resourcesStartedAt = Date.now()
+      const services = await loadedSdk.createAgentSessionServices({
+        cwd: options.cwd,
+        agentDir: options.agentDir,
+        ...(settingsManager ? { settingsManager } : {}),
+        ...(baseModelRuntime
+          ? { modelRuntime: baseModelRuntime }
+          : { modelRuntimeSignal: AbortSignal.timeout(15_000) }),
+      })
+      recordStartupMetric('resource_loader_reload_ms', Date.now() - resourcesStartedAt)
       const resources = startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics)
       if (resources) send('event', { type: 'runtime_resources', resources })
+
       progress('creating_session', '正在创建 Pi Session')
-      const created = await loadedSdk.createAgentSessionFromServices({ services, sessionManager: options.sessionManager, sessionStartEvent: options.sessionStartEvent })
+      const sessionStartedAt = Date.now()
+      const created = await loadedSdk.createAgentSessionFromServices({
+        services,
+        sessionManager: options.sessionManager,
+        sessionStartEvent: options.sessionStartEvent,
+      })
+      recordStartupMetric('agent_session_create_ms', Date.now() - sessionStartedAt)
       return { ...created, services, diagnostics: services.diagnostics }
     }
     runtime = await loadedSdk.createAgentSessionRuntime(createRuntime, { cwd: input.cwd, agentDir, sessionManager })
@@ -728,12 +815,14 @@ async function initialize(input) {
   extensionUi = createExtensionUi()
   unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
   progress('binding_extensions', '正在绑定扩展界面')
+  const extensionBindStartedAt = Date.now()
   await session.bindExtensions({
     uiContext: extensionUi.context,
     mode: 'rpc',
     abortHandler: () => { void session.abort() },
     onError: value => send('event', { type: 'extension_error', error: diagnostic(record(value).error ?? 'Unknown extension error') }),
   })
+  recordStartupMetric('extension_bind_ms', Date.now() - extensionBindStartedAt)
   // resources_discover runs during bindExtensions() and may extend skills/prompts/themes.
   // Emit a post-bind snapshot so the service sees the actual runtime resource set rather than
   // only the pre-session loader state.
@@ -742,6 +831,7 @@ async function initialize(input) {
   if (finalResources) send('event', { type: 'runtime_resources', resources: finalResources })
   if (input.name) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
+  recordStartupMetric('ready_ms', Math.max(0, Date.now() - initializationStartedAt))
   progress('ready', 'Pi Runtime 已就绪')
   startPackageUpdateCheck(input.cwd)
 }
@@ -921,8 +1011,17 @@ process.on('message', async value => {
     if (runtimeSessionId || typeof envelope.requestId !== 'string') return
     if (!rememberRequestId(envelope.requestId)) return
     try {
-      await loadSdk(record(record(envelope.payload).sdk))
-      send('response', { sdkVersion }, envelope.requestId, true)
+      prewarmMetrics = []
+      const sdkStartedAt = Date.now()
+      const loadedSdk = await loadSdk(record(record(envelope.payload).sdk))
+      prewarmMetrics.push({ name: 'prewarm_sdk_import_ms', durationMs: Math.max(0, Date.now() - sdkStartedAt) })
+      const baseMetric = await ensureBaseRuntime(loadedSdk)
+      if (baseMetric) {
+        prewarmMetrics.push({ name: 'prewarm_model_runtime_create_ms', durationMs: baseMetric.durationMs })
+      } else if (baseModelRuntime) {
+        prewarmMetrics.push({ name: 'prewarm_model_runtime_create_ms', durationMs: 0 })
+      }
+      send('response', { sdkVersion, prewarmMetrics }, envelope.requestId, true)
     } catch (error) {
       send('response', undefined, envelope.requestId, false, error instanceof Error ? error.message : String(error))
     }
