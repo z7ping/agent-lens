@@ -104,8 +104,8 @@ requireText(liveNewTask, /onStarted\(selectedProduct\.liveId, state\)/, '启动�
 forbidText(liveNewTask, /\bpiLiveApi\b|\bliveId\s*===\s*['"]pi['"]|\bproductId\s*===\s*['"]pi['"]/, 'LiveNewTaskPanel 不得用 Pi 身份决定产品行为')
 
 /* Live Task controls are capability-driven. */
-requireText(liveTask, /void liveApi\.products\(\)/, 'LiveTaskPage 必须读取通用 Live Product catalog')
-requireText(liveTask, /products\.find\(item => item\.liveId === current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 匹配产品')
+requireText(liveTask, /liveApi\.metadata\(current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 读取通用 Live Product metadata')
+requireText(liveTask, /const metadataRequest = liveApi\.metadata\(current\.liveId\)/, 'LiveTaskPage 不得为了单个 Live 任务先拉取完整 Product catalog')
 for (const capability of ['stream', 'recovery', 'extension-ui', 'command-discovery', 'workspace-file-reference', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
   requireText(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), `LiveTaskPage 缺少 capability 驱动：${capability}`)
 }
@@ -167,7 +167,7 @@ requireText(liveStyles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax
 forbidText(liveStyles, /max-width:\s*720px/, 'Live 样式不得引入脱离统一断点体系的 720px 私有断点')
 requireText(liveStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.pi-live-compose-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
 requireText(liveTask, /<aside className="pi-live-sessions"/, 'LiveTaskPage 两列壳层必须实际渲染通用会话栏')
-requireText(liveTask, /setRuntimes\(matched\.runtimes\)/, 'Live 会话栏必须来自当前 Live Product runtimes')
+requireText(liveTask, /liveApi\.list\(current\.liveId\)/, '当前独立 Live 壳层的会话列表必须按 liveId 有界到当前 Product')
 requireText(liveTask, /LiveTaskRoundProjector/, 'LiveTaskPage 必须通过通用增量 Projector 构造语义 Round')
 requireText(liveTask, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
 requireText(liveTask, /new LiveFollowController\(\)/, 'LiveTaskPage 必须恢复流式阅读自动跟随控制')
