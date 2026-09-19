@@ -2,7 +2,7 @@
 
 /*
  * Live Runtime 页面样式所有者（保留 pi-live 类名作为兼容钩子）。
- * 只负责 Runtime 页面壳层、通用会话侧栏、Composer 内容、队列和扩展交互。
+ * 只负责 Runtime 页面壳层、Legacy Pi 会话侧栏、Composer 内容、队列和扩展交互。
  * Session Header / Reader / 阅读轴与 Composer 外层留白统一由 task-session-view.css 负责；
  * Round / Message / Thinking / Tool / Event 统一由 task-detail.css 负责。
  */
@@ -15,7 +15,8 @@
   overflow: hidden;
   background: var(--al-canvas);
 }
-.pi-live-page-embedded { grid-template-columns: minmax(0, 1fr); }
+.pi-live-page-embedded,
+.live-task-page { grid-template-columns: minmax(0, 1fr); }
 
 .pi-live-sessions {
   display: flex;

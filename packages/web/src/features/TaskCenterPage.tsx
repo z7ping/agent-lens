@@ -17,9 +17,10 @@ import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
 
-export type TaskCenterMode = 'history' | 'new' | 'hub'
+export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
 const HubReviewPage = lazy(() => import('./HubReviewPage').then(module => ({ default: module.HubReviewPage })))
+const LiveTaskPage = lazy(() => import('./LiveTaskPage').then(module => ({ default: module.LiveTaskPage })))
 const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
 type TaskDayGroup = 'today' | 'yesterday' | 'earlier'
 type HistoryTaskEntry =
@@ -175,7 +176,15 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const projects = snapshot.facets?.projects ?? []
 
   useEffect(() => {
-    if (mode !== 'history' || !review.response) {
+    if (mode === 'history' || review.response || review.loading) return
+    const timer = window.setTimeout(() => {
+      void model.ensureReview().catch(() => undefined)
+    }, 750)
+    return () => window.clearTimeout(timer)
+  }, [mode, model, review.loading, review.response])
+
+  useEffect(() => {
+    if (!review.response) {
       setHubSessions([])
       return
     }
@@ -185,7 +194,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         value => { if (!cancelled) setHubSessions(value.items.filter(item => item.origin.kind === 'remote')) },
         () => { if (!cancelled) setHubSessions([]) },
       )
-    }, 200)
+    }, mode === 'history' ? 200 : 750)
     return () => {
       cancelled = true
       window.clearTimeout(timer)
@@ -376,6 +385,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className="task-center-scroll">
       <TaskLiveRuntimeList deferMs={mode === 'new' ? 500 : 150}/>
 
+      {!review.response && <div className="task-center-list-skeleton" aria-hidden="true">
+        <span/><span/><span/>
+      </div>}
+
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
@@ -383,7 +396,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
 
-      {!historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
+      {review.response && !historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
       {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>{t('center.history.loadMore')}</Button>}
     </div>
   </aside>
@@ -394,6 +407,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       <section className="task-center-main">
         <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage model={model} embedded/>}
+          {mode === 'live' && <LiveTaskPage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <LiveNewTaskPanel
             options={projectOptions}

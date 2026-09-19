@@ -183,21 +183,6 @@ function emptyLiveQueue(): LiveQueueStateDto {
   return { steering: [], followUp: [] }
 }
 
-function mergeRuntimeState(
-  runtimes: LiveRuntimeStateDto[],
-  runtime: LiveRuntimeStateDto,
-): LiveRuntimeStateDto[] {
-  const index = runtimes.findIndex(item => item.runtimeSessionId === runtime.runtimeSessionId)
-  if (index < 0) return [runtime, ...runtimes]
-  const next = [...runtimes]
-  next[index] = runtime
-  return next
-}
-
-function runtimeSessionTitle(runtime: LiveRuntimeStateDto): string {
-  return runtime.title?.trim() || workspaceDisplayName(runtime.workspacePath) || runtime.runtimeSessionId
-}
-
 function contributionText(
   value: LiveMessageActionContributionDto['label'],
   language: string,
@@ -427,7 +412,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     [current?.liveId, current?.runtimeSessionId],
   )
   const [product, setProduct] = useState<LiveProductMetadata | null>(null)
-  const [runtimes, setRuntimes] = useState<LiveRuntimeStateDto[]>([])
   const [state, setState] = useState<LiveRuntimeStateDto | null>(null)
   const [projection, setProjection] = useState<{
     stable: LiveTaskProjectionItem[]
@@ -491,7 +475,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     let cancelled = false
     setProduct(null)
-    setRuntimes([])
     setState(null)
     setProjection({ stable: [], active: [] })
     setMessageActions([])
@@ -539,7 +522,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       snapshot => {
         if (cancelled) return
         setState(snapshot.state)
-        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
         setProjection(nextProjection)
@@ -554,7 +536,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const runtime = await liveApi.state(current.liveId, current.runtimeSessionId)
         if (cancelled) return
         setState(runtime)
-        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, runtime))
         setBootstrapTarget({ liveId: current.liveId, runtimeSessionId: current.runtimeSessionId })
       },
     )
@@ -563,10 +544,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       if (cancelled) return
       const queueRevision = queueRevisionRef.current
 
-      // Supporting reads: controls and the product-local runtime list can fill in
-      // after the transcript is already visible.
-      const [runtimeList, model, thinkingControl, queueState] = await Promise.all([
-        liveApi.list(current.liveId).catch(() => []),
+      // Supporting reads: runtime controls can fill in after the transcript is already visible.
+      const [model, thinkingControl, queueState] = await Promise.all([
         matched.capabilities.includes('model-switching')
           ? liveApi.modelControl(current.liveId, current.runtimeSessionId).catch(() => {
               if (!cancelled) setSyncError(t('live.controlsSyncFailed'))
@@ -584,10 +563,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           : Promise.resolve(null),
       ])
       if (cancelled) return
-      setRuntimes(currentRuntimes => {
-        const currentState = currentRuntimes.find(item => item.runtimeSessionId === current.runtimeSessionId)
-        return currentState ? mergeRuntimeState(runtimeList, currentState) : runtimeList
-      })
       setModelControl(model)
       setThinking(thinkingControl)
       if (queueState && queueRevisionRef.current === queueRevision) setQueue(queueState)
@@ -639,7 +614,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         if (!recoveryActive || generation !== recoveryGeneration) return
         if (liveTurnRevisionRef.current !== recoveryTurnRevision) return
         setState(snapshot.state)
-        setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, snapshot.state))
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         if (mode === 'settle' && snapshot.state.isStreaming) {
           // A new turn started before the previous completion reconciliation returned.
@@ -850,11 +824,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     const timeout = window.setTimeout(() => setInterruptNotice(false), 2800)
     return () => window.clearTimeout(timeout)
   }, [interruptNotice])
-
-  useEffect(() => {
-    if (!state) return
-    setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, state))
-  }, [state])
 
   useEffect(() => {
     const controller = followControllerRef.current
@@ -1236,7 +1205,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         action.actionId,
       )
       setState(result.runtime)
-      setRuntimes(currentRuntimes => mergeRuntimeState(currentRuntimes, result.runtime))
       const disclosures = await liveApi.runtimeDisclosures(
         current.liveId,
         current.runtimeSessionId,
@@ -1311,48 +1279,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   ]
 
   return <main className={`pi-live-page live-task-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
-    {!embedded && <aside className="pi-live-sessions" aria-label={t('live.sidebar.title')}>
-      <div className="pi-live-sessions-head">
-        <div>
-          <b>{t('live.sidebar.title')}</b>
-          <small>{t('live.sidebar.closeKeepsRunning')}</small>
-        </div>
-        <Button size="small" onClick={() => navigate('/review/new')}>{t('live.sidebar.newTask')}</Button>
-      </div>
-      <div className="pi-live-session-scroll">
-        {runtimes.map(runtime => {
-          const active = runtime.runtimeSessionId === current.runtimeSessionId
-          return <button
-            type="button"
-            key={runtime.runtimeSessionId}
-            className={`pi-live-session ${active ? 'active' : ''}`}
-            onClick={() => navigate(`/review/live/${encodeURIComponent(current.liveId)}/${encodeURIComponent(runtime.runtimeSessionId)}`)}
-          >
-            <div className="pi-live-session-top">
-              <span className={runtime.isStreaming || runtime.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'} aria-hidden="true"/>
-              <span>{agentLabel}</span>
-              <span>{statusLabel(runtime, t)}</span>
-            </div>
-            <div className="pi-live-session-title" title={runtime.workspacePath || runtime.runtimeSessionId}>
-              {runtimeSessionTitle(runtime)}
-            </div>
-            <div className="pi-live-session-foot">
-              <span title={runtime.runtimeSessionId}>{runtime.runtimeSessionId}</span>
-              {runtime.pendingMessageCount > 0 && <span>{t('live.sidebar.pending', { count: runtime.pendingMessageCount })}</span>}
-            </div>
-          </button>
-        })}
-        {!runtimes.length && <div className="pi-live-side-empty">{t('live.sidebar.empty')}</div>}
-        <button
-          type="button"
-          className="pi-live-review-link"
-          onClick={() => navigate(product ? `/review?source=${encodeURIComponent(product.productId)}` : '/review')}
-        >
-          {t('live.sidebar.history')} <UiIcon name="arrow-right" size={14}/>
-        </button>
-      </div>
-    </aside>}
-
     <TaskSurface mode="live" className="pi-live-workspace live-task-workspace">
       <TaskHeader
         marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}

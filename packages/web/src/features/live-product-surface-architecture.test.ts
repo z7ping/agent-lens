@@ -15,6 +15,7 @@ const runtimeDisclosures = readFileSync(new URL('../components/LiveRuntimeDisclo
 const taskLiveRuntimeList = readFileSync(new URL('./TaskLiveRuntimeList.tsx', import.meta.url), 'utf8')
 const liveTaskProjection = readFileSync(new URL('./live-task-projection.ts', import.meta.url), 'utf8')
 const liveTaskRenderBoundary = readFileSync(new URL('./live-task-render-boundary.ts', import.meta.url), 'utf8')
+const appShell = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 
 test('统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面', () => {
   for (const file of productSurfaceFiles) {
@@ -162,14 +163,21 @@ test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
 })
 
 
-test('LiveTask migration keeps the full session-view shell instead of only the generic protocol', () => {
+test('Task Center owns the only Live task navigation while LiveTask keeps the session detail shell', () => {
+  const taskCenter = productSurfaceFiles.find(file => file.path === './TaskCenterPage.tsx')!.source
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   const styles = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 
-  assert.match(styles, /grid-template-columns:\s*var\(--pi-live-side\)\s+minmax\(0,\s*1fr\)/)
-  assert.match(liveTask, /<aside className="pi-live-sessions"/)
+  assert.match(appShell, /<Route path="\/review\/live\/:liveId\/:runtimeSessionId" element=\{<TaskCenterPage model=\{model\} mode="live" sidebarHost=\{sidebarHost\}\/>\} \/>/)
+  assert.match(taskCenter, /TaskCenterMode = 'history' \| 'live' \| 'new' \| 'hub'/)
+  assert.match(taskCenter, /<TaskLiveRuntimeList/)
+  assert.match(taskCenter, /mode === 'live' && <LiveTaskPage embedded\/>/)
+  assert.match(taskCenter, /mode === 'history' \|\| review\.response \|\| review\.loading/)
+  assert.match(taskCenter, /model\.ensureReview\(\)/)
+  assert.match(taskCenter, /task-center-list-skeleton/)
+  assert.doesNotMatch(liveTask, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/)
+  assert.match(styles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
   assert.match(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId\)/)
-  assert.match(liveTask, /liveApi\.list\(current\.liveId\)/)
   assert.match(liveTask, /LiveTaskRoundProjector/)
   assert.match(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/)
   assert.match(liveTaskProjection, /liveTaskStableRoundPrefixLength/)
@@ -189,16 +197,14 @@ test('LiveTask migration keeps the full session-view shell instead of only the g
   assert.doesNotMatch(liveTask, /\{items\.map\(item => <GenericLiveItem/)
 })
 
-test('通用 Live 标题在任务中心与 Live 会话栏保持一致', () => {
+test('通用 Live 标题在任务中心与 Live 详情保持一致', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
-  assert.match(liveTask, /runtime\.title\?\.trim\(\) \|\| workspaceDisplayName/)
   assert.match(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/)
   assert.match(taskLiveRuntimeList, /item\.state\.title\?\.trim\(\) \|\| workspace \|\| fallback/)
 })
 
-test('LiveTask session sidebar stays agent-neutral', () => {
+test('Live task navigation stays agent-neutral and outside LiveTaskPage', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
-  assert.match(liveTask, /current\.liveId/)
-  assert.match(liveTask, /product\.productId/)
-  assert.doesNotMatch(liveTask, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
+  assert.doesNotMatch(liveTask, /pi-live-sessions|liveApi\.list\(current\.liveId\)/)
+  assert.doesNotMatch(taskLiveRuntimeList, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
 })
