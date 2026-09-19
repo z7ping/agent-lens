@@ -419,6 +419,7 @@ function recoveryInput(input: PiLiveStartInput, resumedSessionPath?: string): Pi
       ...(input.name ? { name: input.name } : {}),
       sessionPath: existingPath,
       historyAction: 'continue',
+      ...(input.logicalSessionId ? { logicalSessionId: input.logicalSessionId } : {}),
     }
   }
   return {
@@ -428,6 +429,7 @@ function recoveryInput(input: PiLiveStartInput, resumedSessionPath?: string): Pi
     ...(input.name ? { name: input.name } : {}),
     ...(input.sessionDir ? { sessionDir: input.sessionDir } : {}),
     ...(input.historyAction ? { historyAction: input.historyAction } : {}),
+    ...(input.logicalSessionId ? { logicalSessionId: input.logicalSessionId } : {}),
   }
 }
 
@@ -1455,6 +1457,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
       ...((runtime.taskSummary || runtime.input.name) ? { title: runtime.taskSummary || runtime.input.name } : {}),
+      ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
@@ -1488,6 +1491,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...((runtime.taskSummary || safeState.sessionName || runtime.input.name)
         ? { title: runtime.taskSummary || safeState.sessionName || runtime.input.name }
         : {}),
+      ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
