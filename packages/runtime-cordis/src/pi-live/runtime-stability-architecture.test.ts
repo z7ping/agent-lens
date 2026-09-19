@@ -46,16 +46,13 @@ test('idle Worker suspension requires no subscribers and preserves logical Runti
 })
 
 
-test('foreground reads trigger hydration without awaiting Worker readiness', () => {
+test('foreground reads never start Worker hydration before SSE is attached', () => {
   const state = section('async state(id:', 'async runtimeDisclosures(')
   const snapshot = section('async snapshot(id:', 'async historyIndex(')
   const subscribe = section('subscribe(id:', 'async terminate(')
 
-  assert.match(state, /void this\.ensureRuntimeHydrated\(runtime\)/)
-  assert.doesNotMatch(state, /await this\.ensureRuntimeHydrated\(runtime\)/)
-
-  assert.match(snapshot, /void this\.ensureRuntimeHydrated\(runtime\)/)
-  assert.doesNotMatch(snapshot, /await this\.ensureRuntimeHydrated\(runtime\)/)
+  assert.doesNotMatch(state, /ensureRuntimeHydrated/)
+  assert.doesNotMatch(snapshot, /ensureRuntimeHydrated/)
 
   const listenerIndex = subscribe.indexOf('runtime.events.subscribe(listener)')
   const hydrationIndex = subscribe.indexOf('this.ensureRuntimeHydrated(runtime)')
