@@ -28,13 +28,14 @@ import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
-import { projectReviewInteractionPresentation, type ReviewProcessPresentationItem } from './review-interaction-presentation'
+import { projectReviewInteractionPresentation, projectReviewMessageModelLabels, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { reviewEventLabel } from './review-event-presentation'
 import { projectReviewLiveInteraction } from './review-live-interaction'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskEvent } from './TaskEvent'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
+import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskRound } from './TaskRound'
 import { TaskSurface } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
@@ -648,11 +649,13 @@ function MessageBubble({
   inspect,
   loadAttachments,
   nestedTools = [],
+  modelLabel,
 }: {
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   nestedTools?: ReviewToolNodeDto[]
+  modelLabel?: string | undefined
 }) {
   const { t } = useTranslation('review')
   const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
@@ -695,6 +698,7 @@ function MessageBubble({
     text={node.text}
     attachments={attachments}
     author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
+    modelLabel={node.role === 'assistant' ? modelLabel : undefined}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
     actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button> : undefined}
@@ -753,23 +757,24 @@ function ReviewProcessGroup({
   id,
   items,
   inspect,
+  durationMs,
 }: {
   id: string
   items: ReviewProcessPresentationItem[]
   inspect(node: ReviewNodeDto): void
+  durationMs: number
 }) {
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
-  const first = messages[0]?.node
-  const toolCount = items.reduce((count, item) => count + (item.type === 'tool-group' ? item.items.length : 0), 0)
-  const model: TaskThinkingModel = {
-    id,
-    label: agentLensI18n.t('review:local.process.thinkingProcess'),
-    text: first?.text ?? '',
-    preview: brief(first?.text ?? agentLensI18n.t('review:local.tool.calls', { count: toolCount }), 78),
-    time: first ? formatClock(first.at) : undefined,
-    state: 'settled',
-  }
-  return <TaskThinking model={model} defaultExpanded={false} className="task-review-process">
+  const tools = items.flatMap(item => item.type === 'tool-group' ? item.items : [])
+  return <TaskProcessGroup
+    id={id}
+    messageCount={messages.length}
+    toolCount={tools.length}
+    errorCount={tools.filter(tool => tool.status === 'error').length}
+    durationMs={durationMs}
+    defaultExpanded={false}
+    className="task-review-process"
+  >
     <div className="task-process-sequence">
       {items.map((item, index) => item.type === 'tool-group'
         ? <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
@@ -779,7 +784,7 @@ function ReviewProcessGroup({
             <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
           </div>)}
     </div>
-  </TaskThinking>
+  </TaskProcessGroup>
 }
 
 function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
@@ -854,6 +859,7 @@ function ReviewRoundAdapter({
   showAllEvents: boolean
 }) {
   const groups = useMemo(() => projectReviewInteractionPresentation(interaction.nodes), [interaction.nodes])
+  const modelLabels = useMemo(() => projectReviewMessageModelLabels(interaction.nodes), [interaction.nodes])
 
   return <TaskRound
     model={round}
@@ -863,11 +869,11 @@ function ReviewRoundAdapter({
     forceRevision={forceRevision}
   >
     {groups.map((entry, index) => {
-      if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect}/>
+      if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect} durationMs={round.durationMs}/>
       if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
       if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
       if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
-      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments}/>
+      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
     })}
   </TaskRound>
