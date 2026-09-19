@@ -596,6 +596,8 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.initializationTimings = []
     runtime.startupMetrics = []
     runtime.warmWorkerStatus = undefined
+    runtime.extensionBindingStatus = undefined
+    runtime.extensionBindingError = undefined
     runtime.startupResources = undefined
     runtime.startupAuditResources = undefined
     runtime.startupResourcesCapturedAt = undefined
@@ -1361,6 +1363,10 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
     runtime.initializationTimings = []
+    runtime.startupMetrics = []
+    runtime.warmWorkerStatus = undefined
+    runtime.extensionBindingStatus = undefined
+    runtime.extensionBindingError = undefined
     runtime.startupResources = undefined
     runtime.startupAuditResources = undefined
     runtime.startupResourcesCapturedAt = undefined
