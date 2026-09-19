@@ -16,6 +16,7 @@ import type {
   LiveRuntimeContributionField,
   LiveRuntimeDisclosureContribution,
   LiveRuntimeLifecycleContribution,
+  LiveRuntimeLifecycleResourceGroupContribution,
   LiveRuntimeState,
   LiveSnapshot,
   LiveService,
@@ -177,7 +178,7 @@ function normalizeRuntimeLifecycle(value: unknown): LiveRuntimeLifecycleContribu
   }
   if (!stages.length) return null
 
-  const resources: LiveRuntimeLifecycleContribution['resources'] extends readonly (infer T)[] | undefined ? T[] : never = []
+  const resources: LiveRuntimeLifecycleResourceGroupContribution[] = []
   const groupIds = new Set<string>()
   if (Array.isArray(row.resources)) {
     for (const candidate of row.resources.slice(0, MAX_LIVE_RUNTIME_LIFECYCLE_RESOURCE_GROUPS)) {
