@@ -37,3 +37,24 @@ export function taskLiveRuntimeStatus(
   if (state.isStreaming) return 'streaming'
   return 'idle'
 }
+
+
+export function mergeTaskLiveRuntimes(
+  previous: readonly LiveRuntimeRefDto[],
+  incoming: readonly LiveRuntimeRefDto[],
+  failedLiveIds: readonly string[],
+): LiveRuntimeRefDto[] {
+  if (!failedLiveIds.length) return [...incoming]
+  const failed = new Set(failedLiveIds)
+  const retained = previous.filter(item => failed.has(item.liveId))
+  const next = incoming.filter(item => !failed.has(item.liveId))
+  const seen = new Set(next.map(item => `${item.liveId}:${item.state.runtimeSessionId}`))
+  for (const item of retained) {
+    const key = `${item.liveId}:${item.state.runtimeSessionId}`
+    if (!seen.has(key)) {
+      seen.add(key)
+      next.push(item)
+    }
+  }
+  return next
+}
