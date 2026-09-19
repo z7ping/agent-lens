@@ -370,6 +370,13 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 .live-runtime-disclosure.is-info { border-color: color-mix(in srgb, var(--al-accent) 24%, var(--al-line)); }
 .live-runtime-disclosure.is-warning { border-color: color-mix(in srgb, var(--al-warning) 28%, var(--al-line)); }
 .live-runtime-disclosure.is-danger { border-color: color-mix(in srgb, var(--al-danger) 30%, var(--al-line)); }
+.live-runtime-disclosure .ui-disclosure-meta {
+  min-width: 0;
+  max-width: 72%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .live-runtime-disclosure-compact {
   display: grid;
@@ -518,6 +525,10 @@ textarea.pi-live-blocking-field { min-height: 74px; }
 }
 .live-runtime-detail-group.is-code .copyable-code-block {
   margin: 0;
+}
+.live-runtime-detail-group.is-code .copyable-code-block pre {
+  max-height: 240px;
+  overflow: auto;
 }
 
 @media (max-width: 991.98px) {
