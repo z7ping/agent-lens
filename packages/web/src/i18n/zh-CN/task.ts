@@ -210,6 +210,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         noLiveAgents: '当前没有支持新建实时任务的智能体。',
         openExisting: '打开已有项目',
         startAgent: '新建任务',
+        directStartTitle: '无需选择工作目录',
+        directStartDescription: '{{agent}} 可直接创建实时任务，进入后再输入任务内容。',
       },
       history: {
         taskSuffix: '{{name}} 任务',
