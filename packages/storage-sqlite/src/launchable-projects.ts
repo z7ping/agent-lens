@@ -101,22 +101,60 @@ function projectCandidatesSql(search: boolean, after: boolean): string {
   `
 }
 
-function projectWorkspacesSql(projectId: boolean): string {
+function placeholders(count: number): string {
+  return Array.from({ length: count }, () => '?').join(', ')
+}
+
+function projectWorkspacesBatchSql(projectCount: number, workspaceCount: number): string {
+  const filters = [
+    projectCount > 0
+      ? `(logical.project_id IS NOT NULL AND logical.project_id IN (${placeholders(projectCount)}))`
+      : '',
+    workspaceCount > 0
+      ? `(logical.project_id IS NULL AND workspace.id IN (${placeholders(workspaceCount)}))`
+      : '',
+  ].filter(Boolean)
+
+  if (!filters.length) throw new Error('launchable workspace batch query requires at least one candidate')
+
   return `
+    WITH workspace_activity AS (
+      SELECT
+        COALESCE(logical.project_id, 'workspace:' || workspace.id) AS project_key,
+        workspace.id AS workspace_id,
+        workspace.path AS workspace_path,
+        MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
+      FROM logical_sessions AS logical
+      JOIN workspaces AS workspace
+        ON workspace.id = logical.workspace_id
+      LEFT JOIN projects AS project
+        ON project.id = logical.project_id
+      WHERE TRIM(workspace.path) <> ''
+        AND (
+          ${filters.join('\n          OR ')}
+        )
+      GROUP BY project_key, workspace.id, workspace.path
+    ),
+    ranked AS (
+      SELECT
+        project_key,
+        workspace_id,
+        workspace_path,
+        last_seen_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY project_key
+          ORDER BY last_seen_at DESC, workspace_id ASC
+        ) AS workspace_rank
+      FROM workspace_activity
+    )
     SELECT
-      workspace.id AS workspace_id,
-      workspace.path AS workspace_path,
-      MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
-    FROM logical_sessions AS logical
-    JOIN workspaces AS workspace
-      ON workspace.id = logical.workspace_id
-    LEFT JOIN projects AS project
-      ON project.id = logical.project_id
-    WHERE TRIM(workspace.path) <> ''
-      AND ${projectId ? 'logical.project_id = ?' : 'logical.project_id IS NULL AND workspace.id = ?'}
-    GROUP BY workspace.id, workspace.path
-    ORDER BY last_seen_at DESC, workspace.id ASC
-    LIMIT ?
+      project_key,
+      workspace_id,
+      workspace_path,
+      last_seen_at
+    FROM ranked
+    WHERE workspace_rank <= ?
+    ORDER BY project_key ASC, last_seen_at DESC, workspace_id ASC
   `
 }
 
@@ -125,6 +163,28 @@ function mapWorkspace(value: unknown): LaunchableWorkspaceCandidate {
   return {
     workspaceId: requiredString(item, 'workspace_id'),
     workspacePath: requiredString(item, 'workspace_path'),
+    lastSeenAt: requiredString(item, 'last_seen_at'),
+  }
+}
+
+interface SelectedProject {
+  key: string
+  projectId?: string
+  projectName?: string
+  repositoryIdentity?: string
+  lastSeenAt: string
+}
+
+function mapSelectedProject(value: unknown): SelectedProject {
+  const item = row(value)
+  const projectId = optionalString(item, 'project_id')
+  const projectName = optionalString(item, 'project_name')
+  const repositoryIdentity = optionalString(item, 'repository_identity')
+  return {
+    key: requiredString(item, 'project_key'),
+    ...(projectId ? { projectId } : {}),
+    ...(projectName ? { projectName } : {}),
+    ...(repositoryIdentity ? { repositoryIdentity } : {}),
     lastSeenAt: requiredString(item, 'last_seen_at'),
   }
 }
@@ -157,29 +217,28 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
         projectCandidatesSql(Boolean(search), Boolean(input.after)),
       ).all(...params)
       const hasMore = values.length > limit
-      const selected = values.slice(0, limit)
+      const selected = values.slice(0, limit).map(mapSelectedProject)
+      if (!selected.length) return { items: [], hasMore }
 
-      const items = selected.map(value => {
+      const projectIds = selected.flatMap(item => item.projectId ? [item.projectId] : [])
+      const workspaceIds = selected.flatMap(item => item.projectId ? [] : [item.key.slice('workspace:'.length)])
+      const workspaceRows = this.executor.db.prepare(
+        projectWorkspacesBatchSql(projectIds.length, workspaceIds.length),
+      ).all(...projectIds, ...workspaceIds, MAX_WORKSPACES_PER_PROJECT)
+
+      const workspacesByProject = new Map<string, LaunchableWorkspaceCandidate[]>()
+      for (const value of workspaceRows) {
         const item = row(value)
-        const key = requiredString(item, 'project_key')
-        const projectId = optionalString(item, 'project_id')
-        const projectName = optionalString(item, 'project_name')
-        const repositoryIdentity = optionalString(item, 'repository_identity')
-        const lastSeenAt = requiredString(item, 'last_seen_at')
-        const workspaceKey = projectId ?? key.slice('workspace:'.length)
-        const workspaces = this.executor.db.prepare(
-          projectWorkspacesSql(Boolean(projectId)),
-        ).all(workspaceKey, MAX_WORKSPACES_PER_PROJECT).map(mapWorkspace)
+        const projectKey = requiredString(item, 'project_key')
+        const workspaces = workspacesByProject.get(projectKey) ?? []
+        workspaces.push(mapWorkspace(item))
+        workspacesByProject.set(projectKey, workspaces)
+      }
 
-        return {
-          key,
-          ...(projectId ? { projectId } : {}),
-          ...(projectName ? { projectName } : {}),
-          ...(repositoryIdentity ? { repositoryIdentity } : {}),
-          lastSeenAt,
-          workspaces,
-        }
-      })
+      const items = selected.map(item => ({
+        ...item,
+        workspaces: workspacesByProject.get(item.key) ?? [],
+      }))
 
       return { items, hasMore }
     })
@@ -190,5 +249,5 @@ export const launchableProjectInternals = {
   MAX_LIMIT,
   MAX_WORKSPACES_PER_PROJECT,
   projectCandidatesSql,
-  projectWorkspacesSql,
+  projectWorkspacesBatchSql,
 }
