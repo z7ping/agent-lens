@@ -960,12 +960,15 @@ export class DefaultPiLiveService implements PiLiveService {
         `${status.en} · ${duration}`,
         `${status.zh} · ${duration}`,
       ),
-      tone: state.status === 'failed'
+      tone: state.status === 'failed' || state.extensionBindingStatus === 'failed'
         ? 'danger' as const
-        : state.status === 'initializing'
+        : state.status === 'initializing' || state.extensionBindingStatus === 'binding'
           ? 'info' as const
           : 'neutral' as const,
-      defaultExpanded: state.status === 'failed' || state.status === 'initializing',
+      defaultExpanded: state.status === 'failed'
+        || state.status === 'initializing'
+        || state.extensionBindingStatus === 'binding'
+        || state.extensionBindingStatus === 'failed',
       fields: runtimeDisclosureFields(state),
       ...(state.status === 'failed'
         ? {
