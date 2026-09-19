@@ -258,6 +258,10 @@ test('suspended Runtime state and SSE stay responsive while Worker hydration is 
     })
 
     await waitFor(() => host.starts === 1, 'hydration did not start')
+    const secondUnsubscribe = service.subscribe('runtime-slow', () => {})
+    await new Promise(resolve => setTimeout(resolve, 10))
+    assert.equal(host.starts, 1, 'concurrent subscribers must share one hydration task')
+
     const state = await Promise.race([
       service.state('runtime-slow'),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('state waited for Worker hydration')), 250)),
@@ -276,6 +280,7 @@ test('suspended Runtime state and SSE stay responsive while Worker hydration is 
     host.release()
     const ready = await waitForReady(service, 'runtime-slow')
     assert.equal(ready.status, 'ready')
+    secondUnsubscribe()
     unsubscribe()
   } finally {
     host.release()
@@ -308,6 +313,32 @@ test('historical Resume defers Worker startup until a Live subscriber is attache
     await waitFor(() => host.starts === 1, 'subscriber did not start historical Runtime hydration')
     assert.ok(observed.includes('initializing'))
 
+    host.release()
+    assert.equal((await waitForReady(service, started.runtimeSessionId)).status, 'ready')
+    unsubscribe()
+  } finally {
+    host.release()
+    await service.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+
+test('historical Fork also defers Worker startup until Live subscription', async () => {
+  const { dir, file } = await makeSession()
+  const host = new BlockingLifecycleHost()
+  const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
+  try {
+    const started = await service.start({
+      cwd: dir,
+      sessionPath: file,
+      historyAction: 'fork',
+    })
+    assert.equal(started.status, 'initializing')
+    assert.equal(host.starts, 0)
+
+    const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+    await waitFor(() => host.starts === 1, 'Fork subscriber did not start hydration')
     host.release()
     assert.equal((await waitForReady(service, started.runtimeSessionId)).status, 'ready')
     unsubscribe()
