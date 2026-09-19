@@ -440,8 +440,10 @@ test('agent_end 不会提前结束 Logical Run，只有 agent_settled 才回到 
   emit?.({ type: 'message_end', message: { id: 'assistant-1', role: 'assistant' } })
   assert.equal((await service.list())[0]?.isStreaming, true)
 
+  emit?.({ type: 'queue_update', steering: [], followUp: ['继续第二轮'] })
   emit?.({ type: 'agent_end' })
   assert.equal((await service.list())[0]?.isStreaming, true)
+  assert.equal((await service.list())[0]?.pendingMessageCount, 1)
 
   emit?.({ type: 'compaction_start' })
   assert.equal((await service.list())[0]?.isStreaming, true)
@@ -451,9 +453,11 @@ test('agent_end 不会提前结束 Logical Run，只有 agent_settled 才回到 
   assert.equal((await service.list())[0]?.isStreaming, true)
   assert.equal((await service.list())[0]?.isCompacting, false)
 
+  emit?.({ type: 'queue_update', steering: [], followUp: [] })
   emit?.({ type: 'agent_settled' })
   assert.equal((await service.list())[0]?.isStreaming, false)
   assert.equal((await service.list())[0]?.isCompacting, false)
+  assert.equal((await service.list())[0]?.pendingMessageCount, 0)
 
   unsubscribe()
   await service.terminate(started.runtimeSessionId)
