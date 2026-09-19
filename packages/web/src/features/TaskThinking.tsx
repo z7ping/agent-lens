@@ -23,14 +23,6 @@ function presentationLabel(label: string, t: TFunction): string {
   return label === t('thinking.thinkingProcess') ? t('thinking.executionProcess') : label
 }
 
-function resolvedDefaultExpanded(model: TaskThinkingModel, defaultExpanded: boolean, t: TFunction) {
-  // Review 的聚合执行过程承载 commentary 与具体工具调用，默认展开；
-  // 独立 reasoning / thinking 仍尊重调用方传入的默认状态。
-  return defaultExpanded
-    || model.label === t('thinking.thinkingProcess')
-    || model.label === t('thinking.executionProcess')
-}
-
 export function TaskThinking({
   model,
   meta,
@@ -44,8 +36,8 @@ export function TaskThinking({
   const label = presentationLabel(model.label, t)
 
   useEffect(() => {
-    setExpanded(resolvedDefaultExpanded(model, defaultExpanded, t))
-  }, [defaultExpanded, model.id, model.label, t])
+    setExpanded(defaultExpanded)
+  }, [defaultExpanded, model.id])
 
   return <details
     className={`task-thinking ${className}`.trim()}
