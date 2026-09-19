@@ -145,8 +145,13 @@ test('mount snapshot reloads an idle runtime after another Pi process appends th
     await appendFile(file, JSON.stringify({ type: 'message', id: 'entry-2', message: { role: 'assistant', content: 'external' } }) + '\n')
     const after = await service.snapshot(started.runtimeSessionId)
 
-    assert.equal(host.starts, 2)
-    assert.ok(after.entries.some(entry => (entry as Record<string, unknown>).id === 'entry-2'))
+    // The foreground read returns the current bounded view immediately; disk-ahead
+    // invalidation rebuilds the Worker in the background instead of blocking Snapshot.
+    assert.equal(after.entries.length, 1)
+    await waitFor(() => host.starts >= 2, 'external update did not schedule Worker refresh')
+    await waitForReady(service, started.runtimeSessionId)
+    const refreshed = await service.snapshot(started.runtimeSessionId)
+    assert.ok(refreshed.entries.some(entry => (entry as Record<string, unknown>).id === 'entry-2'))
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
@@ -267,6 +272,40 @@ test('suspended Runtime state and SSE stay responsive while Worker hydration is 
     host.release()
     const ready = await waitForReady(service, 'runtime-slow')
     assert.equal(ready.status, 'ready')
+    unsubscribe()
+  } finally {
+    host.release()
+    await service.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+
+test('historical Resume defers Worker startup until a Live subscriber is attached', async () => {
+  const { dir, file } = await makeSession()
+  const host = new BlockingLifecycleHost()
+  const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
+  try {
+    const started = await service.start({
+      cwd: dir,
+      sessionPath: file,
+      historyAction: 'continue',
+    })
+
+    assert.equal(started.status, 'initializing')
+    assert.equal(host.starts, 0)
+
+    const observed: string[] = []
+    const unsubscribe = service.subscribe(started.runtimeSessionId, event => {
+      if (event.event.type === 'runtime_status' && typeof event.event.status === 'string') {
+        observed.push(event.event.status)
+      }
+    })
+    await waitFor(() => host.starts === 1, 'subscriber did not start historical Runtime hydration')
+    assert.ok(observed.includes('initializing'))
+
+    host.release()
+    assert.equal((await waitForReady(service, started.runtimeSessionId)).status, 'ready')
     unsubscribe()
   } finally {
     host.release()
