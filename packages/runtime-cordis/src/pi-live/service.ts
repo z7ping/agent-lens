@@ -901,7 +901,10 @@ export class DefaultPiLiveService implements PiLiveService {
         this.updateRuntimeResources(runtime, readyState)
         this.persistStartupAuditBestEffort(runtime, readyState)
         this.persistPackageUpdatesBestEffort(runtime, generation)
-      } else {
+      } else if (runtime.extensionBindingStatus !== 'binding') {
+        // When extension binding is still running, the final binding event owns
+        // the audit probe so resources_discover additions cannot race with a
+        // pre-binding snapshot.
         this.scheduleStartupAuditProbe(runtime, generation)
       }
       this.scheduleIdleCheck(runtime)
