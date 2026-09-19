@@ -367,7 +367,6 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
 export class WorkerPiRuntimeHost implements PiRuntimeHost {
   private warmWorker?: WarmWorker | undefined
   private warming?: Promise<void> | undefined
-  private warmingExecutable?: string | undefined
 
   private workerEntry(): string {
     return fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
@@ -399,7 +398,6 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
   private async preloadFor(executable?: string): Promise<void> {
     if (this.warmWorker) return
     if (this.warming) return this.warming
-    this.warmingExecutable = executable
     this.warming = (async () => {
       const discovered = await discoverInstalledPiSdk(executable)
       const sdk: PiSdkDescriptor = { sdkEntry: discovered.sdkEntry, ...(discovered.version ? { version: discovered.version } : {}) }
@@ -446,7 +444,6 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
       }
     })().finally(() => {
       this.warming = undefined
-      this.warmingExecutable = undefined
     })
     return this.warming
   }
