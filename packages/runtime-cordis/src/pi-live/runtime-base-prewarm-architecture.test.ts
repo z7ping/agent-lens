@@ -21,13 +21,19 @@ test('runtime disclosure summary keeps total elapsed beside resource counts', ()
   assert.match(summary, /\$\{status\.zh\} · \$\{fallbackDuration\} ·/)
 })
 
-test('runtime disclosure main costs ignore background prewarm and aggregate ready metric', () => {
+test('runtime disclosure main costs use readable labels while raw metrics remain available', () => {
+  const labels = section(service, 'const PI_STARTUP_METRIC_LABELS', 'function stageLabel')
   const fields = section(service, 'function runtimeDisclosureFields', 'interface PiUserMessageEntryTarget')
+  assert.match(labels, /sdk_discovery_ms:\s*\{ en: 'SDK discovery', zh: 'SDK 发现' \}/)
+  assert.match(labels, /cwd_services_create_ms:\s*\{ en: 'Workspace resources', zh: '工作区资源加载' \}/)
   assert.match(fields, /label: contributionText\('Main costs', '主要耗时'\)/)
+  assert.match(fields, /kind: 'list' as const/)
   assert.match(fields, /!item\.name\.startsWith\('prewarm_'\)/)
   assert.match(fields, /item\.name !== 'ready_ms'/)
   assert.match(fields, /\.sort\(\(left, right\) => right\.durationMs - left\.durationMs\)/)
   assert.match(fields, /\.slice\(0, 2\)/)
+  assert.match(fields, /startupMetricValue\(item\.name, item\.durationMs\)/)
+  assert.match(fields, /label: contributionText\('Raw startup metrics', '原始启动指标'\)/)
 })
 
 test('prewarm builds only a cross-task Runtime Base', () => {

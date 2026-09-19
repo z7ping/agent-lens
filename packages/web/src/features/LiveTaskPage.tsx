@@ -22,7 +22,7 @@ import { liveApi, type LiveProductMetadata } from '../client/live'
 import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { LocalPathActions } from '../components/LocalPathActions'
-import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
+import { LiveRuntimeFailureNotice, LiveRuntimeTaskInfo } from '../components/LiveRuntimeDisclosures'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import {
   LiveMarkdownComposer,
@@ -1909,6 +1909,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             </span>,
           }] : []),
         ]}
+        infoContent={<LiveRuntimeTaskInfo
+          items={runtimeDisclosures}
+          language={i18n.resolvedLanguage ?? i18n.language}
+          pendingAction={runtimeActionPending}
+          onAction={action => { void runRuntimeAction(action) }}
+        />}
         actions={<>
           {canInterrupt && <Button size="small" variant="danger" disabled={busy} onClick={() => void interrupt()}>{t('live.interrupt')}</Button>}
           <Button size="small" disabled={busy || runtimeActionPending !== null} onClick={() => void terminate()}>{t('live.terminate')}</Button>
@@ -1929,12 +1935,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             className={`live-task-history-sentinel ${historyLoading ? 'is-loading' : ''}`}
             aria-hidden="true"
           />}
-          <LiveRuntimeDisclosures
+          {state?.status === 'failed' && <LiveRuntimeFailureNotice
             items={runtimeDisclosures}
             language={i18n.resolvedLanguage ?? i18n.language}
             pendingAction={runtimeActionPending}
             onAction={action => { void runRuntimeAction(action) }}
-          />
+          />}
           {(!state || state.status === 'initializing') && !error && <div className="pi-live-startup-spotlight">
             <OperationProgress
               statusLabel={runtimeStatus}

@@ -119,6 +119,30 @@ const PI_STAGE_LABELS: Record<PiLiveInitializationStage, { en: string; zh: strin
   ready: { en: 'Ready', zh: '就绪' },
 }
 
+const PI_STARTUP_METRIC_LABELS: Record<string, { en: string; zh: string }> = {
+  prewarm_sdk_import_ms: { en: 'Prewarm SDK import', zh: '预热 SDK 导入' },
+  prewarm_model_runtime_create_ms: { en: 'Prewarm model runtime', zh: '预热模型运行时' },
+  sdk_discovery_ms: { en: 'SDK discovery', zh: 'SDK 发现' },
+  worker_spawn_ms: { en: 'Worker spawn', zh: 'Worker 启动' },
+  warm_worker_wait_ms: { en: 'Warm worker wait', zh: '预热 Worker 等待' },
+  sdk_import_ms: { en: 'SDK import', zh: 'SDK 导入' },
+  session_manager_ms: { en: 'Session restore', zh: '会话恢复' },
+  model_runtime_create_ms: { en: 'Model runtime', zh: '模型运行时' },
+  settings_manager_ms: { en: 'Settings', zh: '设置加载' },
+  cwd_services_create_ms: { en: 'Workspace resources', zh: '工作区资源加载' },
+  agent_session_create_ms: { en: 'Agent session', zh: '智能体会话创建' },
+  ready_ms: { en: 'Runtime ready', zh: '运行时就绪' },
+  extension_bind_ms: { en: 'Extension binding', zh: '扩展绑定' },
+}
+
+function startupMetricValue(name: string, durationMs: number): LiveContributionText | string {
+  const label = PI_STARTUP_METRIC_LABELS[name]
+  const duration = contributionDuration(durationMs)
+  return label
+    ? contributionText(`${label.en} · ${duration}`, `${label.zh} · ${duration}`)
+    : `${name} · ${duration}`
+}
+
 function stageLabel(stage: PiLiveInitializationStage | undefined): { en: string; zh: string } | undefined {
   return stage ? PI_STAGE_LABELS[stage] : undefined
 }
@@ -222,19 +246,26 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     })
   }
   if (state.startupMetrics?.length) {
-    const mainCosts = state.startupMetrics
-      .filter(item => !item.name.startsWith('prewarm_') && item.name !== 'ready_ms' && item.durationMs > 0)
+    const sortedMetrics = [...state.startupMetrics]
       .sort((left, right) => right.durationMs - left.durationMs)
+    const mainCosts = sortedMetrics
+      .filter(item => !item.name.startsWith('prewarm_') && item.name !== 'ready_ms' && item.durationMs > 0)
       .slice(0, 2)
     if (mainCosts.length) {
       fields.push({
         label: contributionText('Main costs', '主要耗时'),
-        value: mainCosts.map(item => `${item.name} · ${contributionDuration(item.durationMs)}`).join(' · '),
+        kind: 'list' as const,
+        values: mainCosts.map(item => startupMetricValue(item.name, item.durationMs)),
       })
     }
     fields.push({
       label: contributionText('Startup metrics', '启动耗时明细'),
       kind: 'list' as const,
+      values: sortedMetrics.map(item => startupMetricValue(item.name, item.durationMs)),
+    })
+    fields.push({
+      label: contributionText('Raw startup metrics', '原始启动指标'),
+      kind: 'code' as const,
       values: state.startupMetrics.map(item => `${item.name} · ${contributionDuration(item.durationMs)}`),
     })
   }
