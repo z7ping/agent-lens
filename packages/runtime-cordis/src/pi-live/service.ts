@@ -562,6 +562,11 @@ export class DefaultPiLiveService implements PiLiveService {
         && runtime.status !== 'terminated')
       // “继续”同一份历史不是创建第二个 Runtime，而是回到已经存在的那个。
       // 这让重复点击和前端跳转中断都保持幂等；“分叉”仍需保留新 Runtime。
+      // 结束中的 Runtime 不能作为 Resume 目标，否则返回的 ID 会在响应后立即被删除；
+      // 同时也不能在旧 Worker 尚未退出时创建第二个 Worker 读写同一 JSONL。
+      if (duplicate?.status === 'terminating') {
+        throw this.conflict('Pi Live session is ending; retry after termination completes')
+      }
       if (duplicate) return this.state(duplicate.id)
     }
     const runtime = this.createRuntime(randomUUID(), input, false)
