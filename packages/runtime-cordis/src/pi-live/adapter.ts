@@ -187,8 +187,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   if (type === 'runtime_resources'
     || type === 'package_updates'
     || type === 'runtime_output'
-    || type === 'runtime_extension_binding'
-    || type === 'runtime_startup_metric') {
+    || type === 'runtime_extension_binding') {
     return { type: 'runtime-disclosure.changed' }
   }
   if (type === 'agent_settled' || type === 'agent_end') {
