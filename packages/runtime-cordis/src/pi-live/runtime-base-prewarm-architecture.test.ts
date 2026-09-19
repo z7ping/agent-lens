@@ -91,6 +91,19 @@ test('warm worker mismatch is evicted and replenishment stays single-flight', ()
   assert.match(start, /worker_spawn_ms/)
 })
 
+test('ready warm worker reuses prewarm SDK discovery before foreground rediscovery', () => {
+  const start = section(host, 'async start(', 'export const piLiveWorkerHostInternals')
+  const warmClaim = start.indexOf('this.takeWarmWorkerForExecutable(input.executable)')
+  const discovery = start.indexOf('discoverInstalledPiSdk(input.executable)')
+
+  assert.ok(warmClaim >= 0, 'foreground start must try the ready Warm Worker first')
+  assert.ok(discovery > warmClaim, 'SDK discovery must be a cold/mismatch fallback after the warm fast path')
+  assert.match(start, /let sdkDiscoveryMs = 0/)
+  assert.match(start, /claim = \{ child: preparedWarm\.child, status: 'hit' \}/)
+  assert.match(start, /stage: 'loading_sdk'/)
+  assert.match(host, /interface WarmWorker[\s\S]*executable\?: string/)
+})
+
 test('Pi Live plugin still starts prewarm eagerly in the background', () => {
   assert.match(plugin, /void service\.preload\(\)/)
 })
