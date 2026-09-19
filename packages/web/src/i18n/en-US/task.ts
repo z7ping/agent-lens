@@ -54,6 +54,14 @@ export const englishTaskMessages: LocaleMessagesDto = {
       thinkingProcess: 'Thinking process',
       executionProcess: 'Execution process',
     },
+    process: {
+      details: 'Processing details',
+      messages: '{{count}} messages',
+      tools: '{{count}} tool calls',
+      duration: '{{value}} elapsed',
+      errors: '{{count}} failures',
+      running: 'Processing',
+    },
     round: {
       running: 'Running',
       stopped: 'Stopped',
@@ -67,6 +75,9 @@ export const englishTaskMessages: LocaleMessagesDto = {
       minutes: '{{value}} min',
       hours: '{{value}} h',
       days: '{{value}} days',
+      preciseSeconds: '{{seconds}}s',
+      preciseMinutesSeconds: '{{minutes}}m {{seconds}}s',
+      preciseHoursMinutesSeconds: '{{hours}}h {{minutes}}m {{seconds}}s',
     },
     live: {
       invalidRuntime: 'The live task address is invalid.',
