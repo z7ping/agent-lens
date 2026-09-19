@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
+import { SqliteLaunchableProjectReader } from './launchable-projects'
 
 const BASE_TIME = '2026-09-01T00:00:00.000Z'
 
@@ -229,4 +230,81 @@ test('launchable project reader does not hide canonical sessions while summary p
   } finally {
     storage.close()
   }
+})
+
+
+test('launchable project reader hydrates a candidate page with one workspace batch query', async () => {
+  const prepared: string[] = []
+  const executor = {
+    db: {
+      prepare(sql: string) {
+        prepared.push(sql)
+        return {
+          all(...args: unknown[]) {
+            if (sql.includes('WITH project_activity AS')) {
+              assert.deepEqual(args, [4])
+              return [
+                {
+                  project_key: 'project-a',
+                  project_id: 'project-a',
+                  project_name: 'Project A',
+                  repository_identity: null,
+                  last_seen_at: isoMinute(3),
+                },
+                {
+                  project_key: 'project-b',
+                  project_id: 'project-b',
+                  project_name: 'Project B',
+                  repository_identity: null,
+                  last_seen_at: isoMinute(2),
+                },
+                {
+                  project_key: 'project-c',
+                  project_id: 'project-c',
+                  project_name: 'Project C',
+                  repository_identity: null,
+                  last_seen_at: isoMinute(1),
+                },
+              ]
+            }
+            assert.match(sql, /WITH workspace_activity AS/)
+            assert.match(sql, /ROW_NUMBER\(\) OVER/)
+            assert.deepEqual(args, ['project-a', 'project-b', 'project-c', 64])
+            return [
+              {
+                project_key: 'project-a',
+                workspace_id: 'workspace-a',
+                workspace_path: '/workspace/a',
+                last_seen_at: isoMinute(3),
+              },
+              {
+                project_key: 'project-b',
+                workspace_id: 'workspace-b',
+                workspace_path: '/workspace/b',
+                last_seen_at: isoMinute(2),
+              },
+              {
+                project_key: 'project-c',
+                workspace_id: 'workspace-c',
+                workspace_path: '/workspace/c',
+                last_seen_at: isoMinute(1),
+              },
+            ]
+          },
+        }
+      },
+    },
+    run<T>(operation: () => T): Promise<T> {
+      return Promise.resolve(operation())
+    },
+  }
+
+  const reader = new SqliteLaunchableProjectReader(executor as never)
+  const result = await reader.query({ limit: 3 })
+
+  assert.equal(prepared.length, 2)
+  assert.deepEqual(
+    result.items.map(item => item.workspaces[0]?.workspacePath),
+    ['/workspace/a', '/workspace/b', '/workspace/c'],
+  )
 })
