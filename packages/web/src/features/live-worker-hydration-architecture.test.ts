@@ -77,3 +77,13 @@ test('Generic Live reconciler only escalates to bounded recovery on drift or exp
   assert.match(block, /recover\(runtime\.isStreaming \? 'live' : 'settle'\)/)
   assert.doesNotMatch(block, /loadBoundedRecoverySnapshot/)
 })
+
+
+test('Runtime reconciler preserves SSE compacting activity until compaction ends', () => {
+  assert.match(page, /let runtimeCompacting = false/)
+  assert.match(page, /status === 'compacting'[\s\S]{0,120}runtimeCompacting = true/)
+  assert.match(page, /runtimeActive = runtime\.isStreaming \|\| runtimeCompacting/)
+  assert.match(page, /runtimeCompacting\s*\? 'compacting'/)
+  assert.match(page, /status === 'ready'[\s\S]{0,120}runtimeCompacting = false/)
+  assert.match(page, /normalizedEvent\?\.type === 'completed'[\s\S]{0,120}runtimeCompacting = false/)
+})
