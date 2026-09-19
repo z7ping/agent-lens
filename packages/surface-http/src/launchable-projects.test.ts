@@ -113,3 +113,40 @@ test('launchable project discovery forwards search to the storage read model and
     error => Boolean(error && typeof error === 'object' && Reflect.get(error, 'statusCode') === 400),
   )
 })
+
+
+test('launchable project discovery validates one bounded candidate page with limited concurrency', async () => {
+  const candidates = Array.from({ length: 40 }, (_, index) =>
+    candidate(
+      `project-${String(index).padStart(2, '0')}`,
+      `2026-09-10T${String(23 - Math.floor(index / 2)).padStart(2, '0')}:00:00.000Z`,
+      [{ id: `workspace-${index}`, path: `/workspace/project-${index}` }],
+    ))
+  let queries = 0
+  let active = 0
+  let maxActive = 0
+  const reader: LaunchableProjectReader = {
+    async query(input) {
+      queries += 1
+      assert.equal(input.limit, 40)
+      return { items: candidates, hasMore: true }
+    },
+  }
+  const storage = { launchableProjects: reader } as StorageService
+  const validate = async (path: string) => {
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    await new Promise(resolve => setTimeout(resolve, 2))
+    active -= 1
+    return path
+  }
+
+  const result = await readLaunchableProjects(storage, new URLSearchParams('limit=20'), validate)
+
+  assert.equal(queries, 1, 'first response must not keep fetching candidate pages to fill 20 rows')
+  assert.equal(result.items.length, 20)
+  assert.ok(maxActive > 1, 'filesystem validation should no longer be globally serial')
+  assert.ok(maxActive <= launchableProjectHttpInternals.VALIDATION_CONCURRENCY)
+  assert.equal(result.meta.hasMore, true)
+  assert.ok(result.meta.nextCursor)
+})
