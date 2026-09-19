@@ -1859,9 +1859,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             pendingAction={runtimeActionPending}
             onAction={action => { void runRuntimeAction(action) }}
           />
-          {!state && !error && <div className="pi-live-startup-spotlight">
+          {(!state || state.status === 'initializing') && !error && <div className="pi-live-startup-spotlight">
             <OperationProgress
-              statusLabel={t('live.loadingStatus')}
+              statusLabel={runtimeStatus}
               title={t('live.loadingTitle')}
               description={t('live.loadingDescription')}
             />
