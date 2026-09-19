@@ -48,8 +48,12 @@ export function projectReviewMessageModelLabels(nodes: ReviewNodeDto[]): Map<str
     if (node.type === 'event' && (node.kind === 'model.changed' || node.kind === 'model.call')) {
       const label = modelLabelFromPayload(node.payload)
       if (!label) continue
-      if (node.kind === 'model.changed') activeModel = label
-      else pendingCallModel = label
+      if (node.kind === 'model.changed') {
+        activeModel = label
+        pendingCallModel = undefined
+      } else {
+        pendingCallModel = label
+      }
       continue
     }
 
