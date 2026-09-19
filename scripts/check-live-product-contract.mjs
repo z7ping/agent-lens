@@ -154,7 +154,9 @@ requireText(liveTask, /if \(recoveryTask\)[\s\S]{0,180}pendingRecoveryMode = mod
 requireText(liveTask, /while \(recoveryActive && nextMode\)[\s\S]{0,220}await recoverOnce\(currentMode\)/, 'Live recovery 必须串行执行 pending 补跑')
 
 requireText(liveTask, /if \(product\.capabilities\.includes\(['"]recovery['"]\)\)[\s\S]{0,180}recover\(['"]settle['"]\)[\s\S]{0,260}else[\s\S]{0,220}stable:[\s\S]{0,120}previous\.active/, '没有 recovery capability 的 Live 产品完成后必须直接稳定活动轮')
-requireText(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须优先使用稳定 leaf 增量快照')
+requireText(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须通过有界恢复 helper 使用稳定 leaf')
+requireText(liveTask, /async function loadBoundedRecoverySnapshot[\s\S]{0,700}liveApi\.snapshot\([\s\S]{0,180}\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/, 'Live 恢复每次 Snapshot 必须保持固定有界窗口')
+requireText(liveTask, /while \(snapshot\.page\?\.hasLater && snapshot\.page\.after\)/, 'Live 恢复存在后续页时必须按 after 有界追平')
 forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
 requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')
