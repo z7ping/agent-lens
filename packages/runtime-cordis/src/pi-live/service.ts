@@ -50,6 +50,8 @@ interface OwnedRuntime {
   workspacePath: string
   projectName: string
   gitBranch?: string | undefined
+  workspaceContextUpdatedAt?: number | undefined
+  workspaceContextTask?: Promise<void> | undefined
   taskSummary?: string | undefined
   activeAssistantMessageId?: string | undefined
   queue: PiLiveQueueState
@@ -78,6 +80,7 @@ interface PiLiveRuntimeLifecycleOptions {
 }
 
 const DEFAULT_PI_LIVE_IDLE_TIMEOUT_MS = 10 * 60_000
+const WORKSPACE_CONTEXT_REFRESH_MS = 30_000
 
 function taskSummary(message: string): string | undefined {
   const normalized = message.replace(/\s+/g, ' ').trim()
@@ -723,11 +726,24 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.recoveryCheckpointTask = checkpoint
   }
 
-  private async refreshWorkspaceContext(runtime: OwnedRuntime): Promise<void> {
-    const context = await resolveWorkspaceContext(runtime.input.cwd)
-    runtime.workspacePath = context.workspacePath
-    runtime.projectName = context.projectName
-    runtime.gitBranch = context.gitBranch
+  private refreshWorkspaceContextBestEffort(runtime: OwnedRuntime, now = Date.now()): void {
+    if (runtime.workspaceContextTask) return
+    if (runtime.workspaceContextUpdatedAt !== undefined
+      && now - runtime.workspaceContextUpdatedAt < WORKSPACE_CONTEXT_REFRESH_MS) return
+
+    let task: Promise<void>
+    task = resolveWorkspaceContext(runtime.input.cwd).then(context => {
+      runtime.workspacePath = context.workspacePath
+      runtime.projectName = context.projectName
+      runtime.gitBranch = context.gitBranch
+      runtime.workspaceContextUpdatedAt = Date.now()
+    }).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live workspace context refresh failed', error)
+      runtime.workspaceContextUpdatedAt = Date.now()
+    }).finally(() => {
+      if (runtime.workspaceContextTask === task) runtime.workspaceContextTask = undefined
+    })
+    runtime.workspaceContextTask = task
   }
 
   private advanceInitialization(runtime: OwnedRuntime, stage: PiLiveInitializationStage, now = Date.now()): void {
@@ -1478,7 +1494,7 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private async runtimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState> {
-    await this.refreshWorkspaceContext(runtime)
+    this.refreshWorkspaceContextBestEffort(runtime)
     if (runtime.status === 'initializing') runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
     if (runtime.status === 'ready' && runtime.handle) {
       const state = await runtime.handle.state()
