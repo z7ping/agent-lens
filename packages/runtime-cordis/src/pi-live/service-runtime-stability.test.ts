@@ -80,6 +80,29 @@ class LifecycleHost implements PiRuntimeHost {
   }
 }
 
+class BlockingLifecycleHost extends LifecycleHost {
+  private releaseStart!: () => void
+  private readonly startGate = new Promise<void>(resolve => { this.releaseStart = resolve })
+
+  release(): void {
+    this.releaseStart()
+  }
+
+  override async start(
+    runtimeSessionId: string,
+    input: PiLiveStartInput,
+    signal: AbortSignal,
+    onEvent: (event: Record<string, unknown>) => void,
+    onExit: (error: Error) => void,
+  ): Promise<PiRuntimeHandle> {
+    this.starts += 1
+    onEvent({ type: 'runtime_initialization', stage: 'loading_sdk', message: 'Loading SDK' })
+    await this.startGate
+    this.starts -= 1
+    return super.start(runtimeSessionId, input, signal, onEvent, onExit)
+  }
+}
+
 async function waitForReady(service: DefaultPiLiveService, id: string): Promise<PiLiveRuntimeState> {
   for (let index = 0; index < 100; index += 1) {
     const state = await service.state(id)
@@ -164,7 +187,8 @@ test('persisted runtimes stay logical until selected and idle workers rehydrate 
     assert.equal(listed[0]?.sessionFile, file)
 
     const active = await service.state('runtime-1')
-    assert.equal(active.status, 'ready')
+    assert.ok(active.status === 'initializing' || active.status === 'ready')
+    await waitForReady(service, 'runtime-1')
     assert.equal(host.starts, 1)
 
     await waitFor(() => host.terminations >= 1, 'idle worker was not suspended')
@@ -195,6 +219,45 @@ test('an SSE subscriber prevents idle suspension until it disconnects', async ()
     unsubscribe()
     await waitFor(() => host.terminations >= 1, 'worker did not suspend after subscriber left')
   } finally {
+    await service.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('suspended Runtime state and SSE stay responsive while Worker hydration is blocked', async () => {
+  const { dir, file } = await makeSession()
+  const host = new BlockingLifecycleHost()
+  const store = new MemoryRecoveryStore([{
+    id: 'runtime-slow',
+    input: { cwd: dir, sessionPath: file, historyAction: 'continue' },
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date().toISOString(),
+  }])
+  const service = new DefaultPiLiveService(host, store, undefined, { idleTimeoutMs: 0 })
+  try {
+    await service.list()
+    const statuses: string[] = []
+    const unsubscribe = service.subscribe('runtime-slow', event => {
+      if (event.event.type === 'runtime_status' && typeof event.event.status === 'string') {
+        statuses.push(event.event.status)
+      }
+    })
+
+    await waitFor(() => host.starts === 1, 'hydration did not start')
+    const state = await Promise.race([
+      service.state('runtime-slow'),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('state waited for Worker hydration')), 50)),
+    ])
+
+    assert.equal(state.status, 'initializing')
+    assert.ok(statuses.includes('initializing'))
+
+    host.release()
+    const ready = await waitForReady(service, 'runtime-slow')
+    assert.equal(ready.status, 'ready')
+    unsubscribe()
+  } finally {
+    host.release()
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
   }
