@@ -123,3 +123,12 @@ test('Worker termination has a fixed graceful shutdown budget before force kill'
   assert.match(terminate, /Promise\.race/)
   assert.match(terminate, /this\.child\.kill\(\)/)
 })
+
+
+test('Pi logical settlement never treats agent_end or assistant message_end as terminal', () => {
+  const publish = section('private publish(runtime:', '\n  }\n}')
+  assert.match(publish, /logicalSettled = type === 'agent_settled' \|\| type === 'runtime_exit'/)
+  assert.doesNotMatch(publish, /logicalSettled[^\n]*agent_end/)
+  assert.doesNotMatch(publish, /logicalSettled[^\n]*message_end/)
+  assert.match(publish, /type === 'message_end' && messageRole === 'assistant'/)
+})
