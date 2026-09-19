@@ -12,6 +12,56 @@ export type ReviewInteractionPresentationEntry =
   | { type: 'event'; node: ReviewEventNodeDto }
   | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
 
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
+}
+
+function stringField(value: unknown, ...keys: string[]): string {
+  const source = record(value)
+  for (const key of keys) {
+    const candidate = source[key]
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+  return ''
+}
+
+function modelLabelFromPayload(payload: unknown): string | undefined {
+  const source = record(payload)
+  const nestedModel = record(source.model)
+  const provider = stringField(source, 'provider', 'modelProvider', 'model_provider')
+    || stringField(nestedModel, 'provider')
+  const model = (typeof source.model === 'string' ? source.model.trim() : '')
+    || stringField(source, 'modelName', 'model_name', 'modelId', 'model_id')
+    || stringField(nestedModel, 'id', 'modelId', 'name')
+  return [provider, model].filter(Boolean).join(' / ') || undefined
+}
+
+export function projectReviewMessageModelLabels(nodes: ReviewNodeDto[]): Map<string, string> {
+  const labels = new Map<string, string>()
+  let activeModel: string | undefined
+  let pendingCallModel: string | undefined
+
+  for (const node of nodes) {
+    if (node.type === 'event' && (node.kind === 'model.changed' || node.kind === 'model.call')) {
+      const label = modelLabelFromPayload(node.payload)
+      if (!label) continue
+      if (node.kind === 'model.changed') activeModel = label
+      else pendingCallModel = label
+      continue
+    }
+
+    if (node.type !== 'message' || node.role !== 'assistant') continue
+    const label = modelLabelFromPayload(node.payload) ?? pendingCallModel ?? activeModel
+    if (label) labels.set(node.id, label)
+    pendingCallModel = undefined
+  }
+
+  return labels
+}
+
 function reasoningIds(node: ReviewMessageNodeDto): Set<string> {
   return new Set([
     node.id,
