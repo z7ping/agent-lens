@@ -697,7 +697,7 @@ function MessageBubble({
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.text}
     attachments={attachments}
-    author={node.role === 'user' ? t('local.role.you') : t('local.role.assistant')}
+    author={node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId)}
     modelLabel={node.role === 'assistant' ? modelLabel : undefined}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
