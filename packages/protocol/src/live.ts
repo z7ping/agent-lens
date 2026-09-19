@@ -354,12 +354,38 @@ export interface LiveRuntimeActionContributionDto {
   tone?: LiveContributionActionToneDto | undefined
 }
 
+export type LiveRuntimeLifecycleStatusDto = 'initializing' | 'ready' | 'failed'
+export type LiveRuntimeLifecycleStageStatusDto = 'pending' | 'active' | 'done' | 'failed'
+
+export interface LiveRuntimeLifecycleStageContributionDto {
+  stageId: string
+  label: LiveContributionTextDto
+  status: LiveRuntimeLifecycleStageStatusDto
+  durationMs?: number | undefined
+}
+
+export interface LiveRuntimeLifecycleResourceGroupContributionDto {
+  groupId: string
+  label: LiveContributionTextDto
+  values: string[]
+}
+
+export interface LiveRuntimeLifecycleContributionDto {
+  status: LiveRuntimeLifecycleStatusDto
+  elapsedMs?: number | undefined
+  message?: LiveContributionTextDto | undefined
+  stages: LiveRuntimeLifecycleStageContributionDto[]
+  resources?: LiveRuntimeLifecycleResourceGroupContributionDto[] | undefined
+}
+
 export interface LiveRuntimeDisclosureContributionDto {
   contributionId: string
   title: LiveContributionTextDto
   summary?: LiveContributionTextDto | undefined
   tone?: LiveContributionToneDto | undefined
   defaultExpanded?: boolean | undefined
+  /** Optional structured lifecycle for TUI-like startup progress on the shared Live Surface. */
+  lifecycle?: LiveRuntimeLifecycleContributionDto | undefined
   fields: LiveRuntimeContributionFieldDto[]
   actions?: LiveRuntimeActionContributionDto[] | undefined
 }
