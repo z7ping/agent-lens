@@ -157,3 +157,55 @@ test('Pi runtime contribution rejects undeclared actions at the service boundary
     await service.dispose()
   }
 })
+
+
+test('Pi Runtime Disclosure stays visible while extension binding is pending or failed', async () => {
+  class BindingHost implements PiRuntimeHost {
+    constructor(private readonly binding: 'binding' | 'failed') {}
+    async start(
+      runtimeSessionId: string,
+      _input: PiLiveStartInput,
+      _signal: AbortSignal,
+      _onEvent: (event: Record<string, unknown>) => void,
+      _onExit: (error: Error) => void,
+    ): Promise<PiRuntimeHandle> {
+      const state = (): PiLiveRuntimeState => ({
+        runtimeSessionId,
+        status: 'ready',
+        extensionBindingStatus: this.binding,
+        ...(this.binding === 'failed' ? { extensionBindingError: 'extension failed' } : {}),
+        isStreaming: false,
+        isCompacting: false,
+        pendingMessageCount: 0,
+      })
+      return {
+        state: async () => state(),
+        snapshot: async () => ({ state: state(), entries: [], leafId: null }),
+        controls: async () => ({ models: [] }),
+        setModel: async () => state(),
+        setThinkingLevel: async () => state(),
+        prompt: async () => {},
+        steer: async () => {},
+        followUp: async () => {},
+        clearQueue: async () => ({ steering: [], followUp: [] }),
+        abort: async () => ({ steering: [], followUp: [] }),
+        respondToExtension: async () => {},
+        terminate: async () => {},
+      }
+    }
+  }
+
+  for (const binding of ['binding', 'failed'] as const) {
+    const service = new DefaultPiLiveService(new BindingHost(binding))
+    try {
+      const started = await service.start({ cwd: '/workspace' })
+      await waitForStatus(service, started.runtimeSessionId, 'ready')
+      const disclosure = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
+      assert.ok(disclosure)
+      assert.equal(disclosure.defaultExpanded, true)
+      assert.equal(disclosure.tone, binding === 'failed' ? 'danger' : 'info')
+    } finally {
+      await service.dispose()
+    }
+  }
+})
