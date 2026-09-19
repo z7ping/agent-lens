@@ -16,6 +16,7 @@ const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.me
 const stateViews = readFileSync(new URL('../StateViews.tsx', import.meta.url), 'utf8')
 const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.meta.url), 'utf8')
 const piLiveCss = readFileSync(new URL('../../pi-live.css', import.meta.url), 'utf8')
+const liveRuntimeDisclosures = readFileSync(new URL('../LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
 const taskCenterPage = readFileSync(new URL('../../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
 const taskCenterCss = readFileSync(new URL('../../task-center.css', import.meta.url), 'utf8')
 const reviewPage = readFileSync(new URL('../../features/ReviewPage.tsx', import.meta.url), 'utf8')
@@ -118,6 +119,18 @@ test('shared composites and Pi surfaces reuse UI primitives', () => {
     /\.pi-live-queue-item button\s*\{/,
     /\.pi-live-editor-toolbar button\s*\{/,
   ]) assert.doesNotMatch(piLiveCss, obsolete)
+})
+
+test('Live Runtime disclosure keeps Reader compact and moves verbose diagnostics into shared Dialog', () => {
+  assert.match(liveRuntimeDisclosures, /import \{ Button, Dialog, Disclosure \} from '\.\/ui'/)
+  assert.match(liveRuntimeDisclosures, /className="live-runtime-disclosure-compact"/)
+  assert.match(liveRuntimeDisclosures, /className="live-runtime-disclosure-counts"/)
+  assert.match(liveRuntimeDisclosures, /<Dialog[\s\S]*?size="xlarge"[\s\S]*?className="live-runtime-detail-overlay"/)
+  assert.match(liveRuntimeDisclosures, /className="live-runtime-detail-values"/)
+  assert.doesNotMatch(liveRuntimeDisclosures, /<ul>/)
+  assert.match(piLiveCss, /\.live-runtime-detail-values\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill, minmax\(150px, 1fr\)\)/)
+  assert.match(piLiveCss, /@media \(max-width: 991\.98px\)[\s\S]*?live-runtime-detail-overview/)
+  assert.doesNotMatch(piLiveCss, /@media \(max-width: (?:1180|900|820|760|640|560)px\)/)
 })
 
 test('Workspace Shell owns three primary workspaces and one dynamic context host', () => {
