@@ -724,6 +724,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       },
     )
 
+    // Runtime diagnostics include the current initialization stage. Fetch them
+    // as soon as the logical state exists; do not queue them behind controls
+    // that legitimately wait for a ready Worker.
+    void stateRequest.then(() => liveApi.runtimeDisclosures(
+      current.liveId,
+      current.runtimeSessionId,
+    )).then(
+      disclosures => { if (!cancelled) setRuntimeDisclosures(disclosures) },
+      () => undefined,
+    )
+
     void liveApi.snapshot(
       current.liveId,
       current.runtimeSessionId,
