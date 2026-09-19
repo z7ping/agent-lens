@@ -27,7 +27,16 @@ const required = [
   [releaseInfo.includes('runtimeReady') && releaseInfo.includes('{ runtimeOwner }'), '版本检查必须复用已有 runtime health 结果'],
   [workspaceSidebar.includes('runtimeOwner={snapshot.health?.runtime?.owner ?? null}'), 'Shell 必须把已有 health 传给版本检查'],
   [app.includes("lazy(() => import('./features/TaskCenterPage')"), '一级页面必须按路由拆包'],
-  [taskCenter.includes("lazy(() => import('./ReviewPage')") && taskCenter.includes("lazy(() => import('./PiLivePage')"), 'Review 与 Pi Live 必须按任务模式拆包'],
+  [
+    taskCenter.includes("lazy(() => import('./ReviewPage')")
+      && taskCenter.includes("lazy(() => import('./HubReviewPage')")
+      && !taskCenter.includes("import('./PiLivePage')"),
+    'Task Center 详情必须按通用任务模式拆包，不得重新依赖 legacy PiLivePage',
+  ],
+  [
+    !taskCenter.includes("mode === 'live'") || taskCenter.includes("lazy(() => import('./LiveTaskPage')"),
+    'Task Center 一旦承载 live 模式，必须懒加载通用 LiveTaskPage',
+  ],
   [!api.includes('preferUserSessionTitle'), 'Web API 不得用首条用户消息覆盖 Source/Core 提供的原生会话标题'],
   [
     /historyTaskPresentation\(\s*item\s*,/.test(reviewPage)
