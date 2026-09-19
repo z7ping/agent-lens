@@ -956,9 +956,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void reconcileState(true)
+      if (document.visibilityState === 'visible') void reconcileState(false)
     }
-    const onOnline = () => { void reconcileState(true) }
+    const onOnline = () => { void reconcileState(false) }
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
     if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
     const reconcileTimer = window.setInterval(() => {
