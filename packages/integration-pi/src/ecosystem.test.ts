@@ -138,7 +138,7 @@ test('Pi ecosystem reuses fresh catalog cache and falls back to last good result
 })
 
 test('Pi ecosystem hard deadline settles even when an upstream operation ignores abort', async () => {
-  assert.equal(piEcosystemInternals.CATALOG_TIMEOUT_MS, 6_000)
+  assert.equal(piEcosystemInternals.CATALOG_TIMEOUT_MS, 8_000)
   await assert.rejects(
     piEcosystemInternals.withinDeadline(20, 'test catalog', async () => new Promise<never>(() => undefined)),
     /test catalog timed out after 20ms/,

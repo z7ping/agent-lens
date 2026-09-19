@@ -248,17 +248,13 @@
   background: var(--al-surface);
   box-shadow: 0 10px 34px rgb(16 24 40 / .055);
 }
-.task-center-new-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+.task-center-new-head { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; gap: 12px; }
 .task-center-new-agent-mark { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--al-accent) 13%, var(--al-surface)); color: var(--al-accent); font-size: 14px; font-weight: 760; }
+.task-center-new-heading { display: grid; min-width: 0; justify-items: start; gap: 5px; }
 .task-center-new-kicker { color: var(--al-accent); font-size: 12px; font-weight: 700; }
-.task-center-new-card h1 { margin: 3px 0 0; color: var(--al-ink); font-size: 22px; font-weight: 720; line-height: 1.35; letter-spacing: -.02em; }
+.task-center-new-card h1 { margin: 0; color: var(--al-ink); font-size: 22px; font-weight: 720; line-height: 1.35; letter-spacing: -.02em; }
 .task-center-new-head p { margin: 5px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
-.task-center-new-readiness { display: inline-flex; height: 25px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--al-line); border-radius: 999px; color: var(--al-muted); font-size: 12px; white-space: nowrap; }
-.task-center-new-readiness i { width: 6px; height: 6px; border-radius: 50%; background: var(--al-muted-2); }
-.task-center-new-readiness[data-state='ready'] { border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line)); color: var(--al-success); }
-.task-center-new-readiness[data-state='ready'] i { background: var(--al-success); }
-.task-center-new-readiness[data-state='unavailable'] { border-color: color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); color: var(--al-danger); }
-.task-center-new-readiness[data-state='unavailable'] i { background: var(--al-danger); }
+.task-center-new-readiness { max-width: 100%; overflow-wrap: anywhere; }
 .task-center-new-fields { margin-top: 24px; }
 .task-center-new-fields label { display: grid; gap: 6px; color: var(--al-muted); font-size: 12px; font-weight: 650; }
 .task-center-new-agent-field { margin-bottom: 12px; }
@@ -310,7 +306,6 @@
   .task-center-new-card { padding: 20px 16px; border-radius: 14px; }
   .task-center-new-head { grid-template-columns: 40px minmax(0, 1fr); }
   .task-center-new-agent-mark { width: 40px; height: 40px; border-radius: 11px; }
-  .task-center-new-readiness { grid-column: 2; justify-self: start; margin-top: 2px; }
   .task-center-new-fields { margin-top: 20px; }
   .task-center-launch-modes { grid-template-columns: 1fr; }
   .task-center-new-manual-directory { grid-template-columns: minmax(0, 1fr); }

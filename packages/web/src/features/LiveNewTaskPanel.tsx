@@ -3,7 +3,7 @@ import type { LiveProductDto, LiveRuntimeStateDto, LiveStartInputDto } from '@ag
 import { useTranslation } from 'react-i18next'
 import { liveApi } from '../client/live'
 import { selectHostProjectDirectory } from '../client/host-directory'
-import { Button, Input, SelectMenu } from '../components/ui'
+import { Button, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { pickTaskProject, type TaskProjectOption } from './task-center'
 
@@ -175,11 +175,17 @@ export function LiveNewTaskPanel({
     <section className="task-center-new-card">
       <header className="task-center-new-head">
         <div className="task-center-new-agent-mark" aria-hidden="true"><UiIcon name="agent" size={16}/></div>
-        <div>
+        <div className="task-center-new-heading">
           <div className="task-center-new-kicker">{t('center.newTask.kicker')}</div>
           <h1>{t('center.newTask.title')}</h1>
+          <StatusBadge
+            className="task-center-new-readiness"
+            tone={readiness.state === 'unavailable' ? 'danger' : readiness.state === 'ready' ? 'success' : 'neutral'}
+            dot
+          >
+            {readiness.label}
+          </StatusBadge>
         </div>
-        <span className="task-center-new-readiness" data-state={readiness.state}><i/>{readiness.label}</span>
       </header>
 
       <div className="task-center-new-fields">

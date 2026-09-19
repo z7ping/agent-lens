@@ -10,6 +10,7 @@ import {
   type PiEcosystemSortDto,
 } from '@agent-lens/protocol'
 import type { AgentLensContext } from '@agent-lens/runtime-cordis'
+import { request as httpsRequest } from 'node:https'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -21,12 +22,15 @@ const PI_CATALOG_ENDPOINT = 'https://pi.dev/packages'
 const NPM_REGISTRY_ENDPOINT = 'https://registry.npmjs.org/'
 const CATALOG_CACHE_TTL_MS = 10 * 60_000
 const PACKAGE_CACHE_TTL_MS = 5 * 60_000
-const CATALOG_TIMEOUT_MS = 6_000
+// Windows 上冷启动的 pi.dev TLS 响应可能略超 6 秒。保留有界等待，
+// 避免丢弃正在返回的响应；缓存命中路径仍会立即返回。
+const CATALOG_TIMEOUT_MS = 8_000
 const PACKAGE_TIMEOUT_MS = 8_000
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 20
 const MAX_SEARCH_CACHE_ENTRIES = 64
 const MAX_PACKAGE_CACHE_ENTRIES = 256
+const MAX_HTTPS_REDIRECTS = 3
 
 interface CacheEntry<T> {
   value: T
@@ -230,6 +234,81 @@ async function responseJson(response: Response, context: string): Promise<unknow
   return response.json()
 }
 
+function responseHeaders(headers: Record<string, string | string[] | undefined>): Headers {
+  const result = new Headers()
+  for (const [name, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) result.append(name, entry)
+    } else if (value !== undefined) {
+      result.set(name, value)
+    }
+  }
+  return result
+}
+
+function requestHeaders(headers: HeadersInit | undefined): Record<string, string> | undefined {
+  if (!headers) return undefined
+  return Object.fromEntries(new Headers(headers).entries())
+}
+
+async function nodeHttpsFetchUrl(url: URL, init: RequestInit | undefined, redirects: number): Promise<Response> {
+  if (url.protocol !== 'https:') return fetch(url, init)
+
+  return new Promise<Response>((resolve, reject) => {
+    let settled = false
+    const finish = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      init?.signal?.removeEventListener('abort', abort)
+      callback()
+    }
+    const request = httpsRequest(url, {
+      method: init?.method ?? 'GET',
+      headers: requestHeaders(init?.headers),
+    }, response => {
+      const chunks: Buffer[] = []
+      response.on('data', chunk => chunks.push(Buffer.from(chunk)))
+      response.on('error', error => finish(() => reject(error)))
+      response.on('end', () => {
+        const status = response.statusCode ?? 500
+        const location = response.headers.location
+        if (status >= 300 && status < 400 && location && redirects < MAX_HTTPS_REDIRECTS) {
+          const target = new URL(Array.isArray(location) ? location[0] : location, url)
+          finish(() => {
+            void nodeHttpsFetchUrl(target, init, redirects + 1).then(resolve, reject)
+          })
+          return
+        }
+        finish(() => resolve(new Response(Buffer.concat(chunks), {
+          status,
+          headers: responseHeaders(response.headers),
+        })))
+      })
+    })
+    const abort = () => request.destroy(new DOMException('The operation was aborted', 'AbortError'))
+    init?.signal?.addEventListener('abort', abort, { once: true })
+    request.on('error', error => finish(() => reject(error)))
+    if (init?.signal?.aborted) {
+      abort()
+      return
+    }
+    request.end()
+  })
+}
+
+/**
+ * 打包 daemon 的 Undici fetch 对 pi.dev 的 TLS 连接可能在 AbortSignal 后
+ * 仍保持 pending。目录请求固定在 Node 传输边界，避免单个卡住的连接阻塞生态页。
+ */
+const nodeHttpsFetch: typeof fetch = (input, init) => {
+  const url = input instanceof Request
+    ? new URL(input.url)
+    : input instanceof URL
+      ? input
+      : new URL(input)
+  return nodeHttpsFetchUrl(url, init, 0)
+}
+
 async function withinDeadline<T>(
   timeoutMs: number,
   label: string,
@@ -261,7 +340,7 @@ export class PiDevEcosystemProvider implements PiEcosystemQueryService {
   private readonly packageInFlight = new Map<string, Promise<NpmPackageDetails>>()
 
   constructor(
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = nodeHttpsFetch,
     private readonly now: () => number = Date.now,
   ) {}
 
@@ -414,6 +493,7 @@ export const piEcosystemInternals = {
   CATALOG_CACHE_TTL_MS,
   CATALOG_TIMEOUT_MS,
   withinDeadline,
+  nodeHttpsFetch,
   MAX_SEARCH_CACHE_ENTRIES,
   MAX_PACKAGE_CACHE_ENTRIES,
 }

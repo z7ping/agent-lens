@@ -9,8 +9,10 @@ function rule(pattern: RegExp): string {
 }
 
 test('轮次导轨选中态只改变颜色，不改变刻度几何', () => {
+  const baseRule = rule(/\.task-turn-rail \.turn-tick i\s*\{([^}]*)\}/)
   const activeRule = rule(/\.task-turn-rail \.turn-tick\.active i\s*\{([^}]*)\}/)
 
+  assert.match(baseRule, /height:\s*2px/)
   assert.match(activeRule, /background:\s*var\(--al-ink\)/)
   assert.doesNotMatch(activeRule, /\b(?:width|height)\s*:/)
 })

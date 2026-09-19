@@ -1,7 +1,7 @@
 /*
  * Task Surface 共享轮次导轨。
  * Review / Pi Live / Hub 只提供语义 TaskRound；导轨的发现、定位与交互统一由 TaskSurface 持有。
- * 基础 tick 固定为 6×1.5；hover 只横向展开，running 只通过强调色与光晕表达状态。
+ * 基础 tick 固定为 6×2；hover 只横向展开，running 只通过强调色与光晕表达状态。
  * 24×9 命中区与轮次间距始终保持一致，任何状态都不改变刻度几何。
  */
 .task-turn-rail {
@@ -27,7 +27,6 @@
   display: grid;
   width: 24px;
   height: 9px;
-  min-height: 2px;
   max-height: 9px;
   flex: 0 1 9px;
   place-items: center;
@@ -40,7 +39,7 @@
 .task-turn-rail .turn-tick i {
   display: block;
   width: 6px;
-  height: 1.5px;
+  height: 2px;
   border-radius: 99px;
   background: color-mix(in srgb, var(--al-muted) 58%, transparent);
   transition: width .16s cubic-bezier(.2,.8,.2,1), background .16s ease, box-shadow .16s ease;
