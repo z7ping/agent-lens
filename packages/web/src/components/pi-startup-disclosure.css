@@ -25,7 +25,7 @@
   user-select: none;
 }
 .pi-startup-disclosure.is-ready[data-expanded='false'] { margin: 4px 0 8px; }
-.pi-startup-disclosure.is-ready[data-expanded='false'] > summary { min-height: 34px; padding-block: 3px; }
+.pi-startup-disclosure.is-ready[data-expanded='false'] > .pi-startup-disclosure-toggle { min-height: 34px; padding-block: 3px; }
 .pi-startup-summary-state {
   width: 7px;
   height: 7px;
