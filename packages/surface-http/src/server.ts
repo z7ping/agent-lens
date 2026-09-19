@@ -515,7 +515,21 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/projects/launchable') {
-        writeJson(response, 200, await withReadPriority(storage, 'supporting', () => readLaunchableProjects(storage, url.searchParams)))
+        let timings: { dbMs: number; fsMs: number; totalMs: number } | undefined
+        const body = await withReadPriority(storage, 'supporting', () => readLaunchableProjects(
+          storage,
+          url.searchParams,
+          undefined,
+          value => { timings = value },
+        ))
+        if (timings && !response.headersSent) {
+          response.setHeader('server-timing', [
+            `projects-db;dur=${timings.dbMs.toFixed(1)}`,
+            `projects-fs;dur=${timings.fsMs.toFixed(1)}`,
+            `projects-total;dur=${timings.totalMs.toFixed(1)}`,
+          ].join(', '))
+        }
+        writeJson(response, 200, body)
         return
       }
       if (url.pathname === '/api/v1/agents/summary') {
