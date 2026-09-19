@@ -16,6 +16,7 @@ export type LiveCapabilityName =
   | 'command-discovery'
   | 'workspace-file-reference'
   | 'history-index'
+  | 'session-tree'
   | 'recovery'
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
@@ -207,6 +208,41 @@ export interface LiveHistoryIndex {
   /** Total semantic rounds in the complete session, never a sampled count. */
   total: number
   items: readonly LiveHistoryIndexItem[]
+}
+
+export type LiveSessionTreeNodeType =
+  | 'message'
+  | 'branch-summary'
+  | 'compaction'
+  | 'control'
+  | 'custom'
+  | 'other'
+
+export interface LiveSessionTreeNode {
+  id: string
+  parentId: string | null
+  type: LiveSessionTreeNodeType
+  timestamp?: string | undefined
+  role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
+  preview?: string | undefined
+  label?: string | undefined
+  summary?: string | undefined
+  activePath: boolean
+  childCount: number
+}
+
+export interface LiveSessionTreeCapabilities {
+  switchBranch: boolean
+  fork: boolean
+  clone: boolean
+  branchSummary: boolean
+}
+
+export interface LiveSessionTree {
+  activeLeafId: string | null
+  nodes: readonly LiveSessionTreeNode[]
+  branchPointIds: readonly string[]
+  capabilities: LiveSessionTreeCapabilities
 }
 
 export type LiveEventStatus =
@@ -522,6 +558,8 @@ export interface LiveAdapter {
    * complete round count; items contains only the requested range/lookup.
    */
   historyIndex?(runtimeSessionId: string, query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
+  /** Optional native session-tree projection. Product Surface must not infer a tree from transcript order. */
+  sessionTree?(runtimeSessionId: string): Promise<LiveSessionTree>
   /** Present only when the adapter declares model-switching. */
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */
