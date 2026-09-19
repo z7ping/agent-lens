@@ -38,11 +38,13 @@ function recoveryInput(value: unknown): PiLiveStartInput | null {
   const sessionPath = optionalString(input.sessionPath)
   if (!cwd || !sessionPath) return null
   const name = optionalString(input.name)
+  const logicalSessionId = optionalString(input.logicalSessionId)
   return {
     cwd,
     ...(name ? { name } : {}),
     sessionPath,
     historyAction: 'continue',
+    ...(logicalSessionId ? { logicalSessionId } : {}),
   }
 }
 

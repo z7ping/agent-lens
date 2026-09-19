@@ -80,6 +80,29 @@ class LifecycleHost implements PiRuntimeHost {
   }
 }
 
+class BlockingLifecycleHost extends LifecycleHost {
+  private releaseStart!: () => void
+  private readonly startGate = new Promise<void>(resolve => { this.releaseStart = resolve })
+
+  release(): void {
+    this.releaseStart()
+  }
+
+  override async start(
+    runtimeSessionId: string,
+    input: PiLiveStartInput,
+    signal: AbortSignal,
+    onEvent: (event: Record<string, unknown>) => void,
+    onExit: (error: Error) => void,
+  ): Promise<PiRuntimeHandle> {
+    this.starts += 1
+    onEvent({ type: 'runtime_initialization', stage: 'loading_sdk', message: 'Loading SDK' })
+    await this.startGate
+    this.starts -= 1
+    return super.start(runtimeSessionId, input, signal, onEvent, onExit)
+  }
+}
+
 async function waitForReady(service: DefaultPiLiveService, id: string): Promise<PiLiveRuntimeState> {
   for (let index = 0; index < 100; index += 1) {
     const state = await service.state(id)
@@ -114,6 +137,7 @@ test('mount snapshot reloads an idle runtime after another Pi process appends th
   const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
   try {
     const started = await service.start({ cwd: dir, sessionPath: file, historyAction: 'continue' })
+    const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
     await waitForReady(service, started.runtimeSessionId)
     const before = await service.snapshot(started.runtimeSessionId)
     assert.equal(host.starts, 1)
@@ -122,8 +146,14 @@ test('mount snapshot reloads an idle runtime after another Pi process appends th
     await appendFile(file, JSON.stringify({ type: 'message', id: 'entry-2', message: { role: 'assistant', content: 'external' } }) + '\n')
     const after = await service.snapshot(started.runtimeSessionId)
 
-    assert.equal(host.starts, 2)
-    assert.ok(after.entries.some(entry => (entry as Record<string, unknown>).id === 'entry-2'))
+    // The foreground read returns the current bounded view immediately; disk-ahead
+    // invalidation rebuilds the Worker in the background instead of blocking Snapshot.
+    assert.equal(after.entries.length, 1)
+    await waitFor(() => host.starts >= 2, 'external update did not schedule Worker refresh')
+    await waitForReady(service, started.runtimeSessionId)
+    const refreshed = await service.snapshot(started.runtimeSessionId)
+    assert.ok(refreshed.entries.some(entry => (entry as Record<string, unknown>).id === 'entry-2'))
+    unsubscribe()
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
@@ -136,11 +166,13 @@ test('external append does not rebuild a streaming runtime', async () => {
   const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
   try {
     const started = await service.start({ cwd: dir, sessionPath: file, historyAction: 'continue' })
+    const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
     await waitForReady(service, started.runtimeSessionId)
     host.streaming = true
     await appendFile(file, JSON.stringify({ type: 'message', id: 'entry-2' }) + '\n')
     await service.snapshot(started.runtimeSessionId)
     assert.equal(host.starts, 1)
+    unsubscribe()
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
@@ -164,8 +196,13 @@ test('persisted runtimes stay logical until selected and idle workers rehydrate 
     assert.equal(listed[0]?.sessionFile, file)
 
     const active = await service.state('runtime-1')
-    assert.equal(active.status, 'ready')
+    assert.equal(active.status, 'initializing')
+    assert.equal(host.starts, 0)
+
+    const firstSubscription = service.subscribe('runtime-1', () => {})
+    await waitForReady(service, 'runtime-1')
     assert.equal(host.starts, 1)
+    firstSubscription()
 
     await waitFor(() => host.terminations >= 1, 'idle worker was not suspended')
     const suspended = await service.list()
@@ -173,8 +210,9 @@ test('persisted runtimes stay logical until selected and idle workers rehydrate 
     assert.equal(suspended[0]?.processId, undefined)
     assert.equal(host.starts, 1)
 
-    await service.state('runtime-1')
-    assert.equal(host.starts, 2)
+    const rehydrate = service.subscribe('runtime-1', () => {})
+    await waitFor(() => host.starts === 2, 'selected Runtime did not rehydrate after subscribe')
+    rehydrate()
   } finally {
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
@@ -187,14 +225,125 @@ test('an SSE subscriber prevents idle suspension until it disconnects', async ()
   const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 25 })
   try {
     const started = await service.start({ cwd: dir, sessionPath: file, historyAction: 'continue' })
-    await waitForReady(service, started.runtimeSessionId)
     const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+    await waitForReady(service, started.runtimeSessionId)
     await new Promise(resolve => setTimeout(resolve, 60))
     assert.equal(host.terminations, 0)
 
     unsubscribe()
     await waitFor(() => host.terminations >= 1, 'worker did not suspend after subscriber left')
   } finally {
+    await service.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('suspended Runtime state and SSE stay responsive while Worker hydration is blocked', async () => {
+  const { dir, file } = await makeSession()
+  const host = new BlockingLifecycleHost()
+  const store = new MemoryRecoveryStore([{
+    id: 'runtime-slow',
+    input: { cwd: dir, sessionPath: file, historyAction: 'continue' },
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date().toISOString(),
+  }])
+  const service = new DefaultPiLiveService(host, store, undefined, { idleTimeoutMs: 0 })
+  try {
+    await service.list()
+    const statuses: string[] = []
+    const unsubscribe = service.subscribe('runtime-slow', event => {
+      if (event.event.type === 'runtime_status' && typeof event.event.status === 'string') {
+        statuses.push(event.event.status)
+      }
+    })
+
+    await waitFor(() => host.starts === 1, 'hydration did not start')
+    const secondUnsubscribe = service.subscribe('runtime-slow', () => {})
+    await new Promise(resolve => setTimeout(resolve, 10))
+    assert.equal(host.starts, 1, 'concurrent subscribers must share one hydration task')
+
+    const state = await Promise.race([
+      service.state('runtime-slow'),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('state waited for Worker hydration')), 250)),
+    ])
+
+    assert.equal(state.status, 'initializing')
+    assert.ok(statuses.includes('initializing'))
+
+    const snapshot = await Promise.race([
+      service.snapshot('runtime-slow'),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('snapshot waited for Worker hydration')), 250)),
+    ])
+    assert.equal(snapshot.state.status, 'initializing')
+    assert.deepEqual(snapshot.entries, [])
+
+    host.release()
+    const ready = await waitForReady(service, 'runtime-slow')
+    assert.equal(ready.status, 'ready')
+    secondUnsubscribe()
+    unsubscribe()
+  } finally {
+    host.release()
+    await service.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+
+test('historical Resume defers Worker startup until a Live subscriber is attached', async () => {
+  const { dir, file } = await makeSession()
+  const host = new BlockingLifecycleHost()
+  const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
+  try {
+    const started = await service.start({
+      cwd: dir,
+      sessionPath: file,
+      historyAction: 'continue',
+    })
+
+    assert.equal(started.status, 'initializing')
+    assert.equal(host.starts, 0)
+
+    const observed: string[] = []
+    const unsubscribe = service.subscribe(started.runtimeSessionId, event => {
+      if (event.event.type === 'runtime_status' && typeof event.event.status === 'string') {
+        observed.push(event.event.status)
+      }
+    })
+    await waitFor(() => host.starts === 1, 'subscriber did not start historical Runtime hydration')
+    assert.ok(observed.includes('initializing'))
+
+    host.release()
+    assert.equal((await waitForReady(service, started.runtimeSessionId)).status, 'ready')
+    unsubscribe()
+  } finally {
+    host.release()
+    await service.dispose()
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+
+test('historical Fork also defers Worker startup until Live subscription', async () => {
+  const { dir, file } = await makeSession()
+  const host = new BlockingLifecycleHost()
+  const service = new DefaultPiLiveService(host, new MemoryRecoveryStore(), undefined, { idleTimeoutMs: 0 })
+  try {
+    const started = await service.start({
+      cwd: dir,
+      sessionPath: file,
+      historyAction: 'fork',
+    })
+    assert.equal(started.status, 'initializing')
+    assert.equal(host.starts, 0)
+
+    const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+    await waitFor(() => host.starts === 1, 'Fork subscriber did not start hydration')
+    host.release()
+    assert.equal((await waitForReady(service, started.runtimeSessionId)).status, 'ready')
+    unsubscribe()
+  } finally {
+    host.release()
     await service.dispose()
     await rm(dir, { recursive: true, force: true })
   }

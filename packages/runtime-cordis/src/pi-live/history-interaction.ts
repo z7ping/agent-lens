@@ -110,5 +110,5 @@ export async function resolvePiLiveHistoryInput(
   const cwd = workspace?.path?.trim() || sourceRecordCwd(sourceRecord)
   if (!cwd) throw interactionError('该会话缺少原始工作目录，无法安全继续')
 
-  return { cwd, sessionPath, historyAction }
+  return { cwd, sessionPath, historyAction, logicalSessionId }
 }

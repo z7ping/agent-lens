@@ -75,15 +75,25 @@ async function waitForStatus(service: DefaultPiLiveService, id: string, status: 
   throw new Error(`runtime ${id} did not reach ${status}`)
 }
 
+async function attachAndWait(
+  service: DefaultPiLiveService,
+  id: string,
+  status: PiLiveRuntimeState['status'],
+): Promise<{ state: PiLiveRuntimeState; unsubscribe: () => void }> {
+  const unsubscribe = service.subscribe(id, () => {})
+  return { state: await waitForStatus(service, id, status), unsubscribe }
+}
+
 test('继续会话只有确认 Worker 仍持有目标 Session 后才 ready', async () => {
   const host = new HistoryHost()
   const service = new DefaultPiLiveService(host)
   try {
     const originalPath = '/sessions/original.jsonl'
     const continued = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'continue' })
-    const ready = await waitForStatus(service, continued.runtimeSessionId, 'ready')
+    const { state: ready, unsubscribe } = await attachAndWait(service, continued.runtimeSessionId, 'ready')
     assert.equal(ready.sessionFile, originalPath)
     assert.equal(host.starts.length, 1)
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -98,7 +108,7 @@ test('继续会话的 Snapshot 保留原 Session 历史供 Live 页面恢复', a
   const service = new DefaultPiLiveService(host)
   try {
     const continued = await service.start({ cwd: '/workspace', sessionPath: '/sessions/original.jsonl', historyAction: 'continue' })
-    await waitForStatus(service, continued.runtimeSessionId, 'ready')
+    const { unsubscribe } = await attachAndWait(service, continued.runtimeSessionId, 'ready')
     const snapshot = await service.snapshot(continued.runtimeSessionId)
 
     assert.deepEqual(snapshot.entries, host.entries)
@@ -107,6 +117,7 @@ test('继续会话的 Snapshot 保留原 Session 历史供 Live 页面恢复', a
 
     await service.snapshot(continued.runtimeSessionId, undefined, { limit: 10_000 })
     assert.deepEqual(host.snapshotWindows.at(-1)?.window, { limit: 500 })
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -117,8 +128,9 @@ test('继续会话返回其他 Session 时拒绝 ready，避免续错会话', as
   const service = new DefaultPiLiveService(host)
   try {
     const continued = await service.start({ cwd: '/workspace', sessionPath: '/sessions/original.jsonl', historyAction: 'continue' })
-    const failed = await waitForStatus(service, continued.runtimeSessionId, 'failed')
+    const { state: failed, unsubscribe } = await attachAndWait(service, continued.runtimeSessionId, 'failed')
     assert.match(failed.error ?? '', /未保持目标 Session/)
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -130,8 +142,9 @@ test('分叉只有确认新 Session 与原 Session 不同时才 ready', async ()
   const service = new DefaultPiLiveService(host)
   try {
     const forked = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
-    const failed = await waitForStatus(service, forked.runtimeSessionId, 'failed')
+    const { state: failed, unsubscribe } = await attachAndWait(service, forked.runtimeSessionId, 'failed')
     assert.match(failed.error ?? '', /未切换到新的 Session/)
+    unsubscribe()
   } finally {
     await service.dispose()
   }
@@ -143,13 +156,16 @@ test('分叉成功后锁转移到新 Session，原 Session 可再次启动且重
   try {
     const originalPath = '/sessions/original.jsonl'
     const forked = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
+    const forkSubscription = service.subscribe(forked.runtimeSessionId, () => {})
     await waitForStatus(service, forked.runtimeSessionId, 'ready')
 
     const repeatedFork = await service.start({ cwd: '/workspace', sessionPath: '/sessions/forked.jsonl', historyAction: 'continue' })
     assert.equal(repeatedFork.runtimeSessionId, forked.runtimeSessionId)
 
     const original = await service.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'continue' })
+    const originalSubscription = service.subscribe(original.runtimeSessionId, () => {})
     await waitForStatus(service, original.runtimeSessionId, 'ready')
+    originalSubscription()
     await service.terminate(original.runtimeSessionId)
 
     const firstForkStart = host.starts.find(item => item.runtimeSessionId === forked.runtimeSessionId)
@@ -165,6 +181,7 @@ test('分叉成功后锁转移到新 Session，原 Session 可再次启动且重
     assert.equal(retryStarts[0]?.input.historyAction, 'fork')
     assert.equal(retryStarts[1]?.input.sessionPath, '/sessions/forked.jsonl')
     assert.equal(retryStarts[1]?.input.historyAction, 'continue')
+    forkSubscription()
   } finally {
     await service.dispose()
   }
