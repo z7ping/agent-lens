@@ -414,3 +414,47 @@ test('同一历史会话正在结束时拒绝新的继续请求', async () => {
   await ending
   unsubscribe()
 })
+
+
+test('agent_end 不会提前结束 Logical Run，只有 agent_settled 才回到 idle', async () => {
+  let emit: ((event: Record<string, unknown>) => void) | undefined
+  const service = new DefaultPiLiveService({
+    start: async (id, _input, _signal, onEvent) => {
+      emit = onEvent
+      return handle(id, '/sessions/settled.jsonl')
+    },
+  })
+
+  const started = await service.start({ cwd: '/workspace' })
+  const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+  for (let index = 0; index < 20; index += 1) {
+    if ((await service.state(started.runtimeSessionId)).status === 'ready') break
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal((await service.state(started.runtimeSessionId)).status, 'ready')
+
+  emit?.({ type: 'agent_start' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
+  emit?.({ type: 'message_start', message: { id: 'assistant-1', role: 'assistant' } })
+  emit?.({ type: 'message_end', message: { id: 'assistant-1', role: 'assistant' } })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
+  emit?.({ type: 'agent_end' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
+  emit?.({ type: 'compaction_start' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+  assert.equal((await service.list())[0]?.isCompacting, true)
+
+  emit?.({ type: 'compaction_end' })
+  assert.equal((await service.list())[0]?.isStreaming, true)
+  assert.equal((await service.list())[0]?.isCompacting, false)
+
+  emit?.({ type: 'agent_settled' })
+  assert.equal((await service.list())[0]?.isStreaming, false)
+  assert.equal((await service.list())[0]?.isCompacting, false)
+
+  unsubscribe()
+  await service.terminate(started.runtimeSessionId)
+})
