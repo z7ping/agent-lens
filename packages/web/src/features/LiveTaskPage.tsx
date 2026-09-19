@@ -917,6 +917,42 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       return task
     }
 
+    let reconcileEpoch = 0
+    let runtimeActive = false
+    const reconcileState = async (forceRecovery = false) => {
+      const epoch = ++reconcileEpoch
+      try {
+        const runtime = await liveApi.state(current.liveId, current.runtimeSessionId)
+        if (!recoveryActive || epoch !== reconcileEpoch) return
+        let changed = false
+        setState(previous => {
+          changed = previous?.status !== runtime.status
+            || previous?.isStreaming !== runtime.isStreaming
+            || previous?.pendingMessageCount !== runtime.pendingMessageCount
+          return runtime
+        })
+        runtimeActive = runtime.isStreaming
+        setActivityStatus(runtime.isStreaming ? 'running' : runtime.status === 'ready' ? 'idle' : null)
+        if ((changed || forceRecovery) && product.capabilities.includes('recovery')) {
+          void recover(runtime.isStreaming ? 'live' : 'settle')
+        }
+      } catch {
+        // SSE remains the primary channel. State reconciliation is best-effort.
+      }
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void reconcileState(true)
+    }
+    const onOnline = () => { void reconcileState(true) }
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
+    if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
+    const reconcileTimer = window.setInterval(() => {
+      if (runtimeActive && (typeof document === 'undefined' || document.visibilityState !== 'hidden')) {
+        void reconcileState(false)
+      }
+    }, 5_000)
+
     const unsubscribe = liveApi.subscribe(
       current.liveId,
       current.runtimeSessionId,
@@ -968,6 +1004,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }))
         }
         if (envelope.normalizedEvent?.type === 'status') {
+          if (envelope.normalizedEvent.status === 'running'
+            || envelope.normalizedEvent.status === 'compacting') runtimeActive = true
+          if (envelope.normalizedEvent.status === 'idle'
+            || envelope.normalizedEvent.status === 'failed'
+            || envelope.normalizedEvent.status === 'terminating'
+            || envelope.normalizedEvent.status === 'terminated') runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
           }
@@ -1023,6 +1065,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
+          runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
             setError(envelope.normalizedEvent.message)
           }
@@ -1045,13 +1088,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       () => setConnected(false),
       () => {
         setConnected(true)
-        void recover()
+        void reconcileState(true)
       },
     )
     return () => {
       recoveryActive = false
       recoveryGeneration += 1
+      reconcileEpoch += 1
       pendingRecoveryMode = null
+      window.clearInterval(reconcileTimer)
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible)
+      if (typeof window !== 'undefined') window.removeEventListener('online', onOnline)
       unsubscribe()
     }
   }, [
