@@ -1338,6 +1338,7 @@ export class DefaultPiLiveService implements PiLiveService {
     return !state.isStreaming
       && !state.isCompacting
       && state.pendingMessageCount === 0
+      && runtime.extensionBindingStatus !== 'binding'
       && !runtime.activeAssistantMessageId
       && runtime.queue.steering.length === 0
       && runtime.queue.followUp.length === 0
