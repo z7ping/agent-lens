@@ -74,7 +74,8 @@ test('Generic Live reconciler only escalates to bounded recovery on drift or exp
   const block = page.slice(start, end)
   assert.match(block, /liveApi\.state/)
   assert.match(block, /changed \|\| forceRecovery/)
-  assert.match(block, /recover\(runtime\.isStreaming \? 'live' : 'settle'\)/)
+  assert.match(block, /runtime\.status === 'ready' \|\| runtime\.status === 'initializing'/)
+  assert.match(block, /runtime\.status === 'ready' && !runtime\.isStreaming \? 'settle' : 'live'/)
   assert.doesNotMatch(block, /loadBoundedRecoverySnapshot/)
 })
 
