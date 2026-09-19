@@ -119,6 +119,56 @@ const PI_STAGE_LABELS: Record<PiLiveInitializationStage, { en: string; zh: strin
   ready: { en: 'Ready', zh: '就绪' },
 }
 
+const PI_LIFECYCLE_STAGES: PiLiveInitializationStage[] = [
+  'starting_worker',
+  'loading_sdk',
+  'loading_resources',
+  'creating_session',
+  'binding_extensions',
+]
+
+function runtimeLifecycle(state: PiLiveRuntimeState) {
+  if (state.status !== 'initializing' && state.status !== 'ready' && state.status !== 'failed') return undefined
+  const timings = new Map((state.initializationTimings ?? []).map(item => [item.stage, Math.max(0, item.durationMs)]))
+  const completedDuration = [...timings.values()].reduce((sum, duration) => sum + duration, 0)
+  const elapsed = state.initializationElapsedMs ?? completedDuration
+  const currentDuration = Math.max(0, elapsed - completedDuration)
+  const stages = PI_LIFECYCLE_STAGES.map(stage => {
+    const label = PI_STAGE_LABELS[stage]
+    const recorded = timings.get(stage)
+    const failed = state.status === 'failed' && state.initializationStage === stage
+    const active = state.status === 'initializing' && state.initializationStage === stage
+    const done = recorded !== undefined || state.status === 'ready'
+    return {
+      stageId: stage,
+      label: contributionText(label.en, label.zh),
+      status: failed ? 'failed' as const : active ? 'active' as const : done ? 'done' as const : 'pending' as const,
+      ...((recorded !== undefined || active || failed)
+        ? { durationMs: recorded ?? currentDuration }
+        : {}),
+    }
+  })
+  const resources = state.startupResources
+  const resourceGroups = resources
+    ? [
+        { groupId: 'contexts', label: contributionText('Contexts', '上下文'), values: resources.contexts },
+        { groupId: 'skills', label: contributionText('Skills', '技能'), values: resources.skills },
+        { groupId: 'prompts', label: contributionText('Prompts', '提示词'), values: resources.prompts },
+        { groupId: 'extensions', label: contributionText('Extensions', '扩展'), values: resources.extensions },
+        { groupId: 'themes', label: contributionText('Themes', '主题'), values: resources.themes },
+      ].filter(group => group.values.length > 0)
+    : undefined
+  return {
+    status: state.status,
+    elapsedMs: elapsed,
+    ...(state.initializationMessage
+      ? { message: contributionText(state.initializationMessage, state.initializationMessage) }
+      : {}),
+    stages,
+    ...(resourceGroups?.length ? { resources: resourceGroups } : {}),
+  }
+}
+
 const PI_STARTUP_METRIC_LABELS: Record<string, { en: string; zh: string }> = {
   prewarm_sdk_import_ms: { en: 'Prewarm SDK import', zh: '预热 SDK 导入' },
   prewarm_model_runtime_create_ms: { en: 'Prewarm model runtime', zh: '预热模型运行时' },
@@ -1054,6 +1104,7 @@ export class DefaultPiLiveService implements PiLiveService {
         || state.status === 'initializing'
         || state.extensionBindingStatus === 'binding'
         || state.extensionBindingStatus === 'failed',
+      ...(runtimeLifecycle(state) ? { lifecycle: runtimeLifecycle(state) } : {}),
       fields: runtimeDisclosureFields(state),
       ...(state.status === 'failed'
         ? {
