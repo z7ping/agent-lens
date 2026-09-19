@@ -11,7 +11,7 @@ import { translateProduct } from '../i18n/runtime'
 export type PiLiveItemState = 'running' | 'settled'
 
 export type PiLiveHistoryItem =
-  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
+  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; modelLabel?: string | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'thinking'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; at: string; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined }
   | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
@@ -88,6 +88,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
           role: fact.role,
           text: presentation.text,
           ...(presentation.attachments.length ? { attachments: presentation.attachments } : {}),
+          ...(fact.role === 'assistant' && (fact.provider || fact.model) ? { modelLabel: [fact.provider, fact.model].filter(Boolean).join(' / ') } : {}),
           at: fact.at,
           ...(fact.contentIndex === undefined ? {} : { contentIndex: fact.contentIndex }),
         })
