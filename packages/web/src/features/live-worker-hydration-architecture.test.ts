@@ -37,3 +37,17 @@ test('Live task keeps a prominent initialization progress while background hydra
   assert.match(page, /statusLabel=\{runtimeStatus\}/)
   assert.match(page, /<LiveRuntimeDisclosures/)
 })
+
+
+test('ready event restores transcript and controls in place without renavigation', () => {
+  const subscribe = page.indexOf('const unsubscribe = liveApi.subscribe(')
+  const ready = page.indexOf("envelope.normalizedEvent.status === 'ready'", subscribe)
+  const effectEnd = page.indexOf('return () => {', ready)
+  const readyBlock = page.slice(ready, effectEnd)
+
+  assert.match(readyBlock, /void recover\(\)/)
+  assert.match(readyBlock, /liveApi\.modelControl/)
+  assert.match(readyBlock, /liveApi\.thinkingControl/)
+  assert.match(readyBlock, /liveApi\.queueState/)
+  assert.doesNotMatch(readyBlock, /navigate\(/)
+})
