@@ -18,8 +18,11 @@ test('Pi Edit from here uses native navigateTree and never rewrites JSONL in ser
   assert.doesNotMatch(service, /writeFile|appendFile|truncate|unlink/)
 })
 
-test('Pi message actions require persisted user entries and an idle Runtime', () => {
+test('Pi message actions use targeted entry lookup and an idle Runtime without reopening full Snapshot', () => {
+  assert.match(service, /const state = await runtime\.handle!\.state\(\)/)
+  assert.match(service, /if \(state\.isStreaming\)/)
+  assert.match(service, /runtime\.handle!\.entry\(targetEntryId\)/)
   assert.match(service, /row\.type !== 'message' \|\| message\.role !== 'user'/)
-  assert.match(service, /snapshot\.state\.isStreaming/)
   assert.match(service, /branchFromEntryId:\s*target\.parentId/)
+  assert.doesNotMatch(service, /runtime\.handle!\.snapshot\(/)
 })
