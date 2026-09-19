@@ -17,6 +17,7 @@ export interface PiLiveInitializationTiming {
 }
 
 export type PiLiveWarmWorkerStatus = 'hit' | 'miss' | 'not_ready' | 'sdk_mismatch'
+export type PiLiveExtensionBindingStatus = 'binding' | 'ready' | 'failed'
 
 export interface PiLiveStartupMetric {
   name: string
@@ -100,6 +101,9 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   /** Fine-grained startup timings for diagnostics; product progress keeps using initializationStage. */
   startupMetrics?: PiLiveStartupMetric[] | undefined
   warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  /** Session Core can be ready while extension session_start/resources_discover binding continues in background. */
+  extensionBindingStatus?: PiLiveExtensionBindingStatus | undefined
+  extensionBindingError?: string | undefined
   /** Current Pi runtime resource snapshot. Field name is retained for API compatibility. */
   startupResources?: PiLiveStartupResources | undefined
   packageUpdates?: PiLivePackageUpdate[] | undefined
