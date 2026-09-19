@@ -508,12 +508,11 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
       sdkEntry: sdk.sdkEntry,
       ...(sdk.version ? { version: sdk.version } : {}),
     }
-    // 只领取从未创建 Session 的空闲 Base Worker。领取后立刻补位，不等待当前 Session Ready。
+    // 只领取从未创建 Session 的空闲 Base Worker。补位延后到当前 Runtime 初始化结束，避免启动期资源争抢。
     const claim = this.takeWarmWorker(sdkDescriptor)
     const spawnStartedAt = Date.now()
     const child = claim.child ?? this.forkWorker(input.cwd)
     const workerSpawnMs = claim.child ? 0 : Math.max(0, Date.now() - spawnStartedAt)
-    void this.preloadFor(input.executable).catch(() => undefined)
     const hostStartupMetrics: PiLiveStartupMetric[] = [
       { name: 'sdk_discovery_ms', durationMs: sdkDiscoveryMs },
       { name: 'worker_spawn_ms', durationMs: workerSpawnMs },
@@ -570,10 +569,16 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     }).catch(async error => {
       signal.removeEventListener('abort', abort)
       await handle.terminate()
+      // Replenish only after the foreground Runtime has stopped consuming startup resources.
+      void this.preloadFor(input.executable).catch(() => undefined)
       throw error
     })
     handle.applyHandshake(handshake)
     signal.removeEventListener('abort', abort)
+    // Do not import another SDK / create another ModelRuntime in parallel with the
+    // foreground Runtime's ResourceLoader and Extension startup. On Windows this
+    // contention can make the very task we are trying to accelerate slower.
+    void this.preloadFor(input.executable).catch(() => undefined)
     return handle
   }
 }
