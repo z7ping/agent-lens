@@ -360,55 +360,60 @@ function RuntimeDiagnostics({
   const lifecycle = item.lifecycle
 
   return <div className="live-runtime-diagnostics">
-    {statusFields.length > 0 && <section className="live-runtime-diagnostic-section">
+    {(statusFields.length > 0 || lifecycle?.elapsedMs !== undefined) && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-overview">
       <h3>{localText(language, '运行概况', 'Runtime overview')}</h3>
-      <div className="live-runtime-diagnostic-rows">
-        {statusFields.map(field => <div className="live-runtime-diagnostic-row" key={field.key}>
-          <span>{field.label}</span>
-          <b>{field.values[0]}</b>
-        </div>)}
-        {lifecycle?.elapsedMs !== undefined && <div className="live-runtime-diagnostic-row">
+      <div className="live-runtime-diagnostic-overview-grid">
+        {lifecycle?.elapsedMs !== undefined && <div className="live-runtime-diagnostic-overview-item is-primary">
           <span>{localText(language, '总耗时', 'Total elapsed')}</span>
           <b>{duration(lifecycle.elapsedMs)}</b>
         </div>}
-      </div>
-    </section>}
-
-    {lifecycle?.stages.length && <section className="live-runtime-diagnostic-section">
-      <h3>{localText(language, '启动阶段', 'Startup stages')}</h3>
-      <div className="live-runtime-diagnostic-stages">
-        {lifecycle.stages.map(stage => <div className="live-runtime-diagnostic-stage" key={stage.stageId}>
-          <span className={`is-${stage.status}`} aria-hidden="true">
-            {stage.status === 'done'
-              ? <UiIcon name="check" size={12}/>
-              : stage.status === 'failed'
-                ? <UiIcon name="exclamation" size={12}/>
-                : null}
-          </span>
-          <b>{contributionText(stage.label, language)}</b>
-          <code>{duration(stage.durationMs)}</code>
+        {statusFields.map(field => <div className="live-runtime-diagnostic-overview-item" key={field.key}>
+          <span>{field.label}</span>
+          <b title={field.values[0]}>{field.values[0]}</b>
         </div>)}
       </div>
     </section>}
 
-    {startupMetrics && <section className="live-runtime-diagnostic-section">
-      <div className="live-runtime-diagnostic-section-head">
-        <h3>{localText(language, '启动性能', 'Startup performance')}</h3>
-        <CopyAction
-          value={timingCopyText(item, language, fields)}
-          language={language}
-          labelZh="复制耗时"
-          labelEn="Copy timing"
-        />
-      </div>
-      <MetricRows values={startupMetrics.values}/>
-    </section>}
+    {(lifecycle?.stages.length || startupMetrics) && <div className="live-runtime-diagnostic-primary-grid">
+      {lifecycle?.stages.length && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-stage-section">
+        <h3>{localText(language, '启动阶段', 'Startup stages')}</h3>
+        <div className="live-runtime-diagnostic-stages">
+          {lifecycle.stages.map(stage => <div className="live-runtime-diagnostic-stage" key={stage.stageId}>
+            <span className={`is-${stage.status}`} aria-hidden="true">
+              {stage.status === 'done'
+                ? <UiIcon name="check" size={12}/>
+                : stage.status === 'failed'
+                  ? <UiIcon name="exclamation" size={12}/>
+                  : null}
+            </span>
+            <b>{contributionText(stage.label, language)}</b>
+            <code>{duration(stage.durationMs)}</code>
+          </div>)}
+        </div>
+      </section>}
 
-    {resourceFields.length > 0 && <section className="live-runtime-diagnostic-section">
+      {startupMetrics && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-performance">
+        <div className="live-runtime-diagnostic-section-head">
+          <h3>{localText(language, '启动性能', 'Startup performance')}</h3>
+          <CopyAction
+            value={timingCopyText(item, language, fields)}
+            language={language}
+            labelZh="复制耗时"
+            labelEn="Copy timing"
+          />
+        </div>
+        <MetricRows values={startupMetrics.values}/>
+      </section>}
+    </div>}
+
+    {resourceFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-resources">
       <h3>{localText(language, '运行资源', 'Runtime resources')}</h3>
       <div className="live-runtime-diagnostic-resource-groups">
         {resourceFields.map(field => <section className="live-runtime-diagnostic-resource-group" key={field.key}>
-          <header><b>{field.label}</b><span>{field.values.length}</span></header>
+          <header>
+            <b>{field.label}</b>
+            <span>{field.values.length}</span>
+          </header>
           <div className="live-runtime-diagnostic-values">
             {field.values.map((value, index) => <span key={`${field.key}:${index}:${value}`}>{value}</span>)}
           </div>
@@ -416,7 +421,7 @@ function RuntimeDiagnostics({
       </div>
     </section>}
 
-    {advancedFields.length > 0 && <section className="live-runtime-diagnostic-section">
+    {advancedFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-advanced">
       <h3>{localText(language, '高级诊断', 'Advanced diagnostics')}</h3>
       <div className="live-runtime-diagnostic-code-groups">
         {advancedFields.map(field => <section key={field.key}>
@@ -440,7 +445,6 @@ function RuntimeDisclosure({
   onAction(action: LiveRuntimeActionContributionDto): void
 }) {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
-  const title = contributionText(item.title, language)
   const fields = prepareFields(item, language)
 
   return <>
@@ -457,7 +461,6 @@ function RuntimeDisclosure({
       size="xlarge"
       className="live-runtime-diagnostics-dialog"
       title={localText(language, '运行诊断', 'Runtime diagnostics')}
-      description={item.summary ? contributionText(item.summary, language) : title}
       headerActions={<CopyAction
         value={diagnosticCopyText(item, language, fields)}
         language={language}
