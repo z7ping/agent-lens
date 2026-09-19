@@ -464,6 +464,30 @@ export interface LiveRuntimeActionContribution {
   tone?: LiveContributionActionTone | undefined
 }
 
+export type LiveRuntimeLifecycleStatus = 'initializing' | 'ready' | 'failed'
+export type LiveRuntimeLifecycleStageStatus = 'pending' | 'active' | 'done' | 'failed'
+
+export interface LiveRuntimeLifecycleStageContribution {
+  stageId: string
+  label: LiveContributionText
+  status: LiveRuntimeLifecycleStageStatus
+  durationMs?: number | undefined
+}
+
+export interface LiveRuntimeLifecycleResourceGroupContribution {
+  groupId: string
+  label: LiveContributionText
+  values: readonly string[]
+}
+
+export interface LiveRuntimeLifecycleContribution {
+  status: LiveRuntimeLifecycleStatus
+  elapsedMs?: number | undefined
+  message?: LiveContributionText | undefined
+  stages: readonly LiveRuntimeLifecycleStageContribution[]
+  resources?: readonly LiveRuntimeLifecycleResourceGroupContribution[] | undefined
+}
+
 export interface LiveRuntimeDisclosureContribution {
   /** Adapter-owned stable id used only for UI identity. */
   contributionId: string
@@ -471,6 +495,8 @@ export interface LiveRuntimeDisclosureContribution {
   summary?: LiveContributionText | undefined
   tone?: LiveContributionTone | undefined
   defaultExpanded?: boolean | undefined
+  /** Optional structured lifecycle for TUI-like startup progress on the shared Live Surface. */
+  lifecycle?: LiveRuntimeLifecycleContribution | undefined
   fields: readonly LiveRuntimeContributionField[]
   actions?: readonly LiveRuntimeActionContribution[] | undefined
 }
