@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import type {
-  LiveContributionText,
-  LiveRuntimeContributionField,
-  LiveRuntimeDisclosureContribution,
+import {
+  LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT,
+  LIVE_SNAPSHOT_DEFAULT_LIMIT,
+  LIVE_SNAPSHOT_MAX_LIMIT,
+  type LiveContributionText,
+  type LiveHistoryIndexQuery,
+  type LiveRuntimeContributionField,
+  type LiveRuntimeDisclosureContribution,
+  type LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
@@ -823,15 +828,46 @@ export class DefaultPiLiveService implements PiLiveService {
     return { runtime: await this.retry(id) }
   }
 
-  async snapshot(id: string, since?: string): Promise<PiLiveSnapshot> {
+  async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
-    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null }
-    const snapshot = await runtime.handle.snapshot(since)
+    if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
+    const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
+    if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
+    const requestedLimit = window?.limit
+    const limit = Number.isInteger(requestedLimit)
+      ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit!))
+      : LIVE_SNAPSHOT_DEFAULT_LIMIT
+    const boundedWindow: LiveSnapshotWindow = {
+      ...(window?.before ? { before: window.before } : {}),
+      ...(window?.after ? { after: window.after } : {}),
+      ...(window?.edge ? { edge: window.edge } : {}),
+      ...(window?.around ? { around: window.around } : {}),
+      limit,
+    }
+    const snapshot = await runtime.handle.snapshot(since, boundedWindow)
     this.persistSessionIfChanged(runtime, snapshot.state)
     this.updateRuntimeResources(runtime, snapshot.state)
     this.persistStartupAuditBestEffort(runtime, snapshot.state)
     this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
     return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
+  }
+
+  async historyIndex(id: string, query: LiveHistoryIndexQuery = {}) {
+    const runtime = await this.readyRuntime(id)
+    const requestedLimit = Number.isInteger(query.limit) ? query.limit! : 0
+    const boundedQuery: LiveHistoryIndexQuery = {
+      ...(Number.isInteger(query.fromOrdinal) && query.fromOrdinal! > 0
+        ? { fromOrdinal: query.fromOrdinal }
+        : {}),
+      ...(query.cursor?.trim() ? { cursor: query.cursor.trim() } : {}),
+      limit: Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, requestedLimit)),
+    }
+    if (boundedQuery.cursor && boundedQuery.fromOrdinal !== undefined) {
+      throw new Error('Live history index accepts cursor or fromOrdinal, not both')
+    }
+    return runtime.handle?.historyIndex
+      ? runtime.handle.historyIndex(boundedQuery)
+      : { total: 0, items: [] }
   }
 
   async commands(id: string): Promise<PiLiveCommand[]> {
@@ -848,7 +884,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const state = await this.runtimeState(runtime)
 
     const actions = []
-    if (runtime.handle?.navigateTree && state.capabilities?.treeNavigation === true) {
+    if (runtime.handle?.entry && runtime.handle.navigateTree && state.capabilities?.treeNavigation === true) {
       actions.push({
         actionId: 'pi.edit-from-here',
         label: {
@@ -866,7 +902,7 @@ export class DefaultPiLiveService implements PiLiveService {
         requiresIdle: true,
       })
     }
-    if (state.sessionFile && state.capabilities?.messageFork === true) {
+    if (runtime.handle?.entry && state.sessionFile && state.capabilities?.messageFork === true) {
       actions.push({
         actionId: 'pi.new-session-from-here',
         label: {
@@ -890,14 +926,16 @@ export class DefaultPiLiveService implements PiLiveService {
   async executeMessageAction(id: string, actionId: string, targetEntryId: string) {
     if (!targetEntryId) throw new Error('Pi message action target entry id is required')
     const runtime = await this.readyRuntime(id)
-    const snapshot = await runtime.handle!.snapshot()
-    if (snapshot.state.isStreaming) {
+    const state = await runtime.handle!.state()
+    if (state.isStreaming) {
       throw this.conflict('Pi message actions require an idle session')
     }
-    const target = piUserMessageEntry(snapshot.entries, targetEntryId)
+    if (!runtime.handle!.entry) throw this.conflict('Pi Runtime does not expose targeted entry lookup')
+    const targetEntry = await runtime.handle!.entry(targetEntryId)
+    const target = piUserMessageEntry(targetEntry ? [targetEntry] : [], targetEntryId)
 
     if (actionId === 'pi.edit-from-here') {
-      if (snapshot.state.capabilities?.treeNavigation !== true || !runtime.handle?.navigateTree) {
+      if (state.capabilities?.treeNavigation !== true || !runtime.handle?.navigateTree) {
         throw this.conflict('Installed Pi SDK does not support Edit from here')
       }
       const result = await runtime.handle.navigateTree(target.entryId)
@@ -913,7 +951,6 @@ export class DefaultPiLiveService implements PiLiveService {
     }
 
     if (actionId === 'pi.new-session-from-here') {
-      const state = snapshot.state
       if (state.capabilities?.messageFork !== true) {
         throw this.conflict('Installed Pi SDK does not support message-level session fork')
       }

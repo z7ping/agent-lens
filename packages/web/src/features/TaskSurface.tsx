@@ -30,9 +30,24 @@ export interface TaskBoundaryNavigation {
   onEnd(): void | Promise<void>
 }
 
+export interface TaskTurnRailData {
+  id: string
+  semanticId?: string | undefined
+  cursor?: string | undefined
+  ordinal?: number | undefined
+  loaded?: boolean | undefined
+  label: string
+  preview?: string | undefined
+  error?: boolean | undefined
+  state?: string | undefined
+}
+
 export interface TaskSurfaceProps extends HTMLAttributes<HTMLElement> {
   mode: TaskSurfaceMode
   boundaryNavigation?: TaskBoundaryNavigation | undefined
+  turnRailItems?: readonly TaskTurnRailData[] | undefined
+  turnRailTotal?: number | undefined
+  onTurnRailSelect?(item: TaskTurnRailData): void | Promise<void>
 }
 
 interface TaskSurfaceViewValue {
@@ -43,11 +58,14 @@ interface TaskSurfaceViewValue {
 interface TaskTurnRailItem {
   id: string
   semanticId: string
+  cursor?: string | undefined
+  ordinal?: number | undefined
+  loaded?: boolean | undefined
   label: string
   preview: string
   error: boolean
   state: string
-  element: HTMLElement
+  element?: HTMLElement | undefined
 }
 
 interface TaskTurnRailPosition {
@@ -72,9 +90,9 @@ const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
   setShowUsageDetails: () => undefined,
 })
 
-const sessionReaderHooks = new Set(['review-reader-pane', 'pi-live-reader'])
-const sessionDocumentHooks = new Set(['review-reader', 'pi-live-document'])
-const sessionComposerHooks = new Set(['pi-live-compose-wrap'])
+const sessionReaderHooks = new Set(['review-reader-pane', 'live-task-reader', 'pi-live-reader'])
+const sessionDocumentHooks = new Set(['review-reader', 'live-task-document', 'pi-live-document'])
+const sessionComposerHooks = new Set(['live-task-compose-wrap', 'pi-live-compose-wrap'])
 
 export function useTaskSurfaceView(): TaskSurfaceViewValue {
   return useContext(TaskSurfaceViewContext)
@@ -146,6 +164,27 @@ function cssPixelValue(element: HTMLElement, property: string): number {
   const value = Number.parseFloat(window.getComputedStyle(element).getPropertyValue(property))
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
+
+const TASK_ROUND_ANCHOR_RATIO = .3
+const TASK_ROUND_ANCHOR_MIN_PX = 72
+const TASK_ROUND_ANCHOR_MAX_PX = 190
+
+function roundAnchorY(viewportRect: DOMRect): number {
+  return viewportRect.top + Math.min(
+    Math.max(viewportRect.height * TASK_ROUND_ANCHOR_RATIO, TASK_ROUND_ANCHOR_MIN_PX),
+    TASK_ROUND_ANCHOR_MAX_PX,
+  )
+}
+
+function sessionRailLeft(root: HTMLElement, fallback: DOMRect): number {
+  const document = root.querySelector<HTMLElement>('.task-session-document')
+  const documentRect = document?.getBoundingClientRect()
+  const contentLeft = document && documentRect && documentRect.width > 0
+    ? documentRect.left + cssPixelValue(document, 'padding-left')
+    : fallback.left
+  return Math.max(16, contentLeft - 34)
+}
+
 function sessionRailFrame(root: HTMLElement, fallback: DOMRect): RailFrameRect {
   const surface = root.getBoundingClientRect()
   const header = Array.from(root.children).find(child => child instanceof HTMLElement && child.classList.contains('task-header'))
@@ -227,7 +266,7 @@ function collectTurnRailItems(root: HTMLElement): TaskTurnRailItem[] {
       continue
     }
 
-    const item = { id: semanticId, semanticId, label, preview, error, state, element }
+    const item = { id: semanticId, semanticId, label, preview, error, state, element, loaded: true }
     bySemanticId.set(semanticId, item)
     result.push(item)
   }
@@ -270,6 +309,9 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
     return Boolean(next)
       && item.id === next.id
       && item.semanticId === next.semanticId
+      && item.cursor === next.cursor
+      && item.ordinal === next.ordinal
+      && item.loaded === next.loaded
       && item.label === next.label
       && item.preview === next.preview
       && item.error === next.error
@@ -278,13 +320,112 @@ function sameTurnRailItems(left: TaskTurnRailItem[], right: TaskTurnRailItem[]):
   })
 }
 
-function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTurnRailItem {
+const TASK_TURN_RAIL_MAX_TICKS = 80
+
+function compactLoadedTurnRailItems(items: readonly TaskTurnRailItem[], activeId: string): TaskTurnRailItem[] {
+  if (items.length <= TASK_TURN_RAIL_MAX_TICKS) return [...items]
+  const required = new Set<number>([0, items.length - 1])
+  const activeIndex = items.findIndex(item => item.id === activeId)
+  if (activeIndex >= 0) required.add(activeIndex)
+
+  const budget = Math.max(2, TASK_TURN_RAIL_MAX_TICKS - required.size)
+  const step = Math.max(1, Math.ceil(items.length / budget))
+  for (let index = 0; index < items.length; index += step) required.add(index)
+
+  return [...required]
+    .sort((left, right) => left - right)
+    .slice(0, TASK_TURN_RAIL_MAX_TICKS)
+    .map(index => items[index]!)
+}
+
+function sampledRoundOrdinals(
+  total: number,
+  requiredOrdinals: readonly number[],
+): number[] {
+  const boundedTotal = Math.max(0, Math.floor(total))
+  if (boundedTotal <= TASK_TURN_RAIL_MAX_TICKS) {
+    return Array.from({ length: boundedTotal }, (_, index) => index + 1)
+  }
+
+  const required = new Set(
+    [1, boundedTotal, ...requiredOrdinals]
+      .filter(value => Number.isInteger(value) && value >= 1 && value <= boundedTotal),
+  )
+  if (required.size >= TASK_TURN_RAIL_MAX_TICKS) {
+    const values = [...required].sort((left, right) => left - right)
+    const selected = new Set<number>([1, boundedTotal])
+    const active = requiredOrdinals.find(value => value > 1 && value < boundedTotal)
+    if (active) selected.add(active)
+    const slots = TASK_TURN_RAIL_MAX_TICKS - selected.size
+    for (let slot = 0; slot < slots; slot += 1) {
+      const index = Math.round(slot * (values.length - 1) / Math.max(1, slots - 1))
+      selected.add(values[index]!)
+    }
+    return [...selected].sort((left, right) => left - right).slice(0, TASK_TURN_RAIL_MAX_TICKS)
+  }
+
+  const sampleSlots = Math.max(2, TASK_TURN_RAIL_MAX_TICKS - required.size)
+  for (let slot = 0; slot < sampleSlots; slot += 1) {
+    required.add(1 + Math.round(slot * (boundedTotal - 1) / Math.max(1, sampleSlots - 1)))
+  }
+  return [...required].sort((left, right) => left - right).slice(0, TASK_TURN_RAIL_MAX_TICKS)
+}
+
+function virtualTurnRailItem(ordinal: number): TaskTurnRailItem {
+  const id = `turn-ordinal:${ordinal}`
+  return {
+    id,
+    semanticId: id,
+    ordinal,
+    loaded: false,
+    label: agentLensI18n.t('task:surface.roundOrdinal', { count: ordinal }),
+    preview: '',
+    error: false,
+    state: 'settled',
+  }
+}
+
+function renderTurnRailItems(
+  items: readonly TaskTurnRailItem[],
+  activeId: string,
+  total?: number,
+): TaskTurnRailItem[] {
+  if (!Number.isInteger(total) || total! <= 0) return compactLoadedTurnRailItems(items, activeId)
+
+  const byOrdinal = new Map<number, TaskTurnRailItem>()
+  for (const item of items) {
+    if (Number.isInteger(item.ordinal) && item.ordinal! > 0 && !byOrdinal.has(item.ordinal!)) {
+      byOrdinal.set(item.ordinal!, item)
+    }
+  }
+  const activeOrdinal = items.find(item => item.id === activeId)?.ordinal
+  const loadedOrdinals = items
+    .flatMap(item => item.ordinal ? [item.ordinal] : [])
+    .sort((left, right) => left - right)
+  const activeLoadedIndex = activeOrdinal ? loadedOrdinals.indexOf(activeOrdinal) : -1
+  const activeNeighborhood = activeLoadedIndex >= 0
+    ? loadedOrdinals.slice(Math.max(0, activeLoadedIndex - 2), activeLoadedIndex + 3)
+    : []
+  const requiredOrdinals = [
+    ...activeNeighborhood,
+    ...items.filter(item => item.error || item.state === 'running').flatMap(item => item.ordinal ? [item.ordinal] : []),
+  ]
+  return sampledRoundOrdinals(total!, requiredOrdinals).map(ordinal => {
+    const loaded = byOrdinal.get(ordinal)
+    if (loaded) return loaded
+    return virtualTurnRailItem(ordinal)
+  })
+}
+
+function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTurnRailItem | null {
+  const positioned = items.filter((item): item is TaskTurnRailItem & { element: HTMLElement } => Boolean(item.element))
+  if (!positioned.length) return null
   let low = 0
-  let high = items.length - 1
+  let high = positioned.length - 1
   let candidate = 0
   while (low <= high) {
     const middle = (low + high) >> 1
-    const item = items[middle]!
+    const item = positioned[middle]!
     const top = item.element.getBoundingClientRect().top
     if (top <= anchorY) {
       candidate = middle
@@ -293,7 +434,7 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
       high = middle - 1
     }
   }
-  return items[candidate]!
+  return positioned[candidate] ?? null
 }
 
 /**
@@ -302,18 +443,33 @@ function activeTurnRailItem(items: TaskTurnRailItem[], anchorY: number): TaskTur
  * TaskSurface 持有统一 Reader/Document/Composer 槽位、语义轮次导轨与边界导航。
  */
 export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function TaskSurface(
-  { mode, className, children, boundaryNavigation, ...props },
+  { mode, className, children, boundaryNavigation, turnRailItems: providedTurnRailItems, turnRailTotal, onTurnRailSelect, ...props },
   ref,
 ) {
   const { t } = useTranslation('task')
   const rootRef = useRef<HTMLElement>(null)
   const railItemsRef = useRef<TaskTurnRailItem[]>([])
+  const pendingTurnRailTargetRef = useRef<{ id: string; ordinal?: number | undefined } | null>(null)
+  const railElementBySemanticIdRef = useRef(new Map<string, HTMLElement>())
+  const providedTurnRailItemsRef = useRef(providedTurnRailItems)
+  providedTurnRailItemsRef.current = providedTurnRailItems
   const railViewportRef = useRef<HTMLElement | null>(null)
   const frameRef = useRef<number | null>(null)
   const [railItems, setRailItems] = useState<TaskTurnRailItem[]>([])
   const [activeRoundId, setActiveRoundId] = useState('')
   const [railPosition, setRailPosition] = useState<TaskTurnRailPosition | null>(null)
   const sessionMode = mode === 'review' || mode === 'live'
+  const hasProvidedTurnRailItems = providedTurnRailItems !== undefined
+  const providedRailIdentity = useMemo(
+    () => providedTurnRailItems
+      ? JSON.stringify(providedTurnRailItems.map(item => [
+          item.semanticId?.trim() || item.id,
+          item.ordinal ?? null,
+          item.loaded === true,
+        ]))
+      : '',
+    [providedTurnRailItems],
+  )
   const classes = ['task-surface', sessionMode ? 'task-session-view' : '', `task-surface-${mode}`, className].filter(Boolean).join(' ')
   const sessionChildren = normalizeSessionChildren(children, sessionMode)
 
@@ -330,8 +486,9 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     }
 
     const items = railItemsRef.current
+    const firstElement = items.find(item => item.element)?.element
     const viewport = railViewportRef.current
-      ?? (items.length ? scrollViewport(root, items[0]!.element) : root.querySelector<HTMLElement>('.task-session-reader'))
+      ?? (firstElement ? scrollViewport(root, firstElement) : root.querySelector<HTMLElement>('.task-session-reader'))
     railViewportRef.current = viewport
     if (!viewport) {
       setRailPosition(null)
@@ -345,15 +502,14 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     }
 
     if (items.length) {
-      const anchorY = viewportRect.top + Math.min(Math.max(viewportRect.height * .3, 72), 190)
-      const active = activeTurnRailItem(items, anchorY)
-      setActiveRoundId(current => current === active.id ? current : active.id)
+      const active = activeTurnRailItem(items, roundAnchorY(viewportRect))
+      if (active) setActiveRoundId(current => current === active.id ? current : active.id)
     }
 
     const railFrame = sessionMode ? sessionRailFrame(root, viewportRect) : viewportRect
     const boundary = sessionBoundaryPosition(root, railFrame, viewportRect)
     const nextPosition = {
-      left: railFrame.left + 10,
+      left: sessionMode ? sessionRailLeft(root, viewportRect) : railFrame.left + 10,
       top: railFrame.top + railFrame.height / 2,
       maxHeight: Math.max(96, railFrame.height - 24),
       boundaryBottom: boundary.bottom,
@@ -383,14 +539,65 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     const collected = collectTurnRailItems(root)
     const next = stabilizeTurnRailItemIds(railItemsRef.current, collected)
     railItemsRef.current = next
-    railViewportRef.current = next.length
-      ? scrollViewport(root, next[0]!.element)
+    const firstElement = next.find(item => item.element)?.element
+    railViewportRef.current = firstElement
+      ? scrollViewport(root, firstElement)
+      : root.querySelector<HTMLElement>('.task-session-reader')
+    setRailItems(current => sameTurnRailItems(current, next) ? current : next)
+    scheduleRailViewport()
+  }, [scheduleRailViewport])
+
+  const syncProvidedRailItems = useCallback(() => {
+    const root = rootRef.current
+    const provided = providedTurnRailItemsRef.current
+    if (!root || !provided) return
+    const next: TaskTurnRailItem[] = provided.map(item => {
+      const semanticId = item.semanticId?.trim() || item.id
+      return {
+        id: item.id,
+        semanticId,
+        ...(item.cursor ? { cursor: item.cursor } : {}),
+        ...(item.ordinal !== undefined ? { ordinal: item.ordinal } : {}),
+        ...(item.loaded !== undefined ? { loaded: item.loaded } : {}),
+        label: item.label,
+        preview: compactRailPreview(item.preview),
+        error: item.error === true,
+        state: item.state || 'settled',
+        element: railElementBySemanticIdRef.current.get(semanticId),
+      }
+    })
+    railItemsRef.current = next
+    const firstElement = next.find(item => item.element)?.element
+    railViewportRef.current = firstElement
+      ? scrollViewport(root, firstElement)
       : root.querySelector<HTMLElement>('.task-session-reader')
     setRailItems(current => sameTurnRailItems(current, next) ? current : next)
     scheduleRailViewport()
   }, [scheduleRailViewport])
 
   useEffect(() => {
+    if (!providedTurnRailItems) return
+    syncProvidedRailItems()
+  }, [providedTurnRailItems, syncProvidedRailItems])
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || !providedTurnRailItems) return
+    const frame = window.requestAnimationFrame(() => {
+      const elementBySemanticId = new Map<string, HTMLElement>()
+      for (const element of root.querySelectorAll<HTMLElement>('[data-round-semantic-id]')) {
+        if (element.closest('.task-surface') !== root) continue
+        const semanticId = element.dataset.roundSemanticId?.trim()
+        if (semanticId && !elementBySemanticId.has(semanticId)) elementBySemanticId.set(semanticId, element)
+      }
+      railElementBySemanticIdRef.current = elementBySemanticId
+      syncProvidedRailItems()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [providedRailIdentity, syncProvidedRailItems])
+
+  useEffect(() => {
+    if (hasProvidedTurnRailItems) return
     const root = rootRef.current
     if (!root || typeof MutationObserver === 'undefined') return
     scanRounds()
@@ -412,12 +619,54 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       frameRef.current = null
       railViewportRef.current = null
     }
-  }, [scanRounds, scheduleRailViewport])
+  }, [hasProvidedTurnRailItems, scanRounds, scheduleRailViewport])
+
+  const scrollRailItemToAnchor = useCallback((item: TaskTurnRailItem) => {
+    if (!item.element || !rootRef.current) return false
+    const viewport = railViewportRef.current ?? scrollViewport(rootRef.current, item.element)
+    const reducedMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const viewportRect = viewport.getBoundingClientRect()
+    const delta = item.element.getBoundingClientRect().top - roundAnchorY(viewportRect)
+    viewport.scrollTo({
+      top: Math.max(0, viewport.scrollTop + delta),
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
+    setActiveRoundId(item.id)
+    return true
+  }, [])
+
+  useEffect(() => {
+    const pending = pendingTurnRailTargetRef.current
+    if (!pending) return
+    const target = railItems.find(item =>
+      (pending.ordinal !== undefined && item.ordinal === pending.ordinal)
+      || item.id === pending.id
+      || item.semanticId === pending.id)
+    if (!target?.element) return
+    const frame = window.requestAnimationFrame(() => {
+      if (scrollRailItemToAnchor(target)) pendingTurnRailTargetRef.current = null
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [railItems, scrollRailItemToAnchor])
 
   const jumpToRound = (item: TaskTurnRailItem) => {
-    const reducedMotion = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    item.element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' })
-    setActiveRoundId(item.id)
+    if (scrollRailItemToAnchor(item)) return
+    pendingTurnRailTargetRef.current = {
+      id: item.id,
+      ...(item.ordinal !== undefined ? { ordinal: item.ordinal } : {}),
+    }
+    void onTurnRailSelect?.({
+      id: item.id,
+      semanticId: item.semanticId,
+      ...(item.cursor ? { cursor: item.cursor } : {}),
+      ...(item.ordinal !== undefined ? { ordinal: item.ordinal } : {}),
+      ...(item.loaded !== undefined ? { loaded: item.loaded } : {}),
+      label: item.label,
+      preview: item.preview,
+      error: item.error,
+      state: item.state,
+    })
   }
 
   const jumpToBoundary = (boundary: 'start' | 'end') => {
@@ -439,25 +688,49 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
         }
       : undefined)
 
-  const rail = railItems.length > 0 && railPosition && typeof document !== 'undefined'
+  const jumpToRailPosition = (clientY: number, railElement: HTMLElement | null) => {
+    if (!railElement || !Number.isInteger(turnRailTotal) || turnRailTotal! <= 0) return
+    const rect = railElement.getBoundingClientRect()
+    if (rect.height <= 0) return
+    const ratio = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
+    const ordinal = 1 + Math.round(ratio * Math.max(0, turnRailTotal! - 1))
+    jumpToRound(virtualTurnRailItem(ordinal))
+  }
+
+  const renderedRailItems = renderTurnRailItems(railItems, activeRoundId, turnRailTotal)
+  const rail = renderedRailItems.length > 0 && railPosition && typeof document !== 'undefined'
     ? createPortal(
         <nav
           className={`turn-rail task-turn-rail task-turn-rail-${mode}`}
           aria-label={t('surface.turnRail')}
           style={{ left: railPosition.left, top: railPosition.top, maxHeight: railPosition.maxHeight }}
+          onClick={event => {
+            if (event.target !== event.currentTarget) return
+            jumpToRailPosition(event.clientY, event.currentTarget)
+          }}
         >
-          {railItems.map(item => {
+          {renderedRailItems.map((item, index) => {
             const active = item.id === activeRoundId
             const running = item.state === 'running'
             const tip = [item.label, item.preview, running ? t('surface.running') : '', item.error ? t('surface.hasError') : ''].filter(Boolean).join(' · ')
+            const position = Number.isInteger(turnRailTotal) && turnRailTotal! > 1 && item.ordinal
+              ? (item.ordinal - 1) / (turnRailTotal! - 1)
+              : renderedRailItems.length > 1 ? index / (renderedRailItems.length - 1) : .5
             return <button
               key={item.id}
               type="button"
               className={`turn-tick ${active ? 'active' : ''} ${item.error ? 'err' : ''} ${running ? 'running' : ''}`.trim()}
+              style={{ top: `${Math.max(0, Math.min(1, position)) * 100}%` }}
               data-tip={tip}
               aria-label={t('surface.jumpTo', { tip })}
               aria-current={active ? 'step' : undefined}
-              onClick={() => jumpToRound(item)}
+              onClick={event => {
+                if (event.detail > 0) {
+                  jumpToRailPosition(event.clientY, event.currentTarget.parentElement)
+                  return
+                }
+                jumpToRound(item)
+              }}
             ><i/></button>
           })}
         </nav>,
@@ -496,6 +769,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     : null
 
   const activeRailIndex = Math.max(0, railItems.findIndex(item => item.id === activeRoundId))
+  const activeRailOrdinal = railItems.find(item => item.id === activeRoundId)?.ordinal ?? activeRailIndex + 1
+  const compactRailTotal = Number.isInteger(turnRailTotal) && turnRailTotal! > 0 ? turnRailTotal! : railItems.length
   const firstErrorItem = railItems.find(item => item.error)
   const compactNav = railItems.length > 0 && resolvedBoundaryNavigation && railPosition && typeof document !== 'undefined'
     ? createPortal(
@@ -512,7 +787,7 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           >
             <UiIcon name="arrow-big-up" size={20} strokeWidth={2}/>
           </IconButton>
-          <span aria-live="polite">{activeRailIndex + 1} / {railItems.length}</span>
+          <span aria-live="polite">{activeRailOrdinal} / {compactRailTotal}</span>
           {firstErrorItem && <IconButton
             className="task-compact-round-error"
             title={t('surface.jumpErrorRound', { label: firstErrorItem.label })}

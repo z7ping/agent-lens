@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { isLiveThinkingControl } from '@agent-lens/core'
+import { LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveHistoryIndex, type LiveHistoryIndexQuery, type LiveSnapshotWindow } from '@agent-lens/core'
 import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
@@ -145,8 +145,23 @@ function forkSessionManager(manager: PiSdkSessionManager, targetLeafId?: string)
   return manager
 }
 
+interface PiRoundIndexRow {
+  cursor: string
+  ordinal: number
+  entryIndex: number
+  preview?: string
+}
+
 class InProcessHandle implements PiRuntimeHandle {
   readonly capabilities: PiLiveRuntimeCapabilities
+  private roundIndexCache: {
+    entryCount: number
+    lastEntryId?: string
+    leafId?: string | null
+    rows: PiRoundIndexRow[]
+    entryPositions: Map<string, number>
+    roundByCursor: Map<string, PiRoundIndexRow>
+  } | undefined
 
   constructor(
     private readonly id: string,
@@ -168,6 +183,72 @@ class InProcessHandle implements PiRuntimeHandle {
     }
   }
 
+  private roundIndex(all: readonly unknown[] = this.session.sessionManager.getEntries()): PiRoundIndexRow[] {
+    const lastEntryId = all.length ? String(record(all.at(-1)).id ?? '') || undefined : undefined
+    const leafId = this.session.sessionManager.getLeafId()
+    const cached = this.roundIndexCache
+    if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId && cached.leafId === leafId) return cached.rows
+
+    const appendOnly = cached
+      && cached.leafId === leafId
+      && all.length >= cached.entryCount
+      && (cached.entryCount === 0
+        || String(record(all[cached.entryCount - 1]).id ?? '') === cached.lastEntryId)
+    const rows = appendOnly ? [...cached.rows] : []
+    const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map<string, number>()
+    const roundByCursor = appendOnly ? new Map(cached.roundByCursor) : new Map<string, PiRoundIndexRow>()
+    const start = appendOnly ? cached.entryCount : 0
+
+    for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
+      const entry = record(all[entryIndex])
+      if (typeof entry.id === 'string' && entry.id) entryPositions.set(entry.id, entryIndex)
+      const message = record(entry.message)
+      if (entry.type !== 'message' || message.role !== 'user' || typeof entry.id !== 'string' || !entry.id) continue
+      const content = message.content ?? entry.content
+      const preview = Array.isArray(content)
+        ? content.map(part => typeof part === 'string'
+          ? part
+          : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
+        : typeof content === 'string' ? content : ''
+      const row: PiRoundIndexRow = {
+        cursor: entry.id,
+        ordinal: rows.length + 1,
+        entryIndex,
+        ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+      }
+      rows.push(row)
+      roundByCursor.set(row.cursor, row)
+    }
+
+    this.roundIndexCache = {
+      entryCount: all.length,
+      ...(lastEntryId ? { lastEntryId } : {}),
+      leafId,
+      rows,
+      entryPositions,
+      roundByCursor,
+    }
+    return rows
+  }
+
+  private roundPage(all: readonly unknown[], start: number, end: number) {
+    if (!this.roundIndexCache) return undefined
+    const rows = this.roundIndex(all)
+    let first: PiRoundIndexRow | undefined
+    let last: PiRoundIndexRow | undefined
+    for (const row of rows) {
+      if (row.entryIndex < start) continue
+      if (row.entryIndex >= end) break
+      first ??= row
+      last = row
+    }
+    return {
+      total: rows.length,
+      ...(first ? { firstOrdinal: first.ordinal } : {}),
+      ...(last ? { lastOrdinal: last.ordinal } : {}),
+    }
+  }
+
   async state(): Promise<PiLiveRuntimeState> {
     const resources = runtimeResourceSnapshot(this.session)
     return { runtimeSessionId: this.id, status: 'ready', initializationStage: 'ready', capabilities: this.capabilities, nativeSessionId: this.session.sessionId,
@@ -178,7 +259,92 @@ class InProcessHandle implements PiRuntimeHandle {
       packageUpdateCheck: this.packageUpdateState.status,
       ...(this.packageUpdateState.updates.length ? { packageUpdates: [...this.packageUpdateState.updates] } : {}) }
   }
-  async snapshot(since?: string): Promise<PiLiveSnapshot> { const all = this.session.sessionManager.getEntries(); const index = since ? all.findIndex(entry => record(entry).id === since) : -1; return { state: await this.state(), entries: since && index >= 0 ? all.slice(index + 1) : all, leafId: this.session.sessionManager.getLeafId() } }
+  async snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
+    if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
+    const all = this.session.sessionManager.getEntries()
+    if (this.roundIndexCache) this.roundIndex(all)
+    const entryPosition = (cursor: string | undefined) => cursor
+      ? this.roundIndexCache?.entryPositions.get(cursor)
+        ?? all.findIndex(entry => record(entry).id === cursor)
+      : -1
+    const requested = window?.limit
+    const limit = Number.isInteger(requested)
+      ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested!))
+      : LIVE_SNAPSHOT_DEFAULT_LIMIT
+
+    let start = 0
+    let end = all.length
+    if (since || window?.after) {
+      const cursor = since ?? window?.after
+      const index = entryPosition(cursor)
+      if (index < 0 && window?.after) throw new Error('Live snapshot after cursor was not found')
+      start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+      end = Math.min(all.length, start + limit)
+    } else if (window?.edge === 'earliest') {
+      start = 0
+      end = Math.min(all.length, limit)
+    } else if (window?.around) {
+      const aroundIndex = entryPosition(window.around)
+      if (aroundIndex < 0) throw new Error('Live snapshot around cursor was not found')
+      start = Math.max(0, aroundIndex - Math.floor(limit * .3))
+      end = Math.min(all.length, start + limit)
+      start = Math.max(0, end - limit)
+    } else {
+      if (window?.before) {
+        const beforeIndex = entryPosition(window.before)
+        if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
+        end = beforeIndex
+      }
+      start = Math.max(0, end - limit)
+    }
+
+    const entries = all.slice(start, end)
+    const first = entries.length ? record(entries[0]).id : undefined
+    const last = entries.length ? record(entries.at(-1)).id : undefined
+    const before = start > 0 ? first : undefined
+    const after = end < all.length ? last : undefined
+    const rounds = this.roundPage(all, start, end)
+    return {
+      state: await this.state(),
+      entries,
+      leafId: this.session.sessionManager.getLeafId(),
+      page: {
+        hasEarlier: start > 0,
+        ...(start > 0 && typeof before === 'string' ? { before } : {}),
+        ...(typeof first === 'string' ? { first } : {}),
+        ...(typeof last === 'string' ? { last } : {}),
+        ...(rounds ? { rounds } : {}),
+        ...(end < all.length ? { hasLater: true, ...(typeof after === 'string' ? { after } : {}) } : {}),
+      },
+    }
+  }
+  async historyIndex(query: LiveHistoryIndexQuery = {}): Promise<LiveHistoryIndex> {
+    const rows = this.roundIndex()
+    const cursor = query.cursor?.trim()
+    if (cursor) {
+      const row = this.roundIndexCache?.roundByCursor.get(cursor)
+      return { total: rows.length, items: row ? [{ cursor: row.cursor, ordinal: row.ordinal, ...(row.preview ? { preview: row.preview } : {}) }] : [] }
+    }
+
+    const limit = Number.isInteger(query.limit)
+      ? Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, query.limit!))
+      : 0
+    if (limit === 0) return { total: rows.length, items: [] }
+
+    const fromOrdinal = Number.isInteger(query.fromOrdinal) && query.fromOrdinal! > 0
+      ? query.fromOrdinal!
+      : 1
+    const start = Math.min(rows.length, fromOrdinal - 1)
+    return {
+      total: rows.length,
+      items: rows.slice(start, start + limit).map(({ entryIndex: _entryIndex, ...item }) => item),
+    }
+  }
+
+  async entry(entryId: string): Promise<unknown | null> {
+    return this.session.sessionManager.getEntries().find(entry => record(entry).id === entryId) ?? null
+  }
   private modelSnapshot(provider?: string): readonly PiSdkModel[] { const snapshot = [...this.session.modelRuntime.getAvailableSnapshot()]; const selected = this.session.model; const catalog = selected && !snapshot.some(model => model.provider === selected.provider && model.id === selected.id) ? [...snapshot, selected] : snapshot; return provider ? catalog.filter(model => model.provider === provider) : catalog }
   private async modelsForSelection(provider?: string): Promise<readonly PiSdkModel[]> { const snapshot = this.modelSnapshot(provider); return snapshot.length ? snapshot : await this.session.modelRuntime.getAvailable(provider) }
   private thinkingControl(): PiLiveControls['thinking'] {
@@ -195,6 +361,7 @@ class InProcessHandle implements PiRuntimeHandle {
     if (this.session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
     if (typeof this.session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
     const result = await this.session.navigateTree(entryId)
+    this.roundIndexCache = undefined
     return {
       cancelled: result.cancelled,
       ...(typeof result.editorText === 'string' ? { editorText: result.editorText } : {}),

@@ -10,6 +10,9 @@ const MAX_MESSAGE_BYTES = 1024 * 1024
 const SNAPSHOT_CHUNK_BYTES = 384 * 1024
 const MAX_SNAPSHOT_TRANSFERS = 8
 const SNAPSHOT_TRANSFER_TTL_MS = 30_000
+const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
+const LIVE_SNAPSHOT_MAX_LIMIT = 500
+const LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT = 120
 const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
@@ -26,6 +29,7 @@ let runtimeMode = 'compatibility'
 let capabilities
 let packageUpdateCheck = 'checking'
 let packageUpdates = []
+let roundIndexCache
 let initializationStartedAt = 0
 let currentInitializationStage
 let currentStageStartedAt = 0
@@ -362,11 +366,136 @@ function nextSnapshotChunk(transferId) {
   return { transferId, sequence, chunk, done }
 }
 
-function beginSnapshotTransfer(since) {
+function snapshotLimit(window) {
+  const requested = record(window).limit
+  return Number.isInteger(requested)
+    ? Math.max(1, Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requested))
+    : LIVE_SNAPSHOT_DEFAULT_LIMIT
+}
+
+function entryId(value) {
+  const id = record(value).id
+  return typeof id === 'string' && id ? id : undefined
+}
+
+function roundIndex(all = session.sessionManager.getEntries()) {
+  const lastEntryId = all.length ? entryId(all.at(-1)) : undefined
+  const leafId = session.sessionManager.getLeafId()
+  const cached = roundIndexCache
+  if (cached && cached.entryCount === all.length && cached.lastEntryId === lastEntryId && cached.leafId === leafId) return cached.rows
+
+  const appendOnly = cached
+    && cached.leafId === leafId
+    && all.length >= cached.entryCount
+    && (cached.entryCount === 0 || entryId(all[cached.entryCount - 1]) === cached.lastEntryId)
+  const rows = appendOnly ? [...cached.rows] : []
+  const entryPositions = appendOnly ? new Map(cached.entryPositions) : new Map()
+  const roundByCursor = appendOnly ? new Map(cached.roundByCursor) : new Map()
+  const start = appendOnly ? cached.entryCount : 0
+
+  for (let entryIndex = start; entryIndex < all.length; entryIndex += 1) {
+    const entry = record(all[entryIndex])
+    const id = entryId(entry)
+    if (id) entryPositions.set(id, entryIndex)
+    const message = record(entry.message)
+    const cursor = entryId(entry)
+    if (entry.type !== 'message' || message.role !== 'user' || !cursor) continue
+    const content = message.content ?? entry.content
+    const preview = Array.isArray(content)
+      ? content.map(part => typeof part === 'string'
+        ? part
+        : typeof record(part).text === 'string' ? String(record(part).text) : '').join(' ')
+      : typeof content === 'string' ? content : ''
+    const row = {
+      cursor,
+      ordinal: rows.length + 1,
+      entryIndex,
+      ...(preview.trim() ? { preview: preview.replace(/\s+/g, ' ').trim().slice(0, 86) } : {}),
+    }
+    rows.push(row)
+    roundByCursor.set(row.cursor, row)
+  }
+
+  roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows, entryPositions, roundByCursor }
+  return rows
+}
+
+function snapshotRoundPage(all, start, end) {
+  if (!roundIndexCache) return undefined
+  const rows = roundIndex(all)
+  let first
+  let last
+  for (const row of rows) {
+    if (row.entryIndex < start) continue
+    if (row.entryIndex >= end) break
+    first ??= row
+    last = row
+  }
+  return {
+    total: rows.length,
+    ...(first ? { firstOrdinal: first.ordinal } : {}),
+    ...(last ? { lastOrdinal: last.ordinal } : {}),
+  }
+}
+
+function beginSnapshotTransfer(since, window) {
+  const requestedWindow = record(window)
+  const before = typeof requestedWindow.before === 'string' ? requestedWindow.before : ''
+  const afterCursor = typeof requestedWindow.after === 'string' ? requestedWindow.after : ''
+  const edge = requestedWindow.edge === 'earliest' || requestedWindow.edge === 'latest' ? requestedWindow.edge : ''
+  const around = typeof requestedWindow.around === 'string' ? requestedWindow.around : ''
+  const selectors = [since, before, afterCursor, edge, around].filter(Boolean)
+  if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
+
   const all = session.sessionManager.getEntries()
-  const index = since ? all.findIndex(entry => record(entry).id === since) : -1
-  const entries = since && index >= 0 ? all.slice(index + 1) : all
-  const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId() }
+  if (roundIndexCache) roundIndex(all)
+  const entryPosition = cursor => cursor
+    ? roundIndexCache?.entryPositions?.get(cursor) ?? all.findIndex(entry => entryId(entry) === cursor)
+    : -1
+  const limit = snapshotLimit(requestedWindow)
+  let start = 0
+  let end = all.length
+
+  if (since || afterCursor) {
+    const cursor = since || afterCursor
+    const index = entryPosition(cursor)
+    if (index < 0 && afterCursor) throw new Error('Live snapshot after cursor was not found')
+    start = index >= 0 ? index + 1 : Math.max(0, all.length - limit)
+    end = Math.min(all.length, start + limit)
+  } else if (edge === 'earliest') {
+    start = 0
+    end = Math.min(all.length, limit)
+  } else if (around) {
+    const aroundIndex = entryPosition(around)
+    if (aroundIndex < 0) throw new Error('Live snapshot around cursor was not found')
+    start = Math.max(0, aroundIndex - Math.floor(limit * .3))
+    end = Math.min(all.length, start + limit)
+    start = Math.max(0, end - limit)
+  } else {
+    if (before) {
+      const beforeIndex = entryPosition(before)
+      if (beforeIndex < 0) throw new Error('Live snapshot before cursor was not found')
+      end = beforeIndex
+    }
+    start = Math.max(0, end - limit)
+  }
+
+  const entries = all.slice(start, end)
+  const firstCursor = entries.length ? entryId(entries[0]) : undefined
+  const lastCursor = entries.length ? entryId(entries.at(-1)) : undefined
+  const olderCursor = start > 0 ? firstCursor : undefined
+  const newerCursor = end < all.length ? lastCursor : undefined
+  const rounds = snapshotRoundPage(all, start, end)
+  const page = {
+    hasEarlier: start > 0,
+    ...(start > 0 && olderCursor ? { before: olderCursor } : {}),
+    ...(firstCursor ? { first: firstCursor } : {}),
+    ...(lastCursor ? { last: lastCursor } : {}),
+    ...(rounds ? { rounds } : {}),
+    ...(end < all.length ? { hasLater: true, ...(newerCursor ? { after: newerCursor } : {}) } : {}),
+  }
+
+  const snapshot = { state: state(), entries, leafId: session.sessionManager.getLeafId(), page }
   const bytes = serialize(snapshot)
 
   pruneSnapshotTransfers()
@@ -382,6 +511,37 @@ function beginSnapshotTransfer(since) {
     expiresAt: Date.now() + SNAPSHOT_TRANSFER_TTL_MS,
   })
   return nextSnapshotChunk(transferId)
+}
+
+function historyIndex(queryValue) {
+  const query = record(queryValue)
+  const rows = roundIndex()
+  const cursor = typeof query.cursor === 'string' ? query.cursor.trim() : ''
+  if (cursor) {
+    const row = roundIndexCache?.roundByCursor?.get(cursor)
+    return {
+      total: rows.length,
+      items: row ? [{
+        cursor: row.cursor,
+        ordinal: row.ordinal,
+        ...(row.preview ? { preview: row.preview } : {}),
+      }] : [],
+    }
+  }
+
+  const limit = Number.isInteger(query.limit)
+    ? Math.max(0, Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, query.limit))
+    : 0
+  if (limit === 0) return { total: rows.length, items: [] }
+
+  const fromOrdinal = Number.isInteger(query.fromOrdinal) && query.fromOrdinal > 0
+    ? query.fromOrdinal
+    : 1
+  const start = Math.min(rows.length, fromOrdinal - 1)
+  return {
+    total: rows.length,
+    items: rows.slice(start, start + limit).map(({ entryIndex, ...item }) => item),
+  }
 }
 
 function resolvedRuntimeSessionDir(cwd, value) {
@@ -687,17 +847,23 @@ function thinkingControl() {
 async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   if (name === 'state') return state()
-  if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since)
+  if (name === 'snapshotBegin') return beginSnapshotTransfer(value.since, value.window)
   if (name === 'snapshotChunk') {
     if (typeof value.transferId !== 'string' || !value.transferId) throw new Error('Pi Runtime snapshot transfer id is required')
     return nextSnapshotChunk(value.transferId)
   }
+  if (name === 'entry') {
+    if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi Runtime entry id is required')
+    return session.sessionManager.getEntries().find(entry => entryId(entry) === value.entryId) ?? null
+  }
+  if (name === 'historyIndex') return historyIndex(value)
   if (name === 'commands') return slashCommands()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
     if (session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
     if (typeof session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
     const result = await session.navigateTree(value.entryId)
+    roundIndexCache = undefined
     return {
       cancelled: result?.cancelled === true,
       ...(typeof result?.editorText === 'string' ? { editorText: result.editorText } : {}),
@@ -741,6 +907,7 @@ async function dispose() {
   if (terminating) return
   terminating = true
   snapshotTransfers.clear()
+  roundIndexCache = undefined
   unsubscribe()
   extensionUi?.dispose()
   if (session?.isStreaming) { session.abortBash?.(); await session.abort().catch(() => undefined) }

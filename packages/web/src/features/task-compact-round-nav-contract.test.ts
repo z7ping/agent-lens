@@ -8,7 +8,7 @@ const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 
 test('窄窗长会话导航由共享 TaskSurface 持有并复用动态 Composer 边界', () => {
   assert.match(taskSurface, /className="task-compact-round-nav"/)
   assert.match(taskSurface, /style=\{\{ bottom: railPosition\.boundaryBottom \}\}/)
-  assert.match(taskSurface, /activeRailIndex \+ 1\} \/ \{railItems\.length/)
+  assert.match(taskSurface, /activeRailOrdinal\} \/ \{compactRailTotal/)
   assert.match(taskSurface, /firstErrorItem = railItems\.find\(item => item\.error\)/)
   assert.match(taskSurface, /t\('surface\.jumpErrorRound'/)
 })

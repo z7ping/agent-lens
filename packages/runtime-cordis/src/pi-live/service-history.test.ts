@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import type { LiveSnapshotWindow } from '@agent-lens/core'
 import { DefaultPiLiveService } from './service'
 import type { PiRuntimeHandle, PiRuntimeHost } from './worker-host'
 import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
@@ -27,6 +28,7 @@ type SessionResolver = (input: PiLiveStartInput) => string
 
 class HistoryHost implements PiRuntimeHost {
   readonly starts: StartCall[] = []
+  readonly snapshotWindows: Array<{ since?: string | undefined; window?: LiveSnapshotWindow | undefined }> = []
   entries: unknown[] = []
 
   constructor(private readonly resolveSession: SessionResolver = input => input.historyAction === 'fork'
@@ -46,7 +48,10 @@ class HistoryHost implements PiRuntimeHost {
     const state = () => readyState(runtimeSessionId, sessionFile)
     return {
       state: async () => state(),
-      snapshot: async () => ({ state: state(), entries: [...this.entries], leafId: 'leaf-1' }),
+      snapshot: async (since, window) => {
+        this.snapshotWindows.push({ ...(since ? { since } : {}), ...(window ? { window } : {}) })
+        return { state: state(), entries: [...this.entries], leafId: 'leaf-1', page: { hasEarlier: false } }
+      },
       controls: async () => ({ models: [] }),
       setModel: async () => state(),
       setThinkingLevel: async () => state(),
@@ -98,6 +103,10 @@ test('继续会话的 Snapshot 保留原 Session 历史供 Live 页面恢复', a
 
     assert.deepEqual(snapshot.entries, host.entries)
     assert.equal(snapshot.leafId, 'leaf-1')
+    assert.deepEqual(host.snapshotWindows.at(-1)?.window, { limit: 120 })
+
+    await service.snapshot(continued.runtimeSessionId, undefined, { limit: 10_000 })
+    assert.deepEqual(host.snapshotWindows.at(-1)?.window, { limit: 500 })
   } finally {
     await service.dispose()
   }

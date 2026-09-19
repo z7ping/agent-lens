@@ -1,4 +1,4 @@
-import type { LiveAvailability, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeActionResult, LiveRuntimeDisclosureContribution, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveSnapshotWindow, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
+import type { LiveAvailability, LiveHistoryIndex, LiveHistoryIndexQuery, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeActionResult, LiveRuntimeDisclosureContribution, LiveRuntimeEvent, LiveRuntimeState, LiveSnapshot, LiveSnapshotWindow, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 
@@ -147,6 +147,7 @@ export interface PiLiveService {
   retry(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState>
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
+  historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
   commands(runtimeSessionId: string): Promise<PiLiveCommand[]>
   workspaceFileReferences(runtimeSessionId: string, query: string, limit?: number): Promise<LiveWorkspaceFileReference[]>
   messageActions(runtimeSessionId: string): Promise<LiveMessageActionContribution[]>

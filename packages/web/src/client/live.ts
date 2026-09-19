@@ -2,6 +2,8 @@ import type {
   LiveAvailabilityDto,
   LiveCommandsResponseDto,
   LiveCommandDto,
+  LiveHistoryIndexDto,
+  LiveHistoryIndexQueryDto,
   LiveInterruptResultDto,
   LiveMessageActionContributionDto,
   LiveMessageActionResultDto,
@@ -234,6 +236,14 @@ async function historyInteraction(
   return state
 }
 
+export interface LiveSnapshotWindowRequest {
+  before?: string | undefined
+  after?: string | undefined
+  edge?: 'earliest' | 'latest' | undefined
+  around?: string | undefined
+  limit?: number | undefined
+}
+
 export type LiveProductMetadata = Pick<
   LiveProductDto,
   'liveId' | 'productId' | 'displayName' | 'capabilities' | 'inputCapabilities' | 'startCapabilities'
@@ -297,9 +307,35 @@ export const liveApi = {
     return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/state')))
   },
 
-  snapshot(liveId: string, runtimeSessionId: string, since?: string): Promise<LiveSnapshotDto> {
-    const search = since ? `?since=${encodeURIComponent(since)}` : ''
+  snapshot(
+    liveId: string,
+    runtimeSessionId: string,
+    since?: string,
+    window?: LiveSnapshotWindowRequest,
+  ): Promise<LiveSnapshotDto> {
+    const params = new URLSearchParams()
+    if (since) params.set('since', since)
+    if (window?.before) params.set('before', window.before)
+    if (window?.after) params.set('after', window.after)
+    if (window?.edge) params.set('edge', window.edge)
+    if (window?.around) params.set('around', window.around)
+    if (window?.limit !== undefined) params.set('limit', String(window.limit))
+    const search = params.size ? `?${params}` : ''
     return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
+  },
+
+  historyIndex(
+    liveId: string,
+    runtimeSessionId: string,
+    query: LiveHistoryIndexQueryDto = {},
+  ): Promise<LiveHistoryIndexDto> {
+    const params = new URLSearchParams()
+    if (query.fromOrdinal !== undefined) params.set('from', String(query.fromOrdinal))
+    if (query.cursor) params.set('cursor', query.cursor)
+    if (query.limit !== undefined) params.set('limit', String(query.limit))
+    const queryString = params.toString()
+    const suffix = queryString ? `?${queryString}` : ''
+    return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}${suffix}`)
   },
 
   async send(

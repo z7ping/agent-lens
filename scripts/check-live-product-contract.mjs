@@ -79,7 +79,7 @@ requireText(legacyRedirect, /to=\{`\/review\/live\/pi\/\$\{encodeURIComponent\(r
 /* Task Center only hosts generic Live Product surfaces. */
 requireText(taskCenter, /import \{ LiveNewTaskPanel \} from '\.\/LiveNewTaskPanel'/, 'Task Center 必须接入通用 LiveNewTaskPanel')
 requireText(taskCenter, /import \{ TaskLiveRuntimeList \} from '\.\/TaskLiveRuntimeList'/, 'Task Center 必须使用通用实时任务列表')
-requireText(taskCenter, /<TaskLiveRuntimeList/, '任务列表必须展示通用 Live runtimes')
+requireText(taskCenter, /<TaskLiveRuntimeList\b/, '任务列表必须展示通用 Live runtimes')
 requireText(taskCenter, /TaskCenterMode = 'history' \| 'live' \| 'new' \| 'hub'/, 'Task Center 必须显式承载 Live detail 模式')
 requireText(taskCenter, /mode === 'live' && <LiveTaskPage embedded\/>/, '实时任务详情必须内嵌在 Task Center 唯一导航壳层中')
 requireText(taskCenter, /mode === 'history' \|\| review\.response \|\| review\.loading/, '历史页仍由 App 负责 P0 Summary，非历史详情才延后补齐任务栏摘要')
@@ -109,8 +109,8 @@ requireText(liveNewTask, /onStarted\(selectedProduct\.liveId, state\)/, '启动�
 forbidText(liveNewTask, /\bpiLiveApi\b|\bliveId\s*===\s*['"]pi['"]|\bproductId\s*===\s*['"]pi['"]/, 'LiveNewTaskPanel 不得用 Pi 身份决定产品行为')
 
 /* Live Task controls are capability-driven. */
-requireText(liveTask, /void liveApi\.products\(\)/, 'LiveTaskPage 必须读取通用 Live Product catalog')
-requireText(liveTask, /products\.find\(item => item\.liveId === current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 匹配产品')
+requireText(liveTask, /liveApi\.metadata\(current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 读取通用 Live Product metadata')
+requireText(liveTask, /const metadataRequest = liveApi\.metadata\(current\.liveId\)/, 'LiveTaskPage 不得为了单个 Live 任务先拉取完整 Product catalog')
 for (const capability of ['stream', 'recovery', 'extension-ui', 'command-discovery', 'workspace-file-reference', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
   requireText(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), `LiveTaskPage 缺少 capability 驱动：${capability}`)
 }
@@ -159,7 +159,9 @@ requireText(liveTask, /if \(recoveryTask\)[\s\S]{0,180}pendingRecoveryMode = mod
 requireText(liveTask, /while \(recoveryActive && nextMode\)[\s\S]{0,220}await recoverOnce\(currentMode\)/, 'Live recovery 必须串行执行 pending 补跑')
 
 requireText(liveTask, /if \(product\.capabilities\.includes\(['"]recovery['"]\)\)[\s\S]{0,180}recover\(['"]settle['"]\)[\s\S]{0,260}else[\s\S]{0,220}stable:[\s\S]{0,120}previous\.active/, '没有 recovery capability 的 Live 产品完成后必须直接稳定活动轮')
-requireText(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须优先使用稳定 leaf 增量快照')
+requireText(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须通过有界恢复 helper 使用稳定 leaf')
+requireText(liveTask, /async function loadBoundedRecoverySnapshot[\s\S]{0,700}liveApi\.snapshot\([\s\S]{0,180}\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/, 'Live 恢复每次 Snapshot 必须保持固定有界窗口')
+requireText(liveTask, /while \(snapshot\.page\?\.hasLater && snapshot\.page\.after\)/, 'Live 恢复存在后续页时必须按 after 有界追平')
 forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
 requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')

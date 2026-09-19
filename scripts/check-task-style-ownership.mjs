@@ -46,9 +46,11 @@ for (const retired of ['./task-detail-prototype.css', './task-detail-polish.css'
 }
 
 for (const marker of [
-  "const sessionReaderHooks = new Set(['review-reader-pane', 'pi-live-reader'])",
-  "const sessionDocumentHooks = new Set(['review-reader', 'pi-live-document'])",
-  "const sessionComposerHooks = new Set(['pi-live-compose-wrap'])",
+  "'review-reader-pane'",
+  "'live-task-reader'",
+  "'review-reader'",
+  "'live-task-document'",
+  "'live-task-compose-wrap'",
   "withSessionClass(candidate, 'task-session-document')",
   "withSessionClass(element, 'task-session-reader'",
   "withSessionClass(candidate, 'task-session-composer')",
@@ -80,10 +82,10 @@ for (const marker of [
   'const reserve = Math.max(baselineReserve, composerRect?.height ?? 0)',
   'const bottom = Math.max(top, surface.bottom - reserve)',
 ]) {
-  if (!taskSurface.includes(marker)) throw new Error(`Turn Rail 缺少 Pi Live 基准的共享 Rail Frame 契约：${marker}`)
+  if (!taskSurface.includes(marker)) throw new Error(`Turn Rail 缺少通用 Live 基准的共享 Rail Frame 契约：${marker}`)
 }
 if (!tokens.includes('--al-task-turn-rail-bottom-reserve:145px;')) {
-  throw new Error('tokens.css 必须定义统一 Turn Rail 底部安全区，保持 Review 与 Pi Live 默认视觉尺度一致')
+  throw new Error('tokens.css 必须定义统一 Turn Rail 底部安全区，保持 Review 与通用 Live 默认视觉尺度一致')
 }
 
 for (const marker of [
@@ -124,7 +126,7 @@ for (const marker of [
 
 const sessionOwner = readFileSync(sessionOwnerPath, 'utf8')
 for (const marker of [
-  'Review / Pi Live 共用会话视图的唯一样式所有者',
+  'Review / 通用 Live 共用会话视图的唯一样式所有者',
   '.task-session-view',
   '.task-session-view > .task-session-reader',
   '.task-session-view .task-session-document',
@@ -160,7 +162,7 @@ if (!runningRule || !runningRule.includes('var(--al-accent)') || !runningRule.in
   throw new Error('Turn Rail running 必须保留强调色与轻量光晕，但不得改变固定几何')
 }
 if (/\.task-turn-rail-(?:review|live)\b/.test(turnRailOwner)) {
-  throw new Error('Review / Pi Live 不得拥有模式专属 Turn Rail 样式；两者必须消费同一导轨视觉')
+  throw new Error('Review / 通用 Live 不得拥有模式专属 Turn Rail 样式；两者必须消费同一导轨视觉')
 }
 for (const marker of [
   '.task-boundary-nav {',
@@ -231,4 +233,4 @@ for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', '
   }
 }
 
-console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / Pi Live 共用 Rail Frame，tick 固定 6×1.5px，状态不改变几何。')
+console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / 通用 Live 共用 Rail Frame，tick 固定 6×1.5px，状态不改变几何。')

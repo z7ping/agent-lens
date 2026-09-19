@@ -1,4 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import {
+  LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT,
+  LIVE_SNAPSHOT_DEFAULT_LIMIT,
+  LIVE_SNAPSHOT_MAX_LIMIT,
+} from '@agent-lens/core'
 import type {
   LiveAdapter,
   LiveCapabilityName,
@@ -13,6 +18,7 @@ import type {
   LiveRuntimeState,
   LiveSnapshot,
   LiveService,
+  LiveSnapshotWindow,
   LiveStartCapabilities,
   LiveStartInput,
 } from '@agent-lens/core'
@@ -335,11 +341,105 @@ function normalizePublicSnapshot(value: unknown): LiveSnapshot {
   if (leafId !== undefined && leafId !== null && typeof leafId !== 'string') {
     throw httpError(500, 'Live adapter returned an invalid snapshot leaf id')
   }
+  const rawPage = row.page
+  let page: LiveSnapshot['page']
+  if (rawPage !== undefined) {
+    if (!rawPage || typeof rawPage !== 'object' || Array.isArray(rawPage)) {
+      throw httpError(500, 'Live adapter returned invalid snapshot page metadata')
+    }
+    const value = rawPage as Record<string, unknown>
+    if (typeof value.hasEarlier !== 'boolean') {
+      throw httpError(500, 'Live adapter snapshot page must declare hasEarlier')
+    }
+    if (value.before !== undefined && typeof value.before !== 'string') {
+      throw httpError(500, 'Live adapter snapshot before cursor is invalid')
+    }
+    if (value.first !== undefined && typeof value.first !== 'string') {
+      throw httpError(500, 'Live adapter snapshot first cursor is invalid')
+    }
+    if (value.last !== undefined && typeof value.last !== 'string') {
+      throw httpError(500, 'Live adapter snapshot last cursor is invalid')
+    }
+    if (value.rounds !== undefined) {
+      if (!value.rounds || typeof value.rounds !== 'object' || Array.isArray(value.rounds)) {
+        throw httpError(500, 'Live adapter snapshot rounds metadata is invalid')
+      }
+      const rounds = value.rounds as Record<string, unknown>
+      if (!Number.isSafeInteger(rounds.total) || Number(rounds.total) < 0) {
+        throw httpError(500, 'Live adapter snapshot rounds total is invalid')
+      }
+      if (rounds.firstOrdinal !== undefined && (!Number.isSafeInteger(rounds.firstOrdinal) || Number(rounds.firstOrdinal) < 1)) {
+        throw httpError(500, 'Live adapter snapshot first round ordinal is invalid')
+      }
+      if (rounds.lastOrdinal !== undefined && (!Number.isSafeInteger(rounds.lastOrdinal) || Number(rounds.lastOrdinal) < 1)) {
+        throw httpError(500, 'Live adapter snapshot last round ordinal is invalid')
+      }
+    }
+    if (value.hasLater !== undefined && typeof value.hasLater !== 'boolean') {
+      throw httpError(500, 'Live adapter snapshot hasLater is invalid')
+    }
+    if (value.after !== undefined && typeof value.after !== 'string') {
+      throw httpError(500, 'Live adapter snapshot after cursor is invalid')
+    }
+    page = {
+      hasEarlier: value.hasEarlier,
+      ...(typeof value.before === 'string' ? { before: value.before } : {}),
+      ...(typeof value.first === 'string' ? { first: value.first } : {}),
+      ...(typeof value.last === 'string' ? { last: value.last } : {}),
+      ...(value.rounds && typeof value.rounds === 'object' && !Array.isArray(value.rounds) ? {
+        rounds: {
+          total: Number((value.rounds as Record<string, unknown>).total),
+          ...(Number.isSafeInteger((value.rounds as Record<string, unknown>).firstOrdinal)
+            ? { firstOrdinal: Number((value.rounds as Record<string, unknown>).firstOrdinal) }
+            : {}),
+          ...(Number.isSafeInteger((value.rounds as Record<string, unknown>).lastOrdinal)
+            ? { lastOrdinal: Number((value.rounds as Record<string, unknown>).lastOrdinal) }
+            : {}),
+        },
+      } : {}),
+      ...(typeof value.hasLater === 'boolean' ? { hasLater: value.hasLater } : {}),
+      ...(typeof value.after === 'string' ? { after: value.after } : {}),
+    }
+  }
   return {
     state: normalizePublicRuntimeState(row.state),
     entries: row.entries,
     ...(leafId !== undefined ? { leafId: leafId as string | null } : {}),
+    ...(page ? { page } : {}),
   }
+}
+
+function normalizeHistoryIndex(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(500, 'Live adapter returned an invalid history index')
+  }
+  const row = value as Record<string, unknown>
+  if (!Number.isSafeInteger(row.total) || Number(row.total) < 0 || !Array.isArray(row.items)) {
+    throw httpError(500, 'Live adapter returned invalid history index metadata')
+  }
+  if (row.items.length > LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT) {
+    throw httpError(500, 'Live adapter history index exceeded the per-query bounded limit')
+  }
+  const items = row.items.map(raw => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw httpError(500, 'Live adapter history index item is invalid')
+    }
+    const item = raw as Record<string, unknown>
+    if (typeof item.cursor !== 'string' || !item.cursor
+      || !Number.isSafeInteger(item.ordinal) || Number(item.ordinal) < 1
+      || Number(item.ordinal) > Number(row.total)) {
+      throw httpError(500, 'Live adapter history index cursor is invalid')
+    }
+    if (item.preview !== undefined && typeof item.preview !== 'string') {
+      throw httpError(500, 'Live adapter history index preview is invalid')
+    }
+    return {
+      cursor: item.cursor,
+      ordinal: Number(item.ordinal),
+      ...(typeof item.preview === 'string' ? { preview: item.preview.slice(0, 120) } : {}),
+    }
+  })
+  return { total: Number(row.total), items }
 }
 
 function normalizeRuntimeActionResult(value: unknown): LiveRuntimeActionResult {
@@ -696,7 +796,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|events|messages|commands|workspace-references|message-actions|runtime-disclosures|runtime-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
+    const runtimeMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/runtimes\/([^/]+)(?:\/(state|snapshot|history-index|events|messages|commands|workspace-references|message-actions|runtime-disclosures|runtime-actions|queue|interrupt|model-control|thinking-control|extension-response))?$/)
     if (!runtimeMatch) {
       writeJson(response, 404, { error: 'not_found' })
       return true
@@ -732,13 +832,68 @@ export async function handleLiveRequest(
     }
     if (action === 'snapshot' && request.method === 'GET') {
       const since = optionalString(url.searchParams.get('since'))
+      const before = optionalString(url.searchParams.get('before'))
+      const after = optionalString(url.searchParams.get('after'))
+      const rawEdge = optionalString(url.searchParams.get('edge'))
+      const edge = rawEdge === 'earliest' || rawEdge === 'latest' ? rawEdge : undefined
+      const around = optionalString(url.searchParams.get('around'))
+      if (rawEdge && !edge) throw httpError(400, 'Live snapshot edge must be earliest or latest')
+      const selectors = [since, before, after, edge, around].filter(Boolean)
+      if (selectors.length > 1) throw httpError(400, 'Live snapshot accepts only one cursor or edge selector')
+      const rawLimit = url.searchParams.get('limit')
+      const requestedLimit = rawLimit === null ? LIVE_SNAPSHOT_DEFAULT_LIMIT : Number(rawLimit)
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
+        throw httpError(400, 'Live snapshot limit must be a positive integer')
+      }
+      const limit = Math.min(LIVE_SNAPSHOT_MAX_LIMIT, requestedLimit)
+      const window: LiveSnapshotWindow = {
+        ...(before ? { before } : {}),
+        ...(after ? { after } : {}),
+        ...(edge ? { edge } : {}),
+        ...(around ? { around } : {}),
+        limit,
+      }
       const snapshot = normalizePublicSnapshot(await shareAdapterRead(
         adapter,
-        `snapshot:${runtimeSessionId}:${since ?? ''}`,
-        () => adapter.snapshot(runtimeSessionId, since),
+        `snapshot:${runtimeSessionId}:${since ?? ''}:${before ?? ''}:${after ?? ''}:${edge ?? ''}:${around ?? ''}:${limit}`,
+        () => adapter.snapshot(runtimeSessionId, since, window),
       ))
       markRuntimeValidated(adapter, runtimeSessionId)
       writeJson(response, 200, jsonValue(snapshot))
+      return true
+    }
+    if (action === 'history-index' && request.method === 'GET') {
+      requireCapability(adapter, 'history-index')
+      if (!adapter.historyIndex) {
+        throw httpError(409, `${adapter.manifest.displayName} does not expose Live history index`)
+      }
+      const rawFrom = url.searchParams.get('from')
+      const rawLimit = url.searchParams.get('limit')
+      const cursor = optionalString(url.searchParams.get('cursor'))
+      const fromOrdinal = rawFrom === null ? undefined : Number(rawFrom)
+      const requestedLimit = rawLimit === null ? 0 : Number(rawLimit)
+      if (fromOrdinal !== undefined && (!Number.isInteger(fromOrdinal) || fromOrdinal < 1)) {
+        throw httpError(400, 'Live history index from must be a positive integer')
+      }
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 0) {
+        throw httpError(400, 'Live history index limit must be a non-negative integer')
+      }
+      if (cursor && fromOrdinal !== undefined) {
+        throw httpError(400, 'Live history index accepts cursor or from, not both')
+      }
+      const limit = Math.min(LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, requestedLimit)
+      const query = {
+        ...(fromOrdinal !== undefined ? { fromOrdinal } : {}),
+        ...(cursor ? { cursor } : {}),
+        limit,
+      }
+      const index = normalizeHistoryIndex(await shareAdapterRead(
+        adapter,
+        `history-index:${runtimeSessionId}:${fromOrdinal ?? ''}:${cursor ?? ''}:${limit}`,
+        () => adapter.historyIndex!(runtimeSessionId, query),
+      ))
+      markRuntimeValidated(adapter, runtimeSessionId)
+      writeJson(response, 200, jsonValue(index))
       return true
     }
     if (action === 'events' && request.method === 'GET') {

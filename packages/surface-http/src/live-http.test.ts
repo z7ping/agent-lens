@@ -5,6 +5,7 @@ import type {
   LiveAdapter,
   LiveAdapterManifest,
   LiveCapabilityName,
+  LiveHistoryIndexQuery,
   LiveMessageInput,
   LiveModelControl,
   LiveRuntimeEvent,
@@ -12,6 +13,7 @@ import type {
   LiveSendOptions,
   LiveService,
   LiveSnapshot,
+  LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
 import { startHttpSurface } from './server'
@@ -25,9 +27,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -45,6 +47,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly messageActionExecutions: Array<{ runtimeSessionId: string; actionId: string; targetEntryId: string }> = []
   readonly runtimeActionExecutions: Array<{ runtimeSessionId: string; actionId: string }> = []
   readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
+  readonly snapshotWindows: Array<{ since?: string | undefined; window?: LiveSnapshotWindow | undefined }> = []
   readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0, disclosures: 0 }
   private modelValue = 'model-a'
@@ -111,10 +114,39 @@ class FakeLiveAdapter implements LiveAdapter {
     return state
   }
 
-  async snapshot(runtimeSessionId: string): Promise<LiveSnapshot> {
+  async snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot> {
     this.readCounts.snapshot += 1
+    this.snapshotWindows.push({ ...(since ? { since } : {}), ...(window ? { window } : {}) })
     await this.delayRead()
-    return { state: await this.state(runtimeSessionId), entries: [{ kind: 'snapshot' }] }
+    return {
+      state: await this.state(runtimeSessionId),
+      entries: [{ kind: 'snapshot' }],
+      page: {
+        hasEarlier: true,
+        before: 'entry-0',
+        first: 'entry-0',
+        last: 'entry-9',
+        rounds: { total: 3, firstOrdinal: 1, lastOrdinal: 3 },
+        hasLater: true,
+        after: 'entry-9',
+      },
+    }
+  }
+
+  async historyIndex(runtimeSessionId: string, query: LiveHistoryIndexQuery = {}) {
+    await this.state(runtimeSessionId)
+    const all = [
+      { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
+      { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
+      { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
+    ]
+    if (query.cursor) {
+      return { total: all.length, items: all.filter(item => item.cursor === query.cursor) }
+    }
+    const limit = query.limit ?? 0
+    if (limit <= 0) return { total: all.length, items: [] }
+    const start = Math.max(0, (query.fromOrdinal ?? 1) - 1)
+    return { total: all.length, items: all.slice(start, start + limit) }
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl> {
@@ -349,7 +381,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -407,7 +439,69 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         pendingMessageCount: 0,
       },
       entries: [{ kind: 'snapshot' }],
+      page: {
+        hasEarlier: true,
+        before: 'entry-0',
+        first: 'entry-0',
+        last: 'entry-9',
+        rounds: { total: 3, firstOrdinal: 1, lastOrdinal: 3 },
+        hasLater: true,
+        after: 'entry-9',
+      },
     })
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { limit: 120 })
+
+    const olderSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?before=entry-0&limit=25`)
+    assert.equal(olderSnapshot.status, 200)
+    await olderSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { before: 'entry-0', limit: 25 })
+
+    const newerSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?after=entry-9&limit=30`)
+    assert.equal(newerSnapshot.status, 200)
+    await newerSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { after: 'entry-9', limit: 30 })
+
+    const earliestSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?edge=earliest&limit=40`)
+    assert.equal(earliestSnapshot.status, 200)
+    await earliestSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { edge: 'earliest', limit: 40 })
+
+    const latestSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?edge=latest&limit=40`)
+    assert.equal(latestSnapshot.status, 200)
+    await latestSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { edge: 'latest', limit: 40 })
+
+    const aroundSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?around=entry-user-2&limit=50`)
+    assert.equal(aroundSnapshot.status, 200)
+    await aroundSnapshot.json()
+    assert.deepEqual(adapter.snapshotWindows.at(-1)?.window, { around: 'entry-user-2', limit: 50 })
+
+    const mixedSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?before=entry-0&after=entry-9`)
+    assert.equal(mixedSnapshot.status, 400)
+
+    const mixedAroundSnapshot = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/snapshot?around=entry-user-2&edge=latest`)
+    assert.equal(mixedAroundSnapshot.status, 400)
+
+    const historySummary = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index`)
+    assert.equal(historySummary.status, 200)
+    assert.deepEqual(await historySummary.json(), { total: 3, items: [] })
+
+    const historyByOrdinal = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?from=2&limit=1`)
+    assert.equal(historyByOrdinal.status, 200)
+    assert.deepEqual(await historyByOrdinal.json(), {
+      total: 3,
+      items: [{ cursor: 'entry-user-2', ordinal: 2, preview: 'second' }],
+    })
+
+    const historyByCursor = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?cursor=entry-user-3`)
+    assert.equal(historyByCursor.status, 200)
+    assert.deepEqual(await historyByCursor.json(), {
+      total: 3,
+      items: [{ cursor: 'entry-user-3', ordinal: 3, preview: 'third' }],
+    })
+
+    const invalidHistoryIndex = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?from=2&cursor=entry-user-2`)
+    assert.equal(invalidHistoryIndex.status, 400)
 
     const sent = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/messages`, {
       method: 'POST',

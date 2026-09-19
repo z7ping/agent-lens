@@ -24,7 +24,7 @@ function snapshot(): PiLiveSnapshot {
   }
 }
 
-test('Pi Live Worker snapshot 超过 1 MiB 时通过多块重组且保持完整历史', async () => {
+test('Pi Live Worker 有界 snapshot 超过 1 MiB 时通过多块重组且保持窗口内容完整', async () => {
   const expected = snapshot()
   const bytes = serialize(expected)
   assert.ok(bytes.byteLength > 1024 * 1024)
@@ -38,7 +38,7 @@ test('Pi Live Worker snapshot 超过 1 MiB 时通过多块重组且保持完整�
   const actual = await piLiveWorkerHostInternals.collectSnapshotTransfer(async (command, payload) => {
     commands.push(command)
     if (command === 'snapshotBegin') {
-      assert.deepEqual(payload, { since: 'entry-before' })
+      assert.deepEqual(payload, { since: 'entry-before', window: { limit: 120 } })
     } else {
       assert.deepEqual(payload, { transferId })
     }
@@ -53,7 +53,7 @@ test('Pi Live Worker snapshot 超过 1 MiB 时通过多块重组且保持完整�
       chunk: bytes.subarray(start, end),
       done: end >= bytes.length,
     }
-  }, 'entry-before')
+  }, 'entry-before', { limit: 120 })
 
   assert.deepEqual(actual, expected)
   assert.ok(commands.length > 2)

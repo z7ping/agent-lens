@@ -15,6 +15,7 @@ export type LiveCapabilityName =
   | 'extension-ui'
   | 'command-discovery'
   | 'workspace-file-reference'
+  | 'history-index'
   | 'recovery'
 
 export type LiveInputSupport = 'native' | 'transform' | 'unsupported'
@@ -142,14 +143,40 @@ export interface LiveRuntimeState {
   pendingMessageCount: number
 }
 
+/** Every Live snapshot request is bounded independently of machine speed/memory. */
+export const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
+export const LIVE_SNAPSHOT_MAX_LIMIT = 500
+
 export interface LiveSnapshotWindow {
+  /** Exclusive cursor for loading older native entries. */
   before?: string | undefined
+  /** Exclusive cursor for loading newer native entries during history browsing. */
+  after?: string | undefined
+  /** Directly select an edge window without traversing intermediate pages. */
+  edge?: 'earliest' | 'latest' | undefined
+  /** Inclusive cursor centered near the shared reading anchor. */
+  around?: string | undefined
+  /** Entry budget. Adapters must clamp omitted/oversized values to the shared limits above. */
   limit?: number | undefined
+}
+
+export interface LiveSnapshotRoundPage {
+  total: number
+  firstOrdinal?: number | undefined
+  lastOrdinal?: number | undefined
 }
 
 export interface LiveSnapshotPage {
   hasEarlier: boolean
   before?: string | undefined
+  /** Inclusive cursors of the returned window, used by bounded client-side page eviction. */
+  first?: string | undefined
+  last?: string | undefined
+  /** Full-session round position for this bounded transcript window. */
+  rounds?: LiveSnapshotRoundPage | undefined
+  /** Forward pagination used when reconnect recovery has more than one bounded page. */
+  hasLater?: boolean | undefined
+  after?: string | undefined
 }
 
 export interface LiveSnapshot {
@@ -157,6 +184,29 @@ export interface LiveSnapshot {
   entries: unknown[]
   leafId?: string | null
   page?: LiveSnapshotPage | undefined
+}
+
+export const LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT = 120
+
+export interface LiveHistoryIndexQuery {
+  /** 1-based round ordinal. Omit with limit=0 to request summary only. */
+  fromOrdinal?: number | undefined
+  /** Resolve one exact round by its native user-message cursor. */
+  cursor?: string | undefined
+  /** Returned metadata rows only; 0 is a summary-only request. */
+  limit?: number | undefined
+}
+
+export interface LiveHistoryIndexItem {
+  cursor: string
+  ordinal: number
+  preview?: string | undefined
+}
+
+export interface LiveHistoryIndex {
+  /** Total semantic rounds in the complete session, never a sampled count. */
+  total: number
+  items: readonly LiveHistoryIndexItem[]
 }
 
 export type LiveEventStatus =
@@ -462,7 +512,16 @@ export interface LiveAdapter {
   /** Present only when the adapter declares fork. Logical session ids stay AgentLens-owned. */
   fork?(logicalSessionId: string): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
+  /**
+   * Must be bounded. Omitting window means LIVE_SNAPSHOT_DEFAULT_LIMIT, never
+   * "return the complete transcript".
+   */
   snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<LiveSnapshot>
+  /**
+   * Full-session round index with bounded query results. total is always the
+   * complete round count; items contains only the requested range/lookup.
+   */
+  historyIndex?(runtimeSessionId: string, query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
   /** Present only when the adapter declares model-switching. */
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */

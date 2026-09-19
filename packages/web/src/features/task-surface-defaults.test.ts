@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const reviewPage = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
-const piLivePage = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
+const liveTaskPage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const taskSessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
@@ -41,10 +41,13 @@ test('Task Review 展示注入上下文正文，不再使用隐藏占位文案',
   assert.doesNotMatch(reviewPage, /注入内容已隐藏/)
 })
 
-test('Task Review 滚到顶部不会自动加载更早轮次并抢走滚动位置', () => {
-  assert.match(reviewPage, /detail\.page\.direction !== 'forward'/)
-  assert.doesNotMatch(reviewPage, /detail\.page\.direction === 'backward'\) void loadOlder/)
-  assert.match(reviewPage, /t\('local\.roundNav\.loadOlder'\)/)
+test('Task Review 更早轮次由用户滚动触发，且每页重新等待新的滚动意图', () => {
+  assert.match(reviewPage, /detail\.page\.direction !== 'backward'/)
+  assert.match(reviewPage, /readerUserRevisionRef\.current <= detailAutoLoadBaselineRef\.current/)
+  assert.match(reviewPage, /detailAutoLoadBaselineRef\.current = userRevision/)
+  assert.match(reviewPage, /void loadOlder\(\)\.finally/)
+  assert.doesNotMatch(reviewPage, /t\('local\.roundNav\.loadOlder'\)/)
+  assert.match(reviewPage, /loadFailedRetry/)
 })
 
 test('Task Review 大范围跳转后等待用户滚动再继续自动补载', () => {

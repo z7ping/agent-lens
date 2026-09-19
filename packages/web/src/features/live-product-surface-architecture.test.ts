@@ -62,7 +62,7 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
   assert.match(liveTask, /event\.type === 'title\.update'/)
-  assert.match(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
+  assert.match(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })
 
@@ -177,7 +177,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.match(taskCenter, /task-center-list-skeleton/)
   assert.doesNotMatch(liveTask, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/)
   assert.match(styles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
-  assert.match(liveTask, /liveApi\.snapshot\(current\.liveId, current\.runtimeSessionId\)/)
+  assert.match(liveTask, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
   assert.match(liveTask, /LiveTaskRoundProjector/)
   assert.match(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/)
   assert.match(liveTaskProjection, /liveTaskStableRoundPrefixLength/)
@@ -207,4 +207,18 @@ test('Live task navigation stays agent-neutral and outside LiveTaskPage', () => 
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.doesNotMatch(liveTask, /pi-live-sessions|liveApi\.list\(current\.liveId\)/)
   assert.doesNotMatch(taskLiveRuntimeList, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
+})
+
+
+test('Live 首屏与旧历史只能通过有界 Snapshot 窗口读取', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveClient = readFileSync(new URL('../client/live.ts', import.meta.url), 'utf8')
+
+  assert.match(liveTask, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
+  assert.match(liveTask, /\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/)
+  assert.match(liveTask, /before: historyPage\.before, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
+  assert.match(liveTask, /historyLoadSentinelRef/)
+  assert.match(liveTask, /historyPagingArmed/)
+  assert.match(liveClient, /if \(window\?\.before\) params\.set\('before', window\.before\)/)
+  assert.match(liveClient, /if \(window\?\.limit !== undefined\) params\.set\('limit', String\(window\.limit\)\)/)
 })

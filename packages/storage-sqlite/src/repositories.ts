@@ -229,12 +229,22 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return row ? mapSourceSession(row) : null
       })
     },
-    async listSourceSessionsByLogicalSession(logicalSessionId) {
-      return executor.run(() => db.prepare(`
-        SELECT * FROM source_sessions
-        WHERE logical_session_id = ?
-        ORDER BY id
-      `).all(logicalSessionId).map(mapSourceSession))
+    async listSourceSessionsByLogicalSession(logicalSessionId, options) {
+      return executor.run(() => {
+        const params: unknown[] = [logicalSessionId]
+        const sourceClause = options?.sourceId ? 'AND source_id = ?' : ''
+        if (options?.sourceId) params.push(options.sourceId)
+        const requestedLimit = options?.limit
+        const hasLimit = Number.isInteger(requestedLimit)
+        if (hasLimit) params.push(Math.max(1, Math.min(64, requestedLimit!)))
+        return db.prepare(`
+          SELECT * FROM source_sessions
+          WHERE logical_session_id = ?
+          ${sourceClause}
+          ORDER BY id
+          ${hasLimit ? 'LIMIT ?' : ''}
+        `).all(...params).map(mapSourceSession)
+      })
     },
     async findSourceSession(sourceId, installationId, nativeSessionId) {
       return executor.run(() => {

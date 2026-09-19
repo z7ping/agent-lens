@@ -7,11 +7,13 @@ import type {
   LiveCapabilityName,
   LiveCommand,
   LiveEvent,
+  LiveHistoryIndexQuery,
   LiveMessage,
   LiveMessageInput,
   LiveModelControl,
   LiveRuntimeEvent,
   LiveSendOptions,
+  LiveSnapshotWindow,
   StorageService,
 } from '@agent-lens/core'
 import {
@@ -43,6 +45,7 @@ const CAPABILITIES = [
   'extension-ui',
   'command-discovery',
   'workspace-file-reference',
+  'history-index',
   'recovery',
 ] as const satisfies readonly LiveCapabilityName[]
 
@@ -348,8 +351,12 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.state(runtimeSessionId)
   }
 
-  snapshot(runtimeSessionId: string, since?: string): Promise<PiLiveSnapshot> {
-    return this.service.snapshot(runtimeSessionId, since)
+  snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    return this.service.snapshot(runtimeSessionId, since, window)
+  }
+
+  historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery) {
+    return this.service.historyIndex(runtimeSessionId, query)
   }
 
   async modelControl(runtimeSessionId: string): Promise<LiveModelControl | null> {
