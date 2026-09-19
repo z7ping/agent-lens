@@ -696,7 +696,18 @@ export class DefaultPiLiveService implements PiLiveService {
     if (!nextPath) return
     const currentPath = runtime.input.sessionPath?.trim()
     if (currentPath && sessionPathKey(currentPath) === sessionPathKey(nextPath) && runtime.input.historyAction === 'continue') return
+
+    const forkedFromLogicalSession = runtime.input.historyAction === 'fork'
+      ? runtime.input.logicalSessionId
+      : undefined
     runtime.input = recoveryInput(runtime.input, nextPath)
+    if (forkedFromLogicalSession) {
+      // The source logical id is only a temporary read-only history anchor while
+      // the fork Worker hydrates. Once Pi creates the detached session, carrying
+      // the parent id into Recovery would render parent Canonical history after
+      // a Daemon restart.
+      delete runtime.input.logicalSessionId
+    }
   }
 
   private async persistRuntime(runtime: OwnedRuntime): Promise<void> {
