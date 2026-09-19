@@ -150,3 +150,24 @@ test('startup audit waits for final extension-discovered resources', () => {
   assert.match(initialize, /runtime\.extensionBindingStatus === 'ready' \|\| runtime\.extensionBindingStatus === 'failed'/)
   assert.match(initialize, /this\.scheduleStartupAuditProbe\(runtime, generation\)/)
 })
+
+
+test('Pi session tree is projected from native SessionManager without leaking native entry objects', () => {
+  const tree = section(worker, 'function sessionTree()', 'function resolvedRuntimeSessionDir')
+  assert.match(tree, /manager\.getTree\(\)/)
+  assert.match(tree, /manager\.getBranch\(\)/)
+  assert.match(tree, /activePath/)
+  assert.match(tree, /branchPointIds/)
+  assert.match(tree, /childCount/)
+  assert.match(tree, /switchBranch:/)
+  assert.match(tree, /fork:/)
+  assert.match(tree, /clone: false/)
+  assert.doesNotMatch(tree, /entry:\s*entry/)
+})
+
+test('session tree stays opt-in and does not replace the existing turn rail', async () => {
+  const page = await readFile(new URL('../../../web/src/features/LiveTaskPage.tsx', import.meta.url), 'utf8')
+  assert.match(page, /turnRailItems/)
+  assert.match(page, /onTurnRailSelect/)
+  assert.doesNotMatch(page, /liveApi\.sessionTree\(/)
+})
