@@ -810,6 +810,13 @@ export class DefaultPiLiveService implements PiLiveService {
             : runtime.extensionBindingStatus === 'failed'
               ? runtime.extensionBindingError
               : undefined
+          if (runtime.status === 'ready') {
+            runtime.message = runtime.extensionBindingStatus === 'binding'
+              ? 'Pi Runtime 核心已就绪 · 扩展后台绑定中'
+              : runtime.extensionBindingStatus === 'failed'
+                ? 'Pi Runtime 核心已就绪 · 扩展绑定失败'
+                : 'Pi Runtime 已就绪'
+          }
         } else if (event.type === 'runtime_resources') {
           const resources = startupResources(event.resources)
           if (resources) {
@@ -867,9 +874,14 @@ export class DefaultPiLiveService implements PiLiveService {
 
       this.advanceInitialization(runtime, 'ready')
       runtime.status = 'ready'
-      runtime.message = runtime.restored
-        ? `Pi Runtime 已恢复 · ${formatElapsed(runtime.initializationElapsedMs)}`
-        : `Pi Runtime 已就绪 · ${formatElapsed(runtime.initializationElapsedMs)}`
+      const readyPrefix = runtime.extensionBindingStatus === 'binding'
+        ? 'Pi Runtime 核心已就绪 · 扩展后台绑定中'
+        : runtime.extensionBindingStatus === 'failed'
+          ? 'Pi Runtime 核心已就绪 · 扩展绑定失败'
+          : runtime.restored
+            ? 'Pi Runtime 已恢复'
+            : 'Pi Runtime 已就绪'
+      runtime.message = `${readyPrefix} · ${formatElapsed(runtime.initializationElapsedMs)}`
       this.publish(runtime, {
         type: 'runtime_status',
         status: 'ready',
