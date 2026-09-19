@@ -784,6 +784,7 @@ export class DefaultPiLiveService implements PiLiveService {
         })
         runtime.startupAuditProbeTask = probe
       }
+      this.scheduleIdleCheck(runtime)
     } catch (error) {
       if (runtime.generation !== generation || runtime.status === 'terminating' || runtime.status === 'terminated') return
       runtime.initializationElapsedMs = Math.max(0, Date.now() - runtime.initializationStartedAt)
@@ -1158,6 +1159,192 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     runtime.events.clear()
     this.runtimes.delete(runtime.id)
+  }
+
+  private clearIdleTimer(runtime: OwnedRuntime): void {
+    if (runtime.idleTimer !== undefined) clearTimeout(runtime.idleTimer)
+    runtime.idleTimer = undefined
+  }
+
+  private markRuntimeActive(runtime: OwnedRuntime): void {
+    runtime.lastActiveAt = Date.now()
+    this.clearIdleTimer(runtime)
+    if (runtime.subscriberCount === 0) this.scheduleIdleCheck(runtime)
+  }
+
+  private scheduleIdleCheck(runtime: OwnedRuntime): void {
+    this.clearIdleTimer(runtime)
+    if (this.disposed || this.idleTimeoutMs <= 0 || runtime.suspended
+      || runtime.status !== 'ready' || !runtime.handle || runtime.subscriberCount > 0) return
+    const elapsed = Math.max(0, Date.now() - runtime.lastActiveAt)
+    const delay = Math.max(1, this.idleTimeoutMs - elapsed)
+    const timer = setTimeout(() => {
+      if (runtime.idleTimer === timer) runtime.idleTimer = undefined
+      void this.suspendIdleRuntime(runtime)
+    }, delay)
+    ;(timer as ReturnType<typeof setTimeout> & { unref?: () => void }).unref?.()
+    runtime.idleTimer = timer
+  }
+
+  private runtimeIsQuiescent(runtime: OwnedRuntime, state: PiLiveRuntimeState): boolean {
+    return !state.isStreaming
+      && !state.isCompacting
+      && state.pendingMessageCount === 0
+      && !runtime.activeAssistantMessageId
+      && runtime.queue.steering.length === 0
+      && runtime.queue.followUp.length === 0
+      && runtime.pendingExtensionRequestIds.size === 0
+  }
+
+  private async checkpointRuntimeState(runtime: OwnedRuntime, state: PiLiveRuntimeState): Promise<boolean> {
+    const sessionPath = state.sessionFile?.trim() || runtime.input.sessionPath?.trim()
+    if (!sessionPath) return false
+    this.adoptRuntimeSession(runtime, sessionPath)
+    this.updateRuntimeResources(runtime, state)
+    this.persistStartupAuditBestEffort(runtime, state)
+    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+    await runtime.recoveryCheckpointTask?.catch(() => undefined)
+    await this.persistRuntime(runtime).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live recovery checkpoint failed', error)
+    })
+    return true
+  }
+
+  private prepareRuntimeInitialization(runtime: OwnedRuntime, message: string): number {
+    const now = Date.now()
+    this.clearIdleTimer(runtime)
+    runtime.generation += 1
+    runtime.initialization.abort()
+    runtime.initialization = new AbortController()
+    runtime.status = 'initializing'
+    runtime.stage = 'starting_worker'
+    runtime.message = message
+    runtime.error = undefined
+    runtime.handle = undefined
+    runtime.suspended = false
+    runtime.cachedState = undefined
+    runtime.initializationStartedAt = now
+    runtime.stageStartedAt = now
+    runtime.initializationElapsedMs = 0
+    runtime.initializationTimings = []
+    runtime.startupResources = undefined
+    runtime.startupAuditResources = undefined
+    runtime.startupResourcesCapturedAt = undefined
+    runtime.startupAuditCompleted = undefined
+    runtime.startupAuditPending = undefined
+    runtime.startupAuditTask = undefined
+    runtime.startupAuditProbeTask = undefined
+    runtime.startupPackageAuditCompleted = undefined
+    runtime.startupPackageAuditPending = undefined
+    runtime.startupPackageAuditTask = undefined
+    runtime.startupOutput = []
+    runtime.packageUpdates = []
+    runtime.packageUpdateCheck = undefined
+    runtime.packageUpdatesCheckedAt = undefined
+    runtime.capabilities = undefined
+    runtime.activeAssistantMessageId = undefined
+    runtime.pendingExtensionRequestIds.clear()
+    runtime.queue = { steering: [], followUp: [] }
+    runtime.lastActiveAt = now
+    this.publish(runtime, { type: 'runtime_status', status: runtime.status, stage: runtime.stage, message: runtime.message })
+    return runtime.generation
+  }
+
+  private async ensureRuntimeHydrated(runtime: OwnedRuntime): Promise<void> {
+    if (runtime.hydrationTask) {
+      await runtime.hydrationTask
+      return
+    }
+    if (!runtime.suspended) return
+    let task: Promise<void>
+    task = Promise.resolve().then(async () => {
+      if (!runtime.suspended || this.disposed) return
+      const generation = this.prepareRuntimeInitialization(runtime, '正在恢复 Pi Runtime')
+      await this.initialize(runtime, generation)
+    }).finally(() => {
+      if (runtime.hydrationTask === task) runtime.hydrationTask = undefined
+    })
+    runtime.hydrationTask = task
+    await task
+  }
+
+  private async suspendIdleRuntime(runtime: OwnedRuntime): Promise<void> {
+    if (this.disposed || runtime.suspended || runtime.status !== 'ready'
+      || !runtime.handle || runtime.subscriberCount > 0 || this.idleTimeoutMs <= 0) return
+
+    const elapsed = Math.max(0, Date.now() - runtime.lastActiveAt)
+    if (elapsed < this.idleTimeoutMs) {
+      this.scheduleIdleCheck(runtime)
+      return
+    }
+
+    const handle = runtime.handle
+    const state = await handle.state().catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live idle state probe failed', error)
+      return undefined
+    })
+    if (!state || runtime.handle !== handle || runtime.status !== 'ready') return
+
+    if (!this.runtimeIsQuiescent(runtime, state)) {
+      runtime.lastActiveAt = Date.now()
+      this.scheduleIdleCheck(runtime)
+      return
+    }
+    if (!await this.checkpointRuntimeState(runtime, state)) {
+      runtime.lastActiveAt = Date.now()
+      this.scheduleIdleCheck(runtime)
+      return
+    }
+
+    const cachedState = this.decorateReadyState(runtime, state)
+    delete cachedState.processId
+    runtime.cachedState = cachedState
+    runtime.generation += 1
+    runtime.initialization.abort()
+    runtime.handle = undefined
+    runtime.suspended = true
+    runtime.status = 'ready'
+    runtime.stage = 'ready'
+    runtime.message = 'Pi Runtime 已挂起，可自动恢复'
+    runtime.activeAssistantMessageId = undefined
+    runtime.pendingExtensionRequestIds.clear()
+    runtime.queue = { steering: [], followUp: [] }
+    this.clearIdleTimer(runtime)
+    await handle.terminate().catch(() => undefined)
+  }
+
+  private async restartRuntimeWorker(
+    runtime: OwnedRuntime,
+    state: PiLiveRuntimeState,
+    message: string,
+  ): Promise<void> {
+    const handle = runtime.handle
+    if (!handle || !await this.checkpointRuntimeState(runtime, state)) return
+    const generation = this.prepareRuntimeInitialization(runtime, message)
+    await handle.terminate().catch(() => undefined)
+    await this.initialize(runtime, generation)
+  }
+
+  private async refreshExternallyUpdatedSession(runtime: OwnedRuntime): Promise<void> {
+    const handle = runtime.handle
+    if (!handle?.entry || runtime.status !== 'ready') return
+    const state = await handle.state().catch(() => undefined)
+    if (!state || runtime.handle !== handle || !this.runtimeIsQuiescent(runtime, state)) return
+    const sessionFile = state.sessionFile?.trim() || runtime.input.sessionPath?.trim()
+    if (!sessionFile) return
+
+    let latestEntryId: string | undefined
+    try {
+      latestEntryId = await latestPiSessionEntryId(sessionFile)
+    } catch (error) {
+      this.recoveryDiagnostic(runtime, 'Pi Live external session probe failed', error)
+      return
+    }
+    if (!latestEntryId || runtime.handle !== handle) return
+
+    const known = await handle.entry(latestEntryId).catch(() => null)
+    if (known) return
+    await this.restartRuntimeWorker(runtime, state, '检测到外部 Pi 会话更新，正在重新加载')
   }
 
   private conflict(message: string): Error { const error = new Error(message) as Error & { statusCode?: number }; error.statusCode = 409; return error }
