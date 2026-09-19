@@ -90,3 +90,10 @@ test('Runtime reconciler preserves SSE compacting activity until compaction ends
   assert.match(page, /status === 'ready'[\s\S]{0,120}runtimeCompacting = false/)
   assert.match(page, /normalizedEvent\?\.type === 'completed'[\s\S]{0,120}runtimeCompacting = false/)
 })
+
+
+test('visibility and online recovery force one bounded transcript reconcile even when state fields are unchanged', () => {
+  assert.match(page, /document\.visibilityState === 'visible'\) void reconcileState\(true\)/)
+  assert.match(page, /const onOnline = \(\) => \{ void reconcileState\(true\) \}/)
+  assert.match(page, /const reconcileTimer = window\.setInterval\([\s\S]*reconcileState\(false\)/)
+})
