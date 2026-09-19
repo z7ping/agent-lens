@@ -73,7 +73,7 @@ test('external disk-ahead detection schedules restart only after bounded Snapsho
 
 test('foreground Runtime state never waits for git workspace discovery', () => {
   const state = section('private async runtimeState(runtime:', 'private decorateReadyState')
-  assert.match(state, /this\.refreshWorkspaceContextBestEffort\(runtime\)/)
+  assert.match(state, /runtime\.status !== 'initializing'\) this\.refreshWorkspaceContextBestEffort\(runtime\)/)
   assert.doesNotMatch(state, /await this\.refreshWorkspaceContext/)
 })
 
@@ -82,4 +82,12 @@ test('workspace git metadata refresh is single-flight and TTL bounded', () => {
   assert.match(refresh, /runtime\.workspaceContextTask/)
   assert.match(refresh, /WORKSPACE_CONTEXT_REFRESH_MS/)
   assert.match(refresh, /resolveWorkspaceContext\(runtime\.input\.cwd\)/)
+})
+
+
+test('Pi initialization does not compete with git workspace discovery', () => {
+  const initialize = section('private async initialize(runtime:', 'private workerExited(')
+  const ready = initialize.indexOf("runtime.status = 'ready'")
+  const refresh = initialize.indexOf('this.refreshWorkspaceContextBestEffort(runtime)')
+  assert.ok(ready >= 0 && refresh > ready, 'git metadata refresh must start only after the Pi Runtime is ready')
 })
