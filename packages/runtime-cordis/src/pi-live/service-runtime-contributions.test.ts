@@ -22,6 +22,12 @@ class RuntimeContributionHost implements PiRuntimeHost {
       status: 'ready',
       sdkVersion: '0.84.4',
       runtimeMode: 'compatibility',
+      warmWorkerStatus: 'hit',
+      startupMetrics: [
+        { name: 'sdk_import_ms', durationMs: 0 },
+        { name: 'model_runtime_create_ms', durationMs: 0 },
+        { name: 'resource_loader_reload_ms', durationMs: 42 },
+      ],
       startupResources: {
         contexts: ['AGENTS.md'],
         skills: ['repo-review'],
@@ -124,6 +130,8 @@ test('Pi runtime retry action reuses native retry lifecycle and becomes a ready 
     assert.equal(labels.includes('Pi SDK'), true)
     assert.equal(labels.includes('Runtime mode'), true)
     assert.equal(labels.includes('Worker PID'), true)
+    assert.equal(labels.includes('Warm worker'), true)
+    assert.equal(labels.includes('Startup metrics'), true)
     assert.equal(labels.includes('Contexts'), true)
     assert.equal(labels.includes('Skills'), true)
     assert.equal(labels.includes('Package updates'), true)
