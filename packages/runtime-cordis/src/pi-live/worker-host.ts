@@ -59,6 +59,8 @@ export interface PiRuntimeHandle {
   readonly capabilities?: PiLiveRuntimeCapabilities | undefined
   readonly initializationElapsedMs?: number | undefined
   readonly initializationTimings?: PiLiveInitializationTiming[] | undefined
+  readonly startupMetrics?: PiLiveStartupMetric[] | undefined
+  readonly warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
   state(): Promise<PiLiveRuntimeState>
   snapshot(since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot>
   historyIndex?(query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
@@ -186,6 +188,8 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   private handshakeCapabilities?: PiLiveRuntimeCapabilities | undefined
   private handshakeElapsedMs?: number | undefined
   private handshakeTimings?: PiLiveInitializationTiming[] | undefined
+  private handshakeStartupMetrics?: PiLiveStartupMetric[] | undefined
+  private handshakeWarmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
 
   constructor(
     private readonly child: ChildProcess,
@@ -240,6 +244,8 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   get capabilities(): PiLiveRuntimeCapabilities | undefined { return this.handshakeCapabilities }
   get initializationElapsedMs(): number | undefined { return this.handshakeElapsedMs }
   get initializationTimings(): PiLiveInitializationTiming[] | undefined { return this.handshakeTimings }
+  get startupMetrics(): PiLiveStartupMetric[] | undefined { return this.handshakeStartupMetrics }
+  get warmWorkerStatus(): PiLiveWarmWorkerStatus | undefined { return this.handshakeWarmWorkerStatus }
 
   applyHandshake(value: unknown): void {
     const payload = record(value)
@@ -257,6 +263,21 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
           ? [{ stage: timing.stage, durationMs: Math.max(0, timing.durationMs) } as PiLiveInitializationTiming]
           : []
       })
+    }
+    if (Array.isArray(payload.startupMetrics)) {
+      this.handshakeStartupMetrics = payload.startupMetrics.flatMap(item => {
+        const metric = record(item)
+        return typeof metric.name === 'string'
+          && metric.name.trim()
+          && typeof metric.durationMs === 'number'
+          && Number.isFinite(metric.durationMs)
+          ? [{ name: metric.name.trim().slice(0, 80), durationMs: Math.max(0, metric.durationMs) }]
+          : []
+      })
+    }
+    const warm = payload.warmWorkerStatus
+    if (warm === 'hit' || warm === 'miss' || warm === 'not_ready' || warm === 'sdk_mismatch') {
+      this.handshakeWarmWorkerStatus = warm
     }
     this.finishStartupOutput()
   }
