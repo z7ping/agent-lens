@@ -46,7 +46,7 @@ test('startup diagnostics split fixed and cwd-bound costs without changing produ
     'sdk_import_ms',
     'model_runtime_create_ms',
     'settings_manager_ms',
-    'resource_loader_reload_ms',
+    'cwd_services_create_ms',
     'session_manager_ms',
     'agent_session_create_ms',
     'extension_bind_ms',
