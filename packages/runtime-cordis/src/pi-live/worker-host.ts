@@ -105,6 +105,8 @@ interface PiSdkDescriptor {
 interface WarmWorker {
   child: ChildProcess
   sdk: PiSdkDescriptor
+  /** Exact executable request that produced this prewarmed SDK; undefined means default Pi discovery. */
+  executable?: string | undefined
 }
 
 interface WarmWorkerClaim {
@@ -437,6 +439,14 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     return normalize(left.sdkEntry) === normalize(right.sdkEntry) && left.version === right.version
   }
 
+  private sameExecutableRequest(left?: string, right?: string): boolean {
+    const normalize = (value?: string) => {
+      const trimmed = value?.trim() || ''
+      return process.platform === 'win32' ? trimmed.toLowerCase() : trimmed
+    }
+    return normalize(left) === normalize(right)
+  }
+
   /** 预热 Worker 只持有跨任务安全的 Runtime Base；不读取 cwd、不创建 Session/ResourceLoader。 */
   async preload(): Promise<void> {
     await this.preloadFor()
@@ -484,7 +494,11 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
           })
         })
         if (child.exitCode !== null || child.signalCode !== null || !child.connected) throw new Error('Pi Runtime Base prewarm Worker disconnected')
-        const warm: WarmWorker = { child, sdk }
+        const warm: WarmWorker = {
+          child,
+          sdk,
+          ...(normalizedExecutable ? { executable: normalizedExecutable } : {}),
+        }
         this.warmWorker = warm
         child.once('close', () => { if (this.warmWorker === warm) this.warmWorker = undefined })
       } catch (error) {
@@ -505,6 +519,22 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     if (!child) return
     if (child.connected) child.disconnect()
     if (child.exitCode === null && child.signalCode === null) child.kill()
+  }
+
+  /**
+   * A ready Warm Worker already contains the SDK descriptor discovered during
+   * prewarm. When the foreground request uses the same executable selection,
+   * consume that descriptor directly instead of repeating expensive PATH/shim
+   * discovery before claiming a Worker that we already know is compatible.
+   */
+  private takeWarmWorkerForExecutable(
+    executable?: string,
+  ): { child: ChildProcess; sdk: PiSdkDescriptor } | undefined {
+    const warm = this.warmWorker
+    if (!warm || !this.sameExecutableRequest(warm.executable, executable)) return undefined
+    this.warmWorker = undefined
+    if (warm.child.exitCode !== null || warm.child.signalCode !== null || !warm.child.connected) return undefined
+    return { child: warm.child, sdk: warm.sdk }
   }
 
   private async claimWarmWorker(
@@ -580,26 +610,45 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
     onEvent: (event: Record<string, unknown>) => void,
     onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle> {
-    // 可执行文件、npm shim 与 SDK 包只能在一个位置解析。Worker 只接收已经
-    // 验证的 SDK 入口，避免父/子进程分别维护一套 PATH 与 shim 规则。
-    const discoveryStartedAt = Date.now()
-    const sdk = await discoverInstalledPiSdk(input.executable)
-    const sdkDiscoveryMs = Math.max(0, Date.now() - discoveryStartedAt)
-    const sdkDescriptor: PiSdkDescriptor = {
-      sdkEntry: sdk.sdkEntry,
-      ...(sdk.version ? { version: sdk.version } : {}),
+    // SDK discovery is part of loading the SDK, not spawning the Worker. Publish
+    // the product stage before any PATH/shim probing so stage timing is honest.
+    onEvent({ type: 'runtime_initialization', stage: 'loading_sdk', message: '正在定位并加载 Pi SDK' })
+
+    // A ready Warm Worker has already completed SDK discovery during prewarm.
+    // Reuse its verified descriptor first; only cold/mismatch paths rediscover.
+    const preparedWarm = this.takeWarmWorkerForExecutable(input.executable)
+    let sdkDescriptor: PiSdkDescriptor
+    let claim: WarmWorkerClaim
+    let sdkDiscoveryMs = 0
+    let warmWorkerWaitMs = 0
+
+    if (preparedWarm) {
+      sdkDescriptor = preparedWarm.sdk
+      claim = { child: preparedWarm.child, status: 'hit' }
+    } else {
+      // 可执行文件、npm shim 与 SDK 包只能在一个位置解析。Worker 只接收已经
+      // 验证的 SDK 入口，避免父/子进程分别维护一套 PATH 与 shim 规则。
+      const discoveryStartedAt = Date.now()
+      const sdk = await discoverInstalledPiSdk(input.executable)
+      sdkDiscoveryMs = Math.max(0, Date.now() - discoveryStartedAt)
+      sdkDescriptor = {
+        sdkEntry: sdk.sdkEntry,
+        ...(sdk.version ? { version: sdk.version } : {}),
+      }
+      // 只领取从未创建 Session 的空闲 Base Worker。若 Daemon 预热尚未完成，
+      // 最多给一个极短命中窗口；随后前台优先，取消后台预热以避免双 Worker 争抢。
+      const claimed = await this.claimWarmWorker(sdkDescriptor, input.executable)
+      claim = claimed.claim
+      warmWorkerWaitMs = claimed.waitedMs
     }
-    // 只领取从未创建 Session 的空闲 Base Worker。若 Daemon 预热尚未完成，
-    // 最多给一个极短命中窗口；随后前台优先，取消后台预热以避免双 Worker 争抢。
-    const claimed = await this.claimWarmWorker(sdkDescriptor, input.executable)
-    const claim = claimed.claim
+
     const spawnStartedAt = Date.now()
     const child = claim.child ?? this.forkWorker(input.cwd)
     const workerSpawnMs = claim.child ? 0 : Math.max(0, Date.now() - spawnStartedAt)
     const hostStartupMetrics: PiLiveStartupMetric[] = [
       { name: 'sdk_discovery_ms', durationMs: sdkDiscoveryMs },
       { name: 'worker_spawn_ms', durationMs: workerSpawnMs },
-      { name: 'warm_worker_wait_ms', durationMs: claimed.waitedMs },
+      { name: 'warm_worker_wait_ms', durationMs: warmWorkerWaitMs },
     ]
     const workerInput = {
       ...input,
