@@ -788,7 +788,7 @@ async function initialize(input) {
           ? { modelRuntime: baseModelRuntime }
           : { modelRuntimeSignal: AbortSignal.timeout(15_000) }),
       })
-      recordStartupMetric('resource_loader_reload_ms', Date.now() - resourcesStartedAt)
+      recordStartupMetric('cwd_services_create_ms', Date.now() - resourcesStartedAt)
       const resources = startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics)
       if (resources) send('event', { type: 'runtime_resources', resources })
 
