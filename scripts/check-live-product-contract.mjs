@@ -79,7 +79,7 @@ requireText(legacyRedirect, /to=\{`\/review\/live\/pi\/\$\{encodeURIComponent\(r
 /* Task Center only hosts generic Live Product surfaces. */
 requireText(taskCenter, /import \{ LiveNewTaskPanel \} from '\.\/LiveNewTaskPanel'/, 'Task Center 必须接入通用 LiveNewTaskPanel')
 requireText(taskCenter, /import \{ TaskLiveRuntimeList \} from '\.\/TaskLiveRuntimeList'/, 'Task Center 必须使用通用实时任务列表')
-requireText(taskCenter, /<TaskLiveRuntimeList\s*\/>/, '任务列表必须展示通用 Live runtimes')
+requireText(taskCenter, /<TaskLiveRuntimeList\b/, '任务列表必须展示通用 Live runtimes')
 requireText(taskCenter, /mode === 'new' && <LiveNewTaskPanel/, '新建任务必须由通用 LiveNewTaskPanel 承载')
 requireText(taskCenter, /onStarted=\{\(liveId, state\) => navigate\(taskLiveRuntimeHref\(\{ liveId, state \}\)\)\}/, '新建 Live 任务后必须进入通用 liveId/runtimeSessionId 路由')
 forbidText(taskCenter, /\bpiLiveApi\b|<PiLivePage\b|PiLiveCompatibilityPage/, 'Task Center 不得直接依赖 Pi Live 兼容 Client/Page')
