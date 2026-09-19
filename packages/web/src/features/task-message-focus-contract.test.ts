@@ -11,6 +11,7 @@ test('Assistant 模型输出操作栏固定在正文底部并支持复制', () =
   assert.match(taskMessageSource, /await copyText\(text\)/)
   assert.match(taskMessageSource, /name=\{copyState === 'copied' \? 'check' : 'copy'\}/)
   assert.match(taskMessageSource, /className="task-message-source-action"/)
+  assert.doesNotMatch(taskMessageSource, /CopyableCodeBlock/)
 })
 
 test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 Agent', () => {
