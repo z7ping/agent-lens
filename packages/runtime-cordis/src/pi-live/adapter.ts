@@ -22,6 +22,7 @@ import {
   dispatchLiveSend,
   requireLiveMessageSupport,
 } from '@agent-lens/live-support'
+import { canonicalPiLiveSnapshot, isCanonicalHistoryCursor } from './canonical-history'
 import { resolvePiLiveHistoryInput } from './history-interaction'
 import type {
   PiLiveImageInput,
@@ -351,8 +352,37 @@ export class PiLiveAdapter implements LiveAdapter {
     return this.service.state(runtimeSessionId)
   }
 
-  snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
-    return this.service.snapshot(runtimeSessionId, since, window)
+  async snapshot(runtimeSessionId: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
+    const canonicalSelector = isCanonicalHistoryCursor(since)
+      || isCanonicalHistoryCursor(window?.before)
+      || isCanonicalHistoryCursor(window?.after)
+      || isCanonicalHistoryCursor(window?.around)
+
+    if (canonicalSelector) {
+      if (!this.storage) throw new Error('Canonical Pi Live history is unavailable without storage')
+      const state = await this.service.state(runtimeSessionId)
+      if (!state.logicalSessionId) throw new Error('Canonical Pi Live history has no logical session identity')
+      return canonicalPiLiveSnapshot(this.storage, state, state.logicalSessionId, since, window)
+    }
+
+    const snapshot = await this.service.snapshot(runtimeSessionId, since, window)
+    if (!this.storage
+      || snapshot.entries.length > 0
+      || snapshot.state.status === 'ready'
+      || !snapshot.state.logicalSessionId) {
+      return snapshot
+    }
+
+    // While the Worker hydrates, render the already-canonicalized AgentLens
+    // history instead of blocking on AgentSession creation. Once Ready, the
+    // normal Pi SessionManager Snapshot replaces/reconciles this temporary view.
+    return canonicalPiLiveSnapshot(
+      this.storage,
+      snapshot.state,
+      snapshot.state.logicalSessionId,
+      since,
+      window,
+    ).catch(() => snapshot)
   }
 
   historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery) {
