@@ -137,6 +137,12 @@
 .task-header-compact-info-list > div[data-tone='danger'] > b { color: var(--al-danger); }
 .task-header-compact-info-list > div[data-tone='accent'] > b { color: var(--al-accent); }
 
+.task-header-info-content {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--al-line);
+}
+
 /* ── Disclosure ── */
 .task-surface .task-disclosure-chevron {
   display: inline-grid;
