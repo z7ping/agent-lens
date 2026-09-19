@@ -184,7 +184,11 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   if (type === 'model_changed') return { type: 'control.changed', control: 'model' }
   if (type === 'thinking_level_changed') return { type: 'control.changed', control: 'thinking' }
-  if (type === 'runtime_resources' || type === 'package_updates' || type === 'runtime_output') {
+  if (type === 'runtime_resources'
+    || type === 'package_updates'
+    || type === 'runtime_output'
+    || type === 'runtime_extension_binding'
+    || type === 'runtime_startup_metric') {
     return { type: 'runtime-disclosure.changed' }
   }
   if (type === 'agent_settled' || type === 'agent_end') {
