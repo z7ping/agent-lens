@@ -773,3 +773,24 @@ test('generic Live HTTP surface reports unavailable LiveService without falling 
     storage.close()
   }
 })
+
+
+test('generic Live runtime list marks failed adapter lanes instead of reporting an authoritative empty list', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter(true)
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    const response = await fetch(`${base}/api/v1/live/runtimes`)
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), {
+      items: [],
+      failedLiveIds: ['test'],
+    })
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
