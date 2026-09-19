@@ -24,7 +24,7 @@ function snapshot(): PiLiveSnapshot {
   }
 }
 
-test('Pi Live Worker snapshot 超过 1 MiB 时通过多块重组且保持完整历史', async () => {
+test('Pi Live Worker 有界 snapshot 超过 1 MiB 时通过多块重组且保持窗口内容完整', async () => {
   const expected = snapshot()
   const bytes = serialize(expected)
   assert.ok(bytes.byteLength > 1024 * 1024)
