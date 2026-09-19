@@ -54,6 +54,14 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       thinkingProcess: '思考过程',
       executionProcess: '执行过程',
     },
+    process: {
+      details: '处理详情',
+      messages: '{{count}} 条消息',
+      tools: '{{count}} 次工具调用',
+      duration: '耗时 {{value}}',
+      errors: '{{count}} 次失败',
+      running: '处理中',
+    },
     round: {
       running: '进行中',
       stopped: '已停止',
@@ -67,6 +75,9 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       minutes: '{{value}} 分钟',
       hours: '{{value}} 小时',
       days: '{{value}} 天',
+      preciseSeconds: '{{seconds}}秒',
+      preciseMinutesSeconds: '{{minutes}}分{{seconds}}秒',
+      preciseHoursMinutesSeconds: '{{hours}}小时{{minutes}}分{{seconds}}秒',
     },
     live: {
       invalidRuntime: '实时任务地址无效。',
