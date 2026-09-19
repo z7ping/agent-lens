@@ -613,17 +613,27 @@ async function listKnownRuntimes(service: LiveService): Promise<JsonValue> {
   const groups = await Promise.all(service.list().map(async adapter => {
     try {
       const runtimes = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
-      return runtimes.map(state => ({
+      return {
         liveId: adapter.manifest.liveId,
-        productId: adapter.manifest.productId,
-        displayName: adapter.manifest.displayName,
-        state: normalizePublicRuntimeState(state),
-      }))
+        failed: false,
+        items: runtimes.map(state => ({
+          liveId: adapter.manifest.liveId,
+          productId: adapter.manifest.productId,
+          displayName: adapter.manifest.displayName,
+          state: normalizePublicRuntimeState(state),
+        })),
+      }
     } catch {
-      return []
+      // A single Adapter read failure must not masquerade as an authoritative
+      // empty list. The Web keeps that Adapter's previous rows while healthy
+      // Adapters continue to refresh.
+      return { liveId: adapter.manifest.liveId, failed: true, items: [] }
     }
   }))
-  return jsonValue({ items: groups.flat() })
+  return jsonValue({
+    items: groups.flatMap(group => group.items),
+    failedLiveIds: groups.filter(group => group.failed).map(group => group.liveId),
+  })
 }
 
 function sendBehavior(value: unknown): 'normal' | 'steer' | 'follow-up' | undefined {
