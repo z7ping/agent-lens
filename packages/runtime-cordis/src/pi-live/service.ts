@@ -15,6 +15,7 @@ import { formatLiveError, LiveEventChannel } from '@agent-lens/live-support'
 import { findPiExecutable, type PiSdkLoader } from './sdk-loader'
 import { InProcessPiRuntimeHost } from './in-process-host'
 import type { PiLiveRecoveryRecord, PiLiveRecoveryStore } from './recovery-store'
+import { latestPiSessionEntryId } from './session-disk-tail'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
@@ -61,7 +62,20 @@ interface OwnedRuntime {
   startupPackageAuditCompleted?: string | undefined
   startupPackageAuditPending?: string | undefined
   startupPackageAuditTask?: Promise<void> | undefined
+  subscriberCount: number
+  lastActiveAt: number
+  idleTimer?: ReturnType<typeof setTimeout> | undefined
+  suspended: boolean
+  hydrationTask?: Promise<void> | undefined
+  cachedState?: PiLiveRuntimeState | undefined
+  pendingExtensionRequestIds: Set<string>
 }
+
+interface PiLiveRuntimeLifecycleOptions {
+  idleTimeoutMs?: number | undefined
+}
+
+const DEFAULT_PI_LIVE_IDLE_TIMEOUT_MS = 10 * 60_000
 
 function taskSummary(message: string): string | undefined {
   const normalized = message.replace(/\s+/g, ' ').trim()
@@ -426,14 +440,19 @@ export class DefaultPiLiveService implements PiLiveService {
   private recoveryLoadPromise: Promise<void> | null = null
   private recoveryLoaded = false
   private disposed = false
+  private readonly idleTimeoutMs: number
 
   constructor(
     dependency?: PiSdkLoader | PiRuntimeHost,
     recoveryStore?: PiLiveRecoveryStore,
     private readonly startupAudit?: PiLiveStartupAuditSink,
+    lifecycle: PiLiveRuntimeLifecycleOptions = {},
   ) {
     this.host = typeof dependency === 'function' ? new InProcessPiRuntimeHost(dependency) : dependency ?? new WorkerPiRuntimeHost()
     this.recoveryStore = recoveryStore
+    this.idleTimeoutMs = Number.isFinite(lifecycle.idleTimeoutMs)
+      ? Math.max(0, lifecycle.idleTimeoutMs!)
+      : DEFAULT_PI_LIVE_IDLE_TIMEOUT_MS
   }
 
   async availability(): Promise<PiLiveAvailability> {
@@ -474,7 +493,7 @@ export class DefaultPiLiveService implements PiLiveService {
         && runtime.status !== 'terminated')
       // “继续”同一份历史不是创建第二个 Runtime，而是回到已经存在的那个。
       // 这让重复点击和前端跳转中断都保持幂等；“分叉”仍需保留新 Runtime。
-      if (duplicate) return this.runtimeState(duplicate)
+      if (duplicate) return this.state(duplicate.id)
     }
     const runtime = this.createRuntime(randomUUID(), input, false)
     this.runtimes.set(runtime.id, runtime)
@@ -546,6 +565,10 @@ export class DefaultPiLiveService implements PiLiveService {
       startupOutput: [],
       packageUpdates: [],
       queue: { steering: [], followUp: [] },
+      subscriberCount: 0,
+      lastActiveAt: now,
+      suspended: false,
+      pendingExtensionRequestIds: new Set<string>(),
       workspacePath,
       projectName: basename(workspacePath) || workspacePath,
       ...(restored && normalizedInput.sessionPath ? { recoverySessionPath: normalizedInput.sessionPath } : {}),
@@ -570,8 +593,11 @@ export class DefaultPiLiveService implements PiLiveService {
       if (this.runtimes.has(item.id)) continue
       const runtime = this.createRuntime(item.id, item.input, true, item.createdAt)
       runtime.taskSummary = item.taskSummary
+      runtime.status = 'ready'
+      runtime.stage = 'ready'
+      runtime.message = 'Pi Runtime 可恢复'
+      runtime.suspended = true
       this.runtimes.set(runtime.id, runtime)
-      void this.initialize(runtime, runtime.generation)
     }
   }
 
