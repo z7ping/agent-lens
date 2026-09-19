@@ -445,6 +445,9 @@ test('agent_end 不会提前结束 Logical Run，只有 agent_settled 才回到 
   assert.equal((await service.list())[0]?.isStreaming, true)
   assert.equal((await service.list())[0]?.pendingMessageCount, 1)
 
+  emit?.({ type: 'agent_start' }) // retry / queued continuation starts another low-level run
+  assert.equal((await service.list())[0]?.isStreaming, true)
+
   emit?.({ type: 'compaction_start' })
   assert.equal((await service.list())[0]?.isStreaming, true)
   assert.equal((await service.list())[0]?.isCompacting, true)
