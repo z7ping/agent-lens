@@ -222,3 +222,18 @@ test('Live 首屏与旧历史只能通过有界 Snapshot 窗口读取', () => {
   assert.match(liveClient, /if \(window\?\.before\) params\.set\('before', window\.before\)/)
   assert.match(liveClient, /if \(window\?\.limit !== undefined\) params\.set\('limit', String\(window\.limit\)\)/)
 })
+
+
+test('session tree stays a generic opt-in data capability and does not replace turn rail UI', async () => {
+  const core = await readFile(new URL('../../../core/src/contracts/live.ts', import.meta.url), 'utf8')
+  const client = await readFile(new URL('../client/live.ts', import.meta.url), 'utf8')
+  const page = await readFile(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+
+  assert.match(core, /\| 'session-tree'/)
+  assert.match(core, /sessionTree\?\(runtimeSessionId: string\)/)
+  assert.match(client, /sessionTree\(liveId: string, runtimeSessionId: string\)/)
+  assert.match(client, /\/session-tree/)
+  assert.match(page, /turnRailItems/)
+  assert.match(page, /onTurnRailSelect/)
+  assert.doesNotMatch(page, /liveApi\.sessionTree\(/)
+})
