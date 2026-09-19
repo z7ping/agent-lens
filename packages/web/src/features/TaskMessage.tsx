@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import type { ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
-import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { copyText } from '../client/clipboard'
 import { IconButton, UiIcon } from '../components/ui'
 
@@ -166,7 +165,7 @@ export function TaskMessage({
             className={`markdown-surface ${canCollapse && !expanded ? 'is-collapsed' : ''}`}
             style={canCollapse && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
           >
-            {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
+            {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <pre className="markdown-source">{text}</pre>}
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
           {(canCollapse || !user) && <div className="markdown-message-actions">
