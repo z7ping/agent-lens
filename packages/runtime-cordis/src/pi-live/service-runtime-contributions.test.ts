@@ -126,6 +126,10 @@ test('Pi runtime retry action reuses native retry lifecycle and becomes a ready 
     assert.equal(disclosure.tone, 'neutral')
     assert.equal(disclosure.defaultExpanded, false)
     assert.equal(disclosure.actions, undefined)
+    assert.equal(disclosure.title.default, 'This run')
+    assert.equal(disclosure.title.localizations?.['zh-CN'], '本次运行')
+    assert.equal(disclosure.summary?.default, 'Ready · Contexts 1 · Skills 1 · Prompts 1 · Extensions 1')
+    assert.equal(disclosure.summary?.localizations?.['zh-CN'], '就绪 · 上下文 1 · 技能 1 · 提示词 1 · 扩展 1')
 
     const labels = disclosure.fields.map(field => field.label.default)
     assert.equal(labels.includes('Pi SDK'), true)
