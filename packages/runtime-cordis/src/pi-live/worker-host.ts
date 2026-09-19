@@ -24,6 +24,7 @@ const MAX_PENDING_REQUESTS = 128
 const MAX_STDERR_TAIL = 64 * 1024
 const MAX_STARTUP_OUTPUT_LINES = 80
 const WARM_CLAIM_GRACE_MS = 250
+const WORKER_TERMINATE_GRACE_MS = 1_000
 
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
@@ -382,7 +383,20 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
 
   async terminate(): Promise<void> {
     if (this.exited) return
-    await this.request<void>('terminate').catch(() => undefined)
+
+    // Extension shutdown is best-effort. A wedged Worker must never make the
+    // user-facing "End session" request wait forever.
+    let timer: NodeJS.Timeout | undefined
+    const graceful = this.request<void>('terminate').catch(() => undefined)
+    await Promise.race([
+      graceful,
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, WORKER_TERMINATE_GRACE_MS)
+        timer.unref?.()
+      }),
+    ])
+    if (timer) clearTimeout(timer)
+
     if (this.exited) return
     this.exited = true
     const error = new Error('Pi Runtime Worker terminated')
