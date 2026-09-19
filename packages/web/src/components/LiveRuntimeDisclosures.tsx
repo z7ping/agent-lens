@@ -302,8 +302,8 @@ function diagnosticCopyText(
   fields: readonly PreparedField[],
 ): string {
   const lifecycle = item.lifecycle
-  const statusFields = fields.filter(field => fieldSection(field) === 'status')
-  const performanceFields = fields.filter(field => fieldSection(field) === 'performance' && field.id !== 'Main costs')
+  const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'Initialization elapsed')
+  const performanceFields = fields.filter(field => field.id === 'Startup metrics')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lines = [
@@ -353,7 +353,7 @@ function RuntimeDiagnostics({
   language: string
 }) {
   const fields = prepareFields(item, language)
-  const statusFields = fields.filter(field => fieldSection(field) === 'status')
+  const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'Initialization elapsed')
   const startupMetrics = fields.find(field => field.id === 'Startup metrics')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
