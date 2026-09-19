@@ -19,7 +19,7 @@ import { latestPiSessionEntryId } from './session-disk-tail'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
-import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
+import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -40,6 +40,8 @@ interface OwnedRuntime {
   initializationTimings: PiLiveInitializationTiming[]
   startupMetrics: PiLiveStartupMetric[]
   warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
+  extensionBindingStatus?: PiLiveExtensionBindingStatus | undefined
+  extensionBindingError?: string | undefined
   startupResources?: PiLiveStartupResources | undefined
   startupAuditResources?: PiLiveStartupResources | undefined
   startupOutput: string[]
@@ -170,6 +172,25 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     fields.push({
       label: contributionText('Warm worker', '预热 Worker'),
       value: contributionText(warm.en, warm.zh),
+    })
+  }
+  if (state.extensionBindingStatus) {
+    const labels: Record<PiLiveExtensionBindingStatus, { en: string; zh: string }> = {
+      binding: { en: 'Binding', zh: '绑定中' },
+      ready: { en: 'Ready', zh: '已就绪' },
+      failed: { en: 'Failed', zh: '失败' },
+    }
+    const binding = labels[state.extensionBindingStatus]
+    fields.push({
+      label: contributionText('Extensions', '扩展绑定'),
+      value: contributionText(binding.en, binding.zh),
+    })
+  }
+  if (state.extensionBindingError) {
+    fields.push({
+      label: contributionText('Extension binding error', '扩展绑定错误'),
+      kind: 'code' as const,
+      values: [state.extensionBindingError],
     })
   }
   if (state.startupMetrics?.length) {
@@ -388,6 +409,10 @@ function warmWorkerStatus(value: unknown): PiLiveWarmWorkerStatus | undefined {
   return value === 'hit' || value === 'miss' || value === 'not_ready' || value === 'sdk_mismatch'
     ? value
     : undefined
+}
+
+function extensionBindingStatus(value: unknown): PiLiveExtensionBindingStatus | undefined {
+  return value === 'binding' || value === 'ready' || value === 'failed' ? value : undefined
 }
 
 function packageUpdates(value: unknown): PiLivePackageUpdate[] {
@@ -776,6 +801,13 @@ export class DefaultPiLiveService implements PiLiveService {
             ]
           }
           runtime.warmWorkerStatus = warmWorkerStatus(event.warmWorkerStatus) ?? runtime.warmWorkerStatus
+        } else if (event.type === 'runtime_extension_binding') {
+          runtime.extensionBindingStatus = extensionBindingStatus(event.status) ?? runtime.extensionBindingStatus
+          runtime.extensionBindingError = typeof event.error === 'string' && event.error.trim()
+            ? event.error.trim().slice(0, 1_000)
+            : runtime.extensionBindingStatus === 'failed'
+              ? runtime.extensionBindingError
+              : undefined
         } else if (event.type === 'runtime_resources') {
           const resources = startupResources(event.resources)
           if (resources) {
@@ -1522,6 +1554,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupMetrics.length ? { startupMetrics: runtime.startupMetrics } : {}),
       ...(runtime.warmWorkerStatus ? { warmWorkerStatus: runtime.warmWorkerStatus } : {}),
+      ...(runtime.extensionBindingStatus ? { extensionBindingStatus: runtime.extensionBindingStatus } : {}),
+      ...(runtime.extensionBindingError ? { extensionBindingError: runtime.extensionBindingError } : {}),
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
@@ -1559,6 +1593,8 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationTimings: runtime.initializationTimings,
       ...(runtime.startupMetrics.length ? { startupMetrics: runtime.startupMetrics } : {}),
       ...(runtime.warmWorkerStatus ? { warmWorkerStatus: runtime.warmWorkerStatus } : {}),
+      ...(runtime.extensionBindingStatus ? { extensionBindingStatus: runtime.extensionBindingStatus } : {}),
+      ...(runtime.extensionBindingError ? { extensionBindingError: runtime.extensionBindingError } : {}),
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
