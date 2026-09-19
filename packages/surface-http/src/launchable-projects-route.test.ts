@@ -48,6 +48,11 @@ test('GET /api/v1/projects/launchable returns only current-host launchable cwd a
   try {
     const response = await fetch(`${base}/api/v1/projects/launchable?search=agentlens&limit=20`)
     assert.equal(response.status, 200)
+    const serverTiming = response.headers.get('server-timing')
+    assert.ok(serverTiming)
+    assert.match(serverTiming, /projects-db;dur=\d+(?:\.\d+)?/)
+    assert.match(serverTiming, /projects-fs;dur=\d+(?:\.\d+)?/)
+    assert.match(serverTiming, /projects-total;dur=\d+(?:\.\d+)?/)
     const body = await response.json() as LaunchableProjectsResponseDto
     assert.equal(body.items.length, 1)
     assert.equal(body.items[0]?.projectId, 'project-agent-lens')
