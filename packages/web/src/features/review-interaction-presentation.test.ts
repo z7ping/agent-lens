@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ReviewEventNodeDto, ReviewMessageNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
-import { projectReviewInteractionPresentation } from './review-interaction-presentation'
+import { projectReviewInteractionPresentation, projectReviewMessageModelLabels } from './review-interaction-presentation'
 
 function reasoning(id: string, nativeEventId = id, sourceRecordId?: string): ReviewMessageNodeDto {
   return {
@@ -122,4 +122,89 @@ test('无对应 reasoning 的 unknown 仍保留在全部事件视图', () => {
   const entries = projectReviewInteractionPresentation([unknownEvent('unknown-real', 'record:other')])
   assert.equal(entries.length, 1)
   assert.equal(entries[0]?.type, 'raw-event-group')
+})
+
+
+test('Review 只用真实模型事件或消息载荷标注对应模型回复', () => {
+  const modelChanged: ReviewEventNodeDto = {
+    type: 'event',
+    id: 'model-changed',
+    at: '2026-09-01T00:00:00.500Z',
+    sourceId: 'codex',
+    kind: 'model.changed',
+    category: 'model',
+    label: '模型已切换',
+    payload: { provider: 'openai', model: 'gpt-5.6' },
+    evidence: [],
+    observationIds: ['obs:model-changed'],
+    capturedAt: '2026-09-01T00:00:00.500Z',
+  }
+  const modelCall: ReviewEventNodeDto = {
+    ...modelChanged,
+    id: 'model-call',
+    at: '2026-09-01T00:00:01.500Z',
+    kind: 'model.call',
+    label: '模型调用',
+    payload: { provider: 'anthropic', modelName: 'claude-sonnet-4.5' },
+    observationIds: ['obs:model-call'],
+    capturedAt: '2026-09-01T00:00:01.500Z',
+  }
+  const assistantOne: ReviewMessageNodeDto = {
+    type: 'message',
+    id: 'assistant-one',
+    role: 'assistant',
+    at: '2026-09-01T00:00:01.000Z',
+    sourceId: 'codex',
+    text: 'first',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:assistant-one'],
+    capturedAt: '2026-09-01T00:00:01.000Z',
+  }
+  const assistantTwo: ReviewMessageNodeDto = {
+    ...assistantOne,
+    id: 'assistant-two',
+    at: '2026-09-01T00:00:02.000Z',
+    text: 'second',
+    observationIds: ['obs:assistant-two'],
+    capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+  const assistantPayloadModel: ReviewMessageNodeDto = {
+    ...assistantTwo,
+    id: 'assistant-three',
+    at: '2026-09-01T00:00:03.000Z',
+    text: 'third',
+    payload: { provider: 'google', model: 'gemini-2.5-pro' },
+    observationIds: ['obs:assistant-three'],
+    capturedAt: '2026-09-01T00:00:03.000Z',
+  }
+
+  const labels = projectReviewMessageModelLabels([
+    modelChanged,
+    assistantOne,
+    modelCall,
+    assistantTwo,
+    assistantPayloadModel,
+  ])
+
+  assert.equal(labels.get('assistant-one'), 'openai / gpt-5.6')
+  assert.equal(labels.get('assistant-two'), 'anthropic / claude-sonnet-4.5')
+  assert.equal(labels.get('assistant-three'), 'google / gemini-2.5-pro')
+})
+
+test('Review 无模型事实时不猜测模型', () => {
+  const assistant: ReviewMessageNodeDto = {
+    type: 'message',
+    id: 'assistant-no-model',
+    role: 'assistant',
+    at: '2026-09-01T00:00:00.000Z',
+    sourceId: 'codex',
+    text: 'answer',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:assistant-no-model'],
+    capturedAt: '2026-09-01T00:00:00.000Z',
+  }
+
+  assert.equal(projectReviewMessageModelLabels([assistant]).has(assistant.id), false)
 })
