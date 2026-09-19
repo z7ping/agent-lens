@@ -810,7 +810,11 @@ export class DefaultPiLiveService implements PiLiveService {
   async state(id: string): Promise<PiLiveRuntimeState> {
     const runtime = await this.runtime(id)
     this.markRuntimeActive(runtime)
-    await this.ensureRuntimeHydrated(runtime)
+    // State is a foreground/control-plane read. It may trigger lazy hydration,
+    // but must never wait for SDK/Resource/Session initialization to finish.
+    void this.ensureRuntimeHydrated(runtime).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
+    })
     return this.runtimeState(runtime)
   }
 
@@ -861,7 +865,12 @@ export class DefaultPiLiveService implements PiLiveService {
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {
     const runtime = await this.runtime(id)
     this.markRuntimeActive(runtime)
-    await this.ensureRuntimeHydrated(runtime)
+    // Snapshot is allowed to be partial while a suspended Worker hydrates.
+    // Returning the logical Runtime immediately keeps page mount/reconnect
+    // independent from cold Worker startup; a ready event triggers recovery.
+    void this.ensureRuntimeHydrated(runtime).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
+    })
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
     const selectors = [since, window?.before, window?.after, window?.edge, window?.around].filter(Boolean)
     if (selectors.length > 1) throw new Error('Live snapshot accepts only one cursor or edge selector')
@@ -1074,13 +1083,15 @@ export class DefaultPiLiveService implements PiLiveService {
     this.markRuntimeActive(runtime)
   }
 
-  /** HTTP events calls state() before subscribe(), so lazy recovery is normally complete before registration. */
+  /** Subscribe first, then trigger hydration so initialization progress is observable from the first stage. */
   subscribe(id: string, listener: PiLiveRuntimeListener): () => void {
     const runtime = this.requireRuntime(id)
     runtime.subscriberCount += 1
     this.markRuntimeActive(runtime)
-    void this.ensureRuntimeHydrated(runtime)
     const unsubscribe = runtime.events.subscribe(listener)
+    void this.ensureRuntimeHydrated(runtime).catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live background hydration failed', error)
+    })
     return () => {
       unsubscribe()
       runtime.subscriberCount = Math.max(0, runtime.subscriberCount - 1)
@@ -1250,22 +1261,20 @@ export class DefaultPiLiveService implements PiLiveService {
     return runtime.generation
   }
 
-  private async ensureRuntimeHydrated(runtime: OwnedRuntime): Promise<void> {
-    if (runtime.hydrationTask) {
-      await runtime.hydrationTask
-      return
-    }
-    if (!runtime.suspended) return
+  private ensureRuntimeHydrated(runtime: OwnedRuntime): Promise<void> {
+    if (runtime.hydrationTask) return runtime.hydrationTask
+    if (!runtime.suspended || this.disposed) return Promise.resolve()
+
+    // Hydration is kicked off synchronously so callers immediately observe the
+    // initializing state, but the Worker startup itself always stays in the
+    // background unless an operation explicitly requires a ready Runtime.
+    const generation = this.prepareRuntimeInitialization(runtime, '正在恢复 Pi Runtime')
     let task: Promise<void>
-    task = Promise.resolve().then(async () => {
-      if (!runtime.suspended || this.disposed) return
-      const generation = this.prepareRuntimeInitialization(runtime, '正在恢复 Pi Runtime')
-      await this.initialize(runtime, generation)
-    }).finally(() => {
+    task = this.initialize(runtime, generation).finally(() => {
       if (runtime.hydrationTask === task) runtime.hydrationTask = undefined
     })
     runtime.hydrationTask = task
-    await task
+    return task
   }
 
   private async suspendIdleRuntime(runtime: OwnedRuntime): Promise<void> {
