@@ -246,11 +246,18 @@ test('suspended Runtime state and SSE stay responsive while Worker hydration is 
     await waitFor(() => host.starts === 1, 'hydration did not start')
     const state = await Promise.race([
       service.state('runtime-slow'),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('state waited for Worker hydration')), 50)),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('state waited for Worker hydration')), 250)),
     ])
 
     assert.equal(state.status, 'initializing')
     assert.ok(statuses.includes('initializing'))
+
+    const snapshot = await Promise.race([
+      service.snapshot('runtime-slow'),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('snapshot waited for Worker hydration')), 250)),
+    ])
+    assert.equal(snapshot.state.status, 'initializing')
+    assert.deepEqual(snapshot.entries, [])
 
     host.release()
     const ready = await waitForReady(service, 'runtime-slow')
