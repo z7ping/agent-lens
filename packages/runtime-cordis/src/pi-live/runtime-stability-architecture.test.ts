@@ -24,8 +24,8 @@ test('external JSONL reconciliation stays on mount or recovery Snapshot reads', 
   const snapshot = section('async snapshot(id:', 'async historyIndex(')
   const state = section('async state(id:', 'async runtimeDisclosures(')
   assert.match(snapshot, /mountOrRecoveryRead/)
-  assert.match(snapshot, /refreshExternallyUpdatedSession/)
-  assert.doesNotMatch(state, /latestPiSessionEntryId|refreshExternallyUpdatedSession/)
+  assert.match(snapshot, /externallyUpdatedRuntimeState/)
+  assert.doesNotMatch(state, /latestPiSessionEntryId|externallyUpdatedRuntimeState/)
 })
 
 test('session disk probe is bounded and tolerates partial JSONL lines', () => {
@@ -57,4 +57,15 @@ test('foreground reads never start Worker hydration before SSE is attached', () 
   const listenerIndex = subscribe.indexOf('runtime.events.subscribe(listener)')
   const hydrationIndex = subscribe.indexOf('this.ensureRuntimeHydrated(runtime)')
   assert.ok(listenerIndex >= 0 && hydrationIndex > listenerIndex, 'SSE listener must attach before hydration starts')
+})
+
+
+test('external disk-ahead detection schedules restart only after bounded Snapshot returns', () => {
+  const snapshot = section('async snapshot(id:', 'async historyIndex(')
+  const detect = snapshot.indexOf('externallyUpdatedRuntimeState(runtime)')
+  const read = snapshot.indexOf('await handle.snapshot')
+  const restart = snapshot.indexOf('this.scheduleRuntimeRestart(runtime')
+
+  assert.ok(detect >= 0 && read > detect)
+  assert.ok(restart > read, 'Worker refresh must not sit in front of the foreground Snapshot read')
 })
