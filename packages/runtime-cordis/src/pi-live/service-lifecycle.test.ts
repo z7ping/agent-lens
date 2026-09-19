@@ -271,7 +271,8 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
   }
   const second = new DefaultPiLiveService(secondHost, store)
   const recovering = await second.state(initial.runtimeSessionId)
-  assert.ok(['initializing', 'ready'].includes(recovering.status))
+  assert.equal(recovering.status, 'initializing')
+  const recoverySubscription = second.subscribe(initial.runtimeSessionId, () => {})
   await new Promise(resolve => setTimeout(resolve, 0))
   const restored = await second.state(initial.runtimeSessionId)
 
@@ -284,6 +285,7 @@ test('Daemon dispose 保留 Live Task，下一代 Runtime 使用同一稳定 ID 
   assert.equal(recoveredInput?.provider, undefined)
   assert.equal(recoveredInput?.model, undefined)
   assert.equal(promptCalls, 0)
+  recoverySubscription()
 
   await second.terminate(initial.runtimeSessionId)
   assert.equal(store.values.has(initial.runtimeSessionId), false)
@@ -321,11 +323,13 @@ test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 
   }
   const first = new DefaultPiLiveService(firstHost, store)
   const started = await first.start({ cwd: '/workspace', sessionPath: originalPath, historyAction: 'fork' })
+  const forkSubscription = first.subscribe(started.runtimeSessionId, () => {})
   await new Promise(resolve => setTimeout(resolve, 0))
   assert.equal((await first.state(started.runtimeSessionId)).status, 'ready')
   assert.equal(firstInput?.historyAction, 'fork')
   assert.equal(store.values.get(started.runtimeSessionId)?.input.sessionPath, forkedPath)
   assert.equal(store.values.get(started.runtimeSessionId)?.input.historyAction, 'continue')
+  forkSubscription()
   await first.dispose()
 
   let restoredInput: PiLiveStartInput | undefined
@@ -336,7 +340,8 @@ test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 
     },
   }
   const second = new DefaultPiLiveService(secondHost, store)
-  await second.state(started.runtimeSessionId)
+  assert.equal((await second.state(started.runtimeSessionId)).status, 'initializing')
+  const restoredSubscription = second.subscribe(started.runtimeSessionId, () => {})
   await new Promise(resolve => setTimeout(resolve, 0))
   const restored = await second.state(started.runtimeSessionId)
 
@@ -345,6 +350,7 @@ test('分叉后的 Runtime 跨 Daemon 只恢复新 Session，不再次 fork 原 
   assert.equal(restoredInput?.sessionPath, forkedPath)
   assert.equal(restoredInput?.historyAction, 'continue')
   assert.notEqual(restoredInput?.sessionPath, originalPath)
+  restoredSubscription()
   await second.terminate(started.runtimeSessionId)
 })
 
