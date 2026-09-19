@@ -497,6 +497,18 @@ export class DefaultPiLiveService implements PiLiveService {
     }
     const runtime = this.createRuntime(randomUUID(), input, false)
     this.runtimes.set(runtime.id, runtime)
+
+    // Historical Resume/Fork is navigation-first: return a Logical Runtime
+    // before starting any Worker so the HTTP response and SSE subscription can
+    // be established before Pi emits initialization progress.
+    if (input.sessionPath && input.historyAction) {
+      runtime.status = 'ready'
+      runtime.stage = 'ready'
+      runtime.message = 'Pi Runtime 等待前台恢复'
+      runtime.suspended = true
+      return this.foregroundRuntimeState(runtime)
+    }
+
     const initialState = await this.runtimeState(runtime)
     this.scheduleInitialize(runtime, runtime.generation)
     return initialState
@@ -873,7 +885,9 @@ export class DefaultPiLiveService implements PiLiveService {
     // Only mount/recovery reads probe disk. Pagination and rail jumps stay purely
     // in-memory so a long Session cannot turn into repeated filesystem work.
     const mountOrRecoveryRead = !window?.before && !window?.after && !window?.edge && !window?.around
-    if (mountOrRecoveryRead) await this.refreshExternallyUpdatedSession(runtime)
+    const externalState = mountOrRecoveryRead
+      ? await this.externallyUpdatedRuntimeState(runtime)
+      : undefined
     if (!runtime.handle || runtime.status !== 'ready') return { state: await this.runtimeState(runtime), entries: [], leafId: null, page: { hasEarlier: false } }
 
     const requestedLimit = window?.limit
@@ -887,12 +901,22 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(window?.around ? { around: window.around } : {}),
       limit,
     }
-    const snapshot = await runtime.handle.snapshot(since, boundedWindow)
-    this.persistSessionIfChanged(runtime, snapshot.state)
-    this.updateRuntimeResources(runtime, snapshot.state)
-    this.persistStartupAuditBestEffort(runtime, snapshot.state)
-    this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
-    return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
+    const handle = runtime.handle
+    try {
+      const snapshot = await handle.snapshot(since, boundedWindow)
+      this.persistSessionIfChanged(runtime, snapshot.state)
+      this.updateRuntimeResources(runtime, snapshot.state)
+      this.persistStartupAuditBestEffort(runtime, snapshot.state)
+      this.persistPackageUpdatesBestEffort(runtime, runtime.generation)
+      return { ...snapshot, state: this.decorateReadyState(runtime, snapshot.state) }
+    } finally {
+      // Disk-ahead invalidation is a background lifecycle concern. The current
+      // bounded Snapshot is returned first; subscribers then observe the Worker
+      // rebuild and reconcile to the externally appended Session.
+      if (externalState && runtime.handle === handle && runtime.status === 'ready') {
+        this.scheduleRuntimeRestart(runtime, externalState, '检测到外部 Pi 会话更新，正在重新加载')
+      }
+    }
   }
 
   async historyIndex(id: string, query: LiveHistoryIndexQuery = {}) {
@@ -1329,26 +1353,41 @@ export class DefaultPiLiveService implements PiLiveService {
     await this.initialize(runtime, generation)
   }
 
-  private async refreshExternallyUpdatedSession(runtime: OwnedRuntime): Promise<void> {
+  private async externallyUpdatedRuntimeState(runtime: OwnedRuntime): Promise<PiLiveRuntimeState | undefined> {
     const handle = runtime.handle
-    if (!handle?.entry || runtime.status !== 'ready') return
+    if (!handle?.entry || runtime.status !== 'ready') return undefined
     const state = await handle.state().catch(() => undefined)
-    if (!state || runtime.handle !== handle || !this.runtimeIsQuiescent(runtime, state)) return
+    if (!state || runtime.handle !== handle || !this.runtimeIsQuiescent(runtime, state)) return undefined
     const sessionFile = state.sessionFile?.trim() || runtime.input.sessionPath?.trim()
-    if (!sessionFile) return
+    if (!sessionFile) return undefined
 
     let latestEntryId: string | undefined
     try {
       latestEntryId = await latestPiSessionEntryId(sessionFile)
     } catch (error) {
       this.recoveryDiagnostic(runtime, 'Pi Live external session probe failed', error)
-      return
+      return undefined
     }
-    if (!latestEntryId || runtime.handle !== handle) return
+    if (!latestEntryId || runtime.handle !== handle) return undefined
 
     const known = await handle.entry(latestEntryId).catch(() => null)
-    if (known) return
-    await this.restartRuntimeWorker(runtime, state, '检测到外部 Pi 会话更新，正在重新加载')
+    return known ? undefined : state
+  }
+
+  private scheduleRuntimeRestart(
+    runtime: OwnedRuntime,
+    state: PiLiveRuntimeState,
+    message: string,
+  ): void {
+    if (runtime.hydrationTask) return
+    let task: Promise<void>
+    task = this.restartRuntimeWorker(runtime, state, message).finally(() => {
+      if (runtime.hydrationTask === task) runtime.hydrationTask = undefined
+    })
+    runtime.hydrationTask = task
+    void task.catch(error => {
+      this.recoveryDiagnostic(runtime, 'Pi Live background Worker refresh failed', error)
+    })
   }
 
   private conflict(message: string): Error { const error = new Error(message) as Error & { statusCode?: number }; error.statusCode = 409; return error }
