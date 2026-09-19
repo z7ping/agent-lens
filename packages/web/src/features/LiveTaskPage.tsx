@@ -945,8 +945,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             : runtime.status === 'ready'
               ? 'idle'
               : null)
-        if ((changed || forceRecovery) && product.capabilities.includes('recovery')) {
-          void recover(runtime.isStreaming ? 'live' : 'settle')
+        const canRecover = runtime.status === 'ready' || runtime.status === 'initializing'
+        if ((changed || forceRecovery) && canRecover && product.capabilities.includes('recovery')) {
+          const mode = runtime.status === 'ready' && !runtime.isStreaming ? 'settle' : 'live'
+          void recover(mode)
         }
       } catch {
         // SSE remains the primary channel. State reconciliation is best-effort.
