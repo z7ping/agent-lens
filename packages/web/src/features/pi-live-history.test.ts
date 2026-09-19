@@ -105,6 +105,11 @@ test('Pi Live persisted history preserves native thinking / text / tool interlea
     .map(item => item.text)
   assert.deepEqual(assistantTexts, ['我先检查。', '工具后继续。'])
 
+  const assistantModels = items
+    .filter((item): item is Extract<PiLiveHistoryItem, { kind: 'message' }> => item.kind === 'message' && item.role === 'assistant')
+    .map(item => item.modelLabel)
+  assert.deepEqual(assistantModels, ['test / model-1', 'test / model-1'])
+
   const thinking = items.filter((item): item is Extract<PiLiveHistoryItem, { kind: 'thinking' }> => item.kind === 'thinking')
   assert.deepEqual(thinking.map(item => item.text), ['先确认状态', '再确认结果'])
 
