@@ -139,6 +139,18 @@ for (const retiredSelector of ['.review-reader-pane', '.review-reader', '.pi-liv
 }
 
 const turnRailOwner = readFileSync(turnRailOwnerPath, 'utf8')
+if (!/\.task-turn-rail\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*center;[^}]*justify-content:\s*center;/s.test(turnRailOwner)) {
+  throw new Error('Turn Rail 必须保持 #283 前经典纵向 flex 布局，不得恢复全会话比例绝对定位')
+}
+if (!/\.task-turn-rail \.turn-tick\s*\{[^}]*position:\s*relative;[^}]*flex:\s*0 1 9px;/s.test(turnRailOwner)) {
+  throw new Error('Turn Rail tick 必须保持经典流式布局与固定间距')
+}
+if (/\.task-turn-rail \.turn-tick\s*\{[^}]*position:\s*absolute;/s.test(turnRailOwner)) {
+  throw new Error('Turn Rail 不得恢复按全会话比例绝对定位 tick')
+}
+if (taskSurface.includes('jumpToRailPosition') || /style=\{\{\s*top:/.test(taskSurface)) {
+  throw new Error('TaskSurface 不得恢复点击导轨空白位置或 inline top 比例定位；全量轮次能力应保留在数据/按 tick 跳转层')
+}
 if (!/\.task-turn-rail \.turn-tick\s*\{[^}]*width:\s*24px;[^}]*height:\s*9px;/s.test(turnRailOwner)) {
   throw new Error('Turn Rail 每个 tick 的 24×9px 命中区必须统一，状态不得改变轮次间距')
 }
