@@ -724,6 +724,7 @@ function handshakeDiagnostics() {
     initializationTimings,
     ...(startupMetrics.length ? { startupMetrics } : {}),
     ...(warmWorkerStatus ? { warmWorkerStatus } : {}),
+    ...(session?.sessionFile ? { sessionFile: session.sessionFile } : {}),
   }
 }
 
