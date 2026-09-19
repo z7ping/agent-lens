@@ -592,6 +592,113 @@ function historyIndex(queryValue) {
   }
 }
 
+function sessionTreePreview(entry) {
+  const row = record(entry)
+  if (row.type === 'message') {
+    const message = record(row.message)
+    const content = message.content ?? row.content
+    const text = Array.isArray(content)
+      ? content.map(part => typeof part === 'string'
+        ? part
+        : typeof record(part).text === 'string'
+          ? String(record(part).text)
+          : '').join(' ')
+      : typeof content === 'string' ? content : ''
+    return text.replace(/\s+/g, ' ').trim().slice(0, 120)
+  }
+  if (row.type === 'branch_summary' || row.type === 'compaction') {
+    return typeof row.summary === 'string' ? row.summary.replace(/\s+/g, ' ').trim().slice(0, 120) : ''
+  }
+  if (row.type === 'custom_message') {
+    const content = row.content
+    const text = Array.isArray(content)
+      ? content.map(part => typeof part === 'string' ? part : String(record(part).text ?? '')).join(' ')
+      : typeof content === 'string' ? content : ''
+    return text.replace(/\s+/g, ' ').trim().slice(0, 120)
+  }
+  return ''
+}
+
+function sessionTreeNodeType(entry) {
+  const type = record(entry).type
+  if (type === 'message') return 'message'
+  if (type === 'branch_summary') return 'branch-summary'
+  if (type === 'compaction') return 'compaction'
+  if (type === 'model_change' || type === 'thinking_level_change' || type === 'session_info' || type === 'label') return 'control'
+  if (type === 'custom' || type === 'custom_message') return 'custom'
+  return 'other'
+}
+
+function sessionTree() {
+  const manager = session?.sessionManager
+  if (!manager || typeof manager.getTree !== 'function') {
+    return {
+      activeLeafId: manager?.getLeafId?.() ?? null,
+      nodes: [],
+      branchPointIds: [],
+      capabilities: { switchBranch: false, fork: false, clone: false, branchSummary: false },
+    }
+  }
+
+  const activePath = new Set(
+    typeof manager.getBranch === 'function'
+      ? manager.getBranch().map(entryId).filter(Boolean)
+      : [],
+  )
+  const roots = manager.getTree()
+  const nodes = []
+  const branchPointIds = []
+  const stack = Array.isArray(roots) ? [...roots].reverse() : []
+  let branchSummarySupported = typeof manager.branchWithSummary === 'function'
+
+  while (stack.length) {
+    const node = record(stack.pop())
+    const entry = record(node.entry)
+    const id = entryId(entry)
+    if (!id) continue
+    const children = Array.isArray(node.children) ? node.children : []
+    if (children.length > 1) branchPointIds.push(id)
+    if (entry.type === 'branch_summary') branchSummarySupported = true
+
+    const message = record(entry.message)
+    const rawRole = typeof message.role === 'string' ? message.role : ''
+    const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
+      ? rawRole
+      : rawRole ? 'unknown' : undefined
+    const preview = sessionTreePreview(entry)
+    const label = typeof node.label === 'string' && node.label.trim() ? node.label.trim().slice(0, 120) : undefined
+    const summary = entry.type === 'branch_summary' && typeof entry.summary === 'string'
+      ? entry.summary.trim().slice(0, 500)
+      : undefined
+
+    nodes.push({
+      id,
+      parentId: typeof entry.parentId === 'string' && entry.parentId ? entry.parentId : null,
+      type: sessionTreeNodeType(entry),
+      ...(typeof entry.timestamp === 'string' ? { timestamp: entry.timestamp } : {}),
+      ...(role ? { role } : {}),
+      ...(preview ? { preview } : {}),
+      ...(label ? { label } : {}),
+      ...(summary ? { summary } : {}),
+      activePath: activePath.has(id),
+      childCount: children.length,
+    })
+    for (let index = children.length - 1; index >= 0; index -= 1) stack.push(children[index])
+  }
+
+  return {
+    activeLeafId: manager.getLeafId?.() ?? null,
+    nodes,
+    branchPointIds,
+    capabilities: {
+      switchBranch: capabilities?.treeNavigation === true,
+      fork: capabilities?.messageFork === true,
+      clone: false,
+      branchSummary: branchSummarySupported,
+    },
+  }
+}
+
 function resolvedRuntimeSessionDir(cwd, value) {
   if (typeof value !== 'string' || !value.trim()) return undefined
   const raw = value.trim()
@@ -1016,6 +1123,7 @@ async function command(name, value = {}) {
     return session.sessionManager.getEntries().find(entry => entryId(entry) === value.entryId) ?? null
   }
   if (name === 'historyIndex') return historyIndex(value)
+  if (name === 'sessionTree') return sessionTree()
   if (name === 'commands') return slashCommands()
   if (name === 'navigateTree') {
     if (typeof value.entryId !== 'string' || !value.entryId) throw new Error('Pi tree navigation entry id is required')
