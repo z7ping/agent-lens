@@ -93,3 +93,14 @@ test('Pi initialization does not compete with git workspace discovery', () => {
   const refresh = initialize.indexOf('this.refreshWorkspaceContextBestEffort(runtime)')
   assert.ok(ready >= 0 && refresh > ready, 'git metadata refresh must start only after the Pi Runtime is ready')
 })
+
+
+test('Runtime list is a logical-memory read and never probes every Worker', () => {
+  const list = section('async list():', 'async start(')
+  const listState = section('private runtimeListState', 'private async foregroundRuntimeState')
+  assert.match(list, /runtimeListState/)
+  assert.doesNotMatch(list, /runtimeState|handle\.state|Promise\.all/)
+  assert.doesNotMatch(listState, /handle\.state|await /)
+  assert.match(listState, /runtime\.isStreaming/)
+  assert.match(listState, /runtime\.input\.logicalSessionId/)
+})
