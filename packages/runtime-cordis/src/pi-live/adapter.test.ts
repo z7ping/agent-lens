@@ -65,10 +65,15 @@ test('Pi Live Adapter invalidates Runtime Disclosure for private diagnostic upda
   for (const event of [
     { type: 'runtime_resources', resources: {} },
     { type: 'package_updates', status: 'complete', updates: [] },
-    { type: 'runtime_output', message: 'loading resource' },
+    { type: 'runtime_extension_binding', status: 'ready' },
   ]) {
     assert.deepEqual(normalizePiLiveEvent(event), { type: 'runtime-disclosure.changed' })
   }
+
+  // Fine-grained startup telemetry stays on the SSE stream but must not trigger
+  // one extra HTTP disclosure read per metric/log line.
+  assert.equal(normalizePiLiveEvent({ type: 'runtime_startup_metric', metric: { name: 'sdk_import_ms', durationMs: 1 } }), undefined)
+  assert.equal(normalizePiLiveEvent({ type: 'runtime_output', message: 'loading resource' }), undefined)
 })
 
 test('Pi Live Adapter maps task summary into generic title.update', () => {
