@@ -62,8 +62,9 @@ if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.
 if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) throw new Error('阅读历史时不得抢滚动位置')
 
 if (!reviewPage.includes('className="review-reader-pane"') || !reviewPage.includes('className="review-reader"')) throw new Error('Review 必须保留分页/滚动行为钩子，由 TaskSurface 归一为 Session 槽位')
-if (!taskSurface.includes("const sessionReaderHooks = new Set(['review-reader-pane', 'pi-live-reader'])")) throw new Error('TaskSurface 必须识别 Review / Live Reader 行为钩子')
-if (!taskSurface.includes("const sessionDocumentHooks = new Set(['review-reader', 'pi-live-document'])")) throw new Error('TaskSurface 必须识别 Review / Live Document 行为钩子')
+if (!taskSurface.includes("'review-reader-pane'") || !taskSurface.includes("'live-task-reader'")) throw new Error('TaskSurface 必须识别 Review / 通用 Live Reader 行为钩子')
+if (!taskSurface.includes("'review-reader'") || !taskSurface.includes("'live-task-document'")) throw new Error('TaskSurface 必须识别 Review / 通用 Live Document 行为钩子')
+if (!taskSurface.includes("'live-task-compose-wrap'")) throw new Error('TaskSurface 必须识别通用 Live Composer 行为钩子')
 if (!taskSurface.includes("withSessionClass(element, 'task-session-reader'") || !taskSurface.includes("withSessionClass(candidate, 'task-session-document')")) throw new Error('TaskSurface 必须将 Review / Live 归一为共享 Reader / Document 槽位')
 if (!taskSessionCss.includes('.task-session-view > .task-session-reader') || !taskSessionCss.includes('.task-session-view .task-session-document')) throw new Error('统一 Session 样式必须只基于共享 Reader / Document 槽位')
 if (taskSessionCss.includes('.review-reader') || taskSessionCss.includes('.pi-live-document')) throw new Error('统一 Session 样式不得再依赖 Review / Pi 页面私有正文类')
