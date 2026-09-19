@@ -141,3 +141,12 @@ test('Runtime state returns cached resource disclosure instead of rescanning Res
   assert.doesNotMatch(state, /startupResourceSnapshot/)
   assert.doesNotMatch(state, /getExtensions|getSkills|getPrompts|getThemes|getAgentsFiles/)
 })
+
+
+test('startup audit waits for final extension-discovered resources', () => {
+  const persist = section(service, 'private persistStartupAuditBestEffort', 'private scheduleStartupAuditProbe')
+  assert.match(persist, /runtime\.extensionBindingStatus === 'binding'/)
+  const initialize = section(service, 'private async initialize(runtime:', 'private workerExited(')
+  assert.match(initialize, /runtime\.extensionBindingStatus === 'ready' \|\| runtime\.extensionBindingStatus === 'failed'/)
+  assert.match(initialize, /this\.scheduleStartupAuditProbe\(runtime, generation\)/)
+})
