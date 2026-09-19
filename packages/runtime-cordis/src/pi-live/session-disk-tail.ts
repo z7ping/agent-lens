@@ -17,7 +17,7 @@ export async function latestPiSessionEntryId(
   filePath: string,
   maxBytes = PI_SESSION_TAIL_PROBE_MAX_BYTES,
 ): Promise<string | undefined> {
-  let handle
+  let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(filePath, 'r')
     const info = await handle.stat()
@@ -49,7 +49,7 @@ export async function latestPiSessionEntryId(
     }
     return undefined
   } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return undefined
+    if ((error as { code?: string } | undefined)?.code === 'ENOENT') return undefined
     throw error
   } finally {
     await handle?.close().catch(() => undefined)
