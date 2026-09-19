@@ -391,6 +391,12 @@ test('同一历史会话正在结束时拒绝新的继续请求', async () => {
     sessionPath: '/sessions/ending.jsonl',
     historyAction: 'continue',
   })
+  const unsubscribe = service.subscribe(started.runtimeSessionId, () => {})
+  for (let index = 0; index < 20; index += 1) {
+    if ((await service.state(started.runtimeSessionId)).status === 'ready') break
+    await new Promise(resolve => setTimeout(resolve, 0))
+  }
+  assert.equal((await service.state(started.runtimeSessionId)).status, 'ready')
 
   const ending = service.terminate(started.runtimeSessionId)
   await new Promise(resolve => setTimeout(resolve, 0))
@@ -406,4 +412,5 @@ test('同一历史会话正在结束时拒绝新的继续请求', async () => {
 
   releaseTerminate()
   await ending
+  unsubscribe()
 })
