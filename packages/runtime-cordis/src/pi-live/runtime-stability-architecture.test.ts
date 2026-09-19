@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const service = await readFile(new URL('./service.ts', import.meta.url), 'utf8')
+const adapter = await readFile(new URL('./adapter.ts', import.meta.url), 'utf8')
+const liveTaskPage = await readFile(new URL('../../../web/src/features/LiveTaskPage.tsx', import.meta.url), 'utf8')
 const tailProbe = await readFile(new URL('./session-disk-tail.ts', import.meta.url), 'utf8')
 
 function section(start: string, end: string): string {
@@ -131,4 +133,21 @@ test('Pi logical settlement never treats agent_end or assistant message_end as t
   assert.doesNotMatch(publish, /logicalSettled[^\n]*agent_end/)
   assert.doesNotMatch(publish, /logicalSettled[^\n]*message_end/)
   assert.match(publish, /type === 'message_end' && messageRole === 'assistant'/)
+})
+
+
+test('Generic Live completion can only originate from Pi agent_settled', () => {
+  const normalizeStart = adapter.indexOf('export function normalizePiLiveEvent')
+  const normalizeEnd = adapter.indexOf('export function normalizePiLiveRuntimeEvent', normalizeStart)
+  assert.ok(normalizeStart >= 0 && normalizeEnd > normalizeStart)
+  const normalize = adapter.slice(normalizeStart, normalizeEnd)
+  assert.match(normalize, /type === 'agent_settled'/)
+  assert.doesNotMatch(normalize, /type === 'agent_settled' \|\| type === 'agent_end'/)
+  assert.doesNotMatch(normalize, /type === 'agent_end'[^\n]*completed/)
+})
+
+test('LiveTaskPage final reconciliation stays bound to normalized completed', () => {
+  assert.match(liveTaskPage, /normalizedEvent\?\.type === 'completed'/)
+  assert.doesNotMatch(liveTaskPage, /agent_end/)
+  assert.doesNotMatch(liveTaskPage, /agent_settled/)
 })
