@@ -23,6 +23,7 @@ const PROTOCOL_VERSION = 1
 const MAX_PENDING_REQUESTS = 128
 const MAX_STDERR_TAIL = 64 * 1024
 const MAX_STARTUP_OUTPUT_LINES = 80
+const WARM_CLAIM_GRACE_MS = 250
 
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
@@ -395,6 +396,8 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
 export class WorkerPiRuntimeHost implements PiRuntimeHost {
   private warmWorker?: WarmWorker | undefined
   private warming?: Promise<void> | undefined
+  private warmingChild?: ChildProcess | undefined
+  private warmingExecutable?: string | undefined
 
   private workerEntry(): string {
     return fileURLToPath(new URL('./worker-entry.mjs', import.meta.url))
@@ -426,10 +429,13 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
   private async preloadFor(executable?: string): Promise<void> {
     if (this.warmWorker) return
     if (this.warming) return this.warming
+    const normalizedExecutable = executable?.trim() || undefined
+    this.warmingExecutable = normalizedExecutable
     this.warming = (async () => {
-      const discovered = await discoverInstalledPiSdk(executable)
+      const discovered = await discoverInstalledPiSdk(normalizedExecutable)
       const sdk: PiSdkDescriptor = { sdkEntry: discovered.sdkEntry, ...(discovered.version ? { version: discovered.version } : {}) }
       const child = this.forkWorker(process.cwd())
+      this.warmingChild = child
       try {
         await new Promise<void>((resolve, reject) => {
           const cleanup = () => {
@@ -472,8 +478,57 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
       }
     })().finally(() => {
       this.warming = undefined
+      this.warmingChild = undefined
+      this.warmingExecutable = undefined
     })
     return this.warming
+  }
+
+  private cancelWarming(): void {
+    const child = this.warmingChild
+    if (!child) return
+    if (child.connected) child.disconnect()
+    if (child.exitCode === null && child.signalCode === null) child.kill()
+  }
+
+  private async claimWarmWorker(
+    sdk: PiSdkDescriptor,
+    executable?: string,
+  ): Promise<{ claim: WarmWorkerClaim; waitedMs: number }> {
+    let claim = this.takeWarmWorker(sdk)
+    if (claim.child || claim.status !== 'not_ready') return { claim, waitedMs: 0 }
+
+    const warming = this.warming
+    const normalizedExecutable = executable?.trim() || undefined
+    if (!warming || this.warmingExecutable !== normalizedExecutable) {
+      this.cancelWarming()
+      await warming?.catch(() => undefined)
+      return { claim, waitedMs: 0 }
+    }
+
+    const startedAt = Date.now()
+    let timer: NodeJS.Timeout | undefined
+    const settled = await Promise.race([
+      warming.then(() => true, () => true),
+      new Promise<boolean>(resolve => {
+        timer = setTimeout(() => resolve(false), WARM_CLAIM_GRACE_MS)
+        timer.unref?.()
+      }),
+    ])
+    if (timer) clearTimeout(timer)
+    const waitedMs = Math.max(0, Date.now() - startedAt)
+
+    if (settled) {
+      claim = this.takeWarmWorker(sdk)
+      if (claim.child) return { claim, waitedMs }
+      return { claim, waitedMs }
+    }
+
+    // Foreground startup wins after a short grace period. Kill the still-warming
+    // background Worker so cold start does not compete for CPU/disk on Windows.
+    this.cancelWarming()
+    await warming.catch(() => undefined)
+    return { claim: { status: 'not_ready' }, waitedMs }
   }
 
   private takeWarmWorker(sdk: PiSdkDescriptor): WarmWorkerClaim {
@@ -492,6 +547,9 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
   }
 
   async dispose(): Promise<void> {
+    const warming = this.warming
+    this.cancelWarming()
+    await warming?.catch(() => undefined)
     const warm = this.warmWorker
     this.warmWorker = undefined
     if (!warm) return
@@ -515,15 +573,17 @@ export class WorkerPiRuntimeHost implements PiRuntimeHost {
       sdkEntry: sdk.sdkEntry,
       ...(sdk.version ? { version: sdk.version } : {}),
     }
-    // 只领取从未创建 Session 的空闲 Base Worker。补位延后到当前 Runtime 初始化结束，避免启动期资源争抢。
-    const claim = this.takeWarmWorker(sdkDescriptor)
+    // 只领取从未创建 Session 的空闲 Base Worker。若 Daemon 预热尚未完成，
+    // 最多给一个极短命中窗口；随后前台优先，取消后台预热以避免双 Worker 争抢。
+    const claimed = await this.claimWarmWorker(sdkDescriptor, input.executable)
+    const claim = claimed.claim
     const spawnStartedAt = Date.now()
     const child = claim.child ?? this.forkWorker(input.cwd)
     const workerSpawnMs = claim.child ? 0 : Math.max(0, Date.now() - spawnStartedAt)
     const hostStartupMetrics: PiLiveStartupMetric[] = [
       { name: 'sdk_discovery_ms', durationMs: sdkDiscoveryMs },
       { name: 'worker_spawn_ms', durationMs: workerSpawnMs },
-      { name: 'warm_worker_wait_ms', durationMs: 0 },
+      { name: 'warm_worker_wait_ms', durationMs: claimed.waitedMs },
     ]
     const workerInput = {
       ...input,
