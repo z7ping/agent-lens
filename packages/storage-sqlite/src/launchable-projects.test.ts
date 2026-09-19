@@ -217,10 +217,10 @@ test('launchable project reader does not hide canonical sessions while summary p
       summary: false,
     })
 
-    assert.equal(
-      storage.db.prepare('SELECT COUNT(*) AS count FROM session_summary_projection').get().count,
-      0,
-    )
+    const projectionCount = storage.db.prepare(
+      'SELECT COUNT(*) AS count FROM session_summary_projection',
+    ).get() as { count: number }
+    assert.equal(projectionCount.count, 0)
 
     const result = await storage.launchableProjects.query({ limit: 10 })
     assert.deepEqual(result.items.map(item => item.projectId), ['canonical-only'])
