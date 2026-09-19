@@ -16,6 +16,13 @@ export interface PiLiveInitializationTiming {
   durationMs: number
 }
 
+export type PiLiveWarmWorkerStatus = 'hit' | 'miss' | 'not_ready' | 'sdk_mismatch'
+
+export interface PiLiveStartupMetric {
+  name: string
+  durationMs: number
+}
+
 export interface PiLivePackageUpdate {
   displayName: string
   type: 'npm' | 'git'
@@ -90,6 +97,9 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   initializationMessage?: string | undefined
   initializationElapsedMs?: number | undefined
   initializationTimings?: PiLiveInitializationTiming[] | undefined
+  /** Fine-grained startup timings for diagnostics; product progress keeps using initializationStage. */
+  startupMetrics?: PiLiveStartupMetric[] | undefined
+  warmWorkerStatus?: PiLiveWarmWorkerStatus | undefined
   /** Current Pi runtime resource snapshot. Field name is retained for API compatibility. */
   startupResources?: PiLiveStartupResources | undefined
   packageUpdates?: PiLivePackageUpdate[] | undefined
