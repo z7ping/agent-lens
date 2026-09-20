@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   type JsonValue,
+  type LiveHistoryIndexDto,
+  type LiveHistoryIndexItemDto,
   type LiveMessageDto,
   type PiLiveControlsDto,
   type PiLiveQueueDto,
@@ -10,6 +12,7 @@ import {
   type PiLiveStateDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
+import { liveApi } from '../client/live'
 import { resolveLiveThinkingControl } from '../client/live-controls'
 import { PiLiveRequestError, piLiveApi, type PiLiveTransportDiagnostics } from '../client/pi-live'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -26,8 +29,8 @@ import { PiLiveFollowController } from './pi-live-follow-controller'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
 import { PiLivePresentationScheduler } from './pi-live-presentation'
 import { sameStablePiLiveHistoryRoundProps } from './pi-live-render-boundary'
-import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound } from './PiLiveTaskRound'
-import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
+import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound, PiLiveIndexedTaskRound, type PiLiveIndexedProcessLoadResult } from './PiLiveTaskRound'
+import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveHistoryIndexRound, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 import { workspaceDisplayName } from './task-detail-model'
@@ -67,6 +70,9 @@ interface ExtensionRequest {
 }
 
 const PI_LIVE_EAGER_CHUNKS = 2
+const PI_LIVE_INDEX_WINDOW = 20
+const PI_LIVE_PROCESS_PAGE_LIMIT = 500
+const PI_LIVE_PROCESS_MAX_PAGES = 4
 
 const PiLiveHistoryVirtualRound = memo(function PiLiveHistoryVirtualRound({
   projection,
@@ -435,6 +441,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const activePromptRef = useRef('')
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
+  const [historyIndex, setHistoryIndex] = useState<LiveHistoryIndexDto | null>(null)
   const [state, setState] = useState<PiLiveStateDto | null>(null)
   const [controls, setControls] = useState<PiLiveControlsDto>({ models: [] })
   const [connected, setConnected] = useState(false)
@@ -496,6 +503,75 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     if (message && liveMessageHasContent(message)) composerSubmitRef.current(message, 'default')
   }, [])
 
+  const refreshHistoryIndex = useCallback(async (): Promise<LiveHistoryIndexDto> => {
+    if (!runtimeId) return { total: 0, items: [] }
+    const meta = await liveApi.historyIndex('pi', runtimeId, { limit: 0 })
+    const count = Math.min(meta.total, PI_LIVE_INDEX_WINDOW)
+    const next = count > 0
+      ? await liveApi.historyIndex('pi', runtimeId, {
+          fromOrdinal: Math.max(1, meta.total - count + 1),
+          limit: count,
+        })
+      : meta
+    const normalized = { total: meta.total, items: next.items }
+    setHistoryIndex(normalized)
+    return normalized
+  }, [runtimeId])
+
+  const loadIndexedProcess = useCallback(async (
+    cursor: string,
+    revision: string,
+    signal?: AbortSignal,
+  ): Promise<PiLiveIndexedProcessLoadResult> => {
+    if (!runtimeId) return { items: [], partial: true }
+    const abort = () => {
+      if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
+    }
+    abort()
+    const exact = await liveApi.historyIndex('pi', runtimeId, { cursor, limit: 1 })
+    abort()
+    const current = exact.items[0]
+    if (!current?.summary || current.summary.process.revision !== revision) {
+      throw new Error(t('history.processChanged'))
+    }
+
+    let after = cursor
+    let entries: JsonValue[] = []
+    let stateForProjection = state
+    let lastLeafId: string | null | undefined
+    for (let pageNumber = 0; pageNumber < PI_LIVE_PROCESS_MAX_PAGES; pageNumber += 1) {
+      abort()
+      const pageSnapshot = await liveApi.snapshot('pi', runtimeId, undefined, {
+        after,
+        limit: PI_LIVE_PROCESS_PAGE_LIMIT,
+      })
+      abort()
+      entries = [...entries, ...(pageSnapshot.entries as JsonValue[])]
+      lastLeafId = pageSnapshot.leafId
+      if (!stateForProjection) stateForProjection = await piLiveApi.state(runtimeId)
+      const projected = projectPiLiveHistory({
+        state: stateForProjection,
+        entries,
+        leafId: lastLeafId ?? null,
+      })
+      const nextUserIndex = projected.findIndex(item => item.kind === 'message' && item.role === 'user')
+      const scoped = nextUserIndex >= 0 ? projected.slice(0, nextUserIndex) : projected
+      if (nextUserIndex >= 0 || !pageSnapshot.page?.hasLater || !pageSnapshot.page.after) {
+        return { items: scoped, partial: false }
+      }
+      after = pageSnapshot.page.after
+    }
+
+    const projected = stateForProjection
+      ? projectPiLiveHistory({ state: stateForProjection, entries, leafId: lastLeafId ?? null })
+      : []
+    const nextUserIndex = projected.findIndex(item => item.kind === 'message' && item.role === 'user')
+    return {
+      items: nextUserIndex >= 0 ? projected.slice(0, nextUserIndex) : projected,
+      partial: true,
+    }
+  }, [runtimeId, state, t])
+
   useEffect(() => {
     let cancelled = false
     void piLiveApi.knownRuntimes().then(value => { if (!cancelled) setKnown(value) }, () => undefined)
@@ -524,6 +600,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     const presentation = new PiLivePresentationScheduler<PiLiveHistoryItem[]>(mutation => setCurrentItems(mutation))
     presentationRef.current = presentation
     setSnapshot(null)
+    setHistoryIndex(null)
     setState(null)
     setControls({ models: [] })
     setComposerValue('')
@@ -600,31 +677,23 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     const reconcileSettledSnapshot = async () => {
       try {
         presentation.flush()
-        const value = await piLiveApi.snapshot(runtimeId, leafIdRef.current)
+        const [nextState] = await Promise.all([
+          piLiveApi.state(runtimeId),
+          refreshHistoryIndex(),
+        ])
         if (!active) return
-        const prompt = activePromptRef.current.trim()
-        const freshHistory = projectPiLiveHistory(value)
-        const freshRounds = projectPiLiveTaskRounds(freshHistory)
-        const ordinal = prompt
-          ? [...freshRounds].reverse().find(round => round.model.ordinal !== undefined && round.items.some(item => item.kind === 'message' && item.role === 'user' && item.text.trim() === prompt))?.model.ordinal ?? null
-          : [...freshRounds].reverse().find(round => round.model.ordinal !== undefined)?.model.ordinal ?? null
-        const settledItems = ordinal === null
-          ? []
-          : freshRounds.filter(round => round.model.ordinal === ordinal).flatMap(round => round.items)
-        const resolvedPromptItem = settledItems.find(item => item.kind === 'message' && item.role === 'user')
-        const resolvedPrompt = prompt || (resolvedPromptItem?.kind === 'message' ? resolvedPromptItem.text : '')
-        acceptSnapshot(value)
-        if (ordinal !== null && settledItems.length > 0) {
-          setCurrentOrdinal(ordinal)
-          setCurrentItems(current => reconcilePiLiveItems(current, omitPiLivePromptMessages(settledItems, resolvedPrompt)))
-          setOptimisticPrompt(resolvedPrompt)
-        }
+        setState(nextState)
+        setSnapshot({ state: nextState, entries: [], leafId: leafIdRef.current ?? null })
+        setCurrentOrdinal(null)
+        setCurrentItems([])
+        setOptimisticPrompt('')
         activePromptRef.current = ''
         setSyncWarningCode(current => current === 'history-reconcile-failed' ? '' : current)
+        window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
       } catch (reason) {
         if (!active) return
         const detail = reason instanceof Error ? reason.message : String(reason)
-        console.warn('[AgentLens] Pi Live settled snapshot reconciliation failed:', detail)
+        console.warn('[AgentLens] Pi Live settled history index reconciliation failed:', detail)
         setCurrentItems(current => settlePiLiveItems(current))
         setSyncWarningCode('history-reconcile-failed')
       }
@@ -647,7 +716,32 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       return task
     }
 
+    const recoverBoundedSnapshot = async (leafId?: string): Promise<PiLiveSnapshotDto> => {
+      const nextState = await piLiveApi.state(runtimeId)
+      try {
+        const index = await refreshHistoryIndex()
+        if (nextState.isStreaming) {
+          const latest = index.items.at(-1)
+          if (latest) {
+            const bounded = await liveApi.snapshot('pi', runtimeId, undefined, {
+              around: latest.cursor,
+              limit: PI_LIVE_PROCESS_PAGE_LIMIT,
+            })
+            return {
+              state: nextState,
+              entries: bounded.entries as JsonValue[],
+              leafId: bounded.leafId ?? leafId ?? null,
+            }
+          }
+        }
+        return { state: nextState, entries: [], leafId: leafId ?? null }
+      } catch {
+        return piLiveApi.snapshot(runtimeId, leafId)
+      }
+    }
+
     const dispose = piLiveApi.connect(runtimeId, {
+      recoverSnapshot: recoverBoundedSnapshot,
       onConnection: value => { if (active) setConnected(value) },
       onSnapshot: value => {
         acceptSnapshot(value)
@@ -802,7 +896,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             if (runtimeError) setError(runtimeError)
             window.dispatchEvent(new Event('agent-lens:pi-live-state-changed'))
             if (status === 'ready') {
-              void piLiveApi.snapshot(runtimeId, leafIdRef.current).then(acceptSnapshot, reason => {
+              void recoverBoundedSnapshot(leafIdRef.current).then(acceptSnapshot, reason => {
                 const detail = reason instanceof Error ? reason.message : String(reason)
                 console.warn('[AgentLens] Pi Live ready snapshot refresh failed:', detail)
                 if (active) setSyncWarningCode('snapshot-sync-failed')
@@ -848,14 +942,21 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       }
       followControllerRef.current.endProgrammaticScroll()
     }
-  }, [runtimeId, setComposerValue])
+  }, [refreshHistoryIndex, runtimeId, setComposerValue])
 
   const history = useMemo(() => projectPiLiveHistory(snapshot), [snapshot, localeRevision])
   const historyRounds = useMemo(() => projectPiLiveTaskRounds(history), [history, localeRevision])
-  const visibleHistoryRounds = useMemo(() => currentOrdinal === null
-    ? historyRounds
-    : historyRounds.filter(round => round.model.ordinal !== currentOrdinal), [currentOrdinal, historyRounds])
+  const useIndexedHistory = Boolean(historyIndex && historyIndex.items.every(item => Boolean(item.summary)))
   const optimisticStreaming = ((Boolean(optimisticPrompt) && currentOrdinal === null && state?.isStreaming !== false) || (state?.isStreaming ?? false))
+  const visibleIndexedHistory = useMemo(() => useIndexedHistory
+    ? (historyIndex?.items ?? []).filter(item => !(optimisticStreaming && item.ordinal === historyIndex?.total))
+    : [], [historyIndex, optimisticStreaming, useIndexedHistory])
+  const visibleHistoryRounds = useMemo(() => useIndexedHistory
+    ? []
+    : currentOrdinal === null
+      ? historyRounds
+      : historyRounds.filter(round => round.model.ordinal !== currentOrdinal), [currentOrdinal, historyRounds, useIndexedHistory])
+  const indexedRoundModels = useMemo(() => visibleIndexedHistory.map(projectPiLiveHistoryIndexRound), [visibleIndexedHistory])
   const visiblePendingCount = queue.steering.length + queue.followUp.length + pendingQueue.length
   const runningRound = useMemo(() => {
     if (currentOrdinal !== null) {
@@ -869,8 +970,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     state: state ? { ...state, pendingMessageCount: visiblePendingCount } : state,
     connected,
     historyRounds,
+    ...(useIndexedHistory ? { historyRoundModels: indexedRoundModels } : {}),
     runningRound,
-  }), [connected, historyRounds, localeRevision, runningRound, state, visiblePendingCount])
+  }), [connected, historyRounds, indexedRoundModels, localeRevision, runningRound, state, useIndexedHistory, visiblePendingCount])
   const headerTitle = taskDetailModel.title
 
   const beginOptimisticPrompt = useCallback((text: string) => {
@@ -1233,7 +1335,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     : state?.isStreaming ? t('connection.composerSteer') : t('connection.composerIdle')
   const startupState = state && ['initializing', 'ready', 'failed'].includes(state.status) ? state : null
   const startupMeta = startupState ? piStartupSummary(startupState) : null
-  const hasBackgroundRound = visibleHistoryRounds.some(projection => projection.model.id === 'background:0')
+  const hasBackgroundRound = !useIndexedHistory && visibleHistoryRounds.some(projection => projection.model.id === 'background:0')
   const startupSummaryMeta = startupMeta ? <span>{startupMeta.label} · {startupMeta.duration}</span> : undefined
   const startupContent = startupState ? <PiStartupDisclosure
     state={startupState}
@@ -1320,6 +1422,19 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             beforeContent={startupContent}
             summaryMeta={startupSummaryMeta}
           />}
+          {useIndexedHistory && visibleIndexedHistory.map((item, index) => <VirtualRoundMount
+            key={`pi-index-round-${item.ordinal}`}
+            rootSelector=".pi-live-reader"
+            flowRoot
+            eager={index >= visibleIndexedHistory.length - PI_LIVE_EAGER_CHUNKS}
+            estimate={220 + Math.min(280, Math.ceil((item.summary?.finalText?.length ?? 0) / 72) * 23)}
+          >
+            <PiLiveIndexedTaskRound
+              item={item}
+              showAllEvents={showAllEvents}
+              loadProcess={loadIndexedProcess}
+            />
+          </VirtualRoundMount>)}
           {visibleHistoryRounds.map((projection, index) => {
             const carriesStartup = Boolean(startupState?.status === 'ready' && projection.model.id === 'background:0')
             const eager = carriesStartup || index >= visibleHistoryRounds.length - PI_LIVE_EAGER_CHUNKS

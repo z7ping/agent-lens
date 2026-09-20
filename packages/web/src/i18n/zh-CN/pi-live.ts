@@ -233,6 +233,7 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       expandToLoad: '展开后加载完整处理详情',
       loadingProcess: '正在加载处理详情…',
       processLoadFailed: '处理详情加载失败',
+      processChanged: '本轮历史已更新，请重新展开',
       partialProcess: '部分',
       retry: '重试',
       terminalCompleted: '本轮完成',

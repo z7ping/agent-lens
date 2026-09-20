@@ -233,6 +233,7 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       expandToLoad: 'Expand to load full process details',
       loadingProcess: 'Loading process details…',
       processLoadFailed: 'Failed to load process details',
+      processChanged: 'This round changed. Expand it again to reload.',
       partialProcess: 'Partial',
       retry: 'Retry',
       terminalCompleted: 'Round completed',
