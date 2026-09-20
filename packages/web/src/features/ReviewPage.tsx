@@ -1037,6 +1037,8 @@ function ReviewRoundAdapter({
   const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
   const promptEntries = groups.filter(entry => entry.type === 'message' && entry.node.role === 'user')
   const afterProcessEntries = groups.filter(entry => !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
+  const hasFinalAnswer = afterProcessEntries.some(entry => entry.type === 'message' && entry.node.role === 'assistant')
+  const resolvedProcessState = hasFinalAnswer ? 'settled' : round.state
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
     if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
@@ -1053,7 +1055,7 @@ function ReviewRoundAdapter({
         items={processEntry?.items ?? []}
         summary={effectiveSummary}
         inspect={inspect}
-        state={round.state}
+        state={resolvedProcessState}
         showAllEvents={showAllEvents}
         expansionStore={expansionStore}
         loadState={lazy ? processLoadState : 'loaded'}
@@ -1062,7 +1064,7 @@ function ReviewRoundAdapter({
         onRetry={requestProcess}
       />
     : processEntry
-      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={round.state} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
+      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
       : null
 
   return <TaskRound
