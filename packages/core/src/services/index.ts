@@ -589,3 +589,5 @@ export interface StorageService {
 
 export * from './source-raw-retention'
 export * from './source-raw-recovery-audit'
+
+export * from './task-file-changes'
