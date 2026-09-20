@@ -101,6 +101,7 @@ function parseCapture(value: unknown): TaskFileChangeCapture {
     ...(optionalString(item, 'baseline_tree_sha') ? { baselineTreeSha: optionalString(item, 'baseline_tree_sha') } : {}),
     baselineCapturedAt: requiredString(item, 'baseline_captured_at'),
     ...(optionalString(item, 'final_tree_sha') ? { finalTreeSha: optionalString(item, 'final_tree_sha') } : {}),
+    ...(optionalString(item, 'checkpointed_at') ? { checkpointedAt: optionalString(item, 'checkpointed_at') } : {}),
     ...(optionalString(item, 'finalized_at') ? { finalizedAt: optionalString(item, 'finalized_at') } : {}),
     ...(changes ? { changes } : {}),
   }
@@ -165,11 +166,12 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
           baseline_tree_sha,
           baseline_captured_at,
           final_tree_sha,
+          checkpointed_at,
           finalized_at,
           changes_json,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(runtime_session_id) DO NOTHING
       `).run(
         capture.runtimeSessionId,
@@ -179,6 +181,7 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
         capture.baselineTreeSha ?? null,
         capture.baselineCapturedAt,
         capture.finalTreeSha ?? null,
+        capture.checkpointedAt ?? null,
         capture.finalizedAt ?? null,
         capture.changes ? JSON.stringify(capture.changes) : null,
         now,
@@ -219,6 +222,56 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
     })
   }
 
+  checkpointRuntime(
+    runtimeSessionId: string,
+    input: {
+      logicalSessionId: LogicalSessionId
+      finalTreeSha?: string
+      checkpointedAt: string
+      changes: TaskFileChangeRecord[]
+    },
+  ): Promise<void> {
+    return this.executor.transaction(async () => {
+      const current = this.executor.db.prepare(`
+        SELECT runtime_session_id, logical_session_id
+        FROM task_file_change_capture
+        WHERE runtime_session_id = ?
+      `).get(runtimeSessionId) as {
+        runtime_session_id?: string
+        logical_session_id?: string | null
+      } | undefined
+      if (!current) throw new Error(`Task file change baseline not found: ${runtimeSessionId}`)
+      if (current.logical_session_id && current.logical_session_id !== input.logicalSessionId) {
+        throw new Error(
+          `Task file change runtime ${runtimeSessionId} is already bound to ${current.logical_session_id}`,
+        )
+      }
+
+      this.executor.db.prepare(`
+        UPDATE task_file_change_capture
+        SET logical_session_id = ?,
+            final_tree_sha = ?,
+            checkpointed_at = ?,
+            changes_json = ?,
+            updated_at = ?
+        WHERE runtime_session_id = ?
+      `).run(
+        input.logicalSessionId,
+        input.finalTreeSha ?? null,
+        input.checkpointedAt,
+        JSON.stringify(input.changes),
+        new Date().toISOString(),
+        runtimeSessionId,
+      )
+
+      this.executor.db.prepare(`
+        DELETE FROM task_file_change_projection
+        WHERE logical_session_id = ?
+      `).run(input.logicalSessionId)
+      insertProjection(this.executor, input.logicalSessionId, input.changes)
+    })
+  }
+
   finalizeRuntime(
     runtimeSessionId: string,
     input: {
@@ -248,6 +301,7 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
         UPDATE task_file_change_capture
         SET logical_session_id = ?,
             final_tree_sha = ?,
+            checkpointed_at = ?,
             finalized_at = ?,
             changes_json = ?,
             updated_at = ?
@@ -255,6 +309,7 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
       `).run(
         input.logicalSessionId,
         input.finalTreeSha ?? null,
+        input.finalizedAt,
         input.finalizedAt,
         JSON.stringify(input.changes),
         new Date().toISOString(),
@@ -274,21 +329,56 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
     changes: TaskFileChangeRecord[],
   ): Promise<boolean> {
     return this.executor.transaction(async () => {
-      const finalized = this.executor.db.prepare(`
-        SELECT 1 AS present
+      const latestCapture = this.executor.db.prepare(`
+        SELECT *
         FROM task_file_change_capture
         WHERE logical_session_id = ?
-          AND finalized_at IS NOT NULL
           AND changes_json IS NOT NULL
+        ORDER BY
+          CASE WHEN finalized_at IS NULL THEN 0 ELSE 1 END DESC,
+          COALESCE(finalized_at, checkpointed_at, updated_at) DESC,
+          updated_at DESC,
+          runtime_session_id DESC
         LIMIT 1
       `).get(logicalSessionId)
-      if (finalized) return false
+      const capture = latestCapture ? parseCapture(latestCapture) : null
+      if (capture?.finalizedAt) return false
+
+      const merged = new Map<string, TaskFileChangeRecord>()
+      for (const item of capture?.changes ?? []) merged.set(item.path, { ...item, evidence: [...item.evidence] })
+      for (const item of changes) {
+        const existing = merged.get(item.path)
+        if (!existing) {
+          merged.set(item.path, item)
+          continue
+        }
+        existing.lastChangedAt = item.lastChangedAt > existing.lastChangedAt
+          ? item.lastChangedAt
+          : existing.lastChangedAt
+        existing.firstChangedAt = item.firstChangedAt < existing.firstChangedAt
+          ? item.firstChangedAt
+          : existing.firstChangedAt
+        for (const evidence of item.evidence) {
+          if (!existing.evidence.includes(evidence)) existing.evidence.push(evidence)
+        }
+        if (existing.confidence !== 'exact') {
+          existing.changeType = item.changeType
+          existing.oldPath = item.oldPath
+          existing.additions = item.additions
+          existing.deletions = item.deletions
+          existing.confidence = item.confidence
+        }
+      }
 
       this.executor.db.prepare(`
         DELETE FROM task_file_change_projection
         WHERE logical_session_id = ?
       `).run(logicalSessionId)
-      insertProjection(this.executor, logicalSessionId, changes)
+      insertProjection(
+        this.executor,
+        logicalSessionId,
+        [...merged.values()].sort((left, right) => left.path.localeCompare(right.path)),
+      )
       return true
     })
   }
@@ -324,11 +414,10 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
           SELECT *,
                  ROW_NUMBER() OVER (
                    PARTITION BY logical_session_id
-                   ORDER BY finalized_at DESC, updated_at DESC, runtime_session_id DESC
+                   ORDER BY COALESCE(finalized_at, checkpointed_at, updated_at) DESC, updated_at DESC, runtime_session_id DESC
                  ) AS capture_rank
           FROM task_file_change_capture
           WHERE logical_session_id IS NOT NULL
-            AND finalized_at IS NOT NULL
             AND changes_json IS NOT NULL
             ${input.logicalSessionId ? 'AND logical_session_id = ?' : ''}
         )
