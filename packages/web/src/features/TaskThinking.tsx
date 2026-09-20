@@ -44,7 +44,6 @@ export function TaskThinking({
     const next = stored ?? defaultExpanded
     setExpanded(next)
     if (stored === undefined && defaultExpanded) expansionStore?.set(model.id, true)
-    onExpandedChange?.(next)
   }, [defaultExpanded, expansionStore, model.id])
 
   return <details
