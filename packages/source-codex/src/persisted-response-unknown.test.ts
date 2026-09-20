@@ -25,6 +25,7 @@ function record(payload: Record<string, unknown>, sourceSequence: number): Sourc
 
 test('official persisted ResponseItem variants do not degrade to unknown', async () => {
   const payloads: Record<string, unknown>[] = [
+    { type: 'additional_tools', role: 'developer', tools: [{ type: 'function', name: 'read_file' }] },
     { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'done' }] },
     { type: 'agent_message', id: 'agent-message-1', author: 'worker', recipient: 'root', content: [{ type: 'input_text', text: 'done' }] },
     { type: 'reasoning', id: 'reasoning-1', summary: [{ type: 'summary_text', text: 'thinking' }], encrypted_content: null },
@@ -38,6 +39,7 @@ test('official persisted ResponseItem variants do not degrade to unknown', async
     { type: 'web_search_call', id: 'web-search-1', status: 'completed', action: { type: 'search', query: 'AgentLens' } },
     { type: 'image_generation_call', id: 'image-1', status: 'completed', revised_prompt: 'diagram', result: 'image-bytes' },
     { type: 'configuration_update', reasoning: { effort: 'high' } },
+    { type: 'compaction_trigger' },
     { type: 'compaction', id: 'compaction-1', encrypted_content: 'opaque' },
     { type: 'context_compaction', id: 'context-compaction-1', encrypted_content: 'opaque' },
   ]
@@ -58,4 +60,20 @@ test('encrypted-only persisted reasoning keeps evidence without manufacturing a 
 
   assert.equal(output.observations.length, 0)
   assert.equal(output.evidenceCandidates.length, 1)
+})
+
+
+test('Codex upstream Other remains explicit unknown with raw evidence instead of guessed semantics', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'other',
+    future_field: { survives: true },
+  }, 30), codexTestContext)
+
+  assert.equal(output.observations[0]?.kind, 'unknown')
+  const payload = output.observations[0]?.payload as { rawType?: string; rawPayload?: unknown }
+  assert.equal(payload.rawType, 'response_item/other')
+  assert.deepEqual((payload.rawPayload as { payload?: unknown }).payload, {
+    type: 'other',
+    future_field: { survives: true },
+  })
 })
