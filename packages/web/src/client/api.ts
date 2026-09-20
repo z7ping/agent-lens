@@ -43,7 +43,7 @@ import {
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
-import { shareInFlight, waitForCaller } from './single-flight'
+import { shareAbortableInFlight, shareInFlight, type AbortableInFlightEntry } from './single-flight'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
@@ -65,6 +65,7 @@ let backupOverviewCache: BackupOverviewResponseDto | null = null
 let reuseBackupOverviewOnce = false
 const managedAssetReadInFlight = new Map<string, Promise<unknown>>()
 const aggregateReadInFlight = new Map<string, Promise<unknown>>()
+const abortableAggregateReadInFlight = new Map<string, AbortableInFlightEntry>()
 
 function rangeStart(range: QueryFilters['range']): string | undefined {
   if (range === 'all') return undefined
@@ -122,6 +123,7 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
     return response.json() as Promise<T>
   } catch (error) {
     if (error instanceof AgentLensRequestError) throw error
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
     throw new AgentLensRequestError(translateProduct('errors:apiRequestFailed'))
   }
 }
@@ -380,13 +382,12 @@ export class AgentLensApi {
     signal?: AbortSignal,
   ): Promise<ReviewInteractionDto | null> {
     const requestPath = `/api/v1/review/${encodeURIComponent(id)}?ordinal=${ordinal}&process=full`
-    const pending = shareInFlight(
-      aggregateReadInFlight,
+    return shareAbortableInFlight(
+      abortableAggregateReadInFlight,
       `review-process:${id}:${ordinal}:${revision}`,
-      () => requestJson<ReviewSessionDetailDto>(requestPath),
-    )
-    return waitForCaller(pending, signal).then(detail =>
-      detail.interactions.find(interaction => interaction.ordinal === ordinal) ?? null)
+      sharedSignal => requestJson<ReviewSessionDetailDto>(requestPath, { signal: sharedSignal }),
+      signal,
+    ).then(detail => detail.interactions.find(interaction => interaction.ordinal === ordinal) ?? null)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {

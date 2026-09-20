@@ -173,3 +173,52 @@ test('review process exact reads coalesce identical revision requests', async t 
   assert.equal(calls, 1)
   assert.equal(results.every(item => item?.ordinal === 3), true)
 })
+
+
+test('review process caller abort cancels underlying request when no shared caller remains', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  let aborted = false
+  globalThis.fetch = ((_input, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => {
+      aborted = true
+      reject(new DOMException('aborted', 'AbortError'))
+    }, { once: true })
+  })) as typeof fetch
+
+  const api = new AgentLensApi()
+  const controller = new AbortController()
+  const pending = api.reviewProcessDetail('session-abort', 9, 'revision-abort', controller.signal)
+  controller.abort()
+  await assert.rejects(pending, error => error instanceof DOMException && error.name === 'AbortError')
+  assert.equal(aborted, true)
+})
+
+test('review process shared request survives one caller abort and aborts after the final caller leaves', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  let calls = 0
+  let aborted = false
+  globalThis.fetch = ((_input, init) => {
+    calls += 1
+    return new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        aborted = true
+        reject(new DOMException('aborted', 'AbortError'))
+      }, { once: true })
+    })
+  }) as typeof fetch
+
+  const api = new AgentLensApi()
+  const first = new AbortController()
+  const second = new AbortController()
+  const p1 = api.reviewProcessDetail('session-shared-abort', 4, 'revision-shared', first.signal)
+  const p2 = api.reviewProcessDetail('session-shared-abort', 4, 'revision-shared', second.signal)
+  first.abort()
+  await assert.rejects(p1, error => error instanceof DOMException && error.name === 'AbortError')
+  assert.equal(calls, 1)
+  assert.equal(aborted, false)
+  second.abort()
+  await assert.rejects(p2, error => error instanceof DOMException && error.name === 'AbortError')
+  assert.equal(aborted, true)
+})

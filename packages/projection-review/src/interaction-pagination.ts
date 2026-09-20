@@ -481,7 +481,8 @@ export class ReviewInteractionPager {
     let mode = 'forward'
     let result: ReviewInteractionPage
     if (query.ordinal !== undefined) {
-      const target = await this.descriptors.find(logicalSessionId, query.ordinal)
+      const descriptors = await this.descriptors.structureCached(summary)
+      const target = descriptors.find(item => item.ordinal === query.ordinal)
       result = {
         interactions: target ? [await this.descriptors.materialize(logicalSessionId, target)] : [],
         page: { count: target ? 1 : 0, hasMore: false, direction: 'forward', filter: 'all' },

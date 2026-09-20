@@ -982,6 +982,7 @@ function ReviewRoundAdapter({
   }
 
   const effectiveInteraction = loadedProcess ?? interaction
+  const effectiveSummary = loadedProcess?.processSummary ?? summary
   const groups = useMemo(() => projectReviewInteractionPresentation(effectiveInteraction.nodes), [effectiveInteraction.nodes])
   const modelLabels = useMemo(() => projectReviewMessageModelLabels(effectiveInteraction.nodes), [effectiveInteraction.nodes])
   const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
@@ -997,11 +998,11 @@ function ReviewRoundAdapter({
     return null
   }
 
-  const processGroup = summary?.itemCount
+  const processGroup = effectiveSummary?.itemCount
     ? <ReviewProcessGroup
-        id={summary.id}
+        id={effectiveSummary.id}
         items={processEntry?.items ?? []}
-        summary={summary}
+        summary={effectiveSummary}
         inspect={inspect}
         state={round.state}
         showAllEvents={showAllEvents}
