@@ -58,6 +58,9 @@ const PROJECTION_TABLES = new Set([
   'session_summary_projection',
   'unknown_observation_projection',
   'tool_usage_fact_projection',
+  'launchable_project_index',
+  'launchable_workspace_index',
+  'asset_current_state',
 ])
 
 function storageCategoryForTable(tableName: string): StorageCategoryName {
