@@ -115,6 +115,99 @@
 }
 .review-page:not(.review-page-embedded) .session-load-more:hover:not(:disabled) { background: var(--al-soft); color: var(--al-ink-2); }
 
+/* 任务级文件变化：默认折叠，和处理详情一样保持高信息密度。 */
+.task-file-changes {
+  margin-top: 10px;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: var(--al-soft-2);
+}
+.task-file-changes > summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+.task-file-changes > summary::marker { content: ''; }
+.task-file-changes > summary::-webkit-details-marker { display: none; }
+.task-file-changes-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
+.task-file-changes[open] > summary .task-file-changes-chevron { transform: rotate(90deg); }
+.task-file-changes-count {
+  display: inline-flex;
+  min-width: 20px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid var(--al-line);
+  border-radius: 999px;
+  color: var(--al-muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+}
+.task-file-changes-delta,
+.task-file-changes-state,
+.task-file-changes-observed {
+  color: var(--al-muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.task-file-changes-state { margin-left: auto; }
+.task-file-changes-list { border-top: 1px solid var(--al-line); }
+.task-file-change-row {
+  display: grid;
+  min-height: 32px;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  color: var(--al-muted);
+  font-size: 12px;
+}
+.task-file-change-row + .task-file-change-row { border-top: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent); }
+.task-file-change-status {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: var(--al-soft);
+  color: var(--al-muted);
+  font: 700 12px/1 var(--font-mono);
+}
+.task-file-change-status.is-added { color: var(--al-success); }
+.task-file-change-status.is-deleted { color: var(--al-danger); }
+.task-file-change-status.is-modified,
+.task-file-change-status.is-renamed { color: var(--al-accent); }
+.task-file-change-path {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+.task-file-change-path > code,
+.task-file-change-path .local-resource-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-file-change-path code { font: 12px/1.45 var(--font-mono); }
+.task-file-change-delta { color: var(--al-muted); font: 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; }
+.task-file-changes-error,
+.task-file-changes-empty { padding: 9px 10px; color: var(--al-muted); font-size: 12px; }
+.task-file-changes-error { color: var(--al-danger); }
+
 /* Session 关系树属于 Review 关系数据，不属于 TaskRound。 */
 .session-relationship-tree { margin-top: 10px; overflow: hidden; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
 .session-relationship-tree > summary { display: flex; align-items: center; gap: 6px; padding: 8px 10px; cursor: pointer; list-style: none; color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
