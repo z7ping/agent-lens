@@ -29,6 +29,7 @@ type ReviewTurnSection = 'prompt' | 'process' | 'meta' | 'terminal' | 'final' | 
 
 function isReviewProcessDriver(node: ReviewNodeDto): boolean {
   if (node.type === 'tool') return true
+  if (node.type === 'event' && node.kind === 'tool.progress') return true
   return node.type === 'message' && (node.role === 'reasoning' || node.role === 'commentary')
 }
 
