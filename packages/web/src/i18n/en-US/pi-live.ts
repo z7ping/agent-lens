@@ -230,6 +230,7 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       viewOutput: 'View output',
       thinking: 'Thinking',
       commentary: 'Process output',
+      loadingOlder: 'Loading earlier rounds…',
       expandToLoad: 'Expand to load full process details',
       loadingProcess: 'Loading process details…',
       processLoadFailed: 'Failed to load process details',
