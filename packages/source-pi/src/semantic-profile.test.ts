@@ -6,7 +6,7 @@ const profile = JSON.parse(readFileSync(new URL('./semantic-profile.v1.json', im
   schemaVersion: string
   profileVersion: string
   source: string
-  mappings: Array<{ id: string; kind: string; coverage: string }>
+  mappings: Array<{ id: string; kind?: string; disposition?: string; coverage: string }>
   fallback: { kind: string; preserveRaw: boolean; semanticSource: string }
 }
 
@@ -44,7 +44,12 @@ test('pi semantic profile v1 is a valid AgentLens semantic contract', () => {
   const ids = profile.mappings.map(item => item.id)
   assert.equal(new Set(ids).size, ids.length)
   for (const mapping of profile.mappings) {
-    assert.equal(allowedKinds.has(mapping.kind), true, `${mapping.id}: ${mapping.kind}`)
+    if (mapping.disposition === 'evidence-only') {
+      assert.equal(mapping.kind, undefined, `${mapping.id}: evidence-only must not manufacture Canonical observation kind`)
+    } else {
+      assert.equal(typeof mapping.kind, 'string', `${mapping.id}: missing kind`)
+      assert.equal(allowedKinds.has(mapping.kind!), true, `${mapping.id}: ${mapping.kind}`)
+    }
     assert.equal(['complete', 'partial', 'passthrough'].includes(mapping.coverage), true, mapping.id)
   }
 
