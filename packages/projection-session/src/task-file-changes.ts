@@ -267,3 +267,50 @@ export function observedTaskFileChanges(
     || left.observationId.localeCompare(right.observationId)
   )
 }
+
+
+export function summarizeObservedTaskFileChanges(
+  candidates: readonly TaskFileChangeCandidate[],
+): import('@agent-lens/core').TaskFileChangeRecord[] {
+  const records = new Map<string, import('@agent-lens/core').TaskFileChangeRecord>()
+
+  for (const candidate of candidates) {
+    const existing = records.get(candidate.path)
+    const changeType = candidate.operation === 'delete'
+      ? 'deleted'
+      : candidate.operation === 'rename'
+        ? 'renamed'
+        : 'unknown'
+    if (!existing) {
+      records.set(candidate.path, {
+        logicalSessionId: candidate.logicalSessionId,
+        path: candidate.path,
+        changeType,
+        ...(candidate.oldPath ? { oldPath: candidate.oldPath } : {}),
+        firstChangedAt: candidate.observedAt,
+        lastChangedAt: candidate.observedAt,
+        evidence: [candidate.evidence],
+        confidence: candidate.confidence,
+      })
+      continue
+    }
+
+    existing.lastChangedAt = candidate.observedAt > existing.lastChangedAt
+      ? candidate.observedAt
+      : existing.lastChangedAt
+    if (!existing.evidence.includes(candidate.evidence)) existing.evidence.push(candidate.evidence)
+
+    if (candidate.operation === 'delete') {
+      existing.changeType = 'deleted'
+      delete existing.oldPath
+    } else if (candidate.operation === 'rename') {
+      existing.changeType = 'renamed'
+      if (candidate.oldPath) existing.oldPath = candidate.oldPath
+    }
+  }
+
+  return [...records.values()].sort((left, right) =>
+    left.firstChangedAt.localeCompare(right.firstChangedAt)
+    || left.path.localeCompare(right.path)
+  )
+}
