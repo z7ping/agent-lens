@@ -85,6 +85,15 @@ test('storage migrations keep heavy indexes out of startup and maintenance creat
       'unknown_observation_projection',
     ])
 
+    const taskFileCaptureColumns = storage.db.prepare("PRAGMA table_info('task_file_change_capture')")
+      .all() as Array<{ name: string }>
+    assert.ok(taskFileCaptureColumns.some(column => column.name === 'checkpointed_at'))
+    assert.ok(taskFileCaptureColumns.some(column => column.name === 'changes_json'))
+    const taskFileProjectionColumns = storage.db.prepare("PRAGMA table_info('task_file_change_projection')")
+      .all() as Array<{ name: string }>
+    assert.ok(taskFileProjectionColumns.some(column => column.name === 'change_type'))
+    assert.ok(taskFileProjectionColumns.some(column => column.name === 'confidence'))
+
     const candidateColumns = storage.db.prepare("PRAGMA table_info('session_relationship_candidates')")
       .all() as Array<{ name: string }>
     assert.ok(candidateColumns.some(column => column.name === 'source_record_id'))
