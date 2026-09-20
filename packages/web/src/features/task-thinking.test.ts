@@ -48,3 +48,16 @@ test('执行过程调用方显式折叠时不再被内部逻辑强制展开', ()
   assert.doesNotMatch(html, /<details[^>]*open=""/)
   assert.doesNotMatch(html, /过程正文/)
 })
+
+
+test('展开状态可由外部 store 恢复，供虚拟列表卸载后重建', () => {
+  const store = new Map<string, boolean>([[model.id, true]])
+  const html = renderToStaticMarkup(createElement(TaskThinking, {
+    model,
+    defaultExpanded: false,
+    expansionStore: store,
+    children: '恢复后的处理正文',
+  }))
+  assert.match(html, /<details[^>]*open=""/)
+  assert.match(html, /恢复后的处理正文/)
+})
