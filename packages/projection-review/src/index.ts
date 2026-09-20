@@ -25,7 +25,13 @@ function normalizeLifecycleAction(value: string): string {
   return value.trim().toLowerCase().replace(/[\s_:\-]+/g, '.')
 }
 
-type ReviewTurnSection = 'prompt' | 'process' | 'terminal' | 'final' | 'artifact'
+type ReviewTurnSection = 'prompt' | 'process' | 'meta' | 'terminal' | 'final' | 'artifact'
+
+function isReviewProcessDriver(node: ReviewNodeDto): boolean {
+  if (node.type === 'tool') return true
+  if (node.type === 'event' && node.kind === 'tool.progress') return true
+  return node.type === 'message' && (node.role === 'reasoning' || node.role === 'commentary')
+}
 
 function reviewEventAction(node: Extract<ReviewNodeDto, { type: 'event' }>): string {
   const record = asRecord(node.payload)
@@ -41,19 +47,17 @@ function isReviewTerminal(node: ReviewNodeDto): boolean {
 function reviewTurnSections(nodes: readonly ReviewNodeDto[]): ReviewTurnSection[] {
   let lastProcessDriver = -1
   for (let index = 0; index < nodes.length; index += 1) {
-    const node = nodes[index]!
-    if (node.type === 'message' && node.role === 'user') continue
-    if (node.type === 'message' && node.role === 'assistant') continue
-    if (node.type === 'event' && node.category === 'artifact') continue
-    if (isReviewTerminal(node)) continue
-    lastProcessDriver = index
+    if (isReviewProcessDriver(nodes[index]!)) lastProcessDriver = index
   }
 
   return nodes.map((node, index) => {
     if (node.type === 'message' && node.role === 'user') return 'prompt'
     if (node.type === 'event' && node.category === 'artifact') return 'artifact'
     if (isReviewTerminal(node)) return 'terminal'
-    if (node.type === 'message' && node.role === 'assistant' && index > lastProcessDriver) return 'final'
+    if (node.type === 'event') return 'meta'
+    if (node.type === 'message' && node.role === 'assistant') {
+      return index > lastProcessDriver ? 'final' : 'process'
+    }
     return 'process'
   })
 }

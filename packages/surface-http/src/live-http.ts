@@ -532,6 +532,34 @@ function normalizeHistoryIndex(value: unknown) {
       if (round.promptText !== undefined && typeof round.promptText !== 'string') throw httpError(500, 'Live history prompt text is invalid')
       if (round.finalText !== undefined && typeof round.finalText !== 'string') throw httpError(500, 'Live history final text is invalid')
       if (round.modelLabel !== undefined && typeof round.modelLabel !== 'string') throw httpError(500, 'Live history model label is invalid')
+      let events
+      if (round.events !== undefined) {
+        if (!Array.isArray(round.events) || round.events.length > 64) throw httpError(500, 'Live history event summaries are invalid')
+        events = round.events.map(rawEvent => {
+          if (!rawEvent || typeof rawEvent !== 'object' || Array.isArray(rawEvent)) throw httpError(500, 'Live history event summary is invalid')
+          const event = rawEvent as Record<string, unknown>
+          if (typeof event.id !== 'string' || !event.id
+            || typeof event.label !== 'string' || !event.label
+            || !['model', 'usage', 'permission', 'subagent', 'context', 'lifecycle', 'unknown'].includes(String(event.category))
+            || (event.detail !== undefined && typeof event.detail !== 'string')
+            || (event.at !== undefined && typeof event.at !== 'string')
+            || (event.phase !== 'before-final' && event.phase !== 'after-final')) {
+            throw httpError(500, 'Live history event summary is invalid')
+          }
+          return {
+            id: event.id.slice(0, 512),
+            category: event.category as 'model' | 'usage' | 'permission' | 'subagent' | 'context' | 'lifecycle' | 'unknown',
+            label: event.label.slice(0, 160),
+            ...(typeof event.detail === 'string' && event.detail ? { detail: event.detail.slice(0, 500) } : {}),
+            ...(typeof event.at === 'string' && event.at ? { at: event.at.slice(0, 80) } : {}),
+            phase: event.phase as 'before-final' | 'after-final',
+          }
+        })
+      }
+      if (round.eventOmittedCount !== undefined
+        && (typeof round.eventOmittedCount !== 'number' || !Number.isSafeInteger(round.eventOmittedCount) || round.eventOmittedCount < 0)) {
+        throw httpError(500, 'Live history omitted event count is invalid')
+      }
       let terminal
       if (round.terminal !== undefined) {
         if (!round.terminal || typeof round.terminal !== 'object' || Array.isArray(round.terminal)) {
@@ -553,6 +581,8 @@ function normalizeHistoryIndex(value: unknown) {
         ...(typeof round.promptText === 'string' ? { promptText: round.promptText } : {}),
         ...(typeof round.finalText === 'string' ? { finalText: round.finalText } : {}),
         ...(typeof round.modelLabel === 'string' ? { modelLabel: round.modelLabel.slice(0, 240) } : {}),
+        ...(events?.length ? { events } : {}),
+        ...(typeof round.eventOmittedCount === 'number' && round.eventOmittedCount > 0 ? { eventOmittedCount: round.eventOmittedCount } : {}),
         ...(terminal ? { terminal } : {}),
         process: {
           revision: process.revision,

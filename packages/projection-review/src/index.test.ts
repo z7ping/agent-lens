@@ -145,7 +145,13 @@ test('ReviewProjection renders an orphan tool result as a completed Tool node', 
       },
     })
 
-    const detail = await new ReviewProjection(storage).get(user.observation.logicalSessionId)
+    const projection = new ReviewProjection(storage)
+    const summary = await projection.get(user.observation.logicalSessionId, { process: 'summary' })
+    assert.ok(summary)
+    assert.equal(summary.interactions[0]?.processSummary?.toolCount, 1)
+    assert.equal(summary.interactions[0]?.processSummary?.itemCount, 1)
+
+    const detail = await projection.get(user.observation.logicalSessionId)
     assert.ok(detail)
     const node = detail.interactions[0]?.nodes.find(item => item.id === 'orphan-tool-result' || item.observationIds.includes(user.observation.id) === false && item.type === 'tool')
     assert.equal(node?.type, 'tool')
@@ -384,6 +390,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     assert.equal(round.processMode, 'summary')
     assert.equal(round.processSummary?.messageCount, 1)
     assert.equal(round.processSummary?.toolCount, 1)
+    assert.equal(round.processSummary?.itemCount, 2)
     assert.equal(round.processSummary?.errorCount, 1)
     assert.equal(round.nodes.some(node => node.type === 'tool'), false)
     assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'commentary'), false)
@@ -394,6 +401,9 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     const full = await projection.get(user.observation.logicalSessionId, { ordinal: 1, process: 'full' })
     assert.ok(full)
     assert.equal(full.interactions[0]?.processMode, 'full')
+    assert.equal(full.interactions[0]?.processSummary?.itemCount, round.processSummary?.itemCount)
+    assert.equal(full.interactions[0]?.processSummary?.messageCount, round.processSummary?.messageCount)
+    assert.equal(full.interactions[0]?.processSummary?.toolCount, round.processSummary?.toolCount)
     assert.equal(full.interactions[0]?.nodes.some(node => node.type === 'tool'), true)
     assert.equal(full.interactions[0]?.nodes.some(node => node.type === 'message' && node.role === 'commentary'), true)
   } finally {

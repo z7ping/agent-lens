@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
-import type { LiveHistoryIndexItemDto } from '@agent-lens/protocol'
+import type { LiveHistoryEventSummaryDto, LiveHistoryIndexItemDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -11,7 +11,7 @@ import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskToolGroup } from './TaskToolGroup'
-import type { TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
+import type { TaskEventCategory, TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
 import { projectPiLiveTurnItems, type PiLiveTaskRoundProjection } from './pi-live-task-projection'
 
@@ -139,12 +139,12 @@ function ThinkingMarkdown({ text, streaming = false }: { text: string; streaming
   return <MarkdownContent text={text} streaming={streaming}/>
 }
 
-function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
+function HistoryToolGroup({ id, items, settled = false }: { id: string; items: HistoryTool[]; settled?: boolean }) {
   const { t } = useTranslation(['piLive', 'task'])
   const model = toolGroup(id, items.map(item => taskTool(
     item.name,
     item.id,
-    item.status,
+    settled && item.status === 'running' ? 'unknown' : item.status,
     item.summary,
     item.output,
     { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
@@ -168,6 +168,16 @@ function HistoryUsageEvent({ entry }: { entry: Extract<PiLiveHistoryItem, { kind
   return <TaskEvent model={{ id: entry.id, label: t('history.usage'), category: 'usage', summary, time: entry.at ? formatClock(entry.at, locale) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
 }
 
+function piLiveEventCategory(event: string): TaskEventCategory {
+  if (event === 'artifact.action') return 'artifact'
+  if (event === 'native.unknown') return 'unknown'
+  if (event.startsWith('model.') || event.startsWith('thinking.level.')) return 'model'
+  if (event.startsWith('context.')) return 'context'
+  if (event.startsWith('permission.')) return 'permission'
+  if (event.startsWith('subagent.')) return 'subagent'
+  return 'lifecycle'
+}
+
 function HistoryLifecycleEvent({ entry, showAllEvents }: { entry: Extract<PiLiveHistoryItem, { kind: 'lifecycle' }>; showAllEvents: boolean }) {
   const { i18n } = useTranslation('piLive')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -176,7 +186,7 @@ function HistoryLifecycleEvent({ entry, showAllEvents }: { entry: Extract<PiLive
   return <TaskEvent model={{
     id: entry.id,
     label: entry.label,
-    category: entry.event === 'artifact.action' ? 'artifact' : entry.event === 'native.unknown' ? 'unknown' : 'lifecycle',
+    category: piLiveEventCategory(entry.event),
     summary: summary || undefined,
     time: entry.at ? formatClock(entry.at, locale) : undefined,
     nativeType: entry.nativeType,
@@ -234,14 +244,14 @@ function HistoryProcessGroup({
   >
     <div className="task-process-sequence">
       {items.map(item => {
-        if (item.kind === 'tool-group') return <HistoryToolGroup key={item.id} id={item.id} items={item.items}/>
+        if (item.kind === 'tool-group') return <HistoryToolGroup key={item.id} id={item.id} items={item.items} settled={state !== 'running'}/>
         if (item.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={item.id}>
           <div className="task-process-message-kind">{t('history.thinking')}</div>
-          <ThinkingMarkdown text={item.text} streaming={item.state === 'running'}/>
+          <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
         </div>
         if (item.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={item.id}>
           <div className="task-process-message-kind">{t('history.commentary')}</div>
-          <ThinkingMarkdown text={item.text} streaming={item.state === 'running'}/>
+          <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
         </div>
         if (item.kind === 'usage') return <HistoryUsageEvent key={item.id} entry={item}/>
         if (item.kind === 'lifecycle') return <HistoryLifecycleEvent key={item.id} entry={item} showAllEvents={showAllEvents}/>
@@ -265,6 +275,8 @@ function HistoryEntries({
   const { t, i18n } = useTranslation(['piLive', 'task'])
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const entries = historyEntries(items)
+  const hasFinal = entries.some(entry => entry.kind === 'message' && entry.role === 'assistant' && entry.turnSection === 'final')
+  const resolvedProcessState = hasFinal ? 'settled' : processState
   return <>{entries.map(entry => {
     if (entry.kind === 'message') {
       return <TaskMessage
@@ -279,7 +291,7 @@ function HistoryEntries({
         className="pi-live-task-message"
       />
     }
-    if (entry.kind === 'process') return <HistoryProcessGroup key={entry.id} id={entry.id} items={entry.items} state={processState} showAllEvents={showAllEvents}/>
+    if (entry.kind === 'process') return <HistoryProcessGroup key={entry.id} id={entry.id} items={entry.items} state={resolvedProcessState} showAllEvents={showAllEvents}/>
     if (entry.kind === 'usage') return <HistoryUsageEvent key={entry.id} entry={entry}/>
     if (entry.kind === 'lifecycle') return <HistoryLifecycleEvent key={entry.id} entry={entry} showAllEvents={showAllEvents}/>
     return null
@@ -320,7 +332,7 @@ export function PiLiveIndexedTaskRound({
   loadProcess(cursor: string, revision: string, signal?: AbortSignal): Promise<PiLiveIndexedProcessLoadResult>
   expansionStore?: Map<string, boolean>
 }) {
-  const { t } = useTranslation('piLive')
+  const { t, i18n } = useTranslation('piLive')
   const summary = item.summary
   const process = summary?.process
   const [loadedItems, setLoadedItems] = useState<PiLiveHistoryItem[]>([])
@@ -399,6 +411,15 @@ export function PiLiveIndexedTaskRound({
   }
 
   const terminal = summary?.terminal
+  const beforeFinalEvents = summary?.events?.filter(event => event.phase === 'before-final') ?? []
+  const afterFinalEvents = summary?.events?.filter(event => event.phase === 'after-final') ?? []
+  const renderIndexedEvent = (event: LiveHistoryEventSummaryDto) => <TaskEvent key={event.id} model={{
+    id: `pi-index-event:${item.ordinal}:${event.id}`,
+    label: event.label,
+    category: event.category,
+    summary: event.detail,
+    time: event.at ? formatClock(event.at, i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN') : undefined,
+  }}/>
   const terminalLabel = terminal?.status === 'error'
     ? t('history.terminalError')
     : terminal?.status === 'aborted'
@@ -449,12 +470,7 @@ export function PiLiveIndexedTaskRound({
         })}
       </div>}
     </TaskProcessGroup>}
-    {terminal && <TaskEvent model={{
-      id: `terminal:pi-index-round-${item.ordinal}`,
-      label: terminalLabel,
-      category: 'lifecycle',
-      summary: terminal.detail || undefined,
-    }}/>}
+    {beforeFinalEvents.map(renderIndexedEvent)}
     {summary?.finalText && <TaskMessage
       role="assistant"
       text={summary.finalText}
@@ -462,6 +478,18 @@ export function PiLiveIndexedTaskRound({
       modelLabel={summary.modelLabel}
       className="pi-live-task-message"
     />}
+    {afterFinalEvents.map(renderIndexedEvent)}
+    {summary?.eventOmittedCount ? <TaskEvent model={{
+      id: `pi-index-event-omitted:${item.ordinal}`,
+      label: t('history.moreEvents', { count: summary.eventOmittedCount }),
+      category: 'unknown',
+    }}/> : null}
+    {terminal && <TaskEvent model={{
+      id: `terminal:pi-index-round-${item.ordinal}`,
+      label: terminalLabel,
+      category: 'lifecycle',
+      summary: terminal.detail || undefined,
+    }}/>}
   </TaskRound>
 }
 

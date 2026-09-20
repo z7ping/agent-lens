@@ -218,12 +218,23 @@ export interface LiveHistoryTerminalSummary {
   detail?: string | undefined
 }
 
+export interface LiveHistoryEventSummary {
+  id: string
+  category: 'model' | 'usage' | 'permission' | 'subagent' | 'context' | 'lifecycle' | 'unknown'
+  label: string
+  detail?: string | undefined
+  at?: string | undefined
+  phase: 'before-final' | 'after-final'
+}
+
 export interface LiveHistoryRoundSummary {
   /** Full user text when the adapter can expose it without loading process-heavy payloads. */
   promptText?: string | undefined
   /** Full settled final answer when cheaply available from the adapter's native round index. */
   finalText?: string | undefined
   modelLabel?: string | undefined
+  events?: LiveHistoryEventSummary[] | undefined
+  eventOmittedCount?: number | undefined
   terminal?: LiveHistoryTerminalSummary | undefined
   process: LiveHistoryProcessSummary
 }

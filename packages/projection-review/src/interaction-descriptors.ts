@@ -16,6 +16,7 @@ const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
 const SLOW_DESCRIPTOR_PHASE_MS = 500
 const MAX_REVIEW_SUMMARY_FACTS = 600
+const MAX_REVIEW_SUMMARY_META_EVENTS = 8
 
 function logSlowDescriptorPhase(phase: string, startedAt: number, details: Record<string, number> = {}): void {
   const elapsedMs = performance.now() - startedAt
@@ -103,6 +104,9 @@ function observationHeader(item: CanonicalObservation): ObservationHeader {
     ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
     capturedAt: item.capturedAt,
     ...(item.kind === 'tool.result' ? { error: observationError(item) } : {}),
+    ...((item.kind === 'tool.call' || item.kind === 'tool.result') && stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
+      ? { toolCallId: stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')! }
+      : {}),
     ...(item.kind === 'session.lifecycle' && lifecycleActionFromPayload(item.payload)
       ? { lifecycleAction: lifecycleActionFromPayload(item.payload) }
       : {}),
@@ -140,9 +144,18 @@ function isTerminalLifecycle(observation: CanonicalObservation): boolean {
 }
 
 function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
-  return kind !== 'message.user'
-    && kind !== 'message.assistant'
-    && kind !== 'artifact.action'
+  return kind === 'message.commentary'
+    || kind === 'message.reasoning'
+    || kind === 'tool.call'
+    || kind === 'tool.result'
+    || kind === 'tool.progress'
+}
+
+function boundedSummaryMetaHeaders(headers: readonly ObservationHeader[]): ObservationHeader[] {
+  if (headers.length <= MAX_REVIEW_SUMMARY_META_EVENTS) return [...headers]
+  const headCount = Math.ceil(MAX_REVIEW_SUMMARY_META_EVENTS / 2)
+  const tailCount = MAX_REVIEW_SUMMARY_META_EVENTS - headCount
+  return [...headers.slice(0, headCount), ...headers.slice(-tailCount)]
 }
 
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
@@ -521,17 +534,23 @@ export class InteractionDescriptorStore {
       }
 
       const processHeaders: ObservationHeader[] = []
+      const metaHeaders: ObservationHeader[] = []
       for (let index = 0; index < group.headers.length; index += 1) {
         const header = group.headers[index]!
-        const finalAssistant = header.kind === 'message.assistant' && index > lastProcessDriver
         const prompt = header.kind === 'message.user'
         const artifact = header.kind === 'artifact.action'
         const terminal = terminalIds.has(header.id)
-        if (prompt || finalAssistant || artifact || terminal || header.kind === 'model.call' || header.kind === 'model.changed') {
-          displayIds.add(header.id)
+        const assistantProcess = header.kind === 'message.assistant' && index <= lastProcessDriver
+        const process = isProcessDriverKind(header.kind) || assistantProcess
+        const finalAssistant = header.kind === 'message.assistant' && !assistantProcess
+        if (prompt || finalAssistant || artifact || terminal) displayIds.add(header.id)
+        if (process && !prompt && !artifact && !terminal) {
+          processHeaders.push(header)
+        } else if (!prompt && !finalAssistant && !artifact && !terminal) {
+          metaHeaders.push(header)
         }
-        if (!prompt && !finalAssistant && !artifact && !terminal) processHeaders.push(header)
       }
+      for (const header of boundedSummaryMetaHeaders(metaHeaders)) displayIds.add(header.id)
 
       const fallbackById = group.fallbackObservations
         ? new Map(group.fallbackObservations.map(item => [item.id, item]))
@@ -540,7 +559,15 @@ export class InteractionDescriptorStore {
         header.kind === 'message.commentary'
         || header.kind === 'message.reasoning'
         || header.kind === 'message.assistant').length
-      const toolCount = processHeaders.filter(header => header.kind === 'tool.call').length
+      const toolCallIds = new Set(processHeaders
+        .filter(header => header.kind === 'tool.call' && header.toolCallId)
+        .map(header => header.toolCallId!))
+      const toolCallCount = processHeaders.filter(header => header.kind === 'tool.call').length
+      const orphanToolResultCount = processHeaders.filter(header =>
+        header.kind === 'tool.result' && (!header.toolCallId || !toolCallIds.has(header.toolCallId))).length
+      const toolCount = toolCallCount + orphanToolResultCount
+      const toolProgressCount = processHeaders.filter(header => header.kind === 'tool.progress').length
+      const processItemCount = messageCount + toolCount + toolProgressCount
       const errorCount = processHeaders.filter(header => {
         if (header.kind !== 'tool.result') return false
         if (header.error !== undefined) return header.error
@@ -557,7 +584,7 @@ export class InteractionDescriptorStore {
       summaries.set(group.descriptor.ordinal, {
         id: `process:${interactionId}`,
         revision: [interactionId, totalFactCount, last?.id ?? 'empty', last?.capturedAt ?? group.descriptor.endedAt].join(':'),
-        itemCount: processHeaders.length,
+        itemCount: processItemCount,
         messageCount,
         toolCount,
         errorCount,

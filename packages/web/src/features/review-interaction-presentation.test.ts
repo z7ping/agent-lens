@@ -99,7 +99,7 @@ test('同一 SourceRecord 的旧 assistant 与新 commentary 只展示一次并�
   if (entries[0].items[0]?.type === 'message') assert.equal(entries[0].items[0].node.id, 'canonical-commentary')
 })
 
-test('Usage 等观测事件不会把同一轮思考过程切成多个父块', () => {
+test('Usage 等元事件位于 Process 外，同时 Process 仍保持单一父块', () => {
   const usage: ReviewEventNodeDto = {
     type: 'event', id: 'usage-1', at: '2026-09-01T00:00:02.000Z', sourceId: 'codex', label: '用量', category: 'usage', kind: 'usage', payload: {},
     evidence: [], observationIds: ['obs:usage-1'], capturedAt: '2026-09-01T00:00:02.000Z',
@@ -116,13 +116,15 @@ test('Usage 等观测事件不会把同一轮思考过程切成多个父块', ()
   const process = entries.find(entry => entry.type === 'process')
   if (process?.type !== 'process') throw new Error('process entry missing')
   assert.deepEqual(process.items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-1', 'tool-2'])
+  assert.equal(process.items.some(item => item.type === 'event' && item.node.id === 'usage-1'), false)
+  const usageEntry = entries.find(entry => entry.type === 'event' && entry.node.id === 'usage-1')
+  assert.ok(usageEntry)
 })
 
-test('无对应 reasoning 的 unknown 仍保留为可展开的原始过程事实', () => {
+test('无对应 reasoning 的 unknown 保留在 Process 外的原始事件区', () => {
   const entries = projectReviewInteractionPresentation([unknownEvent('unknown-real', 'record:other')])
   assert.equal(entries.length, 1)
-  assert.equal(entries[0]?.type, 'process')
-  if (entries[0]?.type === 'process') assert.equal(entries[0].items[0]?.type, 'raw-event-group')
+  assert.equal(entries[0]?.type, 'raw-event-group')
 })
 
 
@@ -234,7 +236,7 @@ test('Review 不把未建立父子关系的 model.call 猜给下一个 Assistant
   assert.equal(labels.get('assistant'), 'openai / gpt-state')
 })
 
-test('Review 处理详情保持 commentary / lifecycle / tool / compaction 的原始顺序', () => {
+test('Review 处理详情只收模型执行，model / context 元事件独立展示', () => {
   const modelEvent: ReviewEventNodeDto = {
     type: 'event', id: 'model-event', at: '2026-09-01T00:00:01.000Z', sourceId: 'codex',
     kind: 'model.changed', category: 'model', label: '模型已切换', payload: { model: 'gpt-5.6' },
@@ -262,16 +264,19 @@ test('Review 处理详情保持 commentary / lifecycle / tool / compaction 的�
   if (entries[0]?.type !== 'process') throw new Error('process entry missing')
   assert.deepEqual(entries[0].items.map(item => {
     if (item.type === 'message') return item.node.id
-    if (item.type === 'event') return item.node.id
     if (item.type === 'tool-group') return item.items.map(tool => tool.id).join(',')
-    return item.items.map(event => event.id).join(',')
-  }), ['commentary-order', 'model-event', 'tool-order', 'compact'])
-  assert.equal(entries[1]?.type, 'message')
-  if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'final')
+    return 'unexpected'
+  }), ['commentary-order', 'tool-order'])
+  assert.equal(entries[1]?.type, 'event')
+  if (entries[1]?.type === 'event') assert.equal(entries[1].node.id, 'model-event')
+  assert.equal(entries[2]?.type, 'event')
+  if (entries[2]?.type === 'event') assert.equal(entries[2].node.id, 'compact')
+  assert.equal(entries[3]?.type, 'message')
+  if (entries[3]?.type === 'message') assert.equal(entries[3].node.id, 'final')
 })
 
 
-test('Review 可证明的 Turn terminal 状态位于 process 与 final answer 之间', () => {
+test('Review 可证明的 Turn terminal 状态位于 final answer 之后', () => {
   const terminal: ReviewEventNodeDto = {
     type: 'event',
     id: 'terminal',
@@ -303,13 +308,13 @@ test('Review 可证明的 Turn terminal 状态位于 process 与 final answer �
     terminal,
     final,
   ])
-  assert.deepEqual(entries.map(entry => entry.type), ['process', 'event', 'message'])
-  if (entries[1]?.type === 'event') assert.equal(entries[1].node.id, 'terminal')
-  if (entries[2]?.type === 'message') assert.equal(entries[2].node.id, 'terminal-final')
+  assert.deepEqual(entries.map(entry => entry.type), ['process', 'message', 'event'])
+  if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'terminal-final')
+  if (entries[2]?.type === 'event') assert.equal(entries[2].node.id, 'terminal')
 })
 
 
-test('Review 非终态运行事件也参与最终回复边界', () => {
+test('Review 非终态元事件不参与最终回复边界', () => {
   const interim: ReviewMessageNodeDto = {
     type: 'message', id: 'assistant-interim', role: 'assistant',
     at: '2026-09-01T00:00:01.000Z', sourceId: 'codex', text: '处理中',
@@ -327,15 +332,12 @@ test('Review 非终态运行事件也参与最终回复边界', () => {
     capturedAt: '2026-09-01T00:00:03.000Z',
   }
   const entries = projectReviewInteractionPresentation([interim, modelEvent, final])
-  assert.equal(entries[0]?.type, 'process')
-  if (entries[0]?.type === 'process') {
-    assert.deepEqual(entries[0].items.map(item => item.type === 'message' ? item.node.id : item.type === 'event' ? item.node.id : 'group'), [
-      'assistant-interim',
-      'model-after-interim',
-    ])
-  }
-  assert.equal(entries[1]?.type, 'message')
-  if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'assistant-final-after-model')
+  assert.equal(entries.some(entry => entry.type === 'process'), false)
+  assert.deepEqual(entries.map(entry => entry.type === 'message' || entry.type === 'event' ? entry.node.id : entry.type), [
+    'assistant-interim',
+    'model-after-interim',
+    'assistant-final-after-model',
+  ])
 })
 
 
@@ -361,4 +363,40 @@ test('Review full-mode 没有 Process Summary 时仍从 Tool 节点统计', () =
   const failed = { ...tool('tool-failed'), status: 'error' as const }
   const stats = projectReviewInteractionToolStats({ nodes: [tool('tool-ok'), failed] })
   assert.deepEqual(stats, { toolCount: 2, errorCount: 1 })
+})
+
+
+test('Review Tool progress 仍属于 Process，不被元事件边界挪出去', () => {
+  const progress: ReviewEventNodeDto = {
+    type: 'event',
+    id: 'tool-progress',
+    at: '2026-09-01T00:00:01.500Z',
+    sourceId: 'codex',
+    kind: 'tool.progress',
+    category: 'unknown',
+    label: '工具进度',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:tool-progress'],
+    capturedAt: '2026-09-01T00:00:01.500Z',
+  }
+  const final: ReviewMessageNodeDto = {
+    type: 'message',
+    id: 'tool-progress-final',
+    role: 'assistant',
+    at: '2026-09-01T00:00:02.000Z',
+    sourceId: 'codex',
+    text: '完成',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:tool-progress-final'],
+    capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([progress, final])
+  assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type === 'process') {
+    assert.equal(entries[0].items[0]?.type, 'event')
+    if (entries[0].items[0]?.type === 'event') assert.equal(entries[0].items[0].node.id, 'tool-progress')
+  }
+  assert.equal(entries[1]?.type, 'message')
 })

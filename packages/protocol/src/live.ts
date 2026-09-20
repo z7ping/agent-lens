@@ -134,10 +134,21 @@ export interface LiveHistoryTerminalSummaryDto {
   detail?: string | undefined
 }
 
+export interface LiveHistoryEventSummaryDto {
+  id: string
+  category: 'model' | 'usage' | 'permission' | 'subagent' | 'context' | 'lifecycle' | 'unknown'
+  label: string
+  detail?: string | undefined
+  at?: string | undefined
+  phase: 'before-final' | 'after-final'
+}
+
 export interface LiveHistoryRoundSummaryDto {
   promptText?: string | undefined
   finalText?: string | undefined
   modelLabel?: string | undefined
+  events?: LiveHistoryEventSummaryDto[] | undefined
+  eventOmittedCount?: number | undefined
   terminal?: LiveHistoryTerminalSummaryDto | undefined
   process: LiveHistoryProcessSummaryDto
 }

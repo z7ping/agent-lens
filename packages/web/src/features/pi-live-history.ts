@@ -9,7 +9,7 @@ import {
 import { translateProduct } from '../i18n/runtime'
 
 export type PiLiveItemState = 'running' | 'settled'
-export type PiLiveTurnSection = 'prompt' | 'process' | 'terminal' | 'final' | 'artifact'
+export type PiLiveTurnSection = 'prompt' | 'process' | 'meta' | 'terminal' | 'final' | 'artifact'
 
 interface PiLiveHistoryItemBase {
   id: string

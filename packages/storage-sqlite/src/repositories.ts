@@ -668,7 +668,16 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
                      json_extract(payload_json, '$.status')
                    )
                    ELSE NULL
-                 END AS lifecycle_action
+                 END AS lifecycle_action,
+                 CASE
+                   WHEN kind IN ('tool.call', 'tool.result') THEN COALESCE(
+                     json_extract(payload_json, '$.callId'),
+                     json_extract(payload_json, '$.call_id'),
+                     json_extract(payload_json, '$.toolUseId'),
+                     json_extract(payload_json, '$.tool_use_id')
+                   )
+                   ELSE NULL
+                 END AS tool_call_id
           FROM observations ${where}
           ORDER BY COALESCE(occurred_at, captured_at) ASC,
                    COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) ASC, id ASC
@@ -687,6 +696,9 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           ...(typeof row.error_flag === 'number' ? { error: row.error_flag === 1 } : {}),
           ...(typeof row.lifecycle_action === 'string' && row.lifecycle_action
             ? { lifecycleAction: row.lifecycle_action.trim().toLowerCase().replace(/[\s_:\-]+/g, '.') }
+            : {}),
+          ...(typeof row.tool_call_id === 'string' && row.tool_call_id
+            ? { toolCallId: row.tool_call_id }
             : {}),
         }))
       })

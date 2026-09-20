@@ -104,11 +104,11 @@ if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('cha
 if (!taskMessage.includes('{!user && <button') || !taskMessage.includes("t('message.source')")) throw new Error('源码切换只属于 Agent Markdown，且必须走国际化文案')
 if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) throw new Error('Agent 源码切换必须悬浮在正文内，不得单独占行')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(taskToolGroup)) throw new Error('Tool Group 不得制造独立折叠父层')
-if (!reviewPresentation.includes('nativeParentEventId') || !reviewPresentation.includes('parentObservationId') || !reviewPresentation.includes('matches.length !== 1')) throw new Error('Thinking / Tool 层级必须只依据显式父关系')
-if (!reviewPage.includes('projectReviewInteractionPresentation(effectiveInteraction.nodes)') || !reviewPage.includes('nestedTools={entry.tools}')) throw new Error('Review 必须用当前 Summary/Detail 对应的有效 Interaction 执行显式父关系投影')
+if (!reviewPresentation.includes("if (node.type === 'tool')") || !reviewPresentation.includes('tools.push(node)') || !reviewPresentation.includes("result.push({ type: 'tool-group', items: tools })") || !reviewPresentation.includes("node.role === 'reasoning') result.push({ type: 'reasoning', node, tools: [] })")) throw new Error('Thinking / Tool 必须保持 Canonical 原始顺序，不得恢复 Tool 重挂载')
+if (!reviewPage.includes('projectReviewInteractionPresentation(effectiveInteraction.nodes)')) throw new Error('Review 必须用当前 Summary/Detail 对应的有效 Interaction 执行统一 Turn 投影')
 
 if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.includes('max-width: 56px') || /\.task-round-summary::before\s*\{[^}]*background:/s.test(taskDetailCss)) throw new Error('轮次标题只允许短右分隔线，不得恢复左右贯穿式分割线')
 if (!taskDetailCss.includes('.task-header-status') || !taskDetailCss.includes('pointer-events: none') || !taskDetailCss.includes('.task-header-actions button')) throw new Error('任务详情头必须明确区分状态与可点击操作')
 if (!reviewCss.includes('.evidence-inline') || !reviewCss.includes('.review-inspector-overlay') || /\.inspector-panel\b/.test(reviewCss)) throw new Error('Review 页面所有者必须保留证据/Inspector 业务内容，抽屉外壳统一由 Drawer 持有')
 
-console.log('任务复盘交互契约检查通过：统一 Session Reader / Document、统一边界导航、默认最新窗口、历史阅读不抢滚动、统一 Drawer、尾部继续操作、轮次导航与显式 Thinking / Tool 层级均已锁定。')
+console.log('任务复盘交互契约检查通过：统一 Session Reader / Document、统一边界导航、默认最新窗口、历史阅读不抢滚动、统一 Drawer、尾部继续操作、轮次导航与 Thinking / Tool 原序语义均已锁定。')

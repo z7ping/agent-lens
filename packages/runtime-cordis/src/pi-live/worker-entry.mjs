@@ -456,6 +456,101 @@ function entryTimestampMs(value) {
   return undefined
 }
 
+const LIVE_HISTORY_META_EVENT_LIMIT = 24
+
+function compactHistoryMeta(value, max = 240) {
+  let text = ''
+  if (typeof value === 'string') text = value
+  else {
+    try { text = JSON.stringify(value) ?? '' } catch { text = String(value ?? '') }
+  }
+  text = text.replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
+function finiteHistoryNumber(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
+  return undefined
+}
+
+function historyUsageEvent(id, value, at, phase) {
+  const usage = record(value)
+  if (!Object.keys(usage).length) return undefined
+  const input = finiteHistoryNumber(usage.input ?? usage.inputTokens) ?? 0
+  const output = finiteHistoryNumber(usage.output ?? usage.outputTokens) ?? 0
+  const cacheRead = finiteHistoryNumber(usage.cacheRead ?? usage.cache_read ?? usage.cacheReadTokens) ?? 0
+  const cacheWrite = finiteHistoryNumber(usage.cacheWrite ?? usage.cache_write ?? usage.cacheWriteTokens) ?? 0
+  const total = finiteHistoryNumber(usage.totalTokens ?? usage.total_tokens) ?? input + output + cacheRead + cacheWrite
+  return {
+    id: `${id}:usage`,
+    category: 'usage',
+    label: '用量',
+    detail: `输入 ${input} · 输出 ${output} · 共 ${total} tokens`,
+    ...(at ? { at } : {}),
+    phase,
+  }
+}
+
+function historyMetaEvents(entryValue, fallbackIndex, phase) {
+  const entry = record(entryValue)
+  const id = entryId(entry) ?? `meta:${fallbackIndex}`
+  const timestamp = entryTimestampMs(entry)
+  const at = timestamp === undefined ? undefined : new Date(timestamp).toISOString()
+  const type = typeof entry.type === 'string' ? entry.type : 'unknown'
+  const message = record(entry.message)
+  const role = typeof message.role === 'string' ? message.role : ''
+  const events = []
+  const push = (category, label, detail = '') => events.push({
+    id,
+    category,
+    label,
+    ...(detail ? { detail: compactHistoryMeta(detail) } : {}),
+    ...(at ? { at } : {}),
+    phase,
+  })
+  const pushUsage = value => {
+    const usage = historyUsageEvent(id, value, at, phase)
+    if (usage) events.push(usage)
+  }
+
+  if (type === 'message') {
+    if (role === 'assistant' || role === 'toolResult' || role === 'tool') {
+      pushUsage(message.usage)
+      return events
+    }
+    if (role === 'branchSummary') push('context', '分支摘要', message.summary)
+    else if (role === 'compactionSummary') push('context', '上下文已压缩', message.summary)
+    else if (role === 'custom') push('lifecycle', `Pi 扩展消息 · ${message.customType ?? 'custom'}`, message.content)
+    else if (role === 'bashExecution') push('lifecycle', 'Pi Bash', message.command ?? message.output)
+    else if (role && role !== 'user') push('unknown', `Pi 消息 · ${role}`, message.content ?? message.text)
+    pushUsage(message.usage)
+    return events
+  }
+
+  if (type === 'model_change') {
+    push('model', '模型已切换', [entry.provider, entry.modelId ?? entry.model].filter(Boolean).join(' / '))
+  } else if (type === 'thinking_level_change') {
+    push('model', '推理级别已切换', entry.thinkingLevel ?? entry.level)
+  } else if (type === 'compaction') {
+    push('context', '上下文已压缩', [entry.tokensBefore === undefined ? '' : `${entry.tokensBefore} tokens`, entry.summary].filter(Boolean).join(' · '))
+  } else if (type === 'branch_summary') {
+    push('context', '分支摘要', entry.summary)
+  } else if (type === 'session_info') {
+    push('lifecycle', '会话信息已更新', entry.name)
+  } else if (type === 'custom' || type === 'custom_message') {
+    push('lifecycle', `Pi 自定义事件 · ${entry.customType ?? entry.name ?? entry.event ?? 'custom'}`, entry.data ?? entry.payload ?? entry.content)
+  } else if (type === 'label') {
+    push('lifecycle', 'Pi 标签', entry.label ?? entry.name)
+  } else if (type === 'bash' || type === 'bash_result') {
+    push('lifecycle', type === 'bash' ? 'Pi Bash' : 'Pi Bash 结果', entry.command ?? entry.output)
+  } else if (type !== 'session') {
+    push('unknown', 'Pi 原生事件', type)
+  }
+  pushUsage(entry.usage)
+  return events
+}
+
 function roundSummary(all, row, nextEntryIndex) {
   const start = row.entryIndex
   const end = Math.max(start + 1, nextEntryIndex)
@@ -483,23 +578,48 @@ function roundSummary(all, row, nextEntryIndex) {
   let toolCount = 0
   let errorCount = 0
   const processTimes = []
+  const pairedToolCalls = new Set()
   for (let index = 1; index < entries.length; index += 1) {
-    if (index === finalAssistantIndex) continue
     const entry = record(entries[index])
     const message = record(entry.message)
-    itemCount += 1
-    const timestamp = entryTimestampMs(entry)
-    if (timestamp !== undefined) processTimes.push(timestamp)
-    if (entry.type === 'message' && message.role === 'assistant') {
-      const blocks = assistantBlocks(message)
-      const processMessages = blocks.filter(block => block.type === 'thinking' || block.type === 'text').length
-      messageCount += processMessages || (messageText(message) ? 1 : 0)
-      toolCount += blocks.filter(block => block.type === 'toolCall').length
+    if (entry.type !== 'message' || message.role !== 'assistant') continue
+    const blocks = assistantBlocks(message)
+    const processMessages = blocks.filter(block =>
+      block.type === 'thinking' || (index !== finalAssistantIndex && block.type === 'text')).length
+      || (index !== finalAssistantIndex && messageText(message) ? 1 : 0)
+    const toolBlocks = blocks.filter(block => block.type === 'toolCall')
+    messageCount += processMessages
+    toolCount += toolBlocks.length
+    itemCount += processMessages + toolBlocks.length
+    for (const block of toolBlocks) {
+      if (typeof block.id === 'string' && block.id) pairedToolCalls.add(block.id)
     }
-    if (entry.type === 'message' && (message.role === 'toolResult' || message.role === 'tool')) {
-      if (message.isError === true || message.error === true) errorCount += 1
+    if (processMessages || toolBlocks.length) {
+      const timestamp = entryTimestampMs(entry)
+      if (timestamp !== undefined) processTimes.push(timestamp)
     }
   }
+  for (let index = 1; index < entries.length; index += 1) {
+    const entry = record(entries[index])
+    const message = record(entry.message)
+    if (entry.type !== 'message' || (message.role !== 'toolResult' && message.role !== 'tool')) continue
+    const callId = typeof message.toolCallId === 'string' ? message.toolCallId : ''
+    if (!callId || !pairedToolCalls.has(callId)) {
+      toolCount += 1
+      itemCount += 1
+    }
+    if (message.isError === true || message.error === true) errorCount += 1
+    const timestamp = entryTimestampMs(entry)
+    if (timestamp !== undefined) processTimes.push(timestamp)
+  }
+
+  const allEvents = entries.flatMap((entry, index) => historyMetaEvents(
+    entry,
+    index,
+    finalAssistantIndex >= 0 && index >= finalAssistantIndex ? 'after-final' : 'before-final',
+  ))
+  const events = allEvents.slice(0, LIVE_HISTORY_META_EVENT_LIMIT)
+  const eventOmittedCount = Math.max(0, allEvents.length - events.length)
 
   const finalEntry = finalAssistantIndex >= 0 ? record(entries[finalAssistantIndex]) : undefined
   const finalMessage = finalEntry ? record(finalEntry.message) : {}
@@ -532,6 +652,8 @@ function roundSummary(all, row, nextEntryIndex) {
     ...(promptText ? { promptText } : {}),
     ...(finalText ? { finalText } : {}),
     ...(modelLabel ? { modelLabel } : {}),
+    ...(events.length ? { events } : {}),
+    ...(eventOmittedCount ? { eventOmittedCount } : {}),
     ...(terminalStatus ? {
       terminal: {
         status: terminalStatus,
