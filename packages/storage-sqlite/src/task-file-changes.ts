@@ -333,10 +333,8 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
         SELECT *
         FROM task_file_change_capture
         WHERE logical_session_id = ?
-          AND changes_json IS NOT NULL
         ORDER BY
-          CASE WHEN finalized_at IS NULL THEN 0 ELSE 1 END DESC,
-          COALESCE(finalized_at, checkpointed_at, updated_at) DESC,
+          COALESCE(finalized_at, checkpointed_at, baseline_captured_at, updated_at) DESC,
           updated_at DESC,
           runtime_session_id DESC
         LIMIT 1
@@ -414,16 +412,19 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
           SELECT *,
                  ROW_NUMBER() OVER (
                    PARTITION BY logical_session_id
-                   ORDER BY COALESCE(finalized_at, checkpointed_at, updated_at) DESC, updated_at DESC, runtime_session_id DESC
+                   ORDER BY
+                     COALESCE(finalized_at, checkpointed_at, baseline_captured_at, updated_at) DESC,
+                     updated_at DESC,
+                     runtime_session_id DESC
                  ) AS capture_rank
           FROM task_file_change_capture
           WHERE logical_session_id IS NOT NULL
-            AND changes_json IS NOT NULL
             ${input.logicalSessionId ? 'AND logical_session_id = ?' : ''}
         )
         SELECT *
         FROM ranked
         WHERE capture_rank = 1
+          AND changes_json IS NOT NULL
         ORDER BY logical_session_id
       `).all(...(input.logicalSessionId ? [input.logicalSessionId] : []))
 
