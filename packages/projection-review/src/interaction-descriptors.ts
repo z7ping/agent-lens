@@ -104,6 +104,9 @@ function observationHeader(item: CanonicalObservation): ObservationHeader {
     ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
     capturedAt: item.capturedAt,
     ...(item.kind === 'tool.result' ? { error: observationError(item) } : {}),
+    ...((item.kind === 'tool.call' || item.kind === 'tool.result') && stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
+      ? { toolCallId: stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')! }
+      : {}),
     ...(item.kind === 'session.lifecycle' && lifecycleActionFromPayload(item.payload)
       ? { lifecycleAction: lifecycleActionFromPayload(item.payload) }
       : {}),
@@ -556,7 +559,13 @@ export class InteractionDescriptorStore {
         header.kind === 'message.commentary'
         || header.kind === 'message.reasoning'
         || header.kind === 'message.assistant').length
-      const toolCount = processHeaders.filter(header => header.kind === 'tool.call').length
+      const toolCallIds = new Set(processHeaders
+        .filter(header => header.kind === 'tool.call' && header.toolCallId)
+        .map(header => header.toolCallId!))
+      const toolCallCount = processHeaders.filter(header => header.kind === 'tool.call').length
+      const orphanToolResultCount = processHeaders.filter(header =>
+        header.kind === 'tool.result' && (!header.toolCallId || !toolCallIds.has(header.toolCallId))).length
+      const toolCount = toolCallCount + orphanToolResultCount
       const toolProgressCount = processHeaders.filter(header => header.kind === 'tool.progress').length
       const processItemCount = messageCount + toolCount + toolProgressCount
       const errorCount = processHeaders.filter(header => {
