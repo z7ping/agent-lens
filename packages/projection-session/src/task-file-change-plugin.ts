@@ -227,10 +227,39 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
     })
   }
 
+  const resolveLogicalSessionId = async (
+    context: LiveRuntimeSettledContext,
+  ): Promise<string | undefined> => {
+    if (context.runtime.logicalSessionId) return context.runtime.logicalSessionId
+    const nativeSessionId = context.runtime.nativeSessionId?.trim()
+    if (!nativeSessionId) return undefined
+
+    const installations = await ctx.storage.repositories.installations.listByProduct(context.productId)
+    if (!installations.length) return undefined
+    const sourceIds = [...new Set([context.liveId, context.productId].filter(Boolean))]
+    const matches = await Promise.all(
+      installations.flatMap(installation =>
+        sourceIds.map(sourceId =>
+          ctx.storage.repositories.sessions.findSourceSession(
+            sourceId,
+            installation.id,
+            nativeSessionId,
+          ),
+        ),
+      ),
+    )
+    const logicalIds = [...new Set(
+      matches
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map(item => item.logicalSessionId),
+    )]
+    return logicalIds.length === 1 ? logicalIds[0] : undefined
+  }
+
   const settle = async (
     context: LiveRuntimeSettledContext,
   ) => {
-    const logicalSessionId = context.runtime.logicalSessionId
+    const logicalSessionId = await resolveLogicalSessionId(context)
     const capture = await store.getByRuntime(context.runtime.runtimeSessionId)
 
     if (!logicalSessionId) {
