@@ -6,6 +6,8 @@ import type {
   ProjectionScope,
   StorageService,
   TaskFileChangeProjectionStore,
+  LiveRuntimeObserverContext,
+  LiveRuntimeSettledContext,
 } from '@agent-lens/core'
 import type { AgentLensContext } from '@agent-lens/runtime-cordis'
 import {
@@ -196,7 +198,7 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
     eventQueues.set(event.logicalSessionId, next)
   }
 
-  const ensureBaseline = async (runtime: Parameters<NonNullable<Parameters<typeof ctx.lives.observe>[0]['beforeSend']>>[0]['runtime']) => {
+  const ensureBaseline = async (runtime: LiveRuntimeObserverContext['runtime']) => {
     const existing = await store.getByRuntime(runtime.runtimeSessionId)
     if (existing) {
       if (runtime.logicalSessionId && !existing.logicalSessionId) {
@@ -226,7 +228,7 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
   }
 
   const settle = async (
-    context: Parameters<NonNullable<Parameters<typeof ctx.lives.observe>[0]['settled']>>[0],
+    context: LiveRuntimeSettledContext,
   ) => {
     const logicalSessionId = context.runtime.logicalSessionId
     const capture = await store.getByRuntime(context.runtime.runtimeSessionId)
@@ -290,7 +292,7 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
   }
 
   const enqueueSettled = (
-    context: Parameters<NonNullable<Parameters<typeof ctx.lives.observe>[0]['settled']>>[0],
+    context: LiveRuntimeSettledContext,
   ) => {
     const id = context.runtime.runtimeSessionId
     const previous = settledQueues.get(id) ?? Promise.resolve()
