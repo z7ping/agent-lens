@@ -19,6 +19,7 @@ export class EventingObservationService implements ObservationService {
       this.ctx.emit('observation/committed', {
         observationId: result.observation.id,
         logicalSessionId: result.observation.logicalSessionId,
+        kind: result.observation.kind,
         status: result.status,
       })
     }
