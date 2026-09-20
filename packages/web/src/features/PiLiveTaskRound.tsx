@@ -313,10 +313,12 @@ export function PiLiveIndexedTaskRound({
   item,
   showAllEvents = false,
   loadProcess,
+  expansionStore,
 }: {
   item: LiveHistoryIndexItemDto
   showAllEvents?: boolean
   loadProcess(cursor: string, revision: string, signal?: AbortSignal): Promise<PiLiveIndexedProcessLoadResult>
+  expansionStore?: Map<string, boolean>
 }) {
   const { t } = useTranslation('piLive')
   const summary = item.summary
@@ -409,6 +411,7 @@ export function PiLiveIndexedTaskRound({
       durationMs={process.durationMs}
       state="settled"
       defaultExpanded={false}
+      expansionStore={expansionStore}
       onExpandedChange={expanded => expanded ? requestProcess() : cancelProcess()}
       summaryExtra={partial ? <span>{t('history.partialProcess')}</span> : undefined}
     >

@@ -10,6 +10,7 @@ export interface TaskThinkingProps {
   actions?: ReactNode
   children: ReactNode
   defaultExpanded?: boolean
+  expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: (expanded: boolean) => void
   className?: string
 }
@@ -30,16 +31,21 @@ export function TaskThinking({
   actions,
   children,
   defaultExpanded = true,
+  expansionStore,
   onExpandedChange,
   className = '',
 }: TaskThinkingProps) {
   const { t } = useTranslation('task')
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
   const label = presentationLabel(model.label, t)
 
   useEffect(() => {
-    setExpanded(defaultExpanded)
-  }, [defaultExpanded, model.id])
+    const stored = expansionStore?.get(model.id)
+    const next = stored ?? defaultExpanded
+    setExpanded(next)
+    if (stored === undefined && defaultExpanded) expansionStore?.set(model.id, true)
+    onExpandedChange?.(next)
+  }, [defaultExpanded, expansionStore, model.id])
 
   return <details
     className={`task-thinking ${className}`.trim()}
@@ -48,6 +54,7 @@ export function TaskThinking({
     onToggle={event => {
       const next = event.currentTarget.open
       setExpanded(next)
+      expansionStore?.set(model.id, next)
       onExpandedChange?.(next)
     }}
   >

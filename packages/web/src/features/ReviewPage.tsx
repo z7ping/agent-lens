@@ -803,6 +803,7 @@ function ReviewProcessGroup({
   showAllEvents,
   loadState = 'loaded',
   loadError = '',
+  expansionStore,
   onExpandedChange,
   onRetry,
 }: {
@@ -814,6 +815,7 @@ function ReviewProcessGroup({
   showAllEvents: boolean
   loadState?: 'idle' | 'loading' | 'loaded' | 'error'
   loadError?: string
+  expansionStore?: Map<string, boolean>
   onExpandedChange?: (expanded: boolean) => void
   onRetry?: () => void
 }) {
@@ -832,6 +834,7 @@ function ReviewProcessGroup({
     endedAtMs={summary ? undefined : state === 'running' ? undefined : timing.endedAtMs}
     state={state}
     defaultExpanded={false}
+    expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
     summaryExtra={partial ? <span>{t('local.process.partial')}</span> : undefined}
     className="task-review-process"
@@ -1006,13 +1009,14 @@ function ReviewRoundAdapter({
         inspect={inspect}
         state={round.state}
         showAllEvents={showAllEvents}
+        expansionStore={expansionStore}
         loadState={lazy ? processLoadState : 'loaded'}
         loadError={processLoadError}
         onExpandedChange={expanded => expanded ? requestProcess() : cancelProcess()}
         onRetry={requestProcess}
       />
     : processEntry
-      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={round.state} showAllEvents={showAllEvents}/>
+      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={round.state} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
       : null
 
   return <TaskRound

@@ -436,6 +436,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const presentationRef = useRef<PiLivePresentationScheduler<PiLiveHistoryItem[]> | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
   const assistantMessageEpochRef = useRef(0)
+  const indexedProcessExpansionRef = useRef(new Map<string, boolean>())
   const startupSendingRef = useRef(false)
   const activePromptRef = useRef('')
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
@@ -604,6 +605,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       partial: true,
     }
   }, [runtimeId, state, t])
+
+  useEffect(() => {
+    indexedProcessExpansionRef.current.clear()
+  }, [runtimeId])
 
   useEffect(() => {
     let cancelled = false
@@ -1469,6 +1474,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               item={item}
               showAllEvents={showAllEvents}
               loadProcess={loadIndexedProcess}
+              expansionStore={indexedProcessExpansionRef.current}
             />
           </VirtualRoundMount>)}
           {visibleHistoryRounds.map((projection, index) => {

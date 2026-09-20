@@ -14,6 +14,7 @@ export interface TaskProcessGroupProps {
   endedAtMs?: number
   state?: TaskRoundState
   defaultExpanded?: boolean
+  expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: (expanded: boolean) => void
   summaryExtra?: ReactNode
   children: ReactNode
@@ -30,6 +31,7 @@ export function TaskProcessGroup({
   endedAtMs,
   state = 'settled',
   defaultExpanded = state === 'running',
+  expansionStore,
   onExpandedChange,
   summaryExtra,
   children,
@@ -59,6 +61,7 @@ export function TaskProcessGroup({
   return <TaskThinking
     model={model}
     defaultExpanded={defaultExpanded}
+    expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
     className={`task-process-group ${className}`.trim()}
     meta={<span className="task-process-summary">
