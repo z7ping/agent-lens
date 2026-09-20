@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { hasPiLiveResponseActivity, PiLiveHistoryTaskRound, piLiveLifecycleSummary } from './PiLiveTaskRound'
+import { hasPiLiveResponseActivity, PiLiveHistoryTaskRound, PiLiveIndexedTaskRound, piLiveLifecycleSummary } from './PiLiveTaskRound'
 
 test('Pi Live 会话信息摘要只移除页面内重复的 Pi 来源后缀', () => {
   assert.equal(piLiveLifecycleSummary({
@@ -106,4 +106,30 @@ test('Pi Live 历史轮将处理中间过程默认折叠且最终输出保留模
   assert.match(html, /仓库正常。/)
   assert.match(html, /test \/ model-1/)
   assert.match(html, /task-message-copy-action/)
+})
+
+
+test('Pi Indexed 外层 Round 不重复展示 Process 耗时', () => {
+  const html = renderToStaticMarkup(createElement(PiLiveIndexedTaskRound, {
+    item: {
+      cursor: 'user-indexed',
+      ordinal: 3,
+      preview: '检查项目',
+      summary: {
+        promptText: '检查项目',
+        finalText: '完成',
+        process: {
+          revision: 'rev-indexed',
+          itemCount: 2,
+          messageCount: 1,
+          toolCount: 1,
+          errorCount: 0,
+          durationMs: 12_000,
+          availability: 'available',
+        },
+      },
+    },
+    loadProcess: async () => ({ items: [], partial: false }),
+  }))
+  assert.equal((html.match(/耗时 12秒/g) ?? []).length, 1)
 })
