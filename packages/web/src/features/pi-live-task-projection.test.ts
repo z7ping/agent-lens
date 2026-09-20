@@ -89,3 +89,18 @@ test('Pi Live 在完整语义轮次分类后再分片，中间 Assistant 不会�
   assert.equal(all.find(item => item.id === 'final-entry')?.turnSection, 'final')
   assert.ok(projections.length > 1)
 })
+
+
+test('Pi Live 非终态 lifecycle 事件也参与最终回复边界', () => {
+  const items: PiLiveHistoryItem[] = [
+    { id: 'interim', kind: 'message', role: 'assistant', text: '处理中', at: '2026-09-09T00:00:01.000Z' },
+    { id: 'model-change', kind: 'lifecycle', event: 'model.changed', label: '模型切换', detail: 'gpt-5.6', at: '2026-09-09T00:00:02.000Z' },
+    { id: 'final', kind: 'message', role: 'assistant', text: '最终结果', at: '2026-09-09T00:00:03.000Z' },
+  ]
+  const presented = projectPiLiveTurnItems(items)
+  assert.deepEqual(presented.map(item => [item.id, item.turnSection]), [
+    ['interim', 'process'],
+    ['model-change', 'process'],
+    ['final', 'final'],
+  ])
+})
