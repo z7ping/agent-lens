@@ -115,6 +115,8 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
     }
     if (item.kind === 'thinking' || item.kind === 'tool') return 'process'
     if (item.kind === 'lifecycle' && item.event === 'artifact.action') return 'artifact'
+    if (isAssistantTerminal(item)) return 'meta'
+    if (item.kind === 'usage' || item.kind === 'lifecycle') return 'process'
     return 'meta'
   })
 

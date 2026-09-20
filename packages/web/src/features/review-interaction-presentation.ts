@@ -164,6 +164,8 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     if (entry.type === 'reasoning' || entry.type === 'tool-group') return 'process'
     if (entry.type === 'message' && entry.node.role === 'commentary') return 'process'
     if (entry.type === 'event' && entry.node.category === 'artifact') return 'artifact'
+    if (entry.type === 'event' && isTerminalEvent(entry.node)) return 'meta'
+    if (entry.type === 'event' || entry.type === 'raw-event-group') return 'process'
     return 'meta'
   })
 

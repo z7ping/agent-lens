@@ -290,3 +290,100 @@ test('ReviewProjection localizes real lifecycle actions instead of collapsing th
   assert.equal(label({ action: 'session_interrupted' }), '会话中断')
   assert.equal(label({ event: 'vendor.future.lifecycle' }), '会话状态变化')
 })
+
+
+test('Review process=summary uses headers plus batch hydration instead of full interaction reads', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-process-summary-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const common = {
+      sourceId: 'codex',
+      host,
+      installation,
+      evidenceCandidates: [],
+    }
+    const add = async (
+      kind: 'message.user' | 'message.assistant' | 'message.commentary' | 'message.reasoning' | 'tool.call' | 'tool.result' | 'model.changed',
+      nativeEventId: string,
+      at: string,
+      payload: unknown,
+    ) => observations.commit({
+      ...common,
+      candidate: {
+        kind,
+        nativeEventId,
+        occurredAt: at,
+        capturedAt: at,
+        payload,
+        identityHints: { nativeSessionId: 'review-process-summary-session' },
+        dedupHints: { nativeEventId },
+      },
+    })
+
+    const user = await add('message.user', 'summary-user', '2026-09-20T00:00:00.000Z', { text: '检查项目' })
+    await add('message.commentary', 'summary-commentary', '2026-09-20T00:00:01.000Z', { text: '正在检查'.repeat(2000) })
+    await add('tool.call', 'summary-tool-call', '2026-09-20T00:00:02.000Z', {
+      callId: 'summary-tool', nativeToolName: 'bash', input: { command: 'npm test' },
+    })
+    await add('tool.result', 'summary-tool-result', '2026-09-20T00:00:03.000Z', {
+      callId: 'summary-tool', success: false, output: 'x'.repeat(100_000),
+    })
+    await add('model.changed', 'summary-model', '2026-09-20T00:00:04.000Z', {
+      provider: 'openai', model: 'gpt-5.6',
+    })
+    await add('message.assistant', 'summary-final', '2026-09-20T00:00:05.000Z', { text: '检查完成' })
+
+    const repository = storage.repositories.observations
+    const originalQuery = repository.query.bind(repository)
+    const originalHeaders = repository.queryHeaders?.bind(repository)
+    const originalGetMany = repository.getMany?.bind(repository)
+    let fullQueries = 0
+    let headerQueries = 0
+    let batchReads = 0
+    repository.query = async query => {
+      if (query.logicalSessionId === user.observation.logicalSessionId) fullQueries += 1
+      return originalQuery(query)
+    }
+    if (originalHeaders) repository.queryHeaders = async query => {
+      if (query.logicalSessionId === user.observation.logicalSessionId) headerQueries += 1
+      return originalHeaders(query)
+    }
+    if (originalGetMany) repository.getMany = async ids => {
+      batchReads += 1
+      return originalGetMany(ids)
+    }
+
+    const projection = new ReviewProjection(storage)
+    const summary = await projection.get(user.observation.logicalSessionId, {
+      direction: 'backward',
+      limit: 1,
+      process: 'summary',
+    })
+    assert.ok(summary)
+    assert.equal(fullQueries, 0)
+    assert.ok(headerQueries > 0)
+    assert.ok(batchReads > 0)
+
+    const round = summary.interactions[0]!
+    assert.equal(round.processMode, 'summary')
+    assert.equal(round.processSummary?.messageCount, 1)
+    assert.equal(round.processSummary?.toolCount, 1)
+    assert.equal(round.processSummary?.errorCount, 1)
+    assert.equal(round.nodes.some(node => node.type === 'tool'), false)
+    assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'commentary'), false)
+    assert.equal(round.nodes.some(node => node.type === 'event' && node.kind === 'model.changed'), true)
+    assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'assistant' && node.text === '检查完成'), true)
+
+    const full = await projection.get(user.observation.logicalSessionId, { ordinal: 1, process: 'full' })
+    assert.ok(full)
+    assert.equal(full.interactions[0]?.processMode, 'full')
+    assert.equal(full.interactions[0]?.nodes.some(node => node.type === 'tool'), true)
+    assert.equal(full.interactions[0]?.nodes.some(node => node.type === 'message' && node.role === 'commentary'), true)
+  } finally {
+    storage.close()
+  }
+})

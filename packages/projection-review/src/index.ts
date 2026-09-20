@@ -42,9 +42,11 @@ function reviewTurnSections(nodes: readonly ReviewNodeDto[]): ReviewTurnSection[
   let lastProcessDriver = -1
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index]!
-    if (node.type === 'tool' || (node.type === 'message' && (node.role === 'reasoning' || node.role === 'commentary'))) {
-      lastProcessDriver = index
-    }
+    if (node.type === 'message' && node.role === 'user') continue
+    if (node.type === 'message' && node.role === 'assistant') continue
+    if (node.type === 'event' && node.category === 'artifact') continue
+    if (isReviewTerminal(node)) continue
+    lastProcessDriver = index
   }
 
   return nodes.map((node, index) => {
