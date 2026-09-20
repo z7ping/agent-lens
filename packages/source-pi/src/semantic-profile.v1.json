@@ -205,7 +205,7 @@
       "kind": "session.lifecycle",
       "semantic": "user-shell-activity",
       "semanticSource": "native",
-      "coverage": "complete"
+      "coverage": "passthrough"
     },
     {
       "id": "bash_result",
@@ -213,7 +213,7 @@
       "kind": "session.lifecycle",
       "semantic": "user-shell-activity",
       "semanticSource": "native",
-      "coverage": "complete"
+      "coverage": "passthrough"
     },
     {
       "id": "usage",
@@ -236,6 +236,122 @@
       "nativeType": "session_info",
       "kind": "session.lifecycle",
       "semantic": "session.info",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.system",
+      "nativeType": "message",
+      "when": {
+        "message.role": "system"
+      },
+      "kind": "context.injected",
+      "semantic": "system-context",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.pending",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "pending"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.stop",
+      "qualifier": {
+        "stopReason": "pending"
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.stop",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "stop"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.stop",
+      "qualifier": {
+        "stopReason": "stop"
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.length",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "length"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.stop",
+      "qualifier": {
+        "stopReason": "length"
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.toolUse",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "toolUse"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.stop",
+      "qualifier": {
+        "stopReason": "toolUse"
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.error",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "error"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.error",
+      "qualifier": {
+        "stopReason": "error"
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.aborted",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "aborted"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.cancelled",
+      "qualifier": {
+        "stopReason": "aborted"
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.deferred",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "deferred"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.stop",
+      "qualifier": {
+        "stopReason": "deferred"
+      },
       "semanticSource": "native",
       "coverage": "complete"
     }
@@ -275,7 +391,9 @@
   },
   "notes": [
     "Pi 官方 SessionEntry 当前包含 message / thinking_level_change / model_change / usage / compaction / branch_summary / custom / custom_message / label / session_info。",
-    "bashExecution 是 message role，不是当前官方 SessionEntry 顶层类型；历史兼容的 bash/bash_result 仍保留 passthrough 语义。",
+    "Pi 官方 Message/AgentMessage 语义覆盖 system / user / assistant / toolResult，以及 coding-agent 扩展的 bashExecution / custom / branchSummary / compactionSummary。",
+    "Pi 官方 StopReason 当前包含 pending / stop / length / toolUse / error / aborted / deferred，全部显式登记。",
+    "bashExecution 是 message role，不是当前官方 SessionEntry 顶层类型；历史兼容的 bash/bash_result 只按 passthrough 保留。",
     "未知 entry 或未知 Assistant block 必须 preserveRaw=true。"
   ]
 }
