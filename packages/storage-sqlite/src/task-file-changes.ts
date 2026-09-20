@@ -201,6 +201,22 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
     })
   }
 
+  getLatestBySession(logicalSessionId: LogicalSessionId): Promise<TaskFileChangeCapture | null> {
+    return this.executor.run(() => {
+      const value = this.executor.db.prepare(`
+        SELECT *
+        FROM task_file_change_capture
+        WHERE logical_session_id = ?
+        ORDER BY
+          COALESCE(finalized_at, checkpointed_at, baseline_captured_at, updated_at) DESC,
+          updated_at DESC,
+          runtime_session_id DESC
+        LIMIT 1
+      `).get(logicalSessionId)
+      return value ? parseCapture(value) : null
+    })
+  }
+
   bindRuntime(runtimeSessionId: string, logicalSessionId: LogicalSessionId): Promise<void> {
     return this.executor.transaction(async () => {
       const current = this.executor.db.prepare(`
