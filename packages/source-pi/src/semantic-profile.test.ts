@@ -101,6 +101,15 @@ test('Pi profile covers current official persisted entries, message roles and St
     assert.equal(stopReasons.includes(reason), true, reason)
   }
 
+  const byReason = new Map(profile.mappings
+    .filter(item => typeof item.when?.['message.stopReason'] === 'string')
+    .map(item => [item.when?.['message.stopReason'] as string, item]))
+  assert.equal(byReason.get('stop')?.kind, 'message.assistant')
+  assert.equal(byReason.get('toolUse')?.kind, 'message.assistant')
+  for (const reason of ['pending', 'length', 'error', 'aborted', 'deferred']) {
+    assert.equal(byReason.get(reason)?.kind, 'session.lifecycle', reason)
+  }
+
   const live = (profile.knownButOutOfScope?.events ?? []) as string[]
   for (const event of [
     'connected', 'agent_start', 'agent_end', 'agent_settled', 'prompt_done', 'prompt_error',
