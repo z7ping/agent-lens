@@ -307,3 +307,33 @@ test('Review 可证明的 Turn terminal 状态位于 process 与 final answer �
   if (entries[1]?.type === 'event') assert.equal(entries[1].node.id, 'terminal')
   if (entries[2]?.type === 'message') assert.equal(entries[2].node.id, 'terminal-final')
 })
+
+
+test('Review 非终态运行事件也参与最终回复边界', () => {
+  const interim: ReviewMessageNodeDto = {
+    type: 'message', id: 'assistant-interim', role: 'assistant',
+    at: '2026-09-01T00:00:01.000Z', sourceId: 'codex', text: '处理中',
+    payload: {}, evidence: [], observationIds: ['obs:assistant-interim'],
+    capturedAt: '2026-09-01T00:00:01.000Z',
+  }
+  const modelEvent: ReviewEventNodeDto = {
+    type: 'event', id: 'model-after-interim', at: '2026-09-01T00:00:02.000Z', sourceId: 'codex',
+    kind: 'model.changed', category: 'model', label: '模型切换', payload: { model: 'gpt-5.6' },
+    evidence: [], observationIds: ['obs:model-after-interim'], capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+  const final: ReviewMessageNodeDto = {
+    ...interim, id: 'assistant-final-after-model', at: '2026-09-01T00:00:03.000Z',
+    text: '最终结果', observationIds: ['obs:assistant-final-after-model'],
+    capturedAt: '2026-09-01T00:00:03.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([interim, modelEvent, final])
+  assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type === 'process') {
+    assert.deepEqual(entries[0].items.map(item => item.type === 'message' ? item.node.id : item.type === 'event' ? item.node.id : 'group'), [
+      'assistant-interim',
+      'model-after-interim',
+    ])
+  }
+  assert.equal(entries[1]?.type, 'message')
+  if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'assistant-final-after-model')
+})
