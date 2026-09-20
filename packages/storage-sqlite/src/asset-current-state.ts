@@ -9,6 +9,14 @@ export function upsertAssetCurrentState(
   db: Database.Database,
   state: AssetStateObservation,
 ): void {
+  // DefaultAssetService ids include binding/state/observedAt, but keep the derived
+  // view correct even if an external repository caller rewrites an existing id.
+  db.prepare(`
+    DELETE FROM asset_current_state
+    WHERE observation_id = ?
+      AND (asset_binding_id <> ? OR state <> ?)
+  `).run(state.id, state.assetBindingId, state.state)
+
   db.prepare(`
     INSERT INTO asset_current_state(
       asset_binding_id,
