@@ -173,6 +173,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
       process: {
         execution: 'Execution process',
         thinking: 'Thinking',
+        output: 'Process output',
         thinkingProcess: 'Thinking process',
         expandToLoad: 'Expand to load full process details',
         loading: 'Loading process details…',
