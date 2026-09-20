@@ -217,14 +217,37 @@ export async function normalizePiRecord(
               ? 'context.summary'
               : fact.event === 'pi.custom_message'
                 ? 'context.injected'
-                : fact.event === 'session.started' || fact.event === 'session.info'
+                : fact.event === 'session.started'
+                    || fact.event === 'session.info'
+                    || fact.event === 'assistant.stop'
+                    || fact.event === 'assistant.error'
+                    || fact.event === 'assistant.cancelled'
+                    || fact.event === 'pi.bash_execution'
+                    || fact.event === 'pi.bash'
+                    || fact.event === 'pi.bash_result'
+                    || fact.event === 'pi.custom'
+                    || fact.event === 'pi.label'
                   ? 'session.lifecycle'
                   : 'unknown'
       const name = fact.event === 'session.info' ? stringField(asRecord(fact.payload), 'name')?.trim() : undefined
       const payload = kind === 'unknown'
         ? { event: fact.event, label: fact.label, detail: fact.detail, rawPayload: fact.payload }
         : kind === 'session.lifecycle'
-          ? { event: fact.event, ...asRecord(fact.payload) }
+          ? {
+              event: fact.event,
+              label: fact.label,
+              detail: fact.detail,
+              ...asRecord(fact.payload),
+              nativeSemantic: fact.event.startsWith('pi.custom')
+                ? 'extension-event'
+                : fact.event.startsWith('pi.bash')
+                  ? 'user-shell-activity'
+                  : fact.event === 'pi.label'
+                    ? 'session-label'
+                    : fact.event.startsWith('assistant.')
+                      ? 'assistant-lifecycle'
+                      : 'session-lifecycle',
+            }
           : kind === 'context.injected'
             ? injectedContextPayload(fact)
             : fact.payload
