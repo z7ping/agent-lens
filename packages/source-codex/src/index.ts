@@ -45,7 +45,7 @@ export async function declareCodexCapabilities(
     { sourceId: 'codex', name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'Static files and the user config are observable; effective merged config, runtime discoverability and enablement require Codex app-server/runtime evidence' },
     { sourceId: 'codex', name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset invocation attribution is not yet implemented' },
     { sourceId: 'codex', name: 'thinking', status: 'partial', captureModes: ['history'], reason: 'Only source-visible reasoning records can be observed' },
-    { sourceId: 'codex', name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not yet implemented' },
+    { sourceId: 'codex', name: 'artifact-action', status: 'partial', captureModes: ['history'], reason: 'Current persisted file-change and image-generation facts are observable; not every artifact mutation has a dedicated native event' },
   ]
 }
 

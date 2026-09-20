@@ -25,7 +25,7 @@ interface PiNativeFactBase {
 export type PiNativeFact =
   | (PiNativeFactBase & {
       kind: 'message'
-      role: 'user' | 'assistant' | 'other'
+      role: 'user' | 'assistant' | 'system' | 'other'
       text: string
       content: unknown
       nonTextContent: unknown[]
@@ -37,7 +37,14 @@ export type PiNativeFact =
   | (PiNativeFactBase & { kind: 'thinking'; text: string })
   | (PiNativeFactBase & { kind: 'tool-call'; callId?: string; name: string; input: unknown })
   | (PiNativeFactBase & { kind: 'tool-result'; callId?: string; name: string; success: boolean; output: string; details?: unknown })
-  | (PiNativeFactBase & { kind: 'usage'; usage: PiNativeUsage })
+  | (PiNativeFactBase & {
+      kind: 'usage'
+      usage: PiNativeUsage
+      usageKind?: string
+      provider?: string
+      model?: string
+      note?: string
+    })
   | (PiNativeFactBase & { kind: 'event'; event: string; label: string; detail: string; payload: unknown })
   | (PiNativeFactBase & { kind: 'unknown'; payload: unknown })
 
@@ -205,6 +212,10 @@ export function normalizePiSessionEntry(
       facts.push({ ...messageBase, kind: 'message', role: 'user', text: textFromContent(content), content, nonTextContent: nonTextContent(content) })
       return facts
     }
+    if (role === 'system') {
+      facts.push({ ...messageBase, kind: 'message', role: 'system', text: textFromContent(content), content, nonTextContent: nonTextContent(content) })
+      return facts
+    }
     if (role === 'assistant') {
       const provider = stringField(message, 'provider')
       const model = stringField(message, 'model')
@@ -270,15 +281,12 @@ export function normalizePiSessionEntry(
           }
           facts.push({
             ...messageBase,
-            ...assistantMeta,
             id: `${id}:content:${index}`,
             parentId: id,
             contentIndex: index,
-            kind: 'message',
-            role: 'assistant',
-            text: '',
-            content: rawBlock,
-            nonTextContent: [rawBlock],
+            nativeType: `message/assistant/content/${stringField(block, 'type') ?? 'unknown'}`,
+            kind: 'unknown',
+            payload: rawBlock,
           })
         }
       } else if (typeof content === 'string') {
@@ -422,6 +430,21 @@ export function normalizePiSessionEntry(
   } else if (type === 'thinking_level_change') {
     const level = stringField(entry, 'thinkingLevel', 'level') ?? 'unknown'
     facts.push({ ...base, kind: 'event', event: 'thinking.level.changed', label: '推理级别已切换', detail: level, payload: { level } })
+  } else if (type === 'usage') {
+    const usage = normalizePiUsage(entry.usage)
+    if (usage) {
+      facts.push({
+        ...base,
+        kind: 'usage',
+        usage,
+        ...(stringField(entry, 'kind') ? { usageKind: stringField(entry, 'kind')! } : {}),
+        ...(stringField(entry, 'provider') ? { provider: stringField(entry, 'provider')! } : {}),
+        ...(stringField(entry, 'model') ? { model: stringField(entry, 'model')! } : {}),
+        ...(stringField(entry, 'note') ? { note: stringField(entry, 'note')! } : {}),
+      })
+    } else {
+      facts.push({ ...base, kind: 'unknown', payload: raw })
+    }
   } else if (type === 'compaction') {
     const payload = {
       phase: 'end',

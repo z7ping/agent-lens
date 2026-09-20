@@ -154,6 +154,23 @@ export async function normalizePiRecord(
         return
       }
 
+      if (fact.role === 'system') {
+        observations.push(piFactCandidate(record, envelope, fact, 'context.injected', {
+          text: fact.text,
+          ...(fact.content === undefined ? {} : { content: fact.content }),
+          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          provenance: {
+            contentRole: 'system-context',
+            actualAuthor: 'system',
+            activityType: 'system-injection',
+            originType: 'system',
+            sourceSignal: 'pi message.role=system',
+            nativeRole: 'system',
+          },
+        }, offset))
+        return
+      }
+
       if (fact.role === 'assistant') {
         const normalized = normalizedMessageAttachments(fact.nonTextContent)
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
@@ -202,7 +219,13 @@ export async function normalizePiRecord(
     }
 
     if (fact.kind === 'usage') {
-      observations.push(piFactCandidate(record, envelope, fact, 'usage', fact.usage, offset))
+      observations.push(piFactCandidate(record, envelope, fact, 'usage', {
+        ...fact.usage,
+        ...(fact.usageKind ? { usageKind: fact.usageKind } : {}),
+        ...(fact.provider ? { provider: fact.provider } : {}),
+        ...(fact.model ? { model: fact.model } : {}),
+        ...(fact.note ? { note: fact.note } : {}),
+      }, offset, { identity: fact.model ? { modelName: fact.model } : {} }))
       return
     }
 
@@ -217,14 +240,37 @@ export async function normalizePiRecord(
               ? 'context.summary'
               : fact.event === 'pi.custom_message'
                 ? 'context.injected'
-                : fact.event === 'session.started' || fact.event === 'session.info'
+                : fact.event === 'session.started'
+                    || fact.event === 'session.info'
+                    || fact.event === 'assistant.stop'
+                    || fact.event === 'assistant.error'
+                    || fact.event === 'assistant.cancelled'
+                    || fact.event === 'pi.bash_execution'
+                    || fact.event === 'pi.bash'
+                    || fact.event === 'pi.bash_result'
+                    || fact.event === 'pi.custom'
+                    || fact.event === 'pi.label'
                   ? 'session.lifecycle'
                   : 'unknown'
       const name = fact.event === 'session.info' ? stringField(asRecord(fact.payload), 'name')?.trim() : undefined
       const payload = kind === 'unknown'
         ? { event: fact.event, label: fact.label, detail: fact.detail, rawPayload: fact.payload }
         : kind === 'session.lifecycle'
-          ? { event: fact.event, ...asRecord(fact.payload) }
+          ? {
+              event: fact.event,
+              label: fact.label,
+              detail: fact.detail,
+              ...asRecord(fact.payload),
+              nativeSemantic: fact.event.startsWith('pi.custom')
+                ? 'extension-event'
+                : fact.event.startsWith('pi.bash')
+                  ? 'user-shell-activity'
+                  : fact.event === 'pi.label'
+                    ? 'session-label'
+                    : fact.event.startsWith('assistant.')
+                      ? 'assistant-lifecycle'
+                      : 'session-lifecycle',
+            }
           : kind === 'context.injected'
             ? injectedContextPayload(fact)
             : fact.payload
