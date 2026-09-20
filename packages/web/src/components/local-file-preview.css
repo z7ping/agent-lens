@@ -1,0 +1,40 @@
+.markdown-local-file-link {
+  cursor: pointer;
+}
+
+.local-file-preview-dialog .ui-dialog-body {
+  min-height: 0;
+}
+
+.local-file-preview-body {
+  min-height: min(62vh, 680px);
+  display: flex;
+  flex-direction: column;
+}
+
+.local-file-preview-content {
+  flex: 1;
+  min-height: 0;
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.local-file-preview-state {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.local-file-preview-state.is-error {
+  color: var(--danger);
+}
+
+.local-file-preview-state small {
+  max-width: 720px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
