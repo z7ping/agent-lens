@@ -183,9 +183,8 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
 
   const prompts: ReviewInteractionPresentationEntry[] = []
   const processItems: ReviewProcessPresentationItem[] = []
-  const meta: ReviewInteractionPresentationEntry[] = []
+  const postProcess: ReviewInteractionPresentationEntry[] = []
   const terminal: ReviewInteractionPresentationEntry[] = []
-  const finalAnswers: ReviewInteractionPresentationEntry[] = []
   const artifacts: ReviewInteractionPresentationEntry[] = []
 
   for (const [index, entry] of result.entries()) {
@@ -194,7 +193,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
       continue
     }
     if (entry.type === 'message' && entry.node.role === 'assistant' && finalAssistantIndexes.has(index)) {
-      finalAnswers.push(entry)
+      postProcess.push(entry)
       continue
     }
     if (entry.type === 'event' && entry.node.category === 'artifact') {
@@ -210,7 +209,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     else if (entry.type === 'message' && entry.node.role === 'commentary') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'message') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'tool-group') processItems.push(entry)
-    else meta.push(entry)
+    else postProcess.push(entry)
   }
 
   const grouped: ReviewInteractionPresentationEntry[] = [...prompts]
@@ -223,6 +222,6 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
         : first.items[0]?.id ?? 'process'
     grouped.push({ type: 'process', id: `process:${id}`, items: processItems })
   }
-  grouped.push(...meta, ...finalAnswers, ...terminal, ...artifacts)
+  grouped.push(...postProcess, ...terminal, ...artifacts)
   return grouped
 }
