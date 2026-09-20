@@ -331,6 +331,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     })
 
     const user = await add('message.user', 'summary-user', '2026-09-20T00:00:00.000Z', { text: '检查项目' })
+    await add('message.assistant', 'summary-assistant-before-process', '2026-09-20T00:00:00.500Z', { text: '先说明一下' })
     await add('message.commentary', 'summary-commentary', '2026-09-20T00:00:01.000Z', { text: '正在检查'.repeat(2000) })
     await add('tool.call', 'summary-tool-call', '2026-09-20T00:00:02.000Z', {
       callId: 'summary-tool', nativeToolName: 'bash', input: { command: 'npm test' },
@@ -395,6 +396,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     assert.equal(round.nodes.some(node => node.type === 'tool'), false)
     assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'commentary'), false)
     assert.equal(round.nodes.some(node => node.type === 'event' && node.kind === 'model.changed'), true)
+    assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'assistant' && node.text === '先说明一下'), true)
     assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'assistant' && node.text === '检查完成'), true)
     assert.equal(round.nodes.some(node => node.type === 'event' && node.kind === 'session.lifecycle'), true)
 
