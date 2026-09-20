@@ -8,6 +8,21 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     newData: '有新数据',
     copy: '复制',
     copied: '已复制',
+    localFilePreview: {
+      loading: '正在读取本地文件…',
+      failed: '无法预览本地文件',
+      metadataOnly: '此文件不能直接预览',
+      unavailable: '预览不可用',
+      line: '第 {{line}} 行',
+      lineColumn: '第 {{line}} 行，第 {{column}} 列',
+      blockedReason: {
+        sensitive: '文件可能包含凭据或敏感配置。',
+        'protected-data': '运行时数据库或会话数据不允许直接预览。',
+        'too-large': '文件超过预览大小限制。',
+        binary: '该文件不是可预览的 UTF-8 文本。',
+        unreadable: '该文件当前无法读取。',
+      },
+    },
     localPath: {
       open: '在文件管理器中打开',
       opening: '正在打开',
