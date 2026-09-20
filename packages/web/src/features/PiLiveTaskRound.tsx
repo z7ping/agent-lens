@@ -11,7 +11,7 @@ import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskToolGroup } from './TaskToolGroup'
-import type { TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
+import type { TaskEventCategory, TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
 import { projectPiLiveTurnItems, type PiLiveTaskRoundProjection } from './pi-live-task-projection'
 
@@ -168,6 +168,16 @@ function HistoryUsageEvent({ entry }: { entry: Extract<PiLiveHistoryItem, { kind
   return <TaskEvent model={{ id: entry.id, label: t('history.usage'), category: 'usage', summary, time: entry.at ? formatClock(entry.at, locale) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
 }
 
+function piLiveEventCategory(event: string): TaskEventCategory {
+  if (event === 'artifact.action') return 'artifact'
+  if (event === 'native.unknown') return 'unknown'
+  if (event.startsWith('model.') || event.startsWith('thinking.level.')) return 'model'
+  if (event.startsWith('context.')) return 'context'
+  if (event.startsWith('permission.')) return 'permission'
+  if (event.startsWith('subagent.')) return 'subagent'
+  return 'lifecycle'
+}
+
 function HistoryLifecycleEvent({ entry, showAllEvents }: { entry: Extract<PiLiveHistoryItem, { kind: 'lifecycle' }>; showAllEvents: boolean }) {
   const { i18n } = useTranslation('piLive')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -176,7 +186,7 @@ function HistoryLifecycleEvent({ entry, showAllEvents }: { entry: Extract<PiLive
   return <TaskEvent model={{
     id: entry.id,
     label: entry.label,
-    category: entry.event === 'artifact.action' ? 'artifact' : entry.event === 'native.unknown' ? 'unknown' : 'lifecycle',
+    category: piLiveEventCategory(entry.event),
     summary: summary || undefined,
     time: entry.at ? formatClock(entry.at, locale) : undefined,
     nativeType: entry.nativeType,
