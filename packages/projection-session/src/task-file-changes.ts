@@ -314,3 +314,39 @@ export function summarizeObservedTaskFileChanges(
     || left.path.localeCompare(right.path)
   )
 }
+
+
+export function reconcileTaskFileChanges(
+  logicalSessionId: string,
+  observed: readonly TaskFileChangeCandidate[],
+  gitDiff: readonly import('./git-workspace-snapshot').GitWorkspaceDiffEntry[] | null,
+  window: { startedAt: string; endedAt: string },
+): import('@agent-lens/core').TaskFileChangeRecord[] {
+  const observedSummary = summarizeObservedTaskFileChanges(observed)
+
+  // A Git snapshot diff is an exact final-workspace comparison. If a tool
+  // touched and then reverted a file, it intentionally disappears here.
+  if (gitDiff) {
+    const byPath = new Map(observedSummary.map(item => [item.path, item]))
+    return gitDiff.map(item => {
+      const toolEvidence = byPath.get(item.path)
+        ?? (item.oldPath ? byPath.get(item.oldPath) : undefined)
+      return {
+        logicalSessionId,
+        path: item.path,
+        changeType: item.changeType,
+        ...(item.oldPath ? { oldPath: item.oldPath } : {}),
+        ...(item.additions === undefined ? {} : { additions: item.additions }),
+        ...(item.deletions === undefined ? {} : { deletions: item.deletions }),
+        firstChangedAt: toolEvidence?.firstChangedAt ?? window.startedAt,
+        lastChangedAt: toolEvidence?.lastChangedAt ?? window.endedAt,
+        evidence: toolEvidence ? ['git', 'tool'] : ['git'],
+        confidence: 'exact',
+      }
+    }).sort((left, right) => left.path.localeCompare(right.path))
+  }
+
+  // Non-Git workspaces retain observed evidence, but never invent line counts
+  // or upgrade a write into Added/Modified without stronger filesystem proof.
+  return observedSummary
+}
