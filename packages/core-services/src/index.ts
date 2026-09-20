@@ -119,11 +119,18 @@ export class DefaultLiveService implements LiveService {
     }
 
     const watchers = new Map<string, () => void>()
+    const terminalSettled = new Set<string>()
+    const originalSend = adapter.send
+    const originalInterrupt = adapter.interrupt
+    const originalTerminate = adapter.terminate
+    const originalDispose = adapter.dispose
+
     const observerContext = (runtime: Awaited<ReturnType<LiveAdapter['state']>>): LiveRuntimeObserverContext => ({
       liveId: adapter.manifest.liveId,
       productId: adapter.manifest.productId,
       runtime,
     })
+
     const notifyBeforeSend = async (runtimeSessionId: string) => {
       if (!this.observers.size) return
       const runtime = await adapter.state(runtimeSessionId)
@@ -134,13 +141,18 @@ export class DefaultLiveService implements LiveService {
         }),
       ))
     }
+
     const notifySettled = async (
       runtimeSessionId: string,
       reason: LiveRuntimeSettledContext['reason'],
       event?: LiveRuntimeEvent,
       knownRuntime?: Awaited<ReturnType<LiveAdapter['state']>>,
     ) => {
+      const terminal = reason === 'terminated' || reason === 'failed'
+      if (terminal && terminalSettled.has(runtimeSessionId)) return
+      if (terminal) terminalSettled.add(runtimeSessionId)
       if (!this.observers.size) return
+
       let runtime = knownRuntime
       if (!runtime) {
         try {
@@ -161,12 +173,13 @@ export class DefaultLiveService implements LiveService {
         }),
       ))
     }
+
     const ensureWatcher = (runtimeSessionId: string) => {
       if (watchers.has(runtimeSessionId) || !adapter.capabilities.has('stream')) return
       const unsubscribe = adapter.subscribe(runtimeSessionId, event => {
         const normalized = event.normalizedEvent
         const completed = normalized?.type === 'completed'
-        const failed = normalized?.type === 'status'
+        const terminalStatus = normalized?.type === 'status'
           && (normalized.status === 'failed' || normalized.status === 'terminated')
         if (completed) {
           void notifySettled(
@@ -174,7 +187,7 @@ export class DefaultLiveService implements LiveService {
             normalized.status === 'failed' ? 'failed' : 'completed',
             event,
           )
-        } else if (failed) {
+        } else if (terminalStatus) {
           void notifySettled(
             runtimeSessionId,
             normalized.status === 'failed' ? 'failed' : 'terminated',
@@ -185,58 +198,58 @@ export class DefaultLiveService implements LiveService {
       watchers.set(runtimeSessionId, unsubscribe)
     }
 
-    const wrapped = new Proxy(adapter, {
-      get: (target, property, receiver) => {
-        if (property === 'send') {
-          return async (
-            runtimeSessionId: string,
-            message: Parameters<LiveAdapter['send']>[1],
-            options?: Parameters<LiveAdapter['send']>[2],
-          ) => {
-            await notifyBeforeSend(runtimeSessionId)
-            ensureWatcher(runtimeSessionId)
-            return target.send(runtimeSessionId, message, options)
-          }
-        }
-        if (property === 'interrupt' && target.interrupt) {
-          return async (runtimeSessionId: string) => {
-            const result = await target.interrupt!(runtimeSessionId)
-            await notifySettled(runtimeSessionId, 'interrupted')
-            return result
-          }
-        }
-        if (property === 'terminate') {
-          return async (runtimeSessionId: string) => {
-            let runtime: Awaited<ReturnType<LiveAdapter['state']>> | undefined
-            try {
-              runtime = await target.state(runtimeSessionId)
-            } catch {
-              runtime = undefined
-            }
-            if (runtime) await notifySettled(runtimeSessionId, 'terminated', undefined, runtime)
-            watchers.get(runtimeSessionId)?.()
-            watchers.delete(runtimeSessionId)
-            return target.terminate(runtimeSessionId)
-          }
-        }
-        if (property === 'dispose') {
-          return async () => {
-            for (const unsubscribe of watchers.values()) unsubscribe()
-            watchers.clear()
-            return target.dispose()
-          }
-        }
-        const value = Reflect.get(target as object, property, receiver)
-        return typeof value === 'function' ? value.bind(target) : value
-      },
-    }) as LiveAdapter
+    const decoratedSend: LiveAdapter['send'] = async (runtimeSessionId, message, options) => {
+      await notifyBeforeSend(runtimeSessionId)
+      ensureWatcher(runtimeSessionId)
+      return originalSend.call(adapter, runtimeSessionId, message, options)
+    }
+    adapter.send = decoratedSend
 
-    this.adapters.set(id, wrapped)
+    let decoratedInterrupt: LiveAdapter['interrupt'] | undefined
+    if (originalInterrupt) {
+      decoratedInterrupt = async runtimeSessionId => {
+        const result = await originalInterrupt.call(adapter, runtimeSessionId)
+        await notifySettled(runtimeSessionId, 'interrupted')
+        return result
+      }
+      adapter.interrupt = decoratedInterrupt
+    }
+
+    const decoratedTerminate: LiveAdapter['terminate'] = async runtimeSessionId => {
+      let runtime: Awaited<ReturnType<LiveAdapter['state']>> | undefined
+      try {
+        runtime = await adapter.state(runtimeSessionId)
+      } catch {
+        runtime = undefined
+      }
+      if (runtime) await notifySettled(runtimeSessionId, 'terminated', undefined, runtime)
+      watchers.get(runtimeSessionId)?.()
+      watchers.delete(runtimeSessionId)
+      return originalTerminate.call(adapter, runtimeSessionId)
+    }
+    adapter.terminate = decoratedTerminate
+
+    const decoratedDispose: LiveAdapter['dispose'] = async () => {
+      for (const unsubscribe of watchers.values()) unsubscribe()
+      watchers.clear()
+      terminalSettled.clear()
+      return originalDispose.call(adapter)
+    }
+    adapter.dispose = decoratedDispose
+
+    this.adapters.set(id, adapter)
     return {
       dispose: () => {
-        if (this.adapters.get(id) !== wrapped) return
+        if (this.adapters.get(id) !== adapter) return
         for (const unsubscribe of watchers.values()) unsubscribe()
         watchers.clear()
+        terminalSettled.clear()
+        if (adapter.send === decoratedSend) adapter.send = originalSend
+        if (decoratedInterrupt && adapter.interrupt === decoratedInterrupt) {
+          adapter.interrupt = originalInterrupt
+        }
+        if (adapter.terminate === decoratedTerminate) adapter.terminate = originalTerminate
+        if (adapter.dispose === decoratedDispose) adapter.dispose = originalDispose
         this.adapters.delete(id)
       },
     }
