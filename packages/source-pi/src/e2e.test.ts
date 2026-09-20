@@ -159,7 +159,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(facts.filter(item => item.kind === 'model.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'thinking.level.changed').length, 1)
     assert.equal(facts.filter(item => item.kind === 'context.compaction').length, 1)
-    const stop = facts.find(item => item.kind === 'unknown' && (item.payload as { event?: string }).event === 'assistant.stop')
+    const stop = facts.find(item => item.kind === 'session.lifecycle' && (item.payload as { event?: string }).event === 'assistant.stop')
     assert.ok(stop)
     const usage = facts.find(item => item.kind === 'usage')
     assert.ok(usage)
@@ -176,7 +176,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     assert.equal(result.nativeParentEventId, 'pi-assistant-1')
     assert.equal(result.parentObservationId, assistant.id)
     assert.equal(tool.parentObservationId, assistant.id)
-    assert.equal((stop.payload as { rawPayload?: { stopReason?: string } }).rawPayload?.stopReason, 'toolUse')
+    assert.equal((stop.payload as { stopReason?: string }).stopReason, 'toolUse')
 
     const assetResult = await assetRunner.scan({
       source: piSourceDefinition,
@@ -297,7 +297,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
 
     storage.db.prepare(`UPDATE source_records SET parser_version = '6' WHERE source_id = 'pi'`).run()
     const staleBefore = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '9'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '10'
     `).get() as { count: number }
     const replay = await history.replay({
       source: piSourceDefinition,
@@ -307,7 +307,7 @@ test('Pi Source covers history, assets and native-tail runtime', async () => {
     })
     assert.equal(replay.records, staleBefore.count)
     const staleParsers = storage.db.prepare(`
-      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '9'
+      SELECT COUNT(*) AS count FROM source_records WHERE source_id = 'pi' AND parser_version != '10'
     `).get() as { count: number }
     assert.equal(staleParsers.count, 0)
   } finally {
