@@ -8,11 +8,11 @@ import { UiIcon } from '../components/UiIcon'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
-import { TaskThinking } from './TaskThinking'
+import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskToolGroup } from './TaskToolGroup'
-import type { TaskRoundModel, TaskThinkingModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
+import type { TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
-import type { PiLiveTaskRoundProjection } from './pi-live-task-projection'
+import { projectPiLiveTurnItems, type PiLiveTaskRoundProjection } from './pi-live-task-projection'
 
 function formatClock(value: string, locale: string): string {
   if (!value) return ''
@@ -21,9 +21,10 @@ function formatClock(value: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
 }
 
-function compactPreview(value: string, max = 120): string {
-  const text = value.replace(/\s+/g, ' ').trim()
-  return text.length > max ? `${text.slice(0, max)}…` : text
+function timestamp(value: string): number | undefined {
+  if (!value) return undefined
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function toolKindLabel(kind: TaskToolKind, t: TFunction): string {
@@ -80,7 +81,9 @@ function ToolOutput({ tool }: { tool: TaskToolModel }) {
 }
 
 type HistoryTool = Extract<PiLiveHistoryItem, { kind: 'tool' }>
-type HistoryRenderEntry = PiLiveHistoryItem | { kind: 'tool-group'; id: string; items: HistoryTool[] }
+type HistoryToolGroup = { kind: 'tool-group'; id: string; items: HistoryTool[] }
+type HistoryProcessItem = PiLiveHistoryItem | HistoryToolGroup
+type HistoryRenderEntry = PiLiveHistoryItem | { kind: 'process'; id: string; items: HistoryProcessItem[] }
 
 export function piLiveLifecycleSummary(entry: Extract<PiLiveHistoryItem, { kind: 'lifecycle' }>): string {
   if (entry.event !== 'session.info') return entry.detail
@@ -96,41 +99,43 @@ export function hasPiLiveResponseActivity(items: PiLiveHistoryItem[]): boolean {
 }
 
 function historyEntries(items: PiLiveHistoryItem[]): HistoryRenderEntry[] {
+  const presented = items.every(item => item.turnSection !== undefined) ? items : projectPiLiveTurnItems(items)
   const result: HistoryRenderEntry[] = []
+  let processItems: HistoryProcessItem[] = []
   let tools: HistoryTool[] = []
+
   const flushTools = () => {
     if (!tools.length) return
-    result.push({ kind: 'tool-group', id: `tools:${tools.map(tool => tool.id).join(':')}`, items: tools })
+    processItems.push({ kind: 'tool-group', id: `tools:${tools.map(tool => tool.id).join(':')}`, items: tools })
     tools = []
   }
-  for (const item of items) {
-    if (item.kind === 'tool') {
-      tools.push(item)
+  const flushProcess = () => {
+    flushTools()
+    if (!processItems.length) return
+    const first = processItems[0]!
+    result.push({ kind: 'process', id: `process:${first.id}`, items: processItems })
+    processItems = []
+  }
+
+  for (const item of presented) {
+    if (item.turnSection === 'process') {
+      if (item.kind === 'tool') {
+        tools.push(item)
+        continue
+      }
+      flushTools()
+      processItems.push(item)
       continue
     }
-    flushTools()
+    flushProcess()
     result.push(item)
   }
-  flushTools()
+  flushProcess()
   return result
 }
 
 function ThinkingMarkdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
   return <MarkdownContent text={text} streaming={streaming}/>
-}
-
-function HistoryThinking({ item }: { item: Extract<PiLiveHistoryItem, { kind: 'thinking' }> }) {
-  const { t, i18n } = useTranslation('piLive')
-  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
-  const model: TaskThinkingModel = {
-    id: item.id,
-    label: t('history.thinking'),
-    text: item.text,
-    preview: compactPreview(item.text),
-    time: item.at ? formatClock(item.at, locale) : undefined,
-    state: item.state ?? 'settled',
-  }
-  return <TaskThinking model={model} defaultExpanded><ThinkingMarkdown text={item.text} streaming={item.state === 'running'}/></TaskThinking>
 }
 
 function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
@@ -144,13 +149,118 @@ function HistoryToolGroup({ id, items }: { id: string; items: HistoryTool[] }) {
     { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
     t,
   )), t)
-  return <TaskToolGroup
-    model={model}
-    renderDetails={tool => <ToolOutput tool={tool}/>}
-  />
+  return <TaskToolGroup model={model} renderDetails={tool => <ToolOutput tool={tool}/>}/>
 }
 
-function HistoryEntries({ items, showAllEvents = false }: { items: PiLiveHistoryItem[]; showAllEvents?: boolean }) {
+function HistoryUsageEvent({ entry }: { entry: Extract<PiLiveHistoryItem, { kind: 'usage' }> }) {
+  const { t, i18n } = useTranslation('piLive')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
+  const cost = entry.usage.cost?.total
+  const summary = t('history.usageSummary', {
+    input: entry.usage.inputTokens.toLocaleString(locale),
+    output: entry.usage.outputTokens.toLocaleString(locale),
+    cacheRead: entry.usage.cacheReadTokens.toLocaleString(locale),
+    cacheWrite: entry.usage.cacheWriteTokens.toLocaleString(locale),
+    total: entry.usage.totalTokens.toLocaleString(locale),
+    cost: cost !== undefined ? ` · ${cost.toFixed(4)}` : '',
+  })
+  return <TaskEvent model={{ id: entry.id, label: t('history.usage'), category: 'usage', summary, time: entry.at ? formatClock(entry.at, locale) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
+}
+
+function HistoryLifecycleEvent({ entry, showAllEvents }: { entry: Extract<PiLiveHistoryItem, { kind: 'lifecycle' }>; showAllEvents: boolean }) {
+  const { i18n } = useTranslation('piLive')
+  const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
+  if (entry.event === 'native.unknown' && !showAllEvents) return null
+  const summary = piLiveLifecycleSummary(entry)
+  return <TaskEvent model={{
+    id: entry.id,
+    label: entry.label,
+    category: entry.event === 'artifact.action' ? 'artifact' : entry.event === 'native.unknown' ? 'unknown' : 'lifecycle',
+    summary: summary || undefined,
+    time: entry.at ? formatClock(entry.at, locale) : undefined,
+    nativeType: entry.nativeType,
+    parentId: entry.parentId,
+  }} raw={entry.raw}/>
+}
+
+function processTiming(items: HistoryProcessItem[]): { startedAtMs?: number; endedAtMs?: number } {
+  let startedAtMs: number | undefined
+  let endedAtMs: number | undefined
+  const include = (start: number | undefined, end = start) => {
+    if (start !== undefined) startedAtMs = startedAtMs === undefined ? start : Math.min(startedAtMs, start)
+    if (end !== undefined) endedAtMs = endedAtMs === undefined ? end : Math.max(endedAtMs, end)
+  }
+  for (const item of items) {
+    if (item.kind === 'tool-group') {
+      for (const tool of item.items) {
+        const start = tool.startedAtMs ?? timestamp(tool.at)
+        include(start, start !== undefined && tool.durationMs !== undefined ? start + tool.durationMs : start)
+      }
+      continue
+    }
+    include(timestamp(item.at))
+  }
+  return {
+    ...(startedAtMs === undefined ? {} : { startedAtMs }),
+    ...(endedAtMs === undefined ? {} : { endedAtMs }),
+  }
+}
+
+function HistoryProcessGroup({
+  id,
+  items,
+  state,
+  showAllEvents,
+}: {
+  id: string
+  items: HistoryProcessItem[]
+  state: TaskRoundModel['state']
+  showAllEvents: boolean
+}) {
+  const { t } = useTranslation('piLive')
+  const messages = items.filter(item => item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant'))
+  const tools = items.flatMap(item => item.kind === 'tool-group' ? item.items : [])
+  const timing = processTiming(items)
+
+  return <TaskProcessGroup
+    id={id}
+    messageCount={messages.length}
+    toolCount={tools.length}
+    errorCount={tools.filter(tool => tool.status === 'error').length}
+    startedAtMs={timing.startedAtMs}
+    endedAtMs={state === 'running' ? undefined : timing.endedAtMs}
+    state={state}
+  >
+    <div className="task-process-sequence">
+      {items.map(item => {
+        if (item.kind === 'tool-group') return <HistoryToolGroup key={item.id} id={item.id} items={item.items}/>
+        if (item.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={item.id}>
+          <div className="task-process-message-kind">{t('history.thinking')}</div>
+          <ThinkingMarkdown text={item.text} streaming={item.state === 'running'}/>
+        </div>
+        if (item.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={item.id}>
+          <div className="task-process-message-kind">{t('history.commentary')}</div>
+          <ThinkingMarkdown text={item.text} streaming={item.state === 'running'}/>
+        </div>
+        if (item.kind === 'usage') return <HistoryUsageEvent key={item.id} entry={item}/>
+        if (item.kind === 'lifecycle') return <HistoryLifecycleEvent key={item.id} entry={item} showAllEvents={showAllEvents}/>
+        return null
+      })}
+    </div>
+  </TaskProcessGroup>
+}
+
+function HistoryEntries({
+  items,
+  showAllEvents = false,
+  processState = 'settled',
+  assistantModelLabel,
+}: {
+  items: PiLiveHistoryItem[]
+  showAllEvents?: boolean
+  processState?: TaskRoundModel['state']
+  assistantModelLabel?: string | undefined
+}) {
   const { t, i18n } = useTranslation(['piLive', 'task'])
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const entries = historyEntries(items)
@@ -162,30 +272,15 @@ function HistoryEntries({ items, showAllEvents = false }: { items: PiLiveHistory
         text={entry.text}
         attachments={entry.attachments}
         author={entry.role === 'user' ? t('piLive:history.user') : 'Pi'}
+        modelLabel={entry.role === 'assistant' ? entry.modelLabel ?? assistantModelLabel : undefined}
         time={entry.at ? formatClock(entry.at, locale) : undefined}
         streaming={entry.role === 'assistant' && entry.state === 'running'}
         className="pi-live-task-message"
       />
     }
-    if (entry.kind === 'thinking') return <HistoryThinking key={entry.id} item={entry}/>
-    if (entry.kind === 'tool-group') return <HistoryToolGroup key={entry.id} id={entry.id} items={entry.items}/>
-    if (entry.kind === 'usage') {
-      const cost = entry.usage.cost?.total
-      const summary = t('piLive:history.usageSummary', {
-        input: entry.usage.inputTokens.toLocaleString(locale),
-        output: entry.usage.outputTokens.toLocaleString(locale),
-        cacheRead: entry.usage.cacheReadTokens.toLocaleString(locale),
-        cacheWrite: entry.usage.cacheWriteTokens.toLocaleString(locale),
-        total: entry.usage.totalTokens.toLocaleString(locale),
-        cost: cost !== undefined ? ` · ${cost.toFixed(4)}` : '',
-      })
-      return <TaskEvent key={entry.id} model={{ id: entry.id, label: t('piLive:history.usage'), category: 'usage', summary, time: entry.at ? formatClock(entry.at, locale) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
-    }
-    if (entry.kind === 'lifecycle') {
-      if (entry.event === 'native.unknown' && !showAllEvents) return null
-      const summary = piLiveLifecycleSummary(entry)
-      return <TaskEvent key={entry.id} model={{ id: entry.id, label: entry.label, category: entry.event === 'native.unknown' ? 'unknown' : 'lifecycle', summary: summary || undefined, time: entry.at ? formatClock(entry.at, locale) : undefined, nativeType: entry.nativeType, parentId: entry.parentId }} raw={entry.raw}/>
-    }
+    if (entry.kind === 'process') return <HistoryProcessGroup key={entry.id} id={entry.id} items={entry.items} state={processState} showAllEvents={showAllEvents}/>
+    if (entry.kind === 'usage') return <HistoryUsageEvent key={entry.id} entry={entry}/>
+    if (entry.kind === 'lifecycle') return <HistoryLifecycleEvent key={entry.id} entry={entry} showAllEvents={showAllEvents}/>
     return null
   })}</>
 }
@@ -203,7 +298,7 @@ export function PiLiveHistoryTaskRound({
 }) {
   return <TaskRound model={projection.model} className="pi-live-history-round" summaryMeta={summaryMeta}>
     {beforeContent}
-    <HistoryEntries items={projection.items} showAllEvents={showAllEvents}/>
+    <HistoryEntries items={projection.items} showAllEvents={showAllEvents} processState={projection.model.state}/>
   </TaskRound>
 }
 
@@ -213,27 +308,24 @@ export function PiLiveCurrentTaskRound({
   items,
   showAllEvents = false,
   pendingMessageCount,
+  assistantModelLabel,
 }: {
   model: TaskRoundModel
   promptText?: string
   items: PiLiveHistoryItem[]
   showAllEvents?: boolean
   pendingMessageCount: number
+  assistantModelLabel?: string | undefined
 }) {
   const { t } = useTranslation('piLive')
+  const presentedItems = projectPiLiveTurnItems(omitPiLivePromptMessages(items, promptText))
   return <TaskRound
     model={model}
     className="pi-live-current-round"
     summaryMeta={pendingMessageCount > 0 ? <span>{t('history.queued', { count: pendingMessageCount })}</span> : undefined}
   >
     {promptText && <TaskMessage role="user" text={promptText} author={t('history.user')} className="pi-live-task-message pi-live-optimistic-message"/>}
-    {model.state === 'running' && Boolean(promptText) && !hasPiLiveResponseActivity(items) && <TaskMessage
-      role="assistant"
-      text=""
-      author="Pi"
-      pending
-      className="pi-live-task-message pi-live-response-pending"
-    />}
-    <HistoryEntries items={omitPiLivePromptMessages(items, promptText)} showAllEvents={showAllEvents}/>
+    {model.state === 'running' && Boolean(promptText) && !hasPiLiveResponseActivity(items) && <TaskMessage role="assistant" text="" author="Pi" pending className="pi-live-task-message pi-live-response-pending"/>}
+    <HistoryEntries items={presentedItems} showAllEvents={showAllEvents} processState={model.state} assistantModelLabel={assistantModelLabel}/>
   </TaskRound>
 }

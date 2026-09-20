@@ -1,7 +1,8 @@
 import type { PiLiveStateDto } from '@agent-lens/protocol'
 import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
-import type { PiLiveHistoryItem } from './pi-live-history'
+import type { PiLiveHistoryItem, PiLiveTurnSection } from './pi-live-history'
 import { currentProductLocale, translateProduct } from '../i18n/runtime'
+import { taskTurnFinalAssistantIndexes } from './task-turn-presentation'
 
 export const PI_LIVE_HISTORY_ROUND_FACT_LIMIT = 8
 
@@ -75,6 +76,87 @@ function roundPreview(items: PiLiveHistoryItem[]): string | undefined {
   return text.length > 86 ? `${text.slice(0, 86)}…` : text || undefined
 }
 
+function isAssistantTerminal(item: PiLiveHistoryItem): boolean {
+  return item.kind === 'lifecycle' && ['assistant.stop', 'assistant.error', 'assistant.cancelled'].includes(item.event)
+}
+
+function assistantEntryIdentity(item: PiLiveHistoryItem): string | undefined {
+  if (item.assistantEntryId) return item.assistantEntryId
+  if (isAssistantTerminal(item)) return item.parentId
+  if ((item.kind === 'message' || item.kind === 'thinking' || item.kind === 'tool') && item.contentIndex !== undefined) {
+    const persistedMarker = item.id.indexOf(':content:')
+    if (persistedMarker > 0) return item.id.slice(0, persistedMarker)
+    const liveMatch = /^(pi-live-current:message-\d+):/.exec(item.id)
+    if (liveMatch?.[1]) return liveMatch[1]
+    return item.id
+  }
+  return undefined
+}
+
+function withTurnSection(item: PiLiveHistoryItem, turnSection: PiLiveTurnSection): PiLiveHistoryItem {
+  return { ...item, turnSection }
+}
+
+/**
+ * 完整语义轮次先统一成 prompt → process(内部原序) → terminal → final → artifacts，
+ * 然后才允许做 8 条事实的渲染分片。
+ */
+export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistoryItem[] {
+  const assistantEntriesWithTools = new Set(items
+    .filter((item): item is Extract<PiLiveHistoryItem, { kind: 'tool' }> => item.kind === 'tool')
+    .map(assistantEntryIdentity)
+    .filter((value): value is string => Boolean(value)))
+
+  const finalAssistantIndexes = taskTurnFinalAssistantIndexes(items, item => {
+    if (item.kind === 'message' && item.role === 'user') return 'prompt'
+    if (item.kind === 'message' && item.role === 'assistant') {
+      const identity = assistantEntryIdentity(item)
+      return identity && assistantEntriesWithTools.has(identity) ? 'process' : 'assistant'
+    }
+    if (item.kind === 'thinking' || item.kind === 'tool') return 'process'
+    if (item.kind === 'lifecycle' && item.event === 'artifact.action') return 'artifact'
+    if (isAssistantTerminal(item)) return 'meta'
+    if (item.kind === 'usage' || item.kind === 'lifecycle') return 'process'
+    return 'meta'
+  })
+
+  const finalAssistantEntryIds = new Set([...finalAssistantIndexes]
+    .map(index => {
+      const item = items[index]
+      return item ? assistantEntryIdentity(item) : undefined
+    })
+    .filter((value): value is string => Boolean(value)))
+
+  const prompt: PiLiveHistoryItem[] = []
+  const process: PiLiveHistoryItem[] = []
+  const terminal: PiLiveHistoryItem[] = []
+  const final: PiLiveHistoryItem[] = []
+  const artifacts: PiLiveHistoryItem[] = []
+
+  for (const [index, item] of items.entries()) {
+    if (item.kind === 'message' && item.role === 'user') {
+      prompt.push(withTurnSection(item, 'prompt'))
+      continue
+    }
+    if (finalAssistantIndexes.has(index)) {
+      final.push(withTurnSection(item, 'final'))
+      continue
+    }
+    const identity = assistantEntryIdentity(item)
+    if (isAssistantTerminal(item) && identity && finalAssistantEntryIds.has(identity)) {
+      terminal.push(withTurnSection(item, 'terminal'))
+      continue
+    }
+    if (item.kind === 'lifecycle' && item.event === 'artifact.action') {
+      artifacts.push(withTurnSection(item, 'artifact'))
+      continue
+    }
+    process.push(withTurnSection(item, 'process'))
+  }
+
+  return [...prompt, ...process, ...terminal, ...final, ...artifacts]
+}
+
 function semanticRounds(history: PiLiveHistoryItem[]): SemanticRound[] {
   const rounds: SemanticRound[] = []
   let current: SemanticRound | null = null
@@ -113,15 +195,16 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
   const result: PiLiveTaskRoundProjection[] = []
 
   for (const round of semanticRounds(history)) {
-    const toolCount = round.items.filter(item => item.kind === 'tool').length
-    const errorCount = round.items.filter(item => item.kind === 'tool' && item.status === 'error').length
+    const presentedItems = projectPiLiveTurnItems(round.items)
+    const toolCount = presentedItems.filter(item => item.kind === 'tool').length
+    const errorCount = presentedItems.filter(item => item.kind === 'tool' && item.status === 'error').length
     const durationMs = roundDuration(round.items)
     const preview = roundPreview(round.items)
-    const fragments = Math.max(1, Math.ceil(round.items.length / PI_LIVE_HISTORY_ROUND_FACT_LIMIT))
+    const fragments = Math.max(1, Math.ceil(presentedItems.length / PI_LIVE_HISTORY_ROUND_FACT_LIMIT))
     const semanticId = round.background ? 'pi-background' : `pi-round-${round.ordinal}`
 
     for (let index = 0; index < fragments; index += 1) {
-      const items = round.items.slice(index * PI_LIVE_HISTORY_ROUND_FACT_LIMIT, (index + 1) * PI_LIVE_HISTORY_ROUND_FACT_LIMIT)
+      const items = presentedItems.slice(index * PI_LIVE_HISTORY_ROUND_FACT_LIMIT, (index + 1) * PI_LIVE_HISTORY_ROUND_FACT_LIMIT)
       const continuation = index > 0
       const baseLabel = round.background ? translateProduct('piLive:projection.background') : translateProduct('piLive:projection.round', { count: round.ordinal })
       result.push({

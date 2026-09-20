@@ -14,6 +14,7 @@ export interface PiLiveCurrentToolInput {
   at?: string | undefined
   startedAtMs?: number | undefined
   contentIndex?: number | undefined
+  messageEpoch?: number | undefined
 }
 
 type PiLiveContentKind = 'text' | 'thinking'
@@ -191,6 +192,9 @@ export function startPiLiveTool(items: PiLiveHistoryItem[], input: PiLiveCurrent
     status: 'running',
     at: input.at ?? previous?.at ?? '',
     startedAtMs: input.startedAtMs ?? previous?.startedAtMs,
+    ...(input.messageEpoch !== undefined || previous?.assistantEntryId
+      ? { assistantEntryId: input.messageEpoch !== undefined ? `pi-live-current:message-${input.messageEpoch}` : previous?.assistantEntryId }
+      : {}),
     contentIndex: input.contentIndex ?? previous?.contentIndex,
   }
   if (index < 0) return [...items, tool]

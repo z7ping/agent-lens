@@ -229,6 +229,7 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       errorOutput: 'Error / output',
       viewOutput: 'View output',
       thinking: 'Thinking',
+      commentary: 'Process output',
       usage: 'Usage',
       user: 'You',
       queued: '{{count}} queued',

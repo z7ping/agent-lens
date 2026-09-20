@@ -55,12 +55,15 @@ test('Round 折叠时不挂载轮次正文', () => {
 
 test('用户保留右侧气泡，Agent 无头像且不恢复历史视觉别名', () => {
   const user = renderToStaticMarkup(createElement(TaskMessage, { role: 'user', text: '用户消息', collapsible: false }))
-  const assistant = renderToStaticMarkup(createElement(TaskMessage, { role: 'assistant', text: '智能体回复', collapsible: false }))
+  const assistant = renderToStaticMarkup(createElement(TaskMessage, { role: 'assistant', text: '智能体回复', modelLabel: 'test / model-1', collapsible: false }))
   assert.match(user, /task-message-row task-message-user/)
   assert.match(user, /task-message-bubble-user/)
   assert.doesNotMatch(user, />源码</)
   assert.match(assistant, /task-message-row task-message-assistant/)
   assert.match(assistant, /task-message-bubble-assistant/)
+  assert.match(assistant, /task-message-model-meta/)
+  assert.match(assistant, /test \/ model-1/)
+  assert.match(assistant, /task-message-copy-action/)
   assert.match(assistant, />源码</)
   assert.doesNotMatch(user, /class="(?:message-row|chat-bubble)(?:\s|\")/)
   assert.doesNotMatch(assistant, /class="(?:message-row|chat-bubble)(?:\s|\")/)
@@ -84,6 +87,9 @@ test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实�
     ],
     pendingMessageCount: 0,
   }))
+  assert.match(html, /处理详情/)
+  assert.match(html, /1 条消息/)
+  assert.match(html, /1 次工具调用/)
   assert.match(html, /data-status="running"/)
   assert.match(html, /data-tool-fact="true"/)
   assert.match(html, /class="task-tool-live-output"/)
@@ -92,26 +98,28 @@ test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实�
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
 })
 
-test('Pi settled 成功输出折叠在 Tool Call 事实行之下', () => {
+test('Pi settled 处理详情默认折叠并隐藏 Tool 正文', () => {
   const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
-    model: { ...runningRound, state: 'settled' },
+    model: { ...runningRound, state: 'settled', durationMs: 138_000 },
     items: [{ id: 'success-tool', kind: 'tool', callId: 'success-tool', name: 'read_file', status: 'success', summary: 'very/long/path/to/source.ts', output: 'file content', at: '' }],
     pendingMessageCount: 0,
   }))
-  assert.match(html, /data-status="success"/)
-  assert.match(html, /very\/long\/path\/to\/source\.ts/)
-  assert.match(html, /class="task-tool-output-details"/)
-  assert.doesNotMatch(html, /class="task-tool-output-details"[^>]*open=""/)
+  assert.match(html, /处理详情/)
+  assert.match(html, /1 次工具调用/)
+  assert.match(html, /耗时 2分18秒/)
+  assert.doesNotMatch(html, /data-status="success"/)
+  assert.doesNotMatch(html, /very\/long\/path\/to\/source\.ts/)
 })
 
-test('Pi Running 失败 Tool 保留事实行并默认展开错误输出', () => {
+test('Pi settled 失败 Tool 默认收进处理详情且摘要保留失败数', () => {
   const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
     model: { ...runningRound, state: 'settled', errorCount: 1 },
     items: [{ id: 'error-tool', kind: 'tool', callId: 'error-tool', name: 'npm test', status: 'error', summary: 'web tests', output: '1 assertion failed', at: '' }],
     pendingMessageCount: 0,
   }))
-  assert.match(html, /data-status="error"/)
-  assert.match(html, /data-kind="test"/)
-  assert.match(html, /class="task-tool-output-details"[^>]*open=""|open=""[^>]*class="task-tool-output-details"/)
-  assert.match(html, /1 assertion failed/)
+  assert.match(html, /处理详情/)
+  assert.match(html, /1 次工具调用/)
+  assert.match(html, /1 次失败/)
+  assert.doesNotMatch(html, /data-status="error"/)
+  assert.doesNotMatch(html, /1 assertion failed/)
 })

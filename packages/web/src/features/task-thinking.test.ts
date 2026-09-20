@@ -32,3 +32,19 @@ test('TaskThinking 折叠时显示弱预览且仍允许调用方显式默认折�
   assert.doesNotMatch(html, /task-thinking-content/)
   assert.doesNotMatch(html, /核对原型与正式实现。<\/div>/)
 })
+
+
+test('执行过程调用方显式折叠时不再被内部逻辑强制展开', () => {
+  const processModel: TaskThinkingModel = {
+    ...model,
+    id: 'thinking:process',
+    label: '思考过程',
+  }
+  const html = renderToStaticMarkup(createElement(TaskThinking, {
+    model: processModel,
+    defaultExpanded: false,
+    children: '过程正文',
+  }))
+  assert.doesNotMatch(html, /<details[^>]*open=""/)
+  assert.doesNotMatch(html, /过程正文/)
+})

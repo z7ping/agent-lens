@@ -229,6 +229,7 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       errorOutput: '错误 / 输出',
       viewOutput: '查看输出',
       thinking: '思考',
+      commentary: '过程输出',
       usage: '用量',
       user: '你',
       queued: '{{count}} 条排队',

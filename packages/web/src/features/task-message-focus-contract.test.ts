@@ -5,9 +5,13 @@ import test from 'node:test'
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const taskMessageSource = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 
-test('Assistant 隐藏操作在 hover 与 keyboard focus 下都可见且保持 overlay', () => {
-  assert.match(taskDetailCss, /\.task-message-assistant \.markdown-message-actions \{[\s\S]*?position: absolute;[\s\S]*?opacity: 0;/)
-  assert.match(taskDetailCss, /\.task-message-assistant:hover \.markdown-message-actions,[\s\S]*?\.task-message-assistant:focus-within \.markdown-message-actions,[\s\S]*?data-view='source'[\s\S]*?opacity: \.82;/)
+test('Assistant 模型输出操作栏固定在正文底部并支持复制', () => {
+  assert.match(taskDetailCss, /\.task-message-assistant \.markdown-message-actions \{[\s\S]*?position: static;[\s\S]*?opacity: \.72;/)
+  assert.match(taskMessageSource, /className="task-message-copy-action"/)
+  assert.match(taskMessageSource, /await copyText\(text\)/)
+  assert.match(taskMessageSource, /name=\{copyState === 'copied' \? 'check' : 'copy'\}/)
+  assert.match(taskMessageSource, /className="task-message-source-action"/)
+  assert.doesNotMatch(taskMessageSource, /CopyableCodeBlock/)
 })
 
 test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 Agent', () => {

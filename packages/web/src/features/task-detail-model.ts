@@ -106,6 +106,19 @@ export function taskDurationLabel(ms: number): string {
   return translateProduct('task:duration.days', { value: days < 10 ? days.toFixed(1) : Math.round(days) })
 }
 
+export function taskPreciseDurationLabel(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const seconds = totalSeconds % 60
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  if (totalMinutes < 1) return translateProduct('task:duration.preciseSeconds', { seconds })
+
+  const minutes = totalMinutes % 60
+  const hours = Math.floor(totalMinutes / 60)
+  if (hours < 1) return translateProduct('task:duration.preciseMinutesSeconds', { minutes, seconds })
+
+  return translateProduct('task:duration.preciseHoursMinutesSeconds', { hours, minutes, seconds })
+}
+
 /**
  * 用于缺少项目关联时的紧凑展示；完整工作区路径仍应在任务信息中呈现。
  */
