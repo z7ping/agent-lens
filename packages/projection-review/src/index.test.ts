@@ -56,6 +56,7 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
     await add('tool.result', 'result-1', '2026-08-21T01:00:03.000Z', {
       callId: 'tool-call-1', success: false, durationMs: 800, output: 'failed',
     })
+    await add('message.assistant', 'assistant-final', '2026-08-21T01:00:04.000Z', { text: '已完成检查' })
 
     const projection = new ReviewProjection(storage)
     const response = await projection.query({ status: 'with-errors' })
@@ -84,6 +85,18 @@ test('ReviewProjection builds task summaries and interaction tool status from ca
       assert.equal(tool.durationMs, 800)
       assert.equal(tool.observationIds.length, 2)
     }
+
+    const summaryDetail = await projection.get(summary.id, { process: 'summary' })
+    assert.ok(summaryDetail)
+    const interaction = summaryDetail.interactions[0]!
+    assert.equal(interaction.processSummary?.messageCount, 1)
+    assert.equal(interaction.processSummary?.toolCount, 1)
+    assert.equal(interaction.processSummary?.errorCount, 1)
+    assert.equal(interaction.processSummary?.availability, 'available')
+    assert.equal(interaction.nodes.some(node => node.type === 'message' && node.role === 'commentary'), false)
+    assert.equal(interaction.nodes.some(node => node.type === 'tool'), false)
+    assert.equal(interaction.nodes.some(node => node.type === 'message' && node.role === 'user'), true)
+    assert.equal(interaction.nodes.some(node => node.type === 'message' && node.role === 'assistant'), true)
   } finally {
     storage.close()
   }

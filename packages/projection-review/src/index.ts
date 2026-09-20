@@ -2,6 +2,8 @@ import type {
   JsonValue,
   ReviewDetailQueryDto,
   ReviewInteractionDto,
+  ReviewNodeDto,
+  ReviewProcessSummaryDto,
   ReviewQueryDto,
   ReviewResponseDto,
   ReviewSessionDetailDto,
@@ -21,6 +23,108 @@ const REVIEW_INTERACTION_TAIL_NODES = MAX_REVIEW_INTERACTION_NODES - REVIEW_INTE
 
 function normalizeLifecycleAction(value: string): string {
   return value.trim().toLowerCase().replace(/[\s_:\-]+/g, '.')
+}
+
+type ReviewTurnSection = 'prompt' | 'process' | 'terminal' | 'final' | 'artifact'
+
+function reviewEventAction(node: Extract<ReviewNodeDto, { type: 'event' }>): string {
+  const record = asRecord(node.payload)
+  return normalizeLifecycleAction(stringField(record, 'event', 'action', 'type', 'status') ?? '')
+}
+
+function isReviewTerminal(node: ReviewNodeDto): boolean {
+  if (node.type !== 'event' || node.kind !== 'session.lifecycle') return false
+  return ['turn.completed', 'turn.complete', 'turn.ended', 'turn.end', 'turn.stopped', 'turn.stop', 'turn.aborted', 'turn.error']
+    .includes(reviewEventAction(node))
+}
+
+function reviewTurnSections(nodes: readonly ReviewNodeDto[]): ReviewTurnSection[] {
+  let lastProcessDriver = -1
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index]!
+    if (node.type === 'tool' || (node.type === 'message' && (node.role === 'reasoning' || node.role === 'commentary'))) {
+      lastProcessDriver = index
+    }
+  }
+
+  return nodes.map((node, index) => {
+    if (node.type === 'message' && node.role === 'user') return 'prompt'
+    if (node.type === 'event' && node.category === 'artifact') return 'artifact'
+    if (isReviewTerminal(node)) return 'terminal'
+    if (node.type === 'message' && node.role === 'assistant' && index > lastProcessDriver) return 'final'
+    return 'process'
+  })
+}
+
+function nodeStartMs(node: ReviewNodeDto): number | undefined {
+  const value = node.type === 'tool' ? node.startedAt : node.at
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function nodeEndMs(node: ReviewNodeDto): number | undefined {
+  if (node.type === 'tool') {
+    const ended = node.endedAt ? Date.parse(node.endedAt) : Number.NaN
+    if (Number.isFinite(ended)) return ended
+    const started = nodeStartMs(node)
+    return started !== undefined && node.durationMs !== undefined ? started + node.durationMs : started
+  }
+  return nodeStartMs(node)
+}
+
+function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummaryDto {
+  const sections = reviewTurnSections(interaction.nodes)
+  const processNodes = interaction.nodes.filter((_, index) => sections[index] === 'process')
+  const messages = processNodes.filter(node => node.type === 'message')
+  const tools = processNodes.filter((node): node is Extract<ReviewNodeDto, { type: 'tool' }> => node.type === 'tool')
+  const starts = processNodes.map(nodeStartMs).filter((value): value is number => value !== undefined)
+  const ends = processNodes.map(nodeEndMs).filter((value): value is number => value !== undefined)
+  const startedAt = starts.length ? Math.min(...starts) : undefined
+  const endedAt = ends.length ? Math.max(...ends) : undefined
+  const totalNodeCount = interaction.nodes.length
+  const omittedNodeCount = Math.max(0, totalNodeCount - MAX_REVIEW_INTERACTION_NODES)
+  const last = interaction.nodes.at(-1)
+  return {
+    id: `process:${interaction.id}`,
+    revision: [interaction.id, totalNodeCount, last?.id ?? 'empty', last?.capturedAt ?? interaction.endedAt].join(':'),
+    messageCount: messages.length,
+    toolCount: tools.length,
+    errorCount: tools.filter(tool => tool.status === 'error').length,
+    durationMs: startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : 0,
+    availability: omittedNodeCount > 0 ? 'partial' : 'available',
+    totalNodeCount,
+    ...(omittedNodeCount > 0 ? { omittedNodeCount } : {}),
+  }
+}
+
+function withProcessSummaries(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  return {
+    ...detail,
+    interactions: detail.interactions.map(interaction => ({
+      ...interaction,
+      processSummary: processSummary(interaction),
+    })),
+  }
+}
+
+function summarizeProcessNodes(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
+  return {
+    ...detail,
+    interactions: detail.interactions.map(interaction => {
+      const sections = reviewTurnSections(interaction.nodes)
+      const nodes = interaction.nodes.filter((node, index) => {
+        const section = sections[index]
+        if (section !== 'process') return true
+        return node.type === 'event' && (node.kind === 'model.changed' || node.kind === 'model.call')
+      })
+      const omittedNodeCount = interaction.nodes.length - nodes.length
+      return {
+        ...interaction,
+        nodes,
+        ...(omittedNodeCount > 0 ? { omittedNodeCount } : {}),
+      }
+    }),
+  }
 }
 
 export function lifecycleEventLabel(payload: JsonValue | unknown): string {
@@ -249,15 +353,24 @@ export class ReviewProjection extends BaseReviewProjection {
     query: ReviewDetailQueryDto = {},
   ): Promise<ReviewSessionDetailDto | null> {
     const detail = await super.get(logicalSessionId, query)
-    return detail
-      ? normalizeReviewSummaryActivity(localizeLifecycle(normalizeOrphanToolResults(boundReviewDetail(detail))))
-      : null
+    if (!detail) return null
+
+    const normalized = normalizeReviewSummaryActivity(
+      localizeLifecycle(normalizeOrphanToolResults(detail)),
+    )
+    const summarized = withProcessSummaries(normalized)
+    return query.process === 'summary'
+      ? summarizeProcessNodes(summarized)
+      : boundReviewDetail(summarized)
   }
 }
 
 export const reviewProjectionInternals = {
   ...baseReviewProjectionInternals,
   lifecycleEventLabel,
+  reviewTurnSections,
+  processSummary,
+  summarizeProcessNodes,
   localizeLifecycle,
   normalizeOrphanToolResults,
   boundInteractionNodes,
