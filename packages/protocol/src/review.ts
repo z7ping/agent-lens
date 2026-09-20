@@ -248,6 +248,8 @@ export interface ReviewInteractionDto {
   nodes: ReviewNodeDto[]
   /** Present for process-aware clients. In summary mode process-heavy nodes are omitted from nodes. */
   processSummary?: ReviewProcessSummaryDto
+  /** Indicates whether process-heavy nodes are present in this interaction payload. */
+  processMode?: ReviewProcessMode
   /** 单轮节点超过服务端稳定性边界时，仅返回有界的首尾窗口。 */
   nodesTruncated?: boolean
   /** 截断前该轮的完整 Review 节点数。 */

@@ -14,6 +14,8 @@ export interface TaskProcessGroupProps {
   endedAtMs?: number
   state?: TaskRoundState
   defaultExpanded?: boolean
+  onExpandedChange?: (expanded: boolean) => void
+  summaryExtra?: ReactNode
   children: ReactNode
   className?: string
 }
@@ -28,6 +30,8 @@ export function TaskProcessGroup({
   endedAtMs,
   state = 'settled',
   defaultExpanded = state === 'running',
+  onExpandedChange,
+  summaryExtra,
   children,
   className = '',
 }: TaskProcessGroupProps) {
@@ -55,12 +59,14 @@ export function TaskProcessGroup({
   return <TaskThinking
     model={model}
     defaultExpanded={defaultExpanded}
+    onExpandedChange={onExpandedChange}
     className={`task-process-group ${className}`.trim()}
     meta={<span className="task-process-summary">
       {messageCount > 0 && <span>{t('process.messages', { count: messageCount })}</span>}
       {toolCount > 0 && <span>{t('process.tools', { count: toolCount })}</span>}
       {resolvedDurationMs > 0 && <span>{t('process.duration', { value: taskPreciseDurationLabel(resolvedDurationMs) })}</span>}
       {errorCount > 0 && <span className="task-process-summary-error">{t('process.errors', { count: errorCount })}</span>}
+      {summaryExtra}
       {state === 'running' && <span>{t('process.running')}</span>}
     </span>}
   >

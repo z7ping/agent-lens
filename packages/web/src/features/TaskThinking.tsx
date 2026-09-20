@@ -10,6 +10,7 @@ export interface TaskThinkingProps {
   actions?: ReactNode
   children: ReactNode
   defaultExpanded?: boolean
+  onExpandedChange?: (expanded: boolean) => void
   className?: string
 }
 
@@ -29,6 +30,7 @@ export function TaskThinking({
   actions,
   children,
   defaultExpanded = true,
+  onExpandedChange,
   className = '',
 }: TaskThinkingProps) {
   const { t } = useTranslation('task')
@@ -43,7 +45,11 @@ export function TaskThinking({
     className={`task-thinking ${className}`.trim()}
     data-task-thinking-state={model.state ?? 'settled'}
     open={expanded}
-    onToggle={event => setExpanded(event.currentTarget.open)}
+    onToggle={event => {
+      const next = event.currentTarget.open
+      setExpanded(next)
+      onExpandedChange?.(next)
+    }}
   >
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">

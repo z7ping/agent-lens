@@ -87,6 +87,7 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
   return {
     id: `process:${interaction.id}`,
     revision: [interaction.id, totalNodeCount, last?.id ?? 'empty', last?.capturedAt ?? interaction.endedAt].join(':'),
+    itemCount: processNodes.length,
     messageCount: messages.length,
     toolCount: tools.length,
     errorCount: tools.filter(tool => tool.status === 'error').length,
@@ -105,6 +106,7 @@ function withProcessSummaries(detail: ReviewSessionDetailDto): ReviewSessionDeta
       return {
         ...interaction,
         processSummary: summary,
+        processMode: 'full',
         ...(summary.availability === 'partial'
           ? {
               nodesTruncated: true,
@@ -130,6 +132,7 @@ function summarizeProcessNodes(detail: ReviewSessionDetailDto): ReviewSessionDet
       return {
         ...interaction,
         nodes,
+        processMode: 'summary',
       }
     }),
   }

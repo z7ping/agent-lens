@@ -174,6 +174,10 @@ export const englishReviewMessages: LocaleMessagesDto = {
         execution: 'Execution process',
         thinking: 'Thinking',
         thinkingProcess: 'Thinking process',
+        expandToLoad: 'Expand to load full process details',
+        loading: 'Loading process details…',
+        loadFailed: 'Failed to load process details',
+        partial: 'Partial',
       },
       rawEvents: {
         title: 'Other runtime records',
