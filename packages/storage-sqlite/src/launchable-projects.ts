@@ -5,6 +5,7 @@ import type {
   LaunchableWorkspaceCandidate,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
+import { rebuildLaunchableProjectIndex } from './launchable-project-index'
 
 const MAX_LIMIT = 100
 const MAX_WORKSPACES_PER_PROJECT = 64
@@ -208,6 +209,10 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
         input.workspacePath,
       )
     })
+  }
+
+  rebuild(): Promise<void> {
+    return this.executor.run(() => rebuildLaunchableProjectIndex(this.executor.db))
   }
 }
 
