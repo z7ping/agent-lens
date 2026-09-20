@@ -45,20 +45,13 @@ function isReviewTerminal(node: ReviewNodeDto): boolean {
 }
 
 function reviewTurnSections(nodes: readonly ReviewNodeDto[]): ReviewTurnSection[] {
-  let lastProcessDriver = -1
-  for (let index = 0; index < nodes.length; index += 1) {
-    if (isReviewProcessDriver(nodes[index]!)) lastProcessDriver = index
-  }
-
-  return nodes.map((node, index) => {
+  return nodes.map(node => {
     if (node.type === 'message' && node.role === 'user') return 'prompt'
     if (node.type === 'event' && node.category === 'artifact') return 'artifact'
     if (isReviewTerminal(node)) return 'terminal'
     if (node.type === 'event') return 'meta'
-    if (node.type === 'message' && node.role === 'assistant') {
-      return index > lastProcessDriver ? 'final' : 'process'
-    }
-    return 'process'
+    if (node.type === 'message' && node.role === 'assistant') return 'final'
+    return isReviewProcessDriver(node) ? 'process' : 'meta'
   })
 }
 

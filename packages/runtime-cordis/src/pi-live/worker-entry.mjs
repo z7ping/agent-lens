@@ -564,10 +564,8 @@ function roundSummary(all, row, nextEntryIndex) {
     const entry = record(entries[index])
     const message = record(entry.message)
     if (entry.type !== 'message' || message.role !== 'assistant') continue
-    const blocks = assistantBlocks(message)
-    const hasToolCall = blocks.some(block => block.type === 'toolCall')
     const text = messageText(message)
-    if (!hasToolCall && text) {
+    if (text) {
       finalAssistantIndex = index
       break
     }
@@ -584,9 +582,7 @@ function roundSummary(all, row, nextEntryIndex) {
     const message = record(entry.message)
     if (entry.type !== 'message' || message.role !== 'assistant') continue
     const blocks = assistantBlocks(message)
-    const processMessages = blocks.filter(block =>
-      block.type === 'thinking' || (index !== finalAssistantIndex && block.type === 'text')).length
-      || (index !== finalAssistantIndex && messageText(message) ? 1 : 0)
+    const processMessages = blocks.filter(block => block.type === 'thinking').length
     const toolBlocks = blocks.filter(block => block.type === 'toolCall')
     messageCount += processMessages
     toolCount += toolBlocks.length

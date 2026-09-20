@@ -4,14 +4,16 @@ import test from 'node:test'
 
 const worker = readFileSync(new URL('./worker-entry.mjs', import.meta.url), 'utf8')
 
-test('Pi Indexed Process 只统计 Assistant 执行块与 Tool，不把普通元事件算进去', () => {
-  assert.match(worker, /const processMessages = blocks\.filter\(block =>[\s\S]*?block\.type === 'thinking'[\s\S]*?index !== finalAssistantIndex && block\.type === 'text'/)
+test('Pi Indexed Process 只统计 Thinking 与 Tool，不把普通 Assistant Text 算进去', () => {
+  assert.match(worker, /const processMessages = blocks\.filter\(block => block\.type === 'thinking'\)\.length/)
   assert.match(worker, /const toolBlocks = blocks\.filter\(block => block\.type === 'toolCall'\)/)
+  assert.doesNotMatch(worker, /processMessages[\s\S]{0,160}block\.type === 'text'/)
   assert.doesNotMatch(worker, /itemCount \+= 1[\s\S]{0,120}entry\.type === 'model_change'/)
 })
 
-test('Pi Final entry 中的 thinking 保留在 Process，最终 text 才排除', () => {
-  assert.match(worker, /block\.type === 'thinking' \|\| \(index !== finalAssistantIndex && block\.type === 'text'\)/)
+test('Pi Indexed 最终文本按最后一个有正文的 Assistant 识别，不因同 entry 带 Tool 排除', () => {
+  assert.match(worker, /const text = messageText\(message\)[\s\S]{0,80}if \(text\) \{[\s\S]{0,80}finalAssistantIndex = index/)
+  assert.doesNotMatch(worker, /!hasToolCall && text/)
 })
 
 test('Pi Indexed 关键事件有界且记录 Final 前后位置', () => {

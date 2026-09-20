@@ -67,15 +67,15 @@ test('Pi Live Turn 按 prompt → process → 关键事件/模型输出原序 �
   ]
   const presented = projectPiLiveTurnItems(items)
   assert.deepEqual(presented.map(item => item.id), [
-    'user', 'assistant-tool', 'assistant-tool:content:1', 'assistant-tool:content:2:tool:call',
+    'user', 'assistant-tool', 'assistant-tool:content:2:tool:call', 'assistant-tool:content:1',
     'model', 'compact', 'assistant-final', 'assistant-final:stop',
   ])
   assert.deepEqual(presented.map(item => item.turnSection), [
-    'prompt', 'process', 'process', 'process', 'meta', 'meta', 'final', 'terminal',
+    'prompt', 'process', 'process', 'final', 'meta', 'meta', 'final', 'terminal',
   ])
 })
 
-test('Pi Live 在完整语义轮次分类后再分片，中间 Assistant 不会因分片变成最终回复', () => {
+test('Pi Live 同一 Assistant entry 同时含 Text / Tool 时，Text 仍留在主阅读流', () => {
   const history: PiLiveHistoryItem[] = [
     { id: 'user', kind: 'message', role: 'user', text: '任务', at: '2026-09-09T00:00:00.000Z' },
     { id: 'tool-entry', kind: 'message', role: 'assistant', text: '中间输出', at: '2026-09-09T00:00:01.000Z', contentIndex: 0 },
@@ -85,7 +85,8 @@ test('Pi Live 在完整语义轮次分类后再分片，中间 Assistant 不会�
   ]
   const projections = projectPiLiveTaskRounds(history)
   const all = projections.flatMap(item => item.items)
-  assert.equal(all.find(item => item.id === 'tool-entry')?.turnSection, 'process')
+  assert.equal(all.find(item => item.id === 'tool-entry')?.turnSection, 'final')
+  assert.equal(all.find(item => item.id === 'tool-entry:content:1:tool:call')?.turnSection, 'process')
   assert.equal(all.find(item => item.id === 'final-entry')?.turnSection, 'final')
   assert.ok(projections.length > 1)
 })
@@ -141,4 +142,15 @@ test('Pi Live usage / lifecycle 永远不进入 Process', () => {
   assert.equal(presented.find(item => item.id === 'usage')?.turnSection, 'meta')
   assert.equal(presented.find(item => item.id === 'context')?.turnSection, 'meta')
   assert.equal(presented.find(item => item.id === 'final')?.turnSection, 'final')
+})
+
+
+test('Pi Live Assistant Text 后出现迟到 Thinking 时，Text 也不回收进 Process', () => {
+  const items: PiLiveHistoryItem[] = [
+    { id: 'assistant-text', kind: 'message', role: 'assistant', text: '正文先到', at: '2026-09-09T00:00:01.000Z' },
+    { id: 'late-thinking', kind: 'thinking', text: '迟到的思考事实', at: '2026-09-09T00:00:02.000Z' },
+  ]
+  const presented = projectPiLiveTurnItems(items)
+  assert.equal(presented.find(item => item.id === 'assistant-text')?.turnSection, 'final')
+  assert.equal(presented.find(item => item.id === 'late-thinking')?.turnSection, 'process')
 })

@@ -2,7 +2,6 @@ import type { LiveHistoryIndexItemDto, PiLiveStateDto } from '@agent-lens/protoc
 import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
 import type { PiLiveHistoryItem, PiLiveTurnSection } from './pi-live-history'
 import { currentProductLocale, translateProduct } from '../i18n/runtime'
-import { taskTurnFinalAssistantIndexes } from './task-turn-presentation'
 
 export const PI_LIVE_HISTORY_ROUND_FACT_LIMIT = 8
 
@@ -98,34 +97,17 @@ function withTurnSection(item: PiLiveHistoryItem, turnSection: PiLiveTurnSection
 }
 
 /**
- * 完整语义轮次先统一成 prompt → process(只含模型执行) → meta → final → terminal → artifacts，
- * 然后才允许做 8 条事实的渲染分片。meta 不参与 Final 边界判断。
+ * 完整语义轮次先统一成 prompt → process(只含明确模型执行) → meta / assistant text → terminal → artifacts，
+ * 然后才允许做 8 条事实的渲染分片。
+ *
+ * Pi 的 Assistant entry 可以同时包含 thinking / toolCall / text。普通 Assistant Text 因此不能因为
+ * 同 entry 带 Tool 就被推断成 Process；只有 Thinking / Tool 才进入 Process。
  */
 export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistoryItem[] {
-  const assistantEntriesWithTools = new Set(items
-    .filter((item): item is Extract<PiLiveHistoryItem, { kind: 'tool' }> => item.kind === 'tool')
-    .map(assistantEntryIdentity)
-    .filter((value): value is string => Boolean(value)))
-
-  const finalAssistantIndexes = taskTurnFinalAssistantIndexes(items, item => {
-    if (item.kind === 'message' && item.role === 'user') return 'prompt'
-    if (item.kind === 'message' && item.role === 'assistant') {
-      const identity = assistantEntryIdentity(item)
-      return identity && assistantEntriesWithTools.has(identity) ? 'process' : 'assistant'
-    }
-    if (item.kind === 'thinking' || item.kind === 'tool') return 'process'
-    if (item.kind === 'lifecycle' && item.event === 'artifact.action') return 'artifact'
-    if (isAssistantTerminal(item)) return 'meta'
-    if (item.kind === 'usage' || item.kind === 'lifecycle') return 'meta'
-    return 'meta'
-  })
-
-  const finalAssistantEntryIds = new Set([...finalAssistantIndexes]
-    .map(index => {
-      const item = items[index]
-      return item ? assistantEntryIdentity(item) : undefined
-    })
-    .filter((value): value is string => Boolean(value)))
+  const assistantEntryIds = new Set(items
+    .filter((item): item is Extract<PiLiveHistoryItem, { kind: 'message' }> => item.kind === 'message' && item.role === 'assistant')
+    .map(item => assistantEntryIdentity(item) ?? item.id)
+    .filter(Boolean))
 
   const prompt: PiLiveHistoryItem[] = []
   const process: PiLiveHistoryItem[] = []
@@ -133,17 +115,17 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
   const terminal: PiLiveHistoryItem[] = []
   const artifacts: PiLiveHistoryItem[] = []
 
-  for (const [index, item] of items.entries()) {
+  for (const item of items) {
     if (item.kind === 'message' && item.role === 'user') {
       prompt.push(withTurnSection(item, 'prompt'))
       continue
     }
-    if (finalAssistantIndexes.has(index)) {
+    if (item.kind === 'message' && item.role === 'assistant') {
       postProcess.push(withTurnSection(item, 'final'))
       continue
     }
     const identity = assistantEntryIdentity(item)
-    if (isAssistantTerminal(item) && identity && finalAssistantEntryIds.has(identity)) {
+    if (isAssistantTerminal(item) && identity && assistantEntryIds.has(identity)) {
       terminal.push(withTurnSection(item, 'terminal'))
       continue
     }

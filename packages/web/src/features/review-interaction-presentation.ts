@@ -1,5 +1,4 @@
 import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
-import { taskTurnFinalAssistantIndexes } from './task-turn-presentation'
 
 export type ReviewProcessPresentationItem =
   | { type: 'message'; node: ReviewMessageNodeDto }
@@ -119,8 +118,8 @@ function isTerminalEvent(node: ReviewEventNodeDto): boolean {
  * 2. parser replay 后，同一 SourceRecord 的旧 unknown / assistant 兼容记录去重。
  *
  * Turn 的统一表现顺序随后收敛为：
- * prompt → process（只含模型执行）→ key events → final answer → terminal → artifacts。
- * 非 Process 事实不再反过来决定模型是否“仍在思考”。
+ * prompt → process（只含明确的 reasoning / commentary / tool）→ key events / assistant text → terminal → artifacts。
+ * 普通 Assistant Text 永远留在主阅读流；没有来源明确语义时，不再根据前后位置猜它是不是 Process。
  */
 export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): ReviewInteractionPresentationEntry[] {
   const reasoning = nodes.filter((node): node is ReviewMessageNodeDto => node.type === 'message' && node.role === 'reasoning')
@@ -170,30 +169,18 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   flushTools()
   flushRawEvents()
 
-  const finalAssistantIndexes = taskTurnFinalAssistantIndexes(result, entry => {
-    if (entry.type === 'message' && entry.node.role === 'user') return 'prompt'
-    if (entry.type === 'message' && entry.node.role === 'assistant') return 'assistant'
-    if (entry.type === 'reasoning' || entry.type === 'tool-group') return 'process'
-    if (entry.type === 'message' && entry.node.role === 'commentary') return 'process'
-    if (entry.type === 'event' && entry.node.category === 'artifact') return 'artifact'
-    if (entry.type === 'event' && entry.node.kind === 'tool.progress') return 'process'
-    if (entry.type === 'event' && isTerminalEvent(entry.node)) return 'meta'
-    if (entry.type === 'event' || entry.type === 'raw-event-group') return 'meta'
-    return 'meta'
-  })
-
   const prompts: ReviewInteractionPresentationEntry[] = []
   const processItems: ReviewProcessPresentationItem[] = []
   const postProcess: ReviewInteractionPresentationEntry[] = []
   const terminal: ReviewInteractionPresentationEntry[] = []
   const artifacts: ReviewInteractionPresentationEntry[] = []
 
-  for (const [index, entry] of result.entries()) {
+  for (const entry of result) {
     if (entry.type === 'message' && entry.node.role === 'user') {
       prompts.push(entry)
       continue
     }
-    if (entry.type === 'message' && entry.node.role === 'assistant' && finalAssistantIndexes.has(index)) {
+    if (entry.type === 'message' && entry.node.role === 'assistant') {
       postProcess.push(entry)
       continue
     }
@@ -208,7 +195,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
 
     if (entry.type === 'reasoning') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'message' && entry.node.role === 'commentary') processItems.push({ type: 'message', node: entry.node })
-    else if (entry.type === 'message') processItems.push({ type: 'message', node: entry.node })
+    else if (entry.type === 'message') postProcess.push(entry)
     else if (entry.type === 'tool-group') processItems.push(entry)
     else if (entry.type === 'event' && entry.node.kind === 'tool.progress') processItems.push(entry)
     else postProcess.push(entry)
