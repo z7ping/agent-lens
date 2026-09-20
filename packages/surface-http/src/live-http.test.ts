@@ -138,7 +138,28 @@ class FakeLiveAdapter implements LiveAdapter {
     const all = [
       { cursor: 'entry-user-1', ordinal: 1, preview: 'first' },
       { cursor: 'entry-user-2', ordinal: 2, preview: 'second' },
-      { cursor: 'entry-user-3', ordinal: 3, preview: 'third' },
+      {
+        cursor: 'entry-user-3',
+        ordinal: 3,
+        preview: 'third',
+        summary: {
+          promptText: 'third',
+          finalText: 'done',
+          events: [
+            { id: 'model-before', category: 'model' as const, label: '模型已切换', detail: 'gpt-test', phase: 'before-final' as const },
+            { id: 'usage-after', category: 'usage' as const, label: '用量', detail: '3 tokens', phase: 'after-final' as const },
+          ],
+          process: {
+            revision: 'rev-3',
+            itemCount: 1,
+            messageCount: 1,
+            toolCount: 0,
+            errorCount: 0,
+            durationMs: 100,
+            availability: 'available' as const,
+          },
+        },
+      },
     ]
     if (query.cursor) {
       return { total: all.length, items: all.filter(item => item.cursor === query.cursor) }
@@ -524,7 +545,28 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
     assert.equal(historyByCursor.status, 200)
     assert.deepEqual(await historyByCursor.json(), {
       total: 3,
-      items: [{ cursor: 'entry-user-3', ordinal: 3, preview: 'third' }],
+      items: [{
+        cursor: 'entry-user-3',
+        ordinal: 3,
+        preview: 'third',
+        summary: {
+          promptText: 'third',
+          finalText: 'done',
+          events: [
+            { id: 'model-before', category: 'model', label: '模型已切换', detail: 'gpt-test', phase: 'before-final' },
+            { id: 'usage-after', category: 'usage', label: '用量', detail: '3 tokens', phase: 'after-final' },
+          ],
+          process: {
+            revision: 'rev-3',
+            itemCount: 1,
+            messageCount: 1,
+            toolCount: 0,
+            errorCount: 0,
+            durationMs: 100,
+            availability: 'available',
+          },
+        },
+      }],
     })
 
     const invalidHistoryIndex = await fetch(`${base}/api/v1/live/test/runtimes/runtime-1/history-index?from=2&cursor=entry-user-2`)
