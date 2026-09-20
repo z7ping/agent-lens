@@ -63,7 +63,7 @@ test('Pi Live Turn 按 prompt → process → 关键事件/模型输出原序 �
     { id: 'assistant-tool:content:2:tool:call', kind: 'tool', callId: 'call', name: 'bash', summary: 'git status', output: 'clean', status: 'success', at: '2026-09-09T00:00:04.000Z', contentIndex: 2 },
     { id: 'compact', kind: 'lifecycle', event: 'context.compaction', label: '上下文压缩', detail: '', at: '2026-09-09T00:00:05.000Z' },
     { id: 'assistant-final', kind: 'message', role: 'assistant', text: '完成', at: '2026-09-09T00:00:06.000Z', contentIndex: 0 },
-    { id: 'assistant-final:stop', kind: 'lifecycle', event: 'assistant.stop', label: '结束', detail: 'stop', at: '2026-09-09T00:00:07.000Z', parentId: 'assistant-final' },
+    { id: 'assistant-final:stop', kind: 'lifecycle', event: 'assistant.truncated', label: '输出被截断', detail: 'length', at: '2026-09-09T00:00:07.000Z', parentId: 'assistant-final' },
   ]
   const presented = projectPiLiveTurnItems(items)
   assert.deepEqual(presented.map(item => item.id), [
