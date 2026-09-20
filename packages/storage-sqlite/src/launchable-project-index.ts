@@ -225,3 +225,66 @@ export function refreshLaunchableProjectMetadata(
 
   db.prepare('DELETE FROM launchable_project_index WHERE project_key = ?').run(projectId)
 }
+
+
+export function rebuildLaunchableProjectIndex(db: Database.Database): void {
+  db.exec(`
+    DELETE FROM launchable_workspace_index;
+    DELETE FROM launchable_project_index;
+
+    INSERT INTO launchable_workspace_index(
+      project_key,
+      workspace_id,
+      workspace_path,
+      last_seen_at,
+      validation_status,
+      validated_at,
+      validated_path
+    )
+    SELECT
+      COALESCE(logical.project_id, 'workspace:' || workspace.id) AS project_key,
+      workspace.id AS workspace_id,
+      workspace.path AS workspace_path,
+      MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at,
+      'unknown' AS validation_status,
+      NULL AS validated_at,
+      NULL AS validated_path
+    FROM logical_sessions AS logical
+    JOIN workspaces AS workspace
+      ON workspace.id = logical.workspace_id
+    LEFT JOIN projects AS project
+      ON project.id = logical.project_id
+    WHERE TRIM(workspace.path) <> ''
+    GROUP BY
+      COALESCE(logical.project_id, 'workspace:' || workspace.id),
+      workspace.id,
+      workspace.path;
+
+    INSERT INTO launchable_project_index(
+      project_key,
+      project_id,
+      project_name,
+      repository_identity,
+      last_seen_at
+    )
+    SELECT
+      workspace_index.project_key,
+      CASE
+        WHEN workspace_index.project_key LIKE 'workspace:%' THEN NULL
+        ELSE workspace_index.project_key
+      END AS project_id,
+      project.name AS project_name,
+      project.repository_identity AS repository_identity,
+      MAX(workspace_index.last_seen_at) AS last_seen_at
+    FROM launchable_workspace_index AS workspace_index
+    LEFT JOIN projects AS project
+      ON project.id = CASE
+        WHEN workspace_index.project_key LIKE 'workspace:%' THEN NULL
+        ELSE workspace_index.project_key
+      END
+    GROUP BY
+      workspace_index.project_key,
+      project.name,
+      project.repository_identity;
+  `)
+}
