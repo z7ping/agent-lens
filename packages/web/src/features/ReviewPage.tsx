@@ -23,6 +23,7 @@ import { useClientSnapshot } from '../App'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalPathActions } from '../components/LocalPathActions'
+import { LocalResourceReference } from '../components/LocalResourceReference'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components/ToolKindIcon'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -440,6 +441,20 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolVisualKind; labe
   return { kind, label: toolKindLabel(kind), primary: brief(node.input, 130), secondary: output }
 }
 
+function toolLocalResource(node: ReviewToolNodeDto): { value: string; kind: 'file' | 'directory'; placement: 'primary' | 'secondary' } | undefined {
+  const input = toolInputRecord(node)
+  const kind = toolVisualKind(node.name)
+  if (kind === 'read' || kind === 'edit') {
+    const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path')
+    return path ? { value: path, kind: 'file', placement: 'primary' } : undefined
+  }
+  if (kind === 'search') {
+    const path = stringValue(input, 'path', 'cwd', 'directory')
+    return path ? { value: path, kind: 'directory', placement: 'secondary' } : undefined
+  }
+  return undefined
+}
+
 function PrettyJson({ value }: { value: unknown }) {
   if (value === undefined) return <div className="muted-empty compact">{agentLensI18n.t('review:local.tool.noData')}</div>
   if (typeof value === 'string') return <CopyableCodeBlock className="tool-detail-code" copyValue={value}>{value}</CopyableCodeBlock>
@@ -450,6 +465,7 @@ function PrettyJson({ value }: { value: unknown }) {
 function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
   const info = toolPresentation(node)
   const input = toolInputRecord(node)
+  const resource = toolLocalResource(node)
   const primaryLabel = info.kind === 'shell'
     ? agentLensI18n.t('review:local.tool.command')
     : info.kind === 'read' || info.kind === 'edit'
@@ -473,7 +489,12 @@ function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
       <span className={`tool-detail-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
       <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
-    {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4><CopyableCodeBlock className="tool-detail-code" copyValue={info.primary}>{info.primary}</CopyableCodeBlock></div>}
+    {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4>{
+      resource?.placement === 'primary' && resource.value === info.primary
+        ? <LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/>
+        : <CopyableCodeBlock className="tool-detail-code" copyValue={info.primary}>{info.primary}</CopyableCodeBlock>
+    }</div>}
+    {resource?.placement === 'secondary' && <div className="tool-detail-section"><h4>{agentLensI18n.t('review:local.tool.path')}</h4><LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/></div>}
     {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>{agentLensI18n.t('review:local.tool.structuredInput')}</h4><PrettyJson value={node.input}/></div>}
     {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? agentLensI18n.t('review:local.tool.errorOutput') : agentLensI18n.t('review:local.tool.output')}</h4><PrettyJson value={node.output}/></div>}
   </section>
@@ -520,6 +541,11 @@ function RawInspectorContent({
         {record.nativeId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeId')}：{record.nativeId}</div>}
         {record.occurredAt && <div className="evidence-path">occurredAt：{record.occurredAt}</div>}
         <div className="evidence-path">capturedAt：{record.capturedAt}</div>
+        {record.locator.path && <div className="evidence-path"><LocalResourceReference
+          value={record.locator.path}
+          kind={record.locator.kind === 'file' ? 'file' : 'path'}
+          presentation="inline"
+        /></div>}
         <div className="evidence-path">{agentLensI18n.t('review:local.event.locator')}：{JSON.stringify(record.locator)}</div>
         <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(record.payload, null, 2)}>{JSON.stringify(record.payload, null, 2)}</CopyableCodeBlock>
       </div>
@@ -588,7 +614,15 @@ function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNodeDto; 
       <h3 className="section-label">{t('local.event.evidence', { count: node.evidence.length })}</h3>
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">
         <div className="evidence-meta"><b>{evidenceLabel(evidenceCaptureKey, item.captureMethod)}</b><span>{evidenceLabel(evidenceDerivationKey, item.derivation)}</span><span>{t('local.evidence.confidenceLabel', { value: evidenceLabel(evidenceConfidenceKey, item.confidence) })}</span></div>
-        <div className="evidence-path">{item.sourceLocator?.path ?? item.sourceRecordId ?? item.id}</div>
+        <div className="evidence-path">{
+          item.sourceLocator?.path
+            ? <LocalResourceReference
+                value={item.sourceLocator.path}
+                kind={item.sourceLocator.kind === 'file' ? 'file' : 'path'}
+                presentation="inline"
+              />
+            : item.sourceRecordId ?? item.id
+        }</div>
         {item.missingReason && <div className="evidence-missing">{t('local.evidence.incomplete')}</div>}
       </div>) : <div className="muted-empty">{t('local.evidence.noEvidence')}</div>}
     </section>}
