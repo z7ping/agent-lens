@@ -1,3 +1,4 @@
+export * from './task-file-change-plugin'
 export * from './summary-plugin'
 
 import type {
