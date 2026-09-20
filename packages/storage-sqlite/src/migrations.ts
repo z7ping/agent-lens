@@ -45,6 +45,7 @@ const migrations: readonly Migration[] = [
     requiresLegacyAlterTable: true,
   },
   { version: 29, name: 'launchable-project-index', fileName: '029-launchable-project-index.sql' },
+  { version: 30, name: 'asset-current-state', fileName: '030-asset-current-state.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {
