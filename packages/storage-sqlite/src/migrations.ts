@@ -69,7 +69,10 @@ async function readMigrationSql(fileName: string): Promise<string> {
   throw lastError ?? new Error(`Migration file not found: ${fileName}`)
 }
 
-export async function migrateDatabase(db: Database.Database): Promise<number> {
+export async function migrateDatabase(
+  db: Database.Database,
+  options: { throughVersion?: number } = {},
+): Promise<number> {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
@@ -82,6 +85,7 @@ export async function migrateDatabase(db: Database.Database): Promise<number> {
   const applied = new Set(rows.map(row => row.version))
 
   for (const migration of migrations) {
+    if (options.throughVersion !== undefined && migration.version > options.throughVersion) break
     if (applied.has(migration.version)) continue
 
     const sql = await readMigrationSql(migration.fileName)
