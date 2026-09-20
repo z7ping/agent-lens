@@ -176,6 +176,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     if (entry.type === 'reasoning' || entry.type === 'tool-group') return 'process'
     if (entry.type === 'message' && entry.node.role === 'commentary') return 'process'
     if (entry.type === 'event' && entry.node.category === 'artifact') return 'artifact'
+    if (entry.type === 'event' && entry.node.kind === 'tool.progress') return 'process'
     if (entry.type === 'event' && isTerminalEvent(entry.node)) return 'meta'
     if (entry.type === 'event' || entry.type === 'raw-event-group') return 'meta'
     return 'meta'
@@ -209,6 +210,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     else if (entry.type === 'message' && entry.node.role === 'commentary') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'message') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'tool-group') processItems.push(entry)
+    else if (entry.type === 'event' && entry.node.kind === 'tool.progress') processItems.push(entry)
     else postProcess.push(entry)
   }
 
