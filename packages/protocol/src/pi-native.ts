@@ -155,16 +155,53 @@ function assistantStopFact(
   errorMessage?: string,
 ): PiNativeFact | null {
   if (!stopReason && !errorMessage) return null
-  const cancelledByUser = stopReason === 'aborted'
-  const failed = !cancelledByUser && (stopReason === 'error' || Boolean(errorMessage))
+
+  // stop/toolUse describe how this Assistant message completed. They are message
+  // metadata, not standalone lifecycle events. In particular toolUse means the
+  // agent is continuing into tool execution rather than stopping the turn.
+  if (!errorMessage && (stopReason === 'stop' || stopReason === 'toolUse')) return null
+
+  const event = errorMessage || stopReason === 'error'
+    ? 'assistant.error'
+    : stopReason === 'aborted'
+      ? 'assistant.cancelled'
+      : stopReason === 'length'
+        ? 'assistant.truncated'
+        : stopReason === 'pending'
+          ? 'assistant.pending'
+          : stopReason === 'deferred'
+            ? 'assistant.deferred'
+            : undefined
+
+  if (!event) {
+    return {
+      ...base,
+      id: `${entryId}:stop`,
+      parentId: entryId,
+      nativeType: `message/assistant/stopReason/${stopReason ?? 'unknown'}`,
+      kind: 'unknown',
+      payload: { stopReason, errorMessage },
+    }
+  }
+
+  const label = event === 'assistant.error'
+    ? 'Pi 响应错误'
+    : event === 'assistant.cancelled'
+      ? 'Pi 响应已取消'
+      : event === 'assistant.truncated'
+        ? 'Pi 输出被截断'
+        : event === 'assistant.pending'
+          ? 'Pi 响应等待中'
+          : 'Pi 响应已延迟'
+
   return {
     ...base,
     id: `${entryId}:stop`,
     parentId: entryId,
     kind: 'event',
-    event: cancelledByUser ? 'assistant.cancelled' : failed ? 'assistant.error' : 'assistant.stop',
-    label: cancelledByUser ? '用户已取消 Pi 响应' : failed ? 'Pi 响应错误' : 'Pi 响应结束',
-    detail: cancelledByUser ? '' : [stopReason, errorMessage].filter(Boolean).join(' · '),
+    event,
+    label,
+    detail: [stopReason, errorMessage].filter(Boolean).join(' · '),
     payload: { stopReason, errorMessage },
   }
 }
@@ -224,6 +261,8 @@ export function normalizePiSessionEntry(
       const assistantMeta = {
         ...(provider ? { provider } : {}),
         ...(model ? { model } : {}),
+        ...(stopReason ? { stopReason } : {}),
+        ...(errorMessage ? { errorMessage } : {}),
       }
 
       if (Array.isArray(content)) {
