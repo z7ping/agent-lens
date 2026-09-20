@@ -1,0 +1,484 @@
+{
+  "schemaVersion": "1.0",
+  "profileVersion": "1.0.0",
+  "source": "codex",
+  "sourceProtocol": "codex-rollout-current",
+  "purpose": "Codex Rollout / ResponseItem / EventMsg / Hook 到 AgentLens 统一观察语义的声明式契约。",
+  "mappings": [
+    {
+      "id": "rollout.session_meta",
+      "nativeType": "session_meta",
+      "kind": "session.lifecycle",
+      "semantic": "session.discovered",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "rollout.turn_context",
+      "nativeType": "turn_context",
+      "kind": "session.lifecycle",
+      "semantic": "turn.context",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "rollout.token_usage_record",
+      "nativeType": "token_usage_record",
+      "kind": "usage",
+      "semantic": "usage",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "rollout.compacted",
+      "nativeType": "compacted",
+      "kind": "context.compaction",
+      "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "rollout.inter_agent_communication",
+      "nativeType": "inter_agent_communication",
+      "kind": "session.lifecycle",
+      "semantic": "subagent.communication",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.message.commentary",
+      "nativeType": "response_item/message",
+      "when": {
+        "role": "assistant",
+        "phase": "commentary"
+      },
+      "kind": "message.commentary",
+      "phase": "commentary",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.message.final",
+      "nativeType": "response_item/message",
+      "when": {
+        "role": "assistant",
+        "phase": "final_answer"
+      },
+      "kind": "message.assistant",
+      "phase": "final",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.message.unspecified",
+      "nativeType": "response_item/message",
+      "when": {
+        "role": "assistant",
+        "phase": null
+      },
+      "kind": "message.assistant",
+      "phase": "unspecified",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.additional_tools",
+      "nativeType": "response_item/additional_tools",
+      "kind": "context.injected",
+      "semantic": "additional-tools",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.agent_message",
+      "nativeType": "response_item/agent_message",
+      "kind": "session.lifecycle",
+      "semantic": "subagent.communication",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.reasoning",
+      "nativeType": "response_item/reasoning",
+      "kind": "message.reasoning",
+      "semantic": "reasoning",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.local_shell_call",
+      "nativeType": "response_item/local_shell_call",
+      "kind": "tool.call",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.function_call",
+      "nativeType": "response_item/function_call",
+      "kind": "tool.call",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.tool_search_call",
+      "nativeType": "response_item/tool_search_call",
+      "kind": "tool.call",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.custom_tool_call",
+      "nativeType": "response_item/custom_tool_call",
+      "kind": "tool.call",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.function_call_output",
+      "nativeType": "response_item/function_call_output",
+      "kind": "tool.result",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.tool_search_output",
+      "nativeType": "response_item/tool_search_output",
+      "kind": "tool.result",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.custom_tool_call_output",
+      "nativeType": "response_item/custom_tool_call_output",
+      "kind": "tool.result",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.web_search_call",
+      "nativeType": "response_item/web_search_call",
+      "kind": "tool.call",
+      "semantic": "web-search",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.image_generation_call",
+      "nativeType": "response_item/image_generation_call",
+      "kind": "artifact.action",
+      "semantic": "image.generate",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.configuration_update",
+      "nativeType": "response_item/configuration_update",
+      "kind": "session.lifecycle",
+      "semantic": "reasoning.configuration.updated",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.compaction",
+      "nativeType": "response_item/compaction",
+      "kind": "context.compaction",
+      "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.context_compaction",
+      "nativeType": "response_item/context_compaction",
+      "kind": "context.compaction",
+      "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.compaction_trigger",
+      "nativeType": "response_item/compaction_trigger",
+      "kind": "context.compaction",
+      "semantic": "compaction-trigger",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.other",
+      "nativeType": "response_item/other",
+      "kind": "unknown",
+      "semantic": "upstream-other",
+      "semanticSource": "unknown",
+      "coverage": "passthrough"
+    },
+    {
+      "id": "event.user_message",
+      "nativeType": "event_msg/user_message",
+      "kind": "message.user",
+      "semantic": "user-request",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.agent_message",
+      "nativeType": "event_msg/agent_message",
+      "kind": "message.assistant",
+      "semantic": "assistant-output",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.agent_reasoning",
+      "nativeType": "event_msg/agent_reasoning",
+      "kind": "message.reasoning",
+      "semantic": "reasoning",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.agent_reasoning_raw_content",
+      "nativeType": "event_msg/agent_reasoning_raw_content",
+      "kind": "message.reasoning",
+      "semantic": "reasoning-raw",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.entered_review_mode",
+      "nativeType": "event_msg/entered_review_mode",
+      "kind": "session.lifecycle",
+      "semantic": "review.entered",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.exited_review_mode",
+      "nativeType": "event_msg/exited_review_mode",
+      "kind": "session.lifecycle",
+      "semantic": "review.exited",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.patch_apply_end",
+      "nativeType": "event_msg/patch_apply_end",
+      "kind": "artifact.action",
+      "semantic": "file.change",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.context_compacted",
+      "nativeType": "event_msg/context_compacted",
+      "kind": "context.compaction",
+      "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.mcp_tool_call_end",
+      "nativeType": "event_msg/mcp_tool_call_end",
+      "kind": "tool.result",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.web_search_end",
+      "nativeType": "event_msg/web_search_end",
+      "kind": "tool.result",
+      "semantic": "web-search",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.image_generation_end",
+      "nativeType": "event_msg/image_generation_end",
+      "kind": "artifact.action",
+      "semantic": "image.generate",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.token_count",
+      "nativeType": "event_msg/token_count",
+      "kind": "usage",
+      "semantic": "usage",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.thread_goal_updated",
+      "nativeType": "event_msg/thread_goal_updated",
+      "kind": "session.lifecycle",
+      "semantic": "thread.goal.updated",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.thread_rolled_back",
+      "nativeType": "event_msg/thread_rolled_back",
+      "kind": "session.lifecycle",
+      "semantic": "thread.rolled-back",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.turn_aborted",
+      "nativeType": "event_msg/turn_aborted",
+      "kind": "session.lifecycle",
+      "semantic": "turn.aborted",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.turn_started",
+      "nativeType": "event_msg/turn_started",
+      "kind": "session.lifecycle",
+      "semantic": "turn.started",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.turn_complete",
+      "nativeType": "event_msg/turn_complete",
+      "kind": "session.lifecycle",
+      "semantic": "turn.completed",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.thread_settings_applied",
+      "nativeType": "event_msg/thread_settings_applied",
+      "kind": "session.lifecycle",
+      "semantic": "thread.settings.applied",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "event.item_completed",
+      "nativeType": "event_msg/item_completed",
+      "kind": "session.lifecycle",
+      "semantic": "paginated-item",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "实际 kind 由 TurnItem 子类型继续映射"
+    },
+    {
+      "id": "event.subagent_activity",
+      "nativeType": "event_msg/subagent_activity",
+      "kind": "session.lifecycle",
+      "semantic": "subagent.activity",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "started/completed/interrupted 会继续映射 spawn/end"
+    },
+    {
+      "id": "hook.pre_tool_use",
+      "nativeType": "hook/PreToolUse",
+      "kind": "tool.call",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.permission_request",
+      "nativeType": "hook/PermissionRequest",
+      "kind": "permission.request",
+      "semantic": "permission",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.post_tool_use",
+      "nativeType": "hook/PostToolUse",
+      "kind": "tool.result",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.pre_compact",
+      "nativeType": "hook/PreCompact",
+      "kind": "context.compaction",
+      "semantic": "compaction-start",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.post_compact",
+      "nativeType": "hook/PostCompact",
+      "kind": "context.compaction",
+      "semantic": "compaction-end",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.session_start",
+      "nativeType": "hook/SessionStart",
+      "kind": "session.lifecycle",
+      "semantic": "session.started",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.session_end",
+      "nativeType": "hook/SessionEnd",
+      "kind": "session.lifecycle",
+      "semantic": "session.ended",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.user_prompt_submit",
+      "nativeType": "hook/UserPromptSubmit",
+      "kind": "message.user",
+      "semantic": "user-request",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.subagent_start",
+      "nativeType": "hook/SubagentStart",
+      "kind": "subagent.spawn",
+      "semantic": "subagent",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.subagent_stop",
+      "nativeType": "hook/SubagentStop",
+      "kind": "subagent.end",
+      "semantic": "subagent",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.stop",
+      "nativeType": "hook/Stop",
+      "kind": "session.lifecycle",
+      "semantic": "turn.stopped",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "hook.interrupt",
+      "nativeType": "hook/Interrupt",
+      "kind": "session.lifecycle",
+      "semantic": "turn.interrupted",
+      "semanticSource": "native",
+      "coverage": "complete"
+    }
+  ],
+  "fallback": {
+    "kind": "unknown",
+    "preserveRaw": true,
+    "semanticSource": "unknown"
+  }
+}
