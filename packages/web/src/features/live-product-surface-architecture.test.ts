@@ -99,7 +99,8 @@ test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污�
   )
 
   assert.match(runtimeDisclosures, /AgentLens-owned|LiveRuntimeDisclosureContributionDto/)
-  assert.match(runtimeDisclosures, /<Disclosure/)
+  assert.match(runtimeDisclosures, /<details/)
+  assert.match(runtimeDisclosures, /<Dialog/)
   assert.match(runtimeDisclosures, /<CopyableCodeBlock/)
   assert.doesNotMatch(runtimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/)
   assert.doesNotMatch(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/)
