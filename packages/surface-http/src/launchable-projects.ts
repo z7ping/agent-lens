@@ -47,6 +47,14 @@ function searchValue(params: URLSearchParams): string | undefined {
 
 type WorkspaceValidator = (workspacePath: string) => Promise<string>
 
+export interface LaunchableProjectTimings {
+  dbMs: number
+  fsMs: number
+  totalMs: number
+}
+
+type TimingObserver = (timings: LaunchableProjectTimings) => void
+
 async function launchableWorkspace(
   candidate: LaunchableProjectCandidate,
   validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
@@ -79,21 +87,26 @@ export async function readLaunchableProjects(
   storage: StorageService,
   params: URLSearchParams,
   validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
+  observeTiming?: TimingObserver,
 ): Promise<LaunchableProjectsResponseDto> {
   const reader = storage.launchableProjects
   if (!reader) throw httpError(503, '本机项目发现暂不可用')
 
+  const totalStartedAt = performance.now()
   const limit = parseLimit(params, MAX_LIMIT) ?? DEFAULT_LIMIT
   const search = searchValue(params)
   const after = decodeCursor(params.get('cursor'))
   const batchLimit = Math.max(limit, Math.min(QUERY_BATCH_SIZE, limit * 2))
+  const dbStartedAt = performance.now()
   const page = await reader.query({
     limit: batchLimit,
     ...(search ? { search } : {}),
     ...(after ? { after } : {}),
   })
+  const dbMs = performance.now() - dbStartedAt
 
   const items: LaunchableProjectDto[] = []
+  const fsStartedAt = performance.now()
   let processed = 0
 
   // One request reads one bounded candidate page only. Filesystem checks are
@@ -113,8 +126,14 @@ export async function readLaunchableProjects(
     }
   }
 
+  const fsMs = performance.now() - fsStartedAt
   const lastProcessed = processed > 0 ? page.items[processed - 1] : undefined
   const hasMore = page.hasMore || processed < page.items.length
+  observeTiming?.({
+    dbMs,
+    fsMs,
+    totalMs: performance.now() - totalStartedAt,
+  })
 
   return {
     items,
