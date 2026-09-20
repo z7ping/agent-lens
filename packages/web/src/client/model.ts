@@ -8,6 +8,7 @@ import type {
   CapturePolicyResponseDto,
   FacetResponseDto,
   HealthResponseDto,
+  HostFilePreviewResponseDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationAuthorizationResponseDto,
   IntegrationEnabledUpdateResponseDto,
@@ -360,6 +361,9 @@ export class AgentLensClientModel {
 
   openHostPath = (path: string): Promise<{ opened: boolean; action?: 'opened' | 'revealed' }> =>
     this.api.openHostPath(path)
+
+  previewHostFile = (path: string): Promise<HostFilePreviewResponseDto> =>
+    this.api.previewHostFile(path)
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener)
