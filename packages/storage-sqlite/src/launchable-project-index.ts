@@ -204,20 +204,24 @@ export function refreshLaunchableProjectMetadata(
   db: Database.Database,
   projectId: string,
 ): void {
-  const project = db.prepare(`
-    SELECT name, repository_identity
-    FROM projects
-    WHERE id = ?
-  `).get(projectId) as { name?: unknown; repository_identity?: unknown } | undefined
+  const workspaces = db.prepare(`
+    SELECT DISTINCT workspace_id
+    FROM logical_sessions
+    WHERE project_id = ?
+      AND workspace_id IS NOT NULL
+  `).all(projectId) as Array<{ workspace_id?: unknown }>
 
-  db.prepare(`
-    UPDATE launchable_project_index
-    SET project_name = ?,
-        repository_identity = ?
-    WHERE project_key = ?
-  `).run(
-    typeof project?.name === 'string' ? project.name : null,
-    typeof project?.repository_identity === 'string' ? project.repository_identity : null,
-    projectId,
-  )
+  let firstWorkspaceId: string | undefined
+  for (const item of workspaces) {
+    if (typeof item.workspace_id !== 'string') continue
+    firstWorkspaceId ??= item.workspace_id
+    refreshWorkspacePair(db, projectId, item.workspace_id)
+  }
+
+  if (firstWorkspaceId) {
+    refreshProjectKey(db, projectId, firstWorkspaceId)
+    return
+  }
+
+  db.prepare('DELETE FROM launchable_project_index WHERE project_key = ?').run(projectId)
 }
