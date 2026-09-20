@@ -219,7 +219,13 @@ export async function normalizePiRecord(
     }
 
     if (fact.kind === 'usage') {
-      observations.push(piFactCandidate(record, envelope, fact, 'usage', fact.usage, offset))
+      observations.push(piFactCandidate(record, envelope, fact, 'usage', {
+        ...fact.usage,
+        ...(fact.usageKind ? { usageKind: fact.usageKind } : {}),
+        ...(fact.provider ? { provider: fact.provider } : {}),
+        ...(fact.model ? { model: fact.model } : {}),
+        ...(fact.note ? { note: fact.note } : {}),
+      }, offset, { identity: fact.model ? { modelName: fact.model } : {} }))
       return
     }
 
