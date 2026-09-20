@@ -270,15 +270,12 @@ export function normalizePiSessionEntry(
           }
           facts.push({
             ...messageBase,
-            ...assistantMeta,
             id: `${id}:content:${index}`,
             parentId: id,
             contentIndex: index,
-            kind: 'message',
-            role: 'assistant',
-            text: '',
-            content: rawBlock,
-            nonTextContent: [rawBlock],
+            nativeType: `message/assistant/content/${stringField(block, 'type') ?? 'unknown'}`,
+            kind: 'unknown',
+            payload: rawBlock,
           })
         }
       } else if (typeof content === 'string') {
