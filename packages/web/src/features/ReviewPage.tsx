@@ -30,7 +30,7 @@ import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
-import { projectReviewInteractionPresentation, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
+import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { reviewEventLabel } from './review-event-presentation'
 import { projectReviewLiveInteraction } from './review-live-interaction'
 import { taskLiveRuntimeHref } from './task-live-runtime'
@@ -885,7 +885,9 @@ function ReviewProcessGroup({
         if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
         if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
         return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-          {item.node.role === 'reasoning' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.thinking')}</div>}
+          <div className="task-process-message-kind">{item.node.role === 'reasoning'
+            ? agentLensI18n.t('review:local.process.thinking')
+            : agentLensI18n.t('review:local.process.output')}</div>
           <MarkdownSurface text={item.node.text}/>
           <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
         </div>
@@ -934,11 +936,10 @@ interface InteractionStats {
 }
 
 function interactionStats(interaction: ReviewInteractionDto): InteractionStats {
-  const tools = interaction.nodes.filter((node): node is ReviewToolNodeDto => node.type === 'tool')
   const user = interaction.nodes.find((node): node is ReviewMessageNodeDto => node.type === 'message' && node.role === 'user')
+  const toolStats = projectReviewInteractionToolStats(interaction)
   return {
-    toolCount: tools.length,
-    errorCount: tools.filter(tool => tool.status === 'error').length,
+    ...toolStats,
     durationMs: elapsed(interaction.startedAt, interaction.endedAt),
     preview: brief(user?.text ?? '', 86),
   }
@@ -976,25 +977,16 @@ function ReviewRoundAdapter({
   const [processLoadError, setProcessLoadError] = useState('')
   const processAbortRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    processAbortRef.current?.abort()
-    processAbortRef.current = null
-    setLoadedProcess(lazy ? null : interaction)
-    setProcessLoadState(lazy ? 'idle' : 'loaded')
-    setProcessLoadError('')
-    return () => processAbortRef.current?.abort()
-  }, [interaction.id, interaction.processMode, summary?.revision, lazy])
-
-  const requestProcess = () => {
-    if (!lazy || !summary || processLoadState === 'loading' || loadedProcess) return
+  const startProcessLoad = useCallback((targetSummary: ReviewProcessSummaryDto) => {
     processAbortRef.current?.abort()
     const controller = new AbortController()
     processAbortRef.current = controller
     setProcessLoadState('loading')
     setProcessLoadError('')
-    void loadProcess(sessionId, interaction.ordinal, summary.revision, controller.signal).then(
+    void loadProcess(sessionId, interaction.ordinal, targetSummary.revision, controller.signal).then(
       result => {
         if (controller.signal.aborted) return
+        if (processAbortRef.current === controller) processAbortRef.current = null
         if (!result) {
           setProcessLoadState('error')
           setProcessLoadError(agentLensI18n.t('review:local.process.loadFailed'))
@@ -1005,11 +997,30 @@ function ReviewRoundAdapter({
       },
       error => {
         if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+        if (processAbortRef.current === controller) processAbortRef.current = null
         setProcessLoadState('error')
         setProcessLoadError(error instanceof Error ? error.message : String(error))
       },
     )
-  }
+  }, [interaction.ordinal, loadProcess, sessionId])
+
+  useEffect(() => {
+    processAbortRef.current?.abort()
+    processAbortRef.current = null
+    setLoadedProcess(lazy ? null : interaction)
+    setProcessLoadError('')
+    if (lazy && summary && expansionStore.get(summary.id) === true) {
+      startProcessLoad(summary)
+    } else {
+      setProcessLoadState(lazy ? 'idle' : 'loaded')
+    }
+    return () => processAbortRef.current?.abort()
+  }, [interaction.id, interaction.processMode, summary?.revision, lazy, expansionStore, startProcessLoad])
+
+  const requestProcess = useCallback(() => {
+    if (!lazy || !summary || processLoadState === 'loading' || loadedProcess) return
+    startProcessLoad(summary)
+  }, [lazy, loadedProcess, processLoadState, startProcessLoad, summary])
 
   const cancelProcess = () => {
     if (processLoadState !== 'loading') return
@@ -1807,7 +1818,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               {annotatedInteractions.map((item, index) => <VirtualRoundMount
                 key={item.round.id}
                 eager={index < 6 || item.round.id === annotatedInteractions.at(-1)?.round.id}
-                retainMounted
                 estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
               >
                 <ReviewRoundAdapter

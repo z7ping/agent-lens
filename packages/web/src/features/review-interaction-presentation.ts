@@ -1,4 +1,4 @@
-import type { ReviewEventNodeDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
+import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
 import { taskTurnFinalAssistantIndexes } from './task-turn-presentation'
 
 export type ReviewProcessPresentationItem =
@@ -6,6 +6,17 @@ export type ReviewProcessPresentationItem =
   | { type: 'tool-group'; items: ReviewToolNodeDto[] }
   | { type: 'event'; node: ReviewEventNodeDto }
   | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
+
+
+export function projectReviewInteractionToolStats(
+  interaction: Pick<ReviewInteractionDto, 'nodes' | 'processSummary'>,
+): { toolCount: number; errorCount: number } {
+  const tools = interaction.nodes.filter((node): node is ReviewToolNodeDto => node.type === 'tool')
+  return {
+    toolCount: interaction.processSummary?.toolCount ?? tools.length,
+    errorCount: interaction.processSummary?.errorCount ?? tools.filter(tool => tool.status === 'error').length,
+  }
+}
 
 export type ReviewInteractionPresentationEntry =
   | { type: 'message'; node: ReviewMessageNodeDto }

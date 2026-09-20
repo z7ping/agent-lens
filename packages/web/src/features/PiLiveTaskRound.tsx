@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import type { LiveHistoryIndexItemDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
@@ -328,16 +328,44 @@ export function PiLiveIndexedTaskRound({
   const [loadError, setLoadError] = useState('')
   const [partial, setPartial] = useState(process?.availability === 'partial')
   const abortRef = useRef<AbortController | null>(null)
+  const processId = `process:pi-index-round-${item.ordinal}`
+
+  const startProcessLoad = useCallback((revision: string) => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setLoadState('loading')
+    setLoadError('')
+    void loadProcess(item.cursor, revision, controller.signal).then(
+      result => {
+        if (controller.signal.aborted) return
+        if (abortRef.current === controller) abortRef.current = null
+        setLoadedItems(result.items)
+        setPartial(current => current || result.partial)
+        setLoadState('loaded')
+      },
+      error => {
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+        if (abortRef.current === controller) abortRef.current = null
+        setLoadState('error')
+        setLoadError(error instanceof Error ? error.message : String(error))
+      },
+    )
+  }, [item.cursor, loadProcess])
 
   useEffect(() => {
     abortRef.current?.abort()
     abortRef.current = null
     setLoadedItems([])
-    setLoadState('idle')
     setLoadError('')
     setPartial(process?.availability === 'partial')
+    if (process && process.itemCount > 0 && expansionStore?.get(processId) === true) {
+      startProcessLoad(process.revision)
+    } else {
+      setLoadState('idle')
+    }
     return () => abortRef.current?.abort()
-  }, [item.cursor, process?.revision, process?.availability])
+  }, [expansionStore, item.cursor, process?.availability, process?.itemCount, process?.revision, processId, startProcessLoad])
 
   const processEntry = useMemo(() => {
     if (!loadedItems.length) return undefined
@@ -345,27 +373,10 @@ export function PiLiveIndexedTaskRound({
     return entries.find((entry): entry is Extract<HistoryRenderEntry, { kind: 'process' }> => entry.kind === 'process')
   }, [loadedItems])
 
-  const requestProcess = () => {
+  const requestProcess = useCallback(() => {
     if (!process || process.itemCount <= 0 || loadState === 'loading' || loadState === 'loaded') return
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
-    setLoadState('loading')
-    setLoadError('')
-    void loadProcess(item.cursor, process.revision, controller.signal).then(
-      result => {
-        if (controller.signal.aborted) return
-        setLoadedItems(result.items)
-        setPartial(current => current || result.partial)
-        setLoadState('loaded')
-      },
-      error => {
-        if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
-        setLoadState('error')
-        setLoadError(error instanceof Error ? error.message : String(error))
-      },
-    )
-  }
+    startProcessLoad(process.revision)
+  }, [loadState, process, startProcessLoad])
 
   const cancelProcess = () => {
     if (loadState !== 'loading') return
@@ -383,7 +394,7 @@ export function PiLiveIndexedTaskRound({
     preview: item.preview,
     toolCount: process?.toolCount ?? 0,
     errorCount: process?.errorCount ?? 0,
-    durationMs: process?.durationMs ?? 0,
+    durationMs: 0,
     highLatency: false,
   }
 
@@ -404,7 +415,7 @@ export function PiLiveIndexedTaskRound({
       className="pi-live-task-message"
     />}
     {process && process.itemCount > 0 && <TaskProcessGroup
-      id={`process:pi-index-round-${item.ordinal}`}
+      id={processId}
       messageCount={process.messageCount}
       toolCount={process.toolCount}
       errorCount={process.errorCount}

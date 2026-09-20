@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { PiLiveHistoryItem } from './pi-live-history'
-import { piLiveSessionTitle, projectPiLiveRunningRound, projectPiLiveTaskRounds, projectPiLiveTurnItems } from './pi-live-task-projection'
+import { piLiveSessionTitle, projectPiLiveHistoryIndexRound, projectPiLiveRunningRound, projectPiLiveTaskRounds, projectPiLiveTurnItems } from './pi-live-task-projection'
 
 function lifecycle(id: string): PiLiveHistoryItem {
   return {
@@ -103,4 +103,27 @@ test('Pi Live 非终态 lifecycle 事件也参与最终回复边界', () => {
     ['model-change', 'process'],
     ['final', 'final'],
   ])
+})
+
+
+test('Pi Indexed 只有 Process duration 时不冒充整轮耗时', () => {
+  const round = projectPiLiveHistoryIndexRound({
+    cursor: 'user-2',
+    ordinal: 2,
+    summary: {
+      promptText: '检查',
+      finalText: '完成',
+      process: {
+        revision: 'rev-2',
+        itemCount: 3,
+        messageCount: 1,
+        toolCount: 2,
+        errorCount: 0,
+        durationMs: 12_000,
+        availability: 'available',
+      },
+    },
+  })
+  assert.equal(round.durationMs, 0)
+  assert.equal(round.toolCount, 2)
 })

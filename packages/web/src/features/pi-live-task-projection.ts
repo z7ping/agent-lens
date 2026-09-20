@@ -239,7 +239,7 @@ export function projectPiLiveHistoryIndexRound(item: LiveHistoryIndexItemDto): T
     preview: item.preview,
     toolCount: item.summary?.process.toolCount ?? 0,
     errorCount: item.summary?.process.errorCount ?? 0,
-    durationMs: item.summary?.process.durationMs ?? 0,
+    durationMs: 0,
     highLatency: false,
   }
 }
