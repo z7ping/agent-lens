@@ -53,6 +53,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         },
         derivation: {
           observed: 'Observed',
+        partialObserved: 'Some counts unavailable',
           reported: 'Reported by source',
           derived: 'Derived',
           estimated: 'Estimated',
