@@ -149,7 +149,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
       continue
     }
 
-    if (node.type === 'event' && node.category === 'unknown') {
+    if (node.type === 'event' && node.category === 'unknown' && node.kind !== 'tool.progress') {
       const duplicateOfReasoning = [...sourceRecordIds(node)].some(id => reasoningSourceRecords.has(id))
       if (duplicateOfReasoning) continue
       flushTools()
