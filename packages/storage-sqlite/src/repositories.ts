@@ -16,6 +16,7 @@ import type {
   ToolRepository,
 } from '@agent-lens/core'
 import { SqliteExecutor } from './executor'
+import { upsertAssetCurrentState } from './asset-current-state'
 import { encodeSourceRecordPayloadJson } from './source-record-compression'
 import {
   refreshLaunchableProjectMetadata,
@@ -919,7 +920,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
       })
     },
     async putState(state: AssetStateObservation) {
-      await executor.run(() => {
+      await executor.transaction(async () => {
         db.prepare(`
           INSERT INTO asset_state_observations(
             id, asset_binding_id, state, value, observed_at, evidence_refs_json
@@ -941,6 +942,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           state.observedAt,
           encodeJson(state.evidenceRefs),
         )
+        upsertAssetCurrentState(db, state)
       })
     },
   }
