@@ -15,9 +15,11 @@ test('Review 工具详情把 read/edit 文件与 search 目录接入统一本地
   assert.match(review, /<LocalResourceReference value=\{resource\.value\} kind=\{resource\.kind\}/)
 })
 
-test('Evidence sourceLocator.path 复用统一本地资源引用并保留 source kind', () => {
+test('Evidence 与 Raw locator path 复用统一本地资源引用并保留 source kind', () => {
   assert.match(review, /item\.sourceLocator\?\.path/)
   assert.match(review, /item\.sourceLocator\.kind === 'file' \? 'file' : 'path'/)
+  assert.match(review, /record\.locator\.path/)
+  assert.match(review, /record\.locator\.kind === 'file' \? 'file' : 'path'/)
   assert.match(review, /presentation="inline"/)
 })
 
