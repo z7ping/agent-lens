@@ -198,10 +198,36 @@ export interface LiveHistoryIndexQuery {
   limit?: number | undefined
 }
 
+export interface LiveHistoryProcessSummary {
+  revision: string
+  itemCount: number
+  messageCount: number
+  toolCount: number
+  errorCount: number
+  durationMs: number
+  availability: 'available' | 'partial'
+}
+
+export interface LiveHistoryTerminalSummary {
+  status: 'completed' | 'stopped' | 'aborted' | 'error'
+  detail?: string | undefined
+}
+
+export interface LiveHistoryRoundSummary {
+  /** Full user text when the adapter can expose it without loading process-heavy payloads. */
+  promptText?: string | undefined
+  /** Full settled final answer when cheaply available from the adapter's native round index. */
+  finalText?: string | undefined
+  modelLabel?: string | undefined
+  terminal?: LiveHistoryTerminalSummary | undefined
+  process: LiveHistoryProcessSummary
+}
+
 export interface LiveHistoryIndexItem {
   cursor: string
   ordinal: number
   preview?: string | undefined
+  summary?: LiveHistoryRoundSummary | undefined
 }
 
 export interface LiveHistoryIndex {

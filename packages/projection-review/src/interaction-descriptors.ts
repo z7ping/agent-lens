@@ -7,13 +7,15 @@ import type {
 import type { TimelineProjection } from '@agent-lens/projection-timeline'
 import type {
   ReviewInteractionDto,
+  ReviewProcessSummaryDto,
   ReviewSessionSummaryDto,
 } from '@agent-lens/protocol'
-import { asRecord, buildInteractionGroups, textFromPayload } from './nodes'
+import { asRecord, buildInteractionGroups, buildNodes, stringField, textFromPayload } from './nodes'
 
 const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
 const SLOW_DESCRIPTOR_PHASE_MS = 500
+const MAX_REVIEW_SUMMARY_FACTS = 600
 
 function logSlowDescriptorPhase(phase: string, startedAt: number, details: Record<string, number> = {}): void {
   const elapsedMs = performance.now() - startedAt
@@ -81,9 +83,72 @@ function headerCursor(item: ObservationHeader): ObservationCursor {
   }
 }
 
+function lifecycleActionFromPayload(value: unknown): string {
+  const payload = asRecord(value)
+  return (stringField(payload, 'event', 'action', 'type', 'status') ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_:\-]+/g, '.')
+}
+
+function observationHeader(item: CanonicalObservation): ObservationHeader {
+  return {
+    id: item.id,
+    installationId: item.installationId,
+    logicalSessionId: item.logicalSessionId,
+    sourceSessionId: item.sourceSessionId,
+    kind: item.kind,
+    ...(item.sourceSequence === undefined ? {} : { sourceSequence: item.sourceSequence }),
+    ...(item.canonicalSequence === undefined ? {} : { canonicalSequence: item.canonicalSequence }),
+    ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
+    capturedAt: item.capturedAt,
+    ...(item.kind === 'tool.result' ? { error: observationError(item) } : {}),
+    ...(item.kind === 'session.lifecycle' && lifecycleActionFromPayload(item.payload)
+      ? { lifecycleAction: lifecycleActionFromPayload(item.payload) }
+      : {}),
+  }
+}
+
+function compareObservationCursor(left: ObservationCursor, right: ObservationCursor): number {
+  const time = left.effectiveAt.localeCompare(right.effectiveAt)
+  if (time) return time
+  const leftSequence = left.sequence ?? Number.POSITIVE_INFINITY
+  const rightSequence = right.sequence ?? Number.POSITIVE_INFINITY
+  if (leftSequence !== rightSequence) return leftSequence < rightSequence ? -1 : 1
+  return left.id.localeCompare(right.id)
+}
+
+function normalizedLifecycleAction(observation: CanonicalObservation): string {
+  return lifecycleActionFromPayload(observation.payload)
+}
+
+function isTerminalLifecycleAction(action: string | undefined): boolean {
+  return [
+    'turn.completed',
+    'turn.complete',
+    'turn.ended',
+    'turn.end',
+    'turn.stopped',
+    'turn.stop',
+    'turn.aborted',
+    'turn.error',
+  ].includes(action ?? '')
+}
+
+function isTerminalLifecycle(observation: CanonicalObservation): boolean {
+  return observation.kind === 'session.lifecycle' && isTerminalLifecycleAction(normalizedLifecycleAction(observation))
+}
+
+function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
+  return kind !== 'message.user'
+    && kind !== 'message.assistant'
+    && kind !== 'artifact.action'
+}
+
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
   descriptor.end = headerCursor(observation)
   descriptor.endedAt = headerEffectiveAt(observation)
+  descriptor.hasError ||= observation.error === true
   descriptor.observationCount += 1
 }
 
@@ -112,7 +177,7 @@ function newStructureDescriptor(observation: ObservationHeader, ordinal: number)
     end: cursor,
     startedAt: cursor.effectiveAt,
     endedAt: cursor.effectiveAt,
-    hasError: false,
+    hasError: observation.error === true,
     observationCount: 1,
   }
 }
@@ -360,6 +425,185 @@ export class InteractionDescriptorStore {
     const count = userCount + (leadingBackground ? 1 : 0)
     logSlowDescriptorPhase('count', startedAt, { pages, interactions: count })
     return count
+  }
+
+  private async observationsByIds(ids: readonly string[]): Promise<CanonicalObservation[]> {
+    if (!ids.length) return []
+    const uniqueIds = [...new Set(ids)]
+    const batch = this.storage.repositories.observations.getMany
+    if (batch) return batch.call(this.storage.repositories.observations, uniqueIds)
+    const values = await Promise.all(uniqueIds.map(id => this.storage.repositories.observations.get(id)))
+    return values.filter((item): item is CanonicalObservation => item !== null)
+  }
+
+  private async loadHeaders(
+    logicalSessionId: string,
+    descriptor: InteractionDescriptor,
+  ): Promise<{ headers: ObservationHeader[]; pages: number; fallbackObservations?: CanonicalObservation[] }> {
+    const queryHeaders = this.storage.repositories.observations.queryHeaders
+    if (!queryHeaders) {
+      const fallback = await this.loadObservations(logicalSessionId, descriptor)
+      return {
+        headers: fallback.observations.map(observationHeader),
+        pages: fallback.pages,
+        fallbackObservations: fallback.observations,
+      }
+    }
+
+    const headers: ObservationHeader[] = []
+    let pages = 0
+    let after: ObservationCursor | undefined
+    while (true) {
+      const page = await queryHeaders.call(this.storage.repositories.observations, {
+        logicalSessionId,
+        from: descriptor.startedAt,
+        ...(after ? { after } : {}),
+        limit: DESCRIPTOR_SCAN_CHUNK,
+      })
+      if (!page.length) break
+      pages += 1
+      let reachedEnd = false
+      for (const header of page) {
+        const cursor = headerCursor(header)
+        if (compareObservationCursor(cursor, descriptor.start) < 0) continue
+        if (compareObservationCursor(cursor, descriptor.end) > 0) {
+          reachedEnd = true
+          break
+        }
+        headers.push(header)
+        if (header.id === descriptor.end.id) {
+          reachedEnd = true
+          break
+        }
+      }
+      if (reachedEnd || page.length < DESCRIPTOR_SCAN_CHUNK) break
+      after = headerCursor(page[page.length - 1]!)
+    }
+    return { headers, pages }
+  }
+
+  async materializeSummaryMany(
+    logicalSessionId: string,
+    descriptors: readonly InteractionDescriptor[],
+  ): Promise<ReviewInteractionDto[]> {
+    const startedAt = performance.now()
+    const groups = []
+    for (const descriptor of descriptors) {
+      groups.push({ descriptor, ...(await this.loadHeaders(logicalSessionId, descriptor)) })
+    }
+
+    const preliminaryIds = new Set<string>()
+    for (const group of groups) {
+      for (const header of group.headers) {
+        if (header.kind === 'session.lifecycle' && header.lifecycleAction === undefined) preliminaryIds.add(header.id)
+        if (header.kind === 'tool.result' && header.error === undefined) preliminaryIds.add(header.id)
+      }
+    }
+    const preliminary = new Map((await this.observationsByIds([...preliminaryIds])).map(item => [item.id, item]))
+
+    const displayIds = new Set<string>()
+    const summaries = new Map<number, ReviewProcessSummaryDto>()
+    for (const group of groups) {
+      const terminalIds = new Set(group.headers
+        .filter(header => {
+          if (header.kind !== 'session.lifecycle') return false
+          if (header.lifecycleAction !== undefined) return isTerminalLifecycleAction(header.lifecycleAction)
+          const observation = preliminary.get(header.id)
+          return observation ? isTerminalLifecycle(observation) : false
+        })
+        .map(header => header.id))
+
+      let lastProcessDriver = -1
+      for (let index = 0; index < group.headers.length; index += 1) {
+        const header = group.headers[index]!
+        if (terminalIds.has(header.id)) continue
+        if (isProcessDriverKind(header.kind)) lastProcessDriver = index
+      }
+
+      const processHeaders: ObservationHeader[] = []
+      for (let index = 0; index < group.headers.length; index += 1) {
+        const header = group.headers[index]!
+        const finalAssistant = header.kind === 'message.assistant' && index > lastProcessDriver
+        const prompt = header.kind === 'message.user'
+        const artifact = header.kind === 'artifact.action'
+        const terminal = terminalIds.has(header.id)
+        if (prompt || finalAssistant || artifact || terminal || header.kind === 'model.call' || header.kind === 'model.changed') {
+          displayIds.add(header.id)
+        }
+        if (!prompt && !finalAssistant && !artifact && !terminal) processHeaders.push(header)
+      }
+
+      const fallbackById = group.fallbackObservations
+        ? new Map(group.fallbackObservations.map(item => [item.id, item]))
+        : preliminary
+      const messageCount = processHeaders.filter(header =>
+        header.kind === 'message.commentary'
+        || header.kind === 'message.reasoning'
+        || header.kind === 'message.assistant').length
+      const toolCount = processHeaders.filter(header => header.kind === 'tool.call').length
+      const errorCount = processHeaders.filter(header => {
+        if (header.kind !== 'tool.result') return false
+        if (header.error !== undefined) return header.error
+        const observation = fallbackById.get(header.id) ?? preliminary.get(header.id)
+        return observation ? observationError(observation) : false
+      }).length
+      const processTimes = processHeaders.map(header => Date.parse(headerEffectiveAt(header))).filter(Number.isFinite)
+      const processStartedAt = processTimes.length ? Math.min(...processTimes) : undefined
+      const processEndedAt = processTimes.length ? Math.max(...processTimes) : undefined
+      const totalFactCount = group.headers.length
+      const omittedFactCount = Math.max(0, totalFactCount - MAX_REVIEW_SUMMARY_FACTS)
+      const last = group.headers.at(-1)
+      const interactionId = `${logicalSessionId}:review:${group.descriptor.ordinal}`
+      summaries.set(group.descriptor.ordinal, {
+        id: `process:${interactionId}`,
+        revision: [interactionId, totalFactCount, last?.id ?? 'empty', last?.capturedAt ?? group.descriptor.endedAt].join(':'),
+        itemCount: processHeaders.length,
+        messageCount,
+        toolCount,
+        errorCount,
+        durationMs: processStartedAt !== undefined && processEndedAt !== undefined
+          ? Math.max(0, processEndedAt - processStartedAt)
+          : 0,
+        availability: omittedFactCount > 0 ? 'partial' : 'available',
+        totalFactCount,
+        ...(omittedFactCount > 0 ? { omittedFactCount } : {}),
+      })
+    }
+
+    const hydrated = new Map(preliminary)
+    const missingDisplayIds = [...displayIds].filter(id => !hydrated.has(id))
+    for (const observation of await this.observationsByIds(missingDisplayIds)) hydrated.set(observation.id, observation)
+    const displayObservations = [...displayIds]
+      .map(id => hydrated.get(id))
+      .filter((item): item is CanonicalObservation => Boolean(item))
+    const itemsById = new Map((await this.timeline.mapObservations(displayObservations)).map(item => [item.id, item]))
+
+    const interactions = groups.map(group => {
+      const items = group.headers
+        .filter(header => displayIds.has(header.id))
+        .map(header => itemsById.get(header.id))
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      const summary = summaries.get(group.descriptor.ordinal)
+      if (!summary) throw new Error(`Review summary integrity error: missing process summary ${group.descriptor.ordinal}`)
+      return {
+        id: `${logicalSessionId}:review:${group.descriptor.ordinal}`,
+        ordinal: group.descriptor.ordinal,
+        trigger: group.descriptor.trigger,
+        startedAt: group.descriptor.startedAt,
+        endedAt: group.descriptor.endedAt,
+        nodes: buildNodes(items),
+        processSummary: summary,
+        processMode: 'summary' as const,
+      }
+    })
+
+    logSlowDescriptorPhase('materialize-summary-many', startedAt, {
+      interactions: interactions.length,
+      headers: groups.reduce((total, group) => total + group.headers.length, 0),
+      hydrated: hydrated.size,
+      pages: groups.reduce((total, group) => total + group.pages, 0),
+    })
+    return interactions
   }
 
   async materialize(logicalSessionId: string, descriptor: InteractionDescriptor): Promise<ReviewInteractionDto> {

@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
+import type { LiveHistoryIndexItemDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -299,6 +300,157 @@ export function PiLiveHistoryTaskRound({
   return <TaskRound model={projection.model} className="pi-live-history-round" summaryMeta={summaryMeta}>
     {beforeContent}
     <HistoryEntries items={projection.items} showAllEvents={showAllEvents} processState={projection.model.state}/>
+  </TaskRound>
+}
+
+
+export interface PiLiveIndexedProcessLoadResult {
+  items: PiLiveHistoryItem[]
+  partial: boolean
+}
+
+export function PiLiveIndexedTaskRound({
+  item,
+  showAllEvents = false,
+  loadProcess,
+  expansionStore,
+}: {
+  item: LiveHistoryIndexItemDto
+  showAllEvents?: boolean
+  loadProcess(cursor: string, revision: string, signal?: AbortSignal): Promise<PiLiveIndexedProcessLoadResult>
+  expansionStore?: Map<string, boolean>
+}) {
+  const { t } = useTranslation('piLive')
+  const summary = item.summary
+  const process = summary?.process
+  const [loadedItems, setLoadedItems] = useState<PiLiveHistoryItem[]>([])
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+  const [loadError, setLoadError] = useState('')
+  const [partial, setPartial] = useState(process?.availability === 'partial')
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    setLoadedItems([])
+    setLoadState('idle')
+    setLoadError('')
+    setPartial(process?.availability === 'partial')
+    return () => abortRef.current?.abort()
+  }, [item.cursor, process?.revision, process?.availability])
+
+  const processEntry = useMemo(() => {
+    if (!loadedItems.length) return undefined
+    const entries = historyEntries(projectPiLiveTurnItems(loadedItems))
+    return entries.find((entry): entry is Extract<HistoryRenderEntry, { kind: 'process' }> => entry.kind === 'process')
+  }, [loadedItems])
+
+  const requestProcess = () => {
+    if (!process || process.itemCount <= 0 || loadState === 'loading' || loadState === 'loaded') return
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    setLoadState('loading')
+    setLoadError('')
+    void loadProcess(item.cursor, process.revision, controller.signal).then(
+      result => {
+        if (controller.signal.aborted) return
+        setLoadedItems(result.items)
+        setPartial(current => current || result.partial)
+        setLoadState('loaded')
+      },
+      error => {
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+        setLoadState('error')
+        setLoadError(error instanceof Error ? error.message : String(error))
+      },
+    )
+  }
+
+  const cancelProcess = () => {
+    if (loadState !== 'loading') return
+    abortRef.current?.abort()
+    abortRef.current = null
+    setLoadState('idle')
+  }
+
+  const model: TaskRoundModel = {
+    id: `pi-index-round-${item.ordinal}`,
+    semanticId: `pi-round-${item.ordinal}`,
+    ordinal: item.ordinal,
+    label: t('projection.round', { count: item.ordinal }),
+    state: 'settled',
+    preview: item.preview,
+    toolCount: process?.toolCount ?? 0,
+    errorCount: process?.errorCount ?? 0,
+    durationMs: process?.durationMs ?? 0,
+    highLatency: false,
+  }
+
+  const terminal = summary?.terminal
+  const terminalLabel = terminal?.status === 'error'
+    ? t('history.terminalError')
+    : terminal?.status === 'aborted'
+      ? t('history.terminalAborted')
+      : terminal?.status === 'stopped'
+        ? t('history.terminalStopped')
+        : t('history.terminalCompleted')
+
+  return <TaskRound model={model} className="pi-live-history-round">
+    {(summary?.promptText || item.preview) && <TaskMessage
+      role="user"
+      text={summary?.promptText || item.preview || ''}
+      author={t('history.user')}
+      className="pi-live-task-message"
+    />}
+    {process && process.itemCount > 0 && <TaskProcessGroup
+      id={`process:pi-index-round-${item.ordinal}`}
+      messageCount={process.messageCount}
+      toolCount={process.toolCount}
+      errorCount={process.errorCount}
+      durationMs={process.durationMs}
+      state="settled"
+      defaultExpanded={false}
+      expansionStore={expansionStore}
+      onExpandedChange={expanded => expanded ? requestProcess() : cancelProcess()}
+      summaryExtra={partial ? <span>{t('history.partialProcess')}</span> : undefined}
+    >
+      {loadState === 'idle' && <div className="task-process-loading">{t('history.expandToLoad')}</div>}
+      {loadState === 'loading' && <div className="task-process-loading">{t('history.loadingProcess')}</div>}
+      {loadState === 'error' && <div className="task-process-load-error" role="alert">
+        <span>{loadError || t('history.processLoadFailed')}</span>
+        <button type="button" onClick={requestProcess}>{t('history.retry')}</button>
+      </div>}
+      {loadState === 'loaded' && processEntry && <div className="task-process-sequence">
+        {processEntry.items.map(processItem => {
+          if (processItem.kind === 'tool-group') return <HistoryToolGroup key={processItem.id} id={processItem.id} items={processItem.items}/>
+          if (processItem.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={processItem.id}>
+            <div className="task-process-message-kind">{t('history.thinking')}</div>
+            <ThinkingMarkdown text={processItem.text}/>
+          </div>
+          if (processItem.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={processItem.id}>
+            <div className="task-process-message-kind">{t('history.commentary')}</div>
+            <ThinkingMarkdown text={processItem.text}/>
+          </div>
+          if (processItem.kind === 'usage') return <HistoryUsageEvent key={processItem.id} entry={processItem}/>
+          if (processItem.kind === 'lifecycle') return <HistoryLifecycleEvent key={processItem.id} entry={processItem} showAllEvents={showAllEvents}/>
+          return null
+        })}
+      </div>}
+    </TaskProcessGroup>}
+    {terminal && <TaskEvent model={{
+      id: `terminal:pi-index-round-${item.ordinal}`,
+      label: terminalLabel,
+      category: 'lifecycle',
+      summary: terminal.detail || undefined,
+    }}/>}
+    {summary?.finalText && <TaskMessage
+      role="assistant"
+      text={summary.finalText}
+      author="Pi"
+      modelLabel={summary.modelLabel}
+      className="pi-live-task-message"
+    />}
   </TaskRound>
 }
 

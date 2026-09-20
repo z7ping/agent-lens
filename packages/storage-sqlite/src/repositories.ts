@@ -521,6 +521,34 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         return mapObservation(row, evidenceRows.map(item => item.evidence_id))
       })
     },
+    async getMany(ids) {
+      if (!ids.length) return []
+      return executor.run(() => {
+        const uniqueIds = [...new Set(ids)]
+        const placeholders = uniqueIds.map(() => '?').join(', ')
+        const rows = db.prepare(`SELECT * FROM observations WHERE id IN (${placeholders})`).all(...uniqueIds)
+        if (!rows.length) return []
+        const rowIds = rows.map(sqliteRowId)
+        const evidencePlaceholders = rowIds.map(() => '?').join(', ')
+        const evidenceRows = db.prepare(`
+          SELECT observation_id, evidence_id
+          FROM observation_evidence
+          WHERE observation_id IN (${evidencePlaceholders})
+          ORDER BY observation_id, evidence_id
+        `).all(...rowIds) as Array<{ observation_id: string; evidence_id: string }>
+        const evidenceByObservation = new Map<string, string[]>()
+        for (const row of evidenceRows) {
+          const values = evidenceByObservation.get(row.observation_id) ?? []
+          values.push(row.evidence_id)
+          evidenceByObservation.set(row.observation_id, values)
+        }
+        const mapped = new Map(rows.map(row => {
+          const id = sqliteRowId(row)
+          return [id, mapObservation(row, evidenceByObservation.get(id) ?? [])] as const
+        }))
+        return uniqueIds.map(id => mapped.get(id)).filter((item): item is NonNullable<typeof item> => Boolean(item))
+      })
+    },
     async query(query: ObservationQuery) {
       return executor.run(() => {
         const conditions: string[] = []
@@ -626,7 +654,21 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
         const limit = Math.max(1, Math.min(query.limit ?? 500, 5000))
         const rows = db.prepare(`
           SELECT id, installation_id, logical_session_id, source_session_id, kind,
-                 source_sequence, canonical_sequence, occurred_at, captured_at
+                 source_sequence, canonical_sequence, occurred_at, captured_at,
+                 CASE
+                   WHEN kind = 'tool.result' AND json_extract(payload_json, '$.success') = 0 THEN 1
+                   WHEN kind = 'tool.result' AND json_type(payload_json, '$.success') IS NOT NULL THEN 0
+                   ELSE NULL
+                 END AS error_flag,
+                 CASE
+                   WHEN kind = 'session.lifecycle' THEN COALESCE(
+                     json_extract(payload_json, '$.event'),
+                     json_extract(payload_json, '$.action'),
+                     json_extract(payload_json, '$.type'),
+                     json_extract(payload_json, '$.status')
+                   )
+                   ELSE NULL
+                 END AS lifecycle_action
           FROM observations ${where}
           ORDER BY COALESCE(occurred_at, captured_at) ASC,
                    COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) ASC, id ASC
@@ -642,6 +684,10 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           ...(typeof row.canonical_sequence === 'number' ? { canonicalSequence: row.canonical_sequence } : {}),
           ...(typeof row.occurred_at === 'string' ? { occurredAt: row.occurred_at } : {}),
           capturedAt: String(row.captured_at),
+          ...(typeof row.error_flag === 'number' ? { error: row.error_flag === 1 } : {}),
+          ...(typeof row.lifecycle_action === 'string' && row.lifecycle_action
+            ? { lifecycleAction: row.lifecycle_action.trim().toLowerCase().replace(/[\s_:\-]+/g, '.') }
+            : {}),
         }))
       })
     },

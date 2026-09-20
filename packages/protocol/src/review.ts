@@ -5,6 +5,8 @@ export type ReviewMessageRole = 'user' | 'assistant' | 'commentary' | 'reasoning
 export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model' | 'lifecycle' | 'artifact' | 'usage' | 'unknown'
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
+export type ReviewProcessMode = 'full' | 'summary'
+export type ReviewProcessAvailability = 'available' | 'partial'
 export type ReviewSessionActivity = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
 
 export type ReviewMessageAttachmentType = 'image' | 'file'
@@ -223,6 +225,20 @@ export interface ReviewEventNodeDto extends ReviewNodeSourceDto {
 
 export type ReviewNodeDto = ReviewMessageNodeDto | ReviewToolNodeDto | ReviewEventNodeDto
 
+export interface ReviewProcessSummaryDto {
+  id: string
+  /** Changes whenever the materialized turn facts used by this summary change. */
+  revision: string
+  itemCount: number
+  messageCount: number
+  toolCount: number
+  errorCount: number
+  durationMs: number
+  availability: ReviewProcessAvailability
+  totalFactCount: number
+  omittedFactCount?: number
+}
+
 export interface ReviewInteractionDto {
   id: string
   ordinal: number
@@ -230,6 +246,10 @@ export interface ReviewInteractionDto {
   startedAt: string
   endedAt: string
   nodes: ReviewNodeDto[]
+  /** Present for process-aware clients. In summary mode process-heavy nodes are omitted from nodes. */
+  processSummary?: ReviewProcessSummaryDto
+  /** Indicates whether process-heavy nodes are present in this interaction payload. */
+  processMode?: ReviewProcessMode
   /** 单轮节点超过服务端稳定性边界时，仅返回有界的首尾窗口。 */
   nodesTruncated?: boolean
   /** 截断前该轮的完整 Review 节点数。 */
@@ -270,6 +290,8 @@ export interface ReviewDetailQueryDto {
   limit?: number
   direction?: ReviewDetailDirection
   filter?: ReviewDetailFilter
+  /** full is backward-compatible; summary keeps prompt/final/artifact plus lightweight model attribution facts. */
+  process?: ReviewProcessMode
 }
 
 export interface ReviewQueryDto {

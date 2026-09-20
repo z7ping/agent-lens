@@ -204,7 +204,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     return await response.json() as T
   }
   const method = (init?.method ?? 'GET').toUpperCase()
-  return method === 'GET'
+  return method === 'GET' && !init?.signal
     ? shareInFlight(liveReadInFlight, path, execute)
     : execute()
 }
@@ -331,6 +331,7 @@ export const liveApi = {
     runtimeSessionId: string,
     since?: string,
     window?: LiveSnapshotWindowRequest,
+    signal?: AbortSignal,
   ): Promise<LiveSnapshotDto> {
     const params = new URLSearchParams()
     if (since) params.set('since', since)
@@ -340,7 +341,10 @@ export const liveApi = {
     if (window?.around) params.set('around', window.around)
     if (window?.limit !== undefined) params.set('limit', String(window.limit))
     const search = params.size ? `?${params}` : ''
-    return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`)
+    return requestJson(
+      `${livePath(liveId, runtimeSuffix(runtimeSessionId, '/snapshot'))}${search}`,
+      signal ? { signal } : undefined,
+    )
   },
 
   sessionTree(liveId: string, runtimeSessionId: string): Promise<LiveSessionTreeDto> {
@@ -351,6 +355,7 @@ export const liveApi = {
     liveId: string,
     runtimeSessionId: string,
     query: LiveHistoryIndexQueryDto = {},
+    signal?: AbortSignal,
   ): Promise<LiveHistoryIndexDto> {
     const params = new URLSearchParams()
     if (query.fromOrdinal !== undefined) params.set('from', String(query.fromOrdinal))
@@ -358,7 +363,10 @@ export const liveApi = {
     if (query.limit !== undefined) params.set('limit', String(query.limit))
     const queryString = params.toString()
     const suffix = queryString ? `?${queryString}` : ''
-    return requestJson(`${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}${suffix}`)
+    return requestJson(
+      `${livePath(liveId, runtimeSuffix(runtimeSessionId, '/history-index'))}${suffix}`,
+      signal ? { signal } : undefined,
+    )
   },
 
   async send(

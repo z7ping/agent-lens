@@ -129,3 +129,96 @@ test('managed asset directory and preview reads coalesce identical concurrent re
   assert.equal(calls.size, 2)
   assert.equal([...calls.values()].every(count => count === 1), true)
 })
+
+
+test('review process exact reads coalesce identical revision requests', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  let calls = 0
+  globalThis.fetch = (async input => {
+    const path = String(input)
+    if (path === '/api/v1/review/session-1?ordinal=3&process=full') {
+      calls += 1
+      await Promise.resolve()
+      return jsonResponse({
+        id: 'session-1',
+        installationId: 'install-1',
+        productId: 'codex',
+        sourceIds: ['codex'],
+        startedAt: '2026-09-01T00:00:00.000Z',
+        endedAt: '2026-09-01T00:00:01.000Z',
+        durationMs: 1000,
+        observationCount: 1,
+        interactionCount: 1,
+        toolCount: 0,
+        errorCount: 0,
+        hasErrors: false,
+        interactions: [{
+          id: 'round-3',
+          ordinal: 3,
+          trigger: 'user',
+          startedAt: '2026-09-01T00:00:00.000Z',
+          endedAt: '2026-09-01T00:00:01.000Z',
+          nodes: [],
+        }],
+        page: { count: 1, hasMore: false, direction: 'forward', filter: 'all' },
+      })
+    }
+    throw new Error(`unexpected request: ${path}`)
+  }) as typeof fetch
+
+  const api = new AgentLensApi()
+  const results = await Promise.all(Array.from({ length: 100 }, () =>
+    api.reviewProcessDetail('session-1', 3, 'revision-1')))
+  assert.equal(calls, 1)
+  assert.equal(results.every(item => item?.ordinal === 3), true)
+})
+
+
+test('review process caller abort cancels underlying request when no shared caller remains', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  let aborted = false
+  globalThis.fetch = ((_input, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener('abort', () => {
+      aborted = true
+      reject(new DOMException('aborted', 'AbortError'))
+    }, { once: true })
+  })) as typeof fetch
+
+  const api = new AgentLensApi()
+  const controller = new AbortController()
+  const pending = api.reviewProcessDetail('session-abort', 9, 'revision-abort', controller.signal)
+  controller.abort()
+  await assert.rejects(pending, error => error instanceof DOMException && error.name === 'AbortError')
+  assert.equal(aborted, true)
+})
+
+test('review process shared request survives one caller abort and aborts after the final caller leaves', async t => {
+  const originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
+  let calls = 0
+  let aborted = false
+  globalThis.fetch = ((_input, init) => {
+    calls += 1
+    return new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => {
+        aborted = true
+        reject(new DOMException('aborted', 'AbortError'))
+      }, { once: true })
+    })
+  }) as typeof fetch
+
+  const api = new AgentLensApi()
+  const first = new AbortController()
+  const second = new AbortController()
+  const p1 = api.reviewProcessDetail('session-shared-abort', 4, 'revision-shared', first.signal)
+  const p2 = api.reviewProcessDetail('session-shared-abort', 4, 'revision-shared', second.signal)
+  first.abort()
+  await assert.rejects(p1, error => error instanceof DOMException && error.name === 'AbortError')
+  assert.equal(calls, 1)
+  assert.equal(aborted, false)
+  second.abort()
+  await assert.rejects(p2, error => error instanceof DOMException && error.name === 'AbortError')
+  assert.equal(aborted, true)
+})

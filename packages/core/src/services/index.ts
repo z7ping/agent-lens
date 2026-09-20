@@ -138,6 +138,10 @@ export interface ObservationHeader {
   canonicalSequence?: number
   occurredAt?: string
   capturedAt: string
+  /** Lightweight error classification for projections; currently populated for failed tool.result facts. */
+  error?: boolean
+  /** Normalized lifecycle action when kind=session.lifecycle; avoids hydrating payload just to classify terminal state. */
+  lifecycleAction?: string
 }
 
 export interface ObservationService {
@@ -408,6 +412,7 @@ export interface SourceRecordRepository {
 
 export interface ObservationRepository {
   get(id: ObservationId): Promise<CanonicalObservation | null>
+  getMany?(ids: ObservationId[]): Promise<CanonicalObservation[]>
   query(query: ObservationQuery): Promise<CanonicalObservation[]>
   queryHeaders?(query: ObservationQuery): Promise<ObservationHeader[]>
   findIdByNativeEventId?(

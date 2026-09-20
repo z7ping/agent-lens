@@ -174,6 +174,10 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         execution: '执行过程',
         thinking: '思考',
         thinkingProcess: '思考过程',
+        expandToLoad: '展开后加载完整处理详情',
+        loading: '正在加载处理详情…',
+        loadFailed: '处理详情加载失败',
+        partial: '部分',
       },
       rawEvents: {
         title: '其他运行记录',

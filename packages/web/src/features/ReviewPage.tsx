@@ -11,6 +11,7 @@ import type {
   ReviewMessageAttachmentDto,
   ReviewMessageNodeDto,
   ReviewNodeDto,
+  ReviewProcessSummaryDto,
   ReviewSessionSummaryDto,
   SourceRecordResponseDto,
   ReviewToolNodeDto,
@@ -29,7 +30,7 @@ import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
-import { projectReviewInteractionPresentation, projectReviewMessageModelLabels, type ReviewProcessPresentationItem } from './review-interaction-presentation'
+import { projectReviewInteractionPresentation, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { reviewEventLabel } from './review-event-presentation'
 import { projectReviewLiveInteraction } from './review-live-interaction'
 import { taskLiveRuntimeHref } from './task-live-runtime'
@@ -830,31 +831,55 @@ function reviewProcessTiming(items: ReviewProcessPresentationItem[]): { startedA
 function ReviewProcessGroup({
   id,
   items,
+  summary,
   inspect,
   state,
   showAllEvents,
+  loadState = 'loaded',
+  loadError = '',
+  expansionStore,
+  onExpandedChange,
+  onRetry,
 }: {
   id: string
   items: ReviewProcessPresentationItem[]
+  summary?: ReviewProcessSummaryDto
   inspect(node: ReviewNodeDto): void
   state: TaskRoundModel['state']
   showAllEvents: boolean
+  loadState?: 'idle' | 'loading' | 'loaded' | 'error'
+  loadError?: string
+  expansionStore?: Map<string, boolean>
+  onExpandedChange?: (expanded: boolean) => void
+  onRetry?: () => void
 }) {
+  const { t } = useTranslation('review')
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
   const tools = items.flatMap(item => item.type === 'tool-group' ? item.items : [])
   const timing = reviewProcessTiming(items)
+  const partial = summary?.availability === 'partial'
   return <TaskProcessGroup
     id={id}
-    messageCount={messages.length}
-    toolCount={tools.length}
-    errorCount={tools.filter(tool => tool.status === 'error').length}
-    startedAtMs={timing.startedAtMs}
-    endedAtMs={state === 'running' ? undefined : timing.endedAtMs}
+    messageCount={summary?.messageCount ?? messages.length}
+    toolCount={summary?.toolCount ?? tools.length}
+    errorCount={summary?.errorCount ?? tools.filter(tool => tool.status === 'error').length}
+    durationMs={summary?.durationMs}
+    startedAtMs={summary ? undefined : timing.startedAtMs}
+    endedAtMs={summary ? undefined : state === 'running' ? undefined : timing.endedAtMs}
     state={state}
     defaultExpanded={false}
+    expansionStore={expansionStore}
+    onExpandedChange={onExpandedChange}
+    summaryExtra={partial ? <span>{t('local.process.partial')}</span> : undefined}
     className="task-review-process"
   >
-    <div className="task-process-sequence">
+    {loadState === 'idle' && <div className="task-process-loading">{t('local.process.expandToLoad')}</div>}
+    {loadState === 'loading' && <div className="task-process-loading">{t('local.process.loading')}</div>}
+    {loadState === 'error' && <div className="task-process-load-error" role="alert">
+      <span>{loadError || t('local.process.loadFailed')}</span>
+      {onRetry && <button type="button" onClick={onRetry}>{t('local.roundNav.loadFailedRetry')}</button>}
+    </div>}
+    {loadState === 'loaded' && <div className="task-process-sequence">
       {items.map((item, index) => {
         if (item.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
         if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
@@ -865,7 +890,7 @@ function ReviewProcessGroup({
           <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
         </div>
       })}
-    </div>
+    </div>}
   </TaskProcessGroup>
 }
 
@@ -920,28 +945,113 @@ function interactionStats(interaction: ReviewInteractionDto): InteractionStats {
 }
 
 function ReviewRoundAdapter({
+  sessionId,
   interaction,
   round,
   inspect,
   loadAttachments,
+  loadProcess,
   defaultExpanded,
   expansionStore,
   forceExpanded,
   forceRevision,
   showAllEvents,
 }: {
+  sessionId: string
   interaction: ReviewInteractionDto
   round: TaskRoundModel
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
+  loadProcess(sessionId: string, ordinal: number, revision: string, signal?: AbortSignal): Promise<ReviewInteractionDto | null>
   defaultExpanded: boolean
   expansionStore: Map<string, boolean>
   forceExpanded: boolean
   forceRevision: number
   showAllEvents: boolean
 }) {
-  const groups = useMemo(() => projectReviewInteractionPresentation(interaction.nodes), [interaction.nodes])
-  const modelLabels = useMemo(() => projectReviewMessageModelLabels(interaction.nodes), [interaction.nodes])
+  const summary = interaction.processSummary
+  const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
+  const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)
+  const [processLoadState, setProcessLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>(lazy ? 'idle' : 'loaded')
+  const [processLoadError, setProcessLoadError] = useState('')
+  const processAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    processAbortRef.current?.abort()
+    processAbortRef.current = null
+    setLoadedProcess(lazy ? null : interaction)
+    setProcessLoadState(lazy ? 'idle' : 'loaded')
+    setProcessLoadError('')
+    return () => processAbortRef.current?.abort()
+  }, [interaction.id, interaction.processMode, summary?.revision, lazy])
+
+  const requestProcess = () => {
+    if (!lazy || !summary || processLoadState === 'loading' || loadedProcess) return
+    processAbortRef.current?.abort()
+    const controller = new AbortController()
+    processAbortRef.current = controller
+    setProcessLoadState('loading')
+    setProcessLoadError('')
+    void loadProcess(sessionId, interaction.ordinal, summary.revision, controller.signal).then(
+      result => {
+        if (controller.signal.aborted) return
+        if (!result) {
+          setProcessLoadState('error')
+          setProcessLoadError(agentLensI18n.t('review:local.process.loadFailed'))
+          return
+        }
+        setLoadedProcess(result)
+        setProcessLoadState('loaded')
+      },
+      error => {
+        if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return
+        setProcessLoadState('error')
+        setProcessLoadError(error instanceof Error ? error.message : String(error))
+      },
+    )
+  }
+
+  const cancelProcess = () => {
+    if (processLoadState !== 'loading') return
+    processAbortRef.current?.abort()
+    processAbortRef.current = null
+    setProcessLoadState('idle')
+  }
+
+  const effectiveInteraction = loadedProcess ?? interaction
+  const effectiveSummary = loadedProcess?.processSummary ?? summary
+  const groups = useMemo(() => projectReviewInteractionPresentation(effectiveInteraction.nodes), [effectiveInteraction.nodes])
+  const modelLabels = useMemo(() => projectReviewMessageModelLabels(effectiveInteraction.nodes), [effectiveInteraction.nodes])
+  const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
+  const promptEntries = groups.filter(entry => entry.type === 'message' && entry.node.role === 'user')
+  const afterProcessEntries = groups.filter(entry => !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
+
+  const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
+    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
+    if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
+    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
+    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
+    if (entry.type === 'event') return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
+    return null
+  }
+
+  const processGroup = effectiveSummary?.itemCount
+    ? <ReviewProcessGroup
+        id={effectiveSummary.id}
+        items={processEntry?.items ?? []}
+        summary={effectiveSummary}
+        inspect={inspect}
+        state={round.state}
+        showAllEvents={showAllEvents}
+        expansionStore={expansionStore}
+        loadState={lazy ? processLoadState : 'loaded'}
+        loadError={processLoadError}
+        onExpandedChange={expanded => expanded ? requestProcess() : cancelProcess()}
+        onRetry={requestProcess}
+      />
+    : processEntry
+      ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={round.state} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
+      : null
 
   return <TaskRound
     model={round}
@@ -950,14 +1060,9 @@ function ReviewRoundAdapter({
     forceExpanded={forceExpanded}
     forceRevision={forceRevision}
   >
-    {groups.map((entry, index) => {
-      if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect} state={round.state} showAllEvents={showAllEvents}/>
-      if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
-      if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
-      if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
-      if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
-      return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
-    })}
+    {promptEntries.map(renderEntry)}
+    {processGroup}
+    {afterProcessEntries.map(renderEntry)}
   </TaskRound>
 }
 
@@ -1706,6 +1811,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                 estimate={item.round.toolCount > 12 ? 420 : item.round.toolCount > 4 ? 300 : 220}
               >
                 <ReviewRoundAdapter
+                  sessionId={detail.id}
                   interaction={item.interaction}
                   round={item.round}
                   defaultExpanded={expandAllRounds}
@@ -1715,6 +1821,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   showAllEvents={showAllEvents}
                   inspect={setInspect}
                   loadAttachments={model.reviewAttachments}
+                  loadProcess={model.reviewProcessDetail}
                 />
               </VirtualRoundMount>)}
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}

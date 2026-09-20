@@ -4,6 +4,7 @@ import {
   type ReviewDetailDirection,
   type ReviewDetailFilter,
   type ReviewDetailQueryDto,
+  type ReviewProcessMode,
   type ReviewQueryDto,
   type ReviewStatusFilter,
   type SessionQueryDto,
@@ -147,6 +148,12 @@ function parseReviewDetailFilter(value: string | undefined): ReviewDetailFilter 
   throw badRequest(`Unknown review detail filter: ${value}`)
 }
 
+function parseReviewProcessMode(value: string | undefined): ReviewProcessMode | undefined {
+  if (!value) return undefined
+  if (value === 'full' || value === 'summary') return value
+  throw badRequest(`Unknown review process mode: ${value}`)
+}
+
 function parsePositiveInteger(params: URLSearchParams, key: string): number | undefined {
   const raw = optionalParam(params, key)
   if (!raw) return undefined
@@ -183,6 +190,7 @@ export function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQue
   const limit = parseLimit(params, 100)
   const direction = parseReviewDetailDirection(optionalParam(params, 'direction'))
   const filter = parseReviewDetailFilter(optionalParam(params, 'filter'))
+  const process = parseReviewProcessMode(optionalParam(params, 'process'))
   const ordinal = parsePositiveInteger(params, 'ordinal')
   const afterOrdinal = parsePositiveInteger(params, 'afterOrdinal')
   if (ordinal !== undefined && afterOrdinal !== undefined) {
@@ -194,6 +202,7 @@ export function parseReviewDetailQuery(params: URLSearchParams): ReviewDetailQue
     ...(afterOrdinal === undefined ? {} : { afterOrdinal }),
     ...(direction ? { direction } : {}),
     ...(filter ? { filter } : {}),
+    ...(process ? { process } : {}),
     ...(limit === undefined ? {} : { limit }),
   }
 }

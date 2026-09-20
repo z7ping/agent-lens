@@ -513,10 +513,63 @@ function normalizeHistoryIndex(value: unknown) {
     if (item.preview !== undefined && typeof item.preview !== 'string') {
       throw httpError(500, 'Live adapter history index preview is invalid')
     }
+    let summary
+    if (item.summary !== undefined) {
+      if (!item.summary || typeof item.summary !== 'object' || Array.isArray(item.summary)) {
+        throw httpError(500, 'Live adapter history round summary is invalid')
+      }
+      const round = item.summary as Record<string, unknown>
+      if (!round.process || typeof round.process !== 'object' || Array.isArray(round.process)) {
+        throw httpError(500, 'Live adapter history process summary is invalid')
+      }
+      const process = round.process as Record<string, unknown>
+      const numeric = ['itemCount', 'messageCount', 'toolCount', 'errorCount', 'durationMs'] as const
+      if (typeof process.revision !== 'string' || !process.revision
+        || !numeric.every(key => typeof process[key] === 'number' && Number.isFinite(process[key]) && Number(process[key]) >= 0)
+        || (process.availability !== 'available' && process.availability !== 'partial')) {
+        throw httpError(500, 'Live adapter history process summary is invalid')
+      }
+      if (round.promptText !== undefined && typeof round.promptText !== 'string') throw httpError(500, 'Live history prompt text is invalid')
+      if (round.finalText !== undefined && typeof round.finalText !== 'string') throw httpError(500, 'Live history final text is invalid')
+      if (round.modelLabel !== undefined && typeof round.modelLabel !== 'string') throw httpError(500, 'Live history model label is invalid')
+      let terminal
+      if (round.terminal !== undefined) {
+        if (!round.terminal || typeof round.terminal !== 'object' || Array.isArray(round.terminal)) {
+          throw httpError(500, 'Live history terminal summary is invalid')
+        }
+        const value = round.terminal as Record<string, unknown>
+        if (!['completed', 'stopped', 'aborted', 'error'].includes(String(value.status))) {
+          throw httpError(500, 'Live history terminal status is invalid')
+        }
+        if (value.detail !== undefined && typeof value.detail !== 'string') {
+          throw httpError(500, 'Live history terminal detail is invalid')
+        }
+        terminal = {
+          status: value.status as 'completed' | 'stopped' | 'aborted' | 'error',
+          ...(typeof value.detail === 'string' && value.detail ? { detail: value.detail.slice(0, 500) } : {}),
+        }
+      }
+      summary = {
+        ...(typeof round.promptText === 'string' ? { promptText: round.promptText } : {}),
+        ...(typeof round.finalText === 'string' ? { finalText: round.finalText } : {}),
+        ...(typeof round.modelLabel === 'string' ? { modelLabel: round.modelLabel.slice(0, 240) } : {}),
+        ...(terminal ? { terminal } : {}),
+        process: {
+          revision: process.revision,
+          itemCount: Number(process.itemCount),
+          messageCount: Number(process.messageCount),
+          toolCount: Number(process.toolCount),
+          errorCount: Number(process.errorCount),
+          durationMs: Number(process.durationMs),
+          availability: process.availability,
+        },
+      }
+    }
     return {
       cursor: item.cursor,
       ordinal: Number(item.ordinal),
       ...(typeof item.preview === 'string' ? { preview: item.preview.slice(0, 120) } : {}),
+      ...(summary ? { summary } : {}),
     }
   })
   return { total: Number(row.total), items }

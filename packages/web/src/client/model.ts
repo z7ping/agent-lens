@@ -23,6 +23,7 @@ import type {
   ManagedAssetRoot,
   LiveUpdateEventDto,
   ReviewDetailFilter,
+  ReviewInteractionDto,
   ReviewMessageAttachmentDto,
   ReviewResponseDto,
   ReviewSessionDetailDto,
@@ -337,6 +338,14 @@ export class AgentLensClientModel {
 
   reviewAttachments = (observationId: string): Promise<ReviewMessageAttachmentDto[]> =>
     this.api.reviewAttachments(observationId)
+
+  reviewProcessDetail = (
+    sessionId: string,
+    ordinal: number,
+    revision: string,
+    signal?: AbortSignal,
+  ): Promise<ReviewInteractionDto | null> =>
+    this.api.reviewProcessDetail(sessionId, ordinal, revision, signal)
 
   sourceRecord = (id: string): Promise<SourceRecordResponseDto> => this.api.sourceRecord(id)
   sourceRecords = (ids: readonly string[]): Promise<SourceRecordResponseDto[]> => this.api.sourceRecords(ids)
@@ -1114,6 +1123,7 @@ export class AgentLensClientModel {
         limit: REVIEW_DETAIL_PAGE_SIZE,
         direction: detail.page.direction,
         filter: detail.page.filter,
+        process: 'summary',
       })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       const latest = this.snapshot.review
@@ -1150,7 +1160,7 @@ export class AgentLensClientModel {
       review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' },
     })
     try {
-      const detail = await this.api.reviewDetail(selectedId, { filter, limit: REVIEW_DETAIL_PAGE_SIZE })
+      const detail = await this.api.reviewDetail(selectedId, { filter, limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       this.publish({
         ...this.snapshot,
@@ -1179,7 +1189,7 @@ export class AgentLensClientModel {
       review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' },
     })
     try {
-      const detail = await this.api.reviewDetail(selectedId, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
+      const detail = await this.api.reviewDetail(selectedId, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       this.publish({
         ...this.snapshot,
@@ -1208,7 +1218,7 @@ export class AgentLensClientModel {
       review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' },
     })
     try {
-      const detail = await this.api.reviewDetail(selectedId, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE })
+      const detail = await this.api.reviewDetail(selectedId, { direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       this.publish({
         ...this.snapshot,
@@ -1235,7 +1245,7 @@ export class AgentLensClientModel {
     const generation = ++this.detailGeneration
     this.publish({ ...this.snapshot, review: { ...current, detailLoading: true, detailLoadingMore: false, error: '' } })
     try {
-      const detail = await this.api.reviewDetail(selectedId, { ordinal })
+      const detail = await this.api.reviewDetail(selectedId, { ordinal, process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       this.publish({ ...this.snapshot, review: { ...this.snapshot.review, detail, detailLoading: false, error: '' } })
     } catch (error) {
@@ -1377,7 +1387,7 @@ export class AgentLensClientModel {
       },
     })
     try {
-      const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })
+      const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
@@ -1493,8 +1503,8 @@ export class AgentLensClientModel {
 
     for (let page = 0; page < 5; page += 1) {
       const next = await this.api.reviewDetail(selectedId, cursor
-        ? { cursor, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all' }
-        : { afterOrdinal: last.ordinal, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all' })
+        ? { cursor, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all', process: 'summary' }
+        : { afterOrdinal: last.ordinal, direction: 'forward', limit: REVIEW_DETAIL_PAGE_SIZE, filter: 'all', process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== selectedId) return
       merged = mergeReviewTail(merged, next)
       if (!next.page.hasMore || !next.page.nextCursor) {

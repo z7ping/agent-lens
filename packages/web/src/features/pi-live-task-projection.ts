@@ -1,4 +1,4 @@
-import type { PiLiveStateDto } from '@agent-lens/protocol'
+import type { LiveHistoryIndexItemDto, PiLiveStateDto } from '@agent-lens/protocol'
 import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
 import type { PiLiveHistoryItem, PiLiveTurnSection } from './pi-live-history'
 import { currentProductLocale, translateProduct } from '../i18n/runtime'
@@ -229,6 +229,21 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
   return result
 }
 
+export function projectPiLiveHistoryIndexRound(item: LiveHistoryIndexItemDto): TaskRoundModel {
+  return {
+    id: `pi-index-round-${item.ordinal}`,
+    semanticId: `pi-round-${item.ordinal}`,
+    ordinal: item.ordinal,
+    label: translateProduct('piLive:projection.round', { count: item.ordinal }),
+    state: 'settled',
+    preview: item.preview,
+    toolCount: item.summary?.process.toolCount ?? 0,
+    errorCount: item.summary?.process.errorCount ?? 0,
+    durationMs: item.summary?.process.durationMs ?? 0,
+    highLatency: false,
+  }
+}
+
 export function projectPiLiveRunningRound(input: PiLiveRunningRoundProjectionInput): TaskRoundModel {
   const tools = input.items.filter((item): item is Extract<PiLiveHistoryItem, { kind: 'tool' }> => item.kind === 'tool')
   return {
@@ -247,6 +262,7 @@ export function projectPiLiveTaskDetail(input: {
   state: PiLiveStateDto | null
   connected: boolean
   historyRounds: PiLiveTaskRoundProjection[]
+  historyRoundModels?: TaskRoundModel[] | undefined
   runningRound?: TaskRoundModel | undefined
 }): TaskDetailModel {
   const state = input.state
@@ -268,7 +284,7 @@ export function projectPiLiveTaskDetail(input: {
       { value: state?.processId ?? '—', label: 'PID' },
     ],
     rounds: [
-      ...input.historyRounds.map(round => round.model),
+      ...(input.historyRoundModels ?? input.historyRounds.map(round => round.model)),
       ...(input.runningRound ? [input.runningRound] : []),
     ],
   }

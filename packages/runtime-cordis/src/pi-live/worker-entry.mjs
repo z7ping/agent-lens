@@ -426,6 +426,130 @@ function entryId(value) {
   return typeof id === 'string' && id ? id : undefined
 }
 
+function messageText(value) {
+  const message = record(value)
+  const content = message.content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content.map(part => {
+    if (typeof part === 'string') return part
+    const item = record(part)
+    return item.type === 'text' && typeof item.text === 'string' ? item.text : ''
+  }).filter(Boolean).join('\n\n').trim()
+}
+
+function assistantBlocks(value) {
+  const message = record(value)
+  const content = Array.isArray(message.content) ? message.content : []
+  return content.map(record)
+}
+
+function entryTimestampMs(value) {
+  const row = record(value)
+  const message = record(row.message)
+  const raw = row.timestamp ?? message.timestamp
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw
+  if (typeof raw === 'string') {
+    const parsed = Date.parse(raw)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+function roundSummary(all, row, nextEntryIndex) {
+  const start = row.entryIndex
+  const end = Math.max(start + 1, nextEntryIndex)
+  const entries = all.slice(start, end)
+  const promptEntry = record(entries[0])
+  const promptMessage = record(promptEntry.message)
+  const promptText = messageText(promptMessage)
+
+  let finalAssistantIndex = -1
+  for (let index = entries.length - 1; index >= 1; index -= 1) {
+    const entry = record(entries[index])
+    const message = record(entry.message)
+    if (entry.type !== 'message' || message.role !== 'assistant') continue
+    const blocks = assistantBlocks(message)
+    const hasToolCall = blocks.some(block => block.type === 'toolCall')
+    const text = messageText(message)
+    if (!hasToolCall && text) {
+      finalAssistantIndex = index
+      break
+    }
+  }
+
+  let itemCount = 0
+  let messageCount = 0
+  let toolCount = 0
+  let errorCount = 0
+  const processTimes = []
+  for (let index = 1; index < entries.length; index += 1) {
+    if (index === finalAssistantIndex) continue
+    const entry = record(entries[index])
+    const message = record(entry.message)
+    itemCount += 1
+    const timestamp = entryTimestampMs(entry)
+    if (timestamp !== undefined) processTimes.push(timestamp)
+    if (entry.type === 'message' && message.role === 'assistant') {
+      const blocks = assistantBlocks(message)
+      const processMessages = blocks.filter(block => block.type === 'thinking' || block.type === 'text').length
+      messageCount += processMessages || (messageText(message) ? 1 : 0)
+      toolCount += blocks.filter(block => block.type === 'toolCall').length
+    }
+    if (entry.type === 'message' && (message.role === 'toolResult' || message.role === 'tool')) {
+      if (message.isError === true || message.error === true) errorCount += 1
+    }
+  }
+
+  const finalEntry = finalAssistantIndex >= 0 ? record(entries[finalAssistantIndex]) : undefined
+  const finalMessage = finalEntry ? record(finalEntry.message) : {}
+  const finalText = finalEntry ? messageText(finalMessage) : ''
+  const provider = typeof finalMessage.provider === 'string' ? finalMessage.provider.trim() : ''
+  const model = typeof finalMessage.model === 'string' ? finalMessage.model.trim() : ''
+  const modelLabel = [provider, model].filter(Boolean).join(' / ')
+  const stopReason = typeof finalMessage.stopReason === 'string'
+    ? finalMessage.stopReason.trim()
+    : typeof finalMessage.stop_reason === 'string'
+      ? finalMessage.stop_reason.trim()
+      : ''
+  const errorMessage = typeof finalMessage.errorMessage === 'string'
+    ? finalMessage.errorMessage.trim()
+    : typeof finalMessage.error_message === 'string'
+      ? finalMessage.error_message.trim()
+      : ''
+  const terminalStatus = stopReason === 'aborted'
+    ? 'aborted'
+    : stopReason === 'error' || errorMessage
+      ? 'error'
+      : stopReason
+        ? 'completed'
+        : ''
+  const firstProcessAt = processTimes.length ? Math.min(...processTimes) : undefined
+  const lastProcessAt = processTimes.length ? Math.max(...processTimes) : undefined
+  const lastId = entries.length ? entryId(entries.at(-1)) : undefined
+
+  return {
+    ...(promptText ? { promptText } : {}),
+    ...(finalText ? { finalText } : {}),
+    ...(modelLabel ? { modelLabel } : {}),
+    ...(terminalStatus ? {
+      terminal: {
+        status: terminalStatus,
+        ...((stopReason || errorMessage) ? { detail: [stopReason, errorMessage].filter(Boolean).join(' · ') } : {}),
+      },
+    } : {}),
+    process: {
+      revision: [row.cursor, entries.length, lastId ?? 'empty'].join(':'),
+      itemCount,
+      messageCount,
+      toolCount,
+      errorCount,
+      durationMs: firstProcessAt !== undefined && lastProcessAt !== undefined ? Math.max(0, lastProcessAt - firstProcessAt) : 0,
+      availability: 'available',
+    },
+  }
+}
+
 function roundIndex(all = session.sessionManager.getEntries()) {
   const lastEntryId = all.length ? entryId(all.at(-1)) : undefined
   const leafId = session.sessionManager.getLeafId()
@@ -462,6 +586,13 @@ function roundIndex(all = session.sessionManager.getEntries()) {
     }
     rows.push(row)
     roundByCursor.set(row.cursor, row)
+  }
+
+  const firstAffectedRound = appendOnly ? Math.max(0, cached.rows.length - 1) : 0
+  for (let index = firstAffectedRound; index < rows.length; index += 1) {
+    const row = rows[index]
+    const nextEntryIndex = rows[index + 1]?.entryIndex ?? all.length
+    row.summary = roundSummary(all, row, nextEntryIndex)
   }
 
   roundIndexCache = { entryCount: all.length, lastEntryId, leafId, rows, entryPositions, roundByCursor }
@@ -573,6 +704,7 @@ function historyIndex(queryValue) {
         cursor: row.cursor,
         ordinal: row.ordinal,
         ...(row.preview ? { preview: row.preview } : {}),
+        ...(row.summary ? { summary: row.summary } : {}),
       }] : [],
     }
   }

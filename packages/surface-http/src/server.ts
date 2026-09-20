@@ -736,7 +736,13 @@ export async function startHttpSurface(
       if (url.pathname.startsWith('/api/v1/review/')) {
         const id = decodeURIComponent(url.pathname.slice('/api/v1/review/'.length))
         if (!id) throw badRequest('logicalSessionId is required')
-        const detail = await review.get(id, parseReviewDetailQuery(url.searchParams))
+        const query = parseReviewDetailQuery(url.searchParams)
+        const priority: ForegroundReadPriority = query.process === 'summary'
+          ? 'critical'
+          : query.ordinal !== undefined
+            ? 'supporting'
+            : 'critical'
+        const detail = await withReadPriority(storage, priority, () => review.get(id, query))
         writeJson(response, detail ? 200 : 404, detail ?? { error: 'not_found' })
         return
       }
