@@ -1,0 +1,28 @@
+.local-resource-reference {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.local-resource-reference.is-block {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.local-resource-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.local-resource-value code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.local-resource-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
