@@ -633,7 +633,16 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
                    WHEN kind = 'tool.result' AND json_extract(payload_json, '$.success') = 0 THEN 1
                    WHEN kind = 'tool.result' AND json_type(payload_json, '$.success') IS NOT NULL THEN 0
                    ELSE NULL
-                 END AS error_flag
+                 END AS error_flag,
+                 CASE
+                   WHEN kind = 'session.lifecycle' THEN COALESCE(
+                     json_extract(payload_json, '$.event'),
+                     json_extract(payload_json, '$.action'),
+                     json_extract(payload_json, '$.type'),
+                     json_extract(payload_json, '$.status')
+                   )
+                   ELSE NULL
+                 END AS lifecycle_action
           FROM observations ${where}
           ORDER BY COALESCE(occurred_at, captured_at) ASC,
                    COALESCE(canonical_sequence, source_sequence, ${MAX_SEQUENCE}) ASC, id ASC
@@ -650,6 +659,9 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           ...(typeof row.occurred_at === 'string' ? { occurredAt: row.occurred_at } : {}),
           capturedAt: String(row.captured_at),
           ...(typeof row.error_flag === 'number' ? { error: row.error_flag === 1 } : {}),
+          ...(typeof row.lifecycle_action === 'string' && row.lifecycle_action
+            ? { lifecycleAction: row.lifecycle_action.trim().toLowerCase().replace(/[\s_:\-]+/g, '.') }
+            : {}),
         }))
       })
     },

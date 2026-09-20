@@ -307,7 +307,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
       evidenceCandidates: [],
     }
     const add = async (
-      kind: 'message.user' | 'message.assistant' | 'message.commentary' | 'message.reasoning' | 'tool.call' | 'tool.result' | 'model.changed',
+      kind: 'message.user' | 'message.assistant' | 'message.commentary' | 'message.reasoning' | 'tool.call' | 'tool.result' | 'model.changed' | 'session.lifecycle',
       nativeEventId: string,
       at: string,
       payload: unknown,
@@ -335,7 +335,16 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     await add('model.changed', 'summary-model', '2026-09-20T00:00:04.000Z', {
       provider: 'openai', model: 'gpt-5.6',
     })
-    await add('message.assistant', 'summary-final', '2026-09-20T00:00:05.000Z', { text: '检查完成' })
+    for (let index = 0; index < 80; index += 1) {
+      await add(
+        'session.lifecycle',
+        `summary-lifecycle-${index}`,
+        `2026-09-20T00:00:${String(5 + index).padStart(2, '0')}.000Z`,
+        { event: 'review.progress', index },
+      )
+    }
+    await add('message.assistant', 'summary-final', '2026-09-20T00:02:00.000Z', { text: '检查完成' })
+    await add('session.lifecycle', 'summary-terminal', '2026-09-20T00:02:01.000Z', { event: 'turn.completed' })
 
     const repository = storage.repositories.observations
     const originalQuery = repository.query.bind(repository)
@@ -344,6 +353,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     let fullQueries = 0
     let headerQueries = 0
     let batchReads = 0
+    let batchHydratedIds = 0
     repository.query = async query => {
       if (query.logicalSessionId === user.observation.logicalSessionId) fullQueries += 1
       return originalQuery(query)
@@ -354,6 +364,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     }
     if (originalGetMany) repository.getMany = async ids => {
       batchReads += 1
+      batchHydratedIds += ids.length
       return originalGetMany(ids)
     }
 
@@ -367,6 +378,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     assert.equal(fullQueries, 0)
     assert.ok(headerQueries > 0)
     assert.ok(batchReads > 0)
+    assert.ok(batchHydratedIds < 12, `expected only display facts to hydrate, got ${batchHydratedIds}`)
 
     const round = summary.interactions[0]!
     assert.equal(round.processMode, 'summary')
@@ -377,6 +389,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'commentary'), false)
     assert.equal(round.nodes.some(node => node.type === 'event' && node.kind === 'model.changed'), true)
     assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'assistant' && node.text === '检查完成'), true)
+    assert.equal(round.nodes.some(node => node.type === 'event' && node.kind === 'session.lifecycle'), true)
 
     const full = await projection.get(user.observation.logicalSessionId, { ordinal: 1, process: 'full' })
     assert.ok(full)

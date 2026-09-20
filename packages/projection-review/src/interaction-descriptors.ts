@@ -83,6 +83,14 @@ function headerCursor(item: ObservationHeader): ObservationCursor {
   }
 }
 
+function lifecycleActionFromPayload(value: unknown): string {
+  const payload = asRecord(value)
+  return (stringField(payload, 'event', 'action', 'type', 'status') ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_:\-]+/g, '.')
+}
+
 function observationHeader(item: CanonicalObservation): ObservationHeader {
   return {
     id: item.id,
@@ -95,6 +103,9 @@ function observationHeader(item: CanonicalObservation): ObservationHeader {
     ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
     capturedAt: item.capturedAt,
     ...(item.kind === 'tool.result' ? { error: observationError(item) } : {}),
+    ...(item.kind === 'session.lifecycle' && lifecycleActionFromPayload(item.payload)
+      ? { lifecycleAction: lifecycleActionFromPayload(item.payload) }
+      : {}),
   }
 }
 
@@ -108,15 +119,10 @@ function compareObservationCursor(left: ObservationCursor, right: ObservationCur
 }
 
 function normalizedLifecycleAction(observation: CanonicalObservation): string {
-  const payload = asRecord(observation.payload)
-  return (stringField(payload, 'event', 'action', 'type', 'status') ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_:\-]+/g, '.')
+  return lifecycleActionFromPayload(observation.payload)
 }
 
-function isTerminalLifecycle(observation: CanonicalObservation): boolean {
-  if (observation.kind !== 'session.lifecycle') return false
+function isTerminalLifecycleAction(action: string | undefined): boolean {
   return [
     'turn.completed',
     'turn.complete',
@@ -126,7 +132,11 @@ function isTerminalLifecycle(observation: CanonicalObservation): boolean {
     'turn.stop',
     'turn.aborted',
     'turn.error',
-  ].includes(normalizedLifecycleAction(observation))
+  ].includes(action ?? '')
+}
+
+function isTerminalLifecycle(observation: CanonicalObservation): boolean {
+  return observation.kind === 'session.lifecycle' && isTerminalLifecycleAction(normalizedLifecycleAction(observation))
 }
 
 function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
@@ -485,7 +495,7 @@ export class InteractionDescriptorStore {
     const preliminaryIds = new Set<string>()
     for (const group of groups) {
       for (const header of group.headers) {
-        if (header.kind === 'session.lifecycle') preliminaryIds.add(header.id)
+        if (header.kind === 'session.lifecycle' && header.lifecycleAction === undefined) preliminaryIds.add(header.id)
         if (header.kind === 'tool.result' && header.error === undefined) preliminaryIds.add(header.id)
       }
     }
@@ -496,6 +506,8 @@ export class InteractionDescriptorStore {
     for (const group of groups) {
       const terminalIds = new Set(group.headers
         .filter(header => {
+          if (header.kind !== 'session.lifecycle') return false
+          if (header.lifecycleAction !== undefined) return isTerminalLifecycleAction(header.lifecycleAction)
           const observation = preliminary.get(header.id)
           return observation ? isTerminalLifecycle(observation) : false
         })
