@@ -58,12 +58,20 @@ function stripLocation(value: string): LocalFileTarget | null {
     }
   }
 
-  const suffix = value.match(/^(.*):(\d+)(?::(\d+))?$/)
-  if (suffix && isAbsoluteLocalPath(suffix[1]!)) {
+  const lineColumn = value.match(/^(.*):(\d+):(\d+)$/)
+  if (lineColumn && isAbsoluteLocalPath(lineColumn[1]!)) {
     return {
-      path: suffix[1]!,
-      line: Number(suffix[2]),
-      ...(suffix[3] ? { column: Number(suffix[3]) } : {}),
+      path: lineColumn[1]!,
+      line: Number(lineColumn[2]),
+      column: Number(lineColumn[3]),
+    }
+  }
+
+  const lineOnly = value.match(/^(.*):(\d+)$/)
+  if (lineOnly && isAbsoluteLocalPath(lineOnly[1]!)) {
+    return {
+      path: lineOnly[1]!,
+      line: Number(lineOnly[2]),
     }
   }
 
@@ -102,7 +110,7 @@ function blockedLabel(
     : t('localFilePreview.unavailable')
 }
 
-type LocalFileLinkProps = Omit<ComponentPropsWithoutRef<'a'>, 'href'> & { href?: string }
+type LocalFileLinkProps = Omit<ComponentPropsWithoutRef<'a'>, 'href'> & { href?: string | undefined }
 
 export function LocalFileLink({
   href,
