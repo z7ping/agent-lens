@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 import { SqliteLaunchableProjectReader } from './launchable-projects'
+import { refreshLaunchableSessionIndex } from './launchable-project-index'
 
 const BASE_TIME = '2026-09-01T00:00:00.000Z'
 
@@ -58,6 +59,10 @@ function seedSession(storage: SqliteStorageService, input: {
     INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, started_at, ended_at)
     VALUES (?, 'install-pi', ?, ?, ?, ?)
   `).run(input.sessionId, input.projectId, input.workspaceId, input.endedAt, input.endedAt)
+  refreshLaunchableSessionIndex(storage.db, undefined, {
+    projectId: input.projectId,
+    workspaceId: input.workspaceId,
+  })
   if (input.summary !== false) {
     storage.db.prepare(`
       INSERT INTO session_summary_projection(
@@ -307,4 +312,90 @@ test('launchable project reader hydrates a candidate page with one workspace bat
     result.items.map(item => item.workspaces[0]?.workspacePath),
     ['/workspace/a', '/workspace/b', '/workspace/c'],
   )
+})
+
+
+test('canonical repository writes maintain the launchable project index incrementally', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    await storage.repositories.sessions.putProject({
+      id: 'indexed-project',
+      name: 'Indexed Project',
+      repositoryIdentity: 'z7ping/indexed-project',
+      createdAt: BASE_TIME,
+      lastSeenAt: isoMinute(1),
+    })
+    await storage.repositories.sessions.putWorkspace({
+      id: 'indexed-workspace',
+      hostId: 'host-local',
+      projectId: 'indexed-project',
+      path: '/workspace/indexed-project',
+    })
+    await storage.repositories.sessions.putLogicalSession({
+      id: 'indexed-session',
+      installationId: 'install-pi',
+      projectId: 'indexed-project',
+      workspaceId: 'indexed-workspace',
+      startedAt: isoMinute(2),
+      endedAt: isoMinute(3),
+    })
+
+    const projectIndex = storage.db.prepare(`
+      SELECT project_name, repository_identity, last_seen_at
+      FROM launchable_project_index
+      WHERE project_key = 'indexed-project'
+    `).get() as { project_name: string; repository_identity: string; last_seen_at: string }
+    assert.deepEqual(projectIndex, {
+      project_name: 'Indexed Project',
+      repository_identity: 'z7ping/indexed-project',
+      last_seen_at: isoMinute(3),
+    })
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(result.items[0]?.projectId, 'indexed-project')
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/indexed-project')
+
+    await storage.repositories.sessions.putWorkspace({
+      id: 'indexed-workspace',
+      hostId: 'host-local',
+      projectId: 'indexed-project',
+      path: '/workspace/indexed-project-moved',
+    })
+    const moved = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(moved.items[0]?.workspaces[0]?.workspacePath, '/workspace/indexed-project-moved')
+    assert.equal(moved.items[0]?.workspaces[0]?.validationStatus, 'unknown')
+  } finally {
+    storage.close()
+  }
+})
+
+test('launchable workspace validation cache persists without touching canonical session history', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'cached-project',
+      projectName: 'Cached Project',
+      workspaceId: 'cached-workspace',
+      workspacePath: '/workspace/cached-project',
+      sessionId: 'cached-session',
+      endedAt: isoMinute(4),
+    })
+
+    await storage.launchableProjects.recordWorkspaceValidation?.({
+      workspaceId: 'cached-workspace',
+      workspacePath: '/workspace/cached-project',
+      status: 'valid',
+      validatedAt: isoMinute(5),
+    })
+    const result = await storage.launchableProjects.query({ limit: 10 })
+
+    assert.equal(result.items[0]?.workspaces[0]?.validationStatus, 'valid')
+    assert.equal(result.items[0]?.workspaces[0]?.validatedAt, isoMinute(5))
+  } finally {
+    storage.close()
+  }
 })
