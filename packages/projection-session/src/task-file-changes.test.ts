@@ -4,6 +4,7 @@ import type { CanonicalObservation } from '@agent-lens/core'
 import {
   observedTaskFileChanges,
   patchMutationPaths,
+  reconcileTaskFileChanges,
   summarizeObservedTaskFileChanges,
   toolMutationIntent,
 } from './task-file-changes'
@@ -116,4 +117,89 @@ test('collapses repeated writes to one task-level row without guessing Git chang
   assert.equal(summary[0]?.changeType, 'unknown')
   assert.equal(summary[0]?.firstChangedAt, '2026-09-20T00:00:00.000Z')
   assert.equal(summary[0]?.lastChangedAt, '2026-09-20T00:01:00.000Z')
+})
+
+
+test('Git reconciliation is authoritative over observed writes and keeps tool evidence when paths match', () => {
+  const values = reconcileTaskFileChanges(
+    'session',
+    [{
+      logicalSessionId: 'session',
+      observationId: 'tool-write',
+      path: 'src/app.ts',
+      operation: 'write',
+      observedAt: '2026-09-20T00:01:00.000Z',
+      evidence: 'tool',
+      confidence: 'medium',
+    }],
+    [{
+      path: 'src/app.ts',
+      changeType: 'modified',
+      additions: 4,
+      deletions: 1,
+    }],
+    {
+      startedAt: '2026-09-20T00:00:00.000Z',
+      endedAt: '2026-09-20T00:02:00.000Z',
+    },
+  )
+
+  assert.deepEqual(values, [{
+    logicalSessionId: 'session',
+    path: 'src/app.ts',
+    changeType: 'modified',
+    additions: 4,
+    deletions: 1,
+    firstChangedAt: '2026-09-20T00:01:00.000Z',
+    lastChangedAt: '2026-09-20T00:01:00.000Z',
+    evidence: ['git', 'tool'],
+    confidence: 'exact',
+  }])
+})
+
+test('Git reconciliation drops tool writes that returned to the task-start baseline', () => {
+  const values = reconcileTaskFileChanges(
+    'session',
+    [{
+      logicalSessionId: 'session',
+      observationId: 'tool-write',
+      path: 'src/app.ts',
+      operation: 'write',
+      observedAt: '2026-09-20T00:01:00.000Z',
+      evidence: 'tool',
+      confidence: 'medium',
+    }],
+    [],
+    {
+      startedAt: '2026-09-20T00:00:00.000Z',
+      endedAt: '2026-09-20T00:02:00.000Z',
+    },
+  )
+
+  assert.deepEqual(values, [])
+})
+
+test('non-Git reconciliation keeps observed evidence without inventing A/M or line counts', () => {
+  const values = reconcileTaskFileChanges(
+    'session',
+    [{
+      logicalSessionId: 'session',
+      observationId: 'tool-write',
+      path: 'src/app.ts',
+      operation: 'write',
+      observedAt: '2026-09-20T00:01:00.000Z',
+      evidence: 'tool',
+      confidence: 'medium',
+    }],
+    null,
+    {
+      startedAt: '2026-09-20T00:00:00.000Z',
+      endedAt: '2026-09-20T00:02:00.000Z',
+    },
+  )
+
+  assert.equal(values[0]?.changeType, 'unknown')
+  assert.equal(values[0]?.additions, undefined)
+  assert.equal(values[0]?.deletions, undefined)
+  assert.deepEqual(values[0]?.evidence, ['tool'])
 })
