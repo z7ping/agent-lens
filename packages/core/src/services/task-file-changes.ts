@@ -1,5 +1,4 @@
 import type { LogicalSessionId, ObservationId } from '../domain/common'
-import type { CanonicalObservation } from '../domain/observation'
 
 export type TaskFileChangeType = 'added' | 'modified' | 'deleted' | 'renamed' | 'unknown'
 export type TaskFileChangeEvidence = 'tool' | 'filesystem' | 'git'
@@ -38,8 +37,41 @@ export interface TaskFileChangeReader {
   listBySession(logicalSessionId: LogicalSessionId): Promise<TaskFileChangeRecord[]>
 }
 
-/** Writable/rebuildable projection contract. */
+export interface TaskFileChangeCapture {
+  runtimeSessionId: string
+  logicalSessionId?: LogicalSessionId
+  workspacePath: string
+  gitRootPath?: string
+  baselineTreeSha?: string
+  baselineCapturedAt: string
+  finalTreeSha?: string
+  finalizedAt?: string
+  changes?: TaskFileChangeRecord[]
+}
+
+/**
+ * Durable capture + rebuildable read model.
+ *
+ * Capture rows preserve what was known at task time; projection rows are only
+ * the fast Task/Review read model and can be reconstructed from finalized
+ * captures.
+ */
 export interface TaskFileChangeProjectionStore extends TaskFileChangeReader {
-  applyObservation(observation: CanonicalObservation): Promise<void>
+  putBaseline(capture: TaskFileChangeCapture): Promise<void>
+  getByRuntime(runtimeSessionId: string): Promise<TaskFileChangeCapture | null>
+  bindRuntime(runtimeSessionId: string, logicalSessionId: LogicalSessionId): Promise<void>
+  finalizeRuntime(
+    runtimeSessionId: string,
+    input: {
+      logicalSessionId: LogicalSessionId
+      finalTreeSha?: string
+      finalizedAt: string
+      changes: TaskFileChangeRecord[]
+    },
+  ): Promise<void>
+  replaceSession(
+    logicalSessionId: LogicalSessionId,
+    changes: TaskFileChangeRecord[],
+  ): Promise<void>
   rebuild(input?: { logicalSessionId?: LogicalSessionId; signal?: AbortSignal }): Promise<void>
 }
