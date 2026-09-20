@@ -1,4 +1,5 @@
 import type { AssetBindingId, CoverageId, LogicalSessionId, ObservationId } from '../domain/common'
+import type { ObservationKind } from '../domain/observation'
 
 export interface CoreEventMap {
   'source/registered': { sourceId: string }
@@ -7,6 +8,7 @@ export interface CoreEventMap {
   'observation/committed': {
     observationId: ObservationId
     logicalSessionId: LogicalSessionId
+    kind: ObservationKind
     status: 'created' | 'merged'
   }
   'coverage/changed': { coverageId: CoverageId }
