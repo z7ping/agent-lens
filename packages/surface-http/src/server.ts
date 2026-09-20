@@ -730,14 +730,19 @@ export async function startHttpSurface(
       if (reviewFileChangesMatch) {
         const id = decodeURIComponent(reviewFileChangesMatch[1] ?? '')
         if (!id) throw badRequest('logicalSessionId is required')
-        const items = storage.taskFileChanges
-          ? await withReadPriority(storage, 'supporting', () => storage.taskFileChanges!.listBySession(id))
-          : []
+        const [items, capture] = storage.taskFileChanges
+          ? await withReadPriority(storage, 'supporting', () => Promise.all([
+              storage.taskFileChanges!.listBySession(id),
+              storage.taskFileChanges!.getLatestBySession(id),
+            ]))
+          : [[], null] as const
         const counted = items.filter(item =>
           item.additions !== undefined || item.deletions !== undefined
         )
         const body: TaskFileChangesResponseDto = {
           logicalSessionId: id,
+          ...(capture?.workspacePath ? { workspacePath: capture.workspacePath } : {}),
+          ...(capture?.gitRootPath ? { rootPath: capture.gitRootPath } : {}),
           items: items.map(item => ({
             path: item.path,
             changeType: item.changeType,
