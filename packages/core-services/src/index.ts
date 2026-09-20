@@ -25,6 +25,10 @@ import type {
   IdentityService,
   InstallationIdentityHint,
   LiveAdapter,
+  LiveRuntimeEvent,
+  LiveRuntimeObserver,
+  LiveRuntimeObserverContext,
+  LiveRuntimeSettledContext,
   LiveService,
   LogicalSession,
   LogicalSessionIdentityHint,
@@ -97,6 +101,7 @@ export class DefaultSourceService implements SourceService {
 
 export class DefaultLiveService implements LiveService {
   private readonly adapters = new Map<string, LiveAdapter>()
+  private readonly observers = new Set<LiveRuntimeObserver>()
 
   register(adapter: LiveAdapter): Disposable {
     const id = adapter.manifest.liveId
@@ -113,10 +118,135 @@ export class DefaultLiveService implements LiveService {
       )
     }
 
-    this.adapters.set(id, adapter)
+    const watchers = new Map<string, () => void>()
+    const observerContext = (runtime: Awaited<ReturnType<LiveAdapter['state']>>): LiveRuntimeObserverContext => ({
+      liveId: adapter.manifest.liveId,
+      productId: adapter.manifest.productId,
+      runtime,
+    })
+    const notifyBeforeSend = async (runtimeSessionId: string) => {
+      if (!this.observers.size) return
+      const runtime = await adapter.state(runtimeSessionId)
+      const context = observerContext(runtime)
+      await Promise.all([...this.observers].map(observer =>
+        Promise.resolve(observer.beforeSend?.(context)).catch(error => {
+          console.warn('[AgentLens] Live runtime observer beforeSend failed', error)
+        }),
+      ))
+    }
+    const notifySettled = async (
+      runtimeSessionId: string,
+      reason: LiveRuntimeSettledContext['reason'],
+      event?: LiveRuntimeEvent,
+      knownRuntime?: Awaited<ReturnType<LiveAdapter['state']>>,
+    ) => {
+      if (!this.observers.size) return
+      let runtime = knownRuntime
+      if (!runtime) {
+        try {
+          runtime = await adapter.state(runtimeSessionId)
+        } catch (error) {
+          console.warn('[AgentLens] Live runtime observer state lookup failed', error)
+          return
+        }
+      }
+      const context: LiveRuntimeSettledContext = {
+        ...observerContext(runtime),
+        reason,
+        ...(event ? { event } : {}),
+      }
+      await Promise.all([...this.observers].map(observer =>
+        Promise.resolve(observer.settled?.(context)).catch(error => {
+          console.warn('[AgentLens] Live runtime observer settled failed', error)
+        }),
+      ))
+    }
+    const ensureWatcher = (runtimeSessionId: string) => {
+      if (watchers.has(runtimeSessionId) || !adapter.capabilities.has('stream')) return
+      const unsubscribe = adapter.subscribe(runtimeSessionId, event => {
+        const normalized = event.normalizedEvent
+        const completed = normalized?.type === 'completed'
+        const failed = normalized?.type === 'status'
+          && (normalized.status === 'failed' || normalized.status === 'terminated')
+        if (completed) {
+          void notifySettled(
+            runtimeSessionId,
+            normalized.status === 'failed' ? 'failed' : 'completed',
+            event,
+          )
+        } else if (failed) {
+          void notifySettled(
+            runtimeSessionId,
+            normalized.status === 'failed' ? 'failed' : 'terminated',
+            event,
+          )
+        }
+      })
+      watchers.set(runtimeSessionId, unsubscribe)
+    }
+
+    const wrapped = new Proxy(adapter, {
+      get: (target, property, receiver) => {
+        if (property === 'send') {
+          return async (
+            runtimeSessionId: string,
+            message: Parameters<LiveAdapter['send']>[1],
+            options?: Parameters<LiveAdapter['send']>[2],
+          ) => {
+            await notifyBeforeSend(runtimeSessionId)
+            ensureWatcher(runtimeSessionId)
+            return target.send(runtimeSessionId, message, options)
+          }
+        }
+        if (property === 'interrupt' && target.interrupt) {
+          return async (runtimeSessionId: string) => {
+            const result = await target.interrupt!(runtimeSessionId)
+            await notifySettled(runtimeSessionId, 'interrupted')
+            return result
+          }
+        }
+        if (property === 'terminate') {
+          return async (runtimeSessionId: string) => {
+            let runtime: Awaited<ReturnType<LiveAdapter['state']>> | undefined
+            try {
+              runtime = await target.state(runtimeSessionId)
+            } catch {
+              runtime = undefined
+            }
+            if (runtime) await notifySettled(runtimeSessionId, 'terminated', undefined, runtime)
+            watchers.get(runtimeSessionId)?.()
+            watchers.delete(runtimeSessionId)
+            return target.terminate(runtimeSessionId)
+          }
+        }
+        if (property === 'dispose') {
+          return async () => {
+            for (const unsubscribe of watchers.values()) unsubscribe()
+            watchers.clear()
+            return target.dispose()
+          }
+        }
+        const value = Reflect.get(target as object, property, receiver)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as LiveAdapter
+
+    this.adapters.set(id, wrapped)
     return {
       dispose: () => {
-        if (this.adapters.get(id) === adapter) this.adapters.delete(id)
+        if (this.adapters.get(id) !== wrapped) return
+        for (const unsubscribe of watchers.values()) unsubscribe()
+        watchers.clear()
+        this.adapters.delete(id)
+      },
+    }
+  }
+
+  observe(observer: LiveRuntimeObserver): Disposable {
+    this.observers.add(observer)
+    return {
+      dispose: () => {
+        this.observers.delete(observer)
       },
     }
   }

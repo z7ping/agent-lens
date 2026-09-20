@@ -1,3 +1,4 @@
+export * from './task-file-change-plugin'
 export * from './summary-plugin'
 
 import type {
@@ -292,3 +293,6 @@ export const sessionProjectionInternals = {
   compareObservations,
   cursorForObservation,
 }
+
+export * from './git-workspace-snapshot'
+export * from './task-file-changes'

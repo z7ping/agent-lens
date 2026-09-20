@@ -135,6 +135,11 @@ export type LiveRuntimeStatus =
 
 export interface LiveRuntimeState {
   runtimeSessionId: string
+  /**
+   * Internal AgentLens logical history identity when an Adapter can resolve it.
+   * Product HTTP normalization intentionally does not expose this field.
+   */
+  logicalSessionId?: string | undefined
   /** Agent-neutral human-readable task/session title for Product Surface navigation. */
   title?: string | undefined
   status: LiveRuntimeStatus
@@ -661,8 +666,29 @@ export interface LiveAdapter {
   dispose(): Promise<void>
 }
 
+export interface LiveRuntimeObserverContext {
+  liveId: string
+  productId: AgentProductId
+  runtime: LiveRuntimeState
+}
+
+export interface LiveRuntimeSettledContext extends LiveRuntimeObserverContext {
+  reason: 'completed' | 'interrupted' | 'terminated' | 'failed'
+  event?: LiveRuntimeEvent | undefined
+}
+
+/**
+ * Runtime-neutral task lifecycle observation. Observers must not alter Adapter
+ * semantics; failures are isolated from the underlying Live operation.
+ */
+export interface LiveRuntimeObserver {
+  beforeSend?(context: LiveRuntimeObserverContext): void | Promise<void>
+  settled?(context: LiveRuntimeSettledContext): void | Promise<void>
+}
+
 export interface LiveService {
   register(adapter: LiveAdapter): Disposable
+  observe(observer: LiveRuntimeObserver): Disposable
   list(): LiveAdapter[]
   get(liveId: string): LiveAdapter | null
 }

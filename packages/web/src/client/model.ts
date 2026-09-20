@@ -30,6 +30,7 @@ import type {
   ReviewSessionSummaryDto,
   SessionRelationshipResponseDto,
   SourceRecordResponseDto,
+  TaskFileChangesResponseDto,
   ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
@@ -68,6 +69,9 @@ export interface ClientSnapshot {
     detail: ReviewSessionDetailDto | null
     relationships: SessionRelationshipResponseDto | null
     relationshipError: string
+    fileChanges: TaskFileChangesResponseDto | null
+    fileChangesLoading: boolean
+    fileChangesError: string
     selectedId: string
     limit: number
     loading: boolean
@@ -280,6 +284,9 @@ export class AgentLensClientModel {
       detail: null,
       relationships: null,
       relationshipError: '',
+      fileChanges: null,
+      fileChangesLoading: false,
+      fileChangesError: '',
       selectedId: '',
       limit: INITIAL_REVIEW_LIMIT,
       loading: false,

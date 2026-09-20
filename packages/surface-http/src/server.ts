@@ -32,6 +32,7 @@ import {
   type SourceRecordResponseDto,
   type SourceRecordsResponseDto,
   type StorageDiagnosticsResponseDto,
+  type TaskFileChangesResponseDto,
 } from '@agent-lens/protocol'
 import type { PiLiveService } from '@agent-lens/runtime-cordis'
 import { handleAgentFilesRequest } from './agent-files-http'
@@ -720,6 +721,47 @@ export async function startHttpSurface(
         const body: ReviewMessageAttachmentsResponseDto = {
           observationId,
           items: reviewMessageAttachmentsFromPayload(observation.payload),
+        }
+        writeJson(response, 200, body)
+        return
+      }
+
+      const reviewFileChangesMatch = url.pathname.match(/^\/api\/v1\/review\/([^/]+)\/file-changes$/)
+      if (reviewFileChangesMatch) {
+        const id = decodeURIComponent(reviewFileChangesMatch[1] ?? '')
+        if (!id) throw badRequest('logicalSessionId is required')
+        const items = storage.taskFileChanges
+          ? await withReadPriority(storage, 'supporting', () => storage.taskFileChanges!.listBySession(id))
+          : []
+        const counted = items.filter(item =>
+          item.additions !== undefined || item.deletions !== undefined
+        )
+        const body: TaskFileChangesResponseDto = {
+          logicalSessionId: id,
+          items: items.map(item => ({
+            path: item.path,
+            changeType: item.changeType,
+            ...(item.oldPath ? { oldPath: item.oldPath } : {}),
+            ...(item.additions === undefined ? {} : { additions: item.additions }),
+            ...(item.deletions === undefined ? {} : { deletions: item.deletions }),
+            firstChangedAt: item.firstChangedAt,
+            lastChangedAt: item.lastChangedAt,
+            evidence: [...item.evidence],
+            confidence: item.confidence,
+          })),
+          summary: {
+            count: items.length,
+            ...(counted.length ? {
+              additions: counted.reduce((sum, item) => sum + (item.additions ?? 0), 0),
+              deletions: counted.reduce((sum, item) => sum + (item.deletions ?? 0), 0),
+            } : {}),
+            exactCount: items.filter(item => item.confidence === 'exact').length,
+            observedCount: items.filter(item => item.confidence !== 'exact').length,
+          },
+          meta: {
+            protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
+            generatedAt: new Date().toISOString(),
+          },
         }
         writeJson(response, 200, body)
         return

@@ -1,7 +1,10 @@
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import type { AgentIntegrationRuntimeStatus, StorageService } from '@agent-lens/core'
 import { HubReviewProjection } from '@agent-lens/projection-review'
-import { SESSION_SUMMARY_PROJECTION_ID } from '@agent-lens/projection-session'
+import {
+  SESSION_SUMMARY_PROJECTION_ID,
+  TASK_FILE_CHANGE_PROJECTION_ID,
+} from '@agent-lens/projection-session'
 import type { DataRuntimeHealthDto, PiEcosystemQueryService } from '@agent-lens/protocol'
 import {
   defineAgentLensPlugin,
@@ -201,7 +204,8 @@ const applyHttpSurface = Object.assign(
 
     ctx.on('projection/rebuilt', event => {
       if (
-        event.projectionId !== SESSION_SUMMARY_PROJECTION_ID
+        (event.projectionId !== SESSION_SUMMARY_PROJECTION_ID
+          && event.projectionId !== TASK_FILE_CHANGE_PROJECTION_ID)
         || event.subjectType !== 'logical-session'
         || !event.subjectId
       ) return

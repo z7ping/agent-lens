@@ -11,6 +11,7 @@ import { IntegrationPackageService } from '@agent-lens/integration-packages'
 import {
   SESSION_SUMMARY_PROJECTION_ID,
   sessionSummaryProjectionPlugin,
+  taskFileChangeProjectionPlugin,
 } from '@agent-lens/projection-session'
 import {
   abortableDelay,
@@ -260,6 +261,7 @@ app.useRuntime(nodeRuntimePlugin, nodeRuntime)
 app.use(dataRuntimeStoragePlugin, { path: dbPath, budget: storageBudget.policy })
 app.useRuntime(coreServicesPlugin)
 app.useRuntime(sessionSummaryProjectionPlugin)
+app.useRuntime(taskFileChangeProjectionPlugin)
 app.useRuntime(capturePolicyPlugin)
 if (capabilities.localCapture) {
   if (integrationPackages) {

@@ -52,6 +52,7 @@ import {
   storageGrowthMetricsFromSnapshots,
   type StorageDiagnosticSnapshot,
 } from './storage-diagnostic-snapshots'
+import { SqliteTaskFileChangeProjectionStore } from './task-file-changes'
 import { SqliteToolUsageObservationReader } from './tool-usage-observations-v2'
 import { SqliteUnknownObservationProjection } from './unknown-observation-projection'
 
@@ -161,6 +162,7 @@ export class SqliteStorageService implements StorageService {
   readonly sessionSummaries: SqliteSessionSummaryReader
   readonly sessionSummaryProjection: SqliteSessionSummaryReader
   readonly launchableProjects: SqliteLaunchableProjectReader
+  readonly taskFileChanges: SqliteTaskFileChangeProjectionStore
   readonly toolUsageObservations: SqliteToolUsageObservationReader
   readonly unknownObservationProjection: SqliteUnknownObservationProjection
   readonly maintenance: SqliteStorageMaintenance
@@ -223,6 +225,7 @@ export class SqliteStorageService implements StorageService {
     this.sessionSummaries = sessionSummaries
     this.sessionSummaryProjection = sessionSummaries
     this.launchableProjects = new SqliteLaunchableProjectReader(this.executor)
+    this.taskFileChanges = new SqliteTaskFileChangeProjectionStore(this.executor)
     this.toolUsageObservations = new SqliteToolUsageObservationReader(this.executor)
     this.unknownObservationProjection = new SqliteUnknownObservationProjection(this.executor)
     this.maintenance = new SqliteStorageMaintenance(this.executor)

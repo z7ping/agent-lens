@@ -53,7 +53,12 @@ const CANONICAL_TABLES = new Set([
   'asset_state_observations',
   'tool_definitions',
 ])
-const EVIDENCE_TABLES = new Set(['evidence', 'observation_evidence', 'coverage'])
+const EVIDENCE_TABLES = new Set([
+  'evidence',
+  'observation_evidence',
+  'coverage',
+  'task_file_change_capture',
+])
 const PROJECTION_TABLES = new Set([
   'session_summary_projection',
   'unknown_observation_projection',
@@ -61,6 +66,7 @@ const PROJECTION_TABLES = new Set([
   'launchable_project_index',
   'launchable_workspace_index',
   'asset_current_state',
+  'task_file_change_projection',
 ])
 
 function storageCategoryForTable(tableName: string): StorageCategoryName {

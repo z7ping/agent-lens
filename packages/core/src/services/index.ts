@@ -67,6 +67,7 @@ import type {
 import type { SourceRawAuditReader } from './source-raw-retention'
 import type { MaintenanceJobStore } from './maintenance'
 import type { ToolUsageObservationReader } from './tool-usage'
+import type { TaskFileChangeProjectionStore } from './task-file-changes'
 
 export interface SourceService {
   register(definition: SourceDefinition): Disposable
@@ -572,6 +573,7 @@ export interface StorageService {
   readonly sessionSummaries?: SessionSummaryReader
   readonly sessionSummaryProjection?: SessionSummaryProjectionStore
   readonly launchableProjects?: LaunchableProjectReader
+  readonly taskFileChanges?: TaskFileChangeProjectionStore
   readonly toolUsageObservations?: ToolUsageObservationReader
   readonly maintenance?: StorageMaintenance
   readonly maintenanceJobs?: MaintenanceJobStore
@@ -589,3 +591,5 @@ export interface StorageService {
 
 export * from './source-raw-retention'
 export * from './source-raw-recovery-audit'
+
+export * from './task-file-changes'
