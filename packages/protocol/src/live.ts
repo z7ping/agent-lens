@@ -119,10 +119,28 @@ export interface LiveSnapshotDto {
   } | undefined
 }
 
+export interface LiveHistoryProcessSummaryDto {
+  revision: string
+  itemCount: number
+  messageCount: number
+  toolCount: number
+  errorCount: number
+  durationMs: number
+  availability: 'available' | 'partial'
+}
+
+export interface LiveHistoryRoundSummaryDto {
+  promptText?: string | undefined
+  finalText?: string | undefined
+  modelLabel?: string | undefined
+  process: LiveHistoryProcessSummaryDto
+}
+
 export interface LiveHistoryIndexItemDto {
   cursor: string
   ordinal: number
   preview?: string | undefined
+  summary?: LiveHistoryRoundSummaryDto | undefined
 }
 
 export interface LiveHistoryIndexQueryDto {
