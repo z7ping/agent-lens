@@ -441,3 +441,35 @@ test('migration 29 backfills launchable indexes for existing canonical sessions'
     storage.close()
   }
 })
+
+
+test('launchable project index can be rebuilt idempotently from canonical rows', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'rebuild-project',
+      projectName: 'Rebuild Project',
+      workspaceId: 'rebuild-workspace',
+      workspacePath: '/workspace/rebuild-project',
+      sessionId: 'rebuild-session',
+      endedAt: isoMinute(7),
+    })
+
+    storage.db.prepare('DELETE FROM launchable_workspace_index').run()
+    storage.db.prepare('DELETE FROM launchable_project_index').run()
+    assert.equal((await storage.launchableProjects.query({ limit: 10 })).items.length, 0)
+
+    await storage.launchableProjects.rebuild?.()
+    await storage.launchableProjects.rebuild?.()
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(result.items.length, 1)
+    assert.equal(result.items[0]?.projectId, 'rebuild-project')
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/rebuild-project')
+    assert.equal(result.items[0]?.workspaces[0]?.validationStatus, 'unknown')
+  } finally {
+    storage.close()
+  }
+})
