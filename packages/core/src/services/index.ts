@@ -185,8 +185,6 @@ export interface AssetInventoryEntry {
 /** Read-only storage contract used by projections and surfaces. */
 export interface AssetInventoryReader {
   listByInstallation(installationId: AgentInstallationId): Promise<AssetInventoryEntry[]>
-  /** Rebuild the derived current-state view from immutable asset state history. */
-  rebuildCurrentState?(): Promise<void>
 }
 
 export type SessionActivityKind = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
