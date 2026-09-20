@@ -4,6 +4,7 @@ import type { CanonicalObservation } from '@agent-lens/core'
 import {
   observedTaskFileChanges,
   patchMutationPaths,
+  summarizeObservedTaskFileChanges,
   toolMutationIntent,
 } from './task-file-changes'
 
@@ -85,4 +86,34 @@ test('extracts multiple files and rename semantics from apply_patch', () => {
     { path: 'src/c.ts', operation: 'delete' },
     { path: 'src/new.ts', oldPath: 'src/old.ts', operation: 'rename' },
   ])
+})
+
+
+test('collapses repeated writes to one task-level row without guessing Git change type', () => {
+  const summary = summarizeObservedTaskFileChanges([
+    {
+      logicalSessionId: 'session',
+      observationId: 'one',
+      path: 'src/app.ts',
+      operation: 'write',
+      observedAt: '2026-09-20T00:00:00.000Z',
+      evidence: 'tool',
+      confidence: 'medium',
+    },
+    {
+      logicalSessionId: 'session',
+      observationId: 'two',
+      path: 'src/app.ts',
+      operation: 'write',
+      observedAt: '2026-09-20T00:01:00.000Z',
+      evidence: 'tool',
+      confidence: 'medium',
+    },
+  ])
+
+  assert.equal(summary.length, 1)
+  assert.equal(summary[0]?.path, 'src/app.ts')
+  assert.equal(summary[0]?.changeType, 'unknown')
+  assert.equal(summary[0]?.firstChangedAt, '2026-09-20T00:00:00.000Z')
+  assert.equal(summary[0]?.lastChangedAt, '2026-09-20T00:01:00.000Z')
 })
