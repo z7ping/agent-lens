@@ -39,6 +39,7 @@ import {
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
+  type TaskFileChangesResponseDto,
   type SourceRecordResponseDto,
   type SourceRecordsResponseDto,
   type ToolAssetUsageResponseDto,
@@ -344,6 +345,15 @@ export class AgentLensApi {
       aggregateReadInFlight,
       `review-attachments:${observationId}`,
       () => requestJson<ReviewMessageAttachmentsResponseDto>(requestPath).then(result => result.items),
+    )
+  }
+
+  reviewFileChanges(id: string): Promise<TaskFileChangesResponseDto> {
+    const requestPath = `/api/v1/review/${encodeURIComponent(id)}/file-changes`
+    return shareInFlight(
+      aggregateReadInFlight,
+      `review-file-changes:${id}`,
+      () => requestJson<TaskFileChangesResponseDto>(requestPath),
     )
   }
 
