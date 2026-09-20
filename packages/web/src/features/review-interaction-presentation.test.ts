@@ -365,3 +365,39 @@ test('Review full-mode 没有 Process Summary 时仍从 Tool 节点统计', () =
   const stats = projectReviewInteractionToolStats({ nodes: [tool('tool-ok'), failed] })
   assert.deepEqual(stats, { toolCount: 2, errorCount: 1 })
 })
+
+
+test('Review Tool progress 仍属于 Process，不被元事件边界挪出去', () => {
+  const progress: ReviewEventNodeDto = {
+    type: 'event',
+    id: 'tool-progress',
+    at: '2026-09-01T00:00:01.500Z',
+    sourceId: 'codex',
+    kind: 'tool.progress',
+    category: 'unknown',
+    label: '工具进度',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:tool-progress'],
+    capturedAt: '2026-09-01T00:00:01.500Z',
+  }
+  const final: ReviewMessageNodeDto = {
+    type: 'message',
+    id: 'tool-progress-final',
+    role: 'assistant',
+    at: '2026-09-01T00:00:02.000Z',
+    sourceId: 'codex',
+    text: '完成',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:tool-progress-final'],
+    capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([progress, final])
+  assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type === 'process') {
+    assert.equal(entries[0].items[0]?.type, 'event')
+    if (entries[0].items[0]?.type === 'event') assert.equal(entries[0].items[0].node.id, 'tool-progress')
+  }
+  assert.equal(entries[1]?.type, 'message')
+})
