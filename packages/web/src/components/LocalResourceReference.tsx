@@ -1,4 +1,3 @@
-import type { ComponentPropsWithoutRef } from 'react'
 import { clientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalFileLink, parseLocalFileTarget } from './LocalFileLink'
@@ -43,6 +42,3 @@ export function LocalResourceReference({
   </span>
 }
 
-// Keep anchor-compatible props discoverable to TS consumers that compose this
-// component beside Markdown links without widening the runtime surface.
-export type LocalResourceAnchorProps = ComponentPropsWithoutRef<'a'>
