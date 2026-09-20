@@ -85,7 +85,9 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
   const endedAt = ends.length ? Math.max(...ends) : undefined
   const returnedNodeCount = interaction.nodes.length
   const totalFactCount = interaction.totalNodeCount ?? returnedNodeCount
-  const omittedFactCount = interaction.omittedNodeCount ?? Math.max(0, totalFactCount - returnedNodeCount)
+  const boundedOmittedFactCount = Math.max(0, totalFactCount - MAX_REVIEW_INTERACTION_NODES)
+  const omittedFactCount = interaction.omittedNodeCount
+    ?? Math.max(0, totalFactCount - returnedNodeCount, boundedOmittedFactCount)
   const last = interaction.nodes.at(-1)
   return {
     id: `process:${interaction.id}`,
@@ -95,7 +97,7 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
     toolCount: tools.length,
     errorCount: tools.filter(tool => tool.status === 'error').length,
     durationMs: startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : 0,
-    availability: interaction.nodesTruncated || omittedFactCount > 0 ? 'partial' : 'available',
+    availability: interaction.nodesTruncated || returnedNodeCount > MAX_REVIEW_INTERACTION_NODES || omittedFactCount > 0 ? 'partial' : 'available',
     totalFactCount,
     ...(omittedFactCount > 0 ? { omittedFactCount } : {}),
   }
@@ -366,7 +368,7 @@ export class ReviewProjection extends BaseReviewProjection {
       localizeLifecycle(normalizeOrphanToolResults(detail)),
     )
     if (query.process === 'summary') return normalized
-    return withProcessSummaries(boundReviewDetail(normalized))
+    return boundReviewDetail(withProcessSummaries(normalized))
   }
 }
 

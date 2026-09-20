@@ -387,3 +387,46 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     storage.close()
   }
 })
+
+
+test('Review full detail keeps complete Process Summary before bounding 600-node body', () => {
+  const base = {
+    at: '2026-09-20T01:00:00.000Z',
+    sourceId: 'codex',
+    payload: {},
+    evidence: [],
+    observationIds: [],
+    capturedAt: '2026-09-20T01:00:00.000Z',
+  }
+  const nodes = [
+    { ...base, type: 'message' as const, id: 'user-large', role: 'user' as const, text: 'large' },
+    ...Array.from({ length: 605 }, (_, index) => ({
+      ...base,
+      type: 'message' as const,
+      id: `commentary-large-${index}`,
+      role: 'commentary' as const,
+      text: `step ${index}`,
+    })),
+    { ...base, type: 'message' as const, id: 'assistant-large', role: 'assistant' as const, text: 'done' },
+  ]
+  const interaction = {
+    id: 'large-round',
+    ordinal: 1,
+    trigger: 'user' as const,
+    startedAt: base.at,
+    endedAt: base.at,
+    nodes,
+  }
+
+  const summary = reviewProjectionInternals.processSummary(interaction)
+  const bounded = reviewProjectionInternals.boundInteractionNodes({ ...interaction, processSummary: summary, processMode: 'full' })
+  assert.equal(summary.messageCount, 605)
+  assert.equal(summary.itemCount, 605)
+  assert.equal(summary.totalFactCount, 607)
+  assert.equal(summary.availability, 'partial')
+  assert.equal(summary.omittedFactCount, 7)
+  assert.equal(bounded.nodes.length, 600)
+  assert.equal(bounded.nodesTruncated, true)
+  assert.equal(bounded.processSummary?.messageCount, 605)
+  assert.equal(bounded.processSummary?.availability, 'partial')
+})
