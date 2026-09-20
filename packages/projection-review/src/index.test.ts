@@ -339,7 +339,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
       await add(
         'session.lifecycle',
         `summary-lifecycle-${index}`,
-        `2026-09-20T00:00:${String(5 + index).padStart(2, '0')}.000Z`,
+        new Date(Date.parse('2026-09-20T00:00:05.000Z') + index * 1_000).toISOString(),
         { event: 'review.progress', index },
       )
     }
