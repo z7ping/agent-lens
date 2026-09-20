@@ -474,7 +474,7 @@ function finiteHistoryNumber(value) {
   return undefined
 }
 
-function historyUsageEvent(id, value, at) {
+function historyUsageEvent(id, value, at, phase) {
   const usage = record(value)
   if (!Object.keys(usage).length) return undefined
   const input = finiteHistoryNumber(usage.input ?? usage.inputTokens) ?? 0
@@ -488,10 +488,11 @@ function historyUsageEvent(id, value, at) {
     label: '用量',
     detail: `输入 ${input} · 输出 ${output} · 共 ${total} tokens`,
     ...(at ? { at } : {}),
+    phase,
   }
 }
 
-function historyMetaEvents(entryValue, fallbackIndex) {
+function historyMetaEvents(entryValue, fallbackIndex, phase) {
   const entry = record(entryValue)
   const id = entryId(entry) ?? `meta:${fallbackIndex}`
   const timestamp = entryTimestampMs(entry)
@@ -506,9 +507,10 @@ function historyMetaEvents(entryValue, fallbackIndex) {
     label,
     ...(detail ? { detail: compactHistoryMeta(detail) } : {}),
     ...(at ? { at } : {}),
+    phase,
   })
   const pushUsage = value => {
-    const usage = historyUsageEvent(id, value, at)
+    const usage = historyUsageEvent(id, value, at, phase)
     if (usage) events.push(usage)
   }
 
@@ -610,7 +612,11 @@ function roundSummary(all, row, nextEntryIndex) {
     if (timestamp !== undefined) processTimes.push(timestamp)
   }
 
-  const allEvents = entries.flatMap((entry, index) => historyMetaEvents(entry, index))
+  const allEvents = entries.flatMap((entry, index) => historyMetaEvents(
+    entry,
+    index,
+    finalAssistantIndex >= 0 && index >= finalAssistantIndex ? 'after-final' : 'before-final',
+  ))
   const events = allEvents.slice(0, LIVE_HISTORY_META_EVENT_LIMIT)
   const eventOmittedCount = Math.max(0, allEvents.length - events.length)
 
