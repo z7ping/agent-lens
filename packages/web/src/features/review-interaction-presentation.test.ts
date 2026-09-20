@@ -276,6 +276,33 @@ test('Review 处理详情只收模型执行，model / context 元事件独立展
 })
 
 
+test('Review Assistant 正文即使后面还有 Tool / Reasoning 也不进入处理详情', () => {
+  const assistant: ReviewMessageNodeDto = {
+    type: 'message', id: 'assistant-before-process', role: 'assistant',
+    at: '2026-09-01T00:00:01.000Z', sourceId: 'claude', text: '先给出正文',
+    payload: {}, evidence: [], observationIds: ['obs:assistant-before-process'],
+    capturedAt: '2026-09-01T00:00:01.000Z',
+  }
+  const laterReasoning: ReviewMessageNodeDto = {
+    ...assistant, id: 'reasoning-after-assistant', role: 'reasoning',
+    at: '2026-09-01T00:00:03.000Z', text: '迟到的思考',
+    observationIds: ['obs:reasoning-after-assistant'],
+    capturedAt: '2026-09-01T00:00:03.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([
+    assistant,
+    tool('tool-after-assistant'),
+    laterReasoning,
+  ])
+  const process = entries.find(entry => entry.type === 'process')
+  assert.ok(process)
+  if (process?.type === 'process') {
+    assert.equal(process.items.some(item => item.type === 'message' && item.node.id === 'assistant-before-process'), false)
+  }
+  const mainText = entries.find(entry => entry.type === 'message' && entry.node.id === 'assistant-before-process')
+  assert.ok(mainText)
+})
+
 test('Review 可证明的 Turn terminal 状态位于 final answer 之后', () => {
   const terminal: ReviewEventNodeDto = {
     type: 'event',
