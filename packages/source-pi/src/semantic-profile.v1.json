@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1",
-  "profileVersion": "1.0.0",
+  "profileVersion": "1.1.0",
   "source": "pi",
   "sourceProtocol": "pi-session-jsonl-v3",
   "purpose": "Pi 原生事件到 AgentLens 统一观察语义的声明式契约；复杂拆块和关联逻辑仍由 Source Adapter 执行。",
@@ -116,42 +116,6 @@
       "coverage": "complete"
     },
     {
-      "id": "assistant.stop",
-      "nativeType": "message",
-      "when": {
-        "message.role": "assistant",
-        "message.stopReason": "stop"
-      },
-      "kind": "session.lifecycle",
-      "semantic": "assistant.stop",
-      "semanticSource": "native",
-      "coverage": "complete"
-    },
-    {
-      "id": "assistant.error",
-      "nativeType": "message",
-      "when": {
-        "message.role": "assistant",
-        "message.stopReason": "error"
-      },
-      "kind": "session.lifecycle",
-      "semantic": "assistant.error",
-      "semanticSource": "native",
-      "coverage": "complete"
-    },
-    {
-      "id": "assistant.cancelled",
-      "nativeType": "message",
-      "when": {
-        "message.role": "assistant",
-        "message.stopReason": "aborted"
-      },
-      "kind": "session.lifecycle",
-      "semantic": "assistant.cancelled",
-      "semanticSource": "native",
-      "coverage": "complete"
-    },
-    {
       "id": "model_change",
       "nativeType": "model_change",
       "kind": "model.changed",
@@ -251,6 +215,40 @@
       "coverage": "complete"
     },
     {
+      "id": "assistant.stopReason.stop",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "stop"
+      },
+      "kind": "message.assistant",
+      "semantic": "assistant-completion-metadata",
+      "qualifier": {
+        "stopReason": "stop",
+        "terminalForMessage": true,
+        "terminalForTurn": false
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stopReason.toolUse",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "toolUse"
+      },
+      "kind": "message.assistant",
+      "semantic": "assistant-completion-metadata",
+      "qualifier": {
+        "stopReason": "toolUse",
+        "continuesToTool": true,
+        "terminalForTurn": false
+      },
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
       "id": "assistant.stopReason.pending",
       "nativeType": "message",
       "when": {
@@ -258,24 +256,26 @@
         "message.stopReason": "pending"
       },
       "kind": "session.lifecycle",
-      "semantic": "assistant.stop",
+      "semantic": "assistant.pending",
       "qualifier": {
-        "stopReason": "pending"
+        "stopReason": "pending",
+        "terminalForTurn": false
       },
       "semanticSource": "native",
       "coverage": "complete"
     },
     {
-      "id": "assistant.stopReason.stop",
+      "id": "assistant.stopReason.deferred",
       "nativeType": "message",
       "when": {
         "message.role": "assistant",
-        "message.stopReason": "stop"
+        "message.stopReason": "deferred"
       },
       "kind": "session.lifecycle",
-      "semantic": "assistant.stop",
+      "semantic": "assistant.deferred",
       "qualifier": {
-        "stopReason": "stop"
+        "stopReason": "deferred",
+        "terminalForTurn": false
       },
       "semanticSource": "native",
       "coverage": "complete"
@@ -288,24 +288,10 @@
         "message.stopReason": "length"
       },
       "kind": "session.lifecycle",
-      "semantic": "assistant.stop",
+      "semantic": "assistant.truncated",
       "qualifier": {
-        "stopReason": "length"
-      },
-      "semanticSource": "native",
-      "coverage": "complete"
-    },
-    {
-      "id": "assistant.stopReason.toolUse",
-      "nativeType": "message",
-      "when": {
-        "message.role": "assistant",
-        "message.stopReason": "toolUse"
-      },
-      "kind": "session.lifecycle",
-      "semantic": "assistant.stop",
-      "qualifier": {
-        "stopReason": "toolUse"
+        "stopReason": "length",
+        "terminalForTurn": false
       },
       "semanticSource": "native",
       "coverage": "complete"
@@ -320,7 +306,8 @@
       "kind": "session.lifecycle",
       "semantic": "assistant.error",
       "qualifier": {
-        "stopReason": "error"
+        "stopReason": "error",
+        "terminalForTurn": false
       },
       "semanticSource": "native",
       "coverage": "complete"
@@ -335,22 +322,8 @@
       "kind": "session.lifecycle",
       "semantic": "assistant.cancelled",
       "qualifier": {
-        "stopReason": "aborted"
-      },
-      "semanticSource": "native",
-      "coverage": "complete"
-    },
-    {
-      "id": "assistant.stopReason.deferred",
-      "nativeType": "message",
-      "when": {
-        "message.role": "assistant",
-        "message.stopReason": "deferred"
-      },
-      "kind": "session.lifecycle",
-      "semantic": "assistant.stop",
-      "qualifier": {
-        "stopReason": "deferred"
+        "stopReason": "aborted",
+        "terminalForTurn": false
       },
       "semanticSource": "native",
       "coverage": "complete"
@@ -391,9 +364,10 @@
   },
   "notes": [
     "Pi 官方 SessionEntry 当前包含 message / thinking_level_change / model_change / usage / compaction / branch_summary / custom / custom_message / label / session_info。",
-    "Pi 官方 Message/AgentMessage 语义覆盖 system / user / assistant / toolResult，以及 coding-agent 扩展的 bashExecution / custom / branchSummary / compactionSummary。",
-    "Pi 官方 StopReason 当前包含 pending / stop / length / toolUse / error / aborted / deferred，全部显式登记。",
+    "Pi 官方 Message/AgentMessage 语义覆盖 system / user / assistant / toolResult，以及 coding-agent 扩展 bashExecution / custom / branchSummary / compactionSummary。",
+    "Pi StopReason 是 Assistant 消息完成/状态元数据，不等同于 Turn 生命周期：stop/toolUse 不再制造独立生命周期事件；length/error/aborted/pending/deferred 保留明确状态。",
+    "toolUse 表示继续进入工具执行；length 表示输出被截断；pending 是未 settle 的流式状态。",
     "bashExecution 是 message role，不是当前官方 SessionEntry 顶层类型；历史兼容的 bash/bash_result 只按 passthrough 保留。",
-    "未知 entry 或未知 Assistant block 必须 preserveRaw=true。"
+    "未知 entry、未知 StopReason 或未知 Assistant block 必须 preserveRaw=true。"
   ]
 }
