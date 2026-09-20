@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "profileVersion": "1.0.0",
   "source": "codex",
   "sourceProtocol": "codex-rollout-current",
@@ -514,6 +514,270 @@
       "semantic": "realtime-presentation",
       "semanticSource": "native",
       "coverage": "complete"
+    },
+    {
+      "id": "turnItem.UserMessage",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "UserMessage"
+      },
+      "kind": "message.user",
+      "semantic": "user-request",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.FunctionCallOutput",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "FunctionCallOutput"
+      },
+      "kind": "tool.result",
+      "semantic": "tool-result",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.HookPrompt",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "HookPrompt"
+      },
+      "kind": "context.injected",
+      "semantic": "hook-context",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.Plan",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "Plan"
+      },
+      "kind": "message.commentary",
+      "semantic": "plan",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.Reasoning",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "Reasoning"
+      },
+      "kind": "message.reasoning",
+      "semantic": "reasoning",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.ImageView",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "ImageView"
+      },
+      "kind": "artifact.action",
+      "semantic": "image-view",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.ImageGeneration",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "ImageGeneration"
+      },
+      "kind": "artifact.action",
+      "semantic": "image-generate",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.EnteredReviewMode",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "EnteredReviewMode"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "review.entered",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.ExitedReviewMode",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "ExitedReviewMode"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "review.exited",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.FileChange",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "FileChange"
+      },
+      "kind": "artifact.action",
+      "semantic": "file.change",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.ContextCompaction",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "ContextCompaction"
+      },
+      "kind": "context.compaction",
+      "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.AgentMessage.commentary",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "AgentMessage",
+        "item.phase": "commentary"
+      },
+      "kind": "message.commentary",
+      "phase": "commentary",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.AgentMessage.final",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "AgentMessage",
+        "item.phase": "final_answer"
+      },
+      "kind": "message.assistant",
+      "phase": "final",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.AgentMessage.unspecified",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "AgentMessage",
+        "item.phase": null
+      },
+      "kind": "message.assistant",
+      "phase": "unspecified",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "turnItem.CommandExecution",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "CommandExecution"
+      },
+      "kinds": [
+        "tool.call",
+        "tool.result"
+      ],
+      "semantic": "tool-lifecycle",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "根据原生 status/result，可能只产生 call，或同时产生 call + result"
+    },
+    {
+      "id": "turnItem.DynamicToolCall",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "DynamicToolCall"
+      },
+      "kinds": [
+        "tool.call",
+        "tool.result"
+      ],
+      "semantic": "tool-lifecycle",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "根据原生 status/result，可能只产生 call，或同时产生 call + result"
+    },
+    {
+      "id": "turnItem.CollabAgentToolCall",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "CollabAgentToolCall"
+      },
+      "kinds": [
+        "tool.call",
+        "tool.result"
+      ],
+      "semantic": "tool-lifecycle",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "根据原生 status/result，可能只产生 call，或同时产生 call + result"
+    },
+    {
+      "id": "turnItem.McpToolCall",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "McpToolCall"
+      },
+      "kinds": [
+        "tool.call",
+        "tool.result"
+      ],
+      "semantic": "tool-lifecycle",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "根据原生 status/result，可能只产生 call，或同时产生 call + result"
+    },
+    {
+      "id": "turnItem.WebSearch",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "WebSearch"
+      },
+      "kinds": [
+        "tool.call",
+        "tool.result"
+      ],
+      "semantic": "tool-lifecycle",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "根据原生 status/result，可能只产生 call，或同时产生 call + result"
+    },
+    {
+      "id": "turnItem.SubAgentActivity",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "SubAgentActivity"
+      },
+      "kinds": [
+        "subagent.spawn",
+        "session.lifecycle",
+        "subagent.end"
+      ],
+      "semantic": "subagent.activity",
+      "semanticSource": "native",
+      "coverage": "complete",
+      "note": "由原生 activity kind 决定 spawn/interacted/end"
+    },
+    {
+      "id": "turnItem.Extension",
+      "nativeType": "event_msg/item_completed",
+      "when": {
+        "item.type": "Extension"
+      },
+      "kinds": [
+        "tool.call",
+        "artifact.action",
+        "unknown"
+      ],
+      "semantic": "extension-owned",
+      "semanticSource": "native",
+      "coverage": "partial",
+      "note": "已知 clock.sleep / web.search / image_gen.generation 映射；未知扩展保持 raw unknown"
     }
   ],
   "fallback": {
@@ -607,6 +871,8 @@
   "notes": [
     "RolloutItem 当前官方持久化顶层类型已全部登记；其中 world_state / retained_context / security_risk_score / realtime_item / inter_agent_communication_metadata 为 evidence-only，不制造 Review 活动。",
     "ResponseItem 当前官方枚举已全覆盖；AdditionalTools / CompactionTrigger / Other 在官方 persistence policy 中不持久化，仍保留协议认知。",
-    "Runtime Hook 当前官方 12 种已全部登记。"
+    "Runtime Hook 当前官方 12 种已全部登记。",
+    "ItemCompleted 下官方 TurnItem 当前 19 种已逐项登记；一对多映射使用 kinds[]。",
+    "未知 Extension 子类型保持 raw unknown，不根据名字猜语义。"
   ]
 }
