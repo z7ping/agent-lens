@@ -4,7 +4,9 @@ import test from 'node:test'
 
 const reviewPage = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
 const liveTaskPage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const piLivePage = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
+const taskProcessGroup = readFileSync(new URL('./TaskProcessGroup.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const taskSessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
 const mainEntry = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8')
@@ -16,16 +18,18 @@ test('Task Review defaults to full observable events without a DOM adapter', () 
   assert.doesNotMatch(reviewPage, /setShowAllEvents\(false\)/)
 })
 
-test('Task Review 的独立 Thinking 仍可折叠，聚合思考过程默认展开以露出工具明细', () => {
+test('Task Review 的独立 Thinking 与 settled Process 默认折叠，running Process 保持可观察', () => {
   assert.match(reviewPage, /<TaskThinking[\s\S]*?defaultExpanded=\{false\}/)
-  assert.match(taskThinking, /model\.label === t\('thinking\.thinkingProcess'\)/)
-  assert.match(taskThinking, /useState\(defaultExpanded\)/)
+  assert.match(reviewPage, /<TaskProcessGroup[\s\S]*?defaultExpanded=\{false\}/)
+  assert.match(taskProcessGroup, /defaultExpanded = state === 'running'/)
+  assert.match(taskThinking, /useState\(\(\) => expansionStore\?\.get\(model\.id\) \?\? defaultExpanded\)/)
 })
 
-test('Task Review 将 commentary、reasoning 与工具统一放入思考过程', () => {
-  assert.match(reviewPage, /label: agentLensI18n\.t\('review:local\.process\.thinkingProcess'\)/)
+test('Task Review 将 commentary、reasoning 与工具统一放入处理详情', () => {
   assert.match(reviewPage, /entry\.type === 'process'/)
-  assert.match(reviewPage, /<TaskThinking model=\{model\} defaultExpanded=\{false\} className="task-review-process">/)
+  assert.match(reviewPage, /function ReviewProcessGroup/)
+  assert.match(reviewPage, /return <TaskProcessGroup/)
+  assert.match(reviewPage, /review:local\.process\.output/)
 })
 
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
@@ -67,8 +71,10 @@ test('Task Review 用统一轮次锚点保护补载与大范围视图切换', ()
   assert.doesNotMatch(reviewPage, /beforeTop \+ \(current\.scrollHeight - beforeHeight\)/)
 })
 
-test('Task Review 已挂载轮次不会退回估算高度占位', () => {
-  assert.match(reviewPage, /<VirtualRoundMount[\s\S]*?retainMounted/)
+test('Task Review 允许离屏卸载重正文，并通过 expansionStore 保留展开意图', () => {
+  assert.match(reviewPage, /<VirtualRoundMount/)
+  assert.doesNotMatch(reviewPage, /<VirtualRoundMount[\s\S]{0,260}\bretainMounted\b/)
+  assert.match(reviewPage, /expansionStore=\{roundExpansionRef\.current\}/)
 })
 
 test('Pi Live defaults and resets to full observable events natively', () => {
