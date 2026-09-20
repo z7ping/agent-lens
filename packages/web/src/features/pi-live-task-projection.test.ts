@@ -54,7 +54,7 @@ test('Pi Live 标题优先使用任务语义，不拼接来源标识', () => {
 })
 
 
-test('Pi Live Turn 按 prompt → process 原序 → terminal → final 收敛', () => {
+test('Pi Live Turn 按 prompt → process → 关键事件/模型输出原序 → terminal 收敛', () => {
   const items: PiLiveHistoryItem[] = [
     { id: 'user', kind: 'message', role: 'user', text: '检查', at: '2026-09-09T00:00:00.000Z' },
     { id: 'assistant-tool', kind: 'thinking', text: '思考', at: '2026-09-09T00:00:01.000Z', contentIndex: 0 },
@@ -67,11 +67,11 @@ test('Pi Live Turn 按 prompt → process 原序 → terminal → final 收敛',
   ]
   const presented = projectPiLiveTurnItems(items)
   assert.deepEqual(presented.map(item => item.id), [
-    'user', 'assistant-tool', 'assistant-tool:content:1', 'model',
-    'assistant-tool:content:2:tool:call', 'compact', 'assistant-final:stop', 'assistant-final',
+    'user', 'assistant-tool', 'assistant-tool:content:1', 'assistant-tool:content:2:tool:call',
+    'model', 'compact', 'assistant-final', 'assistant-final:stop',
   ])
   assert.deepEqual(presented.map(item => item.turnSection), [
-    'prompt', 'process', 'process', 'process', 'process', 'process', 'terminal', 'final',
+    'prompt', 'process', 'process', 'process', 'meta', 'meta', 'final', 'terminal',
   ])
 })
 
@@ -91,7 +91,7 @@ test('Pi Live 在完整语义轮次分类后再分片，中间 Assistant 不会�
 })
 
 
-test('Pi Live 非终态 lifecycle 事件也参与最终回复边界', () => {
+test('Pi Live 非终态 lifecycle 不参与 Final 边界且保持与模型输出原始相对顺序', () => {
   const items: PiLiveHistoryItem[] = [
     { id: 'interim', kind: 'message', role: 'assistant', text: '处理中', at: '2026-09-09T00:00:01.000Z' },
     { id: 'model-change', kind: 'lifecycle', event: 'model.changed', label: '模型切换', detail: 'gpt-5.6', at: '2026-09-09T00:00:02.000Z' },
@@ -99,8 +99,8 @@ test('Pi Live 非终态 lifecycle 事件也参与最终回复边界', () => {
   ]
   const presented = projectPiLiveTurnItems(items)
   assert.deepEqual(presented.map(item => [item.id, item.turnSection]), [
-    ['interim', 'process'],
-    ['model-change', 'process'],
+    ['interim', 'final'],
+    ['model-change', 'meta'],
     ['final', 'final'],
   ])
 })
@@ -126,4 +126,19 @@ test('Pi Indexed 只有 Process duration 时不冒充整轮耗时', () => {
   })
   assert.equal(round.durationMs, 0)
   assert.equal(round.toolCount, 2)
+})
+
+
+test('Pi Live usage / lifecycle 永远不进入 Process', () => {
+  const items: PiLiveHistoryItem[] = [
+    { id: 'thinking', kind: 'thinking', text: '分析', at: '2026-09-09T00:00:01.000Z' },
+    { id: 'usage', kind: 'usage', usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 3 }, at: '2026-09-09T00:00:02.000Z' },
+    { id: 'context', kind: 'lifecycle', event: 'context.compaction', label: '上下文压缩', detail: '', at: '2026-09-09T00:00:03.000Z' },
+    { id: 'final', kind: 'message', role: 'assistant', text: '完成', at: '2026-09-09T00:00:04.000Z' },
+  ]
+  const presented = projectPiLiveTurnItems(items)
+  assert.equal(presented.find(item => item.id === 'thinking')?.turnSection, 'process')
+  assert.equal(presented.find(item => item.id === 'usage')?.turnSection, 'meta')
+  assert.equal(presented.find(item => item.id === 'context')?.turnSection, 'meta')
+  assert.equal(presented.find(item => item.id === 'final')?.turnSection, 'final')
 })
