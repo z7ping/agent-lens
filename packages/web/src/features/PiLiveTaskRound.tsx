@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
-import type { LiveHistoryIndexItemDto } from '@agent-lens/protocol'
+import type { LiveHistoryEventSummaryDto, LiveHistoryIndexItemDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -403,7 +403,7 @@ export function PiLiveIndexedTaskRound({
   const terminal = summary?.terminal
   const beforeFinalEvents = summary?.events?.filter(event => event.phase === 'before-final') ?? []
   const afterFinalEvents = summary?.events?.filter(event => event.phase === 'after-final') ?? []
-  const renderIndexedEvent = (event: NonNullable<typeof summary>['events'][number]) => <TaskEvent key={event.id} model={{
+  const renderIndexedEvent = (event: LiveHistoryEventSummaryDto) => <TaskEvent key={event.id} model={{
     id: `pi-index-event:${item.ordinal}:${event.id}`,
     label: event.label,
     category: event.category,
