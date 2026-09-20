@@ -165,3 +165,129 @@ test('binding a runtime rejects conflicting logical session identities', async (
     storage.close()
   }
 })
+
+
+test('checkpoint keeps exact rows while later observed changes extend the same active runtime', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    await storage.taskFileChanges.putBaseline({
+      runtimeSessionId: 'runtime:multi',
+      logicalSessionId: 'session:multi',
+      workspacePath: '/workspace/project',
+      baselineCapturedAt: '2026-09-20T00:00:00.000Z',
+    })
+    await storage.taskFileChanges.checkpointRuntime('runtime:multi', {
+      logicalSessionId: 'session:multi',
+      checkpointedAt: '2026-09-20T00:05:00.000Z',
+      changes: [change('session:multi', 'src/exact.ts', 'modified', 2, 1)],
+    })
+
+    const observed: TaskFileChangeRecord = {
+      logicalSessionId: 'session:multi',
+      path: 'src/later.ts',
+      changeType: 'unknown',
+      firstChangedAt: '2026-09-20T00:06:00.000Z',
+      lastChangedAt: '2026-09-20T00:06:00.000Z',
+      evidence: ['tool'],
+      confidence: 'medium',
+    }
+    assert.equal(
+      await storage.taskFileChanges.mergeObservedSession('session:multi', [observed]),
+      true,
+    )
+
+    const rows = await storage.taskFileChanges.listBySession('session:multi')
+    assert.deepEqual(rows.map(item => [item.path, item.changeType, item.confidence]), [
+      ['src/exact.ts', 'modified', 'exact'],
+      ['src/later.ts', 'unknown', 'medium'],
+    ])
+    const capture = await storage.taskFileChanges.getByRuntime('runtime:multi')
+    assert.equal(capture?.checkpointedAt, '2026-09-20T00:05:00.000Z')
+    assert.equal(capture?.finalizedAt, undefined)
+  } finally {
+    storage.close()
+  }
+})
+
+test('a newer active runtime supersedes an older finalized capture for observed updates', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    await storage.taskFileChanges.putBaseline({
+      runtimeSessionId: 'runtime:old-final',
+      workspacePath: '/workspace/project',
+      baselineCapturedAt: '2026-09-20T00:00:00.000Z',
+    })
+    await storage.taskFileChanges.finalizeRuntime('runtime:old-final', {
+      logicalSessionId: 'session:continued',
+      finalizedAt: '2026-09-20T00:10:00.000Z',
+      changes: [change('session:continued', 'old.ts', 'modified', 1, 0)],
+    })
+
+    await storage.taskFileChanges.putBaseline({
+      runtimeSessionId: 'runtime:new-active',
+      logicalSessionId: 'session:continued',
+      workspacePath: '/workspace/project',
+      baselineCapturedAt: '2026-09-20T01:00:00.000Z',
+    })
+
+    const observed: TaskFileChangeRecord = {
+      logicalSessionId: 'session:continued',
+      path: 'new-active.ts',
+      changeType: 'unknown',
+      firstChangedAt: '2026-09-20T01:01:00.000Z',
+      lastChangedAt: '2026-09-20T01:01:00.000Z',
+      evidence: ['tool'],
+      confidence: 'medium',
+    }
+    assert.equal(
+      await storage.taskFileChanges.replaceObservedSession('session:continued', [observed]),
+      true,
+    )
+    assert.deepEqual(
+      (await storage.taskFileChanges.listBySession('session:continued'))
+        .map(item => [item.path, item.confidence]),
+      [['new-active.ts', 'medium']],
+    )
+  } finally {
+    storage.close()
+  }
+})
+
+test('rebuild never falls back to stale finalized capture when a newer active runtime has no checkpoint', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    await storage.taskFileChanges.putBaseline({
+      runtimeSessionId: 'runtime:stale',
+      workspacePath: '/workspace/project',
+      baselineCapturedAt: '2026-09-20T00:00:00.000Z',
+    })
+    await storage.taskFileChanges.finalizeRuntime('runtime:stale', {
+      logicalSessionId: 'session:active-wins',
+      finalizedAt: '2026-09-20T00:10:00.000Z',
+      changes: [change('session:active-wins', 'stale.ts', 'modified', 1, 0)],
+    })
+    await storage.taskFileChanges.putBaseline({
+      runtimeSessionId: 'runtime:fresh',
+      logicalSessionId: 'session:active-wins',
+      workspacePath: '/workspace/project',
+      baselineCapturedAt: '2026-09-20T01:00:00.000Z',
+    })
+
+    storage.db.prepare(`
+      DELETE FROM task_file_change_projection
+      WHERE logical_session_id = 'session:active-wins'
+    `).run()
+    await storage.taskFileChanges.rebuild({ logicalSessionId: 'session:active-wins' })
+
+    assert.deepEqual(await storage.taskFileChanges.listBySession('session:active-wins'), [])
+    assert.equal(
+      (await storage.taskFileChanges.getLatestBySession('session:active-wins'))?.runtimeSessionId,
+      'runtime:fresh',
+    )
+  } finally {
+    storage.close()
+  }
+})

@@ -60,6 +60,7 @@ export interface TaskFileChangeCapture {
 export interface TaskFileChangeProjectionStore extends TaskFileChangeReader {
   putBaseline(capture: TaskFileChangeCapture): Promise<void>
   getByRuntime(runtimeSessionId: string): Promise<TaskFileChangeCapture | null>
+  getLatestBySession(logicalSessionId: LogicalSessionId): Promise<TaskFileChangeCapture | null>
   bindRuntime(runtimeSessionId: string, logicalSessionId: LogicalSessionId): Promise<void>
   checkpointRuntime(
     runtimeSessionId: string,

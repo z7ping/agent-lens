@@ -53,6 +53,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         },
         derivation: {
           observed: 'Observed',
+        partialObserved: 'Some counts unavailable',
           reported: 'Reported by source',
           derived: 'Derived',
           estimated: 'Estimated',
@@ -243,6 +244,21 @@ export const englishReviewMessages: LocaleMessagesDto = {
       empty: {
         loadingDetail: 'Loading session details…',
         selectSession: 'Select a session to start reviewing',
+      },
+      fileChanges: {
+        title: 'Changed files',
+        observed: 'Observed',
+        observedShort: 'Observed',
+        refreshing: 'Refreshing…',
+        loadFailed: 'Failed to load changed files',
+        empty: 'No file changes recorded',
+        status: {
+          added: 'Added',
+          modified: 'Modified',
+          deleted: 'Deleted',
+          renamed: 'Renamed',
+          unknown: 'Observed change',
+        },
       },
       relationship: {
         sessionTree: 'Session relationships · {{count}}',

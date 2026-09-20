@@ -1377,6 +1377,47 @@ export class AgentLensClientModel {
     }
   }
 
+  private async refreshReviewFileChanges(
+    id: string,
+    generation = this.detailGeneration,
+    loading = false,
+  ): Promise<void> {
+    if (!id) return
+    if (loading && this.snapshot.review.selectedId === id) {
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          fileChangesLoading: true,
+          fileChangesError: '',
+        },
+      })
+    }
+    try {
+      const fileChanges = await this.api.reviewFileChanges(id)
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          fileChanges,
+          fileChangesLoading: false,
+          fileChangesError: '',
+        },
+      })
+    } catch (error) {
+      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+      this.publish({
+        ...this.snapshot,
+        review: {
+          ...this.snapshot.review,
+          fileChangesLoading: false,
+          fileChangesError: error instanceof Error ? error.message : String(error),
+        },
+      })
+    }
+  }
+
   async selectReviewSession(id: string): Promise<void> {
     if (!id) return
     const generation = ++this.detailGeneration
@@ -1390,9 +1431,12 @@ export class AgentLensClientModel {
         detailLoadingMore: false,
         detailHasNewData: false,
         relationshipError: '',
-        ...(changingSession ? { detail: null, relationships: null } : {}),
+        fileChangesLoading: true,
+        fileChangesError: '',
+        ...(changingSession ? { detail: null, relationships: null, fileChanges: null } : {}),
       },
     })
+    void this.refreshReviewFileChanges(id, generation, false)
     try {
       const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
@@ -1546,6 +1590,12 @@ export class AgentLensClientModel {
         this.reviewRefreshDueAt = null
         this.reviewLiveDirty = false
         this.scheduleReviewSummaryPatch(event.logicalSessionId)
+        if (
+          this.reviewActive
+          && event.logicalSessionId === this.snapshot.review.selectedId
+        ) {
+          void this.refreshReviewFileChanges(event.logicalSessionId, this.detailGeneration)
+        }
       } else if (event.type === 'observation.committed') {
         const updatesSelectedSession = this.reviewActive
           && Boolean(event.logicalSessionId)

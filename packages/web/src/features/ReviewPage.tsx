@@ -35,6 +35,7 @@ import { reviewEventLabel } from './review-event-presentation'
 import { projectReviewLiveInteraction } from './review-live-interaction'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskEvent } from './TaskEvent'
+import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskProcessGroup } from './TaskProcessGroup'
@@ -1788,6 +1789,12 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           {pathError && <div className="page-error" role="alert">{pathError}</div>}
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {historyInteractionError && <div className="page-error" role="alert">{historyInteractionError}</div>}
+
+            <TaskFileChangesDisclosure
+              value={review.fileChanges}
+              loading={review.fileChangesLoading}
+              error={review.fileChangesError}
+            />
 
             {review.relationships?.items.length ? <details className="session-relationship-tree">
               <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
