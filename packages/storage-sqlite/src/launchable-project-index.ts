@@ -182,12 +182,12 @@ export function refreshLaunchableWorkspaceDefinition(
   for (const item of affected) {
     if (typeof item.project_key !== 'string') continue
     const row = db.prepare(`
-      SELECT project_id, workspace_id
+      SELECT workspace_id
       FROM launchable_workspace_index
       WHERE project_key = ?
       ORDER BY last_seen_at DESC, workspace_id ASC
       LIMIT 1
-    `).get(item.project_key) as { project_id?: unknown; workspace_id?: unknown } | undefined
+    `).get(item.project_key) as { workspace_id?: unknown } | undefined
     const projectId = item.project_key.startsWith('workspace:')
       ? undefined
       : item.project_key
