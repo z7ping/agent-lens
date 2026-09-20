@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS task_file_change_capture (
   baseline_tree_sha TEXT,
   baseline_captured_at TEXT NOT NULL,
   final_tree_sha TEXT,
+  checkpointed_at TEXT,
   finalized_at TEXT,
   changes_json TEXT,
   created_at TEXT NOT NULL,
