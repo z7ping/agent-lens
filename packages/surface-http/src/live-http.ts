@@ -542,7 +542,8 @@ function normalizeHistoryIndex(value: unknown) {
             || typeof event.label !== 'string' || !event.label
             || !['model', 'usage', 'permission', 'subagent', 'context', 'lifecycle', 'unknown'].includes(String(event.category))
             || (event.detail !== undefined && typeof event.detail !== 'string')
-            || (event.at !== undefined && typeof event.at !== 'string')) {
+            || (event.at !== undefined && typeof event.at !== 'string')
+            || (event.phase !== 'before-final' && event.phase !== 'after-final')) {
             throw httpError(500, 'Live history event summary is invalid')
           }
           return {
@@ -551,6 +552,7 @@ function normalizeHistoryIndex(value: unknown) {
             label: event.label.slice(0, 160),
             ...(typeof event.detail === 'string' && event.detail ? { detail: event.detail.slice(0, 500) } : {}),
             ...(typeof event.at === 'string' && event.at ? { at: event.at.slice(0, 80) } : {}),
+            phase: event.phase as 'before-final' | 'after-final',
           }
         })
       }
