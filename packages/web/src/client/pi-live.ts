@@ -266,6 +266,8 @@ export interface PiLiveConnectionHandlers {
   onConnection(connected: boolean): void
   onSnapshot?(snapshot: PiLiveSnapshotDto): void
   onError?(error: Error): void
+  /** Optional bounded recovery strategy. Defaults to the legacy Pi snapshot path. */
+  recoverSnapshot?(leafId?: string): Promise<PiLiveSnapshotDto>
 }
 
 export class PiLiveApi {
@@ -392,7 +394,9 @@ export class PiLiveApi {
     const recover = async () => {
       const generation = ++recoveryGeneration
       try {
-        const snapshot = await this.snapshot(runtimeSessionId, leafId)
+        const snapshot = handlers.recoverSnapshot
+          ? await handlers.recoverSnapshot(leafId)
+          : await this.snapshot(runtimeSessionId, leafId)
         if (disposed || generation !== recoveryGeneration) return
         if (snapshot.leafId) leafId = snapshot.leafId
         handlers.onSnapshot?.(snapshot)
