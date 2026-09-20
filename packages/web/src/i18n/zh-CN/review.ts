@@ -246,6 +246,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
       fileChanges: {
         title: '修改文件',
         observed: '已观察',
+        partialObserved: '部分未统计',
         observedShort: '观察',
         refreshing: '更新中…',
         loadFailed: '修改文件读取失败',
