@@ -526,13 +526,6 @@ export class InteractionDescriptorStore {
         })
         .map(header => header.id))
 
-      let lastProcessDriver = -1
-      for (let index = 0; index < group.headers.length; index += 1) {
-        const header = group.headers[index]!
-        if (terminalIds.has(header.id)) continue
-        if (isProcessDriverKind(header.kind)) lastProcessDriver = index
-      }
-
       const processHeaders: ObservationHeader[] = []
       const metaHeaders: ObservationHeader[] = []
       for (let index = 0; index < group.headers.length; index += 1) {
@@ -540,9 +533,8 @@ export class InteractionDescriptorStore {
         const prompt = header.kind === 'message.user'
         const artifact = header.kind === 'artifact.action'
         const terminal = terminalIds.has(header.id)
-        const assistantProcess = header.kind === 'message.assistant' && index <= lastProcessDriver
-        const process = isProcessDriverKind(header.kind) || assistantProcess
-        const finalAssistant = header.kind === 'message.assistant' && !assistantProcess
+        const process = isProcessDriverKind(header.kind)
+        const finalAssistant = header.kind === 'message.assistant'
         if (prompt || finalAssistant || artifact || terminal) displayIds.add(header.id)
         if (process && !prompt && !artifact && !terminal) {
           processHeaders.push(header)
@@ -557,8 +549,7 @@ export class InteractionDescriptorStore {
         : preliminary
       const messageCount = processHeaders.filter(header =>
         header.kind === 'message.commentary'
-        || header.kind === 'message.reasoning'
-        || header.kind === 'message.assistant').length
+        || header.kind === 'message.reasoning').length
       const toolCallIds = new Set(processHeaders
         .filter(header => header.kind === 'tool.call' && header.toolCallId)
         .map(header => header.toolCallId!))
