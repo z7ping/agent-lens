@@ -154,6 +154,23 @@ export async function normalizePiRecord(
         return
       }
 
+      if (fact.role === 'system') {
+        observations.push(piFactCandidate(record, envelope, fact, 'context.injected', {
+          text: fact.text,
+          ...(fact.content === undefined ? {} : { content: fact.content }),
+          ...(fact.nonTextContent.length ? { nonTextContent: fact.nonTextContent } : {}),
+          provenance: {
+            contentRole: 'system-context',
+            actualAuthor: 'system',
+            activityType: 'system-injection',
+            originType: 'system',
+            sourceSignal: 'pi message.role=system',
+            nativeRole: 'system',
+          },
+        }, offset))
+        return
+      }
+
       if (fact.role === 'assistant') {
         const normalized = normalizedMessageAttachments(fact.nonTextContent)
         observations.push(piFactCandidate(record, envelope, fact, 'message.assistant', {
