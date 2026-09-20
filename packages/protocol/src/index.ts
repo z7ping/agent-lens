@@ -28,3 +28,5 @@ export * from './timeline'
 export * from './usage'
 
 export * from './host-file-preview'
+
+export * from './task-file-changes'
