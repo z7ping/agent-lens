@@ -561,7 +561,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       if (signal?.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
     }
     abort()
-    const exact = await liveApi.historyIndex('pi', runtimeId, { cursor, limit: 1 })
+    const exact = await liveApi.historyIndex('pi', runtimeId, { cursor, limit: 1 }, signal)
     abort()
     const current = exact.items[0]
     if (!current?.summary || current.summary.process.revision !== revision) {
@@ -577,7 +577,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       const pageSnapshot = await liveApi.snapshot('pi', runtimeId, undefined, {
         after,
         limit: PI_LIVE_PROCESS_PAGE_LIMIT,
-      })
+      }, signal)
       abort()
       entries = [...entries, ...(pageSnapshot.entries as JsonValue[])]
       lastLeafId = pageSnapshot.leafId
