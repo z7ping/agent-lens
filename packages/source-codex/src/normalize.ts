@@ -399,6 +399,14 @@ function normalizeRuntimeRecord(
     }, {}, actorIdentity)
   }
 
+  if (hookName === 'Interrupt') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: 'turn.interrupted',
+      ...(turnId ? { turnId } : {}),
+      ...(stringField(event, 'model') ? { model: stringField(event, 'model') } : {}),
+    })
+  }
+
   return unknownCandidate(record, envelope, event)
 }
 
