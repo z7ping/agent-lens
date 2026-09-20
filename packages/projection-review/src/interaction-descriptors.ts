@@ -147,6 +147,18 @@ function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
     || kind === 'tool.progress'
 }
 
+function isSummaryMetaKind(kind: ObservationHeader['kind']): boolean {
+  return kind === 'model.call'
+    || kind === 'model.changed'
+    || kind === 'usage'
+    || kind === 'permission.request'
+    || kind === 'permission.response'
+    || kind === 'subagent.spawn'
+    || kind === 'subagent.end'
+    || kind === 'context.compaction'
+    || kind === 'context.summary'
+}
+
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
   descriptor.end = headerCursor(observation)
   descriptor.endedAt = headerEffectiveAt(observation)
@@ -530,7 +542,8 @@ export class InteractionDescriptorStore {
         const terminal = terminalIds.has(header.id)
         const assistantProcess = header.kind === 'message.assistant' && index <= lastProcessDriver
         const process = isProcessDriverKind(header.kind) || assistantProcess
-        if (!process || prompt || artifact || terminal) displayIds.add(header.id)
+        const finalAssistant = header.kind === 'message.assistant' && !assistantProcess
+        if (prompt || finalAssistant || artifact || terminal || isSummaryMetaKind(header.kind)) displayIds.add(header.id)
         if (process && !prompt && !artifact && !terminal) processHeaders.push(header)
       }
 
