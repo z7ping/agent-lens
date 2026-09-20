@@ -55,9 +55,17 @@ for (const retiredClass of ['round-nav-from-start', 'round-nav-latest']) {
 }
 
 const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  async refreshUsage/)?.[1] ?? ''
-if (!selectSessionBody.includes("this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE })")) throw new Error('默认选择会话必须请求 backward 最新窗口')
+if (!selectSessionBody.includes("this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })")) throw new Error('默认选择会话必须请求 backward 最新窗口，并只读取 Process Summary')
 const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  acknowledgeReviewNewData/)?.[1] ?? ''
 if (!fromStartBody.includes("direction: 'forward'")) throw new Error('从头查看必须显式请求 forward 窗口')
+if (!fromStartBody.includes("process: 'summary'")) throw new Error('从头查看首屏不得回退为完整 Process 读取')
+for (const marker of [
+  "direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary'",
+  "filter, limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary'",
+  "{ ordinal, process: 'summary' }",
+]) {
+  if (!clientModel.includes(marker)) throw new Error(`Review 导航必须保持 Process Summary 首屏契约：${marker}`)
+}
 if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('pane.scrollTop = pane.scrollHeight') || !reviewPage.includes('followingTailRef.current = true')) throw new Error('默认最新窗口必须渲染后定位到底部并进入跟随状态')
 if (!reviewPage.includes('pane.scrollHeight - pane.scrollTop - pane.clientHeight < 180')) throw new Error('阅读历史时不得抢滚动位置')
 if (!reviewPage.includes("detail.page.direction !== 'backward'") || !reviewPage.includes('void loadOlder().finally')) throw new Error('Review 更早轮次必须由滚动 sentinel 自动加载')
@@ -97,7 +105,7 @@ if (!taskMessage.includes('{!user && <button') || !taskMessage.includes("t('mess
 if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) throw new Error('Agent 源码切换必须悬浮在正文内，不得单独占行')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(taskToolGroup)) throw new Error('Tool Group 不得制造独立折叠父层')
 if (!reviewPresentation.includes('nativeParentEventId') || !reviewPresentation.includes('parentObservationId') || !reviewPresentation.includes('matches.length !== 1')) throw new Error('Thinking / Tool 层级必须只依据显式父关系')
-if (!reviewPage.includes('projectReviewInteractionPresentation(interaction.nodes)') || !reviewPage.includes('nestedTools={entry.tools}')) throw new Error('Review 必须实际使用显式父关系投影')
+if (!reviewPage.includes('projectReviewInteractionPresentation(effectiveInteraction.nodes)') || !reviewPage.includes('nestedTools={entry.tools}')) throw new Error('Review 必须用当前 Summary/Detail 对应的有效 Interaction 执行显式父关系投影')
 
 if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.includes('max-width: 56px') || /\.task-round-summary::before\s*\{[^}]*background:/s.test(taskDetailCss)) throw new Error('轮次标题只允许短右分隔线，不得恢复左右贯穿式分割线')
 if (!taskDetailCss.includes('.task-header-status') || !taskDetailCss.includes('pointer-events: none') || !taskDetailCss.includes('.task-header-actions button')) throw new Error('任务详情头必须明确区分状态与可点击操作')
