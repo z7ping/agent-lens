@@ -86,7 +86,7 @@ interface RailFrameRect {
 type SessionSlotElement = ReactElement<{ className?: string; children?: ReactNode }>
 
 const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
-  showUsageDetails: true,
+  showUsageDetails: false,
   setShowUsageDetails: () => undefined,
 })
 
@@ -99,7 +99,7 @@ export function useTaskSurfaceView(): TaskSurfaceViewValue {
 }
 
 function TaskSurfaceViewProvider({ children }: PropsWithChildren) {
-  const [showUsageDetails, setShowUsageDetails] = useState(true)
+  const [showUsageDetails, setShowUsageDetails] = useState(false)
   const value = useMemo(() => ({ showUsageDetails, setShowUsageDetails }), [showUsageDetails])
   return <TaskSurfaceViewContext.Provider value={value}>{children}</TaskSurfaceViewContext.Provider>
 }
