@@ -9,13 +9,23 @@ import {
 import { translateProduct } from '../i18n/runtime'
 
 export type PiLiveItemState = 'running' | 'settled'
+export type PiLiveTurnSection = 'prompt' | 'process' | 'terminal' | 'final' | 'artifact'
+
+interface PiLiveHistoryItemBase {
+  id: string
+  at: string
+  /** Web-local Turn presentation metadata; never becomes a Pi/Canonical fact. */
+  turnSection?: PiLiveTurnSection | undefined
+  /** Explicit live assistant identity when native IDs cannot encode it (currently live Tool events). */
+  assistantEntryId?: string | undefined
+}
 
 export type PiLiveHistoryItem =
-  | { id: string; kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; modelLabel?: string | undefined; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
-  | { id: string; kind: 'thinking'; text: string; at: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined }
-  | { id: string; kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; at: string; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined }
-  | { id: string; kind: 'usage'; usage: PiNativeUsage; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
-  | { id: string; kind: 'lifecycle'; event: string; label: string; detail: string; at: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown }
+  | (PiLiveHistoryItemBase & { kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; modelLabel?: string | undefined; state?: PiLiveItemState | undefined; contentIndex?: number | undefined })
+  | (PiLiveHistoryItemBase & { kind: 'thinking'; text: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined })
+  | (PiLiveHistoryItemBase & { kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined })
+  | (PiLiveHistoryItemBase & { kind: 'usage'; usage: PiNativeUsage; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown })
+  | (PiLiveHistoryItemBase & { kind: 'lifecycle'; event: string; label: string; detail: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown })
 
 export function omitPiLivePromptMessages(items: PiLiveHistoryItem[], promptText?: string): PiLiveHistoryItem[] {
   if (!promptText) return items

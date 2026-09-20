@@ -727,6 +727,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 name: common.name || 'tool',
                 summary: common.inputPreview ?? '',
                 ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
+                messageEpoch: assistantMessageEpochRef.current,
                 startedAtMs: Date.now(),
               }))
             }
