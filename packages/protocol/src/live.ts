@@ -140,6 +140,7 @@ export interface LiveHistoryEventSummaryDto {
   label: string
   detail?: string | undefined
   at?: string | undefined
+  phase: 'before-final' | 'after-final'
 }
 
 export interface LiveHistoryRoundSummaryDto {
