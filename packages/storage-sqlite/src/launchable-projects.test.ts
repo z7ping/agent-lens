@@ -246,7 +246,7 @@ test('launchable project reader hydrates a candidate page with one workspace bat
         prepared.push(sql)
         return {
           all(...args: unknown[]) {
-            if (sql.includes('WITH project_activity AS')) {
+            if (sql.includes('FROM launchable_project_index AS candidate')) {
               assert.deepEqual(args, [4])
               return [
                 {
@@ -272,7 +272,7 @@ test('launchable project reader hydrates a candidate page with one workspace bat
                 },
               ]
             }
-            assert.match(sql, /WITH workspace_activity AS/)
+            assert.match(sql, /FROM launchable_workspace_index/)
             assert.match(sql, /ROW_NUMBER\(\) OVER/)
             assert.deepEqual(args, ['project-a', 'project-b', 'project-c', 64])
             return [
@@ -281,18 +281,24 @@ test('launchable project reader hydrates a candidate page with one workspace bat
                 workspace_id: 'workspace-a',
                 workspace_path: '/workspace/a',
                 last_seen_at: isoMinute(3),
+                validation_status: 'unknown',
+                validated_at: null,
               },
               {
                 project_key: 'project-b',
                 workspace_id: 'workspace-b',
                 workspace_path: '/workspace/b',
                 last_seen_at: isoMinute(2),
+                validation_status: 'unknown',
+                validated_at: null,
               },
               {
                 project_key: 'project-c',
                 workspace_id: 'workspace-c',
                 workspace_path: '/workspace/c',
                 last_seen_at: isoMinute(1),
+                validation_status: 'unknown',
+                validated_at: null,
               },
             ]
           },
