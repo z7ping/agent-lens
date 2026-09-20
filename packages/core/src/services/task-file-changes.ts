@@ -45,6 +45,7 @@ export interface TaskFileChangeCapture {
   baselineTreeSha?: string
   baselineCapturedAt: string
   finalTreeSha?: string
+  checkpointedAt?: string
   finalizedAt?: string
   changes?: TaskFileChangeRecord[]
 }
@@ -60,6 +61,15 @@ export interface TaskFileChangeProjectionStore extends TaskFileChangeReader {
   putBaseline(capture: TaskFileChangeCapture): Promise<void>
   getByRuntime(runtimeSessionId: string): Promise<TaskFileChangeCapture | null>
   bindRuntime(runtimeSessionId: string, logicalSessionId: LogicalSessionId): Promise<void>
+  checkpointRuntime(
+    runtimeSessionId: string,
+    input: {
+      logicalSessionId: LogicalSessionId
+      finalTreeSha?: string
+      checkpointedAt: string
+      changes: TaskFileChangeRecord[]
+    },
+  ): Promise<void>
   finalizeRuntime(
     runtimeSessionId: string,
     input: {
