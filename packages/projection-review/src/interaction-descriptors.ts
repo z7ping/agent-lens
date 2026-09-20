@@ -16,6 +16,7 @@ const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
 const SLOW_DESCRIPTOR_PHASE_MS = 500
 const MAX_REVIEW_SUMMARY_FACTS = 600
+const MAX_REVIEW_SUMMARY_META_EVENTS = 8
 
 function logSlowDescriptorPhase(phase: string, startedAt: number, details: Record<string, number> = {}): void {
   const elapsedMs = performance.now() - startedAt
@@ -147,16 +148,11 @@ function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
     || kind === 'tool.progress'
 }
 
-function isSummaryMetaKind(kind: ObservationHeader['kind']): boolean {
-  return kind === 'model.call'
-    || kind === 'model.changed'
-    || kind === 'usage'
-    || kind === 'permission.request'
-    || kind === 'permission.response'
-    || kind === 'subagent.spawn'
-    || kind === 'subagent.end'
-    || kind === 'context.compaction'
-    || kind === 'context.summary'
+function boundedSummaryMetaHeaders(headers: readonly ObservationHeader[]): ObservationHeader[] {
+  if (headers.length <= MAX_REVIEW_SUMMARY_META_EVENTS) return [...headers]
+  const headCount = Math.ceil(MAX_REVIEW_SUMMARY_META_EVENTS / 2)
+  const tailCount = MAX_REVIEW_SUMMARY_META_EVENTS - headCount
+  return [...headers.slice(0, headCount), ...headers.slice(-tailCount)]
 }
 
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
@@ -535,6 +531,7 @@ export class InteractionDescriptorStore {
       }
 
       const processHeaders: ObservationHeader[] = []
+      const metaHeaders: ObservationHeader[] = []
       for (let index = 0; index < group.headers.length; index += 1) {
         const header = group.headers[index]!
         const prompt = header.kind === 'message.user'
@@ -543,9 +540,14 @@ export class InteractionDescriptorStore {
         const assistantProcess = header.kind === 'message.assistant' && index <= lastProcessDriver
         const process = isProcessDriverKind(header.kind) || assistantProcess
         const finalAssistant = header.kind === 'message.assistant' && !assistantProcess
-        if (prompt || finalAssistant || artifact || terminal || isSummaryMetaKind(header.kind)) displayIds.add(header.id)
-        if (process && !prompt && !artifact && !terminal) processHeaders.push(header)
+        if (prompt || finalAssistant || artifact || terminal) displayIds.add(header.id)
+        if (process && !prompt && !artifact && !terminal) {
+          processHeaders.push(header)
+        } else if (!prompt && !finalAssistant && !artifact && !terminal) {
+          metaHeaders.push(header)
+        }
       }
+      for (const header of boundedSummaryMetaHeaders(metaHeaders)) displayIds.add(header.id)
 
       const fallbackById = group.fallbackObservations
         ? new Map(group.fallbackObservations.map(item => [item.id, item]))
