@@ -129,9 +129,8 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
 
   const prompt: PiLiveHistoryItem[] = []
   const process: PiLiveHistoryItem[] = []
-  const meta: PiLiveHistoryItem[] = []
+  const postProcess: PiLiveHistoryItem[] = []
   const terminal: PiLiveHistoryItem[] = []
-  const final: PiLiveHistoryItem[] = []
   const artifacts: PiLiveHistoryItem[] = []
 
   for (const [index, item] of items.entries()) {
@@ -140,7 +139,7 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
       continue
     }
     if (finalAssistantIndexes.has(index)) {
-      final.push(withTurnSection(item, 'final'))
+      postProcess.push(withTurnSection(item, 'final'))
       continue
     }
     const identity = assistantEntryIdentity(item)
@@ -153,13 +152,13 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
       continue
     }
     if (item.kind === 'usage' || item.kind === 'lifecycle') {
-      meta.push(withTurnSection(item, 'meta'))
+      postProcess.push(withTurnSection(item, 'meta'))
       continue
     }
     process.push(withTurnSection(item, 'process'))
   }
 
-  return [...prompt, ...process, ...meta, ...final, ...terminal, ...artifacts]
+  return [...prompt, ...process, ...postProcess, ...terminal, ...artifacts]
 }
 
 function semanticRounds(history: PiLiveHistoryItem[]): SemanticRound[] {
