@@ -11,7 +11,7 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '20'
+export const CODEX_CURRENT_PARSER_VERSION = '21'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',
@@ -221,6 +221,36 @@ function plaintextAgentMessageContent(content: unknown): { text?: string; encryp
   return { ...(text ? { text } : {}), encrypted }
 }
 
+async function normalizeResponseAdditionalTools(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+  payload: Record<string, unknown>,
+): Promise<NormalizedSourceOutput> {
+  const tools = Array.isArray(payload.tools) ? payload.tools : []
+  const names = tools
+    .map(value => stringField(asRecord(value), 'name'))
+    .filter((value): value is string => Boolean(value))
+  return remapUnknown(record, ctx, 'context.injected', {
+    sourceType: 'response_item.additional_tools',
+    injectedContext: true,
+    injectedKind: 'additional-tools',
+    role: stringField(payload, 'role') ?? 'developer',
+    toolCount: tools.length,
+    ...(names.length ? { toolNames: names } : {}),
+  })
+}
+
+async function normalizeResponseCompactionTrigger(
+  record: SourceRecord,
+  ctx: SourceNormalizationContext,
+): Promise<NormalizedSourceOutput> {
+  return remapUnknown(record, ctx, 'context.compaction', {
+    phase: 'start',
+    sourceType: 'response_item.compaction_trigger',
+    trigger: 'request-control',
+  })
+}
+
 async function normalizeResponseAgentMessage(
   record: SourceRecord,
   ctx: SourceNormalizationContext,
@@ -394,11 +424,13 @@ async function normalizePersistedResponseItem(
   const { entry, payload } = rolloutEntry(record)
   if (entry.type !== 'response_item') return null
   switch (payload.type) {
+    case 'additional_tools': return normalizeResponseAdditionalTools(record, ctx, payload)
     case 'agent_message': return normalizeResponseAgentMessage(record, ctx, payload)
     case 'local_shell_call': return normalizeResponseLocalShellCall(record, ctx, payload)
     case 'tool_search_call': return normalizeResponseToolSearchCall(record, ctx, payload)
     case 'image_generation_call': return normalizeResponseImageGeneration(record, ctx, payload)
     case 'configuration_update': return normalizeResponseConfigurationUpdate(record, ctx, payload)
+    case 'compaction_trigger': return normalizeResponseCompactionTrigger(record, ctx)
     case 'compaction':
     case 'compaction_summary':
     case 'context_compaction':
