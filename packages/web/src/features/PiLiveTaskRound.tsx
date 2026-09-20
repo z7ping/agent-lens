@@ -401,6 +401,15 @@ export function PiLiveIndexedTaskRound({
   }
 
   const terminal = summary?.terminal
+  const beforeFinalEvents = summary?.events?.filter(event => event.phase === 'before-final') ?? []
+  const afterFinalEvents = summary?.events?.filter(event => event.phase === 'after-final') ?? []
+  const renderIndexedEvent = (event: NonNullable<typeof summary>['events'][number]) => <TaskEvent key={event.id} model={{
+    id: `pi-index-event:${item.ordinal}:${event.id}`,
+    label: event.label,
+    category: event.category,
+    summary: event.detail,
+    time: event.at ? formatClock(event.at, i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN') : undefined,
+  }}/>
   const terminalLabel = terminal?.status === 'error'
     ? t('history.terminalError')
     : terminal?.status === 'aborted'
@@ -451,18 +460,7 @@ export function PiLiveIndexedTaskRound({
         })}
       </div>}
     </TaskProcessGroup>}
-    {(summary?.events ?? []).map(event => <TaskEvent key={event.id} model={{
-      id: `pi-index-event:${item.ordinal}:${event.id}`,
-      label: event.label,
-      category: event.category,
-      summary: event.detail,
-      time: event.at ? formatClock(event.at, i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN') : undefined,
-    }}/>)}
-    {summary?.eventOmittedCount ? <TaskEvent model={{
-      id: `pi-index-event-omitted:${item.ordinal}`,
-      label: t('history.moreEvents', { count: summary.eventOmittedCount }),
-      category: 'unknown',
-    }}/> : null}
+    {beforeFinalEvents.map(renderIndexedEvent)}
     {summary?.finalText && <TaskMessage
       role="assistant"
       text={summary.finalText}
@@ -470,6 +468,12 @@ export function PiLiveIndexedTaskRound({
       modelLabel={summary.modelLabel}
       className="pi-live-task-message"
     />}
+    {afterFinalEvents.map(renderIndexedEvent)}
+    {summary?.eventOmittedCount ? <TaskEvent model={{
+      id: `pi-index-event-omitted:${item.ordinal}`,
+      label: t('history.moreEvents', { count: summary.eventOmittedCount }),
+      category: 'unknown',
+    }}/> : null}
     {terminal && <TaskEvent model={{
       id: `terminal:pi-index-round-${item.ordinal}`,
       label: terminalLabel,
