@@ -27,7 +27,11 @@
   border-radius: 50%;
   background: var(--al-muted-2);
 }
-.pi-startup-disclosure.is-initializing .pi-startup-summary-state { background: var(--al-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 12%, transparent); }
+.pi-startup-disclosure.is-initializing .pi-startup-summary-state {
+  background: var(--al-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 12%, transparent);
+  animation: pi-startup-pulse 1.4s ease-in-out infinite;
+}
 .pi-startup-disclosure.is-ready .pi-startup-summary-state { background: var(--al-success); }
 .pi-startup-disclosure.is-failed .pi-startup-summary-state { background: var(--al-danger); }
 .pi-startup-summary-copy { display: flex; min-width: 0; align-items: baseline; gap: 7px; overflow: hidden; white-space: nowrap; }
@@ -65,7 +69,12 @@
 }
 .pi-startup-step-dot svg { display: block; }
 .pi-startup-step.is-done .pi-startup-step-dot { border-color: color-mix(in srgb, var(--al-success) 65%, var(--al-line)); background: var(--al-success); color: var(--al-on-accent); }
-.pi-startup-step.is-active .pi-startup-step-dot { border-color: var(--al-accent); background: color-mix(in srgb, var(--al-accent) 18%, transparent); box-shadow: inset 0 0 0 4px var(--al-surface); }
+.pi-startup-step.is-active .pi-startup-step-dot {
+  border-color: var(--al-accent);
+  background: color-mix(in srgb, var(--al-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 4px var(--al-surface);
+  animation: pi-startup-active-ring 1.25s ease-in-out infinite;
+}
 .pi-startup-step.is-failed .pi-startup-step-dot { border-color: var(--al-danger); background: var(--al-danger); color: var(--al-on-accent); }
 .pi-startup-step-copy { display: grid; min-width: 0; gap: 1px; }
 .pi-startup-step-copy b { color: var(--al-ink-2); font-size: 12px; font-weight: 620; }
@@ -74,6 +83,10 @@
 .pi-startup-step.is-pending .pi-startup-step-time { opacity: .48; }
 .pi-startup-step-time { color: var(--al-muted); font: 12px/1 var(--font-mono); white-space: nowrap; }
 .pi-startup-step.is-active .pi-startup-step-time { color: var(--al-accent); }
+.pi-startup-step.is-active .pi-startup-step-copy b {
+  color: var(--al-ink);
+  animation: pi-startup-active-copy 1.6s ease-in-out infinite;
+}
 .pi-startup-step.is-failed .pi-startup-step-time { color: var(--al-danger); }
 .pi-startup-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .pi-startup-meta span { padding: 2px 6px; border-radius: 999px; background: var(--al-soft); color: var(--al-muted); font-size: 12px; }
@@ -98,6 +111,41 @@
 .pi-startup-failure b { font-weight: 700; }
 .pi-startup-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 7px; }
 .pi-startup-actions:empty { display: none; }
+
+@keyframes pi-startup-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 10%, transparent);
+    opacity: .82;
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--al-accent) 4%, transparent);
+    opacity: 1;
+  }
+}
+
+@keyframes pi-startup-active-ring {
+  0%, 100% {
+    transform: scale(.92);
+    border-color: color-mix(in srgb, var(--al-accent) 72%, var(--al-line));
+  }
+  50% {
+    transform: scale(1.08);
+    border-color: var(--al-accent);
+  }
+}
+
+@keyframes pi-startup-active-copy {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-startup-disclosure.is-initializing .pi-startup-summary-state,
+  .pi-startup-step.is-active .pi-startup-step-dot,
+  .pi-startup-step.is-active .pi-startup-step-copy b {
+    animation: none;
+  }
+}
 
 @media (max-width: 767.98px) {
   .pi-startup-body { padding-left: 10px; }
