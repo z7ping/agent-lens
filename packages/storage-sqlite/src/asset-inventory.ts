@@ -7,6 +7,7 @@ import type {
   AssetStateObservation,
   AssetType,
 } from '@agent-lens/core'
+import { rebuildAssetCurrentState } from './asset-current-state'
 import { SqliteExecutor } from './executor'
 
 type AssetRow = Record<string, unknown>
@@ -123,7 +124,7 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
 
   async listByInstallation(installationId: string): Promise<AssetInventoryEntry[]> {
     return this.executor.run(() => {
-      const bindings = this.executor.db.prepare(`
+      const rows = this.executor.db.prepare(`
         SELECT
           b.id AS binding_id,
           b.asset_id AS asset_id,
@@ -137,27 +138,49 @@ export class SqliteAssetInventoryReader implements AssetInventoryReader {
           d.type AS asset_type,
           d.canonical_name AS canonical_name,
           d.display_name AS display_name,
-          d.upstream_identity AS upstream_identity
+          d.upstream_identity AS upstream_identity,
+          current.observation_id AS id,
+          current.asset_binding_id AS asset_binding_id,
+          current.state AS state,
+          current.value AS value,
+          current.observed_at AS observed_at,
+          current.evidence_refs_json AS evidence_refs_json
         FROM asset_bindings b
         JOIN asset_definitions d ON d.id = b.asset_id
+        LEFT JOIN asset_current_state AS current
+          ON current.asset_binding_id = b.id
         WHERE b.installation_id = ?
-        ORDER BY d.type, COALESCE(d.display_name, d.canonical_name), b.id
+        ORDER BY
+          d.type,
+          COALESCE(d.display_name, d.canonical_name),
+          b.id,
+          current.state
       `).all(installationId)
 
-      const states = this.executor.db.prepare(`
-        SELECT * FROM asset_state_observations
-        WHERE asset_binding_id = ?
-        ORDER BY observed_at DESC, id DESC
-      `)
-
-      return bindings.map(row => {
-        const binding = mapBinding(row)
-        return {
-          definition: mapDefinition(row),
-          binding,
-          states: states.all(binding.id).map(mapState),
+      const entries = new Map<string, AssetInventoryEntry>()
+      for (const value of rows) {
+        const item = rowRecord(value)
+        const bindingId = requiredString(item, 'binding_id')
+        let entry = entries.get(bindingId)
+        if (!entry) {
+          entry = {
+            definition: mapDefinition(item),
+            binding: mapBinding(item),
+            states: [],
+          }
+          entries.set(bindingId, entry)
         }
-      })
+        if (optionalString(item, 'state') !== undefined) {
+          entry.states.push(mapState(item))
+        }
+      }
+      return [...entries.values()]
+    })
+  }
+
+  rebuildCurrentState(): Promise<void> {
+    return this.executor.transaction(async () => {
+      rebuildAssetCurrentState(this.executor.db)
     })
   }
 }
