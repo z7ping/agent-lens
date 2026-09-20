@@ -143,6 +143,8 @@ export interface ObservationHeader {
   error?: boolean
   /** Normalized lifecycle action when kind=session.lifecycle; avoids hydrating payload just to classify terminal state. */
   lifecycleAction?: string
+  /** Native Tool correlation id for tool.call / tool.result without hydrating heavy payloads. */
+  toolCallId?: string
 }
 
 export interface ObservationService {
