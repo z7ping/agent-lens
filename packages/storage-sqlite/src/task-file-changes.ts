@@ -324,6 +324,71 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
     })
   }
 
+  mergeObservedSession(
+    logicalSessionId: LogicalSessionId,
+    changes: TaskFileChangeRecord[],
+  ): Promise<boolean> {
+    return this.executor.transaction(async () => {
+      const latestCapture = this.executor.db.prepare(`
+        SELECT *
+        FROM task_file_change_capture
+        WHERE logical_session_id = ?
+        ORDER BY
+          COALESCE(finalized_at, checkpointed_at, baseline_captured_at, updated_at) DESC,
+          updated_at DESC,
+          runtime_session_id DESC
+        LIMIT 1
+      `).get(logicalSessionId)
+      const capture = latestCapture ? parseCapture(latestCapture) : null
+      if (capture?.finalizedAt) return false
+
+      const current = this.executor.db.prepare(`
+        SELECT *
+        FROM task_file_change_projection
+        WHERE logical_session_id = ?
+        ORDER BY path ASC
+      `).all(logicalSessionId).map(parseChangeRecord)
+
+      const merged = new Map<string, TaskFileChangeRecord>(
+        current.map(item => [item.path, { ...item, evidence: [...item.evidence] }]),
+      )
+      for (const item of changes) {
+        const existing = merged.get(item.path)
+        if (!existing) {
+          merged.set(item.path, item)
+          continue
+        }
+        existing.lastChangedAt = item.lastChangedAt > existing.lastChangedAt
+          ? item.lastChangedAt
+          : existing.lastChangedAt
+        existing.firstChangedAt = item.firstChangedAt < existing.firstChangedAt
+          ? item.firstChangedAt
+          : existing.firstChangedAt
+        for (const evidence of item.evidence) {
+          if (!existing.evidence.includes(evidence)) existing.evidence.push(evidence)
+        }
+        if (existing.confidence !== 'exact') {
+          existing.changeType = item.changeType
+          existing.oldPath = item.oldPath
+          existing.additions = item.additions
+          existing.deletions = item.deletions
+          existing.confidence = item.confidence
+        }
+      }
+
+      this.executor.db.prepare(`
+        DELETE FROM task_file_change_projection
+        WHERE logical_session_id = ?
+      `).run(logicalSessionId)
+      insertProjection(
+        this.executor,
+        logicalSessionId,
+        [...merged.values()].sort((left, right) => left.path.localeCompare(right.path)),
+      )
+      return true
+    })
+  }
+
   replaceObservedSession(
     logicalSessionId: LogicalSessionId,
     changes: TaskFileChangeRecord[],
