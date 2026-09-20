@@ -129,10 +129,16 @@ export interface LiveHistoryProcessSummaryDto {
   availability: 'available' | 'partial'
 }
 
+export interface LiveHistoryTerminalSummaryDto {
+  status: 'completed' | 'stopped' | 'aborted' | 'error'
+  detail?: string | undefined
+}
+
 export interface LiveHistoryRoundSummaryDto {
   promptText?: string | undefined
   finalText?: string | undefined
   modelLabel?: string | undefined
+  terminal?: LiveHistoryTerminalSummaryDto | undefined
   process: LiveHistoryProcessSummaryDto
 }
 

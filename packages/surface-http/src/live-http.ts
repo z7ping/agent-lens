@@ -532,10 +532,28 @@ function normalizeHistoryIndex(value: unknown) {
       if (round.promptText !== undefined && typeof round.promptText !== 'string') throw httpError(500, 'Live history prompt text is invalid')
       if (round.finalText !== undefined && typeof round.finalText !== 'string') throw httpError(500, 'Live history final text is invalid')
       if (round.modelLabel !== undefined && typeof round.modelLabel !== 'string') throw httpError(500, 'Live history model label is invalid')
+      let terminal
+      if (round.terminal !== undefined) {
+        if (!round.terminal || typeof round.terminal !== 'object' || Array.isArray(round.terminal)) {
+          throw httpError(500, 'Live history terminal summary is invalid')
+        }
+        const value = round.terminal as Record<string, unknown>
+        if (!['completed', 'stopped', 'aborted', 'error'].includes(String(value.status))) {
+          throw httpError(500, 'Live history terminal status is invalid')
+        }
+        if (value.detail !== undefined && typeof value.detail !== 'string') {
+          throw httpError(500, 'Live history terminal detail is invalid')
+        }
+        terminal = {
+          status: value.status as 'completed' | 'stopped' | 'aborted' | 'error',
+          ...(typeof value.detail === 'string' && value.detail ? { detail: value.detail.slice(0, 500) } : {}),
+        }
+      }
       summary = {
         ...(typeof round.promptText === 'string' ? { promptText: round.promptText } : {}),
         ...(typeof round.finalText === 'string' ? { finalText: round.finalText } : {}),
         ...(typeof round.modelLabel === 'string' ? { modelLabel: round.modelLabel.slice(0, 240) } : {}),
+        ...(terminal ? { terminal } : {}),
         process: {
           revision: process.revision,
           itemCount: Number(process.itemCount),

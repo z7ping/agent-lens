@@ -507,6 +507,23 @@ function roundSummary(all, row, nextEntryIndex) {
   const provider = typeof finalMessage.provider === 'string' ? finalMessage.provider.trim() : ''
   const model = typeof finalMessage.model === 'string' ? finalMessage.model.trim() : ''
   const modelLabel = [provider, model].filter(Boolean).join(' / ')
+  const stopReason = typeof finalMessage.stopReason === 'string'
+    ? finalMessage.stopReason.trim()
+    : typeof finalMessage.stop_reason === 'string'
+      ? finalMessage.stop_reason.trim()
+      : ''
+  const errorMessage = typeof finalMessage.errorMessage === 'string'
+    ? finalMessage.errorMessage.trim()
+    : typeof finalMessage.error_message === 'string'
+      ? finalMessage.error_message.trim()
+      : ''
+  const terminalStatus = stopReason === 'aborted'
+    ? 'aborted'
+    : stopReason === 'error' || errorMessage
+      ? 'error'
+      : stopReason
+        ? 'completed'
+        : ''
   const firstProcessAt = processTimes.length ? Math.min(...processTimes) : undefined
   const lastProcessAt = processTimes.length ? Math.max(...processTimes) : undefined
   const lastId = entries.length ? entryId(entries.at(-1)) : undefined
@@ -515,6 +532,12 @@ function roundSummary(all, row, nextEntryIndex) {
     ...(promptText ? { promptText } : {}),
     ...(finalText ? { finalText } : {}),
     ...(modelLabel ? { modelLabel } : {}),
+    ...(terminalStatus ? {
+      terminal: {
+        status: terminalStatus,
+        ...((stopReason || errorMessage) ? { detail: [stopReason, errorMessage].filter(Boolean).join(' · ') } : {}),
+      },
+    } : {}),
     process: {
       revision: [row.cursor, entries.length, lastId ?? 'empty'].join(':'),
       itemCount,
