@@ -236,6 +236,7 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       processLoadFailed: '处理详情加载失败',
       processChanged: '本轮历史已更新，请重新展开',
       partialProcess: '部分',
+      moreEvents: '另有 {{count}} 条关键事件',
       retry: '重试',
       terminalCompleted: '本轮完成',
       terminalStopped: '本轮停止',
