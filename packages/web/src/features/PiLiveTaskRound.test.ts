@@ -88,10 +88,10 @@ test('Pi Live 历史轮将处理中间过程默认折叠且最终输出保留模
         highLatency: false,
       },
       items: [
-        { id: 'user-1', kind: 'message', role: 'user', text: '检查仓库', at: '2026-09-01T00:00:00.000Z' },
-        { id: 'thinking-1', kind: 'thinking', text: '先检查状态', at: '2026-09-01T00:00:01.000Z' },
-        { id: 'tool-1', kind: 'tool', callId: 'tool-1', name: 'bash', summary: 'git status', output: 'clean', status: 'success', at: '2026-09-01T00:00:02.000Z' },
-        { id: 'assistant-1', kind: 'message', role: 'assistant', text: '仓库正常。', modelLabel: 'test / model-1', at: '2026-09-01T00:00:03.000Z' },
+        { id: 'user-1', kind: 'message', role: 'user', text: '检查仓库', at: '2026-09-01T00:00:00.000Z', turnSection: 'prompt' },
+        { id: 'thinking-1', kind: 'thinking', text: '先检查状态', at: '2026-09-01T00:00:01.000Z', turnSection: 'process' },
+        { id: 'tool-1', kind: 'tool', callId: 'tool-1', name: 'bash', summary: 'git status', output: 'clean', status: 'success', at: '2026-09-01T00:00:02.000Z', turnSection: 'process' },
+        { id: 'assistant-1', kind: 'message', role: 'assistant', text: '仓库正常。', modelLabel: 'test / model-1', at: '2026-09-01T00:00:03.000Z', turnSection: 'final' },
       ],
     },
   }))
@@ -99,7 +99,8 @@ test('Pi Live 历史轮将处理中间过程默认折叠且最终输出保留模
   assert.match(html, /处理详情/)
   assert.match(html, /1 条消息/)
   assert.match(html, /1 次工具调用/)
-  assert.match(html, /耗时 2分18秒/)
+  assert.match(html, /耗时 1秒/)
+  assert.doesNotMatch(html, /耗时 2分18秒/)
   assert.doesNotMatch(html, /先检查状态/)
   assert.doesNotMatch(html, /git status/)
   assert.match(html, /仓库正常。/)
