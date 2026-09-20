@@ -52,6 +52,7 @@ export function TaskThinking({
     open={expanded}
     onToggle={event => {
       const next = event.currentTarget.open
+      if (next === expanded) return
       setExpanded(next)
       expansionStore?.set(model.id, next)
       onExpandedChange?.(next)

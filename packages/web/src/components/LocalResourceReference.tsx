@@ -2,7 +2,6 @@ import { clientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalFileLink, parseLocalFileTarget } from './LocalFileLink'
 import { LocalPathActions } from './LocalPathActions'
-import './local-resource-reference.css'
 
 export type LocalResourceKind = 'file' | 'directory' | 'path'
 export type LocalResourcePresentation = 'block' | 'inline'

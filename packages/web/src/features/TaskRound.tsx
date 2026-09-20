@@ -50,6 +50,7 @@ export function TaskRound({
   }, [expansionStore, forceExpanded, forceRevision, model.id])
 
   const onToggle = (open: boolean) => {
+    if (open === expanded) return
     setExpanded(open)
     expansionStore?.set(model.id, open)
   }

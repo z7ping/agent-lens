@@ -84,7 +84,7 @@ test('v28 rebuild preserves source session ids and enables profile-aware identit
       insertMigration.run(version, `existing-${version}`, '2026-09-17T00:00:00.000Z')
     }
 
-    assert.equal(await migrateDatabase(db), 28)
+    assert.equal(await migrateDatabase(db, { throughVersion: 28 }), 28)
     assert.equal(
       (db.prepare("SELECT source_session_id AS id FROM observations WHERE id = 'observation-1'").get() as { id: string }).id,
       'source-old',

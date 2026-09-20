@@ -5,6 +5,7 @@ import test from 'node:test'
 const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
 const piRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const thinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
+const round = readFileSync(new URL('./TaskRound.tsx', import.meta.url), 'utf8')
 
 test('Review summary-mode 外层统计使用 Process Summary 且重正文可被虚拟卸载', () => {
   assert.match(review, /projectReviewInteractionToolStats\(interaction\)/)
@@ -16,11 +17,12 @@ test('Review 与 Pi 在 revision 更新后会为仍展开的 Process 自动重�
   assert.match(piRound, /expansionStore\?\.get\(processId\) === true[\s\S]{0,120}startProcessLoad\(process\.revision\)/)
 })
 
-test('TaskThinking 状态同步不伪装成用户 toggle，避免 mount 时重复发请求', () => {
+test('Task disclosure 只把真实用户 toggle 写回展开意图，程序同步事件必须忽略', () => {
   const syncEffect = thinking.match(/useEffect\(\(\) => \{([\s\S]*?)\n  \}, \[defaultExpanded, expansionStore, model\.id\]\)/)?.[1] ?? ''
   assert.ok(syncEffect)
   assert.doesNotMatch(syncEffect, /onExpandedChange/)
-  assert.match(thinking, /onToggle=\{event => \{[\s\S]*?onExpandedChange\?\.\(next\)/)
+  assert.match(thinking, /const next = event\.currentTarget\.open[\s\S]*?if \(next === expanded\) return[\s\S]*?onExpandedChange\?\.\(next\)/)
+  assert.match(round, /const onToggle = \(open: boolean\) => \{[\s\S]*?if \(open === expanded\) return/)
 })
 
 test('Review Process 对中间 Assistant\/Commentary 明确标识为过程输出', () => {

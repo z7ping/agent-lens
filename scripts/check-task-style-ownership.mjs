@@ -154,8 +154,8 @@ if (taskSurface.includes('jumpToRailPosition') || /style=\{\{\s*top:/.test(taskS
 if (!/\.task-turn-rail \.turn-tick\s*\{[^}]*width:\s*24px;[^}]*height:\s*9px;/s.test(turnRailOwner)) {
   throw new Error('Turn Rail 每个 tick 的 24×9px 命中区必须统一，状态不得改变轮次间距')
 }
-if (!/\.task-turn-rail \.turn-tick i\s*\{[^}]*width:\s*6px;[^}]*height:\s*1\.5px;/s.test(turnRailOwner)) {
-  throw new Error('Turn Rail 基础标记必须固定为 6×1.5px')
+if (!/\.task-turn-rail \.turn-tick i\s*\{[^}]*width:\s*6px;[^}]*height:\s*2px;/s.test(turnRailOwner)) {
+  throw new Error('Turn Rail 基础标记必须固定为 6×2px')
 }
 const stateGeometryRule = /\.task-turn-rail \.turn-tick\.(?:active|running|err)[^{]*\{[^}]*(?:width|height)\s*:/s
 if (stateGeometryRule.test(turnRailOwner)) {
@@ -163,7 +163,7 @@ if (stateGeometryRule.test(turnRailOwner)) {
 }
 const hoverRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick:hover i\s*\{([^}]*)\}/s)?.[1] ?? ''
 if (!hoverRule || /height\s*:/.test(hoverRule)) {
-  throw new Error('Turn Rail hover 只允许横向展开，不得改变固定 1.5px 线条粗细')
+  throw new Error('Turn Rail hover 只允许横向展开，不得改变固定 2px 线条粗细')
 }
 const activeRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick\.active i\s*\{([^}]*)\}/s)?.[1] ?? ''
 if (!activeRule || !activeRule.includes('var(--al-ink)')) {
@@ -245,4 +245,4 @@ for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', '
   }
 }
 
-console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / 通用 Live 共用 Rail Frame，tick 固定 6×1.5px，状态不改变几何。')
+console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / 通用 Live 共用 Rail Frame，tick 固定 6×2px，状态不改变几何。')
