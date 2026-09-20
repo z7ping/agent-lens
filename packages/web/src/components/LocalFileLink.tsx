@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from 'react'
+import { useState, type ComponentPropsWithoutRef, type MouseEvent } from 'react'
 import type { HostFilePreviewResponseDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { clientModel } from '../client/model'
@@ -74,6 +74,18 @@ function stripLocation(value: string): LocalFileTarget | null {
 export function parseLocalFileTarget(href: string | undefined): LocalFileTarget | null {
   const raw = href?.trim()
   if (!raw) return null
+
+  const fileHash = raw.match(/^(file:\/\/.*)#L(\d+)(?:C(\d+))?$/i)
+  if (fileHash) {
+    const path = fileUrlPath(fileHash[1]!)
+    if (!path) return null
+    return {
+      path,
+      line: Number(fileHash[2]),
+      ...(fileHash[3] ? { column: Number(fileHash[3]) } : {}),
+    }
+  }
+
   const filePath = fileUrlPath(raw)
   return stripLocation(filePath ?? decodePath(raw))
 }
@@ -91,15 +103,13 @@ function blockedLabel(
     : t('localFilePreview.unavailable')
 }
 
+type LocalFileLinkProps = Omit<ComponentPropsWithoutRef<'a'>, 'href'> & { href?: string }
+
 export function LocalFileLink({
   href,
   children,
   ...props
-}: {
-  href?: string
-  children?: ReactNode
-  [key: string]: unknown
-}) {
+}: LocalFileLinkProps) {
   const { t } = useTranslation('common')
   const target = parseLocalFileTarget(href)
   const [open, setOpen] = useState(false)
@@ -134,7 +144,7 @@ export function LocalFileLink({
     <a
       href={href}
       {...props}
-      className={`${typeof props.className === 'string' ? props.className : ''} markdown-local-file-link`.trim()}
+      className={`${props.className ?? ''} markdown-local-file-link`.trim()}
       title={target.path}
       onClick={event => void showPreview(event)}
     >{children}</a>
