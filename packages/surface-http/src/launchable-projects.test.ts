@@ -17,7 +17,13 @@ import {
 function candidate(
   key: string,
   lastSeenAt: string,
-  workspaces: Array<{ id: string; path: string; lastSeenAt?: string }>,
+  workspaces: Array<{
+    id: string
+    path: string
+    lastSeenAt?: string
+    validationStatus?: 'unknown' | 'valid' | 'invalid'
+    validatedAt?: string
+  }>,
 ): LaunchableProjectCandidate {
   return {
     key,
@@ -28,6 +34,8 @@ function candidate(
       workspaceId: workspace.id,
       workspacePath: workspace.path,
       lastSeenAt: workspace.lastSeenAt ?? lastSeenAt,
+      ...(workspace.validationStatus ? { validationStatus: workspace.validationStatus } : {}),
+      ...(workspace.validatedAt ? { validatedAt: workspace.validatedAt } : {}),
     })),
   }
 }
@@ -149,4 +157,84 @@ test('launchable project discovery validates one bounded candidate page with lim
   assert.ok(maxActive <= launchableProjectHttpInternals.VALIDATION_CONCURRENCY)
   assert.equal(result.meta.hasMore, true)
   assert.ok(result.meta.nextCursor)
+})
+
+
+test('launchable project discovery returns a fresh valid cached workspace without filesystem IO', async () => {
+  const now = Date.parse('2026-09-20T00:00:00.000Z')
+  let validations = 0
+  const value = await launchableProjectHttpInternals.launchableWorkspace(
+    candidate('cached-project', '2026-09-20T00:00:00.000Z', [{
+      id: 'cached-workspace',
+      path: '/workspace/cached',
+      validationStatus: 'valid',
+      validatedAt: new Date(now - 5_000).toISOString(),
+    }]),
+    async path => {
+      validations += 1
+      return path
+    },
+    undefined,
+    now,
+  )
+
+  assert.equal(value?.workspacePath, '/workspace/cached')
+  assert.equal(validations, 0)
+})
+
+test('launchable project discovery skips a fresh invalid cached workspace without filesystem IO', async () => {
+  const now = Date.parse('2026-09-20T00:00:00.000Z')
+  let validations = 0
+  const value = await launchableProjectHttpInternals.launchableWorkspace(
+    candidate('cached-project', '2026-09-20T00:00:00.000Z', [
+      {
+        id: 'invalid-workspace',
+        path: '/workspace/invalid',
+        validationStatus: 'invalid',
+        validatedAt: new Date(now - 5_000).toISOString(),
+      },
+      {
+        id: 'unknown-workspace',
+        path: '/workspace/current',
+      },
+    ]),
+    async path => {
+      validations += 1
+      return path
+    },
+    undefined,
+    now,
+  )
+
+  assert.equal(value?.workspaceId, 'unknown-workspace')
+  assert.equal(validations, 1)
+})
+
+test('launchable project discovery records unknown workspace validation for later cache hits', async () => {
+  const records: Array<{ workspaceId: string; workspacePath: string; status: 'valid' | 'invalid'; validatedAt: string }> = []
+  const values = [
+    candidate('recorded-project', '2026-09-20T00:00:00.000Z', [{
+      id: 'recorded-workspace',
+      path: '/workspace/recorded',
+    }]),
+  ]
+  const reader: LaunchableProjectReader = {
+    async query() {
+      return { items: values, hasMore: false }
+    },
+    async recordWorkspaceValidation(input) {
+      records.push(input)
+    },
+  }
+
+  const result = await readLaunchableProjects(
+    { launchableProjects: reader } as StorageService,
+    new URLSearchParams('limit=20'),
+    async path => path,
+  )
+  await new Promise(resolve => setImmediate(resolve))
+
+  assert.equal(result.items[0]?.workspaceId, 'recorded-workspace')
+  assert.equal(records.length, 1)
+  assert.equal(records[0]?.status, 'valid')
 })
