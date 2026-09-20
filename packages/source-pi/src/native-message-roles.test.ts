@@ -164,3 +164,47 @@ test('Pi 未知 Assistant 内容块不会伪装成模型正文', async () => {
   assert.equal(payload.rawType, 'message/assistant/content/futureBlock')
   assert.deepEqual(payload.rawPayload, { type: 'futureBlock', value: { survives: true } })
 })
+
+
+test('Pi official system role maps to system context instead of unknown', async () => {
+  const normalized = await normalizePiRecord(sourceRecord({
+    type: 'message',
+    id: 'system-message',
+    message: {
+      role: 'system',
+      content: 'system instructions',
+      timestamp: 1789000000000,
+    },
+  }), {} as never)
+
+  assert.equal(normalized.observations[0]?.kind, 'context.injected')
+  const payload = normalized.observations[0]?.payload as {
+    text?: string
+    provenance?: { contentRole?: string; actualAuthor?: string; nativeRole?: string }
+  }
+  assert.equal(payload.text, 'system instructions')
+  assert.equal(payload.provenance?.contentRole, 'system-context')
+  assert.equal(payload.provenance?.actualAuthor, 'system')
+  assert.equal(payload.provenance?.nativeRole, 'system')
+})
+
+test('Pi official StopReason values are all preserved as explicit lifecycle facts', async () => {
+  for (const stopReason of ['pending', 'stop', 'length', 'toolUse', 'error', 'aborted', 'deferred']) {
+    const normalized = await normalizePiRecord(sourceRecord({
+      type: 'message',
+      id: `assistant-stop-${stopReason}`,
+      message: {
+        role: 'assistant',
+        provider: 'test',
+        model: 'test-model',
+        stopReason,
+        content: [{ type: 'text', text: 'response' }],
+      },
+    }), {} as never)
+
+    const lifecycle = normalized.observations.find(item =>
+      item.kind === 'session.lifecycle'
+      && (item.payload as { stopReason?: string }).stopReason === stopReason)
+    assert.ok(lifecycle, stopReason)
+  }
+})
