@@ -230,6 +230,7 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       viewOutput: '查看输出',
       thinking: '思考',
       commentary: '过程输出',
+      loadingOlder: '正在加载更早轮次…',
       expandToLoad: '展开后加载完整处理详情',
       loadingProcess: '正在加载处理详情…',
       processLoadFailed: '处理详情加载失败',
