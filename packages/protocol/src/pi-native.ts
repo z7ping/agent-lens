@@ -25,7 +25,7 @@ interface PiNativeFactBase {
 export type PiNativeFact =
   | (PiNativeFactBase & {
       kind: 'message'
-      role: 'user' | 'assistant' | 'other'
+      role: 'user' | 'assistant' | 'system' | 'other'
       text: string
       content: unknown
       nonTextContent: unknown[]
@@ -203,6 +203,10 @@ export function normalizePiSessionEntry(
     const content = message.content ?? message.text
     if (role === 'user') {
       facts.push({ ...messageBase, kind: 'message', role: 'user', text: textFromContent(content), content, nonTextContent: nonTextContent(content) })
+      return facts
+    }
+    if (role === 'system') {
+      facts.push({ ...messageBase, kind: 'message', role: 'system', text: textFromContent(content), content, nonTextContent: nonTextContent(content) })
       return facts
     }
     if (role === 'assistant') {
