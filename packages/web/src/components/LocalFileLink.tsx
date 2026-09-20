@@ -5,7 +5,6 @@ import { clientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { LocalPathActions } from './LocalPathActions'
 import { Dialog, UiIcon } from './ui'
-import './local-file-preview.css'
 
 export interface LocalFileTarget {
   path: string
