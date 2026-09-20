@@ -22,6 +22,11 @@ export interface GitWorkspaceDiffEntry {
   deletions?: number
 }
 
+export interface GitWorkspaceDiffResult {
+  current: GitWorkspaceSnapshot
+  changes: GitWorkspaceDiffEntry[]
+}
+
 async function git(
   cwd: string,
   args: readonly string[],
@@ -169,9 +174,9 @@ function changeType(status: string): GitWorkspaceDiffEntry['changeType'] | undef
  * anonymous trees, so pre-existing dirty/untracked files are not falsely
  * attributed to the task and committed changes remain visible.
  */
-export async function diffGitWorkspaceSnapshot(
+export async function compareGitWorkspaceSnapshot(
   baseline: GitWorkspaceSnapshot,
-): Promise<GitWorkspaceDiffEntry[] | null> {
+): Promise<GitWorkspaceDiffResult | null> {
   const current = await captureGitWorkspaceSnapshot(baseline.rootPath)
   if (!current || current.rootPath !== baseline.rootPath) return null
 
@@ -197,7 +202,7 @@ export async function diffGitWorkspaceSnapshot(
   ])
 
   const lineCounts = parseNumStat(numStat)
-  return parseNameStatus(nameStatus).flatMap(item => {
+  const changes = parseNameStatus(nameStatus).flatMap(item => {
     const type = changeType(item.status)
     if (!type) return []
     const counts = lineCounts.get(item.path)
@@ -209,6 +214,13 @@ export async function diffGitWorkspaceSnapshot(
       ...(counts?.deletions === undefined ? {} : { deletions: counts.deletions }),
     }]
   })
+  return { current, changes }
+}
+
+export async function diffGitWorkspaceSnapshot(
+  baseline: GitWorkspaceSnapshot,
+): Promise<GitWorkspaceDiffEntry[] | null> {
+  return (await compareGitWorkspaceSnapshot(baseline))?.changes ?? null
 }
 
 export const gitWorkspaceSnapshotInternals = {
