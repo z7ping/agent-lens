@@ -89,8 +89,10 @@ test('Pi user-triggered bash execution remains explicit activity without being m
 
   assert.equal(normalized.observations.length, 1)
   const observation = normalized.observations[0]!
-  assert.equal(observation.kind, 'unknown')
-  assert.equal((observation.payload as { event?: string }).event, 'pi.bash_execution')
+  assert.equal(observation.kind, 'session.lifecycle')
+  const payload = observation.payload as { event?: string; nativeSemantic?: string }
+  assert.equal(payload.event, 'pi.bash_execution')
+  assert.equal(payload.nativeSemantic, 'user-shell-activity')
 })
 
 test('Pi historical user images enter canonical attachments without duplicating image bytes in nonTextContent', async () => {
@@ -121,4 +123,44 @@ test('Pi historical user images enter canonical attachments without duplicating 
     data: 'aGVsbG8=',
   }])
   assert.deepEqual(payload.nonTextContent, [{ type: 'custom-block', value: 'keep-me' }])
+})
+
+
+test('Pi 已知顶层扩展/标签/Bash 事件都有稳定语义，未来类型仍保留 unknown', async () => {
+  const known = [
+    { type: 'custom', id: 'custom-1', customType: 'extension-state', data: { value: 1 } },
+    { type: 'custom_message', id: 'custom-message-1', customType: 'notice', content: [{ type: 'text', text: 'hello' }] },
+    { type: 'label', id: 'label-1', label: 'checkpoint' },
+    { type: 'bash', id: 'bash-1', command: 'pwd' },
+    { type: 'bash_result', id: 'bash-result-1', output: '/workspace/pi' },
+  ] as const
+
+  for (const entry of known) {
+    const normalized = await normalizePiRecord(sourceRecord(entry as unknown as Record<string, unknown>), {} as never)
+    assert.equal(normalized.observations.some(item => item.kind === 'unknown'), false, entry.type)
+  }
+
+  const future = await normalizePiRecord(sourceRecord({
+    type: 'future_pi_event',
+    id: 'future-1',
+    payload: { future: true },
+  }), {} as never)
+  assert.equal(future.observations[0]?.kind, 'unknown')
+})
+
+test('Pi 未知 Assistant 内容块不会伪装成模型正文', async () => {
+  const normalized = await normalizePiRecord(sourceRecord({
+    type: 'message',
+    id: 'assistant-future-block',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'futureBlock', value: { survives: true } }],
+    },
+  }), {} as never)
+
+  assert.equal(normalized.observations.length, 1)
+  assert.equal(normalized.observations[0]?.kind, 'unknown')
+  const payload = normalized.observations[0]?.payload as { rawType?: string; rawPayload?: unknown }
+  assert.equal(payload.rawType, 'message/assistant/content/futureBlock')
+  assert.deepEqual(payload.rawPayload, { type: 'futureBlock', value: { survives: true } })
 })
