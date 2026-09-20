@@ -137,6 +137,15 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
   const record = asRecord(payload)
   const raw = stringField(record, 'event', 'action', 'type', 'status') ?? ''
   const action = normalizeLifecycleAction(raw)
+  const stopReason = stringField(record, 'stopReason', 'stop_reason') ?? ''
+
+  if (action === 'assistant.stop') {
+    if (stopReason === 'length') return '模型输出被截断'
+    if (stopReason === 'pending') return '模型响应等待中'
+    if (stopReason === 'deferred') return '模型响应已延迟'
+    if (stopReason === 'toolUse') return '模型继续调用工具'
+    return '模型响应结束'
+  }
 
   const exact: Record<string, string> = {
     'session.created': '创建会话',
@@ -201,6 +210,11 @@ export function lifecycleEventLabel(payload: JsonValue | unknown): string {
     stop: '轮次停止',
     'turn.ended': '轮次结束',
     'turn.end': '轮次结束',
+    'assistant.pending': '模型响应等待中',
+    'assistant.deferred': '模型响应已延迟',
+    'assistant.truncated': '模型输出被截断',
+    'assistant.error': '模型响应错误',
+    'assistant.cancelled': '模型响应已取消',
     'review.entered': '进入审查',
     'review.exited': '退出审查',
     'subagent.interacted': '子 Agent 活动',

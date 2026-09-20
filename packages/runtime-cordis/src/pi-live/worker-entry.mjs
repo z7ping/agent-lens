@@ -515,7 +515,19 @@ function historyMetaEvents(entryValue, fallbackIndex, phase) {
   }
 
   if (type === 'message') {
-    if (role === 'assistant' || role === 'toolResult' || role === 'tool') {
+    if (role === 'assistant') {
+      const stopReason = typeof message.stopReason === 'string'
+        ? message.stopReason.trim()
+        : typeof message.stop_reason === 'string'
+          ? message.stop_reason.trim()
+          : ''
+      if (stopReason === 'length') push('lifecycle', 'Pi 输出被截断', stopReason)
+      else if (stopReason === 'pending') push('lifecycle', 'Pi 响应等待中', stopReason)
+      else if (stopReason === 'deferred') push('lifecycle', 'Pi 响应已延迟', stopReason)
+      pushUsage(message.usage)
+      return events
+    }
+    if (role === 'toolResult' || role === 'tool') {
       pushUsage(message.usage)
       return events
     }
@@ -637,7 +649,7 @@ function roundSummary(all, row, nextEntryIndex) {
     ? 'aborted'
     : stopReason === 'error' || errorMessage
       ? 'error'
-      : stopReason
+      : stopReason === 'stop'
         ? 'completed'
         : ''
   const firstProcessAt = processTimes.length ? Math.min(...processTimes) : undefined

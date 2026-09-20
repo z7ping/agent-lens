@@ -188,11 +188,39 @@ test('Pi official system role maps to system context instead of unknown', async 
   assert.equal(payload.provenance?.nativeRole, 'system')
 })
 
-test('Pi official StopReason values are all preserved as explicit lifecycle facts', async () => {
-  for (const stopReason of ['pending', 'stop', 'length', 'toolUse', 'error', 'aborted', 'deferred']) {
+test('Pi stop/toolUse stay on Assistant metadata while meaningful abnormal states remain explicit', async () => {
+  for (const stopReason of ['stop', 'toolUse']) {
     const normalized = await normalizePiRecord(sourceRecord({
       type: 'message',
       id: `assistant-stop-${stopReason}`,
+      message: {
+        role: 'assistant',
+        provider: 'test',
+        model: 'test-model',
+        stopReason,
+        content: stopReason === 'toolUse'
+          ? [{ type: 'text', text: 'response' }, { type: 'toolCall', id: 'call-1', name: 'read', arguments: {} }]
+          : [{ type: 'text', text: 'response' }],
+      },
+    }), {} as never)
+
+    assert.equal(normalized.observations.some(item => item.kind === 'session.lifecycle'), false, stopReason)
+    const assistant = normalized.observations.find(item => item.kind === 'message.assistant')
+    assert.ok(assistant, stopReason)
+    assert.equal((assistant.payload as { stopReason?: string }).stopReason, stopReason)
+  }
+
+  const expectedEvents = new Map([
+    ['pending', 'assistant.pending'],
+    ['length', 'assistant.truncated'],
+    ['error', 'assistant.error'],
+    ['aborted', 'assistant.cancelled'],
+    ['deferred', 'assistant.deferred'],
+  ])
+  for (const [stopReason, event] of expectedEvents) {
+    const normalized = await normalizePiRecord(sourceRecord({
+      type: 'message',
+      id: `assistant-state-${stopReason}`,
       message: {
         role: 'assistant',
         provider: 'test',
@@ -204,8 +232,10 @@ test('Pi official StopReason values are all preserved as explicit lifecycle fact
 
     const lifecycle = normalized.observations.find(item =>
       item.kind === 'session.lifecycle'
-      && (item.payload as { stopReason?: string }).stopReason === stopReason)
+      && (item.payload as { event?: string }).event === event)
     assert.ok(lifecycle, stopReason)
+    const assistant = normalized.observations.find(item => item.kind === 'message.assistant')
+    assert.equal((assistant?.payload as { stopReason?: string } | undefined)?.stopReason, stopReason)
   }
 })
 

@@ -76,7 +76,8 @@ function roundPreview(items: PiLiveHistoryItem[]): string | undefined {
 }
 
 function isAssistantTerminal(item: PiLiveHistoryItem): boolean {
-  return item.kind === 'lifecycle' && ['assistant.stop', 'assistant.error', 'assistant.cancelled'].includes(item.event)
+  return item.kind === 'lifecycle'
+    && ['assistant.error', 'assistant.cancelled', 'assistant.truncated'].includes(item.event)
 }
 
 function assistantEntryIdentity(item: PiLiveHistoryItem): string | undefined {

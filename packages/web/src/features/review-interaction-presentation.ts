@@ -112,6 +112,13 @@ function isTerminalEvent(node: ReviewEventNodeDto): boolean {
   return ['turn.completed', 'turn.stopped', 'turn.aborted', 'turn.error'].includes(eventAction(node))
 }
 
+function isLegacyPiBenignAssistantStop(node: ReviewEventNodeDto): boolean {
+  if (node.sourceId !== 'pi' || node.kind !== 'session.lifecycle' || eventAction(node) !== 'assistant.stop') return false
+  const payload = record(node.payload)
+  const stopReason = stringField(payload, 'stopReason', 'stop_reason')
+  return stopReason === 'stop' || stopReason === 'toolUse'
+}
+
 /**
  * 保持 Canonical Review 节点原始顺序，只做两类无损表现变换：
  * 1. 连续 Tool 合成同一个视觉 ToolGroup，但不再把 Tool 移到 reasoning 旁边；
@@ -142,6 +149,8 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   }
 
   for (const node of nodes) {
+    if (node.type === 'event' && isLegacyPiBenignAssistantStop(node)) continue
+
     if (node.type === 'tool') {
       flushRawEvents()
       tools.push(node)
