@@ -83,20 +83,21 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
   const ends = processNodes.map(nodeEndMs).filter((value): value is number => value !== undefined)
   const startedAt = starts.length ? Math.min(...starts) : undefined
   const endedAt = ends.length ? Math.max(...ends) : undefined
-  const totalNodeCount = interaction.nodes.length
-  const omittedNodeCount = Math.max(0, totalNodeCount - MAX_REVIEW_INTERACTION_NODES)
+  const returnedNodeCount = interaction.nodes.length
+  const totalFactCount = interaction.totalNodeCount ?? returnedNodeCount
+  const omittedFactCount = interaction.omittedNodeCount ?? Math.max(0, totalFactCount - returnedNodeCount)
   const last = interaction.nodes.at(-1)
   return {
     id: `process:${interaction.id}`,
-    revision: [interaction.id, totalNodeCount, last?.id ?? 'empty', last?.capturedAt ?? interaction.endedAt].join(':'),
+    revision: [interaction.id, totalFactCount, last?.id ?? 'empty', last?.capturedAt ?? interaction.endedAt].join(':'),
     itemCount: processNodes.length,
     messageCount: messages.length,
     toolCount: tools.length,
     errorCount: tools.filter(tool => tool.status === 'error').length,
     durationMs: startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : 0,
-    availability: omittedNodeCount > 0 ? 'partial' : 'available',
-    totalFactCount: totalNodeCount,
-    ...(omittedNodeCount > 0 ? { omittedFactCount: omittedNodeCount } : {}),
+    availability: interaction.nodesTruncated || omittedFactCount > 0 ? 'partial' : 'available',
+    totalFactCount,
+    ...(omittedFactCount > 0 ? { omittedFactCount } : {}),
   }
 }
 
