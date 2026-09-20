@@ -229,6 +229,7 @@ export interface ReviewProcessSummaryDto {
   id: string
   /** Changes whenever the materialized turn facts used by this summary change. */
   revision: string
+  itemCount: number
   messageCount: number
   toolCount: number
   errorCount: number

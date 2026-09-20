@@ -30,8 +30,10 @@ import {
   type ManagedAssetRoot,
   type ReviewDetailDirection,
   type ReviewDetailFilter,
+  type ReviewInteractionDto,
   type ReviewMessageAttachmentDto,
   type ReviewMessageAttachmentsResponseDto,
+  type ReviewProcessMode,
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
@@ -41,7 +43,7 @@ import {
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
-import { shareInFlight } from './single-flight'
+import { shareInFlight, waitForCaller } from './single-flight'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
 
@@ -356,6 +358,7 @@ export class AgentLensApi {
       limit?: number
       direction?: ReviewDetailDirection
       filter?: ReviewDetailFilter
+      process?: ReviewProcessMode
     } = {},
   ): Promise<ReviewSessionDetailDto> {
     const params = new URLSearchParams()
@@ -364,9 +367,26 @@ export class AgentLensApi {
     if (options.afterOrdinal !== undefined) params.set('afterOrdinal', String(options.afterOrdinal))
     if (options.direction) params.set('direction', options.direction)
     if (options.filter && options.filter !== 'all') params.set('filter', options.filter)
+    if (options.process) params.set('process', options.process)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
     const query = params.toString()
     return requestJson<ReviewSessionDetailDto>(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
+  }
+
+  reviewProcessDetail(
+    id: string,
+    ordinal: number,
+    revision: string,
+    signal?: AbortSignal,
+  ): Promise<ReviewInteractionDto | null> {
+    const requestPath = `/api/v1/review/${encodeURIComponent(id)}?ordinal=${ordinal}&process=full`
+    const pending = shareInFlight(
+      aggregateReadInFlight,
+      `review-process:${id}:${ordinal}:${revision}`,
+      () => requestJson<ReviewSessionDetailDto>(requestPath),
+    )
+    return waitForCaller(pending, signal).then(detail =>
+      detail.interactions.find(interaction => interaction.ordinal === ordinal) ?? null)
   }
 
   relationships(id: string): Promise<SessionRelationshipResponseDto> {
