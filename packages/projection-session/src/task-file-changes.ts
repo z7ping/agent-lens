@@ -199,6 +199,10 @@ export function toolMutationIntent(observation: CanonicalObservation): MutationI
   return undefined
 }
 
+export function toolResultCallId(observation: CanonicalObservation): string | undefined {
+  return observation.kind === 'tool.result' ? callId(record(observation.payload)) : undefined
+}
+
 function resultSucceeded(observation: CanonicalObservation): boolean | undefined {
   if (observation.kind !== 'tool.result') return undefined
   const payload = record(observation.payload)
