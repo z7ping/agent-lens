@@ -1,6 +1,7 @@
-import ReactMarkdown, { type Components } from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { LocalFileLink, parseLocalFileTarget } from './LocalFileLink'
 import { splitMarkdownFrontmatter, type MarkdownFrontmatter } from './markdown-frontmatter'
 import { DEFAULT_MARKDOWN_THEME, type CustomMarkdownThemeId, type MarkdownThemeId } from './markdown-theme'
 import { scopedCustomMarkdownCss, useCustomMarkdownThemes } from './markdown-theme-registry'
@@ -27,8 +28,13 @@ export interface StreamingMarkdownSegments {
 }
 
 const markdownComponents: Components = {
+  a: ({ node: _node, ...props }) => <LocalFileLink {...props}/>,
   table: ({ node: _node, ...props }) => <div className="markdown-table-scroll"><table {...props}/></div>,
   pre: ({ node: _node, ...props }) => <CopyableCodeBlock {...props}/>,
+}
+
+function markdownUrlTransform(url: string): string {
+  return parseLocalFileTarget(url) ? url : defaultUrlTransform(url)
 }
 
 function FrontmatterPanel({ value }: { value: MarkdownFrontmatter }) {
@@ -112,7 +118,7 @@ function MarkdownBody({ text, className, streaming, frontmatter, theme, customCs
   return <div id={customCss ? 'write' : undefined} className={`markdown ${streaming ? 'markdown-streaming' : ''} ${className}`.trim()} data-markdown-theme={theme}>
     {customCss && <style>{customCss}</style>}
     {document.frontmatter && <FrontmatterPanel value={document.frontmatter}/>} 
-    {segments.settled && <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{segments.settled}</ReactMarkdown>}
+    {segments.settled && <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={markdownUrlTransform}>{segments.settled}</ReactMarkdown>}
     {segments.tail && <div className="markdown-streaming-tail">{segments.tail}</div>}
   </div>
 }
