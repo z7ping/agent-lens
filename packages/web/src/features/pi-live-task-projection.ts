@@ -98,8 +98,8 @@ function withTurnSection(item: PiLiveHistoryItem, turnSection: PiLiveTurnSection
 }
 
 /**
- * 完整语义轮次先统一成 prompt → process(内部原序) → terminal → final → artifacts，
- * 然后才允许做 8 条事实的渲染分片。
+ * 完整语义轮次先统一成 prompt → process(只含模型执行) → meta → final → terminal → artifacts，
+ * 然后才允许做 8 条事实的渲染分片。meta 不参与 Final 边界判断。
  */
 export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistoryItem[] {
   const assistantEntriesWithTools = new Set(items
@@ -116,7 +116,7 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
     if (item.kind === 'thinking' || item.kind === 'tool') return 'process'
     if (item.kind === 'lifecycle' && item.event === 'artifact.action') return 'artifact'
     if (isAssistantTerminal(item)) return 'meta'
-    if (item.kind === 'usage' || item.kind === 'lifecycle') return 'process'
+    if (item.kind === 'usage' || item.kind === 'lifecycle') return 'meta'
     return 'meta'
   })
 
@@ -129,6 +129,7 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
 
   const prompt: PiLiveHistoryItem[] = []
   const process: PiLiveHistoryItem[] = []
+  const meta: PiLiveHistoryItem[] = []
   const terminal: PiLiveHistoryItem[] = []
   const final: PiLiveHistoryItem[] = []
   const artifacts: PiLiveHistoryItem[] = []
@@ -151,10 +152,14 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
       artifacts.push(withTurnSection(item, 'artifact'))
       continue
     }
+    if (item.kind === 'usage' || item.kind === 'lifecycle') {
+      meta.push(withTurnSection(item, 'meta'))
+      continue
+    }
     process.push(withTurnSection(item, 'process'))
   }
 
-  return [...prompt, ...process, ...terminal, ...final, ...artifacts]
+  return [...prompt, ...process, ...meta, ...final, ...terminal, ...artifacts]
 }
 
 function semanticRounds(history: PiLiveHistoryItem[]): SemanticRound[] {
