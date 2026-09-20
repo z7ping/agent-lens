@@ -333,10 +333,9 @@ test('Review 非终态元事件不参与最终回复边界', () => {
   }
   const entries = projectReviewInteractionPresentation([interim, modelEvent, final])
   assert.equal(entries.some(entry => entry.type === 'process'), false)
-  assert.equal(entries[0]?.type, 'event')
-  if (entries[0]?.type === 'event') assert.equal(entries[0].node.id, 'model-after-interim')
-  assert.deepEqual(entries.slice(1).map(entry => entry.type === 'message' ? entry.node.id : entry.type), [
+  assert.deepEqual(entries.map(entry => entry.type === 'message' || entry.type === 'event' ? entry.node.id : entry.type), [
     'assistant-interim',
+    'model-after-interim',
     'assistant-final-after-model',
   ])
 })
