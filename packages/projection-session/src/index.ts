@@ -292,3 +292,6 @@ export const sessionProjectionInternals = {
   compareObservations,
   cursorForObservation,
 }
+
+export * from './git-workspace-snapshot'
+export * from './task-file-changes'
