@@ -17,6 +17,8 @@ export interface TaskFileChangeDto {
 
 export interface TaskFileChangesResponseDto {
   logicalSessionId: string
+  workspacePath?: string
+  rootPath?: string
   items: TaskFileChangeDto[]
   summary: {
     count: number
