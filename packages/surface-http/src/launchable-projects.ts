@@ -192,7 +192,7 @@ export async function readLaunchableProjects(
 
   const items: LaunchableProjectDto[] = []
   const fsStartedAt = performance.now()
-  const validationRecorder = reader.recordWorkspaceValidation
+  const validationRecorder: WorkspaceValidationRecorder | undefined = reader.recordWorkspaceValidation
     ? input => reader.recordWorkspaceValidation!(input)
     : undefined
   let processed = 0
