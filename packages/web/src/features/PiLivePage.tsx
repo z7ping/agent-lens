@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import {
   type JsonValue,
   type LiveHistoryIndexDto,
-  type LiveHistoryIndexItemDto,
   type LiveMessageDto,
   type PiLiveControlsDto,
   type PiLiveQueueDto,
@@ -442,6 +441,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [known, setKnown] = useState<PiLiveStateDto[]>([])
   const [snapshot, setSnapshot] = useState<PiLiveSnapshotDto | null>(null)
   const [historyIndex, setHistoryIndex] = useState<LiveHistoryIndexDto | null>(null)
+  const [historyIndexLoadingOlder, setHistoryIndexLoadingOlder] = useState(false)
   const [state, setState] = useState<PiLiveStateDto | null>(null)
   const [controls, setControls] = useState<PiLiveControlsDto>({ models: [] })
   const [connected, setConnected] = useState(false)
@@ -517,6 +517,39 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setHistoryIndex(normalized)
     return normalized
   }, [runtimeId])
+
+  const loadOlderIndexedHistory = useCallback(async () => {
+    if (!runtimeId || !historyIndex || historyIndexLoadingOlder) return
+    const first = historyIndex.items[0]
+    if (!first || first.ordinal <= 1) return
+    const count = Math.min(PI_LIVE_INDEX_WINDOW, first.ordinal - 1)
+    const fromOrdinal = Math.max(1, first.ordinal - count)
+    const reader = readerRef.current
+    const previousHeight = reader?.scrollHeight ?? 0
+    const previousTop = reader?.scrollTop ?? 0
+    setHistoryIndexLoadingOlder(true)
+    try {
+      const older = await liveApi.historyIndex('pi', runtimeId, { fromOrdinal, limit: count })
+      setHistoryIndex(current => {
+        if (!current) return { total: older.total, items: older.items }
+        const items = new Map([...older.items, ...current.items].map(item => [item.ordinal, item]))
+        return {
+          total: Math.max(current.total, older.total),
+          items: [...items.values()].sort((left, right) => left.ordinal - right.ordinal),
+        }
+      })
+      requestAnimationFrame(() => {
+        const currentReader = readerRef.current
+        if (!currentReader) return
+        const delta = currentReader.scrollHeight - previousHeight
+        currentReader.scrollTop = Math.max(0, previousTop + delta)
+      })
+    } catch {
+      // Keep the current window intact; the next upward scroll can retry.
+    } finally {
+      setHistoryIndexLoadingOlder(false)
+    }
+  }, [historyIndex, historyIndexLoadingOlder, runtimeId])
 
   const loadIndexedProcess = useCallback(async (
     cursor: string,
@@ -601,6 +634,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     presentationRef.current = presentation
     setSnapshot(null)
     setHistoryIndex(null)
+    setHistoryIndexLoadingOlder(false)
     setState(null)
     setControls({ models: [] })
     setComposerValue('')
@@ -1010,7 +1044,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         controller.endProgrammaticScroll()
       })
     })
-  }, [visibleHistoryRounds, currentItems, optimisticPrompt, queue.steering.length, queue.followUp.length, restored, extension?.id])
+  }, [visibleHistoryRounds, visibleIndexedHistory, currentItems, optimisticPrompt, queue.steering.length, queue.followUp.length, restored, extension?.id])
 
   // 初始化阶段先接住第一条任务；Worker ready 后只发送一次，失败则还原为可编辑草稿。
   useEffect(() => {
@@ -1225,6 +1259,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
       reader.scrollHeight - reader.scrollTop - reader.clientHeight,
     )
     if (following) setNewRecords(false)
+    if (useIndexedHistory && reader.scrollTop < 120) void loadOlderIndexedHistory()
   }
 
   const onReaderWheel = (deltaY: number) => {
@@ -1422,6 +1457,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             beforeContent={startupContent}
             summaryMeta={startupSummaryMeta}
           />}
+          {useIndexedHistory && historyIndexLoadingOlder && <div className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">{t('history.loadingOlder')}</div>}
           {useIndexedHistory && visibleIndexedHistory.map((item, index) => <VirtualRoundMount
             key={`pi-index-round-${item.ordinal}`}
             rootSelector=".pi-live-reader"
@@ -1472,7 +1508,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             pendingMessageCount={visiblePendingCount}
             assistantModelLabel={assistantModelLabel(state)}
           />}
-          {!history.length && !optimisticPrompt && !currentItems.length && runtimeReady && <div className="pi-live-empty">{t('empty')}</div>}
+          {((useIndexedHistory ? visibleIndexedHistory.length === 0 : history.length === 0) && !optimisticPrompt && !currentItems.length && runtimeReady) && <div className="pi-live-empty">{t('empty')}</div>}
           {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
           {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
         </div>
