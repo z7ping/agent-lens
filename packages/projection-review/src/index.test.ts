@@ -430,3 +430,87 @@ test('Review full detail keeps complete Process Summary before bounding 600-node
   assert.equal(bounded.processSummary?.messageCount, 605)
   assert.equal(bounded.processSummary?.availability, 'partial')
 })
+
+
+test('Review full ordinal reuses the header index and only materializes the target round', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-exact-round-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const common = { sourceId: 'codex', host, installation, evidenceCandidates: [] }
+    let sessionId = ''
+
+    for (let round = 1; round <= 3; round += 1) {
+      const minute = String(round).padStart(2, '0')
+      const user = await observations.commit({
+        ...common,
+        candidate: {
+          kind: 'message.user',
+          nativeEventId: `exact-user-${round}`,
+          occurredAt: `2026-09-20T02:${minute}:00.000Z`,
+          capturedAt: `2026-09-20T02:${minute}:00.000Z`,
+          payload: { text: `round ${round}` },
+          identityHints: { nativeSessionId: 'review-exact-round-session' },
+          dedupHints: { nativeEventId: `exact-user-${round}` },
+        },
+      })
+      sessionId = user.observation.logicalSessionId
+      await observations.commit({
+        ...common,
+        candidate: {
+          kind: 'message.commentary',
+          nativeEventId: `exact-commentary-${round}`,
+          occurredAt: `2026-09-20T02:${minute}:01.000Z`,
+          capturedAt: `2026-09-20T02:${minute}:01.000Z`,
+          payload: { text: `work ${round}` },
+          identityHints: { nativeSessionId: 'review-exact-round-session' },
+          dedupHints: { nativeEventId: `exact-commentary-${round}` },
+        },
+      })
+      await observations.commit({
+        ...common,
+        candidate: {
+          kind: 'message.assistant',
+          nativeEventId: `exact-assistant-${round}`,
+          occurredAt: `2026-09-20T02:${minute}:02.000Z`,
+          capturedAt: `2026-09-20T02:${minute}:02.000Z`,
+          payload: { text: `done ${round}` },
+          identityHints: { nativeSessionId: 'review-exact-round-session' },
+          dedupHints: { nativeEventId: `exact-assistant-${round}` },
+        },
+      })
+    }
+
+    const projection = new ReviewProjection(storage)
+    const summary = await projection.get(sessionId, { direction: 'backward', limit: 3, process: 'summary' })
+    assert.ok(summary)
+    const summaryRound = summary.interactions.find(item => item.ordinal === 3)
+    assert.ok(summaryRound?.processSummary)
+
+    const repository = storage.repositories.observations
+    const originalQuery = repository.query.bind(repository)
+    let unboundedSessionReads = 0
+    let boundedTargetReads = 0
+    repository.query = async query => {
+      if (query.logicalSessionId === sessionId) {
+        if (!query.after && !query.kind) unboundedSessionReads += 1
+        else boundedTargetReads += 1
+      }
+      return originalQuery(query)
+    }
+
+    const full = await projection.get(sessionId, { ordinal: 3, process: 'full' })
+    assert.ok(full)
+    const fullRound = full.interactions[0]
+    assert.equal(fullRound?.ordinal, 3)
+    assert.equal(fullRound?.nodes.some(node => node.type === 'message' && node.role === 'commentary' && node.text === 'work 3'), true)
+    assert.equal(unboundedSessionReads, 0)
+    assert.ok(boundedTargetReads <= 1)
+    assert.equal(fullRound?.processSummary?.revision, summaryRound?.processSummary?.revision)
+  } finally {
+    storage.close()
+  }
+})
