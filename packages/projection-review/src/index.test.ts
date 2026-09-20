@@ -390,6 +390,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     assert.equal(round.processMode, 'summary')
     assert.equal(round.processSummary?.messageCount, 1)
     assert.equal(round.processSummary?.toolCount, 1)
+    assert.equal(round.processSummary?.itemCount, 2)
     assert.equal(round.processSummary?.errorCount, 1)
     assert.equal(round.nodes.some(node => node.type === 'tool'), false)
     assert.equal(round.nodes.some(node => node.type === 'message' && node.role === 'commentary'), false)
@@ -400,6 +401,9 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     const full = await projection.get(user.observation.logicalSessionId, { ordinal: 1, process: 'full' })
     assert.ok(full)
     assert.equal(full.interactions[0]?.processMode, 'full')
+    assert.equal(full.interactions[0]?.processSummary?.itemCount, round.processSummary?.itemCount)
+    assert.equal(full.interactions[0]?.processSummary?.messageCount, round.processSummary?.messageCount)
+    assert.equal(full.interactions[0]?.processSummary?.toolCount, round.processSummary?.toolCount)
     assert.equal(full.interactions[0]?.nodes.some(node => node.type === 'tool'), true)
     assert.equal(full.interactions[0]?.nodes.some(node => node.type === 'message' && node.role === 'commentary'), true)
   } finally {
