@@ -54,8 +54,12 @@ export function TaskFileChangesDisclosure({
       <span>{t('local.fileChanges.title')}</span>
       {value && <span className="task-file-changes-count">{count}</span>}
       {summaryDelta && <span className="task-file-changes-delta">{summaryDelta}</span>}
-      {value && value.summary.observedCount > 0 && value.summary.exactCount === 0
-        ? <span className="task-file-changes-observed">{t('local.fileChanges.observed')}</span>
+      {value && value.summary.observedCount > 0
+        ? <span className="task-file-changes-observed">{
+            value.summary.exactCount > 0
+              ? t('local.fileChanges.partialObserved')
+              : t('local.fileChanges.observed')
+          }</span>
         : null}
       {loading && <span className="task-file-changes-state">{t('local.fileChanges.refreshing')}</span>}
     </summary>
@@ -76,7 +80,7 @@ export function TaskFileChangesDisclosure({
               ? <><code title={item.oldPath}>{item.oldPath}</code><UiIcon name="arrow-right" size={13}/></>
               : null}
             {target
-              ? <LocalResourceReference value={target} kind="file" presentation="inline"/>
+              ? <LocalResourceReference value={target} displayValue={item.path} kind="file" presentation="inline"/>
               : <code title={item.path}>{item.path}</code>}
           </span>
           {delta && <span className="task-file-change-delta">{delta}</span>}
