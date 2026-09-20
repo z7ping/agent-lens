@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "1.0",
+  "profileVersion": "1.0.0",
+  "source": "pi",
+  "sourceProtocol": "pi-session-jsonl-v3",
+  "purpose": "Pi 原生事件到 AgentLens 统一观察语义的声明式契约；复杂拆块和关联逻辑仍由 Source Adapter 执行。",
+  "mappings": [
+    {
+      "id": "session",
+      "nativeType": "session",
+      "kind": "session.lifecycle",
+      "semantic": "session.started",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.user",
+      "nativeType": "message",
+      "when": {
+        "message.role": "user"
+      },
+      "kind": "message.user",
+      "semantic": "user-request",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.assistant.text",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "content.type": "text"
+      },
+      "kind": "message.assistant",
+      "phase": "unspecified",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.assistant.thinking",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "content.type": "thinking"
+      },
+      "kind": "message.reasoning",
+      "semantic": "reasoning",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.assistant.toolCall",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "content.type": "toolCall"
+      },
+      "kind": "tool.call",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.toolResult",
+      "nativeType": "message",
+      "when": {
+        "message.role": "toolResult"
+      },
+      "kind": "tool.result",
+      "semantic": "tool",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.branchSummary",
+      "nativeType": "message",
+      "when": {
+        "message.role": "branchSummary"
+      },
+      "kind": "context.summary",
+      "semantic": "branch-summary",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.compactionSummary",
+      "nativeType": "message",
+      "when": {
+        "message.role": "compactionSummary"
+      },
+      "kind": "context.compaction",
+      "semantic": "compaction-summary",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.custom",
+      "nativeType": "message",
+      "when": {
+        "message.role": "custom"
+      },
+      "kind": "context.injected",
+      "semantic": "application-context",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "message.bashExecution",
+      "nativeType": "message",
+      "when": {
+        "message.role": "bashExecution"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "user-shell-activity",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.stop",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "stop"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.stop",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.error",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "error"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.error",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "assistant.cancelled",
+      "nativeType": "message",
+      "when": {
+        "message.role": "assistant",
+        "message.stopReason": "aborted"
+      },
+      "kind": "session.lifecycle",
+      "semantic": "assistant.cancelled",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "model_change",
+      "nativeType": "model_change",
+      "kind": "model.changed",
+      "semantic": "model-switch",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "thinking_level_change",
+      "nativeType": "thinking_level_change",
+      "kind": "thinking.level.changed",
+      "semantic": "reasoning-config",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "compaction",
+      "nativeType": "compaction",
+      "kind": "context.compaction",
+      "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "custom",
+      "nativeType": "custom",
+      "kind": "session.lifecycle",
+      "semantic": "extension-event",
+      "semanticSource": "native",
+      "coverage": "passthrough"
+    },
+    {
+      "id": "custom_message",
+      "nativeType": "custom_message",
+      "kind": "context.injected",
+      "semantic": "application-context",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "label",
+      "nativeType": "label",
+      "kind": "session.lifecycle",
+      "semantic": "session-label",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "bash",
+      "nativeType": "bash",
+      "kind": "session.lifecycle",
+      "semantic": "user-shell-activity",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "bash_result",
+      "nativeType": "bash_result",
+      "kind": "session.lifecycle",
+      "semantic": "user-shell-activity",
+      "semanticSource": "native",
+      "coverage": "complete"
+    }
+  ],
+  "fallback": {
+    "kind": "unknown",
+    "preserveRaw": true,
+    "semanticSource": "unknown"
+  }
+}
