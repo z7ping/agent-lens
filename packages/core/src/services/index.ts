@@ -246,10 +246,14 @@ export interface SessionSummaryReader {
   query(input: SessionSummaryQuery): Promise<{ items: SessionSummaryRecord[]; hasMore: boolean }>
 }
 
+export type LaunchableWorkspaceValidationStatus = 'unknown' | 'valid' | 'invalid'
+
 export interface LaunchableWorkspaceCandidate {
   workspaceId: WorkspaceId
   workspacePath: string
   lastSeenAt: string
+  validationStatus?: LaunchableWorkspaceValidationStatus
+  validatedAt?: string
 }
 
 export interface LaunchableProjectCandidate {
@@ -274,6 +278,12 @@ export interface LaunchableProjectQuery {
 
 export interface LaunchableProjectReader {
   query(input: LaunchableProjectQuery): Promise<{ items: LaunchableProjectCandidate[]; hasMore: boolean }>
+  recordWorkspaceValidation?(input: {
+    workspaceId: WorkspaceId
+    workspacePath: string
+    status: Exclude<LaunchableWorkspaceValidationStatus, 'unknown'>
+    validatedAt: string
+  }): Promise<void>
 }
 
 export interface SessionSummaryFacetScope {
