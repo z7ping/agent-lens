@@ -95,8 +95,8 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
     errorCount: tools.filter(tool => tool.status === 'error').length,
     durationMs: startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : 0,
     availability: omittedNodeCount > 0 ? 'partial' : 'available',
-    totalNodeCount,
-    ...(omittedNodeCount > 0 ? { omittedNodeCount } : {}),
+    totalFactCount: totalNodeCount,
+    ...(omittedNodeCount > 0 ? { omittedFactCount: omittedNodeCount } : {}),
   }
 }
 
@@ -109,13 +109,6 @@ function withProcessSummaries(detail: ReviewSessionDetailDto): ReviewSessionDeta
         ...interaction,
         processSummary: summary,
         processMode: 'full',
-        ...(summary.availability === 'partial'
-          ? {
-              nodesTruncated: true,
-              totalNodeCount: summary.totalNodeCount,
-              omittedNodeCount: summary.omittedNodeCount,
-            }
-          : {}),
       }
     }),
   }
@@ -372,7 +365,7 @@ export class ReviewProjection extends BaseReviewProjection {
       localizeLifecycle(normalizeOrphanToolResults(detail)),
     )
     if (query.process === 'summary') return normalized
-    return boundReviewDetail(withProcessSummaries(normalized))
+    return withProcessSummaries(boundReviewDetail(normalized))
   }
 }
 

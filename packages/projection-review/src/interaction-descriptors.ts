@@ -553,8 +553,8 @@ export class InteractionDescriptorStore {
           ? Math.max(0, processEndedAt - processStartedAt)
           : 0,
         availability: omittedFactCount > 0 ? 'partial' : 'available',
-        totalNodeCount: totalFactCount,
-        ...(omittedFactCount > 0 ? { omittedNodeCount: omittedFactCount } : {}),
+        totalFactCount,
+        ...(omittedFactCount > 0 ? { omittedFactCount } : {}),
       })
     }
 
@@ -582,13 +582,6 @@ export class InteractionDescriptorStore {
         nodes: buildNodes(items),
         processSummary: summary,
         processMode: 'summary' as const,
-        ...(summary.availability === 'partial'
-          ? {
-              nodesTruncated: true,
-              totalNodeCount: summary.totalNodeCount,
-              omittedNodeCount: summary.omittedNodeCount,
-            }
-          : {}),
       }
     })
 

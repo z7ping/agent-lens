@@ -235,8 +235,8 @@ export interface ReviewProcessSummaryDto {
   errorCount: number
   durationMs: number
   availability: ReviewProcessAvailability
-  totalNodeCount: number
-  omittedNodeCount?: number
+  totalFactCount: number
+  omittedFactCount?: number
 }
 
 export interface ReviewInteractionDto {
