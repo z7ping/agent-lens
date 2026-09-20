@@ -405,3 +405,39 @@ test('launchable workspace validation cache persists without touching canonical 
     storage.close()
   }
 })
+
+
+test('migration 29 backfills launchable indexes for existing canonical sessions', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    storage.db.prepare(`
+      INSERT INTO projects(id, name, repository_identity, created_at, last_seen_at)
+      VALUES ('upgrade-project', 'Upgrade Project', 'z7ping/upgrade-project', ?, ?)
+    `).run(BASE_TIME, isoMinute(6))
+    storage.db.prepare(`
+      INSERT INTO workspaces(id, host_id, project_id, path)
+      VALUES ('upgrade-workspace', 'host-local', 'upgrade-project', '/workspace/upgrade-project')
+    `).run()
+    storage.db.prepare(`
+      INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, started_at, ended_at)
+      VALUES ('upgrade-session', 'install-pi', 'upgrade-project', 'upgrade-workspace', ?, ?)
+    `).run(isoMinute(5), isoMinute(6))
+
+    storage.db.exec(`
+      DROP TABLE launchable_workspace_index;
+      DROP TABLE launchable_project_index;
+      DELETE FROM schema_migrations WHERE version = 29;
+    `)
+    await storage.migrate()
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(result.items[0]?.projectId, 'upgrade-project')
+    assert.equal(result.items[0]?.projectName, 'Upgrade Project')
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/upgrade-project')
+    assert.equal(result.items[0]?.workspaces[0]?.validationStatus, 'unknown')
+  } finally {
+    storage.close()
+  }
+})
