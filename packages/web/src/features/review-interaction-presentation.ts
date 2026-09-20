@@ -119,7 +119,8 @@ function isTerminalEvent(node: ReviewEventNodeDto): boolean {
  * 2. parser replay 后，同一 SourceRecord 的旧 unknown / assistant 兼容记录去重。
  *
  * Turn 的统一表现顺序随后收敛为：
- * prompt → process（内部原序）→ final answer → artifacts。
+ * prompt → process（只含模型执行）→ key events → final answer → terminal → artifacts。
+ * 非 Process 事实不再反过来决定模型是否“仍在思考”。
  */
 export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): ReviewInteractionPresentationEntry[] {
   const reasoning = nodes.filter((node): node is ReviewMessageNodeDto => node.type === 'message' && node.role === 'reasoning')
@@ -176,12 +177,13 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     if (entry.type === 'message' && entry.node.role === 'commentary') return 'process'
     if (entry.type === 'event' && entry.node.category === 'artifact') return 'artifact'
     if (entry.type === 'event' && isTerminalEvent(entry.node)) return 'meta'
-    if (entry.type === 'event' || entry.type === 'raw-event-group') return 'process'
+    if (entry.type === 'event' || entry.type === 'raw-event-group') return 'meta'
     return 'meta'
   })
 
   const prompts: ReviewInteractionPresentationEntry[] = []
   const processItems: ReviewProcessPresentationItem[] = []
+  const meta: ReviewInteractionPresentationEntry[] = []
   const terminal: ReviewInteractionPresentationEntry[] = []
   const finalAnswers: ReviewInteractionPresentationEntry[] = []
   const artifacts: ReviewInteractionPresentationEntry[] = []
@@ -205,10 +207,10 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     }
 
     if (entry.type === 'reasoning') processItems.push({ type: 'message', node: entry.node })
+    else if (entry.type === 'message' && entry.node.role === 'commentary') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'message') processItems.push({ type: 'message', node: entry.node })
     else if (entry.type === 'tool-group') processItems.push(entry)
-    else if (entry.type === 'event') processItems.push(entry)
-    else processItems.push(entry)
+    else meta.push(entry)
   }
 
   const grouped: ReviewInteractionPresentationEntry[] = [...prompts]
@@ -221,6 +223,6 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
         : first.items[0]?.id ?? 'process'
     grouped.push({ type: 'process', id: `process:${id}`, items: processItems })
   }
-  grouped.push(...terminal, ...finalAnswers, ...artifacts)
+  grouped.push(...meta, ...finalAnswers, ...terminal, ...artifacts)
   return grouped
 }
