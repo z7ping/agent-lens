@@ -753,36 +753,84 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
   />
 }
 
+function processTimestamp(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function reviewProcessTiming(items: ReviewProcessPresentationItem[]): { startedAtMs?: number; endedAtMs?: number } {
+  let startedAtMs: number | undefined
+  let endedAtMs: number | undefined
+  let running = false
+
+  const include = (start: number | undefined, end = start) => {
+    if (start !== undefined) startedAtMs = startedAtMs === undefined ? start : Math.min(startedAtMs, start)
+    if (end !== undefined) endedAtMs = endedAtMs === undefined ? end : Math.max(endedAtMs, end)
+  }
+
+  for (const item of items) {
+    if (item.type === 'message' || item.type === 'event') {
+      include(processTimestamp(item.node.at))
+      continue
+    }
+    if (item.type === 'raw-event-group') {
+      for (const event of item.items) include(processTimestamp(event.at))
+      continue
+    }
+    for (const tool of item.items) {
+      const start = processTimestamp(tool.startedAt) ?? processTimestamp(tool.at)
+      const explicitEnd = processTimestamp(tool.endedAt)
+      const computedEnd = explicitEnd ?? (start !== undefined && tool.durationMs !== undefined ? start + tool.durationMs : start)
+      include(start, computedEnd)
+      if (tool.status === 'running') running = true
+    }
+  }
+
+  return {
+    ...(startedAtMs === undefined ? {} : { startedAtMs }),
+    ...(running || endedAtMs === undefined ? {} : { endedAtMs }),
+  }
+}
+
 function ReviewProcessGroup({
   id,
   items,
   inspect,
-  durationMs,
+  state,
+  showAllEvents,
 }: {
   id: string
   items: ReviewProcessPresentationItem[]
   inspect(node: ReviewNodeDto): void
-  durationMs: number
+  state: TaskRoundModel['state']
+  showAllEvents: boolean
 }) {
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
   const tools = items.flatMap(item => item.type === 'tool-group' ? item.items : [])
+  const timing = reviewProcessTiming(items)
   return <TaskProcessGroup
     id={id}
     messageCount={messages.length}
     toolCount={tools.length}
     errorCount={tools.filter(tool => tool.status === 'error').length}
-    durationMs={durationMs}
+    startedAtMs={timing.startedAtMs}
+    endedAtMs={state === 'running' ? undefined : timing.endedAtMs}
+    state={state}
     defaultExpanded={false}
     className="task-review-process"
   >
     <div className="task-process-sequence">
-      {items.map((item, index) => item.type === 'tool-group'
-        ? <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
-        : <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-            {item.node.role === 'reasoning' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.thinking')}</div>}
-            <MarkdownSurface text={item.node.text}/>
-            <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
-          </div>)}
+      {items.map((item, index) => {
+        if (item.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
+        if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
+        if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
+        return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
+          {item.node.role === 'reasoning' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.thinking')}</div>}
+          <MarkdownSurface text={item.node.text}/>
+          <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
+        </div>
+      })}
     </div>
   </TaskProcessGroup>
 }
@@ -869,7 +917,7 @@ function ReviewRoundAdapter({
     forceRevision={forceRevision}
   >
     {groups.map((entry, index) => {
-      if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect} durationMs={round.durationMs}/>
+      if (entry.type === 'process') return <ReviewProcessGroup key={entry.id} id={entry.id} items={entry.items} inspect={inspect} state={round.state} showAllEvents={showAllEvents}/>
       if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
       if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
       if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>

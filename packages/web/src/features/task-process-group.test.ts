@@ -41,3 +41,18 @@ test('精确耗时保留秒级而不复用分钟近似格式', () => {
   assert.equal(taskPreciseDurationLabel(138_900), '2分18秒')
   assert.equal(taskPreciseDurationLabel(3_783_900), '1小时3分3秒')
 })
+
+
+test('处理详情优先按真实过程起止计算耗时', () => {
+  const html = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:timing',
+    messageCount: 1,
+    toolCount: 1,
+    durationMs: 999_000,
+    startedAtMs: Date.parse('2026-09-01T00:00:01.000Z'),
+    endedAtMs: Date.parse('2026-09-01T00:00:03.500Z'),
+    children: 'body',
+  }))
+  assert.match(html, /耗时 2秒/)
+  assert.doesNotMatch(html, /16分/)
+})

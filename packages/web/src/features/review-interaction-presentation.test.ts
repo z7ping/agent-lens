@@ -146,6 +146,7 @@ test('Review 只用真实模型事件或消息载荷标注对应模型回复', (
     kind: 'model.call',
     label: '模型调用',
     payload: { provider: 'anthropic', modelName: 'claude-sonnet-4.5' },
+    nativeEventId: 'native-model-call',
     observationIds: ['obs:model-call'],
     capturedAt: '2026-09-01T00:00:01.500Z',
   }
@@ -166,6 +167,7 @@ test('Review 只用真实模型事件或消息载荷标注对应模型回复', (
     id: 'assistant-two',
     at: '2026-09-01T00:00:02.000Z',
     text: 'second',
+    nativeParentEventId: 'native-model-call',
     observationIds: ['obs:assistant-two'],
     capturedAt: '2026-09-01T00:00:02.000Z',
   }
@@ -207,4 +209,62 @@ test('Review 无模型事实时不猜测模型', () => {
   }
 
   assert.equal(projectReviewMessageModelLabels([assistant]).has(assistant.id), false)
+})
+
+
+test('Review 不把未建立父子关系的 model.call 猜给下一个 Assistant', () => {
+  const changed: ReviewEventNodeDto = {
+    type: 'event', id: 'changed', at: '2026-09-01T00:00:00.000Z', sourceId: 'codex',
+    kind: 'model.changed', category: 'model', label: '模型已切换',
+    payload: { provider: 'openai', model: 'gpt-state' }, evidence: [],
+    observationIds: ['obs:changed'], capturedAt: '2026-09-01T00:00:00.000Z',
+  }
+  const call: ReviewEventNodeDto = {
+    ...changed, id: 'call', at: '2026-09-01T00:00:01.000Z', kind: 'model.call', label: '模型调用',
+    payload: { provider: 'anthropic', model: 'claude-call' }, observationIds: ['obs:call'],
+  }
+  const assistant: ReviewMessageNodeDto = {
+    type: 'message', id: 'assistant', role: 'assistant', at: '2026-09-01T00:00:02.000Z', sourceId: 'codex',
+    text: 'answer', payload: {}, evidence: [], observationIds: ['obs:assistant'],
+    capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+
+  const labels = projectReviewMessageModelLabels([changed, call, assistant])
+  assert.equal(labels.get('assistant'), 'openai / gpt-state')
+})
+
+test('Review 处理详情保持 commentary / lifecycle / tool / compaction 的原始顺序', () => {
+  const modelEvent: ReviewEventNodeDto = {
+    type: 'event', id: 'model-event', at: '2026-09-01T00:00:01.000Z', sourceId: 'codex',
+    kind: 'model.changed', category: 'model', label: '模型已切换', payload: { model: 'gpt-5.6' },
+    evidence: [], observationIds: ['obs:model-event'], capturedAt: '2026-09-01T00:00:01.000Z',
+  }
+  const compaction: ReviewEventNodeDto = {
+    ...modelEvent, id: 'compact', at: '2026-09-01T00:00:03.000Z',
+    kind: 'context.compaction', category: 'context', label: '上下文压缩',
+    payload: {}, observationIds: ['obs:compact'],
+  }
+  const final: ReviewMessageNodeDto = {
+    type: 'message', id: 'final', role: 'assistant', at: '2026-09-01T00:00:04.000Z', sourceId: 'codex',
+    text: 'done', payload: {}, evidence: [], observationIds: ['obs:final'],
+    capturedAt: '2026-09-01T00:00:04.000Z',
+  }
+  const entries = projectReviewInteractionPresentation([
+    message('commentary-order', 'commentary', 'record:order'),
+    modelEvent,
+    tool('tool-order'),
+    compaction,
+    final,
+  ])
+
+  assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type !== 'process') throw new Error('process entry missing')
+  assert.deepEqual(entries[0].items.map(item => {
+    if (item.type === 'message') return item.node.id
+    if (item.type === 'event') return item.node.id
+    if (item.type === 'tool-group') return item.items.map(tool => tool.id).join(',')
+    return item.items.map(event => event.id).join(',')
+  }), ['commentary-order', 'model-event', 'tool-order', 'compact'])
+  assert.equal(entries[1]?.type, 'message')
+  if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'final')
 })
