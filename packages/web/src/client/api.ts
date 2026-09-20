@@ -15,6 +15,7 @@ import {
   type CapturePolicyResponseDto,
   type FacetResponseDto,
   type HealthResponseDto,
+  type HostFilePreviewResponseDto,
   type InsightsResponseDto,
   type IntegrationAuthorizationCapabilityDto,
   type IntegrationAuthorizationResponseDto,
@@ -492,6 +493,13 @@ export class AgentLensApi {
     return requestJson('/api/v1/host/open-path', {
       method: 'POST',
       headers: { 'X-AgentLens-Host-Open-Path-Path': encodeURIComponent(path) },
+    })
+  }
+
+  previewHostFile(path: string): Promise<HostFilePreviewResponseDto> {
+    return requestJson('/api/v1/host/file-preview', {
+      method: 'POST',
+      headers: { 'X-AgentLens-Host-File-Preview-Path': encodeURIComponent(path) },
     })
   }
 

@@ -26,3 +26,5 @@ export * from './session'
 export * from './source-record'
 export * from './timeline'
 export * from './usage'
+
+export * from './host-file-preview'

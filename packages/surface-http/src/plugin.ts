@@ -18,6 +18,7 @@ import type { IntegrationAuthorizationController } from './integration-http'
 import type { IntegrationDiscoveryController } from './integration-discovery-http'
 import type { IntegrationManagementController } from './integration-management-http'
 import type { IntegrationPackageController } from './integration-packages-http'
+import { previewLocalHostTextFile } from './host-file-preview'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -260,7 +261,10 @@ const applyHttpSurface = Object.assign(
       ...(config.integrationPackages ? { integrationPackages: config.integrationPackages } : {}),
       ...(config.localePackDirectory ? { localePackDirectory: config.localePackDirectory } : {}),
       ...(config.selectProjectDirectory ? { selectProjectDirectory: config.selectProjectDirectory } : {}),
-      ...(config.openHostPath ? { openHostPath: config.openHostPath } : {}),
+      ...(config.openHostPath ? {
+        openHostPath: config.openHostPath,
+        previewHostFile: previewLocalHostTextFile,
+      } : {}),
       ...(config.reviewQueryObserved ? { reviewQueryObserved: config.reviewQueryObserved } : {}),
       hubReview,
     })

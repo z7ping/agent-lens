@@ -23,6 +23,7 @@ import {
   type AgentRescanResponseDto,
   type AgentRescanSummaryDto,
   type HealthResponseDto,
+  type HostFilePreviewResponseDto,
   type JsonValue,
   type PiEcosystemQueryService,
   type RuntimeModeDto,
@@ -121,6 +122,7 @@ export interface HttpSurfaceOptions {
   localePackDirectory?: string
   selectProjectDirectory?: () => Promise<string | undefined>
   openHostPath?: (path: string) => Promise<'opened' | 'revealed'>
+  previewHostFile?: (path: string) => Promise<HostFilePreviewResponseDto>
   reviewQueryObserved?: (visibleCount: number) => void
   hubReview?: Pick<HubReviewProjection, 'get' | 'query'>
 }
@@ -313,6 +315,51 @@ export async function startHttpSurface(
         storage,
         options.integrationStatus,
       )) return
+
+      if (url.pathname === '/api/v1/host/file-preview') {
+        if (request.method !== 'POST') {
+          writeJson(response, 405, { error: 'method_not_allowed' })
+          return
+        }
+        if (!options.previewHostFile) {
+          writeJson(response, 501, {
+            error: 'desktop_host_required',
+            message: '当前运行环境不支持预览本地文件。',
+          })
+          return
+        }
+        const rawPath = request.headers['x-agentlens-host-file-preview-path']
+        if (Array.isArray(rawPath)) {
+          writeJson(response, 400, {
+            error: 'file_preview_failed',
+            message: '目标文件请求头无效。',
+          })
+          return
+        }
+        let path = ''
+        try {
+          path = rawPath ? decodeURIComponent(rawPath).trim() : ''
+        } catch {
+          path = ''
+        }
+        if (!path) {
+          writeJson(response, 400, {
+            error: 'file_preview_failed',
+            message: '目标文件路径无效。',
+          })
+          return
+        }
+        try {
+          writeJson(response, 200, await options.previewHostFile(path))
+        } catch (error) {
+          const statusCode = statusCodeForError(error)
+          writeJson(response, statusCode, {
+            error: 'file_preview_failed',
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
+        return
+      }
 
       if (url.pathname === '/api/v1/host/open-path' || url.pathname === '/api/v1/host/open-directory') {
         if (request.method !== 'POST') {

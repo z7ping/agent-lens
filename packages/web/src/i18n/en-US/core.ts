@@ -8,6 +8,21 @@ export const englishCoreMessages: LocaleMessagesDto = {
     newData: 'New data available',
     copy: 'Copy',
     copied: 'Copied',
+    localFilePreview: {
+      loading: 'Loading local file…',
+      failed: 'Unable to preview local file',
+      metadataOnly: 'This file cannot be previewed directly',
+      unavailable: 'Preview unavailable',
+      line: 'Line {{line}}',
+      lineColumn: 'Line {{line}}, column {{column}}',
+      blockedReason: {
+        sensitive: 'The file may contain credentials or sensitive configuration.',
+        'protected-data': 'Runtime databases and session data are not directly previewable.',
+        'too-large': 'The file exceeds the preview size limit.',
+        binary: 'The file is not previewable UTF-8 text.',
+        unreadable: 'The file cannot be read.',
+      },
+    },
     localPath: {
       open: 'Open in file manager',
       opening: 'Opening',
