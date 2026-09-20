@@ -21,3 +21,11 @@ test('Pi Indexed 关键事件有界且记录 Final 前后位置', () => {
   assert.match(worker, /finalAssistantIndex >= 0 && index >= finalAssistantIndex \? 'after-final' : 'before-final'/)
   assert.match(worker, /eventOmittedCount/)
 })
+
+
+test('Pi Indexed 只有真正 stop 才标记 completed，toolUse/length/deferred 不冒充完成', () => {
+  assert.match(worker, /stopReason === 'stop'[\s\S]{0,80}\? 'completed'/)
+  assert.doesNotMatch(worker, /: stopReason[\s\S]{0,40}\? 'completed'/)
+  assert.match(worker, /stopReason === 'length'[\s\S]{0,80}Pi 输出被截断/)
+  assert.match(worker, /stopReason === 'deferred'[\s\S]{0,80}Pi 响应已延迟/)
+})
