@@ -224,6 +224,7 @@ export interface LiveHistoryEventSummary {
   label: string
   detail?: string | undefined
   at?: string | undefined
+  phase: 'before-final' | 'after-final'
 }
 
 export interface LiveHistoryRoundSummary {
