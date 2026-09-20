@@ -243,6 +243,21 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         loadingDetail: '加载会话详情…',
         selectSession: '选择一个会话开始复盘',
       },
+      fileChanges: {
+        title: '修改文件',
+        observed: '已观察',
+        observedShort: '观察',
+        refreshing: '更新中…',
+        loadFailed: '修改文件读取失败',
+        empty: '当前没有文件修改记录',
+        status: {
+          added: '新增',
+          modified: '修改',
+          deleted: '删除',
+          renamed: '重命名',
+          unknown: '已观察到修改',
+        },
+      },
       relationship: {
         sessionTree: '会话关系 · {{count}} 条',
       },
