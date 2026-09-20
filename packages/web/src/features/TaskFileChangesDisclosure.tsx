@@ -77,7 +77,7 @@ export function TaskFileChangesDisclosure({
           >{statusCode(item)}</span>
           <span className="task-file-change-path">
             {item.changeType === 'renamed' && item.oldPath
-              ? <><code title={item.oldPath}>{item.oldPath}</code><UiIcon name="arrow-right" size={13}/></>
+              ? <><code title={item.oldPath}>{item.oldPath}</code><UiIcon name="arrow-right" size={14}/></>
               : null}
             {target
               ? <LocalResourceReference value={target} displayValue={item.path} kind="file" presentation="inline"/>
