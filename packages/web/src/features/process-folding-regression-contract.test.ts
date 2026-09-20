@@ -25,6 +25,13 @@ test('Task disclosure 只把真实用户 toggle 写回展开意图，程序同�
   assert.match(round, /const onToggle = \(open: boolean\) => \{[\s\S]*?if \(open === expanded\) return/)
 })
 
+
+test('Review / Pi 一旦 Final 已出现，上方 Process 必须按 settled 展示', () => {
+  assert.match(review, /const hasFinalAnswer = afterProcessEntries\.some\([\s\S]*?const resolvedProcessState = hasFinalAnswer \? 'settled' : round\.state/)
+  assert.match(review, /state=\{resolvedProcessState\}/)
+  assert.match(piRound, /const hasFinal = entries\.some\([\s\S]*?const resolvedProcessState = hasFinal \? 'settled' : processState/)
+})
+
 test('Review Process 对中间 Assistant\/Commentary 明确标识为过程输出', () => {
   assert.match(review, /review:local\.process\.output/)
 })
