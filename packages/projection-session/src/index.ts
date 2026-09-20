@@ -1,3 +1,4 @@
+export * from './git-workspace-snapshot'
 export * from './task-file-changes'
 export * from './summary-plugin'
 
