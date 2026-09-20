@@ -555,6 +555,8 @@ export class InteractionDescriptorStore {
         || header.kind === 'message.reasoning'
         || header.kind === 'message.assistant').length
       const toolCount = processHeaders.filter(header => header.kind === 'tool.call').length
+      const toolProgressCount = processHeaders.filter(header => header.kind === 'tool.progress').length
+      const processItemCount = messageCount + toolCount + toolProgressCount
       const errorCount = processHeaders.filter(header => {
         if (header.kind !== 'tool.result') return false
         if (header.error !== undefined) return header.error
@@ -571,7 +573,7 @@ export class InteractionDescriptorStore {
       summaries.set(group.descriptor.ordinal, {
         id: `process:${interactionId}`,
         revision: [interactionId, totalFactCount, last?.id ?? 'empty', last?.capturedAt ?? group.descriptor.endedAt].join(':'),
-        itemCount: processHeaders.length,
+        itemCount: processItemCount,
         messageCount,
         toolCount,
         errorCount,
