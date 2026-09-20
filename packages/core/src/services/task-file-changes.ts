@@ -69,6 +69,10 @@ export interface TaskFileChangeProjectionStore extends TaskFileChangeReader {
       changes: TaskFileChangeRecord[]
     },
   ): Promise<void>
+  replaceObservedSession(
+    logicalSessionId: LogicalSessionId,
+    changes: TaskFileChangeRecord[],
+  ): Promise<boolean>
   replaceSession(
     logicalSessionId: LogicalSessionId,
     changes: TaskFileChangeRecord[],
