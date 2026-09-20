@@ -173,6 +173,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
       process: {
         execution: '执行过程',
         thinking: '思考',
+        output: '过程输出',
         thinkingProcess: '思考过程',
         expandToLoad: '展开后加载完整处理详情',
         loading: '正在加载处理详情…',
