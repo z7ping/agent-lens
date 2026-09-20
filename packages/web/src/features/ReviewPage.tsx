@@ -540,6 +540,11 @@ function RawInspectorContent({
         {record.nativeId && <div className="evidence-path">{agentLensI18n.t('review:local.event.nativeId')}：{record.nativeId}</div>}
         {record.occurredAt && <div className="evidence-path">occurredAt：{record.occurredAt}</div>}
         <div className="evidence-path">capturedAt：{record.capturedAt}</div>
+        {record.locator.path && <div className="evidence-path"><LocalResourceReference
+          value={record.locator.path}
+          kind={record.locator.kind === 'file' ? 'file' : 'path'}
+          presentation="inline"
+        /></div>}
         <div className="evidence-path">{agentLensI18n.t('review:local.event.locator')}：{JSON.stringify(record.locator)}</div>
         <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(record.payload, null, 2)}>{JSON.stringify(record.payload, null, 2)}</CopyableCodeBlock>
       </div>
