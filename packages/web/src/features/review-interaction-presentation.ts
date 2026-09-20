@@ -92,6 +92,16 @@ function sourceRecordIds(node: ReviewMessageNodeDto | ReviewEventNodeDto): Set<s
   return new Set(node.evidence.map(item => item.sourceRecordId).filter((value): value is string => Boolean(value)))
 }
 
+function eventAction(node: ReviewEventNodeDto): string {
+  const payload = record(node.payload)
+  return stringField(payload, 'action', 'event', 'type', 'status').toLowerCase()
+}
+
+function isTerminalEvent(node: ReviewEventNodeDto): boolean {
+  if (node.kind !== 'session.lifecycle') return false
+  return ['turn.completed', 'turn.stopped', 'turn.aborted', 'turn.error'].includes(eventAction(node))
+}
+
 /**
  * 保持 Canonical Review 节点原始顺序，只做两类无损表现变换：
  * 1. 连续 Tool 合成同一个视觉 ToolGroup，但不再把 Tool 移到 reasoning 旁边；
@@ -159,6 +169,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
 
   const prompts: ReviewInteractionPresentationEntry[] = []
   const processItems: ReviewProcessPresentationItem[] = []
+  const terminal: ReviewInteractionPresentationEntry[] = []
   const finalAnswers: ReviewInteractionPresentationEntry[] = []
   const artifacts: ReviewInteractionPresentationEntry[] = []
 
@@ -173,6 +184,10 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     }
     if (entry.type === 'event' && entry.node.category === 'artifact') {
       artifacts.push(entry)
+      continue
+    }
+    if (entry.type === 'event' && isTerminalEvent(entry.node)) {
+      terminal.push(entry)
       continue
     }
 
@@ -193,6 +208,6 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
         : first.items[0]?.id ?? 'process'
     grouped.push({ type: 'process', id: `process:${id}`, items: processItems })
   }
-  grouped.push(...finalAnswers, ...artifacts)
+  grouped.push(...terminal, ...finalAnswers, ...artifacts)
   return grouped
 }

@@ -118,10 +118,11 @@ test('Usage 等观测事件不会把同一轮思考过程切成多个父块', ()
   assert.deepEqual(process.items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-1', 'tool-2'])
 })
 
-test('无对应 reasoning 的 unknown 仍保留在全部事件视图', () => {
+test('无对应 reasoning 的 unknown 仍保留为可展开的原始过程事实', () => {
   const entries = projectReviewInteractionPresentation([unknownEvent('unknown-real', 'record:other')])
   assert.equal(entries.length, 1)
-  assert.equal(entries[0]?.type, 'raw-event-group')
+  assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type === 'process') assert.equal(entries[0].items[0]?.type, 'raw-event-group')
 })
 
 
@@ -267,4 +268,42 @@ test('Review 处理详情保持 commentary / lifecycle / tool / compaction 的�
   }), ['commentary-order', 'model-event', 'tool-order', 'compact'])
   assert.equal(entries[1]?.type, 'message')
   if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'final')
+})
+
+
+test('Review 可证明的 Turn terminal 状态位于 process 与 final answer 之间', () => {
+  const terminal: ReviewEventNodeDto = {
+    type: 'event',
+    id: 'terminal',
+    at: '2026-09-01T00:00:03.000Z',
+    sourceId: 'codex',
+    kind: 'session.lifecycle',
+    category: 'lifecycle',
+    label: '轮次完成',
+    payload: { event: 'turn.completed' },
+    evidence: [],
+    observationIds: ['obs:terminal'],
+    capturedAt: '2026-09-01T00:00:03.000Z',
+  }
+  const final: ReviewMessageNodeDto = {
+    type: 'message',
+    id: 'terminal-final',
+    role: 'assistant',
+    at: '2026-09-01T00:00:02.000Z',
+    sourceId: 'codex',
+    text: 'done',
+    payload: {},
+    evidence: [],
+    observationIds: ['obs:terminal-final'],
+    capturedAt: '2026-09-01T00:00:02.000Z',
+  }
+
+  const entries = projectReviewInteractionPresentation([
+    message('commentary-terminal', 'commentary', 'record:terminal'),
+    terminal,
+    final,
+  ])
+  assert.deepEqual(entries.map(entry => entry.type), ['process', 'event', 'message'])
+  if (entries[1]?.type === 'event') assert.equal(entries[1].node.id, 'terminal')
+  if (entries[2]?.type === 'message') assert.equal(entries[2].node.id, 'terminal-final')
 })
