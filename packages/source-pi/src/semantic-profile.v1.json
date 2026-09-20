@@ -214,11 +214,68 @@
       "semantic": "user-shell-activity",
       "semanticSource": "native",
       "coverage": "complete"
+    },
+    {
+      "id": "usage",
+      "nativeType": "usage",
+      "kind": "usage",
+      "semantic": "usage",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "branch_summary",
+      "nativeType": "branch_summary",
+      "kind": "context.summary",
+      "semantic": "branch-summary",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "session_info",
+      "nativeType": "session_info",
+      "kind": "session.lifecycle",
+      "semantic": "session.info",
+      "semanticSource": "native",
+      "coverage": "complete"
     }
   ],
   "fallback": {
     "kind": "unknown",
     "preserveRaw": true,
     "semanticSource": "unknown"
-  }
+  },
+  "knownButOutOfScope": {
+    "reference": "pi-web live event stream",
+    "reason": "这些是运行时/UI 生命周期，不属于 Pi Session JSONL v3 的持久化 entry；本轮只登记，不强行映射成 History 事实。",
+    "events": [
+      "connected",
+      "agent_start",
+      "agent_end",
+      "agent_settled",
+      "prompt_done",
+      "prompt_error",
+      "extension_error",
+      "message_start",
+      "message_update",
+      "message_end",
+      "tool_execution_start",
+      "tool_execution_update",
+      "tool_execution_end",
+      "queue_update",
+      "auto_retry_start",
+      "auto_retry_end",
+      "auto_compaction_start",
+      "compaction_start",
+      "auto_compaction_end",
+      "compaction_end",
+      "extension_ui_request",
+      "extension_ui_closed"
+    ]
+  },
+  "notes": [
+    "Pi 官方 SessionEntry 当前包含 message / thinking_level_change / model_change / usage / compaction / branch_summary / custom / custom_message / label / session_info。",
+    "bashExecution 是 message role，不是当前官方 SessionEntry 顶层类型；历史兼容的 bash/bash_result 仍保留 passthrough 语义。",
+    "未知 entry 或未知 Assistant block 必须 preserveRaw=true。"
+  ]
 }
