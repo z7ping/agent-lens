@@ -1690,7 +1690,7 @@ export class DefaultPiLiveService implements PiLiveService {
     const elapsed = runtime.status === 'initializing'
       ? Math.max(0, Date.now() - runtime.initializationStartedAt)
       : runtime.initializationElapsedMs
-    const cached = runtime.cachedState ? { ...runtime.cachedState } : {}
+    const cached: Partial<PiLiveRuntimeState> = runtime.cachedState ? { ...runtime.cachedState } : {}
     delete cached.processId
     return {
       ...cached,
