@@ -12,7 +12,9 @@ const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 const QUERY_BATCH_SIZE = 40
 const VALIDATION_CONCURRENCY = 4
+const VALIDATION_CACHE_TTL_MS = 30_000
 const MAX_SEARCH_LENGTH = 200
+const validationRefreshes = new Map<string, Promise<void>>()
 
 function encodeCursor(cursor: LaunchableProjectCursor): string {
   return Buffer.from(JSON.stringify({
@@ -46,6 +48,12 @@ function searchValue(params: URLSearchParams): string | undefined {
 }
 
 type WorkspaceValidator = (workspacePath: string) => Promise<string>
+type WorkspaceValidationRecorder = (input: {
+  workspaceId: string
+  workspacePath: string
+  status: 'valid' | 'invalid'
+  validatedAt: string
+}) => Promise<void>
 
 export interface LaunchableProjectTimings {
   dbMs: number
@@ -55,29 +63,106 @@ export interface LaunchableProjectTimings {
 
 type TimingObserver = (timings: LaunchableProjectTimings) => void
 
+function launchableProjectDto(
+  candidate: LaunchableProjectCandidate,
+  workspaceId: string,
+  workspacePath: string,
+): LaunchableProjectDto {
+  return {
+    key: candidate.key,
+    ...(candidate.projectId ? { projectId: candidate.projectId } : {}),
+    ...(candidate.projectName ? { projectName: candidate.projectName } : {}),
+    ...(candidate.repositoryIdentity ? { repositoryIdentity: candidate.repositoryIdentity } : {}),
+    workspaceId,
+    workspacePath,
+    // Keep the project-level activity key used by server ordering/cursors. The chosen
+    // workspace may be older only because a newer historical worktree no longer exists.
+    lastSeenAt: candidate.lastSeenAt,
+  }
+}
+
+function validationFresh(validatedAt: string | undefined, nowMs: number): boolean {
+  if (!validatedAt) return false
+  const timestamp = Date.parse(validatedAt)
+  return Number.isFinite(timestamp)
+    && timestamp <= nowMs
+    && nowMs - timestamp <= VALIDATION_CACHE_TTL_MS
+}
+
+function recordValidation(
+  recorder: WorkspaceValidationRecorder | undefined,
+  input: Parameters<WorkspaceValidationRecorder>[0],
+): void {
+  if (!recorder) return
+  void recorder(input).catch(() => undefined)
+}
+
+function refreshValidationInBackground(
+  workspace: LaunchableProjectCandidate['workspaces'][number],
+  validateWorkspace: WorkspaceValidator,
+  recorder: WorkspaceValidationRecorder | undefined,
+): void {
+  const key = `${workspace.workspaceId}\u0000${workspace.workspacePath}`
+  if (validationRefreshes.has(key)) return
+  const task = (async () => {
+    try {
+      await validateWorkspace(workspace.workspacePath)
+      recordValidation(recorder, {
+        workspaceId: workspace.workspaceId,
+        workspacePath: workspace.workspacePath,
+        status: 'valid',
+        validatedAt: new Date().toISOString(),
+      })
+    } catch {
+      recordValidation(recorder, {
+        workspaceId: workspace.workspaceId,
+        workspacePath: workspace.workspacePath,
+        status: 'invalid',
+        validatedAt: new Date().toISOString(),
+      })
+    }
+  })().finally(() => {
+    validationRefreshes.delete(key)
+  })
+  validationRefreshes.set(key, task)
+}
+
 async function launchableWorkspace(
   candidate: LaunchableProjectCandidate,
   validateWorkspace: WorkspaceValidator = validatePiWorkingDirectory,
+  recorder?: WorkspaceValidationRecorder,
+  nowMs = Date.now(),
 ): Promise<LaunchableProjectDto | undefined> {
-  // Workspace candidates are already newest-first. Validate lazily and stop at the first
-  // launchable path so a project with years of historical worktrees does not fan out dozens of
-  // filesystem probes on every dropdown request.
+  // Fresh cache hits never touch the filesystem. Expired successful paths are shown immediately
+  // and revalidated in the background; Pi start still performs its own authoritative cwd check.
   for (const workspace of candidate.workspaces) {
+    const fresh = validationFresh(workspace.validatedAt, nowMs)
+    if (workspace.validationStatus === 'valid') {
+      if (!fresh) refreshValidationInBackground(workspace, validateWorkspace, recorder)
+      return launchableProjectDto(candidate, workspace.workspaceId, workspace.workspacePath)
+    }
+    if (workspace.validationStatus === 'invalid') {
+      if (!fresh) refreshValidationInBackground(workspace, validateWorkspace, recorder)
+      continue
+    }
+
     try {
       const workspacePath = await validateWorkspace(workspace.workspacePath)
-      return {
-        key: candidate.key,
-        ...(candidate.projectId ? { projectId: candidate.projectId } : {}),
-        ...(candidate.projectName ? { projectName: candidate.projectName } : {}),
-        ...(candidate.repositoryIdentity ? { repositoryIdentity: candidate.repositoryIdentity } : {}),
+      recordValidation(recorder, {
         workspaceId: workspace.workspaceId,
-        workspacePath,
-        // Keep the project-level activity key used by server ordering/cursors. The chosen
-        // workspace may be older only because a newer historical worktree no longer exists.
-        lastSeenAt: candidate.lastSeenAt,
-      }
+        workspacePath: workspace.workspacePath,
+        status: 'valid',
+        validatedAt: new Date(nowMs).toISOString(),
+      })
+      return launchableProjectDto(candidate, workspace.workspaceId, workspacePath)
     } catch {
-      // Stale/moved workspace: try the next observed workspace for the same project.
+      recordValidation(recorder, {
+        workspaceId: workspace.workspaceId,
+        workspacePath: workspace.workspacePath,
+        status: 'invalid',
+        validatedAt: new Date(nowMs).toISOString(),
+      })
+      // Unknown/stale path failed: try the next observed workspace for this project.
     }
   }
   return undefined
@@ -107,6 +192,9 @@ export async function readLaunchableProjects(
 
   const items: LaunchableProjectDto[] = []
   const fsStartedAt = performance.now()
+  const validationRecorder = reader.recordWorkspaceValidation
+    ? input => reader.recordWorkspaceValidation!(input)
+    : undefined
   let processed = 0
 
   // One request reads one bounded candidate page only. Filesystem checks are
@@ -115,7 +203,7 @@ export async function readLaunchableProjects(
   for (let offset = 0; offset < page.items.length && items.length < limit; offset += VALIDATION_CONCURRENCY) {
     const chunk = page.items.slice(offset, offset + VALIDATION_CONCURRENCY)
     const resolved = await Promise.all(
-      chunk.map(candidate => launchableWorkspace(candidate, validateWorkspace)),
+      chunk.map(candidate => launchableWorkspace(candidate, validateWorkspace, validationRecorder)),
     )
 
     for (let index = 0; index < chunk.length; index += 1) {
@@ -157,6 +245,8 @@ export const launchableProjectHttpInternals = {
   MAX_LIMIT,
   QUERY_BATCH_SIZE,
   VALIDATION_CONCURRENCY,
+  VALIDATION_CACHE_TTL_MS,
+  validationFresh,
   encodeCursor,
   decodeCursor,
   searchValue,
