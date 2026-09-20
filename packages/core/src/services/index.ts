@@ -284,6 +284,7 @@ export interface LaunchableProjectReader {
     status: Exclude<LaunchableWorkspaceValidationStatus, 'unknown'>
     validatedAt: string
   }): Promise<void>
+  rebuild?(): Promise<void>
 }
 
 export interface SessionSummaryFacetScope {
