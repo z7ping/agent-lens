@@ -6,6 +6,7 @@ import type {
   LiveRuntimeDisclosureContributionDto,
 } from '@agent-lens/protocol'
 import { copyText } from '../client/clipboard'
+import { translateProduct } from '../i18n/runtime'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { Button, Dialog, UiIcon } from './ui'
 
@@ -20,8 +21,8 @@ function contributionValue(value: LiveContributionValueDto, language: string): s
   return typeof value === 'string' ? value : contributionText(value, language)
 }
 
-function localText(language: string, zh: string, en: string): string {
-  return language.replace(/_/g, '-').toLowerCase().startsWith('zh') ? zh : en
+function runtimeText(key: string): string {
+  return translateProduct(`task:runtimeDisclosure.${key}`)
 }
 
 function duration(value: number | undefined): string {
@@ -108,13 +109,11 @@ type CopyState = 'idle' | 'copied' | 'error'
 function CopyAction({
   value,
   language,
-  labelZh,
-  labelEn,
+  labelKey,
 }: {
   value: string
   language: string
-  labelZh: string
-  labelEn: string
+  labelKey: string
 }) {
   const [state, setState] = useState<CopyState>('idle')
   const resetTimer = useRef<number | undefined>(undefined)
@@ -122,10 +121,10 @@ function CopyAction({
   useEffect(() => () => window.clearTimeout(resetTimer.current), [])
 
   const label = state === 'copied'
-    ? localText(language, '已复制', 'Copied')
+    ? runtimeText('copied')
     : state === 'error'
-      ? localText(language, '复制失败', 'Copy failed')
-      : localText(language, labelZh, labelEn)
+      ? runtimeText('copyFailed')
+      : runtimeText(labelKey)
 
   const copy = async () => {
     window.clearTimeout(resetTimer.current)
@@ -199,16 +198,16 @@ function RuntimeLifecycle({
   if (!lifecycle) {
     return <div className="live-runtime-summary-fallback">
       <span><b>{contributionText(item.title, language)}</b>{item.summary && <small>{contributionText(item.summary, language)}</small>}</span>
-      <Button size="small" onClick={onDiagnostics}>{localText(language, '运行诊断', 'Runtime diagnostics')}</Button>
+      <Button size="small" onClick={onDiagnostics}>{runtimeText('runtimeDiagnostics')}</Button>
     </div>
   }
 
   const title = contributionText(item.title, language)
   const statusLabel = lifecycle.status === 'ready'
-    ? localText(language, '已就绪', 'Ready')
+    ? runtimeText('ready')
     : lifecycle.status === 'failed'
-      ? localText(language, '启动失败', 'Failed')
-      : localText(language, '正在准备', 'Preparing')
+      ? runtimeText('startupFailed')
+      : runtimeText('preparing')
   const resourceSummary = (lifecycle.resources ?? [])
     .map(group => `${contributionText(group.label, language)} ${group.values.length}`)
     .join(' · ')
@@ -242,7 +241,7 @@ function RuntimeLifecycle({
     </summary>
 
     <div className="pi-startup-body">
-      <div className="pi-startup-steps" aria-label={localText(language, '运行时启动阶段', 'Runtime startup stages')}>
+      <div className="pi-startup-steps" aria-label={runtimeText('startupStages')}>
         {lifecycle.stages.map(stage => <div
           key={stage.stageId}
           className={`pi-startup-step is-${stage.status}`}
@@ -257,7 +256,7 @@ function RuntimeLifecycle({
           <span className="pi-startup-step-copy"><b>{contributionText(stage.label, language)}</b></span>
           <span className="pi-startup-step-time">
             {stage.status === 'pending'
-              ? localText(language, '等待', 'Waiting')
+              ? runtimeText('waiting')
               : stage.status === 'active'
                 ? `${duration(stageDuration(stage))}+`
                 : duration(stage.durationMs)}
@@ -270,7 +269,7 @@ function RuntimeLifecycle({
           {resourceSummary}
           <UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/>
         </summary>
-        <div className="pi-startup-resources" aria-label={localText(language, '运行资源', 'Runtime resources')}>
+        <div className="pi-startup-resources" aria-label={runtimeText('runtimeResources')}>
           {lifecycle.resources!.map(group => <div className="pi-startup-resource-row" key={group.groupId}>
             <b>[{contributionText(group.label, language)}]</b>
             <span>{group.values.join(', ')}</span>
@@ -284,7 +283,7 @@ function RuntimeLifecycle({
 
       <div className="pi-startup-actions live-runtime-lifecycle-actions">
         <Button size="small" onClick={event => { event.preventDefault(); onDiagnostics() }}>
-          {localText(language, '运行诊断', 'Runtime diagnostics')}
+          {runtimeText('runtimeDiagnostics')}
         </Button>
         <RuntimeActions
           item={item}
@@ -324,18 +323,18 @@ function timingCopyText(
   const lifecycle = item.lifecycle
   const startupMetrics = fields.find(field => field.id === 'Startup metrics')
   const lines = [
-    localText(language, 'Runtime 启动耗时', 'Runtime startup timing'),
+    runtimeText('startupTiming'),
     '',
-    `${localText(language, '总耗时', 'Total elapsed')}：${duration(lifecycle?.elapsedMs)}`,
+    `${runtimeText('totalElapsed')}：${duration(lifecycle?.elapsedMs)}`,
   ]
   if (lifecycle?.stages.length) {
-    lines.push('', `【${localText(language, '启动阶段', 'Startup stages')}】`)
+    lines.push('', `【${runtimeText('startupStages')}】`)
     for (const stage of lifecycle.stages) {
       lines.push(`${contributionText(stage.label, language)}：${duration(stage.durationMs)}`)
     }
   }
   if (startupMetrics?.values.length) {
-    lines.push('', `【${localText(language, '启动性能', 'Startup performance')}】`, ...startupMetrics.values)
+    lines.push('', `【${runtimeText('startupPerformance')}】`, ...startupMetrics.values)
   }
   return lines.join('\n')
 }
@@ -351,22 +350,22 @@ function diagnosticCopyText(
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lines = [
-    localText(language, 'Runtime 运行诊断', 'Runtime diagnostics'),
+    runtimeText('runtimeDiagnostics'),
     '',
-    `【${localText(language, '运行概况', 'Runtime overview')}】`,
+    `【${runtimeText('runtimeOverview')}】`,
     ...statusFields.map(field => `${field.label}：${field.values.join(' · ')}`),
   ]
 
   if (lifecycle) {
-    lines.push(`${localText(language, '总耗时', 'Total elapsed')}：${duration(lifecycle.elapsedMs)}`)
-    lines.push('', `【${localText(language, '启动阶段', 'Startup stages')}】`)
+    lines.push(`${runtimeText('totalElapsed')}：${duration(lifecycle.elapsedMs)}`)
+    lines.push('', `【${runtimeText('startupStages')}】`)
     for (const stage of lifecycle.stages) {
       lines.push(`${contributionText(stage.label, language)}：${duration(stage.durationMs)} · ${stage.status}`)
     }
   }
 
   if (performanceFields.length) {
-    lines.push('', `【${localText(language, '启动性能', 'Startup performance')}】`)
+    lines.push('', `【${runtimeText('startupPerformance')}】`)
     for (const field of performanceFields) {
       lines.push(`${field.label}：`)
       lines.push(...field.values)
@@ -374,14 +373,14 @@ function diagnosticCopyText(
   }
 
   if (resourceFields.length) {
-    lines.push('', `【${localText(language, '运行资源', 'Runtime resources')}】`)
+    lines.push('', `【${runtimeText('runtimeResources')}】`)
     for (const field of resourceFields) {
       lines.push(`${field.label}（${field.values.length}）：${field.values.join(', ')}`)
     }
   }
 
   if (advancedFields.length) {
-    lines.push('', `【${localText(language, '高级诊断', 'Advanced diagnostics')}】`)
+    lines.push('', `【${runtimeText('advancedDiagnostics')}】`)
     for (const field of advancedFields) {
       lines.push(`${field.label}：`, ...field.values)
     }
@@ -405,10 +404,10 @@ function RuntimeDiagnostics({
 
   return <div className="live-runtime-diagnostics">
     {(statusFields.length > 0 || lifecycle?.elapsedMs !== undefined) && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-overview">
-      <h3>{localText(language, '运行概况', 'Runtime overview')}</h3>
+      <h3>{runtimeText('runtimeOverview')}</h3>
       <div className="live-runtime-diagnostic-overview-grid">
         {lifecycle?.elapsedMs !== undefined && <div className="live-runtime-diagnostic-overview-item is-primary">
-          <span>{localText(language, '总耗时', 'Total elapsed')}</span>
+          <span>{runtimeText('totalElapsed')}</span>
           <b>{duration(lifecycle.elapsedMs)}</b>
         </div>}
         {statusFields.map(field => <div className="live-runtime-diagnostic-overview-item" key={field.key}>
@@ -420,7 +419,7 @@ function RuntimeDiagnostics({
 
     {(lifecycle?.stages.length || startupMetrics) && <div className="live-runtime-diagnostic-primary-grid">
       {lifecycle?.stages.length && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-stage-section">
-        <h3>{localText(language, '启动阶段', 'Startup stages')}</h3>
+        <h3>{runtimeText('startupStages')}</h3>
         <div className="live-runtime-diagnostic-stages">
           {lifecycle.stages.map(stage => <div className="live-runtime-diagnostic-stage" key={stage.stageId}>
             <span className={`is-${stage.status}`} aria-hidden="true">
@@ -438,12 +437,11 @@ function RuntimeDiagnostics({
 
       {startupMetrics && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-performance">
         <div className="live-runtime-diagnostic-section-head">
-          <h3>{localText(language, '启动性能', 'Startup performance')}</h3>
+          <h3>{runtimeText('startupPerformance')}</h3>
           <CopyAction
             value={timingCopyText(item, language, fields)}
             language={language}
-            labelZh="复制耗时"
-            labelEn="Copy timing"
+            labelKey="copyTiming"
           />
         </div>
         <MetricRows values={startupMetrics.values}/>
@@ -451,7 +449,7 @@ function RuntimeDiagnostics({
     </div>}
 
     {resourceFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-resources">
-      <h3>{localText(language, '运行资源', 'Runtime resources')}</h3>
+      <h3>{runtimeText('runtimeResources')}</h3>
       <div className="live-runtime-diagnostic-resource-groups">
         {resourceFields.map(field => <section className="live-runtime-diagnostic-resource-group" key={field.key}>
           <header>
@@ -466,7 +464,7 @@ function RuntimeDiagnostics({
     </section>}
 
     {advancedFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-advanced">
-      <h3>{localText(language, '高级诊断', 'Advanced diagnostics')}</h3>
+      <h3>{runtimeText('advancedDiagnostics')}</h3>
       <div className="live-runtime-diagnostic-code-groups">
         {advancedFields.map(field => <section key={field.key}>
           <b>{field.label}</b>
@@ -504,12 +502,11 @@ function RuntimeDisclosure({
       onClose={() => setDiagnosticsOpen(false)}
       size="xlarge"
       className="live-runtime-diagnostics-dialog"
-      title={localText(language, '运行诊断', 'Runtime diagnostics')}
+      title={runtimeText('runtimeDiagnostics')}
       headerActions={<CopyAction
         value={diagnosticCopyText(item, language, fields)}
         language={language}
-        labelZh="复制诊断信息"
-        labelEn="Copy diagnostics"
+        labelKey="copyDiagnostics"
       />}
     >
       <RuntimeDiagnostics item={item} language={language}/>
