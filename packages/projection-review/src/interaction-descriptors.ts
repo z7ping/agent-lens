@@ -138,6 +138,7 @@ function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
   descriptor.end = headerCursor(observation)
   descriptor.endedAt = headerEffectiveAt(observation)
+  descriptor.hasError ||= observation.error === true
   descriptor.observationCount += 1
 }
 
@@ -166,7 +167,7 @@ function newStructureDescriptor(observation: ObservationHeader, ordinal: number)
     end: cursor,
     startedAt: cursor.effectiveAt,
     endedAt: cursor.effectiveAt,
-    hasError: false,
+    hasError: observation.error === true,
     observationCount: 1,
   }
 }

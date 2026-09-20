@@ -369,10 +369,8 @@ export class ReviewProjection extends BaseReviewProjection {
     const normalized = normalizeReviewSummaryActivity(
       localizeLifecycle(normalizeOrphanToolResults(detail)),
     )
-    const summarized = withProcessSummaries(normalized)
-    return query.process === 'summary'
-      ? summarizeProcessNodes(summarized)
-      : boundReviewDetail(summarized)
+    if (query.process === 'summary') return normalized
+    return boundReviewDetail(withProcessSummaries(normalized))
   }
 }
 
