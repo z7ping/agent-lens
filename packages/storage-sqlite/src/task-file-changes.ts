@@ -269,6 +269,30 @@ export class SqliteTaskFileChangeProjectionStore implements TaskFileChangeProjec
     })
   }
 
+  replaceObservedSession(
+    logicalSessionId: LogicalSessionId,
+    changes: TaskFileChangeRecord[],
+  ): Promise<boolean> {
+    return this.executor.transaction(async () => {
+      const finalized = this.executor.db.prepare(`
+        SELECT 1 AS present
+        FROM task_file_change_capture
+        WHERE logical_session_id = ?
+          AND finalized_at IS NOT NULL
+          AND changes_json IS NOT NULL
+        LIMIT 1
+      `).get(logicalSessionId)
+      if (finalized) return false
+
+      this.executor.db.prepare(`
+        DELETE FROM task_file_change_projection
+        WHERE logical_session_id = ?
+      `).run(logicalSessionId)
+      insertProjection(this.executor, logicalSessionId, changes)
+      return true
+    })
+  }
+
   replaceSession(
     logicalSessionId: LogicalSessionId,
     changes: TaskFileChangeRecord[],
