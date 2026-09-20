@@ -140,9 +140,11 @@ function isTerminalLifecycle(observation: CanonicalObservation): boolean {
 }
 
 function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
-  return kind !== 'message.user'
-    && kind !== 'message.assistant'
-    && kind !== 'artifact.action'
+  return kind === 'message.commentary'
+    || kind === 'message.reasoning'
+    || kind === 'tool.call'
+    || kind === 'tool.result'
+    || kind === 'tool.progress'
 }
 
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
@@ -523,14 +525,13 @@ export class InteractionDescriptorStore {
       const processHeaders: ObservationHeader[] = []
       for (let index = 0; index < group.headers.length; index += 1) {
         const header = group.headers[index]!
-        const finalAssistant = header.kind === 'message.assistant' && index > lastProcessDriver
         const prompt = header.kind === 'message.user'
         const artifact = header.kind === 'artifact.action'
         const terminal = terminalIds.has(header.id)
-        if (prompt || finalAssistant || artifact || terminal || header.kind === 'model.call' || header.kind === 'model.changed') {
-          displayIds.add(header.id)
-        }
-        if (!prompt && !finalAssistant && !artifact && !terminal) processHeaders.push(header)
+        const assistantProcess = header.kind === 'message.assistant' && index <= lastProcessDriver
+        const process = isProcessDriverKind(header.kind) || assistantProcess
+        if (!process || prompt || artifact || terminal) displayIds.add(header.id)
+        if (process && !prompt && !artifact && !terminal) processHeaders.push(header)
       }
 
       const fallbackById = group.fallbackObservations
