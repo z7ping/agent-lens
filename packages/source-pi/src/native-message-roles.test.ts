@@ -208,3 +208,36 @@ test('Pi official StopReason values are all preserved as explicit lifecycle fact
     assert.ok(lifecycle, stopReason)
   }
 })
+
+
+test('Pi official top-level usage entry becomes canonical usage with metadata', async () => {
+  const normalized = await normalizePiRecord(sourceRecord({
+    type: 'usage',
+    id: 'usage-1',
+    kind: 'cache_warm',
+    provider: 'test-provider',
+    model: 'test-model',
+    note: 'warmup',
+    usage: {
+      input: 10,
+      output: 2,
+      cacheRead: 3,
+      cacheWrite: 1,
+      totalTokens: 16,
+    },
+  }), {} as never)
+
+  assert.equal(normalized.observations[0]?.kind, 'usage')
+  const payload = normalized.observations[0]?.payload as {
+    usageKind?: string
+    provider?: string
+    model?: string
+    note?: string
+    totalTokens?: number
+  }
+  assert.equal(payload.usageKind, 'cache_warm')
+  assert.equal(payload.provider, 'test-provider')
+  assert.equal(payload.model, 'test-model')
+  assert.equal(payload.note, 'warmup')
+  assert.equal(payload.totalTokens, 16)
+})
