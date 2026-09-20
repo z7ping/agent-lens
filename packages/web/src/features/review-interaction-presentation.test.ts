@@ -36,7 +36,7 @@ function unknownEvent(id: string, sourceRecordId: string): ReviewEventNodeDto {
   } as ReviewEventNodeDto
 }
 
-test('Tool 只有显式指向 reasoning 时才进入 Thinking 子级', () => {
+test('Tool 即使显式指向 reasoning 也保持 process 原始顺序，不被重新挂载', () => {
   const think = reasoning('think-1', 'native-think-1')
   const child = tool('tool-child', { native: 'native-think-1' })
   const sibling = tool('tool-sibling')
@@ -48,7 +48,7 @@ test('Tool 只有显式指向 reasoning 时才进入 Thinking 子级', () => {
   assert.deepEqual(entries[0].items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-child', 'tool-sibling'])
 })
 
-test('parentObservationId 也可命中 reasoning 的 observationIds', () => {
+test('parentObservationId 不改变 Tool 在 process 中的事实位置', () => {
   const think = reasoning('think-2')
   const child = tool('tool-child', { observation: 'obs:think-2' })
   const entries = projectReviewInteractionPresentation([think, child])
@@ -57,7 +57,7 @@ test('parentObservationId 也可命中 reasoning 的 observationIds', () => {
   if (entries[0]?.type === 'process') assert.deepEqual(entries[0].items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-child'])
 })
 
-test('只相邻但没有 parent 信息的 Tool 不会被猜成 Thinking 子级', () => {
+test('相邻 Tool 不依赖 parent 猜测，仍按原序进入 process', () => {
   const think = reasoning('think-3')
   const adjacent = tool('tool-adjacent')
   const entries = projectReviewInteractionPresentation([think, adjacent])
@@ -65,7 +65,7 @@ test('只相邻但没有 parent 信息的 Tool 不会被猜成 Thinking 子级',
   assert.equal(entries[0]?.type, 'process')
 })
 
-test('跨 source 或多重匹配有歧义时保持 Tool 平级', () => {
+test('跨 source 或 parent 歧义不会触发 Tool 重排', () => {
   const left = reasoning('think-a', 'same-parent')
   const right = { ...reasoning('think-b', 'same-parent'), id: 'think-b' }
   const ambiguous = tool('tool-ambiguous', { native: 'same-parent' })
