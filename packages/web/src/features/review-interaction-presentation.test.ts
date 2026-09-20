@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { ReviewEventNodeDto, ReviewMessageNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
-import { projectReviewInteractionPresentation, projectReviewMessageModelLabels } from './review-interaction-presentation'
+import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels } from './review-interaction-presentation'
 
 function reasoning(id: string, nativeEventId = id, sourceRecordId?: string): ReviewMessageNodeDto {
   return {
@@ -336,4 +336,29 @@ test('Review 非终态运行事件也参与最终回复边界', () => {
   }
   assert.equal(entries[1]?.type, 'message')
   if (entries[1]?.type === 'message') assert.equal(entries[1].node.id, 'assistant-final-after-model')
+})
+
+
+test('Review summary-mode 外层轮次统计复用 Process Summary，而不是被裁掉的 Tool 节点', () => {
+  const stats = projectReviewInteractionToolStats({
+    nodes: [],
+    processSummary: {
+      id: 'process:round-summary',
+      revision: 'r1',
+      itemCount: 12,
+      messageCount: 4,
+      toolCount: 7,
+      errorCount: 2,
+      durationMs: 9_000,
+      availability: 'available',
+      totalFactCount: 12,
+    },
+  })
+  assert.deepEqual(stats, { toolCount: 7, errorCount: 2 })
+})
+
+test('Review full-mode 没有 Process Summary 时仍从 Tool 节点统计', () => {
+  const failed = { ...tool('tool-failed'), status: 'error' as const }
+  const stats = projectReviewInteractionToolStats({ nodes: [tool('tool-ok'), failed] })
+  assert.deepEqual(stats, { toolCount: 2, errorCount: 1 })
 })
