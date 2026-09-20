@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { SqliteStorageService } from './storage'
 import { SqliteLaunchableProjectReader } from './launchable-projects'
+import { refreshLaunchableSessionIndex } from './launchable-project-index'
 
 const BASE_TIME = '2026-09-01T00:00:00.000Z'
 
@@ -58,6 +59,10 @@ function seedSession(storage: SqliteStorageService, input: {
     INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, started_at, ended_at)
     VALUES (?, 'install-pi', ?, ?, ?, ?)
   `).run(input.sessionId, input.projectId, input.workspaceId, input.endedAt, input.endedAt)
+  refreshLaunchableSessionIndex(storage.db, undefined, {
+    projectId: input.projectId,
+    workspaceId: input.workspaceId,
+  })
   if (input.summary !== false) {
     storage.db.prepare(`
       INSERT INTO session_summary_projection(
@@ -241,7 +246,7 @@ test('launchable project reader hydrates a candidate page with one workspace bat
         prepared.push(sql)
         return {
           all(...args: unknown[]) {
-            if (sql.includes('WITH project_activity AS')) {
+            if (sql.includes('FROM launchable_project_index AS candidate')) {
               assert.deepEqual(args, [4])
               return [
                 {
@@ -267,7 +272,7 @@ test('launchable project reader hydrates a candidate page with one workspace bat
                 },
               ]
             }
-            assert.match(sql, /WITH workspace_activity AS/)
+            assert.match(sql, /FROM launchable_workspace_index/)
             assert.match(sql, /ROW_NUMBER\(\) OVER/)
             assert.deepEqual(args, ['project-a', 'project-b', 'project-c', 64])
             return [
@@ -276,18 +281,24 @@ test('launchable project reader hydrates a candidate page with one workspace bat
                 workspace_id: 'workspace-a',
                 workspace_path: '/workspace/a',
                 last_seen_at: isoMinute(3),
+                validation_status: 'unknown',
+                validated_at: null,
               },
               {
                 project_key: 'project-b',
                 workspace_id: 'workspace-b',
                 workspace_path: '/workspace/b',
                 last_seen_at: isoMinute(2),
+                validation_status: 'unknown',
+                validated_at: null,
               },
               {
                 project_key: 'project-c',
                 workspace_id: 'workspace-c',
                 workspace_path: '/workspace/c',
                 last_seen_at: isoMinute(1),
+                validation_status: 'unknown',
+                validated_at: null,
               },
             ]
           },
@@ -307,4 +318,158 @@ test('launchable project reader hydrates a candidate page with one workspace bat
     result.items.map(item => item.workspaces[0]?.workspacePath),
     ['/workspace/a', '/workspace/b', '/workspace/c'],
   )
+})
+
+
+test('canonical repository writes maintain the launchable project index incrementally', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    await storage.repositories.sessions.putProject({
+      id: 'indexed-project',
+      name: 'Indexed Project',
+      repositoryIdentity: 'z7ping/indexed-project',
+      createdAt: BASE_TIME,
+      lastSeenAt: isoMinute(1),
+    })
+    await storage.repositories.sessions.putWorkspace({
+      id: 'indexed-workspace',
+      hostId: 'host-local',
+      projectId: 'indexed-project',
+      path: '/workspace/indexed-project',
+    })
+    await storage.repositories.sessions.putLogicalSession({
+      id: 'indexed-session',
+      installationId: 'install-pi',
+      projectId: 'indexed-project',
+      workspaceId: 'indexed-workspace',
+      startedAt: isoMinute(2),
+      endedAt: isoMinute(3),
+    })
+
+    const projectIndex = storage.db.prepare(`
+      SELECT project_name, repository_identity, last_seen_at
+      FROM launchable_project_index
+      WHERE project_key = 'indexed-project'
+    `).get() as { project_name: string; repository_identity: string; last_seen_at: string }
+    assert.deepEqual(projectIndex, {
+      project_name: 'Indexed Project',
+      repository_identity: 'z7ping/indexed-project',
+      last_seen_at: isoMinute(3),
+    })
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(result.items[0]?.projectId, 'indexed-project')
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/indexed-project')
+
+    await storage.repositories.sessions.putWorkspace({
+      id: 'indexed-workspace',
+      hostId: 'host-local',
+      projectId: 'indexed-project',
+      path: '/workspace/indexed-project-moved',
+    })
+    const moved = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(moved.items[0]?.workspaces[0]?.workspacePath, '/workspace/indexed-project-moved')
+    assert.equal(moved.items[0]?.workspaces[0]?.validationStatus, 'unknown')
+  } finally {
+    storage.close()
+  }
+})
+
+test('launchable workspace validation cache persists without touching canonical session history', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'cached-project',
+      projectName: 'Cached Project',
+      workspaceId: 'cached-workspace',
+      workspacePath: '/workspace/cached-project',
+      sessionId: 'cached-session',
+      endedAt: isoMinute(4),
+    })
+
+    await storage.launchableProjects.recordWorkspaceValidation?.({
+      workspaceId: 'cached-workspace',
+      workspacePath: '/workspace/cached-project',
+      status: 'valid',
+      validatedAt: isoMinute(5),
+    })
+    const result = await storage.launchableProjects.query({ limit: 10 })
+
+    assert.equal(result.items[0]?.workspaces[0]?.validationStatus, 'valid')
+    assert.equal(result.items[0]?.workspaces[0]?.validatedAt, isoMinute(5))
+  } finally {
+    storage.close()
+  }
+})
+
+
+test('migration 29 backfills launchable indexes for existing canonical sessions', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    storage.db.prepare(`
+      INSERT INTO projects(id, name, repository_identity, created_at, last_seen_at)
+      VALUES ('upgrade-project', 'Upgrade Project', 'z7ping/upgrade-project', ?, ?)
+    `).run(BASE_TIME, isoMinute(6))
+    storage.db.prepare(`
+      INSERT INTO workspaces(id, host_id, project_id, path)
+      VALUES ('upgrade-workspace', 'host-local', 'upgrade-project', '/workspace/upgrade-project')
+    `).run()
+    storage.db.prepare(`
+      INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, started_at, ended_at)
+      VALUES ('upgrade-session', 'install-pi', 'upgrade-project', 'upgrade-workspace', ?, ?)
+    `).run(isoMinute(5), isoMinute(6))
+
+    storage.db.exec(`
+      DROP TABLE launchable_workspace_index;
+      DROP TABLE launchable_project_index;
+      DELETE FROM schema_migrations WHERE version = 29;
+    `)
+    await storage.migrate()
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(result.items[0]?.projectId, 'upgrade-project')
+    assert.equal(result.items[0]?.projectName, 'Upgrade Project')
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/upgrade-project')
+    assert.equal(result.items[0]?.workspaces[0]?.validationStatus, 'unknown')
+  } finally {
+    storage.close()
+  }
+})
+
+
+test('launchable project index can be rebuilt idempotently from canonical rows', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'rebuild-project',
+      projectName: 'Rebuild Project',
+      workspaceId: 'rebuild-workspace',
+      workspacePath: '/workspace/rebuild-project',
+      sessionId: 'rebuild-session',
+      endedAt: isoMinute(7),
+    })
+
+    storage.db.prepare('DELETE FROM launchable_workspace_index').run()
+    storage.db.prepare('DELETE FROM launchable_project_index').run()
+    assert.equal((await storage.launchableProjects.query({ limit: 10 })).items.length, 0)
+
+    await storage.launchableProjects.rebuild?.()
+    await storage.launchableProjects.rebuild?.()
+
+    const result = await storage.launchableProjects.query({ limit: 10 })
+    assert.equal(result.items.length, 1)
+    assert.equal(result.items[0]?.projectId, 'rebuild-project')
+    assert.equal(result.items[0]?.workspaces[0]?.workspacePath, '/workspace/rebuild-project')
+    assert.equal(result.items[0]?.workspaces[0]?.validationStatus, 'unknown')
+  } finally {
+    storage.close()
+  }
 })

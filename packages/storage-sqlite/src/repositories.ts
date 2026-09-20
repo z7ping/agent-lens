@@ -18,6 +18,11 @@ import type {
 import { SqliteExecutor } from './executor'
 import { encodeSourceRecordPayloadJson } from './source-record-compression'
 import {
+  refreshLaunchableProjectMetadata,
+  refreshLaunchableSessionIndex,
+  refreshLaunchableWorkspaceDefinition,
+} from './launchable-project-index'
+import {
   mapActor,
   mapAssetDefinition,
   mapCoverage,
@@ -154,6 +159,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           project.createdAt,
           project.lastSeenAt,
         )
+        refreshLaunchableProjectMetadata(db, project.id)
       })
     },
     async getWorkspace(id) {
@@ -186,6 +192,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           workspace.repositoryId ?? null,
           workspace.worktreeId ?? null,
         )
+        refreshLaunchableWorkspaceDefinition(db, workspace.id)
       })
     },
     async getLogicalSession(id) {
@@ -196,6 +203,11 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
     },
     async putLogicalSession(session) {
       await executor.run(() => {
+        const previous = db.prepare(`
+          SELECT project_id, workspace_id
+          FROM logical_sessions
+          WHERE id = ?
+        `).get(session.id) as { project_id?: unknown; workspace_id?: unknown } | undefined
         db.prepare(`
           INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, title, started_at, ended_at)
           VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -220,6 +232,19 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           session.title ?? null,
           session.startedAt ?? null,
           session.endedAt ?? null,
+        )
+        refreshLaunchableSessionIndex(
+          db,
+          previous
+            ? {
+                ...(typeof previous.project_id === 'string' ? { projectId: previous.project_id } : {}),
+                ...(typeof previous.workspace_id === 'string' ? { workspaceId: previous.workspace_id } : {}),
+              }
+            : undefined,
+          {
+            ...(session.projectId ? { projectId: session.projectId } : {}),
+            ...(session.workspaceId ? { workspaceId: session.workspaceId } : {}),
+          },
         )
       })
     },

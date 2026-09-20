@@ -5,6 +5,7 @@ import type {
   LaunchableWorkspaceCandidate,
 } from '@agent-lens/core'
 import type { SqliteExecutor } from './executor'
+import { rebuildLaunchableProjectIndex } from './launchable-project-index'
 
 const MAX_LIMIT = 100
 const MAX_WORKSPACES_PER_PROJECT = 64
@@ -33,63 +34,22 @@ function optionalString(value: SqliteRow, key: string): string | undefined {
 
 function projectCandidatesSql(search: boolean, after: boolean): string {
   return `
-    WITH project_activity AS (
-      SELECT
-        logical.project_id AS project_key,
-        logical.project_id AS project_id,
-        project.name AS project_name,
-        project.repository_identity AS repository_identity,
-        MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
-      FROM logical_sessions AS logical
-      JOIN workspaces AS workspace
-        ON workspace.id = logical.workspace_id
-      LEFT JOIN projects AS project
-        ON project.id = logical.project_id
-      WHERE logical.project_id IS NOT NULL
-        AND TRIM(workspace.path) <> ''
-      GROUP BY logical.project_id, project.name, project.repository_identity
-
-      UNION ALL
-
-      SELECT
-        'workspace:' || workspace.id AS project_key,
-        NULL AS project_id,
-        NULL AS project_name,
-        NULL AS repository_identity,
-        MAX(COALESCE(logical.ended_at, logical.started_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
-      FROM logical_sessions AS logical
-      JOIN workspaces AS workspace
-        ON workspace.id = logical.workspace_id
-      WHERE logical.project_id IS NULL
-        AND TRIM(workspace.path) <> ''
-      GROUP BY workspace.id, workspace.path
-    )
     SELECT
       candidate.project_key,
       candidate.project_id,
       candidate.project_name,
       candidate.repository_identity,
       candidate.last_seen_at
-    FROM project_activity AS candidate
+    FROM launchable_project_index AS candidate
     WHERE 1 = 1
       ${search ? `AND (
         LOWER(COALESCE(candidate.project_name, '')) LIKE ?
         OR LOWER(COALESCE(candidate.repository_identity, '')) LIKE ?
         OR EXISTS (
           SELECT 1
-          FROM logical_sessions AS search_logical
-          JOIN workspaces AS search_workspace
-            ON search_workspace.id = search_logical.workspace_id
-          WHERE TRIM(search_workspace.path) <> ''
-            AND (
-              (candidate.project_id IS NOT NULL AND search_logical.project_id = candidate.project_id)
-              OR (
-                candidate.project_id IS NULL
-                AND search_logical.project_id IS NULL
-                AND 'workspace:' || search_workspace.id = candidate.project_key
-              )
-            )
-            AND LOWER(search_workspace.path) LIKE ?
+          FROM launchable_workspace_index AS search_workspace
+          WHERE search_workspace.project_key = candidate.project_key
+            AND LOWER(search_workspace.workspace_path) LIKE ?
         )
       )` : ''}
       ${after ? `AND (
@@ -105,53 +65,31 @@ function placeholders(count: number): string {
   return Array.from({ length: count }, () => '?').join(', ')
 }
 
-function projectWorkspacesBatchSql(projectCount: number, workspaceCount: number): string {
-  const filters = [
-    projectCount > 0
-      ? `(logical.project_id IS NOT NULL AND logical.project_id IN (${placeholders(projectCount)}))`
-      : '',
-    workspaceCount > 0
-      ? `(logical.project_id IS NULL AND workspace.id IN (${placeholders(workspaceCount)}))`
-      : '',
-  ].filter(Boolean)
-
-  if (!filters.length) throw new Error('launchable workspace batch query requires at least one candidate')
-
+function projectWorkspacesBatchSql(projectCount: number): string {
+  if (projectCount < 1) throw new Error('launchable workspace batch query requires at least one project')
   return `
-    WITH workspace_activity AS (
-      SELECT
-        COALESCE(logical.project_id, 'workspace:' || workspace.id) AS project_key,
-        workspace.id AS workspace_id,
-        workspace.path AS workspace_path,
-        MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at
-      FROM logical_sessions AS logical
-      JOIN workspaces AS workspace
-        ON workspace.id = logical.workspace_id
-      LEFT JOIN projects AS project
-        ON project.id = logical.project_id
-      WHERE TRIM(workspace.path) <> ''
-        AND (
-          ${filters.join('\n          OR ')}
-        )
-      GROUP BY project_key, workspace.id, workspace.path
-    ),
-    ranked AS (
+    WITH ranked AS (
       SELECT
         project_key,
         workspace_id,
         workspace_path,
         last_seen_at,
+        validation_status,
+        validated_at,
         ROW_NUMBER() OVER (
           PARTITION BY project_key
           ORDER BY last_seen_at DESC, workspace_id ASC
         ) AS workspace_rank
-      FROM workspace_activity
+      FROM launchable_workspace_index
+      WHERE project_key IN (${placeholders(projectCount)})
     )
     SELECT
       project_key,
       workspace_id,
       workspace_path,
-      last_seen_at
+      last_seen_at,
+      validation_status,
+      validated_at
     FROM ranked
     WHERE workspace_rank <= ?
     ORDER BY project_key ASC, last_seen_at DESC, workspace_id ASC
@@ -160,10 +98,16 @@ function projectWorkspacesBatchSql(projectCount: number, workspaceCount: number)
 
 function mapWorkspace(value: unknown): LaunchableWorkspaceCandidate {
   const item = row(value)
+  const validationStatus = optionalString(item, 'validation_status')
+  const validatedAt = optionalString(item, 'validated_at')
   return {
     workspaceId: requiredString(item, 'workspace_id'),
     workspacePath: requiredString(item, 'workspace_path'),
     lastSeenAt: requiredString(item, 'last_seen_at'),
+    ...(validationStatus === 'unknown' || validationStatus === 'valid' || validationStatus === 'invalid'
+      ? { validationStatus }
+      : {}),
+    ...(validatedAt ? { validatedAt } : {}),
   }
 }
 
@@ -190,11 +134,10 @@ function mapSelectedProject(value: unknown): SelectedProject {
 }
 
 /**
- * Lightweight read model over Canonical Project / Workspace / Logical Session rows.
+ * Incremental read model over Canonical Project / Workspace / Logical Session rows.
  *
- * Launchability must not depend on Session Summary projection catch-up: a Session already visible
- * in Review must also be eligible for task launch discovery. The filesystem is not consulted by
- * this reader; the HTTP Runtime decides which candidate path is actually launchable on this host.
+ * Canonical writes maintain launchable_*_index in the same SQLite database. Reads therefore
+ * avoid re-aggregating the whole logical_sessions history when Task Center opens.
  */
 export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
   constructor(private readonly executor: SqliteExecutor) {}
@@ -220,11 +163,10 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
       const selected = values.slice(0, limit).map(mapSelectedProject)
       if (!selected.length) return { items: [], hasMore }
 
-      const projectIds = selected.flatMap(item => item.projectId ? [item.projectId] : [])
-      const workspaceIds = selected.flatMap(item => item.projectId ? [] : [item.key.slice('workspace:'.length)])
+      const keys = selected.map(item => item.key)
       const workspaceRows = this.executor.db.prepare(
-        projectWorkspacesBatchSql(projectIds.length, workspaceIds.length),
-      ).all(...projectIds, ...workspaceIds, MAX_WORKSPACES_PER_PROJECT)
+        projectWorkspacesBatchSql(keys.length),
+      ).all(...keys, MAX_WORKSPACES_PER_PROJECT)
 
       const workspacesByProject = new Map<string, LaunchableWorkspaceCandidate[]>()
       for (const value of workspaceRows) {
@@ -235,13 +177,42 @@ export class SqliteLaunchableProjectReader implements LaunchableProjectReader {
         workspacesByProject.set(projectKey, workspaces)
       }
 
-      const items = selected.map(item => ({
-        ...item,
-        workspaces: workspacesByProject.get(item.key) ?? [],
-      }))
-
-      return { items, hasMore }
+      return {
+        items: selected.map(item => ({
+          ...item,
+          workspaces: workspacesByProject.get(item.key) ?? [],
+        })),
+        hasMore,
+      }
     })
+  }
+
+  recordWorkspaceValidation(input: {
+    workspaceId: string
+    workspacePath: string
+    status: 'valid' | 'invalid'
+    validatedAt: string
+  }): Promise<void> {
+    return this.executor.run(() => {
+      this.executor.db.prepare(`
+        UPDATE launchable_workspace_index
+        SET validation_status = ?,
+            validated_at = ?,
+            validated_path = ?
+        WHERE workspace_id = ?
+          AND workspace_path = ?
+      `).run(
+        input.status,
+        input.validatedAt,
+        input.workspacePath,
+        input.workspaceId,
+        input.workspacePath,
+      )
+    })
+  }
+
+  rebuild(): Promise<void> {
+    return this.executor.run(() => rebuildLaunchableProjectIndex(this.executor.db))
   }
 }
 
