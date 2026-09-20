@@ -100,10 +100,20 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
 function withProcessSummaries(detail: ReviewSessionDetailDto): ReviewSessionDetailDto {
   return {
     ...detail,
-    interactions: detail.interactions.map(interaction => ({
-      ...interaction,
-      processSummary: processSummary(interaction),
-    })),
+    interactions: detail.interactions.map(interaction => {
+      const summary = processSummary(interaction)
+      return {
+        ...interaction,
+        processSummary: summary,
+        ...(summary.availability === 'partial'
+          ? {
+              nodesTruncated: true,
+              totalNodeCount: summary.totalNodeCount,
+              omittedNodeCount: summary.omittedNodeCount,
+            }
+          : {}),
+      }
+    }),
   }
 }
 
@@ -117,11 +127,9 @@ function summarizeProcessNodes(detail: ReviewSessionDetailDto): ReviewSessionDet
         if (section !== 'process') return true
         return node.type === 'event' && (node.kind === 'model.changed' || node.kind === 'model.call')
       })
-      const omittedNodeCount = interaction.nodes.length - nodes.length
       return {
         ...interaction,
         nodes,
-        ...(omittedNodeCount > 0 ? { omittedNodeCount } : {}),
       }
     }),
   }
