@@ -12,6 +12,7 @@ import type {
   SourceRecord,
 } from '../domain/observation'
 import type { AgentLensPluginManifest } from './plugin'
+import type { SourceHistoryProgressUpdate } from '../domain/diagnostics'
 
 export interface SourcePluginManifest extends AgentLensPluginManifest {
   pluginType: 'source'
@@ -66,6 +67,8 @@ export interface SourceHistoryWindow {
 
 export interface SourceHistoryExecutionContext extends SourceExecutionContext {
   historyWindow?: SourceHistoryWindow
+  /** 来源只报告真实工作节点；由共享 Runner 节流并持久化。 */
+  reportProgress?(update: SourceHistoryProgressUpdate): Promise<void>
 }
 
 export interface SourceNormalizationContext {

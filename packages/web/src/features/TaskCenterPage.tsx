@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
-import { fetchLaunchableProjects } from '../client/launchable-projects'
+import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
@@ -157,10 +157,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const location = useLocation()
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
-  const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>([])
-  const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(null)
+  const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>(() => cachedLaunchableProjects()?.items ?? [])
+  const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
   const [projectSearch, setProjectSearch] = useState('')
-  const [projectLoading, setProjectLoading] = useState(false)
+  const [projectLoading, setProjectLoading] = useState(mode === 'new')
   const [projectLoadingMore, setProjectLoadingMore] = useState(false)
   const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
   const projectRequestGenerationRef = useRef(0)
@@ -205,10 +205,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     if (mode !== 'new') return
     const generation = ++projectRequestGenerationRef.current
     const controller = new AbortController()
-    // A new query owns a new result set. Keeping previous rows here makes
-    // search/filter transitions look successful while actually showing stale projects.
-    setLaunchableProjects([])
-    setLaunchablePage(null)
+    // 搜索切换清空旧查询；默认首页可先展示近期成功结果，再后台刷新。
+    const cached = projectSearch.trim() ? undefined : cachedLaunchableProjects()
+    setLaunchableProjects(cached?.items ?? [])
+    setLaunchablePage(cached?.meta ?? null)
     setProjectLoading(true)
     setProjectLoadingMore(false)
     setProjectDiscoveryError('')
@@ -358,7 +358,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
     <div className="task-center-rail-head">
-      <Button size="small" variant="primary" className="task-center-new-task-button" onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
+      <Button size="small" variant="primary" className="task-center-new-task-button" onPointerEnter={prefetchLaunchableProjects} onFocus={prefetchLaunchableProjects} onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
       <Toolbar className="task-center-toolbar" aria-label={t('center.history.filterAria')}>
         <IconButton
           size="small"
@@ -437,7 +437,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
             options={projectOptions}
             preferredProjectId={preferredProjectId}
             nativeDirectoryPicker={snapshot.health?.runtime?.owner === 'desktop'}
-            projectLoading={projectLoading}
+            projectLoading={projectLoading || (!projectDiscoveryError && !launchableProjects.length && (projectLoadingMore || Boolean(launchablePage?.nextCursor)))}
             projectHasMore={launchablePage?.hasMore ?? false}
             projectLoadingMore={projectLoadingMore}
             projectDiscoveryError={projectDiscoveryError}

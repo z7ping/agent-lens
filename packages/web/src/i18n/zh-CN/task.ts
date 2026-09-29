@@ -206,6 +206,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         existingDescription: '继续已有工作目录',
         selectProjectAria: '选择已有项目',
         selectProject: '选择项目',
+        loadingProjects: '正在加载项目…',
         noProject: '暂无可启动项目',
         searchProject: '搜索项目或工作目录',
         loadMoreProjects: '加载更多项目',

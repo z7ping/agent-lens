@@ -8,7 +8,7 @@ import {
   type SourceParserReplayResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
-import type { AgentInstallation, DetectedSource, Host, SourceDefinition, SourceHistoryWindow } from '@agent-lens/core'
+import type { AgentInstallation, DetectedSource, Host, SourceDefinition, SourceHistoryWindow, SourceRuntimeStatus } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
 export type RegisteredSourceStage = 'detect' | 'history' | 'assets' | 'capture'
@@ -148,14 +148,30 @@ export async function syncRegisteredSourceHistory(
   )
   const results: SourceHistorySyncResult[] = []
   const failures: RegisteredSourceFailure[] = []
-
+  const queued = new Map<RegisteredSourceTarget, SourceRuntimeStatus>()
+  // 执行前发布全部参与来源的等待节点，串行调度不再表现为其他智能体消失。
   for (const target of targets) {
     if (abortSignal.aborted) break
     if (!sourceEnabled(ctx, target.source)) continue
     try {
+      queued.set(target, await runner.queue({ ...target, abortSignal }))
+      ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId })
+    } catch (error) {
+      failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
+    }
+  }
+  for (const [target, queuedStatus] of queued) {
+    if (abortSignal.aborted) {
+      await runner.cancelQueued(queuedStatus)
+      ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId })
+      continue
+    }
+    try {
       results.push(await runner.sync({
         ...target,
         abortSignal,
+        queuedStatus,
+        onProgress: () => { ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId }) },
         ...(historyWindow ? { historyWindow } : {}),
         ...(options.cooperate ? { cooperate: options.cooperate } : {}),
       }))

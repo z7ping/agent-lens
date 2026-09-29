@@ -6,7 +6,7 @@ import {
   fetchHubReviewDetail,
   fetchLocalReviewSessions,
 } from './hub-review'
-import { fetchLaunchableProjects } from './launchable-projects'
+import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from './launchable-projects'
 
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), {
@@ -46,6 +46,39 @@ test('launchable project discovery shares an identical request while caller abor
   release()
   await second
   assert.equal(calls, 1)
+})
+
+test('项目首页可立即复用并后台刷新，搜索及分页不污染首页缓存，空结果清除缓存', async t => {
+  const originalFetch = globalThis.fetch
+  const originalNow = Date.now
+  t.after(() => { globalThis.fetch = originalFetch; Date.now = originalNow })
+  let now = originalNow()
+  Date.now = () => now
+  let calls = 0
+  let key = 'recent-project'
+  globalThis.fetch = (async () => {
+    calls += 1
+    return jsonResponse({
+      items: key ? [{ key, workspaceId: key, workspacePath: '/workspace/project', lastSeenAt: '2026-09-29T00:00:00.000Z' }] : [],
+      meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, count: key ? 1 : 0, hasMore: false, generatedAt: '2026-09-29T00:00:00.000Z' },
+    })
+  }) as typeof fetch
+
+  const initial = await fetchLaunchableProjects()
+  assert.equal(cachedLaunchableProjects(), initial)
+  prefetchLaunchableProjects()
+  assert.equal(calls, 1, '近期首页已加载时不重复预取')
+  key = 'search-project'
+  await fetchLaunchableProjects({ search: 'search-project' })
+  await fetchLaunchableProjects({ cursor: 'next-page' })
+  assert.equal(cachedLaunchableProjects(), initial, '搜索和后续页不能冒充默认首页')
+  now += 60_001
+  assert.equal(cachedLaunchableProjects(), undefined, '过期首页不能继续同步显示')
+  const refreshed = await fetchLaunchableProjects()
+  assert.equal(cachedLaunchableProjects(), refreshed, '展示缓存不阻止后台请求更新首页')
+  key = ''
+  await fetchLaunchableProjects()
+  assert.equal(cachedLaunchableProjects(), undefined, '服务端确认没有项目后清除旧缓存')
 })
 
 test('Hub Review detail and local list coalesce 100 concurrent identical reads', async t => {

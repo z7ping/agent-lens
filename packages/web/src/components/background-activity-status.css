@@ -61,7 +61,7 @@
 }
 
 .background-activity-popover {
-  width: min(294px, calc(100vw - 24px));
+  width: min(420px, calc(100vw - 24px));
   max-height: min(520px, calc(100dvh - 24px));
   border: 1px solid var(--al-line);
   border-radius: 12px;
@@ -248,7 +248,32 @@
   to { transform: rotate(360deg); }
 }
 
+.background-sync-groups { display: grid; gap: 12px; }
+.background-sync-summary { display: grid; gap: 6px; min-width: 0; }
+.background-sync-summary b { font-size: 13px; }
+.background-sync-summary small { font-size: 12px; color: var(--al-muted); }
+.background-sync-detail { display: grid; gap: 12px; min-width: 0; }
+.background-sync-timeline { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.background-sync-timeline li { position: relative; display: grid; gap: 6px; min-width: 0; }
+.background-sync-timeline li:not(:last-child)::before { content: ''; position: absolute; left: 9px; top: 24px; bottom: -12px; width: 1px; background: var(--al-line); }
+.background-sync-node { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.background-sync-node > span:last-child,
+.background-sync-timeline time,
+.background-sync-timeline small { font-size: 12px; color: var(--al-muted); }
+.background-sync-timeline time,
+.background-sync-timeline small { padding-left: 24px; }
+.background-sync-timeline .is-running .ui-status-dot { animation: background-sync-pulse 1.2s ease-in-out infinite; }
+.background-sync-progress { display: grid; gap: 6px; font-size: 12px; color: var(--al-muted); }
+.background-sync-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.background-sync-task { margin-bottom: 12px; font-size: 12px; color: var(--al-muted); }
+.background-sync-note,
+.background-sync-error { margin: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.background-sync-note { color: var(--al-muted); }
+.background-sync-error { color: var(--al-danger); }
+@keyframes background-sync-pulse { 50% { opacity: .4; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .background-sync-timeline .is-running .ui-status-dot { animation: none; }
   .background-activity-trigger.is-active .background-activity-indicator,
   .background-activity-item.is-active .background-activity-item-mark {
     animation: none;

@@ -468,7 +468,7 @@ export async function startHttpSurface(
         return
       }
       if (url.pathname === '/api/v1/background-activity') {
-        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => readBackgroundActivity(storage)))
+        writeJson(response, 200, await withReadPriority(storage, 'opportunistic', () => readBackgroundActivity(storage, new Date(performance.timeOrigin).toISOString())))
         return
       }
       if (url.pathname === '/api/v1/locales') {
@@ -564,7 +564,8 @@ export async function startHttpSurface(
       }
       if (url.pathname === '/api/v1/projects/launchable') {
         let timings: { dbMs: number; fsMs: number; totalMs: number } | undefined
-        const body = await withReadPriority(storage, 'supporting', () => readLaunchableProjects(
+        // 新建任务的必需上下文可使用前台保留 Reader，避免被辅助查询阻塞。
+        const body = await withReadPriority(storage, 'critical', () => readLaunchableProjects(
           storage,
           url.searchParams,
           undefined,
