@@ -10,7 +10,7 @@ const HUB_SESSION_CACHE_MS = 10_000
 const hubSessionCache = new Map<number, { at: number; value: HubReviewSessionListDto }>()
 const hubSessionInFlight = new Map<number, Promise<HubReviewSessionListDto>>()
 const hubDetailInFlight = new Map<string, Promise<unknown>>()
-const localReviewInFlight = new Map<number, Promise<unknown>>()
+const localReviewInFlight = new Map<string, Promise<unknown>>()
 
 class HubReviewRequestError extends Error {
   constructor(message: string) {

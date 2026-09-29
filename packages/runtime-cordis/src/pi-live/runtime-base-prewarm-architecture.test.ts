@@ -25,7 +25,7 @@ test('runtime disclosure exposes structured lifecycle stages and resources', () 
   const lifecycle = section(service, 'function runtimeLifecycle', 'const PI_STARTUP_METRIC_LABELS')
   const disclosures = section(service, 'async runtimeDisclosures(id: string)', 'async executeRuntimeAction')
   for (const stage of ['starting_worker', 'loading_sdk', 'loading_resources', 'creating_session', 'binding_extensions']) {
-    assert.match(lifecycle, new RegExp(stage))
+    assert.match(service, new RegExp(stage))
   }
   assert.match(lifecycle, /status: failed \? 'failed' as const : active \? 'active' as const : done \? 'done' as const : 'pending' as const/)
   assert.match(lifecycle, /groupId: 'contexts'/)

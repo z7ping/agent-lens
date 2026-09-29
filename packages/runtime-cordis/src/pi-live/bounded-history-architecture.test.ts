@@ -20,7 +20,7 @@ test('Pi 历史继续只按原生 Session 身份定位，不扫描 Observation /
 test('Pi Live Snapshot 在 Service 与 Worker 双边都保持固定上限', () => {
   assert.match(serviceSource, /LIVE_SNAPSHOT_DEFAULT_LIMIT/)
   assert.match(serviceSource, /LIVE_SNAPSHOT_MAX_LIMIT/)
-  assert.match(serviceSource, /runtime\.handle\.snapshot\(since, boundedWindow\)/)
+  assert.match(serviceSource, /handle\.snapshot\(since, boundedWindow\)/)
   assert.match(workerSource, /LIVE_SNAPSHOT_DEFAULT_LIMIT\s*=\s*120/)
   assert.match(workerSource, /LIVE_SNAPSHOT_MAX_LIMIT\s*=\s*500/)
   assert.match(workerSource, /entries = all\.slice\(start, end\)/)

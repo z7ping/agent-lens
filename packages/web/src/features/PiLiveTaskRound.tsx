@@ -222,11 +222,13 @@ function HistoryProcessGroup({
   items,
   state,
   showAllEvents,
+  durationMs,
 }: {
   id: string
   items: HistoryProcessItem[]
   state: TaskRoundModel['state']
   showAllEvents: boolean
+  durationMs?: number | undefined
 }) {
   const { t } = useTranslation('piLive')
   const messages = items.filter(item => item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant'))
@@ -238,6 +240,7 @@ function HistoryProcessGroup({
     messageCount={messages.length}
     toolCount={tools.length}
     errorCount={tools.filter(tool => tool.status === 'error').length}
+    durationMs={durationMs}
     startedAtMs={timing.startedAtMs}
     endedAtMs={state === 'running' ? undefined : timing.endedAtMs}
     state={state}
@@ -266,11 +269,13 @@ function HistoryEntries({
   showAllEvents = false,
   processState = 'settled',
   assistantModelLabel,
+  processDurationMs,
 }: {
   items: PiLiveHistoryItem[]
   showAllEvents?: boolean
   processState?: TaskRoundModel['state']
   assistantModelLabel?: string | undefined
+  processDurationMs?: number | undefined
 }) {
   const { t, i18n } = useTranslation(['piLive', 'task'])
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -291,7 +296,7 @@ function HistoryEntries({
         className="pi-live-task-message"
       />
     }
-    if (entry.kind === 'process') return <HistoryProcessGroup key={entry.id} id={entry.id} items={entry.items} state={resolvedProcessState} showAllEvents={showAllEvents}/>
+    if (entry.kind === 'process') return <HistoryProcessGroup key={entry.id} id={entry.id} items={entry.items} state={resolvedProcessState} showAllEvents={showAllEvents} durationMs={processDurationMs}/>
     if (entry.kind === 'usage') return <HistoryUsageEvent key={entry.id} entry={entry}/>
     if (entry.kind === 'lifecycle') return <HistoryLifecycleEvent key={entry.id} entry={entry} showAllEvents={showAllEvents}/>
     return null
@@ -311,7 +316,7 @@ export function PiLiveHistoryTaskRound({
 }) {
   return <TaskRound model={projection.model} className="pi-live-history-round" summaryMeta={summaryMeta}>
     {beforeContent}
-    <HistoryEntries items={projection.items} showAllEvents={showAllEvents} processState={projection.model.state}/>
+    <HistoryEntries items={projection.items} showAllEvents={showAllEvents} processState={projection.model.state} processDurationMs={projection.model.durationMs}/>
   </TaskRound>
 }
 
@@ -517,6 +522,6 @@ export function PiLiveCurrentTaskRound({
   >
     {promptText && <TaskMessage role="user" text={promptText} author={t('history.user')} className="pi-live-task-message pi-live-optimistic-message"/>}
     {model.state === 'running' && Boolean(promptText) && !hasPiLiveResponseActivity(items) && <TaskMessage role="assistant" text="" author="Pi" pending className="pi-live-task-message pi-live-response-pending"/>}
-    <HistoryEntries items={presentedItems} showAllEvents={showAllEvents} processState={model.state} assistantModelLabel={assistantModelLabel}/>
+    <HistoryEntries items={presentedItems} showAllEvents={showAllEvents} processState={model.state} assistantModelLabel={assistantModelLabel} processDurationMs={model.durationMs}/>
   </TaskRound>
 }

@@ -31,8 +31,9 @@ import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, Drawer, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
-import { reviewEventLabel } from './review-event-presentation'
+import { reviewArtifactSummary, reviewEventLabel } from './review-event-presentation'
 import { projectReviewLiveInteraction } from './review-live-interaction'
+import { reviewToolCommand } from './review-tool-command'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskEvent } from './TaskEvent'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
@@ -389,6 +390,8 @@ function sourceEventSummary(node: ReviewEventNodeDto): string {
     }
   }
   if (node.kind === 'artifact.action') {
+    const summary = reviewArtifactSummary(node.payload)
+    if (summary) return summary
     const path = stringValue(payload, 'path', 'filePath', 'file_path')
     return [action, path].filter(Boolean).join(' · ') || brief(payload, 100)
   }
@@ -415,7 +418,7 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolVisualKind; labe
   const kind = toolVisualKind(node.name)
   const output = brief(node.output, 110)
   if (kind === 'shell') {
-    const command = stringValue(input, 'command', 'cmd', 'script', 'raw') || brief(node.input, 140)
+    const command = reviewToolCommand(node.input) || brief(node.input, 140)
     return { kind, label: toolKindLabel(kind), primary: command, secondary: output }
   }
   if (kind === 'read') {
@@ -462,6 +465,11 @@ function PrettyJson({ value }: { value: unknown }) {
   if (typeof value === 'string') return <CopyableCodeBlock className="tool-detail-code" copyValue={value}>{value}</CopyableCodeBlock>
   const text = JSON.stringify(value, null, 2)
   return <CopyableCodeBlock className="tool-detail-code" copyValue={text}>{text}</CopyableCodeBlock>
+}
+
+function toolOutputText(value: JsonValue | undefined): string {
+  if (value === undefined || value === null) return ''
+  return typeof value === 'string' ? value : JSON.stringify(value, null, 2)
 }
 
 function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
@@ -781,6 +789,12 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
     renderMeta={tool => {
       const node = nodes.get(tool.id)
       return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
+    }}
+    renderDetails={tool => {
+      const node = nodes.get(tool.id)
+      if (!node || toolVisualKind(node.name) !== 'shell') return null
+      const output = toolOutputText(node.output)
+      return output ? <div className="task-tool-live-output"><CopyableCodeBlock copyValue={output}>{output}</CopyableCodeBlock></div> : null
     }}
     onToolClick={tool => {
       const node = nodes.get(tool.id)
@@ -1770,11 +1784,13 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             ...taskDetailModel.metrics.filter(metric => metric.label !== t('local.interaction.metricSpan')).map(metric => ({ label: metric.label, value: metric.value, tone: metric.tone })),
           ] : []}
           actions={<>
-            {detailLiveInteraction?.canResume && <Button size="small" loading={historyInteractionPending === 'resume'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('resume')}><UiIcon name="arrow-right" size={14}/>{t('local.header.continueSession')}</Button>}
-            {detailLiveInteraction?.canFork && <Button size="small" loading={historyInteractionPending === 'fork'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('fork')}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>}
             {historyInteractionPending && <StatusBadge tone="accent" dot role="status">{t('local.header.preparingHistory')}</StatusBadge>}
             {historyInteractionError && <StatusBadge tone="danger" title={historyInteractionError}>{t('local.header.continueFailed', { error: historyInteractionError })}</StatusBadge>}
             <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? t('local.header.viewAll') : t('local.header.viewCore')}</button>
+          </>}
+          continuationActions={<>
+            {detailLiveInteraction?.canResume && <Button size="small" loading={historyInteractionPending === 'resume'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('resume')}><UiIcon name="arrow-right" size={14}/>{t('local.header.continueSession')}</Button>}
+            {detailLiveInteraction?.canFork && <Button size="small" loading={historyInteractionPending === 'fork'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('fork')}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>}
           </>}
         />}
 

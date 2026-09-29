@@ -126,6 +126,21 @@ test('Paginated Reasoning becomes visible Thinking content', async () => {
   assert.equal(payload.turnId, 'turn-1')
 })
 
+test('Paginated empty Reasoning stays a classified Thinking event instead of raw unknown', async () => {
+  const output = await normalizePaginatedCodexRecord(itemCompleted({
+    type: 'Reasoning', id: 'reasoning-empty-1', summary_text: [], raw_content: [],
+  }), ctx)
+  assert.ok(output)
+  const fact = output.observations[0]!
+  const payload = asRecord(fact.payload)
+  assert.equal(fact.kind, 'message.reasoning')
+  assert.equal(fact.nativeEventId, 'reasoning-empty-1')
+  assert.equal(payload.text, undefined)
+  assert.equal(payload.summaryAvailable, false)
+  assert.equal(payload.sourceSignal, 'event_msg.item_completed.Reasoning')
+  assert.equal(payload.turnId, 'turn-1')
+})
+
 test('Paginated CommandExecution becomes one tool call/result pair', async () => {
   const output = await normalizePaginatedCodexRecord(itemCompleted({
     type: 'CommandExecution', id: 'command-item-1', command: ['npm', 'test'], cwd: 'file:///safe/project',

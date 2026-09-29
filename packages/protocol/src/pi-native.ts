@@ -161,10 +161,10 @@ function assistantStopFact(
   // agent is continuing into tool execution rather than stopping the turn.
   if (!errorMessage && (stopReason === 'stop' || stopReason === 'toolUse')) return null
 
-  const event = errorMessage || stopReason === 'error'
-    ? 'assistant.error'
-    : stopReason === 'aborted'
-      ? 'assistant.cancelled'
+  const event = stopReason === 'aborted'
+    ? 'assistant.cancelled'
+    : errorMessage || stopReason === 'error'
+      ? 'assistant.error'
       : stopReason === 'length'
         ? 'assistant.truncated'
         : stopReason === 'pending'
@@ -187,7 +187,7 @@ function assistantStopFact(
   const label = event === 'assistant.error'
     ? 'Pi 响应错误'
     : event === 'assistant.cancelled'
-      ? 'Pi 响应已取消'
+      ? '用户已取消 Pi 响应'
       : event === 'assistant.truncated'
         ? 'Pi 输出被截断'
         : event === 'assistant.pending'
@@ -201,7 +201,7 @@ function assistantStopFact(
     kind: 'event',
     event,
     label,
-    detail: [stopReason, errorMessage].filter(Boolean).join(' · '),
+    detail: event === 'assistant.cancelled' ? '' : [stopReason, errorMessage].filter(Boolean).join(' · '),
     payload: { stopReason, errorMessage },
   }
 }

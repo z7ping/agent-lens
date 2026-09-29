@@ -28,7 +28,10 @@ export interface StreamingMarkdownSegments {
 }
 
 const markdownComponents: Components = {
-  a: ({ node: _node, ...props }) => <LocalFileLink {...props}/>,
+  a: ({ node: _node, ...props }) => <LocalFileLink
+    {...props}
+    {...(/^https?:\/\//i.test(props.href ?? '') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+  />,
   table: ({ node: _node, ...props }) => <div className="markdown-table-scroll"><table {...props}/></div>,
   pre: ({ node: _node, ...props }) => <CopyableCodeBlock {...props}/>,
 }

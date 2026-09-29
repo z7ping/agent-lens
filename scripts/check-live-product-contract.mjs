@@ -90,7 +90,7 @@ requireText(taskCenter, /onStarted=\{\(liveId, state\) => navigate\(taskLiveRunt
 forbidText(taskCenter, /\bpiLiveApi\b|<PiLivePage\b|PiLiveCompatibilityPage/, 'Task Center 不得直接依赖 Pi Live 兼容 Client/Page')
 
 /* Running task rail discovers every Live Product through the generic client. */
-requireText(taskLiveRuntimeList, /liveApi\.knownRuntimes\(\)/, '实时任务列表必须通过通用 liveApi 发现 runtimes')
+requireText(taskLiveRuntimeList, /liveApi\.knownRuntimeSnapshot\(\)/, '实时任务列表必须通过通用 liveApi 读取带失败来源的 runtime 快照')
 requireText(taskLiveRuntimeList, /item\.liveId[\s\S]{0,120}item\.state\.runtimeSessionId/, '实时任务列表 key/identity 必须包含 liveId + runtimeSessionId')
 requireText(taskLiveRuntimeList, /navigate\(taskLiveRuntimeHref\(item\)\)/, '实时任务列表必须进入通用 Live route')
 requireText(taskLiveRuntimeList, /agent-lens:live-state-changed/, '实时任务列表必须监听通用 Live 状态变化事件')
@@ -165,7 +165,7 @@ requireText(liveTask, /while \(snapshot\.page\?\.hasLater && snapshot\.page\.aft
 forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
 requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')
-requireText(liveRuntimeDisclosures, /<Disclosure/, 'Runtime diagnostics 必须使用受控 Disclosure placement')
+requireText(liveRuntimeDisclosures, /<Dialog[\s\S]{0,120}open=\{diagnosticsOpen\}/, 'Runtime diagnostics 必须使用受控 Dialog placement')
 forbidText(liveRuntimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|startupResources|runtimeMode/, 'Runtime Disclosure renderer 不得识别 Pi 私有语义')
 
 requireText(liveStyles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/, '通用 LiveTaskPage 必须保持单列详情，不得恢复第二套会话导航')
@@ -245,7 +245,7 @@ requireText(liveProtocol, /export interface LiveCommandDto[\s\S]{0,220}value:\s*
 requireText(liveProtocol, /export interface LiveMessageActionContributionDto[\s\S]{0,420}actionId:\s*string[\s\S]{0,420}roles:\s*Array<['"]user['"] \| ['"]assistant['"]>/, '受控消息动作必须保持 opaque actionId + role 声明')
 requireText(liveProtocol, /export interface LiveMessageActionResultDto[\s\S]{0,300}outcome:\s*['"]refresh-current['"] \| ['"]open-runtime['"]/, '消息动作结果只能返回受控导航结果')
 requireText(liveProtocol, /export interface LiveRuntimeDisclosureContributionDto[\s\S]{0,520}contributionId:\s*string[\s\S]{0,520}fields:\s*LiveRuntimeContributionFieldDto\[]/, 'Runtime Disclosure 必须保持声明式字段契约')
-requireText(liveCore, /export interface LiveRuntimeState[\s\S]{0,180}title\?:\s*string/, 'Core LiveRuntimeState 必须保留 Agent-neutral 任务标题')
+requireText(liveCore, /export interface LiveRuntimeState[\s\S]{0,420}title\?:\s*string/, 'Core LiveRuntimeState 必须保留 Agent-neutral 任务标题')
 requireText(liveProtocol, /export interface LiveRuntimeStateDto[\s\S]{0,180}title\?:\s*string/, 'Protocol LiveRuntimeStateDto 必须暴露通用任务标题')
 requireText(liveCore, /type:\s*['"]title\.update['"][\s\S]{0,80}title:\s*string/, 'Core LiveEvent 必须包含通用 title.update')
 requireText(liveCore, /type:\s*['"]control\.changed['"][\s\S]{0,100}control:\s*['"]model['"] \| ['"]thinking['"]/, 'Core LiveEvent 必须包含通用 control.changed')

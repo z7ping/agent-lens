@@ -232,6 +232,13 @@ try {
   await collector.connect()
   check('SSE 实时通道已连接', true)
 
+  const ready = await waitForState(
+    runtimeSessionId,
+    current => current?.status === 'ready',
+    'Pi Runtime 初始化完成',
+  )
+  check('真实 Pi Runtime 已就绪', ready?.status === 'ready')
+
   const controls = await json(`/api/v1/pi-live/${encodeURIComponent(runtimeSessionId)}/controls`)
   const thinkingOptions = Array.isArray(controls?.thinking?.options)
     ? controls.thinking.options.filter(item => item && typeof item.value === 'string' && item.value)

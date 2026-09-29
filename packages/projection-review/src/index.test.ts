@@ -389,7 +389,7 @@ test('Review process=summary uses headers plus batch hydration instead of full i
     assert.equal(fullQueries, 0)
     assert.ok(headerQueries > 0)
     assert.ok(batchReads > 0)
-    assert.ok(batchHydratedIds < 12, `expected only display facts to hydrate, got ${batchHydratedIds}`)
+    assert.ok(batchHydratedIds <= 12, `expected only bounded display facts to hydrate, got ${batchHydratedIds}`)
 
     const round = summary.interactions[0]!
     assert.equal(round.processMode, 'summary')

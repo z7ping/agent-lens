@@ -25,8 +25,7 @@ test('Pi Native Normalizer preserves assistant content block order, ids, indexes
     'tool-call',
     'message',
     'thinking',
-    'message',
-    'event',
+    'unknown',
     'usage',
   ])
   assert.deepEqual(facts.slice(0, 6).map(fact => fact.id), [
@@ -54,16 +53,10 @@ test('Pi Native Normalizer preserves assistant content block order, ids, indexes
   assert.deepEqual(tool.input, { command: 'git status' })
 
   const nonText = facts[5]
-  assert.ok(nonText?.kind === 'message')
-  assert.equal(nonText.text, '')
-  assert.equal(nonText.nonTextContent.length, 1)
+  assert.ok(nonText?.kind === 'unknown')
+  assert.deepEqual(nonText.payload, { type: 'image', mimeType: 'image/png', data: 'safe-placeholder' })
 
-  const stop = facts[6]
-  assert.ok(stop?.kind === 'event')
-  assert.equal(stop.event, 'assistant.stop')
-  assert.equal(stop.parentId, 'a1')
-
-  const usage = facts[7]
+  const usage = facts[6]
   assert.ok(usage?.kind === 'usage')
   assert.equal(usage.parentId, 'a1')
   assert.equal(usage.usage.totalTokens, 20)

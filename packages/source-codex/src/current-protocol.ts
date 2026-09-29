@@ -11,7 +11,9 @@ import { normalizePaginatedFunctionOutput } from './paginated-function-output'
 import { normalizePaginatedCodexRecord } from './paginated-protocol'
 import { assistantMessageProvenance, contextClassification } from './provenance'
 
-export const CODEX_CURRENT_PARSER_VERSION = '21'
+// Increment whenever a persisted Codex wire shape gains a new semantic
+// projection so existing SourceRecords are replayed through the adapter.
+export const CODEX_CURRENT_PARSER_VERSION = '22'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',
@@ -435,7 +437,12 @@ async function normalizePersistedResponseItem(
     case 'compaction_summary':
     case 'context_compaction':
       return normalizeResponseCompaction(record, ctx, payload)
-    default: return null
+    default: return typeof payload.type === 'string'
+      ? remapUnknown(record, ctx, 'unknown', {
+          rawType: `response_item/${payload.type}`,
+          rawPayload: entry,
+        })
+      : null
   }
 }
 

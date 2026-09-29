@@ -21,6 +21,7 @@ function abortError(): DOMException {
 export function waitForCaller<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return pending
   if (signal.aborted) return Promise.reject(abortError())
+  const callerSignal = signal
 
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => {
@@ -28,9 +29,9 @@ export function waitForCaller<T>(pending: Promise<T>, signal?: AbortSignal): Pro
       reject(abortError())
     }
     function cleanup() {
-      signal.removeEventListener('abort', onAbort)
+      callerSignal.removeEventListener('abort', onAbort)
     }
-    signal.addEventListener('abort', onAbort, { once: true })
+    callerSignal.addEventListener('abort', onAbort, { once: true })
     pending.then(
       value => {
         cleanup()

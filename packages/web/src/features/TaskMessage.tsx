@@ -19,16 +19,16 @@ export interface TaskMessageProps {
   role: TaskMessageRole
   text: string
   attachments?: readonly TaskMessageAttachment[] | undefined
-  author?: string
+  author?: string | undefined
   modelLabel?: string | undefined
   time?: string | undefined
-  meta?: ReactNode
-  actions?: ReactNode
-  collapsible?: boolean
-  streaming?: boolean
-  pending?: boolean
-  pendingLabel?: string
-  className?: string
+  meta?: ReactNode | undefined
+  actions?: ReactNode | undefined
+  collapsible?: boolean | undefined
+  streaming?: boolean | undefined
+  pending?: boolean | undefined
+  pendingLabel?: string | undefined
+  className?: string | undefined
 }
 
 /** 历史 Review 与 Live 共用的稳定消息表现；streaming 只改变状态，不切换消息容器。 */

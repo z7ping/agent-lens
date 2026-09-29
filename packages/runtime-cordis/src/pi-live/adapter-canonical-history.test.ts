@@ -3,6 +3,7 @@ import test from 'node:test'
 import type {
   CanonicalObservation,
   LiveAttachmentService,
+  ObservationQuery,
   StorageService,
 } from '@agent-lens/core'
 import { PiLiveAdapter } from './adapter'
@@ -37,8 +38,8 @@ function canonicalStorage(): StorageService {
         listSourceSessionsByLogicalSession: async () => [{ id: 'source-1', sourceId: 'pi' }],
       },
       observations: {
-        get: async id => id === item.id ? item : null,
-        query: async query => {
+        get: async (id: string) => id === item.id ? item : null,
+        query: async (query: ObservationQuery) => {
           if (query.after?.id === item.id || query.before?.id === item.id) return []
           return [item]
         },

@@ -119,6 +119,12 @@ test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
   assert.match(taskMessage, /message\.fileAttachment/)
 })
 
+test('Live Shell 命令输出使用可复制代码块，不按 Markdown 误解析', () => {
+  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  assert.match(liveTask, /toolVisualKind\(item\.name\)/)
+  assert.match(liveTask, /visualKind === 'shell'[\s\S]{0,180}<CopyableCodeBlock copyValue=\{item\.output\}/)
+})
+
 test('消息级私有动作通过受控 Contribution 暴露，不提升为 Pi 专属 Product 分支', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.match(liveTask, /liveApi\.messageActions\(current\.liveId, current\.runtimeSessionId\)/)

@@ -77,6 +77,43 @@ class FakePiLiveService implements PiLiveService {
     }
   }
 
+  async historyIndex() {
+    return { total: 0, items: [] }
+  }
+
+  async sessionTree() {
+    return {
+      activeLeafId: null,
+      nodes: [],
+      branchPointIds: [],
+      capabilities: { switchBranch: false, fork: false, clone: false, branchSummary: false },
+    }
+  }
+
+  async commands() {
+    return []
+  }
+
+  async workspaceFileReferences() {
+    return []
+  }
+
+  async messageActions() {
+    return []
+  }
+
+  async executeMessageAction() {
+    return { outcome: 'refresh-current' as const }
+  }
+
+  async runtimeDisclosures() {
+    return []
+  }
+
+  async executeRuntimeAction(runtimeSessionId: string) {
+    return { runtime: await this.state(runtimeSessionId) }
+  }
+
   async controls(_runtimeSessionId: string) {
     return {
       models: [
@@ -117,6 +154,10 @@ class FakePiLiveService implements PiLiveService {
 
   async followUp(_runtimeSessionId: string, message: string) {
     this.followUps.push(message)
+  }
+
+  async queueState() {
+    return { steering: [...this.steering], followUp: [...this.followUps] }
   }
 
   async clearQueue() {

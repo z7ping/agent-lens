@@ -27,6 +27,8 @@ export interface TaskHeaderProps {
   metrics?: TaskHeaderMetric[]
   infoItems?: TaskHeaderInfoItem[]
   actions?: ReactNode
+  /** 只读历史会话正文末尾的续会话操作；普通页头动作不可放入此处。 */
+  continuationActions?: ReactNode
   className?: string
 }
 
@@ -81,13 +83,14 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
-export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, className = '' }: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, continuationActions, className = '' }: TaskHeaderProps) {
   const { t } = useTranslation('task')
   const resolvedStatus = status ?? t('header.completed')
   const resolvedContext = context === t('header.noProject') ? t('header.unlinkedProject') : context
   const { showUsageDetails, setShowUsageDetails } = useTaskSurfaceView()
   const auditToggle = findAuditToggle(actions)
-  const primaryActions = collectPrimaryActions(actions)
+  const inlineActions = collectPrimaryActions(actions)
+  const primaryActions = collectPrimaryActions(continuationActions)
   const showAllEvents = auditToggle?.props['aria-pressed'] === true
   const headerRef = useRef<HTMLElement>(null)
   const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
@@ -119,7 +122,6 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     sessionTailHost?.remove()
   }, [sessionTailHost])
 
-  const inlineActions = sessionTailHost ? [] : primaryActions
   const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || inlineActions.length > 0
   const tailActions = sessionTailHost && primaryActions.length > 0
     ? createPortal(

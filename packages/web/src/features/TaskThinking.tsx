@@ -6,13 +6,13 @@ import { UiIcon } from '../components/UiIcon'
 
 export interface TaskThinkingProps {
   model: TaskThinkingModel
-  meta?: ReactNode
-  actions?: ReactNode
+  meta?: ReactNode | undefined
+  actions?: ReactNode | undefined
   children: ReactNode
-  defaultExpanded?: boolean
+  defaultExpanded?: boolean | undefined
   expansionStore?: Map<string, boolean> | undefined
-  onExpandedChange?: (expanded: boolean) => void
-  className?: string
+  onExpandedChange?: ((expanded: boolean) => void) | undefined
+  className?: string | undefined
 }
 
 function DisclosureChevron() {

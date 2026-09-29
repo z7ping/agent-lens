@@ -99,15 +99,30 @@ class BlockingLifecycleHost extends LifecycleHost {
     onEvent({ type: 'runtime_initialization', stage: 'loading_sdk', message: 'Loading SDK' })
     await this.startGate
     this.starts -= 1
-    return super.start(runtimeSessionId, input, signal, onEvent, onExit)
+    const handle = await super.start(runtimeSessionId, input, signal, onEvent, onExit)
+    if (input.historyAction !== 'fork' || !input.sessionPath) return handle
+
+    const forkedSessionFile = `${input.sessionPath}.forked`
+    return {
+      ...handle,
+      initialSessionFile: forkedSessionFile,
+      state: async () => ({ ...await handle.state(), sessionFile: forkedSessionFile }),
+      ...(handle.snapshot
+        ? { snapshot: async query => {
+            const snapshot = await handle.snapshot!(query)
+            return { ...snapshot, state: { ...snapshot.state, sessionFile: forkedSessionFile } }
+          } }
+        : {}),
+    }
   }
 }
 
 async function waitForReady(service: DefaultPiLiveService, id: string): Promise<PiLiveRuntimeState> {
-  for (let index = 0; index < 100; index += 1) {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
     const state = await service.state(id)
     if (state.status === 'ready') return state
-    await new Promise(resolve => setTimeout(resolve, 1))
+    await new Promise(resolve => setTimeout(resolve, 10))
   }
   throw new Error(`runtime ${id} did not become ready`)
 }

@@ -95,8 +95,10 @@ function withReadPriority<T>(
   priority: ForegroundReadPriority,
   operation: () => Promise<T>,
 ): Promise<T> {
-  const scoped = (storage as PriorityAwareStorage).withReadPriority
-  return scoped ? scoped.call(storage, priority, operation) : operation()
+  const scopedStorage = storage as PriorityAwareStorage
+  return scopedStorage.withReadPriority
+    ? scopedStorage.withReadPriority(priority, operation)
+    : operation()
 }
 
 export interface HttpSurfaceOptions {

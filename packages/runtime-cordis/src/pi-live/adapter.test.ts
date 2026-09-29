@@ -299,10 +299,14 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
   assert.deepEqual(
     normalizePiLiveRuntimeEvent({
       runtimeSessionId: 'runtime-1',
+      sequence: 1,
+      receivedAt: '2026-09-23T00:00:00.000Z',
       event: { type: 'agent_end' },
     }),
     {
       runtimeSessionId: 'runtime-1',
+      sequence: 1,
+      receivedAt: '2026-09-23T00:00:00.000Z',
       event: { type: 'agent_end' },
     },
   )
@@ -348,7 +352,7 @@ test('Pi Live Adapter exposes runtime-bound workspace file references genericall
   const calls: Array<{ runtimeSessionId: string; query: string; limit?: number }> = []
   const service = {
     workspaceFileReferences: async (runtimeSessionId: string, query: string, limit?: number) => {
-      calls.push({ runtimeSessionId, query, limit })
+      calls.push({ runtimeSessionId, query, ...(limit !== undefined ? { limit } : {}) })
       return [{ path: 'src/index.ts', value: '@src/index.ts' }]
     },
   } as unknown as PiLiveService
@@ -453,7 +457,7 @@ test('Pi Live Adapter exposes full-session history index through bounded queries
   const calls: Array<{ runtimeSessionId: string; query?: { fromOrdinal?: number; limit?: number } }> = []
   const service = {
     historyIndex: async (runtimeSessionId: string, query?: { fromOrdinal?: number; limit?: number }) => {
-      calls.push({ runtimeSessionId, query })
+      calls.push({ runtimeSessionId, ...(query !== undefined ? { query } : {}) })
       return { total: 2, items: query?.limit ? [
         { cursor: 'user-2', ordinal: 2, preview: 'two' },
       ] : [] }

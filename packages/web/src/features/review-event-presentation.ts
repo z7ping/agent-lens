@@ -16,6 +16,52 @@ function stringValue(value: Record<string, JsonValue>, ...keys: string[]): strin
   return ''
 }
 
+function artifactFiles(value: JsonValue | undefined): string[] {
+  const changes = record(value)
+  return Object.keys(changes)
+}
+
+function artifactChangeTypes(value: JsonValue | undefined): string[] {
+  return Object.values(record(value)).flatMap(change => {
+    const type = stringValue(record(change), 'type').toLowerCase()
+    return type ? [type] : []
+  })
+}
+
+/**
+ * 将来源的产物事件翻译为用户可读的动作。路径仍由 Review 的本地资源组件处理，
+ * 这里不恢复已脱敏的用户目录，也不读取来源文件。
+ */
+export function reviewArtifactLabel(payload: JsonValue): string | undefined {
+  const value = record(payload)
+  const action = stringValue(value, 'action', 'event', 'type').toLowerCase()
+  if (action === 'image.view') return agentLensI18n.t('review:local.event.imageViewed')
+  if (action === 'image.generate') return agentLensI18n.t('review:local.event.imageGenerated')
+  if (action !== 'file.change') return undefined
+
+  const types = new Set(artifactChangeTypes(value.changes))
+  if (types.size === 1 && types.has('create')) return agentLensI18n.t('review:local.event.filesAdded')
+  if (types.size === 1 && types.has('delete')) return agentLensI18n.t('review:local.event.filesDeleted')
+  if (types.size === 1 && types.has('update')) return agentLensI18n.t('review:local.event.filesUpdated')
+  return agentLensI18n.t('review:local.event.filesChanged')
+}
+
+export function reviewArtifactSummary(payload: JsonValue): string {
+  const value = record(payload)
+  const action = stringValue(value, 'action', 'event', 'type').toLowerCase()
+  const files = artifactFiles(value.changes)
+  if (files.length) {
+    const names = files.map(path => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path)
+    return names.length === 1
+      ? names[0]!
+      : agentLensI18n.t('review:local.event.filesCount', { count: names.length, first: names[0] })
+  }
+  if (action === 'image.view' || action === 'image.generate') {
+    return stringValue(value, 'path', 'savedPath', 'saved_path')
+  }
+  return action
+}
+
 /**
  * Source-specific historical vocabulary is presentation metadata, not React
  * behavior. Keep it isolated here until each Integration can contribute the
@@ -25,6 +71,8 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
   if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupInfo')
   const payload = record(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
+
+  if (node.kind === 'artifact.action') return reviewArtifactLabel(node.payload) ?? node.label
 
   if (node.sourceId === 'codex') {
     if (node.kind === 'session.lifecycle' && action === 'turn.context') return agentLensI18n.t('review:local.event.codexTurnContext')

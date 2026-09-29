@@ -290,8 +290,8 @@ test('session.updated 排序变化后先重新对齐分页，再按 cursor 加�
       const first = response(limit)
       return Promise.resolve({
         ...first,
-        items: first.items.map(item => item.id === 'session-2'
-          ? { ...item, title: reviewCalls > 1 ? '会话 2 已更新' : item.title }
+        items: first.items.map(item => item.id === 'session-2' && reviewCalls > 1
+          ? { ...item, title: '会话 2 已更新' }
           : item),
       })
     }
@@ -530,7 +530,10 @@ test('当前会话尾部增量只从最后 ordinal 开始并合并新增轮次',
       options: { afterOrdinal?: number; cursor?: string; direction?: 'forward' | 'backward'; limit?: number } = {},
     ): Promise<ReviewSessionDetailDto> {
       if (options.afterOrdinal !== undefined || options.cursor) {
-        tailQueries.push({ afterOrdinal: options.afterOrdinal, cursor: options.cursor })
+        tailQueries.push({
+          ...(options.afterOrdinal !== undefined ? { afterOrdinal: options.afterOrdinal } : {}),
+          ...(options.cursor !== undefined ? { cursor: options.cursor } : {}),
+        })
         return Promise.resolve({
           ...summary(1),
           interactionCount: 12,
@@ -559,7 +562,7 @@ test('当前会话尾部增量只从最后 ordinal 开始并合并新增轮次',
   ;(model.getSnapshot().review as { detailHasNewData: boolean }).detailHasNewData = true
   await model.refreshReviewTailIncremental()
 
-  assert.deepEqual(tailQueries, [{ afterOrdinal: 10, cursor: undefined }])
+  assert.deepEqual(tailQueries, [{ afterOrdinal: 10 }])
   assert.deepEqual(model.getSnapshot().review.detail?.interactions.map(item => item.ordinal), [1,2,3,4,5,6,7,8,9,10,11,12])
   assert.equal(model.getSnapshot().review.detailHasNewData, false)
   model.stop()

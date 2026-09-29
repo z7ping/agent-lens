@@ -27,7 +27,7 @@ test('从规范 Pi 会话证据解析原生 JSONL、工作目录和继续动作'
       installationId: installation.id,
       sourceSessionNativeId: 'pi-native-1',
       nativeType: 'history/session',
-      nativeId: 'session:pi-native-1',
+      nativeId: 'pi-native-1',
       capturedAt: '2026-09-04T10:00:00.000Z',
       locator: { kind: 'file', path: sessionPath, offset: 0 },
       payload: { session: { nativeSessionId: 'pi-native-1', cwd: workspacePath } },
@@ -69,17 +69,17 @@ test('从规范 Pi 会话证据解析原生 JSONL、工作目录和继续动作'
 
     assert.deepEqual(
       await resolvePiLiveResumeInput(storage, committed.observation.logicalSessionId),
-      { cwd: workspacePath, sessionPath, historyAction: 'continue' },
+      { cwd: workspacePath, sessionPath, historyAction: 'continue', logicalSessionId: committed.observation.logicalSessionId },
     )
     assert.deepEqual(
       await resolvePiLiveResumeInput(storage, committed.observation.logicalSessionId, 'fork'),
-      { cwd: workspacePath, sessionPath, historyAction: 'fork' },
+      { cwd: workspacePath, sessionPath, historyAction: 'fork', logicalSessionId: committed.observation.logicalSessionId },
     )
 
     await writeFile(sessionPath, `${JSON.stringify({ type: 'session', id: 'different-pi-session', cwd: workspacePath })}\n`, 'utf8')
     await assert.rejects(
       () => resolvePiLiveResumeInput(storage, committed.observation.logicalSessionId),
-      /原生 JSONL 与该 Pi 历史会话不匹配/,
+      /原生历史文件与该历史会话不匹配/,
     )
   } finally {
     storage.close()

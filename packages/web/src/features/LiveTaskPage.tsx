@@ -21,6 +21,7 @@ import { AgentLensApi } from '../client/api'
 import { liveApi, type LiveProductMetadata } from '../client/live'
 import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -30,6 +31,7 @@ import {
   type LiveMarkdownComposerHandle,
 } from '../components/LiveMarkdownComposer'
 import { MarkdownContent } from '../components/MarkdownContent'
+import { toolVisualKind } from '../components/ToolKindIcon'
 import {
   liveComposerDraftKey,
   readLiveComposerDraft,
@@ -486,6 +488,7 @@ function GenericLiveItem({
       <MarkdownContent text={item.text} streaming={item.streaming}/>
     </TaskThinking>
   }
+  const visualKind = toolVisualKind(item.name)
   return <TaskToolRow
     model={{
       id: item.id,
@@ -497,7 +500,11 @@ function GenericLiveItem({
       output: item.output,
       durationMs: item.durationMs,
     }}
-    details={item.output ? <MarkdownContent text={item.output}/> : undefined}
+    details={item.output
+      ? visualKind === 'shell'
+        ? <div className="task-tool-live-output"><CopyableCodeBlock copyValue={item.output}>{item.output}</CopyableCodeBlock></div>
+        : <MarkdownContent text={item.output}/>
+      : undefined}
   />
 }
 
