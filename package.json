@@ -86,6 +86,7 @@
     "perf:pi-history-idle": "tsx scripts/performance/pi-history-idle-benchmark.ts",
     "perf:dsh-history-idle": "tsx scripts/performance/dsh-history-idle-benchmark.ts",
     "perf:daemon-startup": "tsx scripts/performance/daemon-startup-benchmark.ts",
+    "perf:first-install": "tsx scripts/performance/first-install-benchmark.ts",
     "perf:web-live-visibility": "tsx scripts/performance/web-live-visibility-benchmark.ts",
     "perf:pi-live-scheduler": "tsx scripts/performance/pi-live-scheduler-benchmark.ts",
     "perf:pi-live-composer": "tsx scripts/performance/pi-live-composer-benchmark.ts",

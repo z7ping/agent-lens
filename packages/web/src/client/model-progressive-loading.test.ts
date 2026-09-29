@@ -37,7 +37,7 @@ function response(count: number): ReviewResponseDto {
     meta: {
       protocolVersion: AGENT_LENS_PROTOCOL_VERSION,
       count,
-      hasMore: true,
+      hasMore: count > 0,
       nextCursor: `cursor-${count}`,
       generatedAt: '2026-09-01T00:00:00.000Z',
     },
@@ -62,6 +62,64 @@ function detailPage(start: number, direction: 'forward' | 'backward', hasMore = 
     page: { count: 10, hasMore, ...(hasMore ? { nextCursor: `cursor-${start}` } : {}), direction, filter: 'all' },
   }
 }
+
+test('review 重复初始化复用在途请求，首个响应即可显示', async () => {
+  let release!: (value: ReviewResponseDto) => void
+  const pending = new Promise<ReviewResponseDto>(resolve => { release = resolve })
+  let calls = 0
+  class InitialApi extends AgentLensApi {
+    override review(): Promise<ReviewResponseDto> { calls += 1; return pending }
+  }
+  const model = new AgentLensClientModel(new InitialApi())
+  const first = model.ensureReview()
+  const second = model.ensureReview()
+  assert.equal(calls, 1)
+  release(response(0))
+  await Promise.all([first, second])
+  assert.equal(calls, 1)
+  assert.equal(model.getSnapshot().review.loading, false)
+  assert.ok(model.getSnapshot().review.response)
+})
+
+test('review 同条件刷新先显示在途结果，再校准新数据', async () => {
+  const releases: Array<(value: ReviewResponseDto) => void> = []
+  class RefreshApi extends AgentLensApi {
+    override review(): Promise<ReviewResponseDto> {
+      return new Promise(resolve => { releases.push(resolve) })
+    }
+  }
+  const model = new AgentLensClientModel(new RefreshApi())
+  const first = model.refreshReview()
+  const next = model.refreshReview({ preserveDetail: true })
+  releases[0]!(response(0))
+  await new Promise(resolve => setImmediate(resolve))
+  assert.ok(model.getSnapshot().review.response)
+  assert.equal(model.getSnapshot().review.loading, false)
+  assert.equal(releases.length, 2)
+  releases[1]!(response(0))
+  await Promise.all([first, next])
+})
+
+test('review 筛选切换丢弃旧条件响应并请求最新条件', async () => {
+  const releases: Array<(value: ReviewResponseDto) => void> = []
+  const searches: string[] = []
+  class FilterApi extends AgentLensApi {
+    override review(filters: ReviewFilters): Promise<ReviewResponseDto> {
+      searches.push(filters.search)
+      return new Promise(resolve => { releases.push(resolve) })
+    }
+  }
+  const model = new AgentLensClientModel(new FilterApi())
+  const first = model.ensureReview()
+  model.setReviewFilters({ search: '新条件', status: 'all' })
+  releases[0]!(response(0))
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(model.getSnapshot().review.response, null)
+  assert.deepEqual(searches, ['', '新条件'])
+  releases[1]!(response(0))
+  await first
+  assert.ok(model.getSnapshot().review.response)
+})
 
 test('review 首屏一次读取 20 个会话并加载最新 10 个轮次', async () => {
   let releaseDetail!: (value: ReviewSessionDetailDto) => void

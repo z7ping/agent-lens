@@ -313,6 +313,7 @@ export class AgentLensClientModel {
   private reviewSearchTimer: ReturnType<typeof setTimeout> | null = null
   private integrationDiscoveryTimer: ReturnType<typeof setTimeout> | null = null
   private reviewInFlight: Promise<void> | null = null
+  private reviewRequestFilterKey = ''
   private reviewRequestDirty = false
   private reviewLiveDirty = false
   private reviewPaginationDirty = false
@@ -909,7 +910,8 @@ export class AgentLensClientModel {
   }
 
   ensureReview(): Promise<void> {
-    return this.snapshot.review.response ? Promise.resolve() : this.refreshReview()
+    if (this.snapshot.review.response) return Promise.resolve()
+    return this.reviewInFlight ?? this.refreshReview()
   }
 
   ensureUsage(): Promise<void> {
@@ -1275,9 +1277,12 @@ export class AgentLensClientModel {
     this.refreshTimer = null
     this.reviewRefreshDueAt = null
     this.reviewLiveDirty = false
-    this.reviewGeneration += 1
     if (this.reviewInFlight) {
       this.reviewRequestDirty = true
+      // 同一条件的新数据刷新保留首个可用结果；筛选切换才使旧响应失效。
+      if (this.reviewRequestFilterKey !== JSON.stringify(this.snapshot.review.filters)) {
+        this.reviewGeneration += 1
+      }
       return this.reviewInFlight
     }
 
@@ -1285,7 +1290,8 @@ export class AgentLensClientModel {
     const run = async () => {
       do {
         this.reviewRequestDirty = false
-        const generation = this.reviewGeneration
+        this.reviewRequestFilterKey = JSON.stringify(this.snapshot.review.filters)
+        const generation = ++this.reviewGeneration
         await this.executeReviewRefresh(generation, preserveDetail)
         preserveDetail = true
       } while (this.reviewRequestDirty)

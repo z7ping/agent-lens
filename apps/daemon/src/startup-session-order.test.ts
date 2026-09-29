@@ -12,14 +12,17 @@ test('startup session fast path precedes deferred projection repair and maintena
   const latestFlush = main.indexOf('await app.context.projections.flush(SESSION_SUMMARY_PROJECTION_ID)', latest)
   const deferredDelay = main.indexOf('await abortableDelay(INITIAL_BACKGROUND_SYNC_DELAY_MS', latest)
   const fullRepair = main.indexOf("session summary projection cooperative rebuild started", deferredDelay)
+  const startupJoin = main.indexOf('await Promise.all(startupTasks)', latest)
 
-  for (const position of [dirty, prepare, capture, latest, latestFlush, deferredDelay, fullRepair]) {
+  for (const position of [dirty, prepare, capture, latest, latestFlush, startupJoin, deferredDelay, fullRepair]) {
     assert.notEqual(position, -1)
   }
   assert.ok(dirty < prepare)
-  assert.ok(prepare < capture)
+  assert.ok(dirty < capture)
   assert.ok(capture < latest)
   assert.ok(latest < latestFlush)
-  assert.ok(latestFlush < deferredDelay)
+  assert.ok(latestFlush < startupJoin)
+  assert.ok(prepare < startupJoin)
+  assert.ok(startupJoin < deferredDelay)
   assert.ok(deferredDelay < fullRepair)
 })

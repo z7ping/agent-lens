@@ -1,5 +1,7 @@
 import { watch, type FSWatcher } from 'chokidar'
 
+const POLLING_INTERVAL_MS = 1_000
+
 export type SourceFileWatchEvent = 'add' | 'change' | 'unlink'
 
 export interface SourceFileWatchOptions {
@@ -68,6 +70,9 @@ export async function watchSourceFiles(
     // after the initial scan. Chokidar's polling backend provides the same event contract
     // without relying on that lossy notification boundary.
     usePolling: process.platform === 'win32',
+    // 万级历史文件使用默认 100ms 轮询会持续占满文件系统队列，
+    // 连首次 ready 和前台历史读取也会被拖住。轮询统一控制在秒级。
+    ...(process.platform === 'win32' ? { interval: POLLING_INTERVAL_MS, binaryInterval: POLLING_INTERVAL_MS } : {}),
   })
   watcher.on('add', path => schedule(path, 'add'))
   watcher.on('change', path => schedule(path, 'change'))

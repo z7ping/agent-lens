@@ -616,34 +616,23 @@ try {
   syncPromise = (async () => {
     if (!await waitForDataRuntime(runtimeController.signal)) return
 
-    startupSessionDiagnostics.markFirst('source.prepare.started')
-    const prepared = await prepareRegisteredSources(app.context, runtimeController.signal)
-    startupSessionDiagnostics.markFirst('source.prepare.completed')
-    logSourceFailures(prepared.failures)
-    if (runtimeController.signal.aborted) return
-
-    const capture = await startRegisteredSourceCapture(
-      app.context,
-      runtimeController.signal,
-      prepared.targets,
-    )
-    captureHandles = capture.results
-    startupSessionDiagnostics.markFirst('source.capture.started')
-    logSourceFailures(capture.failures)
-    for (const handle of captureHandles) {
-      console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
-    }
-    if (runtimeController.signal.aborted) return
-
     const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
     const latestStage = startupHistoryStage(plannedHistoryStages)
-    if (latestStage) {
+    const startPreparedSource = async (targets: Awaited<ReturnType<typeof prepareRegisteredSources>>['targets']) => {
+      const capture = await startRegisteredSourceCapture(app.context, runtimeController.signal, targets)
+      captureHandles.push(...capture.results)
+      startupSessionDiagnostics.markFirst('source.capture.started')
+      logSourceFailures(capture.failures)
+      for (const handle of capture.results) {
+        console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
+      }
+      if (runtimeController.signal.aborted || !latestStage) return
       startupSessionDiagnostics.markFirst('history.latest.started')
       console.info(`[AgentLens] startup history sync started: ${latestStage.label}`)
       const latestHistory = await syncRegisteredSourceHistory(
         app.context,
         runtimeController.signal,
-        prepared.targets,
+        targets,
         latestStage.window,
         { cooperate: () => yieldToForeground(runtimeController.signal) },
       )
@@ -660,8 +649,22 @@ try {
       // Make Canonical commits from the startup latest pass visible through the
       // existing materialized Session Summary before any background repair begins.
       await app.context.projections.flush(SESSION_SUMMARY_PROJECTION_ID)
-      startupSessionDiagnostics.markFirst('history.latest.completed')
     }
+    startupSessionDiagnostics.markFirst('source.prepare.started')
+    const startupTasks: Promise<void>[] = []
+    const prepared = await prepareRegisteredSources(app.context, runtimeController.signal, undefined, {
+      onPrepared: targets => {
+        // 任务由同步流程持有；发现、捕获和最新会话恢复按来源推进。
+        // 捕获先启动，避免将首屏优化变成实时记录的丢失窗口。
+        startupTasks.push(startPreparedSource(targets).catch(error => {
+          console.warn('[AgentLens] source startup fast path failed', error)
+        }))
+      },
+    })
+    startupSessionDiagnostics.markFirst('source.prepare.completed')
+    logSourceFailures(prepared.failures)
+    await Promise.all(startupTasks)
+    startupSessionDiagnostics.markFirst('history.latest.completed')
     if (runtimeController.signal.aborted) return
 
     // Only deferred work keeps the historical startup grace period. Source

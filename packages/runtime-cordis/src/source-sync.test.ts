@@ -117,6 +117,34 @@ test('disabled sources still participate in read-only detection', async () => {
   assert.deepEqual(prepared.failures, [])
 })
 
+test('已发现来源可以先启动，不受另一个来源的慢发现阻塞', async () => {
+  let releaseSlow!: () => void
+  const slowPending = new Promise<void>(resolve => { releaseSlow = resolve })
+  const fast = sourceDefinition('fast', async () => [{ sourceId: 'fast', productId: 'test-product', confidence: 'exact' }])
+  const slow = sourceDefinition('slow', async () => {
+    await slowPending
+    return [{ sourceId: 'slow', productId: 'test-product', confidence: 'exact' }]
+  })
+  const ready: string[] = []
+  const ctx = {
+    sources: { list: () => [slow, fast] },
+    identity: {
+      async resolveHost() { return host },
+      async resolveInstallation() { return installation },
+    },
+    emit() {},
+  } as unknown as AgentLensContext
+  const pending = prepareRegisteredSources(ctx, new AbortController().signal, undefined, {
+    onPrepared: targets => { ready.push(...targets.map(target => target.source.manifest.sourceId)) },
+  })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(ready, ['fast'])
+  releaseSlow()
+  const prepared = await pending
+  assert.deepEqual(ready, ['fast', 'slow'])
+  assert.equal(prepared.targets.length, 2)
+})
+
 test('history synchronization continues after one source fails', async () => {
   const failing = sourceDefinition('failing', async () => [])
   let receivedActiveSince: string | undefined

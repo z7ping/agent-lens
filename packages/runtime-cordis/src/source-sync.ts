@@ -31,6 +31,11 @@ export interface RegisteredSourcePreparation {
   failures: RegisteredSourceFailure[]
 }
 
+export interface RegisteredSourcePreparationOptions {
+  /** 已发现的来源立即交给调用方启动，不等待其他来源的发现。 */
+  onPrepared?: (targets: RegisteredSourceTarget[]) => void
+}
+
 export interface RegisteredSourceStageResult<T> {
   results: T[]
   failures: RegisteredSourceFailure[]
@@ -88,6 +93,7 @@ export async function prepareRegisteredSources(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
   sourceId?: string,
+  options: RegisteredSourcePreparationOptions = {},
 ): Promise<RegisteredSourcePreparation> {
   const host = await resolveRuntimeHost(ctx)
   // Detection is read-only capability discovery and must stay independent from
@@ -95,7 +101,7 @@ export async function prepareRegisteredSources(
   // sourceEnabled() in their execution stages below.
   const registeredSources = ctx.sources.list()
     .filter(source => !sourceId || source.manifest.sourceId === sourceId)
-  const batches = await Promise.all(registeredSources.map(async source => {
+  const prepare = async (source: SourceDefinition): Promise<RegisteredSourcePreparation> => {
     if (abortSignal.aborted) {
       return { targets: [], failures: [] } satisfies RegisteredSourcePreparation
     }
@@ -123,7 +129,11 @@ export async function prepareRegisteredSources(
         failures: [{ sourceId: source.manifest.sourceId, stage: 'detect', error }],
       } satisfies RegisteredSourcePreparation
     }
-  }))
+  }
+  const batches = await Promise.all(registeredSources.map(source => prepare(source).then(batch => {
+    if (!abortSignal.aborted && batch.targets.length) options.onPrepared?.(batch.targets)
+    return batch
+  })))
 
   return {
     targets: batches.flatMap(batch => batch.targets),
