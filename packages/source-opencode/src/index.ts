@@ -474,6 +474,7 @@ export async function startOpenCodeRuntimeCapture(
 
   watcher = await watchSourceFiles({
     paths: dirname(dbPath),
+    recursive: false,
     signal: ctx.abortSignal,
     debounceMs: 120,
     accept: filePath => basename(filePath).startsWith(DB_NAME),

@@ -521,6 +521,7 @@ export async function startHermesRuntimeCapture(
   if (dataRoot && dbPath) {
     watcher = await watchSourceFiles({
       paths: dataRoot,
+      recursive: false,
       signal: ctx.abortSignal,
       debounceMs: 120,
       accept: filePath => basename(filePath).startsWith(DB_NAME),
