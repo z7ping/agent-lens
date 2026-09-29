@@ -85,7 +85,6 @@ test('Pi Live persisted history preserves native thinking / text / tool interlea
     'tool',
     'message',
     'thinking',
-    'lifecycle',
     'usage',
     'lifecycle',
     'lifecycle',
@@ -117,16 +116,15 @@ test('Pi Live persisted history preserves native thinking / text / tool interlea
   assert.ok(tool && tool.kind === 'tool')
   assert.equal(tool.callId, 'tool-1')
   assert.equal(tool.name, 'bash')
+  assert.equal(tool.summary, 'git status')
   assert.equal(tool.status, 'success')
   assert.equal(tool.output, 'clean')
   assert.equal(tool.durationMs, 1000)
   assert.equal(tool.contentIndex, 2)
 
-  const stopIndex = items.findIndex(item => item.kind === 'lifecycle' && item.event === 'assistant.stop')
   const usageIndex = items.findIndex(item => item.kind === 'usage')
-  assert.equal(stopIndex, 6)
-  assert.equal(usageIndex, 7)
-  assert.ok(stopIndex > items.findIndex(item => item.kind === 'thinking' && item.text === '再确认结果'))
+  assert.equal(usageIndex, 6)
+  assert.ok(usageIndex > items.findIndex(item => item.kind === 'thinking' && item.text === '再确认结果'))
 
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'model.changed'))
   assert.ok(items.some(item => item.kind === 'lifecycle' && item.event === 'thinking.level.changed'))

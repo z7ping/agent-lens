@@ -385,6 +385,7 @@ export async function* ingestOpenCodeHistory(
     while (!ctx.abortSignal.aborted) {
       const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs, sessionLimit)
       if (!rows.length) break
+      await ctx.reportProgress?.({ phase: 'processing' })
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
         yield recordFromRow(row, ctx, 'history')
@@ -473,6 +474,7 @@ export async function startOpenCodeRuntimeCapture(
 
   watcher = await watchSourceFiles({
     paths: dirname(dbPath),
+    recursive: false,
     signal: ctx.abortSignal,
     debounceMs: 120,
     accept: filePath => basename(filePath).startsWith(DB_NAME),

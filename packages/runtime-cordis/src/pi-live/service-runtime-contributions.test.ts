@@ -128,8 +128,8 @@ test('Pi runtime retry action reuses native retry lifecycle and becomes a ready 
     assert.equal(disclosure.actions, undefined)
     assert.equal(disclosure.title.default, 'This run')
     assert.equal(disclosure.title.localizations?.['zh-CN'], '本次运行')
-    assert.equal(disclosure.summary?.default, 'Ready · Contexts 1 · Skills 1 · Prompts 1 · Extensions 1')
-    assert.equal(disclosure.summary?.localizations?.['zh-CN'], '就绪 · 上下文 1 · 技能 1 · 提示词 1 · 扩展 1')
+    assert.match(disclosure.summary?.default ?? '', /^Ready · (?:<1ms|\d+ms|\d+(?:\.\d+)?s) · Contexts 1 · Skills 1 · Prompts 1 · Extensions 1$/)
+    assert.match(disclosure.summary?.localizations?.['zh-CN'] ?? '', /^就绪 · (?:<1ms|\d+ms|\d+(?:\.\d+)?s) · 上下文 1 · 技能 1 · 提示词 1 · 扩展 1$/)
 
     const labels = disclosure.fields.map(field => field.label.default)
     assert.equal(labels.includes('Pi SDK'), true)
@@ -277,8 +277,8 @@ test('Runtime resource summary hides zero categories and updates in place after 
     emit?.({ type: 'runtime_extension_binding', status: 'ready' })
 
     const after = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
-    assert.equal(after?.summary?.default, 'Ready · Contexts 2 · Skills 1 · Extensions 2')
-    assert.equal(after?.summary?.localizations?.['zh-CN'], '就绪 · 上下文 2 · 技能 1 · 扩展 2')
+    assert.match(after?.summary?.default ?? '', /^Ready · (?:<1ms|\d+ms|\d+(?:\.\d+)?s) · Contexts 2 · Skills 1 · Extensions 2$/)
+    assert.match(after?.summary?.localizations?.['zh-CN'] ?? '', /^就绪 · (?:<1ms|\d+ms|\d+(?:\.\d+)?s) · 上下文 2 · 技能 1 · 扩展 2$/)
     assert.equal(after?.summary?.default.includes('Themes'), false)
   } finally {
     await service.dispose()

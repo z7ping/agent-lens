@@ -119,7 +119,7 @@ test('Worker termination has a fixed graceful shutdown budget before force kill'
   const host = await readFile(new URL('./worker-host.ts', import.meta.url), 'utf8')
   assert.match(host, /WORKER_TERMINATE_GRACE_MS = 1_000/)
   const from = host.indexOf('async terminate(): Promise<void>')
-  const to = host.indexOf('\n  }\n}\n\nexport class WorkerPiRuntimeHost', from)
+  const to = host.indexOf('export class WorkerPiRuntimeHost', from)
   assert.ok(from >= 0 && to > from)
   const terminate = host.slice(from, to)
   assert.match(terminate, /Promise\.race/)
@@ -128,7 +128,9 @@ test('Worker termination has a fixed graceful shutdown budget before force kill'
 
 
 test('Pi logical settlement never treats agent_end or assistant message_end as terminal', () => {
-  const publish = section('private publish(runtime:', '\n  }\n}')
+  const from = service.indexOf('private publish(runtime:')
+  assert.ok(from >= 0, 'missing publish section')
+  const publish = service.slice(from)
   assert.match(publish, /logicalSettled = type === 'agent_settled' \|\| type === 'runtime_exit'/)
   assert.doesNotMatch(publish, /logicalSettled[^\n]*agent_end/)
   assert.doesNotMatch(publish, /logicalSettled[^\n]*message_end/)

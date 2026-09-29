@@ -53,17 +53,18 @@ const applyDataRuntimeStorage = Object.assign(
       logDataRuntimeFailure('[AgentLens] Data Runtime writer unavailable at startup; control plane will run degraded', { error })
     })
     if (writer.state() === 'ready') {
-      for (const [index, reader] of readers.entries()) {
-        if (reader === writer) continue
-        await reader.start().catch(error => {
+      // 写入端完成迁移后，各只读端可以同时打开同一数据库。
+      const starts = readers.flatMap((reader, index) => reader === writer ? [] : [
+        reader.start().catch(error => {
           logDataRuntimeFailure(`[AgentLens] Data Runtime foreground reader ${index + 1} unavailable at startup`, { error })
-        })
-      }
+        }),
+      ])
       if (maintenanceReader !== writer) {
-        await maintenanceReader.start().catch(error => {
+        starts.push(maintenanceReader.start().catch(error => {
           logDataRuntimeFailure('[AgentLens] Data Runtime maintenance reader unavailable at startup', { error })
-        })
+        }))
       }
+      await Promise.all(starts)
     }
     runtime.dataRuntime.startRecovery()
 

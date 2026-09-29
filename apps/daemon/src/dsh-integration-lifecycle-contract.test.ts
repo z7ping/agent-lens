@@ -15,6 +15,6 @@ test('DSH does not bypass the official Integration package lifecycle in the daem
 
 test('legacy physicalization remains selected by enabled source identity rather than a DSH special case', () => {
   assert.match(main, /\.filter\(item => enabledSourceIds\.has\(item\.productId\)\)/)
-  assert.match(main, /ensureLegacyPhysicalization\(legacySelected\)/)
+  assert.match(main, /ensureLegacyPhysicalization\(physicalizationSelected\)/)
   assert.doesNotMatch(main, /legacyDsh|dshMigration|forceEnableDsh/i)
 })

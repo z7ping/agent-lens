@@ -206,6 +206,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         existingDescription: 'Continue in an existing working directory',
         selectProjectAria: 'Select an existing project',
         selectProject: 'Select project',
+        loadingProjects: 'Loading projects…',
         noProject: 'No launchable projects',
         searchProject: 'Search projects or working directories',
         loadMoreProjects: 'Load more projects',

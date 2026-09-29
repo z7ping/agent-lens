@@ -41,6 +41,11 @@ export class HttpEventHub {
     for (const client of [...this.clients]) this.write(client, payload)
   }
 
+  notifyBackgroundActivity(): void {
+    if (this.closed) return
+    for (const client of [...this.clients]) this.write(client, 'event: background-activity\ndata: {}\n\n')
+  }
+
   close(): void {
     if (this.closed) return
     this.closed = true

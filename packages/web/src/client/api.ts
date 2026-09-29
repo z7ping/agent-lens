@@ -45,6 +45,7 @@ import {
   type ToolAssetUsageResponseDto,
 } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
+import { BACKGROUND_ACTIVITY_CHANGED_EVENT } from './background-activity'
 import { shareAbortableInFlight, shareInFlight, type AbortableInFlightEntry } from './single-flight'
 
 export const LIVE_RECONNECTED_EVENT = 'agent-lens:live-reconnected'
@@ -582,6 +583,9 @@ export class AgentLensApi {
       if (opened) disconnectedAfterOpen = true
       onConnection(false)
     }
+    source.addEventListener('background-activity', () => {
+      if (!disposed) window.dispatchEvent(new Event(BACKGROUND_ACTIVITY_CHANGED_EVENT))
+    })
     source.addEventListener('observation', raw => {
       if (disposed || !(raw instanceof MessageEvent) || typeof raw.data !== 'string') return
       try { onEvent(parseLiveUpdateEvent(JSON.parse(raw.data))) } catch { /* ignore malformed frame */ }

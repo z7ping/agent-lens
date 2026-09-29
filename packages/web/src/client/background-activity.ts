@@ -1,6 +1,8 @@
 import type { BackgroundActivityResponseDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
 
+export const BACKGROUND_ACTIVITY_CHANGED_EVENT = 'agent-lens:background-activity-changed'
+
 export async function fetchBackgroundActivity(signal?: AbortSignal): Promise<BackgroundActivityResponseDto> {
   let response: Response
   try {

@@ -75,7 +75,9 @@ function roundPreview(items: PiLiveHistoryItem[]): string | undefined {
   return text.length > 86 ? `${text.slice(0, 86)}…` : text || undefined
 }
 
-function isAssistantTerminal(item: PiLiveHistoryItem): boolean {
+function isAssistantTerminal(
+  item: PiLiveHistoryItem,
+): item is Extract<PiLiveHistoryItem, { kind: 'lifecycle' }> {
   return item.kind === 'lifecycle'
     && ['assistant.error', 'assistant.cancelled', 'assistant.truncated'].includes(item.event)
 }

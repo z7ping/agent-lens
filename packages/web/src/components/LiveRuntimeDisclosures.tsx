@@ -22,7 +22,7 @@ function contributionValue(value: LiveContributionValueDto, language: string): s
 }
 
 function runtimeText(key: string): string {
-  return translateProduct(`task:runtimeDisclosure.${key}`)
+  return translateProduct(`task:center.runtimeDisclosure.${key}`)
 }
 
 function duration(value: number | undefined): string {

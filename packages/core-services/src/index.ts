@@ -245,7 +245,7 @@ export class DefaultLiveService implements LiveService {
         watchers.clear()
         terminalSettled.clear()
         if (adapter.send === decoratedSend) adapter.send = originalSend
-        if (decoratedInterrupt && adapter.interrupt === decoratedInterrupt) {
+        if (originalInterrupt && decoratedInterrupt && adapter.interrupt === decoratedInterrupt) {
           adapter.interrupt = originalInterrupt
         }
         if (adapter.terminate === decoratedTerminate) adapter.terminate = originalTerminate

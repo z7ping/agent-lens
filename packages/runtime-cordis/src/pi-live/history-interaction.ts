@@ -95,7 +95,7 @@ export async function resolvePiLiveHistoryInput(
     }),
   ])
   if (!logicalSession) throw interactionError('历史会话不存在或已被移除')
-  if (!sourceSessionsForProduct.length) throw interactionError('该历史会话不支持继续')
+  if (!sourceSessionsForProduct.length) throw interactionError('只有本机 Pi 历史会话可以继续')
 
   const nativeSessionIds = new Set(sourceSessionsForProduct.map(item => item.nativeSessionId))
   // SourceRecord 与可选 Workspace 查询也彼此独立；保留 Workspace 的 cwd

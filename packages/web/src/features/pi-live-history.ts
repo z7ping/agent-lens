@@ -57,6 +57,22 @@ function compact(value: unknown, max = 160): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
+function toolInputSummary(name: string, value: unknown): string {
+  const normalizedName = name.trim().toLowerCase()
+  const shellTool = normalizedName === 'bash'
+    || normalizedName === 'shell'
+    || normalizedName === 'exec'
+    || normalizedName === 'exec_command'
+    || normalizedName === 'command_execution'
+  if (!shellTool || !value || typeof value !== 'object' || Array.isArray(value)) return compact(value)
+  const input = value as Record<string, unknown>
+  for (const key of ['command', 'cmd', 'script', 'raw']) {
+    const command = input[key]
+    if (typeof command === 'string' && command.trim()) return compact(command)
+  }
+  return compact(value)
+}
+
 function resultOutput(fact: Extract<PiNativeFact, { kind: 'tool-result' }>): string {
   const details = fact.details === undefined ? '' : compact(fact.details, 1200)
   return [fact.output, details ? `Details: ${details}` : ''].filter(Boolean).join('\n\n')
@@ -133,7 +149,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
         kind: 'tool',
         callId,
         name: fact.name || paired?.name || 'tool',
-        summary: compact(fact.input),
+        summary: toolInputSummary(fact.name, fact.input),
         output: paired ? resultOutput(paired) : '',
         status: paired ? (paired.success ? 'success' : 'error') : 'unknown',
         at: fact.at,

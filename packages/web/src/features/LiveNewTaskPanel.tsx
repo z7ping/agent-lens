@@ -227,7 +227,7 @@ export function LiveNewTaskPanel({
                   options={projectOptions}
                   onChange={setSelectedKey}
                   ariaLabel={t('center.newTask.selectProjectAria')}
-                  placeholder={options.length ? t('center.newTask.selectProject') : t('center.newTask.noProject')}
+                  placeholder={options.length ? t('center.newTask.selectProject') : projectLoading ? t('center.newTask.loadingProjects') : t('center.newTask.noProject')}
                   variant="field"
                   className="task-center-new-project-select"
                   menuWidth={420}

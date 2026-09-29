@@ -7,18 +7,18 @@ export interface TaskProcessGroupProps {
   id: string
   messageCount: number
   toolCount: number
-  errorCount?: number
+  errorCount?: number | undefined
   /** 兼容已知的直接耗时；优先使用 startedAtMs / endedAtMs 的真实过程边界。 */
-  durationMs?: number
-  startedAtMs?: number
-  endedAtMs?: number
-  state?: TaskRoundState
-  defaultExpanded?: boolean
+  durationMs?: number | undefined
+  startedAtMs?: number | undefined
+  endedAtMs?: number | undefined
+  state?: TaskRoundState | undefined
+  defaultExpanded?: boolean | undefined
   expansionStore?: Map<string, boolean> | undefined
-  onExpandedChange?: (expanded: boolean) => void
-  summaryExtra?: ReactNode
+  onExpandedChange?: ((expanded: boolean) => void) | undefined
+  summaryExtra?: ReactNode | undefined
   children: ReactNode
-  className?: string
+  className?: string | undefined
 }
 
 export function TaskProcessGroup({

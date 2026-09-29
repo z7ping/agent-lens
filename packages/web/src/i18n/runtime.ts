@@ -12,6 +12,8 @@ import {
 } from './registry'
 
 const LOCALE_PREFERENCE_KEY = 'agent-lens.locale.v1'
+const LOCALE_DISCOVERY_TIMEOUT_MS = 5_000
+let localeSelectionRevision = 0
 
 export const agentLensI18n: i18n = createInstance()
 
@@ -50,23 +52,38 @@ export function writeLocalePreference(locale: string): void {
   try { localStorage.setItem(LOCALE_PREFERENCE_KEY, locale) } catch { /* storage unavailable */ }
 }
 
-async function discoverCommunityLocalePacks(): Promise<void> {
+async function discoverCommunityLocalePacks(preferred: string, selectionRevision: number): Promise<void> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), LOCALE_DISCOVERY_TIMEOUT_MS)
   try {
     const response = await fetch('/api/v1/locales', {
       headers: { accept: 'application/json' },
+      signal: controller.signal,
     })
     if (!response.ok) return
     const payload = await response.json() as LocalePackListResponseDto
     for (const pack of payload.items) {
-      try { registerLocalePack(pack) } catch { /* one bad/duplicate pack must not break startup */ }
+      try {
+        const registered = registerLocalePack(pack)
+        for (const [namespace, messages] of Object.entries(registered.messages)) {
+          agentLensI18n.addResourceBundle(registered.locale, namespace, messages)
+        }
+      } catch { /* one bad/duplicate pack must not break startup */ }
+    }
+    agentLensI18n.emit('loaded', {})
+    // 恢复社区语言偏好，但不覆盖发现期间用户主动切换的语言。
+    if (selectionRevision === localeSelectionRevision && listLocalePacks().some(pack => pack.locale === preferred)) {
+      await agentLensI18n.changeLanguage(preferred)
+      if (typeof document !== 'undefined') document.documentElement.lang = preferred
     }
   } catch {
     // Offline/static development still boots with the official Chinese baseline.
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
 export async function initializeI18n(): Promise<i18n> {
-  await discoverCommunityLocalePacks()
   const resources = Object.fromEntries(
     Object.entries(resourceBundles()).map(([locale, messages]) => [locale, messages]),
   )
@@ -85,16 +102,19 @@ export async function initializeI18n(): Promise<i18n> {
       ns: ['common', 'navigation', 'shell', 'settings', 'agents', 'insights', 'tools', 'task', 'piLive', 'backup', 'review', 'release', 'errors'],
       interpolation: { escapeValue: false },
       returnNull: false,
-      react: { useSuspense: false },
+      react: { useSuspense: false, bindI18n: 'languageChanged loaded' },
     })
 
   if (typeof document !== 'undefined') document.documentElement.lang = available
+  // 内置语言先完成首屏启动，社区语言包随后补充到同一资源注册表。
+  void discoverCommunityLocalePacks(preferred, localeSelectionRevision)
   return agentLensI18n
 }
 
 export async function setLocale(locale: string): Promise<void> {
   const pack = listLocalePacks().find(item => item.locale === locale)
   if (!pack) throw new Error(`Locale Pack is not installed: ${locale}`)
+  localeSelectionRevision += 1
   await agentLensI18n.changeLanguage(pack.locale)
   writeLocalePreference(pack.locale)
   if (typeof document !== 'undefined') document.documentElement.lang = pack.locale

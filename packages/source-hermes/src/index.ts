@@ -383,6 +383,7 @@ export async function* ingestHermesHistory(ctx: SourceHistoryExecutionContext): 
     while (!ctx.abortSignal.aborted) {
       const rows = selectRows(db, rowId, HISTORY_BATCH, activeSinceMs, sessionLimit)
       if (!rows.length) break
+      await ctx.reportProgress?.({ phase: 'processing' })
       for (const row of rows) {
         if (ctx.abortSignal.aborted) return
         rememberWorkspace(row.cwd)
@@ -520,6 +521,7 @@ export async function startHermesRuntimeCapture(
   if (dataRoot && dbPath) {
     watcher = await watchSourceFiles({
       paths: dataRoot,
+      recursive: false,
       signal: ctx.abortSignal,
       debounceMs: 120,
       accept: filePath => basename(filePath).startsWith(DB_NAME),

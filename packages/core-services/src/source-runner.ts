@@ -25,6 +25,7 @@ import type {
 } from '@agent-lens/core'
 import { materializeEvidence } from './index'
 import { deriveParentRelationshipCandidates } from './relationship-hints'
+import { queuedHistoryStatus, SourceHistoryProgressTracker } from './source-history-progress'
 
 const DEFAULT_COOPERATIVE_BUDGET_MS = 8
 const PARSER_REPLAY_TRANSACTION_SIZE = 50
@@ -154,6 +155,8 @@ export interface SourceHistorySyncInput {
   historyWindow?: SourceHistoryWindow
   /** 历史导入在前台请求活跃时可在记录边界暂停。 */
   cooperate?: () => Promise<void>
+  queuedStatus?: SourceRuntimeStatus
+  onProgress?: () => void
 }
 
 export interface SourceParserReplayInput {
@@ -620,6 +623,18 @@ export class SourceHistoryRunner {
     return result
   }
 
+  async queue(input: SourceHistorySyncInput): Promise<SourceRuntimeStatus> {
+    const installation = await resolveInstallation(this.identity, input.host, input.detected)
+    const profile = await resolveRuntimeProfile(this.storage, installation, input.detected)
+    const status = queuedHistoryStatus(input.source.manifest.sourceId, installation.id, profile?.id)
+    await putRuntimeStatus(this.storage, status)
+    return status
+  }
+
+  async cancelQueued(status: SourceRuntimeStatus): Promise<void> {
+    await new SourceHistoryProgressTracker(this.storage, status).settle('cancelled')
+  }
+
   async sync(input: SourceHistorySyncInput): Promise<SourceHistorySyncResult> {
     const { source, host, detected, abortSignal } = input
     if (source.manifest.sourceId !== detected.sourceId) {
@@ -628,15 +643,11 @@ export class SourceHistoryRunner {
 
     const installation = await resolveInstallation(this.identity, host, detected)
     const runtimeProfile = await resolveRuntimeProfile(this.storage, installation, detected)
-    const runtimeStatus = await markRunning(
-      this.storage,
-      source.manifest.sourceId,
-      installation.id,
-      'history',
-      runtimeProfile?.id,
-    )
+    const runtimeStatus = input.queuedStatus ?? queuedHistoryStatus(source.manifest.sourceId, installation.id, runtimeProfile?.id)
+    const progress = new SourceHistoryProgressTracker(this.storage, runtimeStatus, input.onProgress)
 
     try {
+      await progress.begin()
       const declaredCapabilities = await source.declareCapabilities(detected)
       this.capabilities.registerSourceCapabilities(source.manifest.sourceId, declaredCapabilities)
 
@@ -651,7 +662,8 @@ export class SourceHistoryRunner {
       const yieldForInteractivity = createCooperativeScheduler()
 
       if (!source.ingestHistory) {
-        await markHealthy(this.storage, runtimeStatus)
+        await progress.phase('checkpoint')
+        await progress.settle(abortSignal.aborted ? 'cancelled' : 'completed')
         return result
       }
 
@@ -671,6 +683,7 @@ export class SourceHistoryRunner {
         abortSignal,
         checkpoint,
         ...(input.historyWindow ? { historyWindow: input.historyWindow } : {}),
+        reportProgress: update => progress.report(update),
       })) {
         if (input.cooperate) await input.cooperate()
         if (abortSignal.aborted) break
@@ -689,6 +702,7 @@ export class SourceHistoryRunner {
         result.observationsCreated += processed.observationsCreated
         result.observationsMerged += processed.observationsMerged
         result.observationsUnchanged += processed.observationsUnchanged
+        await progress.record(result)
 
         const time = record.occurredAt ?? record.capturedAt
         const nextFrom = earlier(coverageFrom, time)
@@ -705,6 +719,8 @@ export class SourceHistoryRunner {
       }
 
       if (!abortSignal.aborted) {
+        await progress.phase('processing')
+        await progress.phase('checkpoint')
         for (const capability of declaredCapabilities) {
           if (capability.status === 'unavailable' || capability.status === 'not-applicable') {
             await this.coverage.declare({
@@ -734,11 +750,13 @@ export class SourceHistoryRunner {
         }
       }
 
-      await markHealthy(this.storage, runtimeStatus)
+      await progress.settle(abortSignal.aborted ? 'cancelled' : 'completed')
       return result
     } catch (error) {
-      await markFailed(this.storage, runtimeStatus, error)
+      await progress.settle(abortSignal.aborted ? 'cancelled' : 'failed', errorSummary(error))
       throw error
+    } finally {
+      progress.dispose()
     }
   }
 }

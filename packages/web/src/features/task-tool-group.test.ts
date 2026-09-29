@@ -3,6 +3,7 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TaskToolGroup } from './TaskToolGroup'
+import { taskToolTargetText } from './TaskToolRow'
 import type { TaskToolGroupModel } from './task-detail-model'
 
 const model: TaskToolGroupModel = {
@@ -65,6 +66,19 @@ test('工具类型后紧跟状态和耗时，再展示动作与目标', () => {
   const action = html.indexOf('读取文件')
   const target = html.indexOf('src/review.ts')
   assert.ok(kind >= 0 && status > kind && action > status && target > action)
+})
+
+test('Shell 命令使用共享的全宽等宽命令表现', () => {
+  const html = render()
+  assert.match(html, /data-kind="shell"/)
+  assert.match(html, /data-command="true"/)
+  assert.match(html, /<code class="task-tool-target-text task-tool-command" title="pnpm test">pnpm test<\/code>/)
+})
+
+test('Shell 命令行去掉 Live 历史摘要的 JSON 包装', () => {
+  assert.equal(taskToolTargetText({
+    id: 'shell-json', name: 'bash', kind: 'shell', kindLabel: 'Shell', status: 'success', primary: '{"command":"git status"}',
+  }, 'shell'), 'git status')
 })
 
 test('错误 Tool Call 仍以具体行出现并保留错误语义', () => {

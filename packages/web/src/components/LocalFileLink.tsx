@@ -58,7 +58,7 @@ function stripLocation(value: string): LocalFileTarget | null {
     }
   }
 
-  const suffix = value.match(/^(.*):(\d+)(?::(\d+))?$/)
+  const suffix = value.match(/^(.*):(\d+):(\d+)$/) ?? value.match(/^(.*):(\d+)$/)
   if (suffix && isAbsoluteLocalPath(suffix[1]!)) {
     return {
       path: suffix[1]!,
@@ -102,7 +102,7 @@ function blockedLabel(
     : t('localFilePreview.unavailable')
 }
 
-type LocalFileLinkProps = Omit<ComponentPropsWithoutRef<'a'>, 'href'> & { href?: string }
+type LocalFileLinkProps = Omit<ComponentPropsWithoutRef<'a'>, 'href'> & { href?: string | undefined }
 
 export function LocalFileLink({
   href,

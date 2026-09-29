@@ -9,6 +9,7 @@ import type {
   LiveCapabilityName,
   LiveContributionText,
   LiveContributionValue,
+  LiveHistoryEventSummary,
   LiveMessageActionContribution,
   LiveMessageActionResult,
   LiveRuntimeActionContribution,
@@ -532,7 +533,7 @@ function normalizeHistoryIndex(value: unknown) {
       if (round.promptText !== undefined && typeof round.promptText !== 'string') throw httpError(500, 'Live history prompt text is invalid')
       if (round.finalText !== undefined && typeof round.finalText !== 'string') throw httpError(500, 'Live history final text is invalid')
       if (round.modelLabel !== undefined && typeof round.modelLabel !== 'string') throw httpError(500, 'Live history model label is invalid')
-      let events
+      let events: LiveHistoryEventSummary[] | undefined
       if (round.events !== undefined) {
         if (!Array.isArray(round.events) || round.events.length > 64) throw httpError(500, 'Live history event summaries are invalid')
         events = round.events.map(rawEvent => {

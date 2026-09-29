@@ -250,7 +250,19 @@ async function normalizeReasoning(
     ? completed.item.raw_content.filter((value: unknown): value is string => typeof value === 'string' && Boolean(value.trim()))
     : []
   const text = (summary.length ? summary : rawContent).join('\n\n')
-  if (!text) return normalizeCodexRecord(record, ctx)
+  // `item_completed` already provides authoritative semantics: this is a
+  // Reasoning item even when Codex deliberately omits both the visible summary
+  // and the private raw content.  Do not send that known event through the
+  // generic fallback, or Review will present it as an unclassified raw event.
+  // Keeping the text absent also avoids inventing a reasoning summary that the
+  // source did not expose.
+  if (!text) {
+    return normalizeStructuredCompletedItem(record, ctx, completed, 'message.reasoning', {
+      reasoning: true,
+      summaryAvailable: false,
+      sourceSignal: 'event_msg.item_completed.Reasoning',
+    })
+  }
 
   const output = await normalizeCodexRecord(syntheticRecord(record, {
     type: 'event_msg',

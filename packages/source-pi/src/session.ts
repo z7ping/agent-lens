@@ -509,9 +509,14 @@ export async function* ingestPiHistory(ctx: SourceHistoryExecutionContext): Asyn
   const diagnostics = createHistoryScanDiagnostics()
   const startedAt = performance.now()
   try {
-    for (const filePath of await listJsonlFiles(sessionsDir, ctx.historyWindow, diagnostics)) {
+    const files = await listJsonlFiles(sessionsDir, ctx.historyWindow, diagnostics)
+    let processedUnits = 0
+    await ctx.reportProgress?.({ phase: 'processing', discoveredUnits: files.length, processedUnits })
+    for (const filePath of files) {
       if (ctx.abortSignal.aborted) return
+      await ctx.reportProgress?.({ phase: 'processing', currentUnit: filePath })
       yield* ingestPiFile(ctx, filePath, rememberSession, diagnostics)
+      if (!ctx.abortSignal.aborted) await ctx.reportProgress?.({ phase: 'processing', processedUnits: ++processedUnits })
     }
     if (!ctx.abortSignal.aborted) {
       await ctx.checkpoint.set(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY, [...knownCwds.values()])

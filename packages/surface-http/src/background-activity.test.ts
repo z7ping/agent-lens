@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { MaintenanceJob, StorageService } from '@agent-lens/core'
 import { readBackgroundActivity } from './background-activity'
+import type { SourceRuntimeStatus } from '@agent-lens/core'
 
 function maintenanceJob(overrides: Partial<MaintenanceJob> = {}): MaintenanceJob {
   return {
@@ -17,6 +18,20 @@ function maintenanceJob(overrides: Partial<MaintenanceJob> = {}): MaintenanceJob
     ...overrides,
   }
 }
+
+test('旧进程遗留的同步不再运行，本轮等待和已完成来源独立展示，成功记录不带旧错误', async () => {
+  const statuses: SourceRuntimeStatus[] = [
+    { sourceId: 'codex', installationId: 'old', stage: 'history', state: 'running', lastStartedAt: '2026-09-09T00:00:00.000Z', errorCount: 0 },
+    { sourceId: 'codex', installationId: 'current', stage: 'history', state: 'healthy', lastStartedAt: '2026-09-29T00:01:00.000Z', lastSuccessAt: '2026-09-29T00:02:00.000Z', lastErrorSummary: '上次执行超时', errorCount: 1 },
+    { sourceId: 'pi', installationId: 'old-pi', stage: 'history', state: 'running', lastStartedAt: '2026-09-08T00:00:00.000Z', errorCount: 0 },
+  ]
+  const storage = { sourceRuntimeStatus: { list: async () => statuses } } as unknown as StorageService
+  const result = await readBackgroundActivity(storage, '2026-09-29T00:00:00.000Z')
+  assert.equal(result.active.length, 0)
+  assert.equal(result.sources?.find(item => item.sourceId === 'codex')?.state, 'completed')
+  assert.equal(result.sources?.find(item => item.sourceId === 'codex')?.errorSummary, undefined)
+  assert.equal(result.sources?.find(item => item.sourceId === 'pi')?.state, 'interrupted')
+})
 
 test('background activity combines source loading and maintenance jobs without exposing raw progress', async () => {
   const storage = {

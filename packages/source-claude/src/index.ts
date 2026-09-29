@@ -428,14 +428,18 @@ export async function* ingestClaudeHistory(
   }
 
   const files = await listJsonlFiles(projectsDir, ctx.historyWindow)
+  let processedUnits = 0
+  await ctx.reportProgress?.({ phase: 'processing', discoveredUnits: files.length, processedUnits })
   const needsWorkspaceBackfill = remembered.length === 0 || rememberedDataRoots.length === 0
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
+    await ctx.reportProgress?.({ phase: 'processing', currentUnit: filePath })
     if (needsWorkspaceBackfill) {
       const cwd = await readClaudeSessionCwd(filePath)
       if (cwd) rememberWorkspace(cwd, filePath)
     }
     yield* ingestClaudeFile(ctx, filePath, cwd => rememberWorkspace(cwd, filePath))
+    if (!ctx.abortSignal.aborted) await ctx.reportProgress?.({ phase: 'processing', processedUnits: ++processedUnits })
   }
 
   if (!ctx.abortSignal.aborted) {

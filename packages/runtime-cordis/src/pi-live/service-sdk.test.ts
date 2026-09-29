@@ -242,7 +242,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.equal(promptFinished, true, 'HTTP-facing prompt should resolve after SDK preflight, before the agent turn completes')
   assert.equal(streaming, true, 'agent turn should still be running after prompt acknowledgement')
   assert.equal(calls.includes('prompt:hello:followUp:rpc'), true)
-  assert.equal((await service.state(state.runtimeSessionId)).title, 'hello')
+  assert.equal((await service.state(state.runtimeSessionId)).title, 'AgentLens task')
 
   await service.steer(state.runtimeSessionId, 'change direction')
   await service.followUp(state.runtimeSessionId, 'afterwards')

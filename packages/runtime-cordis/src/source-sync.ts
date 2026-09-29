@@ -8,7 +8,7 @@ import {
   type SourceParserReplayResult,
   type SourceRuntimeCaptureHandle,
 } from '@agent-lens/core-services/source-runner'
-import type { AgentInstallation, DetectedSource, Host, SourceDefinition, SourceHistoryWindow } from '@agent-lens/core'
+import type { AgentInstallation, DetectedSource, Host, SourceDefinition, SourceHistoryWindow, SourceRuntimeStatus } from '@agent-lens/core'
 import type { AgentLensContext } from './context'
 
 export type RegisteredSourceStage = 'detect' | 'history' | 'assets' | 'capture'
@@ -29,6 +29,11 @@ export interface RegisteredSourceFailure {
 export interface RegisteredSourcePreparation {
   targets: RegisteredSourceTarget[]
   failures: RegisteredSourceFailure[]
+}
+
+export interface RegisteredSourcePreparationOptions {
+  /** 已发现的来源立即交给调用方启动，不等待其他来源的发现。 */
+  onPrepared?: (targets: RegisteredSourceTarget[]) => void
 }
 
 export interface RegisteredSourceStageResult<T> {
@@ -88,6 +93,7 @@ export async function prepareRegisteredSources(
   ctx: AgentLensContext,
   abortSignal: AbortSignal,
   sourceId?: string,
+  options: RegisteredSourcePreparationOptions = {},
 ): Promise<RegisteredSourcePreparation> {
   const host = await resolveRuntimeHost(ctx)
   // Detection is read-only capability discovery and must stay independent from
@@ -95,7 +101,7 @@ export async function prepareRegisteredSources(
   // sourceEnabled() in their execution stages below.
   const registeredSources = ctx.sources.list()
     .filter(source => !sourceId || source.manifest.sourceId === sourceId)
-  const batches = await Promise.all(registeredSources.map(async source => {
+  const prepare = async (source: SourceDefinition): Promise<RegisteredSourcePreparation> => {
     if (abortSignal.aborted) {
       return { targets: [], failures: [] } satisfies RegisteredSourcePreparation
     }
@@ -123,7 +129,11 @@ export async function prepareRegisteredSources(
         failures: [{ sourceId: source.manifest.sourceId, stage: 'detect', error }],
       } satisfies RegisteredSourcePreparation
     }
-  }))
+  }
+  const batches = await Promise.all(registeredSources.map(source => prepare(source).then(batch => {
+    if (!abortSignal.aborted && batch.targets.length) options.onPrepared?.(batch.targets)
+    return batch
+  })))
 
   return {
     targets: batches.flatMap(batch => batch.targets),
@@ -148,14 +158,30 @@ export async function syncRegisteredSourceHistory(
   )
   const results: SourceHistorySyncResult[] = []
   const failures: RegisteredSourceFailure[] = []
-
+  const queued = new Map<RegisteredSourceTarget, SourceRuntimeStatus>()
+  // 执行前发布全部参与来源的等待节点，串行调度不再表现为其他智能体消失。
   for (const target of targets) {
     if (abortSignal.aborted) break
     if (!sourceEnabled(ctx, target.source)) continue
     try {
+      queued.set(target, await runner.queue({ ...target, abortSignal }))
+      ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId })
+    } catch (error) {
+      failures.push({ sourceId: target.source.manifest.sourceId, stage: 'history', error })
+    }
+  }
+  for (const [target, queuedStatus] of queued) {
+    if (abortSignal.aborted) {
+      await runner.cancelQueued(queuedStatus)
+      ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId })
+      continue
+    }
+    try {
       results.push(await runner.sync({
         ...target,
         abortSignal,
+        queuedStatus,
+        onProgress: () => { ctx.emit?.('source/sync-progress', { sourceId: target.source.manifest.sourceId }) },
         ...(historyWindow ? { historyWindow } : {}),
         ...(options.cooperate ? { cooperate: options.cooperate } : {}),
       }))

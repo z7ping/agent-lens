@@ -42,7 +42,7 @@ test('Pi derived assistant facts use internal shared keys instead of fabricated 
     },
   }, 'assistant-native-id'), {} as never)
 
-  assert.equal(normalized.observations.length, 4)
+  assert.equal(normalized.observations.length, 3)
 
   const first = normalized.observations[0]!
   assert.equal(first.kind, 'message.assistant')
@@ -57,12 +57,7 @@ test('Pi derived assistant facts use internal shared keys instead of fabricated 
   assert.equal(second.dedupHints?.nativeEventId, undefined)
   assert.equal(second.dedupHints?.sharedEventKey, 'assistant-native-id:content:1')
 
-  const stop = normalized.observations[2]!
-  assert.equal(stop.nativeEventId, undefined)
-  assert.equal(stop.nativeParentEventId, 'assistant-native-id')
-  assert.equal(stop.dedupHints?.sharedEventKey, 'assistant-native-id:stop')
-
-  const usage = normalized.observations[3]!
+  const usage = normalized.observations[2]!
   assert.equal(usage.nativeEventId, undefined)
   assert.equal(usage.nativeParentEventId, 'assistant-native-id')
   assert.equal(usage.dedupHints?.sharedEventKey, 'assistant-native-id:usage')

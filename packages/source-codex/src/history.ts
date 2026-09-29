@@ -441,9 +441,13 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
 
   const threadNames = await readThreadNames(ctx.installation.configRoot)
   const files = await listJsonlFiles(sessionsDir, ctx.historyWindow)
+  let processedUnits = 0
+  await ctx.reportProgress?.({ phase: 'processing', discoveredUnits: files.length, processedUnits })
   for (const filePath of files) {
     if (ctx.abortSignal.aborted) return
+    await ctx.reportProgress?.({ phase: 'processing', currentUnit: filePath })
     yield* ingestCodexFileWithThreadNames(ctx, filePath, threadNames, rememberSession)
+    if (!ctx.abortSignal.aborted) await ctx.reportProgress?.({ phase: 'processing', processedUnits: ++processedUnits })
   }
 
   if (!ctx.abortSignal.aborted) {

@@ -8,7 +8,7 @@ export interface TaskFileChangeCandidate {
   logicalSessionId: LogicalSessionId
   observationId: ObservationId
   path: string
-  oldPath?: string
+  oldPath?: string | undefined
   operation: 'write' | 'delete' | 'rename' | 'unknown'
   observedAt: string
   evidence: TaskFileChangeEvidence
@@ -19,9 +19,9 @@ export interface TaskFileChangeRecord {
   logicalSessionId: LogicalSessionId
   path: string
   changeType: TaskFileChangeType
-  oldPath?: string
-  additions?: number
-  deletions?: number
+  oldPath?: string | undefined
+  additions?: number | undefined
+  deletions?: number | undefined
   firstChangedAt: string
   lastChangedAt: string
   evidence: TaskFileChangeEvidence[]
@@ -39,15 +39,15 @@ export interface TaskFileChangeReader {
 
 export interface TaskFileChangeCapture {
   runtimeSessionId: string
-  logicalSessionId?: LogicalSessionId
+  logicalSessionId?: LogicalSessionId | undefined
   workspacePath: string
-  gitRootPath?: string
-  baselineTreeSha?: string
+  gitRootPath?: string | undefined
+  baselineTreeSha?: string | undefined
   baselineCapturedAt: string
-  finalTreeSha?: string
-  checkpointedAt?: string
-  finalizedAt?: string
-  changes?: TaskFileChangeRecord[]
+  finalTreeSha?: string | undefined
+  checkpointedAt?: string | undefined
+  finalizedAt?: string | undefined
+  changes?: TaskFileChangeRecord[] | undefined
 }
 
 /**
@@ -66,7 +66,7 @@ export interface TaskFileChangeProjectionStore extends TaskFileChangeReader {
     runtimeSessionId: string,
     input: {
       logicalSessionId: LogicalSessionId
-      finalTreeSha?: string
+      finalTreeSha?: string | undefined
       checkpointedAt: string
       changes: TaskFileChangeRecord[]
     },
@@ -75,7 +75,7 @@ export interface TaskFileChangeProjectionStore extends TaskFileChangeReader {
     runtimeSessionId: string,
     input: {
       logicalSessionId: LogicalSessionId
-      finalTreeSha?: string
+      finalTreeSha?: string | undefined
       finalizedAt: string
       changes: TaskFileChangeRecord[]
     },

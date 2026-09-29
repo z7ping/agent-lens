@@ -1,15 +1,16 @@
 import type {
   CanonicalObservation,
   TaskFileChangeCandidate,
+  TaskFileChangeRecord,
 } from '@agent-lens/core'
 
 type RecordValue = Record<string, unknown>
 
 interface MutationIntent {
-  callId?: string
+  callId?: string | undefined
   paths: Array<{
     path: string
-    oldPath?: string
+    oldPath?: string | undefined
     operation: TaskFileChangeCandidate['operation']
   }>
 }
@@ -275,8 +276,8 @@ export function observedTaskFileChanges(
 
 export function summarizeObservedTaskFileChanges(
   candidates: readonly TaskFileChangeCandidate[],
-): import('@agent-lens/core').TaskFileChangeRecord[] {
-  const records = new Map<string, import('@agent-lens/core').TaskFileChangeRecord>()
+): TaskFileChangeRecord[] {
+  const records = new Map<string, TaskFileChangeRecord>()
 
   for (const candidate of candidates) {
     const existing = records.get(candidate.path)
@@ -325,14 +326,14 @@ export function reconcileTaskFileChanges(
   observed: readonly TaskFileChangeCandidate[],
   gitDiff: readonly import('./git-workspace-snapshot').GitWorkspaceDiffEntry[] | null,
   window: { startedAt: string; endedAt: string },
-): import('@agent-lens/core').TaskFileChangeRecord[] {
+): TaskFileChangeRecord[] {
   const observedSummary = summarizeObservedTaskFileChanges(observed)
 
   // A Git snapshot diff is an exact final-workspace comparison. If a tool
   // touched and then reverted a file, it intentionally disappears here.
   if (gitDiff) {
     const byPath = new Map(observedSummary.map(item => [item.path, item]))
-    return gitDiff.map(item => {
+    return gitDiff.map((item): TaskFileChangeRecord => {
       const toolEvidence = byPath.get(item.path)
         ?? (item.oldPath ? byPath.get(item.oldPath) : undefined)
       return {

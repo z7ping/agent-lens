@@ -71,6 +71,9 @@ class MessageActionHost implements PiRuntimeHost {
       capabilities,
       state: async () => state(),
       snapshot: async () => ({ state: state(), entries: [...this.entries], leafId: 'u-2' }),
+      entry: async entryId => this.entries.find(value => (
+        typeof value === 'object' && value !== null && 'id' in value && value.id === entryId
+      )) ?? null,
       navigateTree: async entryId => {
         this.navigated.push(entryId)
         return { cancelled: false, editorText: entryId === 'u-2' ? 'second prompt' : 'first prompt' }
@@ -170,6 +173,7 @@ test('New session forks before the selected user message without mutating the cu
 
     assert.equal(result.outcome, 'open-runtime')
     assert.equal(result.draftText, 'second prompt')
+    if (result.outcome !== 'open-runtime') assert.fail('expected message action to open a runtime')
     assert.ok(result.runtime)
     assert.notEqual(result.runtime.runtimeSessionId, original.runtimeSessionId)
 
@@ -206,6 +210,7 @@ test('New session from the first user message preserves a root-fork marker', asy
       'u-root',
     )
 
+    if (result.outcome !== 'open-runtime') assert.fail('expected root message action to open a runtime')
     assert.ok(result.runtime)
     assert.equal(host.starts.length, 1)
     const forkUnsubscribe = service.subscribe(result.runtime!.runtimeSessionId, () => {})

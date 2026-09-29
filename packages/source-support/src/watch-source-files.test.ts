@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import test from 'node:test'
@@ -132,4 +132,27 @@ test('watchSourceFiles accepts an already-aborted signal', async () => {
     },
   })
   await handle.dispose()
+})
+
+test('数据库目录的非递归监听只观察当前目录，仍能观察数据库删除与重建', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-watch-db-'))
+  const nested = join(root, 'plugins', 'cache')
+  await mkdir(nested, { recursive: true })
+  const controller = new AbortController()
+  const seen: Array<{ path: string; event: string }> = []
+  const handle = await watchSourceFiles({
+    paths: root, signal: controller.signal, recursive: false, debounceMs: 20,
+    accept: path => basename(path) === 'state.db',
+    onFile(path, event) { seen.push({ path, event }) },
+  })
+  t.after(async () => { controller.abort(); await handle.dispose(); await rm(root, { recursive: true, force: true }) })
+  const dbPath = join(root, 'state.db')
+  await writeFile(join(nested, 'state.db'), '不能把子目录数据库当成当前来源')
+  await writeFile(dbPath, 'one')
+  await waitFor(() => seen.some(item => item.path === dbPath && item.event === 'add'), '未观察到当前目录数据库')
+  await unlink(dbPath)
+  await waitFor(() => seen.some(item => item.path === dbPath && item.event === 'unlink'), '未观察到数据库移除')
+  await writeFile(dbPath, 'two')
+  await waitFor(() => seen.filter(item => item.path === dbPath && item.event === 'add').length === 2, '未观察到数据库重建')
+  assert.ok(seen.every(item => item.path === dbPath), '不能递归监听无关插件和缓存目录')
 })

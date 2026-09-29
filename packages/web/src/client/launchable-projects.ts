@@ -3,6 +3,19 @@ import { translateProduct } from '../i18n/runtime'
 import { shareInFlight, waitForCaller } from './single-flight'
 
 const launchableProjectsInFlight = new Map<string, Promise<unknown>>()
+const PROJECT_PAGE_CACHE_TTL_MS = 60_000
+let initialProjectPage: { value: LaunchableProjectsResponseDto; loadedAt: number } | undefined
+
+// 仅复用默认首页；搜索和后续游标必须始终对应各自的服务端结果。
+export function cachedLaunchableProjects(): LaunchableProjectsResponseDto | undefined {
+  if (!initialProjectPage || Date.now() - initialProjectPage.loadedAt > PROJECT_PAGE_CACHE_TTL_MS) return undefined
+  return initialProjectPage.value
+}
+
+export function prefetchLaunchableProjects(): void {
+  if (cachedLaunchableProjects()) return
+  void fetchLaunchableProjects().catch(() => undefined)
+}
 
 class LaunchableProjectsRequestError extends Error {
   constructor(message: string) {
@@ -42,7 +55,11 @@ export async function fetchLaunchableProjects(input: {
           headers: { accept: 'application/json' },
         })
         if (!response.ok) throw await responseError(response)
-        return await response.json() as LaunchableProjectsResponseDto
+        const value = await response.json() as LaunchableProjectsResponseDto
+        if (!search && !input.cursor && params.get('limit') === '20') {
+          initialProjectPage = value.items.length > 0 ? { value, loadedAt: Date.now() } : undefined
+        }
+        return value
       } catch (error) {
         if (error instanceof LaunchableProjectsRequestError) throw error
         throw new LaunchableProjectsRequestError(translateProduct('errors:launchableProjectsFailed'))

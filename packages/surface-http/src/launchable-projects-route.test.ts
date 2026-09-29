@@ -41,13 +41,22 @@ test('GET /api/v1/projects/launchable returns only current-host launchable cwd a
       source_ids_json, rebuilt_at
     ) VALUES ('session-agent-lens', 'install-pi', ?, ?, 1, 1, 0, 0, '["pi"]', ?)
   `).run(now, now, now)
+  await storage.launchableProjects?.rebuild?.()
 
-  const surface = await startHttpSurface(storage, { port: 0 })
+  const priorities: string[] = []
+  const scopedStorage = Object.assign(storage, {
+    withReadPriority<T>(priority: string, operation: () => Promise<T>): Promise<T> {
+      priorities.push(priority)
+      return operation()
+    },
+  })
+  const surface = await startHttpSurface(scopedStorage, { port: 0 })
   const base = `http://${surface.host}:${surface.port}`
 
   try {
     const response = await fetch(`${base}/api/v1/projects/launchable?search=agentlens&limit=20`)
     assert.equal(response.status, 200)
+    assert.deepEqual(priorities, ['critical'], '启动项目列表必须使用关键前台读取通道')
     const serverTiming = response.headers.get('server-timing')
     assert.ok(serverTiming)
     assert.match(serverTiming, /projects-db;dur=\d+(?:\.\d+)?/)

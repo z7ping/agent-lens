@@ -165,6 +165,7 @@ function storageWithRuntimeHealth(
 const applyHttpSurface = Object.assign(
   async (ctx: AgentLensContext, config: HttpSurfacePluginConfig = {}) => {
     const eventHub = new HttpEventHub()
+    ctx.on('source/sync-progress', () => { eventHub.notifyBackgroundActivity() })
     const eventLoop = monitorEventLoopDelay({ resolution: 20 })
     const rescanController = new AbortController()
     const sourceRescan = new SourceRescanService(ctx, rescanController.signal)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { CanonicalObservation, StorageService } from '@agent-lens/core'
+import type { CanonicalObservation, ObservationQuery, StorageService } from '@agent-lens/core'
 import {
   canonicalHistoryCursor,
   canonicalPiLiveSnapshot,
@@ -42,8 +42,8 @@ function storage(values: CanonicalObservation[]): StorageService {
         }],
       },
       observations: {
-        get: async id => byId.get(id) ?? null,
-        query: async query => {
+        get: async (id: string) => byId.get(id) ?? null,
+        query: async (query: ObservationQuery) => {
           let items = ordered.filter(item => item.logicalSessionId === query.logicalSessionId)
           const afterId = query.after?.id
           const beforeId = query.before?.id
