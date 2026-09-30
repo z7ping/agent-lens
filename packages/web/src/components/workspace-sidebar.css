@@ -62,6 +62,13 @@
   border-color: transparent;
   background: transparent;
   color: var(--al-muted-2);
+  opacity: 0;
+  transition: opacity .14s ease, background-color .14s ease, color .14s ease;
+}
+
+.workspace-sidebar:hover .workspace-sidebar-collapse-button,
+.workspace-sidebar-collapse-button:focus-visible {
+  opacity: 1;
 }
 
 .workspace-sidebar-collapse-button:hover:not(:disabled) {
