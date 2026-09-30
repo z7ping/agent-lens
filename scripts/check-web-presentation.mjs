@@ -91,7 +91,7 @@ const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
 const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
 if (!appShell.includes('<WorkspaceTopBar') || !appShell.includes('className="workspace-breadcrumb"') || !appShell.includes('className="workspace-topbar-page-tools"')) throw new Error('右侧工作区必须保留统一单行 Topbar：面包屑 / 页面控件 / 页面操作共用同一层')
 if (!runtimeStatus.includes('<Popover') || !runtimeStatus.includes('placement="right-end"')) throw new Error('Runtime 详情必须通过统一 Portal Popover 逃离侧栏裁剪')
-if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在侧栏左下角')
+if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;[\s\S]*?padding:\s*0;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在 40px 图标 Rail 左下角')
 
 function tsxFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

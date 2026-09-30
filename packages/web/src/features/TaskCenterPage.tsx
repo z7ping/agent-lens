@@ -10,7 +10,7 @@ import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchablePr
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar } from '../components/ui'
+import { Button, IconButton, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
@@ -124,6 +124,7 @@ function remoteVisible(
 
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
+  const { t: tNavigation } = useTranslation('navigation')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const sourceId = item.sourceIds[0] ?? ''
   const fallback = item.projectName
@@ -166,7 +167,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const projectRequestGenerationRef = useRef(0)
   const historyScrollTargetRef = useRef('')
   const review = snapshot.review
-  const [searchOpen, setSearchOpen] = useState(Boolean(review.filters.search))
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const agentSelectionSummary = review.filters.sourceIds === null
     ? t('center.history.allAgents')
@@ -356,54 +356,91 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
 
+  const selectedAgentIds = review.filters.sourceIds ?? []
+  const selectedProject = review.filters.projectId
+    ? projects.find(project => project.id === review.filters.projectId)
+    : undefined
+  const clearQuickFilters = () => model.setReviewFilters({ sourceIds: null, projectId: '' })
+  const removeAgentFilter = (sourceId: string) => {
+    const next = selectedAgentIds.filter(id => id !== sourceId)
+    model.setReviewFilters({ sourceIds: next.length ? next : null })
+  }
+
   const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
     <div className="task-center-rail-head">
+      <strong className="task-center-rail-title">{tNavigation('taskCenter')}</strong>
       <Button size="small" variant="primary" className="task-center-new-task-button" onPointerEnter={prefetchLaunchableProjects} onFocus={prefetchLaunchableProjects} onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
-      <Toolbar className="task-center-toolbar" aria-label={t('center.history.filterAria')}>
-        <IconButton
-          size="small"
-          className={searchOpen || review.filters.search ? 'is-active' : ''}
-          onClick={() => setSearchOpen(current => !current)}
-          title={searchOpen ? t('center.history.collapseSearch') : t('center.history.searchTasks')}
-          aria-label={searchOpen ? t('center.history.collapseSearch') : t('center.history.searchTasks')}
-          aria-pressed={searchOpen}
-        ><UiIcon name="search" size={14}/></IconButton>
-        <IconButton size="small" onClick={() => void model.refreshReview()} title={t('center.history.refreshTasks')} aria-label={t('center.history.refreshTasks')}><UiIcon name="refresh" size={14}/></IconButton>
-      </Toolbar>
     </div>
 
-    <SidebarFilterDisclosure className="task-center-sidebar-filter" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}>
-      <div className="workspace-insight-filter-fields" aria-label={t('center.history.filterAria')}>
-        <label><span>{t('center.history.project')}</span><SelectMenu variant="field" value={review.filters.projectId} onChange={projectId => model.setReviewFilters({ projectId })} ariaLabel={t('center.history.filterProject')} placeholder={t('center.history.allProjects')} menuWidth={280} searchable searchPlaceholder={t('center.history.searchProject')} options={projectFilterOptions}/></label>
-        <label><span>{t('center.history.time')}</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('center.history.filterTime')} menuWidth={156} options={[
-          { value: 'today', label: t('center.day.today') }, { value: '7d', label: t('center.history.sevenDays') }, { value: '30d', label: t('center.history.thirtyDays') }, { value: 'all', label: t('center.history.allTime') },
-        ]}/></label>
-        <label><span>{t('center.history.status')}</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('center.history.filterStatus')} menuWidth={150} options={[
-          { value: 'all', label: t('center.history.allStatus') }, { value: 'clean', label: t('center.history.clean') }, { value: 'with-errors', label: t('center.history.withErrors') },
-        ]}/></label>
+    <div className="task-center-search-panel">
+      <div className="task-center-search-row">
+        <div className="task-center-search-field">
+          <UiIcon name="search" size={14}/>
+          <Input
+            className="task-center-search-input"
+            placeholder={t('center.history.searchPlaceholder')}
+            value={review.filters.search}
+            onChange={event => model.setReviewFilters({ search: event.target.value })}
+            aria-label={t('center.history.searchTasks')}
+          />
+          {review.filters.search && <IconButton
+            size="small"
+            className="task-center-search-clear"
+            onClick={() => model.setReviewFilters({ search: '' })}
+            title={t('center.history.clearSearch')}
+            aria-label={t('center.history.clearSearch')}
+          ><UiIcon name="close" size={14}/></IconButton>}
+        </div>
+        <IconButton size="small" className="task-center-search-refresh" onClick={() => void model.refreshReview()} title={t('center.history.refreshTasks')} aria-label={t('center.history.refreshTasks')}><UiIcon name="refresh" size={14}/></IconButton>
       </div>
-    </SidebarFilterDisclosure>
+    </div>
 
-    {searchOpen && <div className="task-center-search-panel">
-      <div className="task-center-search-field">
-        <UiIcon name="search" size={14}/>
-        <Input
-          autoFocus
-          className="task-center-search-input"
-          placeholder={t('center.history.searchPlaceholder')}
-          value={review.filters.search}
-          onChange={event => model.setReviewFilters({ search: event.target.value })}
-          onKeyDown={event => { if (event.key === 'Escape') setSearchOpen(false) }}
-          aria-label={t('center.history.searchTasks')}
-        />
-        {review.filters.search && <IconButton
-          size="small"
-          className="task-center-search-clear"
-          onClick={() => model.setReviewFilters({ search: '' })}
-          title={t('center.history.clearSearch')}
-          aria-label={t('center.history.clearSearch')}
-        ><UiIcon name="close" size={14}/></IconButton>}
-      </div>
+    <div className="task-center-quick-filters" aria-label={t('center.history.filterAria')}>
+      <SidebarFilterDisclosure
+        className="task-center-agent-filter"
+        summary={agentSelectionSummary}
+        summaryMeta={false}
+        agents={agents}
+        agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}
+      />
+      <SelectMenu
+        className="task-center-project-filter"
+        variant="field"
+        value={review.filters.projectId}
+        onChange={projectId => model.setReviewFilters({ projectId })}
+        ariaLabel={t('center.history.filterProject')}
+        placeholder={t('center.history.allProjects')}
+        menuWidth={280}
+        searchable
+        searchPlaceholder={t('center.history.searchProject')}
+        options={projectFilterOptions}
+      />
+      <SidebarFilterDisclosure
+        className="task-center-advanced-filter"
+        summary={<span className="task-center-advanced-filter-label"><UiIcon name="filter" size={14}/></span>}
+        summaryMeta={false}
+      >
+        <div className="workspace-insight-filter-fields">
+          <label><span>{t('center.history.time')}</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('center.history.filterTime')} menuWidth={156} options={[
+            { value: 'today', label: t('center.day.today') }, { value: '7d', label: t('center.history.sevenDays') }, { value: '30d', label: t('center.history.thirtyDays') }, { value: 'all', label: t('center.history.allTime') },
+          ]}/></label>
+          <label><span>{t('center.history.status')}</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('center.history.filterStatus')} menuWidth={150} options={[
+            { value: 'all', label: t('center.history.allStatus') }, { value: 'clean', label: t('center.history.clean') }, { value: 'with-errors', label: t('center.history.withErrors') },
+          ]}/></label>
+        </div>
+      </SidebarFilterDisclosure>
+    </div>
+
+    {(review.filters.sourceIds !== null || review.filters.projectId) && <div className="task-center-active-filters">
+      {selectedAgentIds.map(sourceId => <Button key={sourceId} size="small" className="task-center-filter-chip" onClick={() => removeAgentFilter(sourceId)}>
+        {agentLabel(sourceId, agents.find(agent => agent.sourceId === sourceId)?.displayName)}
+        <UiIcon name="close" size={12}/>
+      </Button>)}
+      {review.filters.projectId && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ projectId: '' })}>
+        {selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId}
+        <UiIcon name="close" size={12}/>
+      </Button>}
+      <Button size="small" className="task-center-filter-clear" onClick={clearQuickFilters}>{t('center.history.clearSearch')}</Button>
     </div>}
 
     <div className="task-center-scroll">

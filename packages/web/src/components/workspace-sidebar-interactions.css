@@ -3,7 +3,7 @@
  * 结构尺寸仍由 workspace-sidebar.css 持有；这里仅负责选中、搜索、筛选和设置菜单的交互视觉。
  */
 
-/* 一级导航只用 Accent 标记当前位置；文字保持中性，避免整栏发紫。 */
+/* 一级导航只用 Accent 标记当前位置；图标 Rail 保持低噪音。 */
 .workspace-primary-link.is-active::after {
   background: var(--al-accent);
 }
@@ -36,7 +36,7 @@
 /* 页脚不再伪装成本机用户/账户区，只保留真实可操作的设置入口。 */
 .workspace-sidebar-footer {
   justify-content: flex-start;
-  padding: 5px 10px;
+  padding: 0;
 }
 
 /* Task Rail 的图标按钮：hover 中性，active 使用 Accent。 */
