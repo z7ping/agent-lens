@@ -33,22 +33,23 @@
 .background-activity-trigger.is-warning { color: var(--al-danger); }
 
 .background-activity-indicator {
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
   flex: 0 0 auto;
+  box-sizing: border-box;
+  border: 1.5px solid transparent;
   border-radius: 999px;
   background: currentColor;
+  background-clip: content-box;
   opacity: .78;
 }
 
-.background-activity-trigger.is-active .background-activity-indicator {
-  width: 10px;
-  height: 10px;
+.background-activity-trigger.is-animating .background-activity-indicator {
   border: 1.5px solid color-mix(in srgb, currentColor 26%, transparent);
   border-top-color: currentColor;
   background: transparent;
   opacity: 1;
-  animation: background-activity-spin .9s linear infinite;
+  animation: background-activity-spin 1.2s linear infinite;
 }
 
 .background-activity-trigger-label {
@@ -179,14 +180,14 @@
   background: var(--al-muted-2);
 }
 
-.background-activity-item.is-active .background-activity-item-mark {
+.background-activity-item.is-executing .background-activity-item-mark {
   width: 8px;
   height: 8px;
   margin-top: 4px;
   border: 1.5px solid color-mix(in srgb, var(--al-accent) 26%, transparent);
   border-top-color: var(--al-accent);
   background: transparent;
-  animation: background-activity-spin .9s linear infinite;
+  animation: background-activity-spin 1.2s linear infinite;
 }
 
 .background-activity-item.is-completed .background-activity-item-mark { background: var(--al-success); }
@@ -249,33 +250,56 @@
 }
 
 .background-sync-groups { display: grid; gap: 12px; }
+.background-sync-agent.btn { width: 100%; height: auto; min-height: 30px; justify-content: space-between; gap: 12px; padding: 9px 10px; text-align: left; }
+.background-sync-agent[aria-expanded='true'] { border-color: var(--al-accent); background: var(--al-accent-soft); }
+.background-sync-agent > .ui-status-badge,
+.background-sync-agent > svg { flex-shrink: 0; }
+.background-sync-agent > .background-sync-summary { flex: 1; }
+.background-sync-popover { width: min(360px, calc(100vw - 24px)); }
+.background-sync-details { display: grid; gap: 16px; padding: 14px; }
 .background-sync-summary { display: grid; gap: 6px; min-width: 0; }
 .background-sync-summary b { font-size: 13px; }
 .background-sync-summary small { font-size: 12px; color: var(--al-muted); }
 .background-sync-detail { display: grid; gap: 12px; min-width: 0; }
 .background-sync-timeline { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
 .background-sync-timeline li { position: relative; display: grid; gap: 6px; min-width: 0; }
-.background-sync-timeline li:not(:last-child)::before { content: ''; position: absolute; left: 9px; top: 24px; bottom: -12px; width: 1px; background: var(--al-line); }
+.background-sync-timeline li:not(:last-child)::before,
+.background-sync-timeline li:not(:last-child)::after { content: ''; position: absolute; left: 9px; top: 24px; bottom: -12px; width: 1px; pointer-events: none; }
+.background-sync-timeline li:not(:last-child)::before { background: var(--al-line); }
+.background-sync-timeline li:not(:last-child)::after { background: var(--al-success); transform: scaleY(0); transform-origin: top; transition: transform .18s ease-out; }
+.background-sync-timeline li.is-linked::after { transform: scaleY(1); }
 .background-sync-node { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.background-sync-node .ui-status-badge,
+.background-sync-agent .ui-status-badge { transition: color .18s ease-out, background-color .18s ease-out, border-color .18s ease-out; }
 .background-sync-node > span:last-child,
 .background-sync-timeline time,
-.background-sync-timeline small { font-size: 12px; color: var(--al-muted); }
+.background-sync-timeline small { font-size: 12px; color: var(--al-muted); font-variant-numeric: tabular-nums; }
 .background-sync-timeline time,
 .background-sync-timeline small { padding-left: 24px; }
-.background-sync-timeline .is-running .ui-status-dot { animation: background-sync-pulse 1.2s ease-in-out infinite; }
-.background-sync-progress { display: grid; gap: 6px; font-size: 12px; color: var(--al-muted); }
+.background-sync-detail .is-executing .ui-status-dot { animation: background-sync-pulse 1.8s ease-in-out infinite; }
+.background-sync-detail .is-confirming .ui-status-dot { animation: background-sync-confirm .32s ease-out; }
+.background-sync-progress { display: grid; gap: 6px; font-size: 12px; color: var(--al-muted); font-variant-numeric: tabular-nums; }
 .background-sync-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .background-sync-task { margin-bottom: 12px; font-size: 12px; color: var(--al-muted); }
 .background-sync-note,
 .background-sync-error { margin: 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .background-sync-note { color: var(--al-muted); }
 .background-sync-error { color: var(--al-danger); }
-@keyframes background-sync-pulse { 50% { opacity: .4; } }
+@keyframes background-sync-pulse { 50% { opacity: .55; } }
+@keyframes background-sync-confirm { 50% { opacity: .45; } }
+
+.background-activity-popover.is-offline .background-sync-node .ui-status-badge,
+.background-activity-popover.is-offline .background-sync-agent .ui-status-badge,
+.background-activity-popover.is-offline .background-sync-timeline li::after { transition: none; }
 
 @media (prefers-reduced-motion: reduce) {
-  .background-sync-timeline .is-running .ui-status-dot { animation: none; }
-  .background-activity-trigger.is-active .background-activity-indicator,
-  .background-activity-item.is-active .background-activity-item-mark {
+  .background-sync-node .ui-status-badge,
+  .background-sync-agent .ui-status-badge,
+  .background-sync-timeline li::after { transition: none; }
+  .background-sync-detail .is-executing .ui-status-dot,
+  .background-sync-detail .is-confirming .ui-status-dot { animation: none; }
+  .background-activity-trigger.is-animating .background-activity-indicator,
+  .background-activity-item.is-executing .background-activity-item-mark {
     animation: none;
     border-color: currentColor;
   }
