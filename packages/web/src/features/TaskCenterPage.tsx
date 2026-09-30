@@ -440,7 +440,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         {selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId}
         <UiIcon name="close" size={12}/>
       </Button>}
-      <Button size="small" className="task-center-filter-clear" onClick={clearQuickFilters}>{t('center.history.clearSearch')}</Button>
+      <Button size="small" className="task-center-filter-clear" onClick={clearQuickFilters}>{t('center.history.clearFilters')}</Button>
     </div>}
 
     <div className="task-center-scroll">
