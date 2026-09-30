@@ -159,7 +159,7 @@ export interface PopoverProps {
   children: ReactNode
   onClose(): void
   className?: string
-  placement?: 'right-end' | 'bottom-end'
+  placement?: 'right-end' | 'right-start' | 'bottom-end'
   gap?: number
 }
 
@@ -192,10 +192,11 @@ export function Popover({
       const panelRect = panel.getBoundingClientRect()
       const panelWidth = Math.min(panelRect.width, window.innerWidth - margin * 2)
       const panelHeight = Math.min(panelRect.height, window.innerHeight - margin * 2)
-      let left = placement === 'right-end' ? anchorRect.right + gap : anchorRect.right - panelWidth
-      let top = placement === 'right-end' ? anchorRect.bottom - panelHeight : anchorRect.bottom + gap
+      const beside = placement !== 'bottom-end'
+      let left = beside ? anchorRect.right + gap : anchorRect.right - panelWidth
+      let top = placement === 'right-start' ? anchorRect.top : placement === 'right-end' ? anchorRect.bottom - panelHeight : anchorRect.bottom + gap
 
-      if (placement === 'right-end' && left + panelWidth > window.innerWidth - margin) {
+      if (beside && left + panelWidth > window.innerWidth - margin) {
         left = anchorRect.left - panelWidth - gap
       }
       if (placement === 'bottom-end' && top + panelHeight > window.innerHeight - margin) {
