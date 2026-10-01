@@ -124,7 +124,6 @@ function remoteVisible(
 
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
-  const { t: tNavigation } = useTranslation('navigation')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const sourceId = item.sourceIds[0] ?? ''
   const fallback = item.projectName
@@ -153,6 +152,7 @@ function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSumma
 
 export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensClientModel; mode: TaskCenterMode; sidebarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('task')
+  const { t: tNavigation } = useTranslation('navigation')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const snapshot = useClientSnapshot(model)
   const location = useLocation()
