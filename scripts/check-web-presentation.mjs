@@ -87,11 +87,19 @@ if (/export function Select\b/.test(readFileSync(p('components/ui/Primitives.tsx
 if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/ui/index.ts'), 'utf8'))) throw new Error('UiIcon 必须经统一 UI 出口导出')
 const appShell = readFileSync(p('App.tsx'), 'utf8')
 const workspaceSidebar = readFileSync(p('components/workspace-sidebar.css'), 'utf8')
+const taskCenterPage = readFileSync(p('features/TaskCenterPage.tsx'), 'utf8')
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
 const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
+if (!/\.workspace-sidebar\s*\{[\s\S]*?grid-template-columns:\s*40px minmax\(0, 1fr\);/m.test(workspaceSidebar)) throw new Error('桌面 WorkspaceSidebar 必须保持 40px 图标 Rail + 上下文栏结构')
+if (!/\.app-shell\.is-sidebar-collapsed\s*\{[\s\S]*?grid-template-columns:\s*40px minmax\(0, 1fr\);/m.test(workspaceSidebar)) throw new Error('收起侧栏时必须保留 40px 图标 Rail，不得再次收为 0px')
+if (appShell.includes('workspace-sidebar-restore-button') || appShell.includes('onExpandSidebar')) throw new Error('展开 / 收起必须共用 Rail 固定按钮，不得恢复 Topbar 第二入口')
+if (!taskCenterPage.includes('task-center-context-brand-logo') || !workspaceSidebar.includes('.workspace-context-brand-logo')) throw new Error('AgentLens Logo 必须展示在上下文标题区，不得重新占用 40px Rail')
+if (!/\.workspace-primary-link > span\s*\{[\s\S]*?display:\s*none;/m.test(workspaceSidebar)) throw new Error('桌面一级工作区必须保持图标 Rail，不得恢复横向文字导航')
+if (!taskCenterPage.includes('className="task-center-search-panel"') || taskCenterPage.includes('searchOpen')) throw new Error('任务中心搜索必须常驻上下文栏，不得恢复折叠搜索')
+if (!taskCenterPage.includes('className="task-center-quick-filters"') || !taskCenterPage.includes('className="task-center-project-filter"')) throw new Error('任务中心必须常驻智能体 / 项目快捷筛选')
 if (!appShell.includes('<WorkspaceTopBar') || !appShell.includes('className="workspace-breadcrumb"') || !appShell.includes('className="workspace-topbar-page-tools"')) throw new Error('右侧工作区必须保留统一单行 Topbar：面包屑 / 页面控件 / 页面操作共用同一层')
 if (!runtimeStatus.includes('<Popover') || !runtimeStatus.includes('placement="right-end"')) throw new Error('Runtime 详情必须通过统一 Portal Popover 逃离侧栏裁剪')
-if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在侧栏左下角')
+if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;[\s\S]*?padding:\s*0;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在 40px 图标 Rail 左下角')
 
 function tsxFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {

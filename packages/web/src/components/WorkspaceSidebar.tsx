@@ -25,7 +25,8 @@ interface WorkspaceSidebarProps {
   onToggleTheme(): void
   onOpenMarkdownThemes(): void
   onContextHost(node: HTMLDivElement | null): void
-  onCollapse(): void
+  collapsed: boolean
+  onToggleCollapse(): void
   mobileOpen?: boolean
   onMobileClose?(): void
 }
@@ -43,7 +44,8 @@ export function WorkspaceSidebar({
   onToggleTheme,
   onOpenMarkdownThemes,
   onContextHost,
-  onCollapse,
+  collapsed,
+  onToggleCollapse,
   mobileOpen = false,
   onMobileClose = () => undefined,
 }: WorkspaceSidebarProps) {
@@ -59,6 +61,15 @@ export function WorkspaceSidebar({
   const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
   const hasNewIntegrations = snapshot.integrationManagement?.items.some(item => item.isNew) ?? false
+  const contextTitle = onInsights
+    ? t('navigation:insights')
+    : onAgents
+      ? t('navigation:agents')
+      : onIntegrations
+        ? t('navigation:agentIntegration')
+        : onBackup
+          ? t('navigation:assetBackup')
+          : ''
 
   useModalFocusScope({ open: mobileOpen, onClose: onMobileClose, panelRef: sidebarRef })
 
@@ -95,11 +106,14 @@ export function WorkspaceSidebar({
     tabIndex={mobileOpen ? -1 : undefined}
   >
     <div className="workspace-sidebar-brand-row">
-      <NavLink to="/review" className="workspace-sidebar-brand" aria-label={`AgentLens，${t('navigation:backToTaskCenter')}`} title={t('navigation:backToTaskCenter')} onClick={onMobileClose}>
-        <img className="workspace-sidebar-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-        <span className="workspace-sidebar-brand-copy"><b>AgentLens</b></span>
-      </NavLink>
-      <IconButton className="workspace-sidebar-collapse-button" size="small" onClick={onCollapse} title={t('navigation:collapseSidebar')} aria-label={t('navigation:collapseSidebar')}><UiIcon name="panel-left-close" size={16}/></IconButton>
+      <IconButton
+        className="workspace-sidebar-collapse-button"
+        size="small"
+        onClick={onToggleCollapse}
+        title={collapsed ? t('navigation:expandSidebar') : t('navigation:collapseSidebar')}
+        aria-label={collapsed ? t('navigation:expandSidebar') : t('navigation:collapseSidebar')}
+        aria-pressed={collapsed}
+      ><UiIcon name={collapsed ? 'panel-left-open' : 'panel-left-close'} size={16}/></IconButton>
     </div>
 
     <WorkspacePrimaryNavigation
@@ -110,6 +124,10 @@ export function WorkspaceSidebar({
     />
 
     <div className="workspace-sidebar-context" ref={onContextHost}>
+      {!onReview && contextTitle && <div className="workspace-context-brand">
+        <img className="workspace-context-brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
+        <div className="workspace-context-brand-copy"><b>AgentLens</b><span aria-hidden="true">·</span><span>{contextTitle}</span></div>
+      </div>}
       {onInsights && <nav className="workspace-insight-switcher" aria-label={t('navigation:insightsView')}>
         <NavLink to="/insights" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`} end>{t('navigation:usageOverview')}</NavLink>
         <NavLink to="/tools" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>{t('navigation:tools')}{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
