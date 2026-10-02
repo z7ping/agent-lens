@@ -368,7 +368,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
     <div className="task-center-rail-head">
-      <strong className="task-center-rail-title">{tNavigation('taskCenter')}</strong>
+      <div className="task-center-context-brand">
+        <img className="task-center-context-brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
+        <div className="task-center-context-brand-copy"><b>AgentLens</b><span aria-hidden="true">·</span><strong className="task-center-rail-title">{tNavigation('taskCenter')}</strong></div>
+      </div>
       <Button size="small" variant="primary" className="task-center-new-task-button" onPointerEnter={prefetchLaunchableProjects} onFocus={prefetchLaunchableProjects} onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
     </div>
 

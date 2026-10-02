@@ -40,35 +40,14 @@
   border-right: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
 }
 
-.workspace-sidebar-brand {
-  display: grid;
-  width: 40px;
-  height: 58px;
-  min-width: 0;
-  place-items: center;
-  padding: 0;
-  color: var(--al-ink);
-  text-decoration: none;
-}
-
 .workspace-sidebar-collapse-button {
-  position: absolute;
-  bottom: 60px;
-  left: 7px;
-  z-index: 12;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
   border-color: transparent;
   background: transparent;
   color: var(--al-muted-2);
-  opacity: 0;
-  transition: opacity .14s ease, background-color .14s ease, color .14s ease;
-}
-
-.workspace-sidebar:hover .workspace-sidebar-collapse-button,
-.workspace-sidebar-collapse-button:focus-visible {
-  opacity: 1;
+  transition: background-color .14s ease, color .14s ease;
 }
 
 .workspace-sidebar-collapse-button:hover:not(:disabled) {
@@ -79,28 +58,15 @@
 
 @media (min-width: 768px) {
   .app-shell.is-sidebar-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr);
   }
 
-  .app-shell.is-sidebar-collapsed > .workspace-sidebar {
+  .app-shell.is-sidebar-collapsed .workspace-sidebar-context,
+  .app-shell.is-sidebar-collapsed .workspace-sidebar-footer .workspace-background-activity {
     visibility: hidden;
     pointer-events: none;
     opacity: 0;
-    transform: translateX(-16px);
-    transition: opacity .12s ease, transform .18s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .18s;
   }
-}
-
-.workspace-sidebar-logo {
-  width: 27px;
-  height: 27px;
-  flex: 0 0 27px;
-  border-radius: 7px;
-  object-fit: contain;
-}
-
-.workspace-sidebar-brand-copy {
-  display: none;
 }
 
 /* 一级工作区收敛为 40px 图标 Rail；文字通过 aria-label/title 保留语义。 */
@@ -184,6 +150,55 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--al-soft-2);
+  opacity: 1;
+  transition: opacity .12s ease, visibility 0s linear 0s;
+}
+
+.workspace-context-brand {
+  display: flex;
+  min-width: 0;
+  min-height: 58px;
+  flex: 0 0 58px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
+}
+
+.workspace-context-brand-logo,
+.task-center-context-brand-logo {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.workspace-context-brand-copy,
+.task-center-context-brand-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workspace-context-brand-copy b,
+.task-center-context-brand-copy b {
+  color: var(--al-ink);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.workspace-context-brand-copy > span:last-child,
+.task-center-context-brand-copy .task-center-rail-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workspace-context-menu {
@@ -467,23 +482,8 @@
 }
 
 .workspace-topbar .workspace-mobile-nav-button,
-.workspace-mobile-backdrop,
-.workspace-sidebar-restore-button {
+.workspace-mobile-backdrop {
   display: none;
-}
-
-.workspace-sidebar-restore-button {
-  align-self: center;
-  margin-left: -2px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--al-muted);
-}
-
-.workspace-sidebar-restore-button:hover:not(:disabled) {
-  border-color: transparent;
-  background: var(--al-soft-2);
-  color: var(--al-ink);
 }
 
 .workspace-breadcrumb {
@@ -538,15 +538,24 @@
   padding: 10px 10px 8px;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-rail-title {
+.workspace-sidebar-context > .task-center-rail .task-center-context-brand {
+  display: flex;
   min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 7px;
   overflow: hidden;
-  color: var(--al-ink);
-  font-size: 16px;
-  font-weight: 720;
-  letter-spacing: -.015em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy {
+  flex: 1 1 auto;
+}
+
+.workspace-sidebar-context > .task-center-rail .task-center-rail-title {
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 620;
+  letter-spacing: 0;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-new-task-button {
@@ -899,8 +908,9 @@
     grid-template-rows: 54px minmax(0, 1fr) 50px;
   }
 
-  .workspace-sidebar-brand {
-    height: 54px;
+  .workspace-context-brand {
+    min-height: 54px;
+    flex-basis: 54px;
   }
 
   .workspace-primary-nav {
@@ -937,14 +947,9 @@
     grid-template-rows: 52px minmax(0, 1fr) 48px;
   }
 
-  .workspace-sidebar-brand {
-    height: 52px;
-  }
-
-  .workspace-sidebar-logo {
-    width: 25px;
-    height: 25px;
-    flex-basis: 25px;
+  .workspace-context-brand {
+    min-height: 52px;
+    flex-basis: 52px;
   }
 
   .workspace-primary-nav {
