@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { agentLensI18n, initializeI18n, setLocale } from './runtime'
+import { agentLensI18n, initializeI18n, readLocalePreference, setLocale, systemProductLocale } from './runtime'
 import { localePack, resetLocaleRegistry } from './registry'
 
 const frenchPack = {
@@ -26,7 +26,7 @@ test('社区语言请求未完成时内置语言仍可启动，随后恢复已�
   let release!: (response: Response) => void
   t.mock.method(globalThis, 'fetch', () => new Promise<Response>(resolve => { release = resolve }))
   await initializeI18n()
-  assert.equal(agentLensI18n.language, 'zh-CN')
+  assert.equal(agentLensI18n.language, 'en-US')
   assert.equal(localePack('fr-FR'), null)
   release(Response.json({ items: [frenchPack] }))
   await new Promise(resolve => setImmediate(resolve))
@@ -71,5 +71,34 @@ test('语言发现超时中止请求，页面继续使用内置语言', async t 
   t.mock.timers.tick(5_000)
   await Promise.resolve()
   assert.equal(signal?.aborted, true)
-  assert.equal(agentLensI18n.language, 'zh-CN')
+  assert.equal(agentLensI18n.language, 'en-US')
+})
+
+test('首次启动按系统语言选择；C/POSIX/未知回退英文', () => {
+  for (const input of ['zh-CN', 'zh_TW', 'zh', 'ZH-hans']) {
+    assert.equal(systemProductLocale(input), 'zh-CN')
+  }
+  for (const input of ['en-US', 'fr-FR', 'C', 'POSIX', undefined]) {
+    assert.equal(systemProductLocale(input), 'en-US')
+  }
+})
+
+test('保存的用户选择优先于系统语言', t => {
+  const originalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { language: 'en-US' } })
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true, value: { getItem: () => 'zh-CN' },
+  })
+  t.after(() => {
+    if (originalStorage) Object.defineProperty(globalThis, 'localStorage', originalStorage)
+    else Reflect.deleteProperty(globalThis, 'localStorage')
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator)
+    else Reflect.deleteProperty(globalThis, 'navigator')
+  })
+  assert.equal(readLocalePreference(), 'zh-CN')
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true, value: { getItem: () => null },
+  })
+  assert.equal(readLocalePreference(), 'en-US')
 })
