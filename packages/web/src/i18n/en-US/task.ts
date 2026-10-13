@@ -261,6 +261,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         searchPlaceholder: 'Search tasks…',
         clearSearch: 'Clear search',
         clearFilters: 'Clear',
+        remoteFilterLimitation: 'Remote tasks cannot be filtered by agent, project, or status and are hidden for the current filter.',
         running: 'Running',
         empty: 'No historical tasks in the current filter range.',
         loadMore: 'Load more historical tasks',
