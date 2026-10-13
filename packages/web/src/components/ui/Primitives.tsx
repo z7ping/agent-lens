@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type {
   ButtonHTMLAttributes,
   DetailsHTMLAttributes,
@@ -50,20 +51,21 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   variant?: ButtonVariant
 }
 
-export function IconButton({
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({
   size = 'default',
   variant = 'default',
   className,
   children,
   type = 'button',
   ...props
-}: IconButtonProps) {
+}, ref) {
   return <button
+    ref={ref}
     type={type}
     className={classes('ui-icon-button', `is-${size}`, `is-${variant}`, className)}
     {...props}
   >{children}</button>
-}
+})
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={classes('ui-field', className)} {...props}/>
