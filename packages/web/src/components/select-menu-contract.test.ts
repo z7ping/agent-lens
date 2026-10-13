@@ -8,6 +8,7 @@ const sourceRoot = fileURLToPath(new URL('../', import.meta.url))
 const selectSource = readFileSync(new URL('./SelectMenu.tsx', import.meta.url), 'utf8')
 const taskCenterSource = readFileSync(new URL('../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
 const liveNewTaskSource = readFileSync(new URL('../features/LiveNewTaskPanel.tsx', import.meta.url), 'utf8')
+const sidebarStyles = readFileSync(new URL('./workspace-sidebar.css', import.meta.url), 'utf8')
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -20,6 +21,21 @@ test('Web 下拉入口统一使用 SelectMenu，而不是页面级原生 select'
   const nativeSelectOwners = sourceFiles(sourceRoot).filter(path => /<select(?:\s|>)/.test(readFileSync(path, 'utf8')))
   assert.deepEqual(nativeSelectOwners, [])
   assert.match(liveNewTaskSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
+})
+
+test('任务中心全部智能体与全部项目使用同一 34px 紧凑筛选规格', () => {
+  const projectFilter = taskCenterSource.match(/<SelectMenu\s+className="task-center-project-filter"[\s\S]*?\/>/)?.[0]
+  assert.ok(projectFilter)
+  assert.match(projectFilter, /variant="toolbar"/)
+  assert.match(projectFilter, /searchable/)
+  assert.match(taskCenterSource, /<SidebarFilterDisclosure\s+className="task-center-agent-filter"/)
+  const sharedTriggerRule = sidebarStyles.match(/\.workspace-sidebar-context > \.task-center-rail \.task-center-agent-filter > summary,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-advanced-filter > summary \{([^}]*)\}/)?.[1]
+  assert.ok(sharedTriggerRule, '项目 SelectMenu 和智能体 Disclosure 必须使用同一条视觉契约')
+  assert.match(sharedTriggerRule, /height:\s*34px;/)
+  assert.match(sharedTriggerRule, /min-height:\s*34px;/)
+  assert.match(sharedTriggerRule, /font-size:\s*13px;/)
+  assert.match(sharedTriggerRule, /border-radius:\s*8px;/)
+  assert.doesNotMatch(sidebarStyles, /\.task-center-project-filter\s+\.select-menu-trigger/)
 })
 
 test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => {
