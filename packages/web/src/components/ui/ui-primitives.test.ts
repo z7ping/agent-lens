@@ -118,6 +118,17 @@ test('Dialog and Drawer own common accessibility behavior', () => {
   assert.match(overlay, /export function Drawer/)
 })
 
+test('Review 诊断 Tabs 使用单一 Tab 停靠点及方向键切换', () => {
+  assert.match(reviewPage, /aria-orientation="horizontal"/)
+  assert.match(reviewPage, /event\.key === 'ArrowRight'/)
+  assert.match(reviewPage, /event\.key === 'ArrowLeft'/)
+  assert.match(reviewPage, /event\.key === 'Home'/)
+  assert.match(reviewPage, /event\.key === 'End'/)
+  assert.match(reviewPage, /tabIndex=\{tab === 'detail' \? 0 : -1\}/)
+  assert.match(reviewPage, /tabIndex=\{tab === 'evidence' \? 0 : -1\}/)
+  assert.match(reviewPage, /tabIndex=\{tab === 'raw' \? 0 : -1\}/)
+})
+
 test('Popover 在异步内容改变尺寸后重新定位', () => {
   assert.match(overlay, /new ResizeObserver\(updatePosition\)/)
   assert.match(overlay, /observer\?\.observe\(panel\)/)
