@@ -35,7 +35,8 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
 test('SelectMenu 的菜单键盘处理保护 IME，并跟踪 Sidebar 浮层锚点变化', () => {
   assert.match(selectSource, /event\.nativeEvent\.isComposing \|\| event\.nativeEvent\.keyCode === 229/)
   assert.match(selectSource, /event\.target !== searchRef\.current/)
-  assert.match(selectSource, /new ResizeObserver\(updatePosition\)/)
+  assert.match(selectSource, /new ResizeObserver\(\(\) =>/)
+  assert.match(selectSource, /getComputedStyle\(trigger\)\.visibility === 'hidden'/)
   assert.match(selectSource, /geometryObserver\?\.observe\(triggerRef\.current\)/)
   assert.match(selectSource, /geometryObserver\?\.observe\(sidebar\)/)
   assert.match(selectSource, /geometryObserver\?\.disconnect\(\)/)
