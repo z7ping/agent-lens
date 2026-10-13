@@ -156,7 +156,12 @@ export function SelectMenu({
       close(false)
     }
     // Portal 下拉位置依赖锚点真实几何；侧栏展开不会触发 window.resize。
-    const geometryObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePosition)
+    const geometryObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      if (getComputedStyle(trigger).visibility === 'hidden') close(false)
+      else updatePosition()
+    })
     if (triggerRef.current) geometryObserver?.observe(triggerRef.current)
     const sidebar = triggerRef.current?.closest('.workspace-sidebar')
     if (sidebar) geometryObserver?.observe(sidebar)
