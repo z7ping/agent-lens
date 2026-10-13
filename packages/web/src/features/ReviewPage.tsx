@@ -605,10 +605,25 @@ function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNodeDto; 
     title={title}
     onClose={onClose}
   >
-    <div className="agent-scope" role="tablist" aria-label={t('local.event.categoriesAria')}>
-      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>{t('local.event.detail')}</button>
-      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>{t('local.event.evidence', { count: node.evidence.length })}</button>
-      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>{t('local.event.raw')}</button>
+    <div className="agent-scope" role="tablist" aria-orientation="horizontal" aria-label={t('local.event.categoriesAria')}
+      onKeyDown={event => {
+        const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+        const current = tabs.indexOf(event.target as HTMLButtonElement)
+        if (current < 0) return
+        const next = event.key === 'ArrowRight' ? (current + 1) % tabs.length
+          : event.key === 'ArrowLeft' ? (current + tabs.length - 1) % tabs.length
+          : event.key === 'Home' ? 0
+          : event.key === 'End' ? tabs.length - 1
+          : -1
+        if (next < 0) return
+        event.preventDefault()
+        tabs[next]?.focus({ preventScroll: true })
+        setTab((['detail', 'evidence', 'raw'] as const)[next]!)
+      }}
+    >
+      <button className={`scope-chip ${tab === 'detail' ? 'scope-chip-active' : ''}`} role="tab" tabIndex={tab === 'detail' ? 0 : -1} aria-selected={tab === 'detail'} onClick={() => setTab('detail')}>{t('local.event.detail')}</button>
+      <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" tabIndex={tab === 'evidence' ? 0 : -1} aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>{t('local.event.evidence', { count: node.evidence.length })}</button>
+      <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" tabIndex={tab === 'raw' ? 0 : -1} aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>{t('local.event.raw')}</button>
     </div>
     {tab === 'detail' && <>
       {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">

@@ -9,7 +9,7 @@ import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
 import { SidebarFilterDisclosure } from './SidebarFilterDisclosure'
 import { WorkspacePrimaryNavigation } from './WorkspacePrimaryNavigation'
-import { IconButton, UiIcon, useModalFocusScope } from './ui'
+import { IconButton, Popover, UiIcon, useModalFocusScope } from './ui'
 import './workspace-sidebar-menu.css'
 
 interface WorkspaceSidebarProps {
@@ -53,7 +53,7 @@ export function WorkspaceSidebar({
   const navigate = useNavigate()
   const { t } = useTranslation(['navigation', 'settings', 'shell'])
   const sidebarRef = useRef<HTMLElement>(null)
-  const settingsAnchorRef = useRef<HTMLDivElement>(null)
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const onReview = location.pathname.startsWith('/review')
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
@@ -76,26 +76,6 @@ export function WorkspaceSidebar({
   useEffect(() => {
     setSettingsOpen(false)
   }, [location.pathname])
-
-  useEffect(() => {
-    if (!settingsOpen) return
-
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!settingsAnchorRef.current?.contains(event.target as Node)) setSettingsOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      setSettingsOpen(false)
-      requestAnimationFrame(() => settingsAnchorRef.current?.querySelector<HTMLButtonElement>('.workspace-settings-button')?.focus({ preventScroll: true }))
-    }
-
-    document.addEventListener('pointerdown', closeOnOutsidePointer)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [settingsOpen])
 
   return <aside
     ref={sidebarRef}
@@ -154,8 +134,9 @@ export function WorkspaceSidebar({
     </div>
 
     <div className="workspace-sidebar-footer">
-      <div className="workspace-settings-anchor" ref={settingsAnchorRef}>
+      <div className="workspace-settings-anchor">
         <IconButton
+          ref={settingsButtonRef}
           className={`workspace-settings-button ${settingsOpen || onIntegrations || onBackup ? 'is-active' : ''}`}
           aria-label={t('settings:openMenu')}
           aria-expanded={settingsOpen}
@@ -163,12 +144,20 @@ export function WorkspaceSidebar({
           onClick={() => setSettingsOpen(current => !current)}
         ><UiIcon name="settings" size={16}/></IconButton>
 
-        {settingsOpen && <section className="workspace-settings-popover" aria-label={t('settings:menu')}>
+        <Popover
+          open={settingsOpen}
+          anchorRef={settingsButtonRef}
+          onClose={() => setSettingsOpen(false)}
+          placement="right-end"
+          className="workspace-settings-popover"
+        >
+          <section aria-label={t('settings:menu')}>
           <section className="workspace-settings-group" aria-labelledby="workspace-settings-management-title">
             <div id="workspace-settings-management-title" className="workspace-settings-group-title">{t('settings:management')}</div>
             <div className="workspace-settings-menu">
               <button
                 type="button"
+                autoFocus
                 className={`workspace-settings-menu-item ${onIntegrations ? 'is-active' : ''}`}
                 onClick={() => {
                   navigate('/integrations')
@@ -242,7 +231,8 @@ export function WorkspaceSidebar({
               <BrandVersion/>
             </div>
           </section>
-        </section>}
+          </section>
+        </Popover>
       </div>
       <BackgroundActivityStatus health={snapshot.health}/>
     </div>

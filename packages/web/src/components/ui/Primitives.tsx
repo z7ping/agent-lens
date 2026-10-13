@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import type {
   ButtonHTMLAttributes,
   DetailsHTMLAttributes,
@@ -50,20 +51,21 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   variant?: ButtonVariant
 }
 
-export function IconButton({
+export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({
   size = 'default',
   variant = 'default',
   className,
   children,
   type = 'button',
   ...props
-}: IconButtonProps) {
+}, ref) {
   return <button
+    ref={ref}
     type={type}
     className={classes('ui-icon-button', `is-${size}`, `is-${variant}`, className)}
     {...props}
   >{children}</button>
-}
+})
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={classes('ui-field', className)} {...props}/>
@@ -99,8 +101,8 @@ export interface DisclosureProps extends Omit<DetailsHTMLAttributes<HTMLDetailsE
   children: ReactNode
 }
 
-export function Disclosure({ summary, summaryMeta, children, className, ...props }: DisclosureProps) {
-  return <details className={classes('ui-disclosure', className)} {...props}>
+export const Disclosure = forwardRef<HTMLDetailsElement, DisclosureProps>(function Disclosure({ summary, summaryMeta, children, className, ...props }, ref) {
+  return <details ref={ref} className={classes('ui-disclosure', className)} {...props}>
     <summary>
       <UiIcon className="ui-disclosure-chevron" name="chevron-down" size={14}/>
       <span className="ui-disclosure-summary">{summary}</span>
@@ -108,7 +110,7 @@ export function Disclosure({ summary, summaryMeta, children, className, ...props
     </summary>
     <div className="ui-disclosure-body">{children}</div>
   </details>
-}
+})
 
 export interface ToolbarProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode

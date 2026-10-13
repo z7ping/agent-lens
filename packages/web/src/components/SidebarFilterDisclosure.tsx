@@ -1,4 +1,4 @@
-import { useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
@@ -19,6 +19,7 @@ interface SidebarFilterDisclosureProps {
   defaultOpen?: boolean
   showAllOption?: boolean
   agentOrderManagement?: boolean
+  closeOnOutside?: boolean
 }
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
@@ -32,13 +33,37 @@ export function SidebarFilterDisclosure({
   defaultOpen = false,
   showAllOption = false,
   agentOrderManagement = false,
+  closeOnOutside = false,
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
   const { t: tAgents } = useTranslation('agents')
   const [open, setOpen] = useState(defaultOpen)
+  const disclosureRef = useRef<HTMLDetailsElement>(null)
   const [managingOrder, setManagingOrder] = useState(false)
   const [draggedId, setDraggedId] = useState('')
   const { canReorder, move, moveBy, reset } = useIntegrationOrder()
+  useEffect(() => {
+    if (!closeOnOutside || !open) return
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target
+      if (target instanceof Node && !disclosureRef.current?.contains(target)) setOpen(false)
+    }
+    const closeEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      if (!disclosureRef.current?.contains(document.activeElement)) return
+      event.preventDefault()
+      setOpen(false)
+      disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeEscape)
+    }
+  }, [closeOnOutside, open])
+
+
   const resolvedSummary = summary ?? t('sidebarFilter.summary')
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
@@ -74,6 +99,7 @@ export function SidebarFilterDisclosure({
   }
 
   return <Disclosure
+    ref={disclosureRef}
     className={`workspace-sidebar-filter-disclosure ${className}`.trim()}
     summary={resolvedSummary}
     summaryMeta={summaryMeta ?? computedSummary}

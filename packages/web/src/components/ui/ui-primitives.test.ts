@@ -48,12 +48,31 @@ function tsxFiles(directory: string): string[] {
 }
 
 test('shared UI primitives expose the unified component set', () => {
-  for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
+  for (const name of ['Button', 'Input', 'Textarea', 'StatusBadge', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
+  assert.match(source, /export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>/)
+  assert.match(source, /export const Disclosure = forwardRef<HTMLDetailsElement, DisclosureProps>/)
   assert.match(index, /export \{ Dialog, Drawer, Popover(?:, [^}]*)? \} from '\.\/Overlay'/)
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
   assert.match(index, /export \{ UiIcon \} from '\.\.\/UiIcon'/)
+})
+
+test('快捷筛选复用 Disclosure 且具有显式可选的外部关闭策略', () => {
+  assert.match(sidebarFilterDisclosure, /closeOnOutside\?: boolean/)
+  assert.match(sidebarFilterDisclosure, /ref=\{disclosureRef\}/)
+  assert.match(sidebarFilterDisclosure, /document\.addEventListener\('pointerdown', closeOutside\)/)
+  assert.match(sidebarFilterDisclosure, /document\.addEventListener\('keydown', closeEscape\)/)
+  assert.match(taskCenterPage, /className="task-center-agent-filter"\s+closeOnOutside/)
+  assert.match(taskCenterPage, /className="task-center-advanced-filter"\s+closeOnOutside/)
+  assert.match(sidebarFilterDisclosure, /closeOnOutside = false/)
+})
+
+test('侧栏设置使用 Popover 锚点，不受折叠侧栏裁切', () => {
+  assert.match(workspaceSidebar, /ref=\{settingsButtonRef\}/)
+  assert.match(workspaceSidebar, /<Popover[\s\S]*?anchorRef=\{settingsButtonRef\}[\s\S]*?placement="right-end"/)
+  assert.doesNotMatch(workspaceSidebar, /settingsAnchorRef/)
+  assert.match(workspaceSidebar, /autoFocus[\s\S]*?workspace-settings-menu-item/)
 })
 
 test('DeepSeek Harness 在浅色和深色主题都拥有来源色 Token', () => {
@@ -97,6 +116,17 @@ test('Dialog and Drawer own common accessibility behavior', () => {
   assert.match(overlay, /previous\.focus\(\{ preventScroll: true \}\)/)
   assert.match(overlay, /export function Dialog/)
   assert.match(overlay, /export function Drawer/)
+})
+
+test('Review 诊断 Tabs 使用单一 Tab 停靠点及方向键切换', () => {
+  assert.match(reviewPage, /aria-orientation="horizontal"/)
+  assert.match(reviewPage, /event\.key === 'ArrowRight'/)
+  assert.match(reviewPage, /event\.key === 'ArrowLeft'/)
+  assert.match(reviewPage, /event\.key === 'Home'/)
+  assert.match(reviewPage, /event\.key === 'End'/)
+  assert.match(reviewPage, /tabIndex=\{tab === 'detail' \? 0 : -1\}/)
+  assert.match(reviewPage, /tabIndex=\{tab === 'evidence' \? 0 : -1\}/)
+  assert.match(reviewPage, /tabIndex=\{tab === 'raw' \? 0 : -1\}/)
 })
 
 test('Popover 在异步内容改变尺寸后重新定位', () => {
@@ -168,17 +198,17 @@ test('Workspace Shell owns three primary workspaces and one dynamic context host
   assert.match(workspacePrimaryNavigation, /<UiIcon name=\{section\.icon\} size=\{16\}/)
   assert.doesNotMatch(workspacePrimaryNavigation, /to: '\/(?:tools|backup|review\/live)'/)
   assert.match(workspaceSidebar, /workspace-sidebar-context" ref=\{onContextHost\}/)
-  assert.match(workspaceSidebar, /aria-label=\{t\('navigation:collapseSidebar'\)\}/)
-  assert.match(app, /aria-label=\{t\('expandSidebar'\)\}/)
+  assert.match(workspaceSidebar, /collapsed \? t\('navigation:expandSidebar'\) : t\('navigation:collapseSidebar'\)/)
+  assert.match(app, /onToggleCollapse=\{\(\) => setDesktopSidebarCollapsed\(!sidebarCollapsed\)\}/)
   assert.match(app, /writeSidebarCollapsed\(collapsed\)/)
   assert.match(workspaceSidebar, /workspace-insight-switcher/)
   assert.match(workspaceSidebarCss, /grid-template-columns:\s*316px minmax\(0, 1fr\)/)
-  assert.match(workspaceSidebarCss, /\.app-shell\.is-sidebar-collapsed\s*\{[\s\S]*?grid-template-columns:\s*0 minmax\(0, 1fr\)/)
-  assert.match(workspaceSidebarCss, /workspace-primary-link\.is-active\s*\{[\s\S]*?background:\s*transparent;/)
+  assert.match(workspaceSidebarCss, /\.app-shell\.is-sidebar-collapsed\s*\{[\s\S]*?grid-template-columns:\s*40px minmax\(0, 1fr\)/)
+  assert.match(workspaceSidebarCss, /workspace-primary-link\.is-active\s*\{[\s\S]*?background:\s*var\(--al-accent-soft\)/)
   assert.doesNotMatch(workspaceSidebarCss, /workspace-primary-link\.is-active::before/)
   assert.match(workspaceSidebarCss, /workspace-sidebar-filter-disclosure/)
-  assert.doesNotMatch(sidebarFilterDisclosure, /<Disclosure[^>]*\sopen(?:\s|>)/)
-  assert.match(workspaceSidebarCss, /\.task-center-sidebar-filter\s*\{[\s\S]*?flex:\s*0 0 auto;/)
+  assert.match(sidebarFilterDisclosure, /open=\{open\}/)
+  assert.match(workspaceSidebarCss, /\.task-center-quick-filters\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\) 34px;/)
   assert.doesNotMatch(workspaceSidebarCss, /\.task-center-sidebar-filter[\s\S]{0,300}position:\s*absolute;/)
   assert.match(app, /<ToolsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
   assert.match(app, /<InsightsPage model=\{model\} sidebarHost=\{sidebarHost\}/)

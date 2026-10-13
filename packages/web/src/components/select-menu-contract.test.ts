@@ -48,6 +48,25 @@ test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => 
   assert.match(selectSource, /createPortal\(/)
 })
 
+test('SelectMenu 的菜单键盘处理保护 IME，并跟踪 Sidebar 浮层锚点变化', () => {
+  assert.match(selectSource, /event\.nativeEvent\.isComposing \|\| event\.nativeEvent\.keyCode === 229/)
+  assert.match(selectSource, /event\.target !== searchRef\.current/)
+  assert.match(selectSource, /new ResizeObserver\(\(\) =>/)
+  assert.match(selectSource, /getComputedStyle\(trigger\)\.visibility === 'hidden'/)
+  assert.match(selectSource, /geometryObserver\?\.observe\(triggerRef\.current\)/)
+  assert.match(selectSource, /geometryObserver\?\.observe\(sidebar\)/)
+  assert.match(selectSource, /geometryObserver\?\.disconnect\(\)/)
+})
+
+test('任务中心高级筛选的展示和清除行为与筛选条件一致', () => {
+  assert.match(taskCenterSource, /advancedTimeActive = review\.filters\.range !== '7d'/)
+  assert.match(taskCenterSource, /advancedStatusActive = review\.filters\.status !== 'all'/)
+  assert.match(taskCenterSource, /className="task-center-filter-chip" onClick=\{\(\) => model\.setReviewFilters\(\{ range: '7d' \}\)\}/)
+  assert.match(taskCenterSource, /className="task-center-filter-chip" onClick=\{\(\) => model\.setReviewFilters\(\{ status: 'all' \}\)\}/)
+  assert.match(taskCenterSource, /clearAllFilters = \(\) => model\.setReviewFilters\(\{ sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' \}\)/)
+  assert.match(taskCenterSource, /remoteFilterLimitation/)
+})
+
 test('SelectMenu 浮层阻止 pointerdown 冒泡，避免嵌套弹层在选择前被关闭', () => {
   assert.match(selectSource, /onPointerDown=\{event => event\.stopPropagation\(\)\}/)
 })
