@@ -2,6 +2,7 @@ import { createInstance, type i18n } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import {
   OFFICIAL_AGENT_LENS_LOCALE,
+  BUILTIN_AGENT_LENS_ENGLISH_LOCALE,
   type LocalePackListResponseDto,
 } from '@agent-lens/protocol'
 import { officialChineseLocalePack } from './official-zh-CN'
@@ -39,13 +40,19 @@ export function translateProduct(key: string, options: Record<string, unknown> =
   })
 }
 
+export function systemProductLocale(language: string | undefined): string {
+  const normalized = (language ?? '').replaceAll('_', '-').trim().toLowerCase()
+  return normalized === 'zh' || normalized.startsWith('zh-')
+    ? OFFICIAL_AGENT_LENS_LOCALE
+    : BUILTIN_AGENT_LENS_ENGLISH_LOCALE
+}
+
 export function readLocalePreference(): string {
   try {
     const stored = localStorage.getItem(LOCALE_PREFERENCE_KEY)
-    return stored || OFFICIAL_AGENT_LENS_LOCALE
-  } catch {
-    return OFFICIAL_AGENT_LENS_LOCALE
-  }
+    if (stored) return stored
+  } catch { /* storage unavailable */ }
+  return systemProductLocale(typeof navigator === 'undefined' ? undefined : navigator.language)
 }
 
 export function writeLocalePreference(locale: string): void {
@@ -90,7 +97,7 @@ export async function initializeI18n(): Promise<i18n> {
   const preferred = readLocalePreference()
   const available = listLocalePacks().some(pack => pack.locale === preferred)
     ? preferred
-    : OFFICIAL_AGENT_LENS_LOCALE
+    : systemProductLocale(typeof navigator === 'undefined' ? undefined : navigator.language)
 
   await agentLensI18n
     .use(initReactI18next)
