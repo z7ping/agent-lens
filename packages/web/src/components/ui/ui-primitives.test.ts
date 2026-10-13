@@ -48,13 +48,24 @@ function tsxFiles(directory: string): string[] {
 }
 
 test('shared UI primitives expose the unified component set', () => {
-  for (const name of ['Button', 'Input', 'Textarea', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
+  for (const name of ['Button', 'Input', 'Textarea', 'StatusBadge', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
   assert.match(source, /export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>/)
+  assert.match(source, /export const Disclosure = forwardRef<HTMLDetailsElement, DisclosureProps>/)
   assert.match(index, /export \{ Dialog, Drawer, Popover(?:, [^}]*)? \} from '\.\/Overlay'/)
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
   assert.match(index, /export \{ UiIcon \} from '\.\.\/UiIcon'/)
+})
+
+test('快捷筛选复用 Disclosure 且具有显式可选的外部关闭策略', () => {
+  assert.match(sidebarFilterDisclosure, /closeOnOutside\?: boolean/)
+  assert.match(sidebarFilterDisclosure, /ref=\{disclosureRef\}/)
+  assert.match(sidebarFilterDisclosure, /document\.addEventListener\('pointerdown', closeOutside\)/)
+  assert.match(sidebarFilterDisclosure, /document\.addEventListener\('keydown', closeEscape\)/)
+  assert.match(taskCenterPage, /className="task-center-agent-filter"\s+closeOnOutside/)
+  assert.match(taskCenterPage, /className="task-center-advanced-filter"\s+closeOnOutside/)
+  assert.match(sidebarFilterDisclosure, /closeOnOutside = false/)
 })
 
 test('侧栏设置使用 Popover 锚点，不受折叠侧栏裁切', () => {
