@@ -155,11 +155,17 @@ export function SelectMenu({
       if (!target || triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
       close(false)
     }
+    // Portal 下拉位置依赖锚点真实几何；侧栏展开不会触发 window.resize。
+    const geometryObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updatePosition)
+    if (triggerRef.current) geometryObserver?.observe(triggerRef.current)
+    const sidebar = triggerRef.current?.closest('.workspace-sidebar')
+    if (sidebar) geometryObserver?.observe(sidebar)
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
     document.addEventListener('pointerdown', dismiss, true)
     return () => {
       cancelAnimationFrame(focusFrame)
+      geometryObserver?.disconnect()
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
       document.removeEventListener('pointerdown', dismiss, true)
@@ -185,13 +191,16 @@ export function SelectMenu({
   }
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    // 中文 IME 的回车/方向键属于候选词操作，不能被菜单消费。
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
     if (event.key === 'Escape') {
       event.preventDefault()
+      event.stopPropagation()
       close(true)
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       moveActive(event.key === 'ArrowDown' ? 1 : -1)
-    } else if (event.key === 'Home' || event.key === 'End') {
+    } else if (event.target !== searchRef.current && (event.key === 'Home' || event.key === 'End')) {
       event.preventDefault()
       setActiveValue((event.key === 'Home' ? enabledOptions[0] : enabledOptions.at(-1))?.value ?? '')
     } else if ((event.key === 'Enter' || (!searchable && event.key === ' ')) && activeValue) {
