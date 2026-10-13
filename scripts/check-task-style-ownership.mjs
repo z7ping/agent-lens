@@ -194,6 +194,22 @@ for (const retiredMarker of [
 }
 
 const taskCenter = readFileSync(taskCenterPath, 'utf8')
+const taskCenterView = readFileSync(`${webRoot}/features/TaskCenterPage.tsx`, 'utf8')
+const sidebarStyles = readFileSync(`${webRoot}/components/workspace-sidebar.css`, 'utf8')
+// 同级筛选控件必须在唯一 Sidebar 样式所有者中共用几何，禁止回退到高版 Field 或无效后代覆盖。
+if (!/<SelectMenu\s+className="task-center-project-filter"\s+variant="toolbar"/.test(taskCenterView)
+  || !/<SidebarFilterDisclosure\s+className="task-center-agent-filter"/.test(taskCenterView)) {
+  throw new Error('任务中心必须使用现有 Sidebar Disclosure + 单行 SelectMenu toolbar 筛选组合')
+}
+const filterGeometry = sidebarStyles.match(/\.task-center-agent-filter > summary,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-advanced-filter > summary\s*\{([^}]*)\}/)?.[1]
+if (!filterGeometry
+  || !/height:\s*34px;/.test(filterGeometry)
+  || !/min-height:\s*34px;/.test(filterGeometry)
+  || !/font-size:\s*13px;/.test(filterGeometry)
+  || !/border-radius:\s*8px;/.test(filterGeometry)
+  || /\.task-center-project-filter\s+\.select-menu-trigger/.test(sidebarStyles)) {
+  throw new Error('任务中心全部智能体/全部项目必须共用 Sidebar 34px/13px 筛选几何，禁止无效后代 CSS 覆盖')
+}
 for (const marker of [
   '.task-center-main .review-reader',
   '.task-center-main .pi-live-document',
