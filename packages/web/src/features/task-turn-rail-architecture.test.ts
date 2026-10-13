@@ -20,9 +20,21 @@ test('Review 与 Live 导轨由轮次数据驱动，并在数据到达后释放 
   assert.match(taskSurface, /turnRailItems\?: readonly TaskTurnRailData\[]/)
   assert.match(taskSurface, /const hasProvidedTurnRailItems = providedTurnRailItems !== undefined/)
   assert.match(taskSurface, /if \(hasProvidedTurnRailItems\) return/)
-  assert.match(taskSurface, /\[hasProvidedTurnRailItems, scanRounds, scheduleRailViewport\]/)
+  assert.match(taskSurface, /\[hasProvidedTurnRailItems, scanRounds\]/)
   assert.match(liveTask, /turnRailItems=\{turnRailItems\}/)
   assert.match(review, /turnRailItems=\{detail \? turnRailItems : undefined\}/)
+})
+
+test('侧栏展开/收起时共享导轨几何监听不依赖 fallback DOM 轮次扫描', () => {
+  const layoutEffect = taskSurface.match(/useEffect\(\(\) => \{\s*const root = rootRef\.current\s*if \(!root\) return\s*scheduleRailViewport\(\)[\s\S]*?\}, \[scheduleRailViewport\]\)/)?.[0]
+  assert.ok(layoutEffect, '共享布局监听必须独立于有条件的轮次扫描')
+  assert.match(layoutEffect, /new ResizeObserver\(scheduleRailViewport\)/)
+  assert.match(layoutEffect, /resizeObserver\?\.observe\(root\)/)
+  assert.match(layoutEffect, /root\.addEventListener\('scroll', scheduleRailViewport, true\)/)
+  assert.match(layoutEffect, /window\.addEventListener\('resize', scheduleRailViewport\)/)
+  assert.match(layoutEffect, /resizeObserver\?\.disconnect\(\)/)
+  assert.doesNotMatch(layoutEffect, /hasProvidedTurnRailItems/)
+  assert.match(taskSurface, /const boundary = sessionBoundaryPosition\(root, railFrame, viewportRect\)/)
 })
 
 test('超长轮次导轨限制真实 DOM tick 数量', () => {
