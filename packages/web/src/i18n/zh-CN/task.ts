@@ -261,6 +261,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         searchPlaceholder: '搜索任务…',
         clearSearch: '清除搜索',
         clearFilters: '清除',
+        remoteFilterLimitation: '远程任务不支持按智能体、项目或状态筛选，当前条件下已隐藏。',
         running: '进行中',
         empty: '当前筛选范围没有历史任务。',
         loadMore: '加载更多历史任务',
