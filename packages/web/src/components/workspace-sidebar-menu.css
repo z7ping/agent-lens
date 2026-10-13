@@ -78,10 +78,8 @@
   color: var(--al-ink);
 }
 
+/* 锚点几何由统一 Popover 计算；此处仅持有设置菜单自身视觉。 */
 .workspace-settings-popover {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 8px);
   z-index: 90;
   width: 242px;
   padding: 7px;
