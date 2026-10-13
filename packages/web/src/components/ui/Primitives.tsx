@@ -101,8 +101,8 @@ export interface DisclosureProps extends Omit<DetailsHTMLAttributes<HTMLDetailsE
   children: ReactNode
 }
 
-export function Disclosure({ summary, summaryMeta, children, className, ...props }: DisclosureProps) {
-  return <details className={classes('ui-disclosure', className)} {...props}>
+export const Disclosure = forwardRef<HTMLDetailsElement, DisclosureProps>(function Disclosure({ summary, summaryMeta, children, className, ...props }, ref) {
+  return <details ref={ref} className={classes('ui-disclosure', className)} {...props}>
     <summary>
       <UiIcon className="ui-disclosure-chevron" name="chevron-down" size={14}/>
       <span className="ui-disclosure-summary">{summary}</span>
@@ -110,7 +110,7 @@ export function Disclosure({ summary, summaryMeta, children, className, ...props
     </summary>
     <div className="ui-disclosure-body">{children}</div>
   </details>
-}
+})
 
 export interface ToolbarProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode
