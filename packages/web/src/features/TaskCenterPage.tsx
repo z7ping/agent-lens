@@ -360,7 +360,17 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const selectedProject = review.filters.projectId
     ? projects.find(project => project.id === review.filters.projectId)
     : undefined
-  const clearQuickFilters = () => model.setReviewFilters({ sourceIds: null, projectId: '' })
+  const advancedTimeActive = review.filters.range !== '7d'
+  const advancedStatusActive = review.filters.status !== 'all'
+  const hasActiveFilters = review.filters.sourceIds !== null || Boolean(review.filters.projectId)
+    || advancedTimeActive || advancedStatusActive || Boolean(review.filters.search)
+  const unsupportedRemoteFilters = review.filters.sourceIds !== null
+    || Boolean(review.filters.projectId) || advancedStatusActive
+  const activeTimeLabel = review.filters.range === 'today' ? t('center.day.today')
+    : review.filters.range === '30d' ? t('center.history.thirtyDays')
+    : t('center.history.allTime')
+  const activeStatusLabel = review.filters.status === 'clean' ? t('center.history.clean') : t('center.history.withErrors')
+  const clearAllFilters = () => model.setReviewFilters({ sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' })
   const removeAgentFilter = (sourceId: string) => {
     const next = selectedAgentIds.filter(id => id !== sourceId)
     model.setReviewFilters({ sourceIds: next.length ? next : null })
@@ -434,7 +444,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       </SidebarFilterDisclosure>
     </div>
 
-    {(review.filters.sourceIds !== null || review.filters.projectId) && <div className="task-center-active-filters">
+    {hasActiveFilters && <div className="task-center-active-filters">
       {selectedAgentIds.map(sourceId => <Button key={sourceId} size="small" className="task-center-filter-chip" onClick={() => removeAgentFilter(sourceId)}>
         {agentLabel(sourceId, agents.find(agent => agent.sourceId === sourceId)?.displayName)}
         <UiIcon name="close" size={12}/>
@@ -443,7 +453,15 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         {selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId}
         <UiIcon name="close" size={12}/>
       </Button>}
-      <Button size="small" className="task-center-filter-clear" onClick={clearQuickFilters}>{t('center.history.clearFilters')}</Button>
+      {advancedTimeActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ range: '7d' })}>
+        {t('center.history.time')} · {activeTimeLabel}
+        <UiIcon name="close" size={12}/>
+      </Button>}
+      {advancedStatusActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ status: 'all' })}>
+        {t('center.history.status')} · {activeStatusLabel}
+        <UiIcon name="close" size={12}/>
+      </Button>}
+      <Button size="small" className="task-center-filter-clear" onClick={clearAllFilters}>{t('center.history.clearFilters')}</Button>
     </div>}
 
     <div className="task-center-scroll">
@@ -461,6 +479,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       </section>)}
 
       {review.response && !historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
+      {hubSessions.length > 0 && unsupportedRemoteFilters && <div className="task-center-empty" role="status">{t('center.history.remoteFilterLimitation')}</div>}
       {review.response?.meta.hasMore && <Button size="small" className="session-load-more" loading={review.loadingMore} onClick={() => void model.loadMoreReview()}>{t('center.history.loadMore')}</Button>}
     </div>
   </aside>
