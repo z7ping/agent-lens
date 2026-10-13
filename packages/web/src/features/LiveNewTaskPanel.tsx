@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LiveProductDto, LiveRuntimeStateDto, LiveStartInputDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { liveApi } from '../client/live'
@@ -49,6 +49,7 @@ export function LiveNewTaskPanel({
   const [productsError, setProductsError] = useState('')
   const [selectedLiveId, setSelectedLiveId] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
+  const projectSelectionInitializedRef = useRef(false)
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
   const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
@@ -81,12 +82,11 @@ export function LiveNewTaskPanel({
   }, [])
 
   useEffect(() => {
-    const preferred = pickTaskProject(options, preferredProjectId)
-    setSelectedKey(current => {
-      if (current && options.some(option => option.key === current)) return current
-      return preferred?.key ?? options[0]?.key ?? ''
-    })
-  }, [options, preferredProjectId])
+    // 仅初次默认选择；搜索/分页刷新不能悄悄把已选工作目录换成其他项目。
+    if (projectSelectionInitializedRef.current || projectSearchActive || !options.length) return
+    projectSelectionInitializedRef.current = true
+    setSelectedKey(pickTaskProject(options, preferredProjectId)?.key ?? '')
+  }, [options, preferredProjectId, projectSearchActive])
 
   const selectedProduct = products.find(item => item.liveId === selectedLiveId)
   const startCapabilities = selectedProduct?.startCapabilities ?? {
@@ -257,7 +257,7 @@ export function LiveNewTaskPanel({
                     placeholder={t('center.newTask.pathPlaceholder')}
                     aria-label={t('center.newTask.pathAria')}
                     disabled={starting}
-                    onKeyDown={event => { if (event.key === 'Enter') void startManualDirectory() }}
+                    onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) void startManualDirectory() }}
                   />
                   <Button variant="primary" loading={starting} disabled={!available} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
                   {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
