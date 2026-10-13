@@ -587,6 +587,30 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
     return () => window.cancelAnimationFrame(frame)
   }, [providedRailIdentity, syncProvidedRailItems])
 
+  // 导轨和边界导航通过 Portal 固定在 body，需始终跟随当前 TaskSurface 的几何位置。
+  // Review / Live 提供轮次数据时不扫描 DOM，但仍必须监听布局变化。
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    scheduleRailViewport()
+    root.addEventListener('scroll', scheduleRailViewport, true)
+    window.addEventListener('resize', scheduleRailViewport)
+    // 左侧工作栏的 Grid 列宽动画不会触发 window.resize。
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleRailViewport)
+      : null
+    resizeObserver?.observe(root)
+    return () => {
+      resizeObserver?.disconnect()
+      root.removeEventListener('scroll', scheduleRailViewport, true)
+      window.removeEventListener('resize', scheduleRailViewport)
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+      railViewportRef.current = null
+    }
+  }, [scheduleRailViewport])
+
+  // fallback DOM 轮次扫描独立存在，不能再控制几何监听的生命周期。
   useEffect(() => {
     if (hasProvidedTurnRailItems) return
     const root = rootRef.current
@@ -600,17 +624,8 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       attributes: true,
       attributeFilter: ['class', 'data-interaction-id', 'data-round-semantic-id', 'data-round-label', 'data-round-preview', 'data-round-error', 'data-round-state', 'data-mounted', 'open'],
     })
-    root.addEventListener('scroll', scheduleRailViewport, true)
-    window.addEventListener('resize', scheduleRailViewport)
-    return () => {
-      observer.disconnect()
-      root.removeEventListener('scroll', scheduleRailViewport, true)
-      window.removeEventListener('resize', scheduleRailViewport)
-      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
-      frameRef.current = null
-      railViewportRef.current = null
-    }
-  }, [hasProvidedTurnRailItems, scanRounds, scheduleRailViewport])
+    return () => observer.disconnect()
+  }, [hasProvidedTurnRailItems, scanRounds])
 
   const scrollRailItemToAnchor = useCallback((item: TaskTurnRailItem) => {
     if (!item.element || !rootRef.current) return false
