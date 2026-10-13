@@ -20,9 +20,15 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
   let flushPromise: Promise<void> | undefined
   let parserReplayDepth = 0
   let disposed = false
+  let firstUserMessagePending = true
 
-  const schedule = () => {
-    if (disposed || parserReplayDepth > 0 || timer || flushPromise || pending.size === 0) return
+  const schedule = (delayMs = REBUILD_DEBOUNCE_MS) => {
+    if (disposed || parserReplayDepth > 0 || flushPromise || pending.size === 0) return
+    if (timer) {
+      if (delayMs === REBUILD_DEBOUNCE_MS) return
+      clearTimeout(timer)
+      timer = undefined
+    }
     timer = setTimeout(() => {
       timer = undefined
       if (disposed) return
@@ -104,7 +110,13 @@ const applySessionSummaryProjection: Plugin.Function<void> = (ctx: AgentLensCont
     // EventingObservationService 已经过滤 unchanged；收到事件就说明 Canonical Observation
     // 有创建或合并变化，需要刷新会话摘要，覆盖 replay 后的新 provenance / metadata。
     pending.add(event.logicalSessionId)
-    schedule()
+    // 首条用户正文直接生成正式摘要，避免首次安装再等常规合并窗口。
+    if (firstUserMessagePending && event.kind === 'message.user') {
+      firstUserMessagePending = false
+      schedule(50)
+    } else {
+      schedule()
+    }
   })
 
   ctx.on('source/parser-replay-state', event => {

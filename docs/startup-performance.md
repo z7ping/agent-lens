@@ -6,7 +6,7 @@
 
 启用来源并启动 Runtime 后，先恢复最近一个会话，让列表与正文可读，再沿用已有的最近十个会话、最近七天历史的渐进同步。导入仍经过 Canonical Pipeline 和正式摘要投影。其他来源的发现和后续历史补齐不应阻塞已经可用的会话。
 
-数据库写入端完成迁移后，只读端并行启动。来源按各自的发现结果启动捕获，再读取最近历史，保留实时监听与历史恢复之间的衔接。
+数据库写入端完成迁移后，只读端并行启动。来源准备完成后立即读取最近历史，捕获监听并行启动。Codex 历史监听不等待大型目录的首次扫描完成；首次摘要遇到用户正文时缩短合并等待。最新历史完成后再次同步同一时间窗，补齐监听启动期间的文件变化，再在后台恢复较早历史。导入、补齐和摘要仍使用原有 Canonical Pipeline。
 
 Windows 继续使用可靠的文件轮询监听，但轮询间隔统一为一秒，避免默认 100 毫秒轮询在万级文件下挤占读取队列。文件变化通知因此按秒级轮询并叠加原有防抖；其他平台的原生监听方式不变。
 
@@ -23,13 +23,16 @@ npm.cmd run perf:first-install -- --dist --onboarding
 # 空数据库、已启用 Codex，各会话含 20 条消息记录
 npm.cmd run perf:first-install -- --dist --sessions=1000
 npm.cmd run perf:first-install -- --dist --sessions=10000
+
+# 只验证当前源码，不运行发行构建
+npm.cmd run perf:first-install -- --sessions=10000
 ```
 
 检查会创建独立临时用户目录、数据库、集成安装目录和原生 Codex JSONL 历史，启动真实 Daemon，结束后关闭进程并清理这些临时文件。不会使用当前用户的摘要缓存或修改当前运行中的服务。
 
 Windows PowerShell 使用 `npm.cmd` 保留传给脚本的 `--` 参数；其他平台使用 `npm`。
 
-默认可用预算为 3,000 毫秒，观察超时为 30,000 毫秒。可通过 `--budget-ms=`、`--timeout-ms=` 和 `--observations-per-session=` 调整。超出预算或超时返回非零退出码。不带 `--dist` 时运行源码，包含 TypeScript 开发加载开销，不适合代替发行构建指标。
+默认可用预算为 3,000 毫秒，观察超时为 30,000 毫秒。可通过 `--budget-ms=`、`--timeout-ms=` 和 `--observations-per-session=` 调整。超出预算或超时返回非零退出码。不带 `--dist` 时先构建当前源码集成包，再启动 TypeScript 开发 Runtime；构建耗时不计入 Runtime 首次可用时间。源码指标不代替发行构建指标。可用 `--source-file=绝对路径` 将一个既有 Codex JSONL 会话复制进独立临时目录，验证真实文件格式；该文件不会被修改。
 
 ## 输出与测量边界
 
@@ -38,8 +41,10 @@ Windows PowerShell 使用 `npm.cmd` 保留传给脚本的 `--` 参数；其他�
 | 字段 | 含义 |
 | --- | --- |
 | `httpReadyMs` | `/api/v1/review` 首次成功响应 |
+| `sseConnectedMs` | SSE 通道连接成功 |
 | `firstSessionVisibleMs` | 列表首次包含真实导入的会话 |
 | `firstSessionNotificationMs` | SSE 首次收到 `session.updated` |
+| `notificationTransportLagMs` | 首次通知从服务端发出到客户端收到的时差 |
 | `firstDetailReadableMs` | 收到通知后，正式会话接口能够读取合成历史中的用户正文 |
 | `startupSessionPath` | Health 返回的 Runtime 内部启动阶段诊断 |
 
@@ -61,3 +66,7 @@ Windows PowerShell 使用 `npm.cmd` 保留传给脚本的 `--` 参数；其他�
 该场景通过 3 秒预算。调整 Windows 轮询前，同等场景在 30 秒观察期内未能取得可读正文。
 
 同一构建另测：尚未选择来源时接口约 0.49 秒可用；1,000 个同规格会话时，首个正文约 1.11 秒可读。三种场景均通过 3 秒预算。这些结果均为本机单次测量。
+
+2026-10-13，Windows，当前源码、空数据库、10,000 个合成 Codex 会话，每个会话 100 条记录，两次隔离运行：接口首次响应约 1.84–1.85 秒、首个会话出现在列表约 2.17–2.18 秒、SSE 通知约 2.43–2.70 秒、正文可读约 2.48–2.75 秒，均从 Daemon 子进程启动前计时。两次均通过 3 秒预算；前端浏览器绘制另以 `5173` 页面和 `56801` Runtime 验证，不应与本表的 API 时间混为一项。
+
+同日，以已启动的源码 Runtime `56801` 和 Vite `5173` 打开真实 Review 页面：浏览器导航起算，首次内容绘制约 0.63 秒，最近任务列表请求约 0.84 秒完成，当前会话正文请求约 1.13 秒完成，界面随后可见真实列表与正文。该浏览器结果使用已有数据和已启动的服务，不能代替空库启动测量。

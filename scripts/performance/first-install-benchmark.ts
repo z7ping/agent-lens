@@ -1,12 +1,13 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { readPositiveInt } from './benchmark-utils'
+import { buildIntegrationPackages } from '../build-integration-packages.mjs'
 
 // 独立用户目录、空数据库和正式 Daemon；不复用已有摘要或真实用户历史。
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -19,6 +20,7 @@ const budgetMs = readPositiveInt('budget-ms', 3_000)
 const timeoutMs = readPositiveInt('timeout-ms', 30_000)
 const onboarding = process.argv.includes('--onboarding')
 const distribution = process.argv.includes('--dist')
+const sourceFile = process.argv.find(argument => argument.startsWith('--source-file='))?.slice('--source-file='.length)
 let child: ChildProcess | undefined
 let output = ''
 const eventsController = new AbortController()
@@ -46,8 +48,14 @@ async function stopDaemon(): Promise<void> {
 try {
   await mkdir(sessionsDirectory, { recursive: true })
   await mkdir(join(root, 'project'), { recursive: true })
+  const sourceIntegrationBundles = join(root, 'integration-packages')
+  if (!distribution) {
+    await buildIntegrationPackages({ root: repositoryRoot, outDir: sourceIntegrationBundles, clean: true })
+  }
   const now = Date.now()
-  for (let index = 0; index < sessions; index += 1) {
+  if (sourceFile) {
+    await copyFile(resolve(sourceFile), join(sessionsDirectory, basename(sourceFile)))
+  } else for (let index = 0; index < sessions; index += 1) {
     const id = randomUUID()
     const at = new Date(now - index * 1_000).toISOString()
     const lines = [JSON.stringify({
@@ -75,6 +83,7 @@ try {
     AGENT_LENS_DB_PATH: join(root, 'agent-lens.db'),
     AGENT_LENS_VAULT_PATH: join(root, 'vault'),
     AGENT_LENS_INTEGRATIONS_DIR: join(root, 'integrations'),
+    ...(!distribution ? { AGENT_LENS_INTEGRATION_BUNDLE_DIR: sourceIntegrationBundles } : {}),
     AGENT_LENS_CAPTURE_POLICY_PATH: join(root, 'config', 'capture-policy.json'),
     AGENT_LENS_INTEGRATION_AUTH_PATH: join(root, 'config', 'authorization.json'),
     AGENT_LENS_INTEGRATION_PREFERENCES_PATH: join(root, 'config', 'preferences.json'),
@@ -100,6 +109,8 @@ try {
   let firstSessionVisibleMs: number | undefined
   let firstDetailReadableMs: number | undefined
   let firstSessionNotificationMs: number | undefined
+  let notificationTransportLagMs: number | undefined
+  let sseConnectedMs: number | undefined
   let marks: unknown
   const base = `http://127.0.0.1:${port}`
   while (performance.now() - startedAt < timeoutMs) {
@@ -113,6 +124,7 @@ try {
         eventsTask = (async () => {
           const events = await fetch(`${base}/api/v1/events`, { signal: eventsController.signal })
           if (!events.ok || !events.body) throw new Error('会话通知通道不可用')
+          sseConnectedMs = performance.now() - startedAt
           const decoder = new TextDecoder()
           let buffer = ''
           for await (const chunk of events.body) {
@@ -122,9 +134,10 @@ try {
             for (const frame of frames) {
               const data = frame.split(/\r?\n/).find(line => line.startsWith('data:'))
               if (!data) continue
-              const event = JSON.parse(data.slice(5)) as { type?: string }
+              const event = JSON.parse(data.slice(5)) as { type?: string; emittedAt?: string }
               if (event.type === 'session.updated') {
                 firstSessionNotificationMs ??= performance.now() - startedAt
+                if (event.emittedAt) notificationTransportLagMs = Date.now() - Date.parse(event.emittedAt)
                 return
               }
             }
@@ -138,7 +151,10 @@ try {
         if (!onboarding) {
           const detailResponse = await fetch(`${base}/api/v1/review/${encodeURIComponent(list.items[0]!.id)}?direction=backward&limit=10&process=summary`, { signal: AbortSignal.timeout(5_000) })
           const detail = await detailResponse.json()
-          if (!detailResponse.ok || !JSON.stringify(detail).includes('首次安装验证')) {
+          const readable = sourceFile
+            ? Boolean(detail.preview && Array.isArray(detail.interactions) && detail.interactions.length > 0)
+            : JSON.stringify(detail).includes('首次安装验证')
+          if (!detailResponse.ok || !readable) {
             throw new Error('首个会话尚无可阅读的用户内容')
           }
           firstDetailReadableMs = performance.now() - startedAt
@@ -158,8 +174,10 @@ try {
   console.log(JSON.stringify({
     scenario: onboarding ? '全新安装未选择来源' : '空数据库已选择 Codex 来源',
     runtime: distribution ? '发行构建' : '源码开发运行',
-    fixture: { sessions, observationsPerSession },
-    httpReadyMs, firstSessionVisibleMs, firstSessionNotificationMs, firstDetailReadableMs,
+    fixture: sourceFile
+      ? { kind: '现有 Codex 会话文件', sessions: 1, database: '空数据库' }
+      : { sessions, observationsPerSession, database: '空数据库' },
+    httpReadyMs, sseConnectedMs, firstSessionVisibleMs, firstSessionNotificationMs, notificationTransportLagMs, firstDetailReadableMs,
     budgetMs, passed: usableMs !== undefined && usableMs <= budgetMs,
     startupSessionPath: marks,
   }, null, 2))

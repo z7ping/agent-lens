@@ -13,12 +13,14 @@
   "dependencies": {
     "@agent-lens/core": "1.0.0-alpha.6",
     "@agent-lens/core-services": "1.0.0-alpha.6",
-    "@deepseek-ai/cordis": "4.0.1",
-    "@agent-lens/live-support": "1.0.0-alpha.6",
     "@agent-lens/integration-catalog": "1.0.0-alpha.6",
-    "@agent-lens/integration-packages": "1.0.0-alpha.6"
+    "@agent-lens/integration-packages": "1.0.0-alpha.6",
+    "@agent-lens/live-support": "1.0.0-alpha.6",
+    "@deepseek-ai/cordis": "4.0.1",
+    "electron": "43.7.9",
+    "smol-toml": "1.9.1"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.84.4"
+    "@earendil-works/pi-coding-agent": "^1.2.0"
   }
 }

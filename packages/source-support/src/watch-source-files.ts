@@ -12,6 +12,8 @@ export interface SourceFileWatchOptions {
   debounceMs?: number
   /** 数据库监听只需当前目录；事件过滤器不能避免无关子目录的初始遍历。 */
   recursive?: boolean
+  /** 首次历史恢复可与监听器的初始目录扫描并行。 */
+  waitForReady?: boolean
   onError?: (error: unknown) => void
 }
 
@@ -97,7 +99,12 @@ export async function watchSourceFiles(
   }
   options.signal.addEventListener('abort', abort, { once: true })
 
-  await new Promise<void>((resolve, reject) => {
+  if (options.waitForReady === false) {
+    watcher.on('error', error => {
+      reportError(error)
+      void closeWatcher()
+    })
+  } else await new Promise<void>((resolve, reject) => {
     const active = watcher
     if (!active || stopped || options.signal.aborted) {
       resolve()

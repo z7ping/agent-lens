@@ -173,6 +173,8 @@ export async function startCodexRuntimeCapture(
           }
         },
         debounceMs: 180,
+        // 监听器已经建立；初始目录扫描不应挡住最新会话的 Canonical 导入。
+        waitForReady: false,
         fallbackPollMs: 60_000,
         fallbackReconcileLimit: 20,
         reconcilePollMs: 5 * 60_000,

@@ -498,8 +498,9 @@ process.on('SIGTERM', () => handleSignal('SIGTERM'))
 try {
   await app.start()
   startupSessionDiagnostics.markFirst('runtime.ready')
-  app.context.on('observation/committed', () => {
+  app.context.on('observation/committed', event => {
     startupSessionDiagnostics.markFirst('observation.firstCommitted')
+    if (event.kind === 'message.user') startupSessionDiagnostics.markFirst('observation.firstUserCommitted')
   })
   app.context.on('projection/rebuilt', event => {
     if (
@@ -619,23 +620,38 @@ try {
     const plannedHistoryStages = createProgressiveHistoryStages(startedAt)
     const latestStage = startupHistoryStage(plannedHistoryStages)
     const startPreparedSource = async (targets: Awaited<ReturnType<typeof prepareRegisteredSources>>['targets']) => {
-      const capture = await startRegisteredSourceCapture(app.context, runtimeController.signal, targets)
-      captureHandles.push(...capture.results)
-      startupSessionDiagnostics.markFirst('source.capture.started')
-      logSourceFailures(capture.failures)
-      for (const handle of capture.results) {
-        console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
+      // 监听器初始目录扫描可能很大；先建立监听任务，同时读取最新历史。
+      // 两者都完成后再重扫 latest，补齐监听就绪窗口内的文件变化。
+      const captureTask = abortableDelay(500, runtimeController.signal)
+        .then(() => startRegisteredSourceCapture(app.context, runtimeController.signal, targets))
+        .then(capture => {
+          captureHandles.push(...capture.results)
+          startupSessionDiagnostics.markFirst('source.capture.started')
+          logSourceFailures(capture.failures)
+          for (const handle of capture.results) {
+            console.info(`[AgentLens] runtime capture started: ${handle.sourceId}`)
+          }
+        })
+      // latest 同步可能比捕获启动慢，提前挂接拒绝处理以避免未处理的 Promise。
+      void captureTask.catch(() => undefined)
+      if (runtimeController.signal.aborted || !latestStage) {
+        await captureTask
+        return
       }
-      if (runtimeController.signal.aborted || !latestStage) return
       startupSessionDiagnostics.markFirst('history.latest.started')
       console.info(`[AgentLens] startup history sync started: ${latestStage.label}`)
-      const latestHistory = await syncRegisteredSourceHistory(
-        app.context,
-        runtimeController.signal,
-        targets,
-        latestStage.window,
-        { cooperate: () => yieldToForeground(runtimeController.signal) },
-      )
+      let latestHistory: Awaited<ReturnType<typeof syncRegisteredSourceHistory>>
+      try {
+        latestHistory = await syncRegisteredSourceHistory(
+          app.context,
+          runtimeController.signal,
+          targets,
+          latestStage.window,
+          { cooperate: () => yieldToForeground(runtimeController.signal) },
+        )
+      } finally {
+        await captureTask
+      }
       logSourceFailures(latestHistory.failures)
       for (const result of latestHistory.results) {
         startupSessionDiagnostics.mark('history.latest.source.completed', {
@@ -649,13 +665,23 @@ try {
       // Make Canonical commits from the startup latest pass visible through the
       // existing materialized Session Summary before any background repair begins.
       await app.context.projections.flush(SESSION_SUMMARY_PROJECTION_ID)
+      if (!runtimeController.signal.aborted) {
+        const catchupHistory = await syncRegisteredSourceHistory(
+          app.context,
+          runtimeController.signal,
+          targets,
+          latestStage.window,
+          { cooperate: () => yieldToForeground(runtimeController.signal) },
+        )
+        logSourceFailures(catchupHistory.failures)
+      }
     }
     startupSessionDiagnostics.markFirst('source.prepare.started')
     const startupTasks: Promise<void>[] = []
     const prepared = await prepareRegisteredSources(app.context, runtimeController.signal, undefined, {
       onPrepared: targets => {
         // 任务由同步流程持有；发现、捕获和最新会话恢复按来源推进。
-        // 捕获先启动，避免将首屏优化变成实时记录的丢失窗口。
+        // 最新历史先行；随后启动的捕获与二次 latest 同步覆盖交接窗口。
         startupTasks.push(startPreparedSource(targets).catch(error => {
           console.warn('[AgentLens] source startup fast path failed', error)
         }))

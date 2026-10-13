@@ -8,6 +8,7 @@ export type StartupSessionStage =
   | 'history.latest.source.completed'
   | 'history.latest.completed'
   | 'observation.firstCommitted'
+  | 'observation.firstUserCommitted'
   | 'sessionSummary.firstReady'
   | 'review.firstQuery'
   | 'review.firstSessionVisible'

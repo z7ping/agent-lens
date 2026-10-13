@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { open, opendir, readFile, stat } from 'node:fs/promises'
+import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
@@ -40,37 +40,32 @@ function sha256(value: string | Buffer): string {
 }
 
 
-async function* walkJsonlFiles(root: string): AsyncIterable<string> {
-  let directory
+export async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
+  let entries
   try {
-    directory = await opendir(root)
+    entries = await readdir(root, { withFileTypes: true, recursive: true })
   } catch (error) {
-    if (isMissingPathError(error)) return
+    if (isMissingPathError(error)) return []
     throw error
   }
+  const paths = entries
+    .filter(entry => entry.isFile() && extname(entry.name).toLowerCase() === '.jsonl')
+    .map(entry => join(entry.parentPath, entry.name))
 
-  for await (const entry of directory) {
-    const fullPath = join(root, entry.name)
-    if (entry.isDirectory()) {
-      yield* walkJsonlFiles(fullPath)
-    } else if (entry.isFile() && extname(entry.name).toLowerCase() === '.jsonl') {
-      yield fullPath
-    }
+  // 大目录的无界并发 stat 会与实时监听和前台读取争用文件系统队列。
+  const candidates: Array<{ path: string; mtimeMs: number }> = []
+  const statBatchSize = 256
+  for (let offset = 0; offset < paths.length; offset += statBatchSize) {
+    const batch = await Promise.all(paths.slice(offset, offset + statBatchSize).map(async path => {
+      try {
+        return { path, mtimeMs: (await stat(path)).mtimeMs }
+      } catch (error) {
+        if (isMissingPathError(error)) return null
+        throw error
+      }
+    }))
+    for (const candidate of batch) if (candidate) candidates.push(candidate)
   }
-}
-
-export async function listJsonlFiles(root: string, historyWindow?: SourceHistoryWindow): Promise<string[]> {
-  const paths: string[] = []
-  for await (const file of walkJsonlFiles(root)) paths.push(file)
-
-  const candidates = (await Promise.all(paths.map(async path => {
-    try {
-      return { path, mtimeMs: (await stat(path)).mtimeMs }
-    } catch (error) {
-      if (isMissingPathError(error)) return null
-      throw error
-    }
-  }))).filter((candidate): candidate is { path: string; mtimeMs: number } => candidate !== null)
 
   const activeSince = historyWindow?.activeSince ? Date.parse(historyWindow.activeSince) : Number.NaN
   const filtered = Number.isFinite(activeSince)

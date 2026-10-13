@@ -14,7 +14,8 @@
     "@agent-lens/core": "1.0.0-alpha.6",
     "@agent-lens/runtime-cordis": "1.0.0-alpha.6",
     "@agent-lens/source-support": "1.0.0-alpha.6",
-    "smol-toml": "1.8.0"
+    "electron": "43.7.9",
+    "smol-toml": "^1.9.1"
   },
   "devDependencies": {
     "@agent-lens/core-services": "1.0.0-alpha.6",

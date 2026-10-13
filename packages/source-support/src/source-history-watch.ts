@@ -12,6 +12,7 @@ export interface HistoryFileWatchOptions {
   reconcilePollMs?: number
   reconcileLimit?: number
   initialReconcileLimit?: number
+  waitForReady?: boolean
   onError?: (error: unknown) => void
 }
 
@@ -28,6 +29,7 @@ export async function startHistoryFileWatch(
   let stopped = false
   let watcher: SourceFileWatchHandle | null = null
   let watcherClose: Promise<void> | null = null
+  let watcherFailed = false
   let fallbackTimer: NodeJS.Timeout | null = null
   let reconcileTimer: NodeJS.Timeout | null = null
   const debounce = new Map<string, NodeJS.Timeout>()
@@ -89,6 +91,7 @@ export async function startHistoryFileWatch(
     watcher = await watchSourceFiles({
       paths: options.root,
       signal: options.signal,
+      ...(options.waitForReady === undefined ? {} : { waitForReady: options.waitForReady }),
       debounceMs,
       accept: filePath => options.accept ? options.accept(filePath) : true,
       onFile: async (filePath, event) => {
@@ -99,13 +102,19 @@ export async function startHistoryFileWatch(
         processFile(filePath)
       },
       onError: error => {
+        watcherFailed = true
         reportError(error)
-        void closeWatcher()
+        if (watcher) void closeWatcher()
         if (reconcileTimer) clearInterval(reconcileTimer)
         reconcileTimer = null
         startFallbackPolling()
       },
     })
+    // 非等待模式下初始扫描的错误可能早于 watchSourceFiles 返回。
+    if (watcherFailed && watcher) {
+      await watcher.dispose()
+      watcher = null
+    }
   } catch (error) {
     reportError(error)
     watcher = null
