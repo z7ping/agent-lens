@@ -20,6 +20,7 @@ const report = {
   cases: [],
   inspectorReturn: null,
   switchStability: null,
+  sidebarRailToggle: null,
   diagnostics: [],
   ok: true,
 }
@@ -159,6 +160,50 @@ async function waitForProjectedReviewDetail(win, label) {
     await delay(100)
   }
   fail(`${label} 12 秒内未完成真实 Review 详情投影`)
+}
+
+// 覆盖工作栏的真实展开/收起：body Portal 不能停留在动画前的旧坐标。
+async function inspectSidebarRailToggle(win) {
+  const samples = []
+  const errors = []
+  for (const collapsed of [false, true, false]) {
+    const found = await withTimeout(win.webContents.executeJavaScript(`(() => {
+      const shell = document.querySelector('.app-shell')
+      const toggle = document.querySelector('.workspace-sidebar-collapse-button')
+      if (!shell || !toggle) return false
+      if (shell.classList.contains('is-sidebar-collapsed') !== ${collapsed}) toggle.click()
+      return true
+    })()`), 2_000, '切换工作栏折叠状态')
+    if (!found) return { samples, errors: ['缺少工作栏折叠按钮或应用壳层'], ok: false }
+    // 等待正式 Grid 列宽动画完成；检查最终几何，避免把动画中的正常一帧位移算作错误。
+    await delay(240)
+    const value = await withTimeout(win.webContents.executeJavaScript(`(() => {
+      const rect = selector => {
+        const node = document.querySelector(selector)
+        if (!node || getComputedStyle(node).display === 'none') return null
+        const bounds = node.getBoundingClientRect()
+        return { left: bounds.left, right: bounds.right, width: bounds.width }
+      }
+      return {
+        collapsed: document.querySelector('.app-shell')?.classList.contains('is-sidebar-collapsed'),
+        sidebar: rect('.workspace-sidebar'),
+        surface: rect('.task-session-view'),
+        turnRail: rect('.task-turn-rail'),
+      }
+    })()`), 2_000, '检查工作栏与轮次导轨坐标')
+    samples.push(value)
+    if (value.collapsed !== collapsed) errors.push('工作栏折叠状态没有切换到预期值')
+    if (!value.sidebar || !value.surface || !value.turnRail) {
+      errors.push('缺少共享轮次导轨、TaskSurface 或工作栏')
+      continue
+    }
+    if (value.turnRail.left < value.sidebar.right + 2
+      || value.turnRail.left < value.surface.left + 4
+      || value.turnRail.right > value.surface.right + 2) {
+      errors.push(`工作栏 ${collapsed ? '收起' : '展开'}后轮次导轨与列表重叠或越出详情：sidebar=${value.sidebar.right} surface=${value.surface.left} rail=${value.turnRail.left}`)
+    }
+  }
+  return { samples, errors, ok: errors.length === 0 }
 }
 
 async function inspect(win, viewport, theme) {
@@ -417,6 +462,11 @@ try {
         for (const error of result.errors) console.error(`  - ${error}`)
       }
       if (viewport.width === 1280) {
+        diagnostic.phase = 'sidebar-rail-toggle'
+        report.sidebarRailToggle = await inspectSidebarRailToggle(win)
+        if (!report.sidebarRailToggle.ok) report.ok = false
+        await persistReport()
+        for (const error of report.sidebarRailToggle.errors) console.error(`  - ${error}`)
         diagnostic.phase = 'inspector-return'
         report.inspectorReturn = await withTimeout(runInspectorReturn(win), 10_000, 'Inspector 返回位置与焦点验收')
         if (!report.inspectorReturn.ok) report.ok = false
