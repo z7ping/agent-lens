@@ -260,6 +260,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         withErrors: 'With errors',
         searchPlaceholder: 'Search tasks…',
         clearSearch: 'Clear search',
+        clearFilters: 'Clear',
         running: 'Running',
         empty: 'No historical tasks in the current filter range.',
         loadMore: 'Load more historical tasks',

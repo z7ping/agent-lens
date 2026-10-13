@@ -260,6 +260,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         withErrors: '有错误',
         searchPlaceholder: '搜索任务…',
         clearSearch: '清除搜索',
+        clearFilters: '清除',
         running: '进行中',
         empty: '当前筛选范围没有历史任务。',
         loadMore: '加载更多历史任务',

@@ -4,10 +4,6 @@
  * 断点固定采用 Bootstrap 5：sm 576 / md 768 / lg 992 / xl 1200 / xxl 1400。
  */
 
-@media (min-width: 768px) {
-  .workspace-sidebar-restore-button { display: inline-flex; }
-}
-
 @media (max-width: 1199.98px) {
   .app-header-inner { gap: 14px; padding-inline: 14px; }
   .app-header .nav-item { padding-inline: 9px; }

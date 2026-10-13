@@ -42,9 +42,11 @@ export function WorkspacePrimaryNavigation({
         to={section.to}
         onClick={onNavigate}
         className={`workspace-primary-link ${activeSection === section.id ? 'is-active' : ''}`}
+        aria-label={section.ariaLabelKey ? t(section.ariaLabelKey) : t(section.labelKey)}
+        title={section.ariaLabelKey ? t(section.ariaLabelKey) : t(section.labelKey)}
       >
         <UiIcon name={section.icon} size={16}/>
-        <span aria-label={section.ariaLabelKey ? t(section.ariaLabelKey) : undefined}>{t(section.labelKey)}</span>
+        <span>{t(section.labelKey)}</span>
         {hasUpdate && <i className="workspace-nav-dot" aria-label={t('common:newData')}/>}
       </NavLink>
     })}

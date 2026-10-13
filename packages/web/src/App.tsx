@@ -134,8 +134,6 @@ function WorkspaceTopBar({
   snapshot,
   selectedAgentId,
   onOpenNavigation,
-  sidebarCollapsed,
-  onExpandSidebar,
   actions,
   onPageToolsHost,
 }: {
@@ -143,8 +141,6 @@ function WorkspaceTopBar({
   snapshot: ClientSnapshot
   selectedAgentId: string
   onOpenNavigation(): void
-  sidebarCollapsed: boolean
-  onExpandSidebar(): void
   actions?: ReactNode
   onPageToolsHost(node: HTMLDivElement | null): void
 }) {
@@ -181,7 +177,6 @@ function WorkspaceTopBar({
 
   return <div className="workspace-topbar">
     <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title={t('openWorkspaceNavigation')} aria-label={t('openWorkspaceNavigation')}><UiIcon name="menu" size={16}/></IconButton>
-    {sidebarCollapsed && <IconButton className="workspace-sidebar-restore-button" onClick={onExpandSidebar} title={t('expandSidebar')} aria-label={t('expandSidebar')}><UiIcon name="panel-left-open" size={16}/></IconButton>}
     <Breadcrumb
       className="workspace-breadcrumb"
       items={items.map((item, index) => item.to && index < items.length - 1
@@ -414,7 +409,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         onToggleTheme={toggleTheme}
         onOpenMarkdownThemes={() => setMarkdownThemeManagerOpen(true)}
         onContextHost={setSidebarHost}
-        onCollapse={() => setDesktopSidebarCollapsed(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setDesktopSidebarCollapsed(!sidebarCollapsed)}
         mobileOpen={mobileNavigationOpen}
         onMobileClose={() => setMobileNavigationOpen(false)}
       />
@@ -426,8 +422,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           snapshot={snapshot}
           selectedAgentId={resolvedAgentOverviewSourceId}
           onOpenNavigation={() => setMobileNavigationOpen(true)}
-          sidebarCollapsed={sidebarCollapsed}
-          onExpandSidebar={() => setDesktopSidebarCollapsed(false)}
           onPageToolsHost={setWorkspaceTopbarHost}
           actions={onAgents
             ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
