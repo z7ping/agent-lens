@@ -48,12 +48,20 @@ function tsxFiles(directory: string): string[] {
 }
 
 test('shared UI primitives expose the unified component set', () => {
-  for (const name of ['Button', 'IconButton', 'Input', 'Textarea', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
+  for (const name of ['Button', 'Input', 'Textarea', 'StatusBadge', 'Disclosure', 'Toolbar', 'ToolbarGroup']) {
     assert.match(source, new RegExp(`export function ${name}\\b`))
   }
+  assert.match(source, /export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>/)
   assert.match(index, /export \{ Dialog, Drawer, Popover(?:, [^}]*)? \} from '\.\/Overlay'/)
   assert.match(index, /export \{ SelectMenu \} from '\.\.\/SelectMenu'/)
   assert.match(index, /export \{ UiIcon \} from '\.\.\/UiIcon'/)
+})
+
+test('侧栏设置使用 Popover 锚点，不受折叠侧栏裁切', () => {
+  assert.match(workspaceSidebar, /ref=\{settingsButtonRef\}/)
+  assert.match(workspaceSidebar, /<Popover[\s\S]*?anchorRef=\{settingsButtonRef\}[\s\S]*?placement="right-end"/)
+  assert.doesNotMatch(workspaceSidebar, /settingsAnchorRef/)
+  assert.match(workspaceSidebar, /autoFocus[\s\S]*?workspace-settings-menu-item/)
 })
 
 test('DeepSeek Harness 在浅色和深色主题都拥有来源色 Token', () => {
