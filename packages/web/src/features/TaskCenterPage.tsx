@@ -408,7 +408,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       />
       <SelectMenu
         className="task-center-project-filter"
-        variant="field"
+        variant="toolbar"
         value={review.filters.projectId}
         onChange={projectId => model.setReviewFilters({ projectId })}
         ariaLabel={t('center.history.filterProject')}

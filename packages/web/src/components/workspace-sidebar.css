@@ -677,18 +677,28 @@
   margin: 0;
 }
 
+/* 任务中心筛选栏共享紧凑触发器几何；Disclosure 与 SelectMenu 各自保留交互。 */
 .workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary,
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger,
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary {
+  box-sizing: border-box;
+  height: 34px;
   min-height: 34px;
+  gap: 4px;
   padding: 0 8px;
   border: 1px solid var(--al-line);
   border-radius: 8px;
   background: var(--al-surface);
   color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 560;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary {
-  gap: 4px;
+.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:hover:not(:disabled),
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary:hover {
+  border-color: var(--al-line-strong);
+  color: var(--al-ink);
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary .ui-disclosure-chevron,
@@ -718,16 +728,9 @@
   right: 0;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter,
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter .select-menu-trigger {
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger {
   width: 100%;
   min-width: 0;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter .select-menu-trigger {
-  height: 34px;
-  border-color: var(--al-line);
-  background: var(--al-surface);
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary {
