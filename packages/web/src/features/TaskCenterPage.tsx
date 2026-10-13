@@ -411,6 +411,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className="task-center-quick-filters" aria-label={t('center.history.filterAria')}>
       <SidebarFilterDisclosure
         className="task-center-agent-filter"
+        closeOnOutside
         summary={agentSelectionSummary}
         summaryMeta={false}
         agents={agents}
@@ -430,6 +431,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       />
       <SidebarFilterDisclosure
         className="task-center-advanced-filter"
+        closeOnOutside
         summary={<span className="task-center-advanced-filter-label"><UiIcon name="filter" size={14}/></span>}
         summaryMeta={false}
       >
