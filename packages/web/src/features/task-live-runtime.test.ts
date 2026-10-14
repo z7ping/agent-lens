@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
-import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
+import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, shouldRefreshRuntimeListOnVisible, sameLiveRuntimeState, sameTaskRuntimeList, LIVE_VISIBILITY_RECONCILE_WINDOW_MS } from './task-live-runtime'
 
 function state(overrides: Partial<LiveRuntimeStateDto> = {}): LiveRuntimeStateDto {
   return {
@@ -63,4 +63,31 @@ test('runtime list refresh replaces healthy adapters but preserves failed adapte
     [['hermes', 'hermes-new'], ['pi', 'pi-old']],
   )
   assert.deepEqual(mergeTaskLiveRuntimes(previous, [], []), [])
+})
+
+test('short tab switches stay state-only; long gaps and disconnections recover transcript', () => {
+  assert.equal(shouldRecoverLiveOnVisible(0, false), false)
+  assert.equal(shouldRecoverLiveOnVisible(500, false), false)
+  assert.equal(shouldRecoverLiveOnVisible(LIVE_VISIBILITY_RECONCILE_WINDOW_MS - 1, false), false)
+  assert.equal(shouldRecoverLiveOnVisible(LIVE_VISIBILITY_RECONCILE_WINDOW_MS, false), true)
+  assert.equal(shouldRecoverLiveOnVisible(500, true), true)
+})
+
+test('runtime list resumes only when invalidated, uninitialized or stale', () => {
+  const now = 100_000
+  assert.equal(shouldRefreshRuntimeListOnVisible(now, now - 500, 300, false), false)
+  assert.equal(shouldRefreshRuntimeListOnVisible(now, now - 500, 300, true), true)
+  assert.equal(shouldRefreshRuntimeListOnVisible(now, 0, 300, false), true)
+  assert.equal(shouldRefreshRuntimeListOnVisible(now, now - LIVE_VISIBILITY_RECONCILE_WINDOW_MS, 300, false), true)
+  assert.equal(shouldRefreshRuntimeListOnVisible(now, now - 500, LIVE_VISIBILITY_RECONCILE_WINDOW_MS, false), true)
+})
+
+test('unchanged runtime state and list reuse React state', () => {
+  const first = state({ title: 'A', workspacePath: '/workspace', nativeSessionId: 'native-a' })
+  assert.equal(sameLiveRuntimeState(first, { ...first }), true)
+  assert.equal(sameLiveRuntimeState(first, { ...first, pendingMessageCount: 2 }), false)
+  const runtimes: LiveRuntimeRefDto[] = [{ liveId: 'pi', productId: 'pi', displayName: 'Pi', state: first }]
+  assert.equal(sameTaskRuntimeList(runtimes, [{ ...runtimes[0]!, state: { ...first } }]), true)
+  assert.equal(sameTaskRuntimeList(runtimes, [{ ...runtimes[0]!, state: { ...first, title: 'B' } }]), false)
+  assert.equal(sameTaskRuntimeList(runtimes, []), false)
 })
