@@ -48,3 +48,21 @@ test('Guardian 徽标保留来源原生事实并解释为内部审查，而不�
   assert.match(page, /item\.sessionActivity === 'internal-review' \? t\('center\.presentation\.internalReviewHint'\)/)
   assert.match(zhTask, /internalReviewHint: '由来源智能体标记的内部审查会话，不代表 AgentLens 审查发现了问题。'/)
 })
+
+test('进行中与历史会话共享无外框分隔线列表，选中/悬停状态仍保留', () => {
+  assert.match(taskCss, /\.task-center-rail \.session-item \{[^}]*border: 0;[^}]*border-bottom: 1px solid[^}]*border-radius: 0;[^}]*background: transparent;/)
+  assert.doesNotMatch(taskCss, /\.task-center-rail \.task-center-live-group \.session-item \{/)
+  assert.doesNotMatch(taskCss, /\.task-center-rail \.task-center-history-group \.session-item \{/)
+  assert.match(taskCss, /\.task-center-rail \.session-item:hover \{/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-active::before \{/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-active,\s*\.task-center-rail \.session-item-active:hover \{/)
+})
+
+test('idle 状态不创建视觉徽标，保留中性状态圆点和其余异常运行态徽标', () => {
+  assert.match(runtimeList, /if \(status === 'streaming'\) return \{ label: labels.streaming/)
+  assert.match(runtimeList, /if \(status === 'failed'\) return \{ label: labels.failed/)
+  assert.match(runtimeList, /return null\s*\}/)
+  assert.match(runtimeList, /\{badge && <StatusBadge className="task-live-status-badge"/)
+  assert.match(runtimeList, /badge\?\.label \?\? t\('center.runtimeStatus.idle'\)/)
+  assert.match(runtimeList, /'pi-live-idle-dot'/)
+})

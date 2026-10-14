@@ -207,12 +207,25 @@ for (const [name, css] of [
   }
 }
 for (const required of [
-  '.task-center-history-group .session-item',
-  '.task-center-live-group .session-item',
+  '.task-center-rail .session-item {',
+  'border: 0;',
+  'border-bottom: 1px solid',
+  'border-radius: 0;',
+  '.task-center-rail .session-item:hover',
+  '.task-center-rail .session-item-active::before',
   '.session-item-source',
-  '.session-item-active::before',
 ]) {
   if (!taskCenter.includes(required)) throw new Error(`Task Center Rail 缺少共享会话行视觉：${required}`)
+}
+// Live / History / Hub must consume exactly the same row style: the previous
+// group-specific rules recreated boxed Live cards and inconsistent spacing.
+for (const retired of [
+  '.task-center-history-group .session-item {',
+  '.task-center-live-group .session-item {',
+  '.task-center-live-group .session-item:hover',
+  '.task-center-live-group .session-item-active',
+]) {
+  if (taskCenter.includes(retired)) throw new Error(`Task Center 列表不得恢复分组私有卡片视觉：${retired}`)
 }
 
 const taskCenterView = readFileSync(`${webRoot}/features/TaskCenterPage.tsx`, 'utf8')
