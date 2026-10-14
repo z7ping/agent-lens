@@ -22,6 +22,17 @@ export function normalizedSessionSources(sourceIds: readonly string[], productId
   return unique
 }
 
+/** Review startedAt is the earliest captured session fact; endedAt is the latest.
+ * Do not substitute a missing/invalid end time with a fabricated "last active" stamp. */
+export function sessionTimeFact(startedAt: string | undefined, endedAt: string | undefined): {
+  at: string
+  source: 'last-activity' | 'session-start'
+} | undefined {
+  if (endedAt && Number.isFinite(Date.parse(endedAt))) return { at: endedAt, source: 'last-activity' }
+  if (startedAt && Number.isFinite(Date.parse(startedAt))) return { at: startedAt, source: 'session-start' }
+  return undefined
+}
+
 export interface HistoryTaskPresentation {
   title: string
   activityLabel?: string
