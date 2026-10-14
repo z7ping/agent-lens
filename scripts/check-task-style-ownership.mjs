@@ -245,12 +245,12 @@ if (!/<SelectMenu\s+className="task-center-project-filter"\s+variant="toolbar"/.
 }
 const filterGeometry = sidebarStyles.match(/\.task-center-agent-filter > summary,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-advanced-filter > summary\s*\{([^}]*)\}/)?.[1]
 if (!filterGeometry
-  || !/height:\s*34px;/.test(filterGeometry)
-  || !/min-height:\s*34px;/.test(filterGeometry)
+  || !/height:\s*32px;/.test(filterGeometry)
+  || !/min-height:\s*32px;/.test(filterGeometry)
   || !/font-size:\s*13px;/.test(filterGeometry)
   || !/border-radius:\s*8px;/.test(filterGeometry)
   || /\.task-center-project-filter\s+\.select-menu-trigger/.test(sidebarStyles)) {
-  throw new Error('任务中心全部智能体/全部项目必须共用 Sidebar 34px/13px 筛选几何，禁止无效后代 CSS 覆盖')
+  throw new Error('任务中心全部智能体/全部项目必须共用 Sidebar 32px/13px 筛选几何，禁止无效后代 CSS 覆盖')
 }
 for (const marker of [
   '.task-center-main .review-reader',

@@ -23,7 +23,7 @@ test('Web 下拉入口统一使用 SelectMenu，而不是页面级原生 select'
   assert.match(liveNewTaskSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
 })
 
-test('任务中心全部智能体与全部项目使用同一 34px 紧凑筛选规格', () => {
+test('任务中心智能体/项目/高级筛选共享 32px 控件规格', () => {
   const projectFilter = taskCenterSource.match(/<SelectMenu\s+className="task-center-project-filter"[\s\S]*?\/>/)?.[0]
   assert.ok(projectFilter)
   assert.match(projectFilter, /variant="toolbar"/)
@@ -31,8 +31,8 @@ test('任务中心全部智能体与全部项目使用同一 34px 紧凑筛选�
   assert.match(taskCenterSource, /<SidebarFilterDisclosure\s+className="task-center-agent-filter"/)
   const sharedTriggerRule = sidebarStyles.match(/\.workspace-sidebar-context > \.task-center-rail \.task-center-agent-filter > summary,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-advanced-filter > summary \{([^}]*)\}/)?.[1]
   assert.ok(sharedTriggerRule, '项目 SelectMenu 和智能体 Disclosure 必须使用同一条视觉契约')
-  assert.match(sharedTriggerRule, /height:\s*34px;/)
-  assert.match(sharedTriggerRule, /min-height:\s*34px;/)
+  assert.match(sharedTriggerRule, /height:\s*32px;/)
+  assert.match(sharedTriggerRule, /min-height:\s*32px;/)
   assert.match(sharedTriggerRule, /font-size:\s*13px;/)
   assert.match(sharedTriggerRule, /border-radius:\s*8px;/)
   assert.doesNotMatch(sidebarStyles, /\.task-center-project-filter\s+\.select-menu-trigger/)
@@ -56,6 +56,19 @@ test('SelectMenu 的菜单键盘处理保护 IME，并跟踪 Sidebar 浮层锚�
   assert.match(selectSource, /geometryObserver\?\.observe\(triggerRef\.current\)/)
   assert.match(selectSource, /geometryObserver\?\.observe\(sidebar\)/)
   assert.match(selectSource, /geometryObserver\?\.disconnect\(\)/)
+})
+
+test('任务中心多选由「全部」进入单项、复选累计；高级筛选不再嵌套 SelectMenu', () => {
+  const agentSource = readFileSync(new URL('./SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
+  const advanced = taskCenterSource.slice(taskCenterSource.indexOf('className="task-center-advanced-filter"'))
+  assert.match(taskCenterSource, /multipleSelectionBehavior="pick-from-all"/)
+  assert.match(agentSource, /nextAgentFilterSelection\(agentSelection\.value, sourceId, detectedIds\)/)
+  assert.match(agentSource, /<UiIcon name="check" size=\{14\} aria-hidden="true"\/>/)
+  assert.match(advanced, /task-center-advanced-filter-panel/)
+  assert.match(advanced, /className="task-center-advanced-filter-options"/)
+  assert.match(advanced, /aria-pressed=\{review\.filters\.range === option\.value\}/)
+  assert.match(advanced, /aria-pressed=\{review\.filters\.status === option\.value\}/)
+  assert.doesNotMatch(advanced.split('</SidebarFilterDisclosure>')[0], /<SelectMenu/)
 })
 
 test('任务中心高级筛选的展示和清除行为与筛选条件一致', () => {
