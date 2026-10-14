@@ -25,6 +25,9 @@ export type LiveTaskProjectionItem =
       text: string
       streaming: boolean
       at?: string | undefined
+      /** Only reliable native reasoning start/end event pairs produce this duration. */
+      startedAtMs?: number | undefined
+      durationMs?: number | undefined
     }
   | {
       id: string
@@ -401,15 +404,26 @@ export function reduceLiveTaskEvent(
 
   if (event.type === 'reasoning.start' || event.type === 'reasoning.delta' || event.type === 'reasoning.end') {
     const id = contentId(event, 'thinking', fallback)
-    return upsertThinking(items, id, current => ({
-      id,
-      kind: 'thinking',
-      text: event.type === 'reasoning.delta'
-        ? `${current?.text ?? ''}${event.delta ?? ''}`
-        : event.text ?? current?.text ?? '',
-      streaming: event.type !== 'reasoning.end',
-      at: current?.at ?? envelope.receivedAt,
-    }))
+    return upsertThinking(items, id, current => {
+      const receivedAtMs = Date.parse(envelope.receivedAt)
+      const startedAtMs = current?.startedAtMs ?? (
+        event.type === 'reasoning.start' && Number.isFinite(receivedAtMs) ? receivedAtMs : undefined
+      )
+      const durationMs = event.type === 'reasoning.end'
+        && startedAtMs !== undefined && Number.isFinite(receivedAtMs) && receivedAtMs >= startedAtMs
+        ? receivedAtMs - startedAtMs : current?.durationMs
+      return {
+        id,
+        kind: 'thinking',
+        text: event.type === 'reasoning.delta'
+          ? `${current?.text ?? ''}${event.delta ?? ''}`
+          : event.text ?? current?.text ?? '',
+        streaming: event.type !== 'reasoning.end',
+        at: current?.at ?? envelope.receivedAt,
+        ...(startedAtMs === undefined ? {} : { startedAtMs }),
+        ...(durationMs === undefined ? {} : { durationMs }),
+      }
+    })
   }
 
   if (event.type === 'tool.start') {

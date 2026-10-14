@@ -57,6 +57,11 @@ export const englishTaskMessages: LocaleMessagesDto = {
     thinking: {
       thinkingProcess: 'Thinking process',
       executionProcess: 'Execution process',
+      thoughtFor: 'Thought for {{value}}',
+    },
+    toolOutput: {
+      original: 'Raw',
+      formatted: 'Formatted',
     },
     process: {
       details: 'Processing details',
@@ -298,6 +303,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
     },
     tool: {
+      fullInput: 'View full arguments',
       calls: '{{count}} tool calls',
       status: {
         error: 'Failed',

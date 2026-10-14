@@ -23,7 +23,7 @@ interface PiLiveHistoryItemBase {
 export type PiLiveHistoryItem =
   | (PiLiveHistoryItemBase & { kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; modelLabel?: string | undefined; state?: PiLiveItemState | undefined; contentIndex?: number | undefined })
   | (PiLiveHistoryItemBase & { kind: 'thinking'; text: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined })
-  | (PiLiveHistoryItemBase & { kind: 'tool'; callId: string; name: string; summary: string; output: string; status: 'running' | 'success' | 'error' | 'unknown'; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined })
+  | (PiLiveHistoryItemBase & { kind: 'tool'; callId: string; name: string; summary: string; rawInput?: string | undefined; output: string; status: 'running' | 'success' | 'error' | 'unknown'; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined })
   | (PiLiveHistoryItemBase & { kind: 'usage'; usage: PiNativeUsage; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown })
   | (PiLiveHistoryItemBase & { kind: 'lifecycle'; event: string; label: string; detail: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown })
 
@@ -150,6 +150,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
         callId,
         name: fact.name || paired?.name || 'tool',
         summary: toolInputSummary(fact.name, fact.input),
+        ...(fact.input === undefined ? {} : { rawInput: typeof fact.input === 'string' ? fact.input : JSON.stringify(fact.input) ?? String(fact.input) }),
         output: paired ? resultOutput(paired) : '',
         status: paired ? (paired.success ? 'success' : 'error') : 'unknown',
         at: fact.at,

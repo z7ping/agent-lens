@@ -57,6 +57,11 @@ export const chineseTaskMessages: LocaleMessagesDto = {
     thinking: {
       thinkingProcess: '思考过程',
       executionProcess: '执行过程',
+      thoughtFor: '思考了 {{value}}',
+    },
+    toolOutput: {
+      original: '原文',
+      formatted: '格式化',
     },
     process: {
       details: '处理详情',
@@ -298,6 +303,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       },
     },
     tool: {
+      fullInput: '查看完整参数',
       calls: '{{count}} 次工具调用',
       status: {
         error: '失败',

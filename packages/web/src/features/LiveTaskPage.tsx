@@ -31,7 +31,6 @@ import {
   type LiveMarkdownComposerHandle,
 } from '../components/LiveMarkdownComposer'
 import { MarkdownContent } from '../components/MarkdownContent'
-import { toolVisualKind } from '../components/ToolKindIcon'
 import {
   liveComposerDraftKey,
   readLiveComposerDraft,
@@ -65,6 +64,7 @@ import { TaskRound } from './TaskRound'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
+import { ToolOutputContent } from './ToolOutputContent'
 import { workspaceDisplayName } from './task-detail-model'
 
 function messageText(message: LiveMessageDto): string {
@@ -478,7 +478,8 @@ function GenericLiveItem({
     return <TaskThinking
       model={{
         id: item.id,
-        label: t('thinking.executionProcess'),
+        label: t('thinking.thinkingProcess'),
+        ...(item.durationMs !== undefined ? { durationMs: item.durationMs } : {}),
         text: item.text,
         preview: item.text.replace(/\s+/g, ' ').trim().slice(0, 96),
         state: item.streaming ? 'running' : 'settled',
@@ -488,7 +489,6 @@ function GenericLiveItem({
       <MarkdownContent text={item.text} streaming={item.streaming}/>
     </TaskThinking>
   }
-  const visualKind = toolVisualKind(item.name)
   return <TaskToolRow
     model={{
       id: item.id,
@@ -500,11 +500,7 @@ function GenericLiveItem({
       output: item.output,
       durationMs: item.durationMs,
     }}
-    details={item.output
-      ? visualKind === 'shell'
-        ? <div className="task-tool-live-output"><CopyableCodeBlock copyValue={item.output}>{item.output}</CopyableCodeBlock></div>
-        : <MarkdownContent text={item.output}/>
-      : undefined}
+    details={item.output ? <div className="task-tool-live-output"><ToolOutputContent text={item.output} streaming={item.status === 'running'}/></div> : undefined}
   />
 }
 
