@@ -201,15 +201,14 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
       <span>{agentSelectionSummary}</span>
       <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
-    <SidebarFilterDisclosure defaultOpen summary={t('filters.agentScope')} className="workspace-insight-filter-disclosure" summaryMeta={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}>
-      <div className="workspace-insight-filter-fields">
+    <SidebarFilterDisclosure variant="popover" closeOnOutside summary={agentSelectionSummary} className="workspace-insight-filter-disclosure" summaryMeta={false} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}/>
+    <div className="workspace-insight-filter-fields">
         <label><span>{t('filters.project')}</span><SelectMenu variant="field" value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
         <label><span>{t('filters.time')}</span><SelectMenu variant="field" value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel={t('filters.timeAria')} menuWidth={156} options={[
           { value: 'today', label: t('filters.today') }, { value: '7d', label: t('filters.sevenDays') }, { value: '30d', label: t('filters.thirtyDays') }, { value: 'all', label: t('filters.all') },
         ]}/></label>
         {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>{t('filters.clear')}</button>}
-      </div>
-    </SidebarFilterDisclosure>
+    </div>
   </div>
 
   return <>
