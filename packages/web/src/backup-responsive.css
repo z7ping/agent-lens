@@ -65,6 +65,11 @@
     gap: 4px;
   }
 
+  .backup-agent-filter {
+    min-width: 100px;
+    flex-basis: 140px;
+  }
+
   .backup-view-switcher,
   .backup-toolbar-actions {
     gap: 3px;
