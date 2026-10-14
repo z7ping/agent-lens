@@ -8,6 +8,7 @@ import type { PiLiveStartupAuditSnapshot } from './startup-audit'
 import type {
   InstalledPiSdk,
   PiSdkModel,
+  PiSdkPromptOptions,
   PiSdkSession,
   PiSdkSessionManager,
   PiSdkThinkingLevel,
@@ -29,7 +30,7 @@ function emit(listener: PiSdkEventListener | undefined, event: Record<string, un
   listener?.(event as PiSdkEvent)
 }
 
-function compatibility(version = '0.84.4') {
+function compatibility(version = '1.2.0') {
   return inspectPiSdkCompatibility(version)
 }
 
@@ -98,12 +99,12 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     prompt: async (message, options) => {
       calls.push(`prompt:${message}:${options?.streamingBehavior ?? 'direct'}:${options?.source ?? 'none'}`)
       streaming = true
-      options?.preflightResult?.(true)
+      options?.preflightResult?.('started')
       await new Promise<void>(resolve => { releasePrompt = resolve })
       streaming = false
     },
-    steer: async message => { calls.push(`steer:${message}`) },
-    followUp: async message => { calls.push(`follow:${message}`) },
+    steer: async message => { calls.push(`steer:${message}`); return 'queued' as const },
+    followUp: async message => { calls.push(`follow:${message}`); return 'queued' as const },
     clearQueue: () => ({ steering: ['queued-steer'], followUp: ['queued-follow'] }),
     abortBash: () => { calls.push('abort-bash') },
     abort: async () => { streaming = false; releasePrompt?.(); calls.push('abort') },
@@ -115,7 +116,7 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     executable: '/bin/pi',
     packageRoot: '/node_modules/@earendil-works/pi-coding-agent',
     sdkEntry: '/node_modules/@earendil-works/pi-coding-agent/dist/index.js',
-    version: '0.84.4',
+    version: '1.2.0',
     compatibility: compatibility(),
     module: {
       createAgentSession: async () => ({ session }),
@@ -298,12 +299,13 @@ test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', asyn
     setModel: async () => {},
     setThinkingLevel: () => {},
     getAvailableThinkingLevels: () => ['off'],
-    prompt: async (_message: string, options?: { preflightResult?: (success: boolean) => void }) => {
-      options?.preflightResult?.(false)
+    prompt: async (_message: string, options?: PiSdkPromptOptions) => {
+      // Official SDK rejects before invoking preflightResult on failed validation.
+      void options
       throw new Error('No model selected')
     },
-    steer: async () => {},
-    followUp: async () => {},
+    steer: async () => 'queued' as const,
+    followUp: async () => 'queued' as const,
     clearQueue: () => ({ steering: [], followUp: [] }),
     abort: async () => {},
     waitForIdle: async () => {},
@@ -313,7 +315,7 @@ test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', asyn
     executable: '/bin/pi',
     packageRoot: '/pi',
     sdkEntry: '/pi/dist/index.js',
-    version: '0.84.4',
+    version: '1.2.0',
     compatibility: compatibility(),
     module: {
       createAgentSession: async () => ({ session }),
@@ -374,11 +376,11 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
     },
     setThinkingLevel: level => { currentThinking = level },
     getAvailableThinkingLevels: () => currentModel ? switchedThinkingLevels : initialThinkingLevels,
-    prompt: async (_message: string, options?: { preflightResult?: (success: boolean) => void }) => {
-      options?.preflightResult?.(true)
+    prompt: async (_message: string, options?: PiSdkPromptOptions) => {
+      options?.preflightResult?.('started')
     },
-    steer: async () => {},
-    followUp: async () => {},
+    steer: async () => 'queued' as const,
+    followUp: async () => 'queued' as const,
     clearQueue: () => ({ steering: [], followUp: [] }),
     abort: async () => {},
     waitForIdle: async () => {},
@@ -389,7 +391,7 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
     executable: '/bin/pi',
     packageRoot: '/pi',
     sdkEntry: '/pi/dist/index.js',
-    version: '0.84.4',
+    version: '1.2.0',
     compatibility: compatibility(),
     module: {
       createAgentSession: async () => ({ session }),

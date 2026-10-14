@@ -10,7 +10,7 @@ type AgentSelection =
   | { mode: 'multiple'; value: string[] | null; onChange(value: string[] | null): void }
 
 interface SidebarFilterDisclosureProps {
-  summary?: string
+  summary?: ReactNode
   summaryMeta?: ReactNode
   className?: string
   agents?: AgentFacetDto[]
@@ -106,7 +106,7 @@ export function SidebarFilterDisclosure({
     open={open}
     onToggle={event => setOpen(event.currentTarget.open)}
   >
-    {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={resolvedSummary}>
+    {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={typeof resolvedSummary === 'string' ? resolvedSummary : t('sidebarFilter.summary')}>
       {(agentSelection.mode === 'multiple' || showAllOption) && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>}
       {orderedAgents.map(agent => {
         const selected = selectedIds.includes(agent.sourceId)
