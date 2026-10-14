@@ -1,6 +1,6 @@
 /*
  * AgentLens 全局工作栏。
- * 保持 316px 总宽度，将一级工作区收敛为 40px 图标 Rail，
+ * 默认 316px 总宽度，将一级工作区收敛为 40px 图标 Rail，
  * 其余宽度专注承载当前工作区上下文，不改变右侧主内容结构。
  */
 
@@ -14,6 +14,19 @@
   overflow: hidden;
   background: var(--al-canvas);
   transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1);
+}
+
+/* Task Center 才扩展会话列表；其他工作区沿用 316px，收起态维持 40px。 */
+@media (min-width: 1200px) {
+  .app-shell.is-task-center:not(.is-sidebar-collapsed) {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .app-shell.is-task-center:not(.is-sidebar-collapsed) {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
 }
 
 .workspace-sidebar {
