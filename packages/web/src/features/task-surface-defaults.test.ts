@@ -18,10 +18,11 @@ test('Task Review defaults to full observable events without a DOM adapter', () 
   assert.doesNotMatch(reviewPage, /setShowAllEvents\(false\)/)
 })
 
-test('Task Review 的独立 Thinking 与 settled Process 默认折叠，running Process 保持可观察', () => {
+test('Task Review 的 Thinking 和 Process 统一默认折叠，运行中摘要仍保持可观察', () => {
   assert.match(reviewPage, /<TaskThinking[\s\S]*?defaultExpanded=\{false\}/)
   assert.match(reviewPage, /<TaskProcessGroup[\s\S]*?defaultExpanded=\{false\}/)
-  assert.match(taskProcessGroup, /defaultExpanded = state === 'running'/)
+  assert.match(taskProcessGroup, /defaultExpanded = false/)
+  assert.match(taskProcessGroup, /state === 'running' && <span>\{t\('process\.running'\)\}<\/span>/)
   assert.match(taskThinking, /useState\(\(\) => expansionStore\?\.get\(model\.id\) \?\? defaultExpanded\)/)
 })
 
