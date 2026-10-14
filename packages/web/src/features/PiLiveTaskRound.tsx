@@ -221,6 +221,14 @@ function processTiming(items: HistoryProcessItem[]): { startedAtMs?: number; end
   }
 }
 
+/** Add up only fully measured native reasoning blocks. Partial/legacy history
+ * must not masquerade as a complete thinking duration. */
+function measuredThinkingDuration(items: HistoryProcessItem[]): number | undefined {
+  const thinking = items.filter((item): item is Extract<PiLiveHistoryItem, { kind: 'thinking' }> => item.kind === 'thinking')
+  if (!thinking.length || thinking.some(item => item.durationMs === undefined || !Number.isFinite(item.durationMs) || item.durationMs < 0)) return undefined
+  return thinking.reduce((total, item) => total + item.durationMs!, 0)
+}
+
 function HistoryProcessGroup({
   id,
   items,
@@ -245,6 +253,7 @@ function HistoryProcessGroup({
     toolCount={tools.length}
     errorCount={tools.filter(tool => tool.status === 'error').length}
     durationMs={durationMs}
+    thinkingDurationMs={measuredThinkingDuration(items)}
     startedAtMs={timing.startedAtMs}
     endedAtMs={state === 'running' ? undefined : timing.endedAtMs}
     state={state}
@@ -253,7 +262,6 @@ function HistoryProcessGroup({
       {items.map(item => {
         if (item.kind === 'tool-group') return <HistoryToolGroup key={item.id} id={item.id} items={item.items} settled={state !== 'running'}/>
         if (item.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={item.id}>
-          <div className="task-process-message-kind">{t('history.thinking')}</div>
           <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
         </div>
         if (item.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={item.id}>
@@ -450,6 +458,7 @@ export function PiLiveIndexedTaskRound({
       toolCount={process.toolCount}
       errorCount={process.errorCount}
       durationMs={process.durationMs}
+      thinkingDurationMs={loadState === 'loaded' && processEntry ? measuredThinkingDuration(processEntry.items) : undefined}
       state="settled"
       defaultExpanded={false}
       expansionStore={expansionStore}
@@ -466,7 +475,6 @@ export function PiLiveIndexedTaskRound({
         {processEntry.items.map(processItem => {
           if (processItem.kind === 'tool-group') return <HistoryToolGroup key={processItem.id} id={processItem.id} items={processItem.items}/>
           if (processItem.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={processItem.id}>
-            <div className="task-process-message-kind">{t('history.thinking')}</div>
             <ThinkingMarkdown text={processItem.text}/>
           </div>
           if (processItem.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={processItem.id}>
