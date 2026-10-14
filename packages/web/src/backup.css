@@ -60,6 +60,12 @@
   flex: 0 0 auto;
 }
 
+.backup-agent-filter {
+  min-width: 130px;
+  max-width: 220px;
+  flex: 0 1 190px;
+}
+
 .backup-toolbar-actions {
   min-width: 0;
   flex: 0 0 auto;
