@@ -15,6 +15,13 @@ export function sortProjectFacetsByActivity(projects: readonly ProjectFacetDto[]
   })
 }
 
+/** Preserve every observed source identity, but keep the rail's visible label compact. */
+export function normalizedSessionSources(sourceIds: readonly string[], productId: string): string[] {
+  const unique = [...new Set(sourceIds.map(source => source.trim()).filter(Boolean))]
+  if (!unique.length && productId.trim()) unique.push(productId.trim())
+  return unique
+}
+
 export interface HistoryTaskPresentation {
   title: string
   activityLabel?: string

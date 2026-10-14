@@ -12,7 +12,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
@@ -125,7 +125,11 @@ function remoteVisible(
 function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
-  const sourceId = item.sourceIds[0] ?? ''
+  const sourceIds = normalizedSessionSources(item.sourceIds, item.productId)
+  const sourceId = sourceIds[0] ?? item.productId
+  const sourceNames = sourceIds.map(id => agentLabel(id))
+  const fullSourceNames = sourceNames.join(' · ')
+  const compactSourceNames = sourceNames.length > 1 ? `${sourceNames[0]} +${sourceNames.length - 1}` : (sourceNames[0] ?? item.productId)
   const fallback = item.projectName
     ? t('center.history.taskSuffix', { name: item.projectName })
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
@@ -135,7 +139,12 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
       <div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>
       {presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}
     </div>
-    <div className="session-item-meta"><span className={`source-dot ${sourceDot(sourceId)}`}/><span>{agentLabel(sourceId, item.productId)}</span><span className="session-item-project">{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')}</span><time>{formatTime(localTime(item), t, locale)}</time></div>
+    <div className="session-item-meta">
+      <span className={`source-dot ${sourceDot(sourceId)}`}/>
+      <span className="session-item-source" title={fullSourceNames} aria-label={fullSourceNames}>{compactSourceNames}</span>
+      <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')}</span>
+      <time>{formatTime(localTime(item), t, locale)}</time>
+    </div>
   </button>
 }
 
@@ -447,22 +456,30 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>
 
     {hasActiveFilters && <div className="task-center-active-filters">
-      {selectedAgentIds.map(sourceId => <Button key={sourceId} size="small" className="task-center-filter-chip" onClick={() => removeAgentFilter(sourceId)}>
-        {agentLabel(sourceId, agents.find(agent => agent.sourceId === sourceId)?.displayName)}
-        <UiIcon name="close" size={12}/>
-      </Button>)}
-      {review.filters.projectId && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ projectId: '' })}>
-        {selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId}
-        <UiIcon name="close" size={12}/>
-      </Button>}
-      {advancedTimeActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ range: '7d' })}>
-        {t('center.history.time')} · {activeTimeLabel}
-        <UiIcon name="close" size={12}/>
-      </Button>}
-      {advancedStatusActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ status: 'all' })}>
-        {t('center.history.status')} · {activeStatusLabel}
-        <UiIcon name="close" size={12}/>
-      </Button>}
+      <div className="task-center-active-filter-list" aria-label={t('center.history.filterAria')}>
+        {review.filters.sourceIds !== null && selectedAgentIds.length === 0 && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ sourceIds: null })}>
+          {t('center.history.noneSelected')}<UiIcon name="close" size={12}/>
+        </Button>}
+        {selectedAgentIds.map(sourceId => <Button key={sourceId} size="small" className="task-center-filter-chip" onClick={() => removeAgentFilter(sourceId)}>
+          {agentLabel(sourceId, agents.find(agent => agent.sourceId === sourceId)?.displayName)}
+          <UiIcon name="close" size={12}/>
+        </Button>)}
+        {review.filters.projectId && <Button size="small" className="task-center-filter-chip" title={selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId} onClick={() => model.setReviewFilters({ projectId: '' })}>
+          {selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId}
+          <UiIcon name="close" size={12}/>
+        </Button>}
+        {advancedTimeActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ range: '7d' })}>
+          {t('center.history.time')} · {activeTimeLabel}
+          <UiIcon name="close" size={12}/>
+        </Button>}
+        {advancedStatusActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ status: 'all' })}>
+          {t('center.history.status')} · {activeStatusLabel}
+          <UiIcon name="close" size={12}/>
+        </Button>}
+        {review.filters.search.trim() && <Button size="small" className="task-center-filter-chip" title={review.filters.search} onClick={() => model.setReviewFilters({ search: '' })}>
+          {review.filters.search}<UiIcon name="close" size={12}/>
+        </Button>}
+      </div>
       <Button size="small" className="task-center-filter-clear" onClick={clearAllFilters}>{t('center.history.clearFilters')}</Button>
     </div>}
 

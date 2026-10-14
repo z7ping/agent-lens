@@ -194,6 +194,27 @@ for (const retiredMarker of [
 }
 
 const taskCenter = readFileSync(taskCenterPath, 'utf8')
+const workspaceSidebarCss = readFileSync(`${webRoot}/components/workspace-sidebar.css`, 'utf8')
+const sidebarInteractionsCss = readFileSync(`${webRoot}/components/workspace-sidebar-interactions.css`, 'utf8')
+// Task Center session row visual states are owned by task-center.css only.
+// Geometry/filters stay in the sidebar layout owner.
+for (const [name, css] of [
+  ['workspace-sidebar.css', workspaceSidebarCss],
+  ['workspace-sidebar-interactions.css', sidebarInteractionsCss],
+]) {
+  if (/\\.session-item(?:-active|-title|-meta|-foot)?(?:\\s|:|\\{)/.test(css)) {
+    throw new Error(`Task Center 会话行视觉不得在 ${name} 重复定义`)
+  }
+}
+for (const required of [
+  '.task-center-history-group .session-item',
+  '.task-center-live-group .session-item',
+  '.session-item-source',
+  '.session-item-active::before',
+]) {
+  if (!taskCenter.includes(required)) throw new Error(`Task Center Rail 缺少共享会话行视觉：${required}`)
+}
+
 const taskCenterView = readFileSync(`${webRoot}/features/TaskCenterPage.tsx`, 'utf8')
 const sidebarStyles = readFileSync(`${webRoot}/components/workspace-sidebar.css`, 'utf8')
 // 同级筛选控件必须在唯一 Sidebar 样式所有者中共用几何，禁止回退到高版 Field 或无效后代覆盖。

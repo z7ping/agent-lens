@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
-import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sortProjectFacetsByActivity } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sortProjectFacetsByActivity, normalizedSessionSources } from './task-center'
 
 function session(overrides: Partial<ReviewSessionSummaryDto>): ReviewSessionSummaryDto {
   return {
@@ -174,4 +174,10 @@ test('全部项目筛选按全历史最近活动倒序，未记录时间的项�
     { id: 'tie-a', name: 'A 项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
   ])
   assert.deepEqual(sorted.map(item => item.id), ['recent', 'tie-a', 'tie-z', 'older', 'unknown'])
+})
+
+test('会话来源规范化保留全部身份且缺失来源才降级使用产品', () => {
+  assert.deepEqual(normalizedSessionSources(['pi', 'codex', 'pi', '  hermes '], 'pi'), ['pi', 'codex', 'hermes'])
+  assert.deepEqual(normalizedSessionSources([], 'claude-code'), ['claude-code'])
+  assert.deepEqual(normalizedSessionSources(['codex'], 'pi'), ['codex'])
 })

@@ -127,15 +127,6 @@
   width: 286px;
 }
 
-/* 当前任务与二级入口沿用同一 Accent 选中语义。 */
-.workspace-sidebar-context > .task-center-rail .session-item-active {
-  background: color-mix(in srgb, var(--al-accent-soft) 46%, transparent);
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item-active::before {
-  display: block;
-}
-
 /* 设置菜单按用途分组，避免所有低频入口挤成一串。 */
 .workspace-settings-group {
   display: grid;

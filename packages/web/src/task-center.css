@@ -2,7 +2,7 @@
 
 /*
  * Task Center 页面壳层唯一所有者。
- * 任务 Rail 已进入全局 WorkspaceSidebar；本文件只负责任务上下文、详情容器与新建任务布局。
+ * 任务 Rail 已进入全局 WorkspaceSidebar；本文件唯一持有会话行视觉，Sidebar CSS 只管理外层几何。
  * Task 详情组件归 task-detail.css，长会话导航归 review-long-session.css，Pi Live 专属 UI 归 pi-live.css。
  */
 .task-center-page {
@@ -119,33 +119,66 @@
 .task-live-item { --session-source: var(--al-accent); }
 .task-live-item .session-item-meta time { color: var(--al-muted-2); font-weight: 400; }
 
-/* Rail 是平面高密度列表；session-item 基础语义来自 Review 数据模型，视觉仅在 Rail 上下文内生效。 */
+/* 单一所有者：历史任务是扁平两行列表，Live 状态行仍以卡片强调。 */
 .task-center-rail .session-item {
   position: relative;
   display: flex;
   width: 100%;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
-  margin: 3px 0;
-  padding: 8px 8px 8px 11px;
-  border: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--al-surface) 74%, transparent);
+  margin: 0;
+  padding: 8px 8px 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
   box-shadow: none;
   text-align: left;
 }
-.task-center-rail .session-item:hover { border-color: var(--al-line); background: var(--al-surface); }
-.task-center-rail .session-item-active { border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line)); background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-surface)); }
+.task-center-rail .session-item:hover {
+  background: color-mix(in srgb, var(--al-surface) 72%, transparent);
+}
+.task-center-rail .session-item-active,
+.task-center-rail .session-item-active:hover {
+  background: color-mix(in srgb, var(--al-accent-soft) 43%, var(--al-surface));
+}
 .task-center-rail .session-item-active::before {
   content: "";
   position: absolute;
-  top: 7px;
-  bottom: 7px;
+  top: 8px;
+  bottom: 8px;
   left: 0;
   width: 2px;
   border-radius: 2px;
   background: var(--al-accent);
 }
+.task-center-rail .task-center-history-group .session-item {
+  margin: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 55%, transparent);
+  border-radius: 0;
+}
+.task-center-rail .task-center-history-group .session-item-active {
+  border-radius: 7px;
+}
+.task-center-rail .task-center-live-group .session-item {
+  margin: 3px 0;
+  border-color: color-mix(in srgb, var(--al-line) 72%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 74%, transparent);
+}
+.task-center-rail .task-center-live-group .session-item:hover { background: var(--al-surface); }
+.task-center-rail .task-center-live-group .session-item-active {
+  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent-soft) 40%, var(--al-surface));
+}
+.task-center-rail .session-item-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  order: 1;
+  gap: 6px;
+}
+.task-center-rail .session-item-title-row .session-item-title { min-width: 0; flex: 1 1 auto; }
 .task-center-rail .session-item-title {
   display: -webkit-box;
   max-height: 1.45em;
@@ -153,38 +186,45 @@
   overflow: hidden;
   color: var(--al-ink);
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 630;
   line-height: 1.42;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
 }
-.task-center-rail .session-item-title-row {
+.task-center-rail .session-item-title-row .ui-status-badge {
+  max-width: 74px;
+  flex: 0 1 auto;
+  gap: 3px;
+  padding: 1px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.task-center-rail .session-item-meta {
   display: flex;
   min-width: 0;
   align-items: center;
-  order: 1;
-  gap: 8px;
-}
-.task-center-rail .session-item-title-row .session-item-title { min-width: 0; flex: 1; }
-.task-center-rail .session-item-title-row .ui-status-badge { flex: 0 0 auto; gap: 4px; padding: 1px 5px; }
-.task-center-rail .session-item-meta {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  color: var(--al-muted-2);
-  line-height: 1.35;
-}
-.task-center-rail .session-item-meta {
   order: 2;
   gap: 5px;
-  margin-top: 5px;
+  margin-top: 4px;
+  color: var(--al-muted-2);
   font-size: 12px;
+  line-height: 1.32;
 }
-.task-center-rail .session-item-meta .source-dot { width: 6px; height: 6px; flex: 0 0 6px; }
-.task-center-rail .session-item-meta .session-item-project { flex: 1; }
-.task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
-.task-center-page.is-new-task .task-center-main { grid-row: 1; }
+.task-center-rail .session-item-meta .source-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+}
+.task-center-rail .session-item-meta .session-item-source {
+  max-width: 42%;
+  flex: 0 1 auto;
+}
+.task-center-rail .session-item-meta .session-item-project {
+  min-width: 0;
+  flex: 1 1 0;
+}
 .task-center-rail .session-item-meta > span:not(.source-dot):not(.pi-live-pulse):not(.pi-live-idle-dot) {
   min-width: 0;
   overflow: hidden;
@@ -194,17 +234,27 @@
 .task-center-rail .session-item-meta time {
   margin-left: auto;
   flex: 0 0 auto;
+  color: var(--al-muted-2);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.task-center-rail .session-item-meta time { color: var(--al-muted-2); font-weight: 400; font-variant-numeric: tabular-nums; }
 .task-center-rail .session-activity-badge {
   min-height: 18px;
-  flex: 0 0 auto;
-  padding: 1px 5px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 620;
+  font-size: 11px;
+  font-weight: 570;
 }
+.task-center-rail .task-center-group-title {
+  margin: 4px 0 0;
+  padding: 7px 5px 5px;
+  color: var(--al-muted-2);
+  background: var(--al-soft-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.task-center-page.is-new-task { grid-template-rows: minmax(0, 1fr); }
+.task-center-page.is-new-task .task-center-main { grid-row: 1; }
 .task-center-rail .session-load-more {
   width: 100%;
   margin-top: 9px;
