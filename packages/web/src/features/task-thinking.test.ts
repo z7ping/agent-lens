@@ -62,7 +62,7 @@ test('展开状态可由外部 store 恢复，供虚拟列表卸载后重建', (
   assert.match(html, /恢复后的处理正文/)
 })
 
-test('思考无多余大脑图标，过程保留语义标识和运行状态', () => {
+test('共享处理详情只在唯一摘要入口展示大脑图标，不额外插入思考折叠层', () => {
   const running = renderToStaticMarkup(createElement(TaskThinking, {
     model: { ...model, state: 'running' },
     kind: 'thinking',
@@ -80,5 +80,7 @@ test('思考无多余大脑图标，过程保留语义标识和运行状态', ()
   }))
   assert.match(process, /task-thinking-kind-mark/)
   assert.match(process, /task-thinking-running-mark/)
+  // 同一个 disclosure 承担摘要与展开；BrainCircuit 是现有 UiIcon.thinking。
+  assert.match(process, /lucide-brain-circuit|lucide-brain|brain-circuit/i)
 })
 
