@@ -221,7 +221,7 @@ if (!taskCenterView.includes('normalizedSessionSources(item.sourceIds, item.prod
   || !taskCenterView.includes('className="task-center-active-filter-list"')) {
   throw new Error('Task Center 会话来源与单行活动筛选条必须按共享语义呈现')
 }
-if (!/task-center-active-filter-list[^}]*overflow-x:\\s*auto/s.test(sidebarStyles)) {
+if (!/task-center-active-filter-list[^}]*overflow-x:\s*auto/s.test(sidebarStyles)) {
   throw new Error('Task Center 活动筛选条必须单行滚动，不能增加会话列表的垂直噪声')
 }
 
