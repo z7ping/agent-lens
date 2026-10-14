@@ -159,10 +159,10 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
   const displayTitle = sessionListTitle(presentation.title, fallback, sourceIds)
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${displayTitle} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${displayTitle}${presentation.activityLabel ? ` · ${presentation.activityLabel}` : ''} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
       <div className="session-item-title" title={displayTitle}>{displayTitle}</div>
-      {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
+      {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
       <span className={`source-dot ${sourceDot(sourceId)}`}/>
