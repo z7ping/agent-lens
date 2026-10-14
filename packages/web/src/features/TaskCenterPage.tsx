@@ -471,6 +471,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         summaryMeta={false}
         agents={agents}
         agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}
+        multipleSelectionBehavior="pick-from-all"
       />
       <SelectMenu
         className="task-center-project-filter"
@@ -490,13 +491,40 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         summary={<span className="task-center-advanced-filter-label" role="img" aria-label={t('center.history.filterAria')}><UiIcon name="filter" size={14}/></span>}
         summaryMeta={false}
       >
-        <div className="workspace-insight-filter-fields">
-          <label><span>{t('center.history.time')}</span><SelectMenu variant="field" value={review.filters.range} onChange={range => model.setReviewFilters({ range: range as typeof review.filters.range })} ariaLabel={t('center.history.filterTime')} menuWidth={156} options={[
-            { value: 'today', label: t('center.day.today') }, { value: '7d', label: t('center.history.sevenDays') }, { value: '30d', label: t('center.history.thirtyDays') }, { value: 'all', label: t('center.history.allTime') },
-          ]}/></label>
-          <label><span>{t('center.history.status')}</span><SelectMenu variant="field" value={review.filters.status} onChange={status => model.setReviewFilters({ status: status as typeof review.filters.status })} ariaLabel={t('center.history.filterStatus')} menuWidth={150} options={[
-            { value: 'all', label: t('center.history.allStatus') }, { value: 'clean', label: t('center.history.clean') }, { value: 'with-errors', label: t('center.history.withErrors') },
-          ]}/></label>
+        <div className="task-center-advanced-filter-panel">
+          <div className="task-center-advanced-filter-group" role="group" aria-label={t('center.history.filterTime')}>
+            <span className="task-center-advanced-filter-heading">{t('center.history.time')}</span>
+            <div className="task-center-advanced-filter-options">
+              {([
+                { value: 'today', label: t('center.day.today') },
+                { value: '7d', label: t('center.history.sevenDays') },
+                { value: '30d', label: t('center.history.thirtyDays') },
+                { value: 'all', label: t('center.history.allTime') },
+              ] as const).map(option => <button
+                key={option.value}
+                type="button"
+                className={`task-center-filter-option ${review.filters.range === option.value ? 'is-selected' : ''}`}
+                aria-pressed={review.filters.range === option.value}
+                onClick={() => model.setReviewFilters({ range: option.value })}
+              >{option.label}{review.filters.range === option.value && <UiIcon name="check" size={14}/>}</button>)}
+            </div>
+          </div>
+          <div className="task-center-advanced-filter-group" role="group" aria-label={t('center.history.filterStatus')}>
+            <span className="task-center-advanced-filter-heading">{t('center.history.status')}</span>
+            <div className="task-center-advanced-filter-options">
+              {([
+                { value: 'all', label: t('center.history.allStatus') },
+                { value: 'clean', label: t('center.history.clean') },
+                { value: 'with-errors', label: t('center.history.withErrors') },
+              ] as const).map(option => <button
+                key={option.value}
+                type="button"
+                className={`task-center-filter-option ${review.filters.status === option.value ? 'is-selected' : ''}`}
+                aria-pressed={review.filters.status === option.value}
+                onClick={() => model.setReviewFilters({ status: option.value })}
+              >{option.label}{review.filters.status === option.value && <UiIcon name="check" size={14}/>}</button>)}
+            </div>
+          </div>
         </div>
       </SidebarFilterDisclosure>
     </div>
