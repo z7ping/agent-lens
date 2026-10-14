@@ -19,8 +19,6 @@ interface WorkspaceSidebarProps {
   selectedAgentId: string
   onSelectAgent(id: string): void
   onRefreshAgents(): void
-  backupAssetSourceId: string
-  onBackupAssetSourceIdChange(id: string): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onOpenMarkdownThemes(): void
@@ -38,8 +36,6 @@ export function WorkspaceSidebar({
   selectedAgentId,
   onSelectAgent,
   onRefreshAgents,
-  backupAssetSourceId,
-  onBackupAssetSourceIdChange,
   theme,
   onToggleTheme,
   onOpenMarkdownThemes,
@@ -118,18 +114,9 @@ export function WorkspaceSidebar({
           <span>{t('navigation:agentCount', { count: agentSelectionAgents.length })}</span>
           <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        <SidebarFilterDisclosure defaultOpen agentOrderManagement summary={t('navigation:agentSelection')} agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
+        <SidebarFilterDisclosure variant="popover" closeOnOutside agentOrderManagement summary={t('navigation:agentSelection')} agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
-      {onBackup && <div className="workspace-context-menu workspace-agent-context">
-        <SidebarFilterDisclosure
-          defaultOpen
-          showAllOption
-          summary={t('navigation:backupScope')}
-          agents={agentSelectionAgents}
-          agentSelection={{ mode: 'single', value: backupAssetSourceId, onChange: sourceId => { onBackupAssetSourceIdChange(sourceId); onMobileClose() } }}
-        />
-      </div>}
 
     </div>
 
