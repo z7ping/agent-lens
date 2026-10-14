@@ -12,7 +12,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
@@ -43,11 +43,21 @@ function mergeLaunchableProjects(
   })
 }
 
-function formatTime(value: string, t: TFunction, locale: string): string {
+function absoluteTime(value: string, locale: string): string {
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return value
-  const now = new Date()
-  const diff = Math.max(0, now.getTime() - date.getTime())
+  if (!Number.isFinite(date.getTime())) return ''
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(date)
+}
+
+function formatTime(value: string, t: TFunction, locale: string, nowMs: number): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return t('center.time.notAvailable')
+  const now = new Date(nowMs)
+  const diff = now.getTime() - date.getTime()
+  if (diff < 0) return absoluteTime(value, locale)
   if (date.toDateString() === now.toDateString()) {
     const minutes = Math.floor(diff / 60_000)
     if (minutes < 1) return t('center.time.justNow')
@@ -60,7 +70,10 @@ function formatTime(value: string, t: TFunction, locale: string): string {
       time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date),
     })
   }
-  return new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(locale, {
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date)
 }
 
 function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
@@ -75,7 +88,7 @@ function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
 function cleanTitle(value: string | undefined, fallback: string): string {
   const text = value?.replace(/\s+/g, ' ').trim() ?? ''
   if (!text) return fallback
-  return text.length > 74 ? `${text.slice(0, 74)}…` : text
+  return text
 }
 
 function availabilityString(value: HubReadAvailability): string | undefined {
@@ -85,11 +98,11 @@ function availabilityString(value: HubReadAvailability): string | undefined {
 }
 
 function localTime(item: ReviewSessionSummaryDto): string {
-  return item.endedAt || item.startedAt
+  return sessionTimeFact(item.startedAt, item.endedAt)?.at ?? ''
 }
 
 function remoteTime(item: HubReviewSessionSummaryDto): string {
-  return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
+  return sessionTimeFact(availabilityString(item.startedAt), availabilityString(item.endedAt))?.at ?? ''
 }
 
 function remoteTitle(item: HubReviewSessionSummaryDto, t: TFunction): string {
@@ -104,15 +117,17 @@ function remoteVisible(
   item: HubReviewSessionSummaryDto,
   review: ReturnType<AgentLensClientModel['getSnapshot']>['review'],
   t: TFunction,
+  nowMs: number,
 ): boolean {
   if (review.filters.sourceIds !== null || review.filters.projectId || review.filters.status !== 'all') return false
   const search = review.filters.search.trim().toLowerCase()
   if (search && !remoteTitle(item, t).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
   const time = remoteTime(item)
-  if (!time || review.filters.range === 'all') return true
+  if (review.filters.range === 'all') return true
+  if (!time) return false
   const at = Date.parse(time)
   if (!Number.isFinite(at)) return false
-  const now = Date.now()
+  const now = nowMs
   if (review.filters.range === 'today') {
     const date = new Date(at)
     const today = new Date(now)
