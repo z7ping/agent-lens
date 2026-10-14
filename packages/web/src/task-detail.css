@@ -333,6 +333,19 @@
 }
 .task-surface .task-thinking-summary::-webkit-details-marker { display: none; }
 .task-surface .task-thinking-summary-main { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.task-surface .task-thinking-kind-mark,
+.task-surface .task-thinking-running-mark {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--al-muted-2);
+}
+.task-surface .task-thinking-running-mark { visibility: hidden; }
+.task-surface .task-thinking[data-task-thinking-state='running'] .task-thinking-running-mark { visibility: visible; color: var(--al-accent); }
+.task-surface .task-thinking[data-task-thinking-state='running'] .task-thinking-running-mark svg { animation: task-activity-spin 1.4s linear infinite; }
 .task-surface .task-thinking-label { flex: 0 0 auto; color: var(--al-muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
 .task-surface .task-thinking-preview { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--al-muted-2); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-thinking-summary-meta { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
@@ -378,7 +391,7 @@
   display: grid;
   width: 100%;
   min-height: 28px;
-  grid-template-columns: 66px auto minmax(88px, auto) minmax(0, 1fr);
+  grid-template-columns: 66px 122px minmax(88px, auto) minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   padding: 2px;
@@ -420,14 +433,19 @@
 .task-surface .task-tool-kind-test { --kind-fg: var(--al-accent); }
 .task-surface .task-tool-kind .tool-kind-svg,
 .task-surface .task-tool-kind .tool-kind-svg > svg { width: 13px; height: 13px; }
-.task-surface .task-tool-status { color: var(--al-muted-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.task-surface .task-tool-status { display: inline-flex; min-width: 0; align-items: center; gap: 4px; overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.task-surface .task-tool-status-mark { display: inline-flex; flex: 0 0 14px; align-items: center; }
+.task-surface .task-tool-status-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-surface .task-tool-status-run .task-tool-status-mark svg { animation: task-activity-spin 1.4s linear infinite; }
+.task-surface .task-tool-status-ok .task-tool-status-mark { color: var(--al-success); }
+@keyframes task-activity-spin { to { transform: rotate(360deg); } }
 .task-surface .task-tool-status-run { color: var(--al-accent); }
 .task-surface .task-tool-status-error { color: var(--al-danger); }
 .task-surface .task-tool-action { min-width: 0; overflow: hidden; color: var(--al-ink-2); font: 650 13px/1.4 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-target { display: flex; min-width: 0; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 13px; }
 .task-surface .task-tool-target-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-row[data-kind='shell'][data-command='true'] {
-  grid-template-columns: 66px auto minmax(0, 1fr);
+  grid-template-columns: 66px 122px minmax(0, 1fr);
   grid-template-rows: 24px auto;
   column-gap: 8px;
   row-gap: 3px;
@@ -524,12 +542,12 @@
 }
 
 @media (max-width: 1199.98px) {
-  .task-surface .task-tool-row { grid-template-columns: 64px auto minmax(84px, auto) minmax(0, 1fr); }
-  .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 64px auto minmax(0, 1fr); }
+  .task-surface .task-tool-row { grid-template-columns: 64px 118px minmax(84px, auto) minmax(0, 1fr); }
+  .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 64px 118px minmax(0, 1fr); }
   .task-surface .task-message-bubble-user { max-width: min(76%, 760px); }
 }
 @media (max-width: 991.98px) {
-  .task-surface .task-tool-row { grid-template-columns: 64px auto minmax(0, 1fr); }
+  .task-surface .task-tool-row { grid-template-columns: 64px 118px minmax(0, 1fr); }
   .task-surface .task-tool-action { display: none; }
   .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 64px minmax(0, 1fr); }
   .task-surface .task-header-metric:nth-child(n+5) { display: none; }
@@ -545,7 +563,7 @@
   .task-surface .task-round-preview { max-width: 48%; }
   .task-surface .task-round-meta { display: none; }
   .task-surface .task-message-bubble-user { max-width: 94%; }
-  .task-surface .task-tool-row { grid-template-columns: 62px auto minmax(0, 1fr); }
+  .task-surface .task-tool-row { grid-template-columns: 62px 110px minmax(0, 1fr); }
   .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 62px minmax(0, 1fr); }
   .task-surface .task-tool-target { min-width: 0; }
   .task-surface .task-event-row { display: flex; flex-wrap: wrap; }
@@ -559,4 +577,6 @@
   .task-surface .task-tool-output-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
   .task-surface .task-message-response-pending > span { animation: none; opacity: .55; }
+  .task-surface .task-thinking-running-mark svg,
+  .task-surface .task-tool-status-run .task-tool-status-mark svg { animation: none; }
 }
