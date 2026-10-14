@@ -198,6 +198,16 @@
 }
 
 @media (max-width: 575.98px) {
+  .backup-topbar-controls > .backup-agent-filter {
+    display: none;
+  }
+
+  .backup-mobile-scope {
+    display: block;
+    width: min(240px, 100%);
+    margin-bottom: 12px;
+  }
+
   .backup-toolbar-label {
     display: none;
   }
