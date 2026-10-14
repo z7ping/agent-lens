@@ -30,6 +30,8 @@ export interface TaskThinkingModel {
   text: string
   preview?: string | undefined
   time?: string | undefined
+  /** Only the measured reasoning interval; never the whole turn duration. */
+  durationMs?: number | undefined
   state?: TaskRoundState | undefined
 }
 
@@ -41,6 +43,8 @@ export interface TaskToolModel {
   status: TaskToolStatus
   primary?: string | undefined
   secondary?: string | undefined
+  /** Full native tool input when available, never derived from a truncated preview. */
+  rawInput?: string | undefined
   durationLabel?: string | undefined
   durationMs?: number | undefined
   startedAtMs?: number | undefined

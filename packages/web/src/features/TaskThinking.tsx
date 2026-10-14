@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import type { TaskThinkingModel } from './task-detail-model'
+import { taskPreciseDurationLabel, type TaskThinkingModel } from './task-detail-model'
 import { UiIcon } from '../components/UiIcon'
 
 export interface TaskThinkingProps {
@@ -22,10 +21,6 @@ function DisclosureChevron() {
   </span>
 }
 
-function presentationLabel(label: string, t: TFunction): string {
-  return label === t('thinking.thinkingProcess') ? t('thinking.executionProcess') : label
-}
-
 export function TaskThinking({
   model,
   meta,
@@ -40,7 +35,9 @@ export function TaskThinking({
   const { t } = useTranslation('task')
   const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
   const identityRef = useRef(model.id)
-  const label = presentationLabel(model.label, t)
+  const label = kind === 'thinking' && model.state !== 'running' && model.durationMs !== undefined && model.durationMs > 0
+    ? t('thinking.thoughtFor', { value: taskPreciseDurationLabel(model.durationMs) })
+    : model.label
   const running = model.state === 'running'
 
   useEffect(() => {
@@ -69,7 +66,7 @@ export function TaskThinking({
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">
         <DisclosureChevron/>
-        <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name={kind === 'process' ? 'task' : 'thinking'} size={14}/></span>
+        {kind === 'process' && <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="task" size={14}/></span>}
         <span className="task-thinking-label">{label}</span>
         <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
         {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}

@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
+import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import type { TaskToolModel } from './task-detail-model'
 
 export interface TaskToolRowProps {
@@ -62,6 +63,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
   const visualKind = model.kind === 'tool' ? toolVisualKind(model.name) : model.kind
   const target = taskToolTargetText(model, visualKind)
   const commandTarget = visualKind === 'shell' && Boolean(model.primary)
+  const fullInput = model.rawInput ?? model.primary
+  const hasExpandedInput = Boolean(fullInput && (fullInput.length > 96 || /[\r\n]/.test(fullInput)))
   const rowClass = `task-tool-row ${model.status === 'error' ? 'task-tool-row-error' : ''} ${className}`.trim()
 
   useEffect(() => {
@@ -101,6 +104,10 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     {onClick
       ? <button className={rowClass} data-status={model.status} data-kind={visualKind} data-command={commandTarget} onClick={onClick} aria-label={`${model.name}，${statusLabel(model.status, t)}`}>{content}</button>
       : <div className={rowClass} data-status={model.status} data-kind={visualKind} data-command={commandTarget}>{content}</div>}
+    {hasExpandedInput && fullInput && <details className="task-tool-input-details">
+      <summary>{t('tool.fullInput')}</summary>
+      <CopyableCodeBlock copyValue={fullInput}>{fullInput}</CopyableCodeBlock>
+    </details>}
     {details && <div className="task-tool-payload">{details}</div>}
   </div>
 }

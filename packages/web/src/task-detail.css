@@ -511,6 +511,17 @@
 .task-surface .task-tool-output-chevron { flex: 0 0 14px; transition: transform .18s cubic-bezier(.2,.8,.2,1); }
 .task-surface .task-tool-output-details[open] > summary > .task-tool-output-chevron { transform: rotate(90deg); }
 
+/* Expand native tool arguments without hiding any original bytes. */
+.task-surface .task-tool-input-details { min-width: 0; margin: 2px 7px 4px 20px; }
+.task-surface .task-tool-input-details > summary { width: max-content; max-width: 100%; padding: 3px 4px; color: var(--al-accent); font-size: 12px; cursor: pointer; }
+.task-surface .task-tool-input-details pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.55 var(--font-mono); }
+.task-surface .task-tool-output-format-actions { display: flex; gap: 6px; margin: 4px 0; }
+.task-surface .task-tool-output-format-actions button { padding: 3px 7px; border: 1px solid var(--al-line); border-radius: 5px; background: transparent; color: var(--al-muted); font-size: 12px; }
+.task-surface .task-tool-output-format-actions button[aria-pressed='true'] { border-color: var(--al-accent); color: var(--al-accent); }
+.task-surface .task-tool-formatted-output { overflow-x: auto; max-height: 420px; overflow-y: auto; padding: 6px 8px; }
+.task-surface .task-tool-formatted-output .markdown-table-scroll { overflow-x: auto; }
+.task-surface .task-tool-original-output pre { max-height: 420px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.55 var(--font-mono); }
+
 /* ── Event ── */
 .task-surface .task-event-row {
   display: grid;

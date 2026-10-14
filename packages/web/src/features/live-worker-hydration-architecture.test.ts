@@ -61,7 +61,7 @@ test('Generic Live reconciler corrects SSE with visible online and active pollin
   assert.match(page, /epoch !== reconcileEpoch/)
   assert.match(page, /document\.addEventListener\('visibilitychange', onVisible\)/)
   assert.match(page, /window\.addEventListener\('online', onOnline\)/)
-  assert.match(page, /const onVisible = \(\) => \{[\s\S]{0,120}reconcileState\(true\)/)
+  assert.match(page, /reconcileState\(shouldRecoverLiveOnVisible\(hiddenForMs, streamDisconnected\)\)/)
   assert.match(page, /const onOnline = \(\) => \{ void reconcileState\(true\) \}/)
   assert.match(page, /window\.setInterval\([\s\S]*5_000/)
   assert.match(page, /if \(runtimeActive/)
@@ -92,8 +92,9 @@ test('Runtime reconciler preserves SSE compacting activity until compaction ends
 })
 
 
-test('visibility and online recovery force one bounded transcript reconcile even when state fields are unchanged', () => {
-  assert.match(page, /document\.visibilityState === 'visible'\) void reconcileState\(true\)/)
+test('short visibility gaps reconcile state without forcing transcript; online still restores bounded history', () => {
+  assert.match(page, /reconcileState\(shouldRecoverLiveOnVisible\(hiddenForMs, streamDisconnected\)\)/)
+  assert.doesNotMatch(page, /visibilityState === 'visible'\) void reconcileState\(true\)/)
   assert.match(page, /const onOnline = \(\) => \{ void reconcileState\(true\) \}/)
   assert.match(page, /const reconcileTimer = window\.setInterval\([\s\S]*reconcileState\(false\)/)
 })

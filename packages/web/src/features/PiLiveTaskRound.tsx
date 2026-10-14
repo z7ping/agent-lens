@@ -4,6 +4,7 @@ import type { LiveHistoryEventSummaryDto, LiveHistoryIndexItemDto } from '@agent
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { ToolOutputContent } from './ToolOutputContent'
 import { toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
 import { TaskEvent } from './TaskEvent'
@@ -38,6 +39,7 @@ function taskTool(
   status: TaskToolModel['status'],
   summary: string,
   output: string,
+  rawInput: string | undefined,
   timing: { durationMs?: number | undefined; startedAtMs?: number | undefined } | undefined,
   t: TFunction,
 ): TaskToolModel {
@@ -50,6 +52,7 @@ function taskTool(
     kindLabel: t(`task:tool.kind.${kind}`),
     status,
     primary: summary || undefined,
+    ...(rawInput ? { rawInput } : {}),
     output: output || undefined,
     durationMs: timing?.durationMs,
     startedAtMs: timing?.startedAtMs,
@@ -73,11 +76,11 @@ function ToolOutput({ tool }: { tool: TaskToolModel }) {
   const { t } = useTranslation('piLive')
   if (!tool.output) return null
   if (tool.status === 'running') {
-    return <div className="task-tool-live-output" role="status" aria-label={t('history.liveOutput', { tool: tool.name })}><CopyableCodeBlock copyValue={tool.output}>{tool.output}</CopyableCodeBlock></div>
+    return <div className="task-tool-live-output" role="status" aria-label={t('history.liveOutput', { tool: tool.name })}><ToolOutputContent text={tool.output} streaming/></div>
   }
   return <details className="task-tool-output-details" open={tool.status === 'error'}>
     <summary><UiIcon className="task-tool-output-chevron" name="chevron-right" size={14}/><span>{tool.status === 'error' ? t('history.errorOutput') : t('history.viewOutput')}</span></summary>
-    <CopyableCodeBlock copyValue={tool.output}>{tool.output}</CopyableCodeBlock>
+    <ToolOutputContent text={tool.output}/>
   </details>
 }
 
@@ -147,6 +150,7 @@ function HistoryToolGroup({ id, items, settled = false }: { id: string; items: H
     settled && item.status === 'running' ? 'unknown' : item.status,
     item.summary,
     item.output,
+    item.rawInput,
     { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
     t,
   )), t)

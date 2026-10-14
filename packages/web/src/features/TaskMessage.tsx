@@ -171,7 +171,7 @@ export function TaskMessage({
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
           {(canCollapse || !user) && <div className="markdown-message-actions">
-            {!user && <span className="task-message-output-state" data-active={streaming ? 'true' : undefined} role={streaming ? 'status' : undefined} aria-label={streaming ? t('message.generating') : undefined}>
+            {!user && streaming && <span className="task-message-output-state" data-active="true" role="status" aria-label={t('message.generating')}>
               <UiIcon name="loading" size={14}/>
             </span>}
             {!user && <IconButton
