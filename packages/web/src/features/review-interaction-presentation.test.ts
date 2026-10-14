@@ -36,7 +36,7 @@ function unknownEvent(id: string, sourceRecordId: string): ReviewEventNodeDto {
   } as ReviewEventNodeDto
 }
 
-test('Tool 即使显式指向 reasoning 也保持 process 原始顺序，不被重新挂载', () => {
+test('Tool 显式指向 reasoning 时标记归属、保持原序且不连带相邻无归属工具', () => {
   const think = reasoning('think-1', 'native-think-1')
   const child = tool('tool-child', { native: 'native-think-1' })
   const sibling = tool('tool-sibling')
@@ -45,7 +45,10 @@ test('Tool 即使显式指向 reasoning 也保持 process 原始顺序，不被�
   assert.equal(entries.length, 1)
   assert.equal(entries[0]?.type, 'process')
   if (entries[0]?.type !== 'process') throw new Error('process entry missing')
-  assert.deepEqual(entries[0].items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-child', 'tool-sibling'])
+  const groups = entries[0].items.filter(item => item.type === 'tool-group')
+  assert.deepEqual(groups.flatMap(item => item.items.map(tool => tool.id)), ['tool-child', 'tool-sibling'])
+  assert.equal(groups[0]?.parentReasoningId, 'think-1')
+  assert.equal(groups[1]?.parentReasoningId, undefined)
 })
 
 test('parentObservationId 不改变 Tool 在 process 中的事实位置', () => {
@@ -54,7 +57,11 @@ test('parentObservationId 不改变 Tool 在 process 中的事实位置', () => 
   const entries = projectReviewInteractionPresentation([think, child])
   assert.equal(entries.length, 1)
   assert.equal(entries[0]?.type, 'process')
-  if (entries[0]?.type === 'process') assert.deepEqual(entries[0].items.flatMap(item => item.type === 'tool-group' ? item.items.map(tool => tool.id) : []), ['tool-child'])
+  if (entries[0]?.type === 'process') {
+    const groups = entries[0].items.filter(item => item.type === 'tool-group')
+    assert.deepEqual(groups.flatMap(item => item.items.map(tool => tool.id)), ['tool-child'])
+    assert.equal(groups[0]?.parentReasoningId, 'think-2')
+  }
 })
 
 test('相邻 Tool 不依赖 parent 猜测，仍按原序进入 process', () => {
@@ -63,6 +70,10 @@ test('相邻 Tool 不依赖 parent 猜测，仍按原序进入 process', () => {
   const entries = projectReviewInteractionPresentation([think, adjacent])
   assert.equal(entries.length, 1)
   assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type === 'process') {
+    const groups = entries[0].items.filter(item => item.type === 'tool-group')
+    assert.equal(groups[0]?.parentReasoningId, undefined)
+  }
 })
 
 test('跨 source 或 parent 歧义不会触发 Tool 重排', () => {
@@ -72,6 +83,10 @@ test('跨 source 或 parent 歧义不会触发 Tool 重排', () => {
   const entries = projectReviewInteractionPresentation([left, right, ambiguous])
   assert.equal(entries.length, 1)
   assert.equal(entries[0]?.type, 'process')
+  if (entries[0]?.type === 'process') {
+    const groups = entries[0].items.filter(item => item.type === 'tool-group')
+    assert.equal(groups[0]?.parentReasoningId, undefined)
+  }
 })
 
 test('parser replay 后同一 SourceRecord 的旧 unknown 不再与 Thinking 重复展示', () => {
