@@ -139,8 +139,9 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
+/* Selection must remain obvious in both themes and after a double-click. */
 ::selection {
-  background: var(--al-accent-soft);
+  background: color-mix(in srgb, var(--al-accent) 38%, var(--al-surface));
   color: var(--al-ink);
 }
 
