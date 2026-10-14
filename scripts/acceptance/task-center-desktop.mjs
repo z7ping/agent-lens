@@ -227,7 +227,11 @@ async function inspect(win, viewport, theme) {
     const fontPx = element => element ? Number.parseFloat(getComputedStyle(element).fontSize) || 0 : 0
     const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden' && getComputedStyle(element).display !== 'none')
     const page = pick('.task-center-page')
-    const toolbar = pick('.task-center-toolbar')
+    // Current Task Center has a search panel and quick filters in the sidebar,
+    // not the removed standalone task-center-toolbar.
+    const searchPanel = pick('.task-center-search-panel')
+    const quickFilters = pick('.task-center-quick-filters')
+    const workspaceTopbar = pick('.workspace-topbar')
     const rail = pick('.task-center-rail')
     const railScroll = pick('.task-center-scroll')
     const main = pick('.task-center-main')
@@ -250,7 +254,16 @@ async function inspect(win, viewport, theme) {
     const firstThinkingContent = pick('.task-thinking-content')
     const liveOutputs = all('.task-tool-live-output pre')
     const errorOutputDetails = all('.task-tool-row-shell:has(.task-tool-row[data-status="error"]) .task-tool-output-details')
-    const toolStyle = firstTool ? getComputedStyle(firstTool) : null
+    const toolRowsLayout = toolRows.map(row => {
+      const style = getComputedStyle(row)
+      const columns = style.gridTemplateColumns || ''
+      return {
+        kind: row.dataset.kind || '',
+        command: row.dataset.command === 'true',
+        columns,
+        columnCount: columns.trim().split(/\\s+/).filter(Boolean).length,
+      }
+    })
     const liveStyle = liveOutputs[0] ? getComputedStyle(liveOutputs[0]) : null
     return {
       innerWidth: window.innerWidth,
@@ -258,7 +271,8 @@ async function inspect(win, viewport, theme) {
       devicePixelRatio: window.devicePixelRatio,
       documentScrollWidth: root?.scrollWidth || 0,
       documentScrollHeight: root?.scrollHeight || 0,
-      page: rect(page), toolbar: rect(toolbar), rail: rect(rail), railScroll: rect(railScroll), main: rect(main), detailScroll: rect(detailScroll),
+      page: rect(page), searchPanel: rect(searchPanel), quickFilters: rect(quickFilters),
+      workspaceTopbar: rect(workspaceTopbar), rail: rect(rail), railScroll: rect(railScroll), main: rect(main), detailScroll: rect(detailScroll),
       overflow: { page: pageStyle?.overflow || '', rail: railStyle?.overflow || '', railY: railScrollStyle?.overflowY || '', main: mainStyle?.overflow || '', detailY: detailStyle?.overflowY || '' },
       messageCount: all('.task-message-row').length,
       roundCount: all('[data-task-round-state]').length,
@@ -270,8 +284,7 @@ async function inspect(win, viewport, theme) {
         closedToolGroupCount: toolGroups.filter(group => group.tagName === 'DETAILS' && !group.open).length,
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
-        toolGridColumns: toolStyle?.gridTemplateColumns || '',
-        toolGridColumnCount: toolStyle?.gridTemplateColumns?.trim().split(/\\s+/).filter(Boolean).length || 0,
+        toolRowsLayout,
         toolRow: rect(firstTool),
         toolRowClientWidth: firstTool?.clientWidth || 0,
         toolRowScrollWidth: firstTool?.scrollWidth || 0,
@@ -299,11 +312,11 @@ async function inspect(win, viewport, theme) {
   if (!within(value.innerWidth, viewport.width)) errors.push(`内容宽度 ${value.innerWidth} != ${viewport.width}`)
   if (!within(value.innerHeight, viewport.height)) errors.push(`内容高度 ${value.innerHeight} != ${viewport.height}`)
   if (!within(value.devicePixelRatio, 1, 0.01)) errors.push(`devicePixelRatio ${value.devicePixelRatio} != 1`)
-  if (!value.page || !value.toolbar || !value.rail || !value.main) errors.push('Task Center 核心区域缺失')
+  if (!value.page || !value.searchPanel || !value.quickFilters || !value.workspaceTopbar || !value.rail || !value.main) errors.push('Task Center 核心区域缺失')
   if (value.documentScrollWidth > value.innerWidth + 2) errors.push(`出现全局横向滚动：${value.documentScrollWidth} > ${value.innerWidth}`)
   if (value.documentScrollHeight > value.innerHeight + 2) errors.push(`出现全局纵向滚动：${value.documentScrollHeight} > ${value.innerHeight}`)
   if (value.rail && value.main && value.rail.right > value.main.left + 2) errors.push('任务列表与详情发生重叠')
-  if (value.toolbar && value.toolbar.height > 54) errors.push(`Toolbar 过高：${value.toolbar.height}px`)
+  if (value.workspaceTopbar && value.workspaceTopbar.height > 54) errors.push(`Workspace Topbar 过高：${value.workspaceTopbar.height}px`)
   if (value.rail && !within(value.rail.width, viewport.width >= 1200 ? 300 : viewport.width >= 992 ? 260 : 212)) errors.push(`任务上下文栏宽度偏离当前响应式基线：${value.rail.width}px`)
   if (!['auto', 'scroll'].includes(value.overflow.railY)) errors.push(`左侧任务列表不是独立滚动根：overflow-y=${value.overflow.railY}`)
   if (value.overflow.main !== 'hidden') errors.push(`Task Center 主区应隔离全局滚动：overflow=${value.overflow.main}`)
@@ -312,7 +325,16 @@ async function inspect(win, viewport, theme) {
   const p = value.presentation
   if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个被额外折叠`)
   if (p.toolFactCount > 0 && p.hiddenToolFactCount > 0) errors.push(`初始状态存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
-  if (p.toolGridColumnCount > 0 && viewport.width >= 1200 && p.toolGridColumnCount !== 4) errors.push(`Tool Row 桌面主基线不是四列：${p.toolGridColumns}`)
+  if (viewport.width >= 1200) {
+    for (const [index, row] of p.toolRowsLayout.entries()) {
+      // Shell command rows intentionally use 3 columns plus a second-line
+      // command target; regular Tool and MCP rows use 4 columns.
+      const expectedColumns = row.kind === 'shell' && row.command ? 3 : 4
+      if (row.columnCount !== expectedColumns) {
+        errors.push(`Tool Row #${index + 1} ${row.kind} 栅格应为 ${expectedColumns} 列：${row.columns}`)
+      }
+    }
+  }
   if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
   if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
   if (p.toolTargetFont > 0 && p.toolTargetFont < 13) errors.push(`Tool 目标字号过小：${p.toolTargetFont}px`)
