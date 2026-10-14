@@ -560,14 +560,11 @@
 }
 
 @media (max-width: 1199.98px) {
-  .task-surface .task-tool-row { grid-template-columns: 64px 118px minmax(84px, auto) minmax(0, 1fr); }
-  .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 64px 118px minmax(0, 1fr); }
+  .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 70px minmax(0, 1fr) 18px 14px; }
   .task-surface .task-message-bubble-user { max-width: min(76%, 760px); }
 }
 @media (max-width: 991.98px) {
-  .task-surface .task-tool-row { grid-template-columns: 64px 118px minmax(0, 1fr); }
-  .task-surface .task-tool-action { display: none; }
-  .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 64px minmax(0, 1fr); }
+  .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 68px minmax(0, 1fr) 18px 14px; }
   .task-surface .task-header-metric:nth-child(n+5) { display: none; }
   .task-surface .task-message-bubble-user { max-width: 88%; }
 }
@@ -581,9 +578,7 @@
   .task-surface .task-round-preview { max-width: 48%; }
   .task-surface .task-round-meta { display: none; }
   .task-surface .task-message-bubble-user { max-width: 94%; }
-  .task-surface .task-tool-row { grid-template-columns: 62px 110px minmax(0, 1fr); }
-  .task-surface .task-tool-row[data-kind='shell'][data-command='true'] { grid-template-columns: 62px minmax(0, 1fr); }
-  .task-surface .task-tool-target { min-width: 0; }
+  .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 62px minmax(0, 1fr) 18px 14px; }
   .task-surface .task-event-row { display: flex; flex-wrap: wrap; }
   .task-surface .task-event-copy { flex: 1 1 calc(100% - 34px); }
   .task-surface .task-event-row > .evidence-inline-list { margin-left: 26px; }
@@ -592,7 +587,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .task-surface .task-disclosure-chevron,
-  .task-surface .task-tool-output-chevron,
+  .task-surface .task-tool-row-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
   .task-surface .task-message-response-dots > span { animation: none; opacity: .55; }
   .task-surface .task-message-response-activity svg { animation: none; }
