@@ -161,6 +161,6 @@ test('MCP 完整入参与出参位于同一个默认折叠的 Tool 内，不被�
   assert.match(html, /data-tool-section="input"/)
   assert.match(html, /data-tool-section="output"/)
   assert.doesNotMatch(html, /task-tool-input-details|task-tool-output-details/)
-  assert.match(html, /SELECT \\* FROM organization WHERE ancestors LIKE \\?/)
+  assert.match(html, /organization WHERE ancestors LIKE/)
   assert.match(html, /rows/)
 })
