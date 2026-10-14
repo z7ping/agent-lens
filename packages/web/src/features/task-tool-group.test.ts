@@ -109,6 +109,6 @@ test('工具运行与结果共用固定状态图标占位，不改变事实行�
   assert.equal((html.match(/class="task-tool-status-mark"/g) ?? []).length, 2)
   assert.match(html, /task-tool-status-run/)
   assert.match(html, /task-tool-status-error/)
-  assert.ok(html.indexOf('tool-running') < 0 || html.indexOf('task-tool-status-run') < html.indexOf('task-tool-status-error'))
+  assert.deepEqual([...html.matchAll(/data-status="([^"]+)"/g)].map(match => match[1]), ['running', 'error'])
 })
 
