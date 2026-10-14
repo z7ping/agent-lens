@@ -164,6 +164,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         systemActivity: 'System activity',
         internalReviewTitle: 'Internal review activity',
         internalReviewLabel: 'Internal review',
+        internalReviewHint: 'An internal review session identified by the source agent, not a finding from AgentLens.',
         subagentRecord: 'Subagent run record',
         subagentLabel: 'Subagent',
         branchRecord: 'Branch task record',

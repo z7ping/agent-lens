@@ -164,6 +164,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         systemActivity: '系统活动',
         internalReviewTitle: '内部审查活动',
         internalReviewLabel: '内部审查',
+        internalReviewHint: '由来源智能体标记的内部审查会话，不代表 AgentLens 审查发现了问题。',
         subagentRecord: '子智能体运行记录',
         subagentLabel: '子智能体',
         branchRecord: '分支任务记录',
