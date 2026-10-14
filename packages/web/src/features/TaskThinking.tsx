@@ -66,7 +66,7 @@ export function TaskThinking({
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">
         <DisclosureChevron/>
-        {kind === 'process' && <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="task" size={14}/></span>}
+        {kind === 'process' && <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="thinking" size={14}/></span>}
         <span className="task-thinking-label">{label}</span>
         <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
         {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}
