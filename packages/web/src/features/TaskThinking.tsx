@@ -38,6 +38,7 @@ export function TaskThinking({
   const { t } = useTranslation('task')
   const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
   const label = presentationLabel(model.label, t)
+  const running = model.state === 'running'
 
   useEffect(() => {
     const stored = expansionStore?.get(model.id)
@@ -49,6 +50,7 @@ export function TaskThinking({
   return <details
     className={`task-thinking ${className}`.trim()}
     data-task-thinking-state={model.state ?? 'settled'}
+    aria-busy={running || undefined}
     open={expanded}
     onToggle={event => {
       const next = event.currentTarget.open
@@ -61,7 +63,9 @@ export function TaskThinking({
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">
         <DisclosureChevron/>
+        <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name={className.includes('task-process-group') ? 'task' : 'thinking'} size={14}/></span>
         <span className="task-thinking-label">{label}</span>
+        <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
         {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}
       </span>
       <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}</span>
