@@ -13,7 +13,7 @@ export function detectToolOutputFormat(text: string): ToolOutputFormat {
     try { JSON.parse(value); return 'json' } catch { /* Not JSON. */ }
   }
   const lines = value.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
-  const tableSeparator = /^\|?\s*:?-{3,}:?\s*\|\s*:?-{3,}:?(?:\s*\|\s*:?-{3,}:?)*\s*\|?$/
+  const tableSeparator = /^\|?\s*:?-{1,}:?\s*\|\s*:?-{1,}:?(?:\s*\|\s*:?-{1,}:?)*\s*\|?$/
   if (lines.length >= 3 && lines[0]?.includes('|') && tableSeparator.test(lines[1] ?? '')
     && lines[2]?.includes('|')) return 'markdown'
   if (/^\x60{3}(?:markdown|md)\s*\n/i.test(value)) return 'markdown'
