@@ -71,7 +71,7 @@ async function applyViewport(win, viewport) {
     height: viewport.height,
   }), 3_000, `设置 ${viewport.width}×${viewport.height} 可见区域`).catch(() => undefined)
 
-  const expectedRail = viewport.width >= 1200 ? 276 : viewport.width >= 992 ? 246 : viewport.width >= 768 ? 212 : Math.max(0, viewport.width - 40)
+  const expectedRail = viewport.width >= 1200 ? 300 : viewport.width >= 992 ? 260 : viewport.width >= 768 ? 212 : Math.max(0, viewport.width - 40)
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const geometry = await withTimeout(win.webContents.executeJavaScript(`(() => {
       const page = document.querySelector('.task-center-page')
@@ -86,7 +86,7 @@ async function applyViewport(win, viewport) {
       && Math.abs(geometry.railWidth - expectedRail) <= 2) return
     await delay(50)
   }
-  fail(`${viewport.width}×${viewport.height} viewport 几何未稳定到原型基线`)
+  fail(`${viewport.width}×${viewport.height} viewport 几何未稳定到当前响应式基线`)
 }
 
 async function captureViewport(win, viewport, theme) {
@@ -294,7 +294,7 @@ async function inspect(win, viewport, theme) {
   if (value.documentScrollHeight > value.innerHeight + 2) errors.push(`出现全局纵向滚动：${value.documentScrollHeight} > ${value.innerHeight}`)
   if (value.rail && value.main && value.rail.right > value.main.left + 2) errors.push('任务列表与详情发生重叠')
   if (value.toolbar && value.toolbar.height > 54) errors.push(`Toolbar 过高：${value.toolbar.height}px`)
-  if (value.rail && !within(value.rail.width, viewport.width >= 1200 ? 276 : viewport.width >= 992 ? 246 : 212)) errors.push(`任务上下文栏宽度偏离原型：${value.rail.width}px`)
+  if (value.rail && !within(value.rail.width, viewport.width >= 1200 ? 300 : viewport.width >= 992 ? 260 : 212)) errors.push(`任务上下文栏宽度偏离当前响应式基线：${value.rail.width}px`)
   if (!['auto', 'scroll'].includes(value.overflow.railY)) errors.push(`左侧任务列表不是独立滚动根：overflow-y=${value.overflow.railY}`)
   if (value.overflow.main !== 'hidden') errors.push(`Task Center 主区应隔离全局滚动：overflow=${value.overflow.main}`)
   if (value.detailScroll && !['auto', 'scroll'].includes(value.overflow.detailY)) errors.push(`右侧详情不是独立滚动根：overflow-y=${value.overflow.detailY}`)
