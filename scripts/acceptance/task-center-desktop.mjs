@@ -246,20 +246,20 @@ async function inspect(win, viewport, theme) {
     const toolFacts = all('[data-tool-fact="true"]')
     const toolRows = all('[data-tool-fact="true"] .task-tool-row')
     const firstTool = toolRows[0] || null
-    const firstToolAction = firstTool?.querySelector('.task-tool-action') || null
-    const firstToolTarget = firstTool?.querySelector('.task-tool-target') || null
+    const firstToolAction = firstTool?.querySelector('.task-tool-summary-text') || null
+    const firstToolTarget = firstToolAction
     const firstToolStatus = firstTool?.querySelector('.task-tool-status') || null
     const firstUserBubble = pick('[data-task-message-role="user"] .task-message-bubble')
     const firstAgentBubble = pick('[data-task-message-role="assistant"] .task-message-bubble')
     const firstThinkingContent = pick('.task-thinking-content')
-    const liveOutputs = all('.task-tool-live-output pre')
-    const errorOutputDetails = all('.task-tool-row-shell:has(.task-tool-row[data-status="error"]) .task-tool-output-details')
+    const liveOutputs = all('.task-tool-section[data-tool-section="output"] pre')
+    const errorToolCalls = all('.task-tool-call[data-status="error"]')
     const toolRowsLayout = toolRows.map(row => {
       const style = getComputedStyle(row)
       const columns = style.gridTemplateColumns || ''
       return {
-        kind: row.dataset.kind || '',
-        command: row.dataset.command === 'true',
+        kind: row.closest('.task-tool-call')?.dataset.kind || '',
+        command: row.closest('.task-tool-call')?.dataset.command === 'true',
         columns,
         columnCount: columns.trim().split(/\\s+/).filter(Boolean).length,
       }
@@ -281,6 +281,8 @@ async function inspect(win, viewport, theme) {
       taskButtonCount: all('.task-center-rail button.session-item').length,
       presentation: {
         toolGroupCount: toolGroups.length,
+        expandedToolCallCount: toolFacts.filter(item => item instanceof HTMLDetailsElement && item.open).length,
+        invalidToolSections: toolFacts.filter(item => item.querySelectorAll('[data-tool-section="input"]').length !== 1 || item.querySelectorAll('[data-tool-section="output"]').length !== 1).length,
         closedToolGroupCount: toolGroups.filter(group => group.tagName === 'DETAILS' && !group.open).length,
         toolFactCount: toolFacts.length,
         hiddenToolFactCount: toolFacts.filter(item => !visible(item)).length,
@@ -289,17 +291,17 @@ async function inspect(win, viewport, theme) {
         toolRowClientWidth: firstTool?.clientWidth || 0,
         toolRowScrollWidth: firstTool?.scrollWidth || 0,
         toolFont: fontPx(firstTool),
-        toolActionFont: fontPx(firstToolAction),
+        toolSummaryFont: fontPx(firstToolAction),
         toolTargetFont: fontPx(firstToolTarget),
         toolStatusFont: fontPx(firstToolStatus),
         userMessageFont: fontPx(firstUserBubble),
         agentMessageFont: fontPx(firstAgentBubble),
         thinkingFont: fontPx(firstThinkingContent),
         liveOutputCount: liveOutputs.length,
-        liveOutputOverflowY: liveStyle?.overflowY || '',
-        liveOutputMaxHeight: liveStyle?.maxHeight || '',
-        errorOutputCount: errorOutputDetails.length,
-        closedErrorOutputCount: errorOutputDetails.filter(item => !item.open).length,
+        toolOutputOverflowY: liveStyle?.overflowY || '',
+        toolOutputMaxHeight: liveStyle?.maxHeight || '',
+        errorOutputCount: errorToolCalls.length,
+        expandedErrorToolCount: errorToolCalls.filter(item => item.open).length,
       },
       theme: document.documentElement.dataset.theme || 'light',
       href: location.href,
@@ -325,18 +327,16 @@ async function inspect(win, viewport, theme) {
   const p = value.presentation
   if (p.toolGroupCount > 0 && p.closedToolGroupCount > 0) errors.push(`初始 Tool Group 有 ${p.closedToolGroupCount}/${p.toolGroupCount} 个被额外折叠`)
   if (p.toolFactCount > 0 && p.hiddenToolFactCount > 0) errors.push(`初始状态存在 ${p.hiddenToolFactCount}/${p.toolFactCount} 条 Tool Call 事实不可见`)
-  if (viewport.width >= 1200) {
-    for (const [index, row] of p.toolRowsLayout.entries()) {
-      // Shell command rows intentionally use 3 columns plus a second-line
-      // command target; regular Tool and MCP rows use 4 columns.
-      const expectedColumns = row.kind === 'shell' && row.command ? 3 : 4
-      if (row.columnCount !== expectedColumns) {
-        errors.push(`Tool Row #${index + 1} ${row.kind} 栅格应为 ${expectedColumns} 列：${row.columns}`)
-      }
+  for (const [index, row] of p.toolRowsLayout.entries()) {
+    const expectedColumns = 4
+    if (row.columnCount !== expectedColumns) {
+      errors.push(`Tool Row #${index + 1} ${row.kind} 单行摘要应为 ${expectedColumns} 列：${row.columns}`)
     }
   }
+  if (p.expandedToolCallCount > 0) errors.push(`Tool Call 初始应全部收起，当前展开 ${p.expandedToolCallCount}`)
+  if (p.invalidToolSections > 0) errors.push(`${p.invalidToolSections} 条 Tool 缺少入参或出参分区`)
   if (p.toolFont > 0 && p.toolFont < 13) errors.push(`Tool Call 主体字号过小：${p.toolFont}px`)
-  if (p.toolActionFont > 0 && p.toolActionFont < 13) errors.push(`Tool 操作名称字号过小：${p.toolActionFont}px`)
+  if (p.toolSummaryFont > 0 && p.toolSummaryFont < 13) errors.push(`Tool 摘要字号过小：${p.toolSummaryFont}px`)
   if (p.toolTargetFont > 0 && p.toolTargetFont < 13) errors.push(`Tool 目标字号过小：${p.toolTargetFont}px`)
   if (p.toolStatusFont > 0 && p.toolStatusFont < 12) errors.push(`Tool 状态字号过小：${p.toolStatusFont}px`)
   if (p.userMessageFont > 0 && p.userMessageFont < 14) errors.push(`用户消息字号过小：${p.userMessageFont}px`)
@@ -345,10 +345,10 @@ async function inspect(win, viewport, theme) {
   if (value.thinkingCount < 1) errors.push('Codex 可见 Thinking 未进入 Task Surface')
   if (p.toolRow && value.main && p.toolRow.right > value.main.right + 2) errors.push('Tool Row 超出详情主区')
   if (p.toolRowScrollWidth > p.toolRowClientWidth + 2) errors.push(`Tool Row 内部横向溢出：${p.toolRowScrollWidth} > ${p.toolRowClientWidth}`)
-  if (p.liveOutputCount > 0 && !['auto', 'scroll'].includes(p.liveOutputOverflowY)) errors.push(`Pi Running 输出不是局部滚动：overflow-y=${p.liveOutputOverflowY}`)
-  const liveMax = Number.parseFloat(p.liveOutputMaxHeight)
-  if (p.liveOutputCount > 0 && Number.isFinite(liveMax) && liveMax > 200) errors.push(`Pi Running 输出局部高度过高：${p.liveOutputMaxHeight}`)
-  if (p.errorOutputCount > 0 && p.closedErrorOutputCount > 0) errors.push(`错误 Tool 输出有 ${p.closedErrorOutputCount} 个未默认展开`)
+  if (p.liveOutputCount > 0 && !['auto', 'scroll'].includes(p.toolOutputOverflowY)) errors.push(`Tool 输出不是局部滚动：overflow-y=${p.toolOutputOverflowY}`)
+  const liveMax = Number.parseFloat(p.toolOutputMaxHeight)
+  if (p.liveOutputCount > 0 && Number.isFinite(liveMax) && liveMax > 420) errors.push(`Tool 输出局部高度过高：${p.toolOutputMaxHeight}`)
+  if (p.expandedErrorToolCount > 0) errors.push(`失败的 Tool 也必须默认收起：${p.expandedErrorToolCount}`)
   return { viewport, theme, value, errors, ok: errors.length === 0 }
 }
 
