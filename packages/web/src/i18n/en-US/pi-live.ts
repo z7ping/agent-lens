@@ -92,6 +92,8 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       branchLabel: 'Branch',
       startTime: 'Start time',
       elapsed: 'Elapsed',
+      outputSpeed: 'Output speed',
+      outputSpeedHint: 'Observed average for the latest generation: provider output tokens divided by the time over which the client received deltas. Not native instantaneous TPS; affected by network latency. A dash means unavailable.',
       viewAll: 'View: all events',
       viewCore: 'View: core events',
       interrupting: 'Interrupting…',
