@@ -88,6 +88,32 @@ if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/u
 const appShell = readFileSync(p('App.tsx'), 'utf8')
 const workspaceSidebar = readFileSync(p('components/workspace-sidebar.css'), 'utf8')
 const taskCenterPage = readFileSync(p('features/TaskCenterPage.tsx'), 'utf8')
+// 所有智能体筛选只能消费共享 Disclosure 弹层；维护页仅保留 40px 导航轨。
+const sidebarFilter = readFileSync(p('components/SidebarFilterDisclosure.tsx'), 'utf8')
+const sidebarView = readFileSync(p('components/WorkspaceSidebar.tsx'), 'utf8')
+const filterConsumers = [
+  ['任务中心', taskCenterPage],
+  ['智能体总览', sidebarView],
+  ['使用洞察', readFileSync(p('features/InsightsPage.tsx'), 'utf8')],
+  ['工具分析', readFileSync(p('features/ToolsPage.tsx'), 'utf8')],
+  ['资产备份', readFileSync(p('features/BackupPage.tsx'), 'utf8')],
+]
+if (!sidebarFilter.includes("variant?: 'inline' | 'popover'")
+  || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure.is-popover > summary')
+  || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body')) {
+  throw new Error('智能体筛选样式和弹层行为必须由共享 SidebarFilterDisclosure 持有')
+}
+for (const [name, source] of filterConsumers) {
+  if (!/<SidebarFilterDisclosure\s+variant="popover"/.test(source)) {
+    throw new Error(`${name} 必须消费统一智能体弹层，禁止恢复页面展开式列表`)
+  }
+}
+if (!appShell.includes("onIntegrations || onBackup ? 'is-maintenance-contextless'")
+  || !/\.app-shell\.is-maintenance-contextless\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/.test(workspaceSidebar)
+  || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('className="backup-agent-filter"')
+  || sidebarView.includes('onBackup && <div className="workspace-context-menu')) {
+  throw new Error('智能体接入与资产备份只能保留图标导航轨；备份范围筛选必须位于统一 Topbar')
+}
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
 const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
 if (!/\.workspace-sidebar\s*\{[\s\S]*?grid-template-columns:\s*40px minmax\(0, 1fr\);/m.test(workspaceSidebar)) throw new Error('桌面 WorkspaceSidebar 必须保持 40px 图标 Rail + 上下文栏结构')
