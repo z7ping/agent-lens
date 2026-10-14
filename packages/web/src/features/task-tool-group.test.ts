@@ -102,3 +102,17 @@ test('Review Inspector 保留为展开面板内的明确操作按钮，不劫持
   assert.match(html, /查看原始证据/)
   assert.doesNotMatch(html, /<button[^>]*class="task-tool-row"/)
 })
+
+test('成功绿色、失败红色且状态标记无额外圆框', () => {
+  const success = render()
+  assert.match(success, /data-status="success"/)
+  assert.match(success, /task-tool-status-ok/)
+  const failed = renderToStaticMarkup(createElement(TaskToolGroup, { model: {
+    ...model, itemCount: 1, errorCount: 1,
+    tools: [{ id: 'bad', name: 'bash', kind: 'shell', kindLabel: 'Shell', status: 'error', rawInput: '{"command":"exit 1"}', output: 'exit=1' }],
+  } }))
+  assert.match(failed, /data-status="error"/)
+  assert.match(failed, /task-tool-status-error/)
+  assert.doesNotMatch(failed, /lucide-circle-x|lucide-circle-check/)
+  assert.match(failed, /data-code-language="json"/)
+})
