@@ -620,15 +620,15 @@
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: center;
   gap: 6px;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-refresh {
-  width: 30px;
-  min-width: 30px;
-  height: 30px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
   border-color: var(--al-line);
   background: var(--al-surface);
   color: var(--al-muted-2);
@@ -657,7 +657,7 @@
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field {
   width: 100%;
-  height: 34px;
+  height: 32px;
   padding: 0 9px 0 29px;
   border-color: var(--al-line);
   border-radius: 8px;
@@ -677,7 +677,7 @@
   position: relative;
   z-index: 9;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
   align-items: start;
   gap: 6px;
   padding: 0 10px 6px;
@@ -695,23 +695,33 @@
 .workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger,
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary {
   box-sizing: border-box;
-  height: 34px;
-  min-height: 34px;
+  height: 32px;
+  min-height: 32px;
   gap: 4px;
   padding: 0 8px;
   border: 1px solid var(--al-line);
   border-radius: 8px;
-  background: var(--al-surface);
+  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
   color: var(--al-ink-2);
   font-size: 13px;
   font-weight: 560;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-agent-filter[open] > summary,
 .workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:hover:not(:disabled),
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary:hover {
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger.is-open,
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter[open] > summary {
   border-color: var(--al-line-strong);
+  background: var(--al-surface);
   color: var(--al-ink);
+}
+.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary:focus-visible,
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:focus-visible,
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: 2px;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary .ui-disclosure-chevron,
@@ -723,9 +733,9 @@
 .workspace-sidebar-context > .task-center-rail .task-center-agent-filter .ui-disclosure-body,
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter .ui-disclosure-body {
   position: absolute;
-  top: 38px;
+  top: 36px;
   z-index: 28;
-  width: 220px;
+  width: min(240px, calc(100vw - 24px));
   padding: 8px;
   border: 1px solid var(--al-line);
   border-radius: 10px;
@@ -747,7 +757,7 @@
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary {
-  width: 34px;
+  width: 32px;
   justify-content: center;
   padding: 0;
 }
@@ -764,6 +774,65 @@
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-label {
   display: grid;
   place-items: center;
+}
+
+/* Advanced filters use the same flat choice rows as the agent popover:
+ * one layer, no second SelectMenu portal over the session list. */
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-group {
+  display: grid;
+  gap: 5px;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-group + .task-center-advanced-filter-group {
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 60%, transparent);
+}
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-heading {
+  padding-inline: 6px;
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-options {
+  display: grid;
+  gap: 2px;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-filter-option {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-filter-option:hover,
+.workspace-sidebar-context > .task-center-rail .task-center-filter-option:focus-visible {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+.workspace-sidebar-context > .task-center-rail .task-center-filter-option:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: -2px;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-filter-option.is-selected {
+  border-color: color-mix(in srgb, var(--al-accent) 20%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent) 9%, transparent);
+  color: var(--al-accent);
+  font-weight: 650;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-filter-option > svg:last-child {
+  flex: 0 0 auto;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-active-filters {
