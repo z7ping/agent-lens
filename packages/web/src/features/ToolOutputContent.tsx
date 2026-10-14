@@ -25,7 +25,7 @@ export function detectToolOutputFormat(text: string): ToolOutputFormat {
 }
 
 /** Source is preserved exactly; structured rendering is an explicit opt-in. */
-export function ToolOutputContent({ text, streaming = false }: { text: string; streaming?: boolean }) {
+export function ToolOutputContent({ text, streaming = false, highlight = true }: { text: string; streaming?: boolean; highlight?: boolean }) {
   const { t } = useTranslation('task')
   const [formatted, setFormatted] = useState(false)
   const format = streaming ? null : detectToolOutputFormat(text)
@@ -41,6 +41,6 @@ export function ToolOutputContent({ text, streaming = false }: { text: string; s
     </div>}
     {view === 'formatted' && format === 'markdown'
       ? <div className="task-tool-formatted-output"><MarkdownContent text={text}/></div>
-      : <div className="task-tool-original-output"><CopyableCodeBlock copyValue={text} language={streaming ? undefined : codeLanguageFromContent(pretty)}>{pretty}</CopyableCodeBlock></div>}
+      : <div className="task-tool-original-output"><CopyableCodeBlock copyValue={text} language={highlight && !streaming ? codeLanguageFromContent(pretty) : undefined}>{pretty}</CopyableCodeBlock></div>}
   </div>
 }
