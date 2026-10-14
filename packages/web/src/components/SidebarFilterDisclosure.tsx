@@ -121,6 +121,7 @@ export function SidebarFilterDisclosure({
     ref={disclosureRef}
     className={`workspace-sidebar-filter-disclosure ${variant === 'popover' ? 'is-popover' : ''} ${className}`.trim()}
     summary={resolvedSummary}
+    title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
     summaryMeta={summaryMeta ?? computedSummary}
     open={open}
     onToggle={event => setOpen(event.currentTarget.open)}
