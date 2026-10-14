@@ -119,6 +119,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       connecting: '正在连接实时任务',
       model: '模型',
       thinking: '思考强度',
+      thinkingNoAlternatives: '当前模型只有这一个推理档位，无法切换',
+      thinkingNotApplied: '推理档位未生效：请求 {{requested}}，运行时仍为 {{actual}}',
       streamingMode: '流式消息方式',
       steer: '立即调整',
       followUp: '排队继续',

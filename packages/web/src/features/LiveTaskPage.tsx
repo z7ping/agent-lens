@@ -1766,14 +1766,18 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     try {
       const nextState = await liveApi.setThinkingControl(current.liveId, current.runtimeSessionId, value)
       setState(nextState)
-      setThinking(await liveApi.thinkingControl(current.liveId, current.runtimeSessionId))
+      const confirmed = await liveApi.thinkingControl(current.liveId, current.runtimeSessionId)
+      setThinking(confirmed)
+      if (confirmed?.value !== value) {
+        throw new Error(t('live.thinkingNotApplied', { requested: value, actual: confirmed?.value ?? '—' }))
+      }
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setBusy(false)
     }
-  }, [busy, current, thinking])
+  }, [busy, current, thinking, t])
 
   const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
     if (!current || historyLoading) return
@@ -2103,12 +2107,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
               />}
               {thinking && <ComposerPillSelect
                 ariaLabel={t('live.thinking')}
-                title={t('live.thinking')}
+                title={thinking.options.length <= 1 ? t('live.thinkingNoAlternatives') : t('live.thinking')}
                 value={thinking.value}
                 placeholder={thinking.label || thinking.value}
                 className="pi-live-thinking-picker"
                 menuWidth={180}
-                disabled={busy || state?.status !== 'ready'}
+                disabled={busy || state?.status !== 'ready' || thinking.options.length <= 1}
                 options={thinking.options.map(option => ({
                   value: option.value,
                   label: option.label || option.value,

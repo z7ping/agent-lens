@@ -1174,7 +1174,11 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     try {
       const nextState = await piLiveApi.setThinkingLevel(runtimeId, level)
       setState(nextState)
-      setControls(await piLiveApi.controls(runtimeId))
+      const refreshed = await piLiveApi.controls(runtimeId)
+      setControls(refreshed)
+      if (refreshed.thinking?.value !== level) {
+        throw new Error(t('composer.thinkingNotApplied', { requested: level, actual: refreshed.thinking?.value ?? '—' }))
+      }
       inputRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
@@ -1622,12 +1626,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               />
               {thinkingControl && <ComposerPillSelect
                 ariaLabel={t('composer.thinkingAria')}
-                title={t('composer.thinkingTitle', { level: currentThinkingLabel })}
+                title={thinkingOptions.length <= 1 ? t('composer.thinkingNoAlternatives') : t('composer.thinkingTitle', { level: currentThinkingLabel })}
                 value={thinkingControl.value}
                 placeholder={currentThinkingLabel || t('composer.thinkingPlaceholder')}
                 className="pi-live-thinking-picker"
                 menuWidth={168}
-                disabled={!runtimeReady || controlBusy}
+                disabled={!runtimeReady || controlBusy || thinkingOptions.length <= 1}
                 options={thinkingOptions}
                 onChange={level => void changeThinkingLevel(level)}
               />}

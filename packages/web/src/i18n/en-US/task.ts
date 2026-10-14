@@ -119,6 +119,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
       connecting: 'Connecting to live task',
       model: 'Model',
       thinking: 'Thinking level',
+      thinkingNoAlternatives: 'This model offers no other reasoning levels',
+      thinkingNotApplied: 'Reasoning level did not change: requested {{requested}}, runtime reports {{actual}}',
       streamingMode: 'Streaming message mode',
       steer: 'Steer now',
       followUp: 'Queue follow-up',

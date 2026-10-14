@@ -62,7 +62,7 @@ test('展开状态可由外部 store 恢复，供虚拟列表卸载后重建', (
   assert.match(html, /恢复后的处理正文/)
 })
 
-test('共享处理详情只在唯一摘要入口展示大脑图标，不额外插入思考折叠层', () => {
+test('思考片段与共享处理详情都使用统一大脑图标与折叠摘要', () => {
   const running = renderToStaticMarkup(createElement(TaskThinking, {
     model: { ...model, state: 'running' },
     kind: 'thinking',
@@ -70,8 +70,9 @@ test('共享处理详情只在唯一摘要入口展示大脑图标，不额外�
   }))
   assert.match(running, /data-task-thinking-state="running"/)
   assert.match(running, /aria-busy="true"/)
-  assert.doesNotMatch(running, /task-thinking-kind-mark/)
+  assert.match(running, /task-thinking-kind-mark/)
   assert.match(running, /task-thinking-running-mark/)
+  assert.match(running, /data-task-thinking-kind="thinking"/)
   const process = renderToStaticMarkup(createElement(TaskThinking, {
     model: { ...model, id: 'process:test' },
     kind: 'process',
@@ -79,6 +80,7 @@ test('共享处理详情只在唯一摘要入口展示大脑图标，不额外�
     children: '历史处理详情',
   }))
   assert.match(process, /task-thinking-kind-mark/)
+  assert.match(process, /data-task-thinking-kind="process"/)
   assert.match(process, /task-thinking-running-mark/)
   // 同一个 disclosure 承担摘要与展开；BrainCircuit 是现有 UiIcon.thinking。
   assert.match(process, /lucide-brain-circuit|lucide-brain|brain-circuit/i)

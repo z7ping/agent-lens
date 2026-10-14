@@ -141,7 +141,7 @@ test('thinking title uses a measured duration only and does not masquerade as ex
     children: 'work',
   }))
   assert.match(html, /思考了 1分23秒/)
-  assert.doesNotMatch(html, /task-thinking-kind-mark/)
+  assert.match(html, /task-thinking-kind-mark/)
   const unknown = renderToStaticMarkup(createElement(TaskThinking, {
     model: { id: 'reasoning-unknown', label: '思考过程', text: 'work' },
     defaultExpanded: false, children: 'work',

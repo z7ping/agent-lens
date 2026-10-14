@@ -128,6 +128,8 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       modelGenericTitle: 'Pi 模型',
       thinkingAria: 'Pi 推理强度',
       thinkingTitle: 'Pi 推理强度 · {{level}}',
+      thinkingNoAlternatives: '当前模型只有这一个推理档位，无法切换',
+      thinkingNotApplied: '推理档位未生效：请求 {{requested}}，运行时仍为 {{actual}}',
       thinkingUnset: '未设置',
       thinkingPlaceholder: '推理',
       modeAria: '发送方式',
