@@ -395,7 +395,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     model={model}
   >
     <PinnedAgentsProvider agents={agents}>
-      <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
+      <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${onIntegrations || onBackup ? 'is-maintenance-contextless' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}
@@ -403,8 +403,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
         selectedAgentId={resolvedAgentOverviewSourceId}
         onSelectAgent={setAgentOverviewSourceId}
         onRefreshAgents={() => { void Promise.allSettled([model.rescanIntegrationDiscovery(), model.refreshFacetsAndAgents()]) }}
-        backupAssetSourceId={backupAssetSourceId}
-        onBackupAssetSourceIdChange={setBackupAssetSourceId}
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenMarkdownThemes={() => setMarkdownThemeManagerOpen(true)}
@@ -450,7 +448,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} topbarHost={workspaceTopbarHost} />} />
           <Route path="/integrations" element={<IntegrationManagementPage model={model} topbarHost={workspaceTopbarHost} />} />
-          <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} topbarHost={workspaceTopbarHost} />} />
+          <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} onSelectedAssetSourceIdChange={setBackupAssetSourceId} agents={agentSelectionItems} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
         </Suspense>

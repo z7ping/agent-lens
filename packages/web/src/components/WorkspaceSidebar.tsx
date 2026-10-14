@@ -7,6 +7,7 @@ import { LocaleSelector } from '../i18n/LocaleSelector'
 import { BackgroundActivityStatus } from './BackgroundActivityStatus'
 import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
+import { agentLabel } from './AgentScope'
 import { SidebarFilterDisclosure } from './SidebarFilterDisclosure'
 import { WorkspacePrimaryNavigation } from './WorkspacePrimaryNavigation'
 import { IconButton, Popover, UiIcon, useModalFocusScope } from './ui'
@@ -19,8 +20,6 @@ interface WorkspaceSidebarProps {
   selectedAgentId: string
   onSelectAgent(id: string): void
   onRefreshAgents(): void
-  backupAssetSourceId: string
-  onBackupAssetSourceIdChange(id: string): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onOpenMarkdownThemes(): void
@@ -38,8 +37,6 @@ export function WorkspaceSidebar({
   selectedAgentId,
   onSelectAgent,
   onRefreshAgents,
-  backupAssetSourceId,
-  onBackupAssetSourceIdChange,
   theme,
   onToggleTheme,
   onOpenMarkdownThemes,
@@ -51,7 +48,7 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { t } = useTranslation(['navigation', 'settings', 'shell'])
+  const { t } = useTranslation(['navigation', 'settings', 'shell', 'common'])
   const sidebarRef = useRef<HTMLElement>(null)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -118,18 +115,9 @@ export function WorkspaceSidebar({
           <span>{t('navigation:agentCount', { count: agentSelectionAgents.length })}</span>
           <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        <SidebarFilterDisclosure defaultOpen agentOrderManagement summary={t('navigation:agentSelection')} agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
+        <SidebarFilterDisclosure variant="popover" closeOnOutside agentOrderManagement summary={selectedAgentId ? agentLabel(selectedAgentId, agentSelectionAgents.find(agent => agent.sourceId === selectedAgentId)?.displayName) : t('common:sidebarFilter.allAgents')} summaryMeta={false} agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
-      {onBackup && <div className="workspace-context-menu workspace-agent-context">
-        <SidebarFilterDisclosure
-          defaultOpen
-          showAllOption
-          summary={t('navigation:backupScope')}
-          agents={agentSelectionAgents}
-          agentSelection={{ mode: 'single', value: backupAssetSourceId, onChange: sourceId => { onBackupAssetSourceIdChange(sourceId); onMobileClose() } }}
-        />
-      </div>}
 
     </div>
 

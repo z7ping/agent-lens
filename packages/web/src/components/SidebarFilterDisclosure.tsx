@@ -21,6 +21,7 @@ interface SidebarFilterDisclosureProps {
   showAllOption?: boolean
   agentOrderManagement?: boolean
   closeOnOutside?: boolean
+  variant?: 'inline' | 'popover'
   /** In a filter, selecting an agent from All narrows to that agent instead of excluding it. */
   multipleSelectionBehavior?: 'toggle' | 'pick-from-all'
 }
@@ -37,6 +38,7 @@ export function SidebarFilterDisclosure({
   showAllOption = false,
   agentOrderManagement = false,
   closeOnOutside = false,
+  variant = 'inline',
   multipleSelectionBehavior = 'toggle',
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
@@ -89,13 +91,19 @@ export function SidebarFilterDisclosure({
   const selectAll = () => {
     if (!agentSelection) return
     if (agentSelection.mode === 'multiple') agentSelection.onChange(null)
-    else agentSelection.onChange('')
+    else {
+      agentSelection.onChange('')
+      setOpen(false)
+      disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
+    }
   }
 
   const selectAgent = (sourceId: string) => {
     if (!agentSelection) return
     if (agentSelection.mode === 'single') {
       agentSelection.onChange(sourceId)
+      setOpen(false)
+      disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
       return
     }
     if (pickFromAll) {
@@ -111,8 +119,9 @@ export function SidebarFilterDisclosure({
 
   return <Disclosure
     ref={disclosureRef}
-    className={`workspace-sidebar-filter-disclosure ${className}`.trim()}
+    className={`workspace-sidebar-filter-disclosure ${variant === 'popover' ? 'is-popover' : ''} ${className}`.trim()}
     summary={resolvedSummary}
+    title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
     summaryMeta={summaryMeta ?? computedSummary}
     open={open}
     onToggle={event => setOpen(event.currentTarget.open)}

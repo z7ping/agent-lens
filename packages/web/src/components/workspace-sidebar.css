@@ -16,6 +16,20 @@
   transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1);
 }
 
+/* 维护页面不需要会话/上下文栏，保留全局 40px 导航轨。 */
+.app-shell.is-maintenance-contextless {
+  grid-template-columns: 40px minmax(0, 1fr);
+}
+
+.app-shell.is-maintenance-contextless .workspace-sidebar-context,
+.app-shell.is-maintenance-contextless .workspace-sidebar-footer .workspace-background-activity {
+  display: none;
+}
+
+.app-shell.is-maintenance-contextless .workspace-sidebar-collapse-button {
+  visibility: hidden;
+}
+
 /* Task Center 才扩展会话列表；其他工作区沿用 316px，收起态维持 40px。 */
 @media (min-width: 1200px) {
   .app-shell.is-task-center:not(.is-sidebar-collapsed) {
@@ -381,6 +395,183 @@
   padding: 10px 4px 7px;
 }
 
+/* 所有工作区智能体筛选使用同一个紧凑弹层样式。 */
+.workspace-sidebar-filter-disclosure.is-popover {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-sidebar-filter-disclosure.is-popover > summary {
+  box-sizing: border-box;
+  height: 32px;
+  min-height: 32px;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
+  color: var(--al-ink-2);
+  font-size: 13px;
+  font-weight: 560;
+}
+
+.workspace-sidebar-filter-disclosure.is-popover > summary:hover,
+.workspace-sidebar-filter-disclosure.is-popover[open] > summary {
+  border-color: var(--al-line-strong);
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
+
+.workspace-sidebar-filter-disclosure.is-popover > summary:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: 2px;
+}
+
+.workspace-sidebar-filter-disclosure.is-popover > summary .ui-disclosure-chevron {
+  order: 2;
+  margin-left: auto;
+}
+
+.workspace-sidebar-filter-disclosure.is-popover > summary .ui-disclosure-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  z-index: 28;
+  width: min(240px, calc(100vw - 24px));
+  max-height: min(380px, calc(100dvh - 210px));
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 10px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+
+/* 弹层单独滚动，侧栏筛选容器不得将其裁剪。 */
+.workspace-context-menu.workspace-agent-context,
+.workspace-context-menu.workspace-insight-context {
+  overflow: visible;
+}
+
+.workspace-context-menu .workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body {
+  width: min(240px, 100%);
+}
+
+/* 共享智能体选项与排序，只在工作区侧栏所有者中维护。 */
+.workspace-agent-filter-list {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-agent-filter-option {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 520;
+  text-align: left;
+}
+
+.workspace-agent-filter-option:hover:not(:disabled) {
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+.workspace-agent-filter-option:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: -2px;
+}
+.workspace-agent-filter-option > svg:last-child {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.workspace-agent-filter-option > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-agent-filter-option.is-selected {
+  border-color: color-mix(in srgb, var(--al-accent) 25%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent) 10%, transparent);
+  color: var(--al-accent);
+  font-weight: 650;
+}
+
+.workspace-agent-filter-option:disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.workspace-agent-filter-state {
+  margin-left: auto;
+  color: var(--al-muted-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.workspace-agent-order {
+  display: grid;
+  gap: 7px;
+  padding-top: 4px;
+}
+
+.workspace-agent-order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.workspace-agent-order-list {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace-agent-order-option {
+  display: grid;
+  min-height: 32px;
+  grid-template-columns: 16px 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 2px;
+  border-radius: 7px;
+  color: var(--al-ink-2);
+}
+
+.workspace-agent-order-option:hover { background: var(--al-soft); }
+.workspace-agent-order-option.is-dragging { background: var(--al-accent-soft); }
+.workspace-agent-order-option.is-fixed { color: var(--al-muted); }
+.workspace-agent-order-option b {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-agent-order-drag { color: var(--al-muted-2); cursor: grab; }
+.workspace-agent-order-option.is-fixed .workspace-agent-order-drag { cursor: default; opacity: .38; }
+.workspace-agent-order-buttons { display: flex; gap: 2px; }
+
+.workspace-insight-filter-disclosure + .workspace-insight-filter-fields {
+  margin-top: 10px;
+}
+
 .workspace-insight-filter-fields {
   display: grid;
   min-width: 0;
@@ -690,10 +881,8 @@
   margin: 0;
 }
 
-/* 任务中心筛选栏共享紧凑触发器几何；Disclosure 与 SelectMenu 各自保留交互。 */
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary,
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary {
+/* 项目选择框与共享弹层触发器保持同一几何规范。 */
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger {
   box-sizing: border-box;
   height: 32px;
   min-height: 32px;
@@ -707,47 +896,20 @@
   font-weight: 560;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary:hover,
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter[open] > summary,
 .workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:hover:not(:disabled),
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger.is-open,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary:hover,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter[open] > summary {
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger.is-open {
   border-color: var(--al-line-strong);
   background: var(--al-surface);
   color: var(--al-ink);
 }
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary:focus-visible,
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:focus-visible,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary:focus-visible {
+
+.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:focus-visible {
   outline: 2px solid var(--al-accent);
   outline-offset: 2px;
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter > summary .ui-disclosure-chevron,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary .ui-disclosure-chevron {
-  order: 2;
-  margin-left: auto;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter .ui-disclosure-body,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter .ui-disclosure-body {
-  position: absolute;
-  top: 36px;
-  z-index: 28;
-  width: min(240px, calc(100vw - 24px));
-  padding: 8px;
-  border: 1px solid var(--al-line);
-  border-radius: 10px;
-  background: var(--al-surface-raised);
-  box-shadow: var(--al-shadow-lg);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter .ui-disclosure-body {
-  left: 0;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter .ui-disclosure-body {
+.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter.is-popover .ui-disclosure-body {
+  left: auto;
   right: 0;
 }
 
@@ -970,6 +1132,11 @@
 @media (max-width: 767.98px) {
   .app-shell {
     grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  /* 移动端侧栏为覆盖式 Drawer，不再预留维护页的 40px 网格列。 */
+  .app-shell.is-maintenance-contextless {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .workspace-breadcrumb {

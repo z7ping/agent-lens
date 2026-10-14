@@ -238,19 +238,25 @@ if (!/task-center-active-filter-list[^}]*overflow-x:\s*auto/s.test(sidebarStyles
   throw new Error('Task Center 活动筛选条必须单行滚动，不能增加会话列表的垂直噪声')
 }
 
-// 同级筛选控件必须在唯一 Sidebar 样式所有者中共用几何，禁止回退到高版 Field 或无效后代覆盖。
+// 任务中心继续复用跨工作区统一弹层，项目 SelectMenu 保持相同触发器几何。
 if (!/<SelectMenu\s+className="task-center-project-filter"\s+variant="toolbar"/.test(taskCenterView)
-  || !/<SidebarFilterDisclosure\s+className="task-center-agent-filter"/.test(taskCenterView)) {
-  throw new Error('任务中心必须使用现有 Sidebar Disclosure + 单行 SelectMenu toolbar 筛选组合')
+  || !/<SidebarFilterDisclosure\s+variant="popover"\s+className="task-center-agent-filter"/.test(taskCenterView)) {
+  throw new Error('任务中心必须使用共享弹层 Disclosure + 单行 SelectMenu toolbar 筛选组合')
 }
-const filterGeometry = sidebarStyles.match(/\.task-center-agent-filter > summary,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-advanced-filter > summary\s*\{([^}]*)\}/)?.[1]
-if (!filterGeometry
-  || !/height:\s*32px;/.test(filterGeometry)
-  || !/min-height:\s*32px;/.test(filterGeometry)
-  || !/font-size:\s*13px;/.test(filterGeometry)
-  || !/border-radius:\s*8px;/.test(filterGeometry)
-  || /\.task-center-project-filter\s+\.select-menu-trigger/.test(sidebarStyles)) {
-  throw new Error('任务中心全部智能体/全部项目必须共用 Sidebar 32px/13px 筛选几何，禁止无效后代 CSS 覆盖')
+const sharedFilterGeometry = sidebarStyles.match(/\.workspace-sidebar-filter-disclosure\.is-popover > summary\s*\{([^}]*)\}/)?.[1]
+const projectGeometry = sidebarStyles.match(/\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger\s*\{([^}]*)\}/)?.[1]
+for (const geometry of [sharedFilterGeometry, projectGeometry]) {
+  if (!geometry
+    || !/height:\s*32px;/.test(geometry)
+    || !/min-height:\s*32px;/.test(geometry)
+    || !/font-size:\s*13px;/.test(geometry)
+    || !/border-radius:\s*8px;/.test(geometry)) {
+    throw new Error('共享智能体弹层与任务中心项目筛选必须保持 32px/13px 统一几何')
+  }
+}
+if (/\.task-center-project-filter\s+\.select-menu-trigger/.test(sidebarStyles)
+  || /\.task-center-agent-filter > summary/.test(sidebarStyles)) {
+  throw new Error('任务中心不得重新声明页面级智能体触发器样式或无效 SelectMenu 后代样式')
 }
 for (const marker of [
   '.task-center-main .review-reader',

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type {
+  AgentFacetDto,
   BackupAssetKindDto,
   BackupOverviewResponseDto,
   BackupProtectionSourceDto,
@@ -15,6 +16,7 @@ import { AgentLensApi } from '../client/api'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { LocalPathActions } from '../components/LocalPathActions'
+import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { PageLoadingState } from '../components/StateViews'
 import { Button, Dialog, Drawer, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
 
@@ -151,12 +153,16 @@ function policyKinds(kindGroup: BackupAssetKindDto[], sources: BackupProtectionS
 
 export function BackupPage({
   selectedAssetSourceId,
+  onSelectedAssetSourceIdChange,
+  agents,
   topbarHost,
 }: {
   selectedAssetSourceId: string
+  onSelectedAssetSourceIdChange(sourceId: string): void
+  agents: AgentFacetDto[]
   topbarHost?: HTMLDivElement | null
 }) {
-  const { t, i18n } = useTranslation('backup')
+  const { t, i18n } = useTranslation(['backup', 'common'])
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
   const [overview, setOverview] = useState<BackupOverviewResponseDto | null>(null)
@@ -451,6 +457,17 @@ export function BackupPage({
     </label>
   }
 
+  const backupScopeFilter = <SidebarFilterDisclosure
+        variant="popover"
+        className="backup-agent-filter"
+        closeOnOutside
+        showAllOption
+        summary={selectedAssetSourceId ? agentLabel(selectedAssetSourceId, agents.find(agent => agent.sourceId === selectedAssetSourceId)?.displayName) : t('common:sidebarFilter.allAgents')}
+        summaryMeta={false}
+        agents={agents}
+        agentSelection={{ mode: 'single', value: selectedAssetSourceId, onChange: onSelectedAssetSourceIdChange }}
+      />
+
   return <>
     <main className="workspace-page backup-page">
     {topbarHost ? createPortal(<div className="backup-topbar-controls">
@@ -458,6 +475,7 @@ export function BackupPage({
         <button type="button" aria-pressed={activeView === 'assets'} className={`scope-chip ${activeView === 'assets' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
         <button type="button" aria-pressed={activeView === 'history'} className={`scope-chip ${activeView === 'history' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
       </ToolbarGroup>
+      {backupScopeFilter}
       <ToolbarGroup className="backup-toolbar-actions" align="end">
         {activeView === 'history' && visibleSnapshots.length > 0 && <Button aria-label={t('snapshots.verifyAll')} title={t('snapshots.verifyAll')} loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}><UiIcon name="check" size={14}/><span className="backup-toolbar-label">{t('snapshots.verifyAll')}</span></Button>}
         <Button aria-label={t('toolbar.import')} title={t('toolbar.import')} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/><span className="backup-toolbar-label">{t('toolbar.import')}</span></Button>
@@ -466,6 +484,7 @@ export function BackupPage({
       </ToolbarGroup>
     </div>, topbarHost) : null}
     <div className="page-content backup-content">
+      <div className="backup-mobile-scope">{backupScopeFilter}</div>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
       {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="backup-link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}
