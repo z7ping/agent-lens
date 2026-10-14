@@ -328,6 +328,13 @@
   margin-left: auto;
 }
 
+.workspace-agent-filter-option > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-agent-filter-option.is-selected {
   border-color: color-mix(in srgb, var(--al-accent) 25%, var(--al-line));
   background: color-mix(in srgb, var(--al-accent) 10%, transparent);
