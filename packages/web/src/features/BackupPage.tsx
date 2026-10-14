@@ -457,16 +457,7 @@ export function BackupPage({
     </label>
   }
 
-  const backupScopeFilter = {backupScopeFilter}
-
-  return <>
-    <main className="workspace-page backup-page">
-    {topbarHost ? createPortal(<div className="backup-topbar-controls">
-      <ToolbarGroup className="backup-view-switcher" role="group" aria-label={t('assetView.tabsAria')}>
-        <button type="button" aria-pressed={activeView === 'assets'} className={`scope-chip ${activeView === 'assets' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
-        <button type="button" aria-pressed={activeView === 'history'} className={`scope-chip ${activeView === 'history' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
-      </ToolbarGroup>
-      <SidebarFilterDisclosure
+  const backupScopeFilter = <SidebarFilterDisclosure
         variant="popover"
         className="backup-agent-filter"
         closeOnOutside
@@ -476,6 +467,15 @@ export function BackupPage({
         agents={agents}
         agentSelection={{ mode: 'single', value: selectedAssetSourceId, onChange: onSelectedAssetSourceIdChange }}
       />
+
+  return <>
+    <main className="workspace-page backup-page">
+    {topbarHost ? createPortal(<div className="backup-topbar-controls">
+      <ToolbarGroup className="backup-view-switcher" role="group" aria-label={t('assetView.tabsAria')}>
+        <button type="button" aria-pressed={activeView === 'assets'} className={`scope-chip ${activeView === 'assets' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
+        <button type="button" aria-pressed={activeView === 'history'} className={`scope-chip ${activeView === 'history' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
+      </ToolbarGroup>
+      {backupScopeFilter}
       <ToolbarGroup className="backup-toolbar-actions" align="end">
         {activeView === 'history' && visibleSnapshots.length > 0 && <Button aria-label={t('snapshots.verifyAll')} title={t('snapshots.verifyAll')} loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}><UiIcon name="check" size={14}/><span className="backup-toolbar-label">{t('snapshots.verifyAll')}</span></Button>}
         <Button aria-label={t('toolbar.import')} title={t('toolbar.import')} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/><span className="backup-toolbar-label">{t('toolbar.import')}</span></Button>
