@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
 import type { TaskToolModel } from './task-detail-model'
 
@@ -104,8 +105,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
       <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
         <span className="task-tool-status-mark" aria-hidden="true">
           {model.status === 'running' ? <UiIcon name="loading" size={14}/>
-            : model.status === 'success' ? <UiIcon name="status-success" size={14}/>
-              : model.status === 'error' ? <UiIcon name="status-error" size={14}/>
+            : model.status === 'success' ? <UiIcon name="check" size={16}/>
+              : model.status === 'error' ? <UiIcon name="close" size={16}/>
                 : <UiIcon name="clock" size={14}/>}
         </span>
       </span>
@@ -115,8 +116,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
       <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
-          ? <CopyableCodeBlock copyValue={input}>{input}</CopyableCodeBlock>
-          : preview ? <CopyableCodeBlock copyValue={preview}>{preview}</CopyableCodeBlock>
+          ? <CopyableCodeBlock copyValue={input} language={codeLanguageFromContent(input, visualKind === 'shell' ? (/powershell|pwsh/i.test(model.name) ? 'powershell' : 'bash') : undefined)}>{input}</CopyableCodeBlock>
+          : preview ? <CopyableCodeBlock copyValue={preview} language={codeLanguageFromContent(preview, visualKind === 'shell' ? 'bash' : undefined)}>{preview}</CopyableCodeBlock>
             : <span className="task-tool-section-empty">{t('tool.inputUnavailable')}</span>}
       </section>
       <section className="task-tool-section" data-tool-section="output" aria-label={t('tool.output')}>
