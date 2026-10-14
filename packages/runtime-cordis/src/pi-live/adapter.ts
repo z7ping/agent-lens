@@ -217,7 +217,9 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       type: 'tool.start',
       ...(callId ? { callId } : {}),
       name: liveText(event.toolName) || 'tool',
+      ...(liveText(event.parentToolCallId) ? { parentToolCallId: liveText(event.parentToolCallId) } : {}),
       ...(liveText(event.toolSourceType) === 'mcp' ? { toolSourceType: 'mcp' as const } : {}),
+      ...(liveText(event.toolSourceType) === 'builtin' ? { toolSourceType: 'builtin' as const } : {}),
       ...(liveText(event.mcpServerId) ? { mcpServerId: liveText(event.mcpServerId) } : {}),
       ...(event.args === undefined ? {} : { inputPreview: livePreview(event.args) }),
     }
@@ -241,6 +243,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ...(callId ? { callId } : {}),
       ...(liveText(event.toolName) ? { name: liveText(event.toolName) } : {}),
       status: event.isError === true ? 'error' : 'success',
+      ...(liveText(event.parentToolCallId) ? { parentToolCallId: liveText(event.parentToolCallId) } : {}),
       ...(output ? { output } : {}),
     }
   }
