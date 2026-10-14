@@ -217,6 +217,14 @@ for (const required of [
 
 const taskCenterView = readFileSync(`${webRoot}/features/TaskCenterPage.tsx`, 'utf8')
 const sidebarStyles = readFileSync(`${webRoot}/components/workspace-sidebar.css`, 'utf8')
+if (!taskCenterView.includes('normalizedSessionSources(item.sourceIds, item.productId)')
+  || !taskCenterView.includes('className="task-center-active-filter-list"')) {
+  throw new Error('Task Center 会话来源与单行活动筛选条必须按共享语义呈现')
+}
+if (!/task-center-active-filter-list[^}]*overflow-x:\\s*auto/s.test(sidebarStyles)) {
+  throw new Error('Task Center 活动筛选条必须单行滚动，不能增加会话列表的垂直噪声')
+}
+
 // 同级筛选控件必须在唯一 Sidebar 样式所有者中共用几何，禁止回退到高版 Field 或无效后代覆盖。
 if (!/<SelectMenu\s+className="task-center-project-filter"\s+variant="toolbar"/.test(taskCenterView)
   || !/<SidebarFilterDisclosure\s+className="task-center-agent-filter"/.test(taskCenterView)) {

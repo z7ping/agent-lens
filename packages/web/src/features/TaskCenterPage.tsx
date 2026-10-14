@@ -137,7 +137,7 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
     <div className="session-item-title-row">
       <div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>
-      {presentation.activityLabel && <StatusBadge className="session-activity-badge">{presentation.activityLabel}</StatusBadge>}
+      {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
       <span className={`source-dot ${sourceDot(sourceId)}`}/>
@@ -372,7 +372,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const advancedTimeActive = review.filters.range !== '7d'
   const advancedStatusActive = review.filters.status !== 'all'
   const hasActiveFilters = review.filters.sourceIds !== null || Boolean(review.filters.projectId)
-    || advancedTimeActive || advancedStatusActive || Boolean(review.filters.search)
+    || advancedTimeActive || advancedStatusActive
   const unsupportedRemoteFilters = review.filters.sourceIds !== null
     || Boolean(review.filters.projectId) || advancedStatusActive
   const activeTimeLabel = review.filters.range === 'today' ? t('center.day.today')
@@ -456,7 +456,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>
 
     {hasActiveFilters && <div className="task-center-active-filters">
-      <div className="task-center-active-filter-list" aria-label={t('center.history.filterAria')}>
+      <div className="task-center-active-filter-list" role="group" aria-label={t('center.history.filterAria')}>
         {review.filters.sourceIds !== null && selectedAgentIds.length === 0 && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ sourceIds: null })}>
           {t('center.history.noneSelected')}<UiIcon name="close" size={12}/>
         </Button>}
@@ -475,9 +475,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         {advancedStatusActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ status: 'all' })}>
           {t('center.history.status')} · {activeStatusLabel}
           <UiIcon name="close" size={12}/>
-        </Button>}
-        {review.filters.search.trim() && <Button size="small" className="task-center-filter-chip" title={review.filters.search} onClick={() => model.setReviewFilters({ search: '' })}>
-          {review.filters.search}<UiIcon name="close" size={12}/>
         </Button>}
       </div>
       <Button size="small" className="task-center-filter-clear" onClick={clearAllFilters}>{t('center.history.clearFilters')}</Button>
