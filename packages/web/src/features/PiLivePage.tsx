@@ -854,7 +854,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               messageEpoch: assistantMessageEpochRef.current,
               ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
             }
-            presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, common.text ?? ''))
+            presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', { ...deltaOptions, startedAtMs: Date.now() }, common.text ?? ''))
           } else if (common?.type === 'reasoning.delta' && common.delta) {
             if (assistantGenerationActiveRef.current && firstAssistantDeltaAtRef.current === null) firstAssistantDeltaAtRef.current = performance.now()
             const deltaOptions = {
@@ -867,7 +867,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
               messageEpoch: assistantMessageEpochRef.current,
               ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
             }
-            presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', common.text ?? '', deltaOptions))
+            presentation.boundary(items => finishPiLiveContentBlock(items, 'thinking', common.text ?? '', { ...deltaOptions, endedAtMs: Date.now() }))
           } else if (common?.type === 'message.end') {
             presentation.flush()
           } else if (common?.type === 'tool.start') {
