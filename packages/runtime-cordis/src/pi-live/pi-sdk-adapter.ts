@@ -6,8 +6,8 @@ import type {
 } from '@earendil-works/pi-coding-agent'
 
 export const PI_SDK_PACKAGE_NAME = '@earendil-works/pi-coding-agent'
-export const PI_SDK_TYPE_BASELINE = '0.84.4'
-export const PI_SDK_TESTED_MINOR = '0.84'
+export const PI_SDK_TYPE_BASELINE = '1.2.0'
+export const PI_SDK_TESTED_MINOR = '1.2'
 
 type OfficialPiModule = typeof import('@earendil-works/pi-coding-agent')
 type OfficialPiModel = NonNullable<AgentSession['model']>
