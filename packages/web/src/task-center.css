@@ -119,7 +119,7 @@
 .task-live-item { --session-source: var(--al-accent); }
 .task-live-item .session-item-meta time { color: var(--al-muted-2); font-weight: 400; }
 
-/* 单一所有者：历史任务是扁平两行列表，Live 状态行仍以卡片强调。 */
+/* 同一列表规范：Live / History / Hub 都用轻分隔线，不再用独立卡片框线。 */
 .task-center-rail .session-item {
   position: relative;
   display: flex;
@@ -129,8 +129,9 @@
   flex-direction: column;
   margin: 0;
   padding: 8px 8px 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 7px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 55%, transparent);
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   text-align: left;
@@ -151,26 +152,6 @@
   width: 2px;
   border-radius: 2px;
   background: var(--al-accent);
-}
-.task-center-rail .task-center-history-group .session-item {
-  margin: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--al-line) 55%, transparent);
-  border-radius: 0;
-}
-.task-center-rail .task-center-history-group .session-item-active {
-  border-radius: 7px;
-}
-.task-center-rail .task-center-live-group .session-item {
-  margin: 3px 0;
-  border-color: color-mix(in srgb, var(--al-line) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--al-surface) 74%, transparent);
-}
-.task-center-rail .task-center-live-group .session-item:hover { background: var(--al-surface); }
-.task-center-rail .task-center-live-group .session-item-active,
-.task-center-rail .task-center-live-group .session-item-active:hover {
-  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
-  background: color-mix(in srgb, var(--al-accent-soft) 40%, var(--al-surface));
 }
 .task-center-rail .session-item-title-row {
   display: flex;
