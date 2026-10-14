@@ -94,6 +94,11 @@ requireText(taskLiveRuntimeList, /liveApi\.knownRuntimeSnapshot\(\)/, '实时任
 requireText(taskLiveRuntimeList, /item\.liveId[\s\S]{0,120}item\.state\.runtimeSessionId/, '实时任务列表 key/identity 必须包含 liveId + runtimeSessionId')
 requireText(taskLiveRuntimeList, /navigate\(taskLiveRuntimeHref\(item\)\)/, '实时任务列表必须进入通用 Live route')
 requireText(taskLiveRuntimeList, /agent-lens:live-state-changed/, '实时任务列表必须监听通用 Live 状态变化事件')
+requireText(taskLiveRuntimeList, /shouldRefreshRuntimeListOnVisible\(now, lastSuccessfulAt, hiddenForMs, invalidatedWhileHidden\)/, '切回标签不得每次强制刷新完整运行任务列表')
+requireText(taskLiveRuntimeList, /sameTaskRuntimeList\(previous, next\) \? previous : next/, '相同运行任务数据必须复用现有 React 列表')
+requireText(liveTask, /reconcileState\(shouldRecoverLiveOnVisible\(hiddenForMs, streamDisconnected\)\)/, 'Live 重新可见时必须按断线和时间缺口决定历史快照恢复')
+requireText(liveTask, /if \(!sameLiveRuntimeState\(previous, runtime\)\)/, 'Live 轻量状态不变时不得重复发布 React State')
+forbidText(liveTask, /if \(document\.visibilityState === 'visible'\) void reconcileState\(true\)/, '普通标签切换不得无条件强制 Live 快照对账')
 
 /* New Task is capability-driven, not Pi-driven. */
 requireText(liveNewTask, /items\.filter\(item => item\.capabilities\.includes\('create'\)\)/, '新建任务只展示声明 create capability 的 Live Product')
