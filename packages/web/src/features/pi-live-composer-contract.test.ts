@@ -66,7 +66,7 @@ test('共享 Composer 保留 Markdown、大文本、图片、Shift+Enter 与 Alt
 
 test('流式消息继续复用 TaskMessage，不恢复第二套响应气泡', () => {
   assert.match(taskMessage, /data-streaming=\{streaming \? 'true' : undefined\}/)
-  assert.match(taskMessage, /aria-busy=\{streaming \|\| pending \|\| undefined\}/)
+  assert.match(taskMessage, /aria-busy=\{streaming \|\| awaitingFirstContent \|\| undefined\}/)
   assert.doesNotMatch(page, /pi-live-stream-response|pi-live-stream-text|PiLiveRunningTaskRound/)
   assert.doesNotMatch(css, /\.pi-live-stream-response|\.pi-live-stream-text|\.pi-live-caret/)
   assert.match(sessionCss, /\.task-session-view \.task-session-reader \{[\s\S]*?scrollbar-gutter:\s*stable;/)

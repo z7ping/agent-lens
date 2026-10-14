@@ -86,7 +86,8 @@ requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
 /* Thinking：单一 disclosure，默认展开，用户可主动折叠。 */
 requireText(thinking, /defaultExpanded\s*=\s*true/, 'Thinking 必须默认展开')
-requireText(thinking, /useState\(defaultExpanded\)/, 'Thinking 必须保存主动折叠状态')
+requireText(thinking, /useState\(\(\) => expansionStore\?\.get\(model\.id\) \?\? defaultExpanded\)/, 'Thinking 必须按语义 ID 初始化可保存的折叠状态')
+requireText(thinking, /expansionStore\?\.set\(model\.id, next\)/, 'Thinking 用户切换必须写回展开意图')
 requireText(thinking, /className={`task-thinking/, 'Thinking 必须使用共享 Task Surface 语义类')
 requireText(thinking, /task-thinking-preview/, 'Thinking 必须保留弱预览')
 requireText(thinking, /task-thinking-content/, 'Thinking 必须保留正文结构')
@@ -115,7 +116,7 @@ requireText(piHistory, /elapsedMs\(fact\.at, paired\.at\)/, 'Pi History 必须�
 requireText(piTaskRound, /className="task-tool-live-output"/, 'Pi Running 必须显示局部实时输出')
 requireText(piTaskRound, /className="task-tool-output-details" open=\{tool\.status === 'error'\}/, '错误 Tool 输出必须默认展开')
 requireText(piTaskRound, /startedAtMs/, 'Pi Running Tool 必须保留本轮起始时间')
-requireText(piTaskRound, /return <TaskThinking model=\{model\} defaultExpanded>/, 'Pi Thinking 必须通过共享 TaskThinking 显式默认展开')
+requireText(piTaskRound, /<TaskProcessGroup[\s\S]*?state="settled"[\s\S]*?defaultExpanded=\{false\}/, 'Pi 历史 Process 必须复用共享组件并默认折叠')
 const sharedHistoryEntries = piTaskRound.match(/<HistoryEntries\b/g) ?? []
 if (sharedHistoryEntries.length < 2) failures.push('Pi History / Running Thinking 必须共用默认展开的共享渲染链路')
 
@@ -130,7 +131,7 @@ requireText(message, /task-message-assistant/, '消息必须表达 Agent 文档�
 if (/task-message-agent-mark|chat-avatar-agent|chat-row/.test(message)) failures.push('TaskMessage 不得恢复旧 Review 头像/方向类')
 
 requireText(taskDetailCss, /Task Surface 共享详情组件的唯一样式所有者/, 'task-detail.css 必须声明共享详情唯一所有权')
-requireText(taskDetailCss, /grid-template-columns:\s*66px auto minmax\(88px, auto\) minmax\(0, 1fr\)/, '桌面 Tool Row 必须保持四列事实布局')
+requireText(taskDetailCss, /grid-template-columns:\s*66px 122px minmax\(88px, auto\) minmax\(0, 1fr\)/, '桌面 Tool Row 必须保持四列事实布局')
 requireText(taskDetailCss, /task-tool-action[^}]*font:\s*650 13px\/1\.4/s, 'Tool 操作名称必须保持 13px')
 requireText(taskDetailCss, /task-tool-target[^}]*font-size:\s*13px/s, 'Tool 目标必须保持 13px')
 requireText(taskDetailCss, /task-message-content[^}]*font-size:\s*14px/s, '对话正文必须保持 14px')
