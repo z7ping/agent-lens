@@ -1,5 +1,19 @@
-import type { LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { LaunchableProjectDto, ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
+
+/** All-project history filter: sort using the complete facet activity, never only the paginated visible sessions. */
+export function sortProjectFacetsByActivity(projects: readonly ProjectFacetDto[]): ProjectFacetDto[] {
+  return [...projects].sort((left, right) => {
+    if (left.lastActivityAt && right.lastActivityAt && left.lastActivityAt !== right.lastActivityAt) {
+      return left.lastActivityAt > right.lastActivityAt ? -1 : 1
+    }
+    if (left.lastActivityAt && !right.lastActivityAt) return -1
+    if (!left.lastActivityAt && right.lastActivityAt) return 1
+    const labelOrder = (left.name ?? left.repositoryIdentity ?? left.id)
+      .localeCompare(right.name ?? right.repositoryIdentity ?? right.id)
+    return labelOrder || left.id.localeCompare(right.id)
+  })
+}
 
 export interface HistoryTaskPresentation {
   title: string

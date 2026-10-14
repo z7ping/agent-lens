@@ -295,7 +295,7 @@ export interface LaunchableProjectReader {
 }
 
 export interface SessionSummaryFacetScope {
-  projects: Array<{ id: string; name?: string; repositoryIdentity?: string }>
+  projects: Array<{ id: string; name?: string; repositoryIdentity?: string; lastActivityAt?: string }>
   from?: string
   to?: string
 }

@@ -242,6 +242,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         allProjects: 'All projects',
         railAria: 'Task list: running + history',
         newTask: 'New task',
+        newTaskShort: 'New',
         filterAria: 'Filter task history',
         collapseSearch: 'Collapse search',
         searchTasks: 'Search task history',

@@ -4,6 +4,7 @@ interface FacetScopeProject {
   id: string
   name?: string
   repositoryIdentity?: string
+  lastActivityAt?: string
 }
 
 export interface FacetScopeSnapshot {
@@ -26,19 +27,22 @@ export class SqliteFacetScopeReader {
         SELECT DISTINCT
           project.id AS id,
           project.name AS name,
-          project.repository_identity AS repositoryIdentity
+          project.repository_identity AS repositoryIdentity,
+          MAX(summary.ended_at) AS lastActivityAt
         FROM session_summary_projection AS summary
         JOIN logical_sessions AS logical ON logical.id = summary.logical_session_id
         JOIN projects AS project ON project.id = logical.project_id
         WHERE logical.project_id IS NOT NULL
-        ORDER BY COALESCE(project.name, project.id), project.id
-      `).all() as Array<{ id: string; name?: string | null; repositoryIdentity?: string | null }>
+        GROUP BY project.id, project.name, project.repository_identity
+        ORDER BY lastActivityAt DESC, COALESCE(project.name, project.id), project.id
+      `).all() as Array<{ id: string; name?: string | null; repositoryIdentity?: string | null; lastActivityAt?: string | null }>
 
       return {
         projects: projects.map(project => ({
           id: project.id,
           ...(project.name ? { name: project.name } : {}),
           ...(project.repositoryIdentity ? { repositoryIdentity: project.repositoryIdentity } : {}),
+          ...(project.lastActivityAt ? { lastActivityAt: project.lastActivityAt } : {}),
         })),
         ...(range.from ? { from: range.from } : {}),
         ...(range.to ? { to: range.to } : {}),

@@ -12,7 +12,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
@@ -351,10 +351,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [model, navigate])
 
   const historyCount = localSessions.length + visibleHub.length
-  const projectFilterOptions = [
+  const projectFilterOptions = useMemo(() => [
     { value: '', label: t('center.history.allProjects') },
-    ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
-  ]
+    ...sortProjectFacetsByActivity(projects).map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
+  ], [projects, t])
 
   const selectedAgentIds = review.filters.sourceIds ?? []
   const selectedProject = review.filters.projectId
@@ -382,7 +382,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         <img className="task-center-context-brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
         <div className="task-center-context-brand-copy"><b>AgentLens</b><span aria-hidden="true">·</span><strong className="task-center-rail-title">{tNavigation('taskCenter')}</strong></div>
       </div>
-      <Button size="small" variant="primary" className="task-center-new-task-button" onPointerEnter={prefetchLaunchableProjects} onFocus={prefetchLaunchableProjects} onClick={newTask}><UiIcon name="plus" size={14}/> {t('center.history.newTask')}</Button>
+      <Button size="small" variant="primary" className="task-center-new-task-button" onPointerEnter={prefetchLaunchableProjects} onFocus={prefetchLaunchableProjects} onClick={newTask} title={t('center.history.newTask')} aria-label={t('center.history.newTask')}><UiIcon name="plus" size={14}/> {t('center.history.newTaskShort')}</Button>
     </div>
 
     <div className="task-center-search-panel">
