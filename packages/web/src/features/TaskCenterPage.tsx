@@ -145,7 +145,7 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
   const sourceNames = sourceIds.map(id => agentLabel(id))
   const fullSourceNames = sourceNames.join(' · ')
   const compactSourceNames = sourceNames.length > 1 ? `${sourceNames[0]} +${sourceNames.length - 1}` : (sourceNames[0] ?? item.productId)
-  const projectLabel = item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')
+  const projectLabel = item.projectName?.trim() || item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) || t('center.history.noProject')
   const moment = sessionTimeFact(item.startedAt, item.endedAt)
   const updatedLabel = formatTime(moment?.at ?? '', t, locale, nowMs)
   const createdLabel = absoluteTime(item.startedAt, locale)
@@ -154,8 +154,8 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
     ...(createdLabel ? [t('center.time.startedAt', { time: createdLabel })] : []),
     ...(recentLabel ? [t(moment?.source === 'last-activity' ? 'center.time.lastActivityAt' : 'center.time.onlyStartedAt', { time: recentLabel })] : []),
   ].join(' · ')
-  const fallback = item.projectName
-    ? t('center.history.taskSuffix', { name: item.projectName })
+  const fallback = item.projectName?.trim()
+    ? t('center.history.taskSuffix', { name: item.projectName.trim() })
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
   const displayTitle = sessionListTitle(presentation.title, fallback, sourceIds)
