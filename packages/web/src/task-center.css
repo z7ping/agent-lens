@@ -194,13 +194,23 @@
   -webkit-line-clamp: 1;
 }
 .task-center-rail .session-item-title-row .ui-status-badge {
-  max-width: 74px;
-  flex: 0 1 auto;
+  /* Keep source-provided review labels readable without sacrificing the title
+   * row: long arbitrary labels may still ellipsize, but do not flex-shrink. */
+  max-width: min(56%, 148px);
+  flex: 0 0 auto;
   gap: 3px;
   padding: 1px 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Runtime states are a finite, translated vocabulary. They must never be
+ * truncated; the adjacent task title owns single-line ellipsis instead. */
+.task-center-rail .session-item-title-row .task-live-status-badge {
+  max-width: none;
+  min-width: max-content;
+  overflow: visible;
+  text-overflow: clip;
 }
 .task-center-rail .session-item-meta {
   display: flex;
