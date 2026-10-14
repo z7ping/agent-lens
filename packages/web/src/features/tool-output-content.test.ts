@@ -11,6 +11,8 @@ test('only explicit structured data is eligible for a formatted view', () => {
   assert.equal(detectToolOutputFormat('Connecting...\nQuery OK'), null)
   assert.equal(detectToolOutputFormat('SELECT * FROM table WHERE x = 1;'), null)
   assert.equal(detectToolOutputFormat('{"broken":'), null)
+  assert.equal(detectToolOutputFormat('```sql\nSELECT 1;\n```'), 'markdown')
+  assert.equal(detectToolOutputFormat('```unknown\nhello\n```'), null)
 })
 
 test('the original output remains the default and copyable even for Markdown tables', () => {
@@ -20,4 +22,12 @@ test('the original output remains the default and copyable even for Markdown tab
   assert.match(html, /task-tool-output-format-actions/)
   assert.match(html, /copyable-code-block/)
   assert.match(html, /\| --- \| --- \|/)
+})
+
+test('Tool JSON output remains copyable and receives language-aware token markup', () => {
+  const raw = '{"ok":true,"rows":[1,2]}'
+  const html = renderToStaticMarkup(createElement(ToolOutputContent, { text: raw }))
+  assert.match(html, /data-code-language="json"/)
+  assert.match(html, /token-property|token-string/)
+  assert.match(html, /data-view="original"/)
 })
