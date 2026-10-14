@@ -45,6 +45,29 @@ test('Pi Live *_end 用权威完整内容原位结算 block', () => {
   assert.equal(items[0]!.kind === 'thinking' ? items[0].state : undefined, 'settled')
 })
 
+test('Pi Live 仅由原生 reasoning.start/end 形成思考耗时，跨工具不改变顺序', () => {
+  let items: PiLiveHistoryItem[] = []
+  items = startPiLiveContentBlock(items, 'thinking', {
+    messageEpoch: 1, contentIndex: 0, startedAtMs: 1_000,
+  }, '思考')
+  items = startPiLiveTool(items, { callId: 'mcp-1', name: 'mcp__dbx__execute_query', summary: '{}', contentIndex: 1 })
+  items = finishPiLiveContentBlock(items, 'thinking', '思考完成', {
+    messageEpoch: 1, contentIndex: 0, endedAtMs: 43_000,
+  })
+  assert.deepEqual(items.map(item => item.kind), ['thinking', 'tool'])
+  const thinking = items[0]
+  assert.ok(thinking?.kind === 'thinking')
+  assert.equal(thinking.durationMs, 42_000)
+  assert.equal(thinking.state, 'settled')
+
+  // A persisted snapshot may omit timing; do not synthesize duration from
+  // process timestamps or the tool's own execution time.
+  const noStart = finishPiLiveContentBlock([], 'thinking', '仅有结束', {
+    messageEpoch: 1, contentIndex: 0, endedAtMs: 43_000,
+  })
+  assert.equal(noStart[0]?.kind === 'thinking' ? noStart[0].durationMs : undefined, undefined)
+})
+
 test('Pi Live 同一 contentIndex 的 delta 原位增长，即使中途出现其他块', () => {
   let items: PiLiveHistoryItem[] = []
   items = appendPiLiveDelta(items, 'text', '前', { messageEpoch: 3, contentIndex: 0 })
