@@ -40,6 +40,8 @@ export interface TaskToolModel {
   name: string
   kind: TaskToolKind
   kindLabel: string
+  toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
+  mcpServerId?: string | undefined
   status: TaskToolStatus
   primary?: string | undefined
   secondary?: string | undefined

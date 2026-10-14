@@ -34,6 +34,8 @@ export type LiveTaskProjectionItem =
       kind: 'tool'
       callId: string
       name: string
+      toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
+      mcpServerId?: string | undefined
       inputPreview?: string | undefined
       output?: string | undefined
       status: 'running' | 'success' | 'error'
@@ -433,6 +435,8 @@ export function reduceLiveTaskEvent(
       kind: 'tool',
       callId,
       name: event.name || current?.name || 'tool',
+      ...(event.toolSourceType ? { toolSourceType: event.toolSourceType } : {}),
+      ...(event.mcpServerId ? { mcpServerId: event.mcpServerId } : {}),
       inputPreview: event.inputPreview ?? current?.inputPreview,
       output: current?.output,
       status: 'running',
@@ -447,6 +451,8 @@ export function reduceLiveTaskEvent(
       kind: 'tool',
       callId,
       name: event.name || current?.name || 'tool',
+      ...(current?.toolSourceType ? { toolSourceType: current.toolSourceType } : {}),
+      ...(current?.mcpServerId ? { mcpServerId: current.mcpServerId } : {}),
       inputPreview: current?.inputPreview,
       output: event.output,
       status: current?.status ?? 'running',
@@ -461,6 +467,8 @@ export function reduceLiveTaskEvent(
       kind: 'tool',
       callId,
       name: event.name || current?.name || 'tool',
+      ...(current?.toolSourceType ? { toolSourceType: current.toolSourceType } : {}),
+      ...(current?.mcpServerId ? { mcpServerId: current.mcpServerId } : {}),
       inputPreview: current?.inputPreview,
       output: event.output ?? current?.output,
       status: event.status,

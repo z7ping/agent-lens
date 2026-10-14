@@ -282,6 +282,8 @@ export type LiveEventDto =
       type: 'tool.start'
       callId?: string | undefined
       name: string
+      toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
+      mcpServerId?: string | undefined
       inputPreview?: string | undefined
       contentIndex?: number | undefined
     }
@@ -612,6 +614,9 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       type,
       name: event.name,
       ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(['builtin', 'mcp', 'plugin', 'extension', 'skill-runtime', 'unknown'].includes(String(event.toolSourceType))
+        ? { toolSourceType: event.toolSourceType as 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' } : {}),
+      ...(eventText(event.mcpServerId) !== undefined ? { mcpServerId: eventText(event.mcpServerId) } : {}),
       ...(eventText(event.inputPreview) !== undefined ? { inputPreview: eventText(event.inputPreview) } : {}),
       ...(contentIndex !== undefined ? { contentIndex } : {}),
     }

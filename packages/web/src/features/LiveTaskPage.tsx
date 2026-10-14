@@ -495,6 +495,8 @@ function GenericLiveItem({
       name: item.name,
       kind: 'tool',
       kindLabel: t('tool.kind.tool'),
+      ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}),
+      ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}),
       status: item.status,
       primary: item.inputPreview,
       output: item.output,

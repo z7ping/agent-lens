@@ -76,6 +76,20 @@ function toolCallId(item: TimelineItemDto): string | undefined {
   return stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
 }
 
+/** Only explicit native tool metadata is authoritative; user input is not registration metadata. */
+function toolOrigin(item: TimelineItemDto): { toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown'; mcpServerId?: string } {
+  const payload = asRecord(item.payload)
+  const native = asRecord(payload.toolMetadata ?? payload.tool_metadata ?? payload.toolIdentity)
+  const source = stringField(native, 'sourceType', 'toolSourceType', 'source_type')
+    ?? stringField(payload, 'toolSourceType', 'tool_source_type')
+  const toolSourceType = source === 'builtin' || source === 'mcp' || source === 'plugin' || source === 'extension' || source === 'skill-runtime' || source === 'unknown' ? source : undefined
+  const mcpServerId = stringField(native, 'mcpServerId', 'mcp_server_id') ?? stringField(payload, 'mcpServerId', 'mcp_server_id')
+  return {
+    ...(toolSourceType ? { toolSourceType } : {}),
+    ...(mcpServerId ? { mcpServerId } : {}),
+  }
+}
+
 function toolName(item: TimelineItemDto): string {
   return stringField(asRecord(item.payload), 'nativeToolName', 'toolName', 'tool_name', 'name') ?? 'Tool'
 }
@@ -166,6 +180,7 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         sourceId: item.sourceId,
         ...reviewNodeSource(item),
         name: toolName(item),
+        ...toolOrigin(item),
         ...(id ? { callId: id } : {}),
         status: 'running',
         startedAt: item.effectiveAt,

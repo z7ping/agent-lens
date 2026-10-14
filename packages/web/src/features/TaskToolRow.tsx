@@ -60,7 +60,9 @@ export function taskToolTargetText(model: TaskToolModel, visualKind: ReturnType<
 export function TaskToolRow({ model, meta, details, onClick, className = '' }: TaskToolRowProps) {
   const { t } = useTranslation('task')
   const [now, setNow] = useState(() => Date.now())
-  const visualKind = model.kind === 'tool' ? toolVisualKind(model.name) : model.kind
+  const visualKind = model.kind === 'tool'
+    ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
+    : model.kind
   const target = taskToolTargetText(model, visualKind)
   const commandTarget = visualKind === 'shell' && Boolean(model.primary)
   const fullInput = model.rawInput ?? model.primary

@@ -415,7 +415,7 @@ function toolInputRecord(node: ReviewToolNodeDto): Record<string, JsonValue> {
 
 function toolPresentation(node: ReviewToolNodeDto): { kind: ToolVisualKind; label: string; primary: string; secondary: string } {
   const input = toolInputRecord(node)
-  const kind = toolVisualKind(node.name)
+  const kind = toolVisualKind(node.name, { sourceType: node.toolSourceType, mcpServerId: node.mcpServerId })
   const output = brief(node.output, 110)
   if (kind === 'shell') {
     const command = reviewToolCommand(node.input) || brief(node.input, 140)
@@ -448,7 +448,7 @@ function toolPresentation(node: ReviewToolNodeDto): { kind: ToolVisualKind; labe
 
 function toolLocalResource(node: ReviewToolNodeDto): { value: string; kind: 'file' | 'directory'; placement: 'primary' | 'secondary' } | undefined {
   const input = toolInputRecord(node)
-  const kind = toolVisualKind(node.name)
+  const kind = toolVisualKind(node.name, { sourceType: node.toolSourceType, mcpServerId: node.mcpServerId })
   if (kind === 'read' || kind === 'edit') {
     const path = stringValue(input, 'path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path')
     return path ? { value: path, kind: 'file', placement: 'primary' } : undefined
@@ -772,6 +772,8 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
     name: node.name,
     kind: info.kind,
     kindLabel: info.label,
+    ...(node.toolSourceType ? { toolSourceType: node.toolSourceType } : {}),
+    ...(node.mcpServerId ? { mcpServerId: node.mcpServerId } : {}),
     status,
     primary: info.primary || undefined,
     secondary: info.secondary || undefined,

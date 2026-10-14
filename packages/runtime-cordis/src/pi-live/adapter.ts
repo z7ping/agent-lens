@@ -217,6 +217,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       type: 'tool.start',
       ...(callId ? { callId } : {}),
       name: liveText(event.toolName) || 'tool',
+      ...(liveText(event.toolSourceType) === 'mcp' ? { toolSourceType: 'mcp' as const } : {}),
+      ...(liveText(event.mcpServerId) ? { mcpServerId: liveText(event.mcpServerId) } : {}),
       ...(event.args === undefined ? {} : { inputPreview: livePreview(event.args) }),
     }
   }
