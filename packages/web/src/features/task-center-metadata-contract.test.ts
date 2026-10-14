@@ -5,6 +5,9 @@ import test from 'node:test'
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../components/workspace-sidebar.css', import.meta.url), 'utf8')
 const shell = readFileSync(new URL('../shell-responsive.css', import.meta.url), 'utf8')
+const taskCss = readFileSync(new URL('../task-center.css', import.meta.url), 'utf8')
+const runtimeList = readFileSync(new URL('./TaskLiveRuntimeList.tsx', import.meta.url), 'utf8')
+const zhTask = readFileSync(new URL('../i18n/zh-CN/task.ts', import.meta.url), 'utf8')
 const page = readFileSync(new URL('./TaskCenterPage.tsx', import.meta.url), 'utf8')
 const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
 
@@ -31,4 +34,17 @@ test('Review 的创建时间与最后观测独立显示，避免缺失结束时�
   assert.match(review, /infoItems=\{taskDetailModel \? \[/)
   assert.match(review, /taskDetailModel\.startedAt && Number\.isFinite\(Date\.parse\(taskDetailModel\.startedAt\)\)/)
   assert.match(review, /taskDetailModel\.endedAt && Number\.isFinite\(Date\.parse\(taskDetailModel\.endedAt\)\)/)
+})
+
+test('进行中/初始化中徽标不被 max-width 74px 裁切，标题负责自适应省略', () => {
+  assert.match(runtimeList, /className="task-live-status-badge"/)
+  assert.match(runtimeList, /title=\{badge\.label\}/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-title-row \.task-live-status-badge \{[^}]*max-width: none;[^}]*min-width: max-content;[^}]*overflow: visible;/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-title-row \.session-item-title \{ min-width: 0; flex: 1 1 auto; \}/)
+  assert.doesNotMatch(taskCss, /max-width:\s*74px/)
+})
+
+test('Guardian 徽标保留来源原生事实并解释为内部审查，而不是 AgentLens 检查结论', () => {
+  assert.match(page, /item\.sessionActivity === 'internal-review' \? t\('center\.presentation\.internalReviewHint'\)/)
+  assert.match(zhTask, /internalReviewHint: '由来源智能体标记的内部审查会话，不代表 AgentLens 审查发现了问题。'/)
 })
