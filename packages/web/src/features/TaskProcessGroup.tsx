@@ -68,7 +68,7 @@ export function TaskProcessGroup({
     meta={<span className="task-process-summary">
       {messageCount > 0 && <span>{t('process.messages', { count: messageCount })}</span>}
       {toolCount > 0 && <span>{t('process.tools', { count: toolCount })}</span>}
-      {resolvedDurationMs > 0 && <span>{t('process.duration', { value: taskPreciseDurationLabel(resolvedDurationMs) })}</span>}
+      {(resolvedDurationMs > 0 || (state === 'running' && hasTimingBoundary)) && <span className="task-process-duration">{t('process.duration', { value: taskPreciseDurationLabel(resolvedDurationMs) })}</span>}
       {errorCount > 0 && <span className="task-process-summary-error">{t('process.errors', { count: errorCount })}</span>}
       {summaryExtra}
       {state === 'running' && <span>{t('process.running')}</span>}
