@@ -91,7 +91,11 @@ export function SidebarFilterDisclosure({
   const selectAll = () => {
     if (!agentSelection) return
     if (agentSelection.mode === 'multiple') agentSelection.onChange(null)
-    else { agentSelection.onChange(''); setOpen(false) }
+    else {
+      agentSelection.onChange('')
+      setOpen(false)
+      disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
+    }
   }
 
   const selectAgent = (sourceId: string) => {
@@ -99,6 +103,7 @@ export function SidebarFilterDisclosure({
     if (agentSelection.mode === 'single') {
       agentSelection.onChange(sourceId)
       setOpen(false)
+      disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
       return
     }
     if (pickFromAll) {
