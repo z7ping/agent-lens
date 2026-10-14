@@ -192,8 +192,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   }
   // Pi distinguishes a low-level agent run ending from the whole logical
   // turn settling. agent_end can be followed by retry, auto-compaction or queued
-  // continuation, so only agent_settled may cross the Generic Live boundary as
-  // completed.
+  // continuation, so only agent_settled may cross the Generic Live boundary
+  // as the final completion/cancellation boundary.
   if (type === 'agent_settled') {
     // Pi 1.2 reports cancellation on the final settlement event, not agent_end.
     return { type: 'completed', status: event.aborted === true ? 'cancelled' : 'completed' }
