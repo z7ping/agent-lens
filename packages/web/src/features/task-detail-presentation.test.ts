@@ -71,13 +71,14 @@ test('用户保留右侧气泡，Agent 无头像且不恢复历史视觉别名',
   assert.doesNotMatch(assistant, /class="(?:message-row|chat-bubble)(?:\s|\")/)
 })
 
-test('工具状态和耗时紧跟工具类型，而不是放到最右侧', () => {
+test('默认 Tool 摘要一行展示类型、名称和状态图标，原始数据只在展开后出现', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
-  const kind = html.indexOf('>读取</span>')
-  const status = html.indexOf('完成 · 42ms')
-  const action = html.indexOf('读取文件')
-  const target = html.indexOf('packages/web/src/App.tsx')
-  assert.ok(kind >= 0 && status > kind && action > status && target > action)
+  assert.equal((html.match(/<summary class="task-tool-row"/g) ?? []).length, 4)
+  assert.equal((html.match(/<details class="task-tool-call/g) ?? []).length, 4)
+  assert.doesNotMatch(html, /<details class="task-tool-call[^>]*open=""/)
+  assert.match(html, /task-tool-summary-text/)
+  assert.match(html, /task-tool-status-mark/)
+  assert.match(html, /task-tool-row-chevron/)
 })
 
 test('Pi Running Tool 收在单一处理详情中，运行中摘要默认折叠且不丢失调用统计', () => {
@@ -149,13 +150,17 @@ test('thinking title uses a measured duration only and does not masquerade as ex
   assert.doesNotMatch(unknown, /思考了/)
 })
 
-test('long tool arguments expose all source input in a separate copyable disclosure', () => {
+test('MCP 完整入参与出参位于同一个默认折叠的 Tool 内，不被再次套娃', () => {
   const input = JSON.stringify({ database: 'auth-center-v3', sql: 'SELECT * FROM organization WHERE ancestors LIKE ?', args: ['%sample%'] })
   const data: TaskToolGroupModel = { ...toolGroup, tools: [
-    { id: 'mcp', name: 'dbx_execute_query', kind: 'mcp', kindLabel: 'MCP', status: 'success', primary: input.slice(0, 30), rawInput: input },
+    { id: 'mcp', name: 'dbx_execute_query', kind: 'mcp', kindLabel: 'MCP', status: 'success', primary: input.slice(0, 30), rawInput: input, output: '{"rows":[{"id":1}]}' },
   ], itemCount: 1 }
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: data }))
-  assert.match(html, /task-tool-input-details/)
-  assert.match(html, /查看完整参数/)
-  assert.match(html, /SELECT \* FROM organization WHERE ancestors LIKE \?/)
+  assert.match(html, /<details class="task-tool-call/)
+  assert.doesNotMatch(html, /<details class="task-tool-call[^>]*open=""/)
+  assert.match(html, /data-tool-section="input"/)
+  assert.match(html, /data-tool-section="output"/)
+  assert.doesNotMatch(html, /task-tool-input-details|task-tool-output-details/)
+  assert.match(html, /SELECT \\* FROM organization WHERE ancestors LIKE \\?/)
+  assert.match(html, /rows/)
 })
