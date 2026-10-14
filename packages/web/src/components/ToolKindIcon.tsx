@@ -3,15 +3,22 @@ import { agentLensI18n } from '../i18n/runtime'
 
 export type ToolVisualKind = 'shell' | 'read' | 'edit' | 'search' | 'test' | 'mcp' | 'web' | 'tool'
 
-export function toolVisualKind(name: string): ToolVisualKind {
-  const value = name.toLowerCase()
-  if (value.includes('mcp')) return 'mcp'
-  if (/(web|browser|http|url)/.test(value)) return 'web'
-  if (/(test|spec|vitest|jest|playwright|pytest|unittest|测试)/.test(value)) return 'test'
-  if (/(bash|shell|exec|command|terminal|powershell|cmd)/.test(value)) return 'shell'
-  if (/(read|cat|open[_-]?file|get[_-]?file|view[_-]?file)/.test(value)) return 'read'
-  if (/(write|edit|patch|replace|create[_-]?file|apply[_-]?patch)/.test(value)) return 'edit'
-  if (/(grep|search|find|glob|ripgrep|rg)/.test(value)) return 'search'
+/** Tool identity belongs to the native registration, not a substring in the name. */
+export interface ToolOriginEvidence {
+  sourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
+  mcpServerId?: string | undefined
+}
+export function toolVisualKind(name: string, evidence?: ToolOriginEvidence): ToolVisualKind {
+  if (evidence?.sourceType === 'mcp' || evidence?.mcpServerId?.trim()) return 'mcp'
+  const value = name.trim().toLowerCase()
+  if (/^mcp__[a-z0-9_-]+__[a-z0-9_-]+$/.test(value) || /^mcp:[^:]+:[^:]+$/.test(value)) return 'mcp'
+  if (/(?:^|[_:./-])(web|browser|http|url)(?:$|[_:./-])/.test(value)) return 'web'
+  if (/(?:^|[_:./-])(test|spec|vitest|jest|playwright|pytest|unittest|测试)(?:$|[_:./-])/.test(value)) return 'test'
+  // "execute" is not "exec": dbx_execute_query must not be presented as Shell.
+  if (/(?:^|[_:./-])(bash|shell|exec|exec_command|command|terminal|powershell|cmd)(?:$|[_:./-])/.test(value)) return 'shell'
+  if (/(?:^|[_:./-])(read|cat|open_file|get_file|view_file)(?:$|[_:./-])/.test(value)) return 'read'
+  if (/(?:^|[_:./-])(write|edit|patch|replace|create_file|apply_patch)(?:$|[_:./-])/.test(value)) return 'edit'
+  if (/(?:^|[_:./-])(grep|search|find|glob|ripgrep|rg)(?:$|[_:./-])/.test(value)) return 'search'
   return 'tool'
 }
 

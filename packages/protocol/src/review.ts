@@ -199,6 +199,8 @@ export interface ReviewToolNodeDto extends ReviewNodeSourceDto {
   sourceId: string
   name: string
   callId?: string
+  toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown'
+  mcpServerId?: string
   status: 'running' | 'success' | 'error' | 'unknown'
   startedAt: string
   endedAt?: string
