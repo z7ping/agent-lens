@@ -351,10 +351,10 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }, [model, navigate])
 
   const historyCount = localSessions.length + visibleHub.length
-  const projectFilterOptions = [
+  const projectFilterOptions = useMemo(() => [
     { value: '', label: t('center.history.allProjects') },
     ...sortProjectFacetsByActivity(projects).map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
-  ]
+  ], [projects, t])
 
   const selectedAgentIds = review.filters.sourceIds ?? []
   const selectedProject = review.filters.projectId
