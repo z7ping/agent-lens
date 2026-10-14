@@ -1,5 +1,50 @@
 import type { LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
 
+/** A long hidden gap can lose SSE events even without an observed connection error. */
+export const LIVE_VISIBILITY_RECONCILE_WINDOW_MS = 30_000
+
+/** Small tab switches stay state-only; disconnections and long background gaps reconcile history. */
+export function shouldRecoverLiveOnVisible(hiddenForMs: number, disconnected: boolean): boolean {
+  return disconnected || hiddenForMs >= LIVE_VISIBILITY_RECONCILE_WINDOW_MS
+}
+
+export function shouldRefreshRuntimeListOnVisible(
+  now: number,
+  lastSuccessfulAt: number,
+  hiddenForMs: number,
+  invalidatedWhileHidden: boolean,
+): boolean {
+  return invalidatedWhileHidden
+    || lastSuccessfulAt === 0
+    || hiddenForMs >= LIVE_VISIBILITY_RECONCILE_WINDOW_MS
+    || now - lastSuccessfulAt >= LIVE_VISIBILITY_RECONCILE_WINDOW_MS
+}
+
+export function sameLiveRuntimeState(previous: LiveRuntimeStateDto | null, next: LiveRuntimeStateDto): boolean {
+  if (!previous) return false
+  return previous.runtimeSessionId === next.runtimeSessionId
+    && previous.status === next.status
+    && previous.isStreaming === next.isStreaming
+    && previous.pendingMessageCount === next.pendingMessageCount
+    && previous.title === next.title
+    && previous.nativeSessionId === next.nativeSessionId
+    && previous.workspacePath === next.workspacePath
+}
+
+export function sameTaskRuntimeList(
+  previous: readonly LiveRuntimeRefDto[],
+  incoming: readonly LiveRuntimeRefDto[],
+): boolean {
+  return previous.length === incoming.length && previous.every((item, index) => {
+    const next = incoming[index]
+    return next !== undefined
+      && item.liveId === next.liveId
+      && item.productId === next.productId
+      && item.displayName === next.displayName
+      && sameLiveRuntimeState(item.state, next.state)
+  })
+}
+
 export interface TaskLiveRuntimeLocation {
   liveId: string
   runtimeSessionId: string

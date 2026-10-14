@@ -58,7 +58,7 @@ import {
 } from './live-task-projection'
 import { LiveFollowController } from './live-follow-controller'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
-import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
+import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, sameLiveRuntimeState } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
@@ -941,6 +941,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     let reconcileEpoch = 0
     let runtimeActive = false
     let runtimeCompacting = false
+    let hiddenSince: number | null = document.visibilityState === 'hidden' ? Date.now() : null
+    let streamDisconnected = false
     const reconcileState = async (forceRecovery = false) => {
       const epoch = ++reconcileEpoch
       try {
@@ -950,8 +952,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         const changed = previous?.status !== runtime.status
           || previous?.isStreaming !== runtime.isStreaming
           || previous?.pendingMessageCount !== runtime.pendingMessageCount
-        runtimeStateRef.current = runtime
-        setState(runtime)
+        if (!sameLiveRuntimeState(previous, runtime)) {
+          runtimeStateRef.current = runtime
+          setState(runtime)
+        }
         runtimeActive = runtime.isStreaming || runtimeCompacting
         setActivityStatus(runtimeCompacting
           ? 'compacting'
@@ -971,7 +975,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     }
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void reconcileState(true)
+      if (document.visibilityState === 'hidden') {
+        hiddenSince = Date.now()
+        return
+      }
+      const hiddenForMs = hiddenSince === null ? 0 : Math.max(0, Date.now() - hiddenSince)
+      hiddenSince = null
+      // A short healthy tab switch only checks state. Long throttled gaps still reconcile
+      // bounded history because SSE does not guarantee replay of missed events.
+      void reconcileState(shouldRecoverLiveOnVisible(hiddenForMs, streamDisconnected))
     }
     const onOnline = () => { void reconcileState(true) }
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
@@ -1129,9 +1141,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         }
         if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
       },
-      () => setConnected(false),
       () => {
+        streamDisconnected = true
+        setConnected(false)
+      },
+      () => {
+        streamDisconnected = false
         setConnected(true)
+        // EventSource reconnect cannot replay events missed during the gap.
         void reconcileState(true)
       },
     )
