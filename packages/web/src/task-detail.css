@@ -413,6 +413,8 @@
 .task-surface .task-process-message { min-width: 0; }
 .task-surface .task-process-message-kind { margin-bottom: 2px; color: var(--al-muted-2); font-size: 12px; font-weight: 650; }
 .task-surface .task-process-message-meta { margin-top: 2px; }
+/* Explicit, unique native parent evidence only; no reordering or extra disclosure. */
+.task-surface .task-process-related-tool { margin-left: 16px; min-width: 0; }
 .task-surface .task-tool-row {
   display: grid;
   width: 100%;
