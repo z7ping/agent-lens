@@ -92,6 +92,8 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       branchLabel: '分支',
       startTime: '开始时间',
       elapsed: '已运行时长',
+      outputSpeed: '输出速度',
+      outputSpeedHint: '最近一次生成的观测平均速度：模型提供的输出 Token 数 ÷ 客户端接收增量的时间。非模型原生瞬时 TPS，网络延迟可能影响结果；无有效数据时显示 —。',
       viewAll: '视图：全部事件',
       viewCore: '视图：核心事件',
       interrupting: '正在中断…',

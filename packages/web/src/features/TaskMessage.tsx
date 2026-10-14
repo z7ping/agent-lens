@@ -110,6 +110,7 @@ export function TaskMessage({
     }
   }, [measure, streaming, user, view])
 
+  const awaitingFirstContent = !user && (pending || (streaming && !text && attachments.length === 0))
   const roleClass = user ? 'task-message-user' : 'task-message-assistant'
   const bubbleClass = user ? 'task-message-bubble-user' : 'task-message-bubble-assistant'
 
@@ -117,24 +118,24 @@ export function TaskMessage({
     className={`task-message-row ${roleClass} ${className}`.trim()}
     data-task-message-role={role}
     data-streaming={streaming ? 'true' : undefined}
-    data-pending={pending ? 'true' : undefined}
+    data-pending={awaitingFirstContent ? 'true' : undefined}
     data-model-label={modelLabel || undefined}
-    aria-busy={streaming || pending || undefined}
+    aria-busy={streaming || awaitingFirstContent || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
       {!user && modelLabel && <div className="task-message-model-meta">
         <b>{resolvedAuthor}</b><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span>{time && <time>{time}</time>}
       </div>}
       <div className="task-message-meta"><b>{resolvedAuthor}</b>{meta}{time && <time>{time}</time>}</div>
-      {pending && !user ? <div
+      {awaitingFirstContent ? <div
         className="task-message-response-pending"
         role="status"
         aria-live="polite"
         aria-label={pendingLabel ?? t('message.waitingResponse')}
       >
-        <span aria-hidden="true"/>
-        <span aria-hidden="true"/>
-        <span aria-hidden="true"/>
+        <span className="task-message-response-activity" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
+        <span className="task-message-response-label">{pendingLabel ?? t('message.waitingResponse')}</span>
+        <span className="task-message-response-dots" aria-hidden="true"><span/><span/><span/></span>
       </div> : <>
         {attachments.length > 0 && <div className="task-message-attachments">
           {attachments.map((attachment, index) => {
@@ -170,6 +171,9 @@ export function TaskMessage({
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
           {(canCollapse || !user) && <div className="markdown-message-actions">
+            {!user && <span className="task-message-output-state" data-active={streaming ? 'true' : undefined} role={streaming ? 'status' : undefined} aria-label={streaming ? t('message.generating') : undefined}>
+              <UiIcon name="loading" size={14}/>
+            </span>}
             {!user && <IconButton
               size="small"
               className="task-message-copy-action"

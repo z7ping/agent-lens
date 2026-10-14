@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
+import { UiIcon } from '../components/UiIcon'
 import type { TaskToolModel } from './task-detail-model'
 
 export interface TaskToolRowProps {
@@ -78,7 +79,15 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     : <ToolKindIcon kind={model.kind}/>
   const content = <>
     <span className={`task-tool-kind task-tool-kind-${visualKind}`}>{icon}<span>{t(`tool.kind.${visualKind}`)}</span></span>
-    <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`}>{statusLabel(model.status, t)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
+    <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[statusLabel(model.status, t), elapsedLabel].filter(Boolean).join(' · ')}>
+      <span className="task-tool-status-mark" aria-hidden="true">
+        {model.status === 'running' ? <UiIcon name="loading" size={14}/>
+          : model.status === 'success' ? <UiIcon name="status-success" size={14}/>
+            : model.status === 'error' ? <UiIcon name="status-error" size={14}/>
+              : <UiIcon name="clock" size={14}/>}
+      </span>
+      <span className="task-tool-status-label">{statusLabel(model.status, t)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
+    </span>
     <b className="task-tool-action" title={model.name}>{model.name}</b>
     <span className="task-tool-target">
       {commandTarget

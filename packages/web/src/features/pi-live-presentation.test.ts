@@ -2,7 +2,17 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { appendPiLiveDelta, finishPiLiveContentBlock, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import type { PiLiveHistoryItem } from './pi-live-history'
-import { PiLivePresentationScheduler } from './pi-live-presentation'
+import { PiLivePresentationScheduler, observedOutputTokenSpeed } from './pi-live-presentation'
+
+test('Token 速度仅使用来源报告的 outputTokens 和客户端观测的正向时间间隔', () => {
+  assert.equal(observedOutputTokenSpeed(180, 1000, 4000), 60)
+  assert.equal(observedOutputTokenSpeed(180, 1000, 1500), 360)
+  assert.equal(observedOutputTokenSpeed(0, 1000, 4000), null)
+  assert.equal(observedOutputTokenSpeed(-1, 1000, 4000), null)
+  assert.equal(observedOutputTokenSpeed(180, null, 4000), null)
+  assert.equal(observedOutputTokenSpeed(180, 1000, 1100), null)
+  assert.equal(observedOutputTokenSpeed(Number.NaN, 1000, 4000), null)
+})
 
 function applySequential(mutations: Array<(items: PiLiveHistoryItem[]) => PiLiveHistoryItem[]>): PiLiveHistoryItem[] {
   return mutations.reduce((items, mutation) => mutation(items), [] as PiLiveHistoryItem[])

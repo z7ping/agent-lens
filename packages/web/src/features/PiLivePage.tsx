@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   type JsonValue,
+  normalizePiUsage,
   type LiveHistoryIndexDto,
   type LiveMessageDto,
   type PiLiveControlsDto,
@@ -26,7 +27,7 @@ import { UiIcon } from '../components/UiIcon'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, settlePiLiveItems, startPiLiveContentBlock, startPiLiveTool, updatePiLiveTool } from './pi-live-current'
 import { PiLiveFollowController } from './pi-live-follow-controller'
 import { omitPiLivePromptMessages, projectPiLiveHistory, type PiLiveHistoryItem } from './pi-live-history'
-import { PiLivePresentationScheduler } from './pi-live-presentation'
+import { PiLivePresentationScheduler, observedOutputTokenSpeed } from './pi-live-presentation'
 import { sameStablePiLiveHistoryRoundProps } from './pi-live-render-boundary'
 import { PiLiveCurrentTaskRound, PiLiveHistoryTaskRound, PiLiveIndexedTaskRound, type PiLiveIndexedProcessLoadResult } from './PiLiveTaskRound'
 import { piLiveSessionTitle, piLiveTaskRoundEstimate, projectPiLiveHistoryIndexRound, projectPiLiveRunningRound, projectPiLiveTaskDetail, projectPiLiveTaskRounds } from './pi-live-task-projection'
@@ -436,6 +437,9 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const presentationRef = useRef<PiLivePresentationScheduler<PiLiveHistoryItem[]> | null>(null)
   const leafIdRef = useRef<string | undefined>(undefined)
   const assistantMessageEpochRef = useRef(0)
+  const assistantGenerationActiveRef = useRef(false)
+  const firstAssistantDeltaAtRef = useRef<number | null>(null)
+  const lastSpeedSampleAtRef = useRef(0)
   const indexedProcessExpansionRef = useRef(new Map<string, boolean>())
   const startupSendingRef = useRef(false)
   const activePromptRef = useRef('')
@@ -455,6 +459,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
   const [optimisticPrompt, setOptimisticPrompt] = useState('')
   const [currentOrdinal, setCurrentOrdinal] = useState<number | null>(null)
   const [currentItems, setCurrentItems] = useState<PiLiveHistoryItem[]>([])
+  const [observedOutputSpeed, setObservedOutputSpeed] = useState<number | null>(null)
   const [queue, setQueue] = useState<PiLiveQueueDto>({ steering: [], followUp: [] })
   const [pendingQueue, setPendingQueue] = useState<PendingQueueSubmission[]>([])
   const [restored, setRestored] = useState<RestoredDraft[]>([])
@@ -660,6 +665,10 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
     setComposerExpanded(false)
     setQueueMutationPending(false)
     assistantMessageEpochRef.current = 0
+    assistantGenerationActiveRef.current = false
+    firstAssistantDeltaAtRef.current = null
+    lastSpeedSampleAtRef.current = 0
+    setObservedOutputSpeed(null)
     startupSendingRef.current = false
     activePromptRef.current = ''
     leafIdRef.current = undefined
@@ -814,7 +823,13 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             settled = true
             if (common.status === 'failed' && common.message) setError(common.message)
           } else if (common?.type === 'message.start') {
-            if (common.role === 'assistant') assistantMessageEpochRef.current += 1
+            if (common.role === 'assistant') {
+              assistantMessageEpochRef.current += 1
+              assistantGenerationActiveRef.current = true
+              firstAssistantDeltaAtRef.current = null
+              lastSpeedSampleAtRef.current = 0
+              setObservedOutputSpeed(null)
+            }
           } else if (common?.type === 'text.start') {
             const deltaOptions = {
               messageEpoch: assistantMessageEpochRef.current,
@@ -822,6 +837,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             }
             presentation.boundary(items => startPiLiveContentBlock(items, 'text', deltaOptions, common.text ?? ''))
           } else if (common?.type === 'text.delta' && common.delta) {
+            if (assistantGenerationActiveRef.current && firstAssistantDeltaAtRef.current === null) firstAssistantDeltaAtRef.current = performance.now()
             const deltaOptions = {
               messageEpoch: assistantMessageEpochRef.current,
               ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
@@ -840,6 +856,7 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
             }
             presentation.boundary(items => startPiLiveContentBlock(items, 'thinking', deltaOptions, common.text ?? ''))
           } else if (common?.type === 'reasoning.delta' && common.delta) {
+            if (assistantGenerationActiveRef.current && firstAssistantDeltaAtRef.current === null) firstAssistantDeltaAtRef.current = performance.now()
             const deltaOptions = {
               messageEpoch: assistantMessageEpochRef.current,
               ...(common.contentIndex === undefined ? {} : { contentIndex: common.contentIndex }),
@@ -883,6 +900,19 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
           // must not inspect Pi's private runtime payload vocabulary.
           const event = record(wrapper.event)
           const type = stringValue(event.type)
+          if (assistantGenerationActiveRef.current && (type === 'message_update' || type === 'message_end')) {
+            const rawUsage = type === 'message_end' ? record(event.message).usage : event.usage
+            const usage = normalizePiUsage(rawUsage)
+            if (usage && usage.outputTokens > 0) {
+              const now = performance.now()
+              const speed = observedOutputTokenSpeed(usage.outputTokens, firstAssistantDeltaAtRef.current, now)
+              if (speed !== null && (type === 'message_end' || now - lastSpeedSampleAtRef.current >= 750)) {
+                lastSpeedSampleAtRef.current = now
+                setObservedOutputSpeed(speed)
+              }
+            }
+          }
+          if (type === 'message_end') assistantGenerationActiveRef.current = false
           if (type === 'compaction_start') {
             statePatch = { ...statePatch, isCompacting: true }
           } else if (type === 'compaction_end') {
@@ -1409,7 +1439,12 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
         showStatus={false}
         title={<span title={headerTitle}>{brief(headerTitle, 15)}</span>}
         submeta={state?.gitBranch ? <span className="pi-live-header-branch" title={t('header.branchTitle', { branch: state.gitBranch })}>{t('header.branch', { branch: state.gitBranch })}</span> : undefined}
-        metrics={[]}
+        metrics={[{
+          label: t('header.outputSpeed'),
+          value: <span className="pi-live-observed-token-speed" title={t('header.outputSpeedHint')}>
+            {observedOutputSpeed === null ? '—' : `${observedOutputSpeed.toFixed(1)} tokens/s`}
+          </span>,
+        }]}
         infoItems={state ? [
           { label: t('header.model'), value: taskDetailModel.contextLabel ?? t('header.defaultModel') },
           { label: t('header.project'), value: state.projectName ?? t('header.noProject') },
