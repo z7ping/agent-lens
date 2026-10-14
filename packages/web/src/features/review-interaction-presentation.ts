@@ -2,7 +2,7 @@ import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageNodeDto, Re
 
 export type ReviewProcessPresentationItem =
   | { type: 'message'; node: ReviewMessageNodeDto }
-  | { type: 'tool-group'; items: ReviewToolNodeDto[] }
+  | { type: 'tool-group'; items: ReviewToolNodeDto[]; parentReasoningId?: string | undefined }
   | { type: 'event'; node: ReviewEventNodeDto }
   | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
 
@@ -20,7 +20,7 @@ export function projectReviewInteractionToolStats(
 export type ReviewInteractionPresentationEntry =
   | { type: 'message'; node: ReviewMessageNodeDto }
   | { type: 'reasoning'; node: ReviewMessageNodeDto; tools: ReviewToolNodeDto[] }
-  | { type: 'tool-group'; items: ReviewToolNodeDto[] }
+  | { type: 'tool-group'; items: ReviewToolNodeDto[]; parentReasoningId?: string | undefined }
   | { type: 'process'; id: string; items: ReviewProcessPresentationItem[] }
   | { type: 'event'; node: ReviewEventNodeDto }
   | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
@@ -121,7 +121,7 @@ function isLegacyPiBenignAssistantStop(node: ReviewEventNodeDto): boolean {
 
 /**
  * 保持 Canonical Review 节点原始顺序，只做两类无损表现变换：
- * 1. 连续 Tool 合成同一个视觉 ToolGroup，但不再把 Tool 移到 reasoning 旁边；
+ * 1. 连续 Tool 按原始顺序视觉聚合；只有唯一可信原生父级的工具才标记 reasoning 归属，不移动节点；
  * 2. parser replay 后，同一 SourceRecord 的旧 unknown / assistant 兼容记录去重。
  *
  * Turn 的统一表现顺序随后收敛为：
@@ -134,12 +134,39 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   const reasoningSourceRecords = new Set(reasoning.flatMap(node => [...sourceRecordIds(node)]))
   const commentarySourceRecords = new Set(commentary.flatMap(node => [...sourceRecordIds(node)]))
 
+  // Attach only when an explicit native/observation parent resolves to exactly
+  // one reasoning node of the same Source. Never use name, time or adjacency.
+  const toolReasoningParent = (tool: ReviewToolNodeDto): string | undefined => {
+    const parentIds = [tool.nativeParentEventId, tool.parentObservationId].filter((id): id is string => Boolean(id))
+    if (!parentIds.length) return undefined
+    const matches = reasoning.filter(node => node.sourceId === tool.sourceId
+      && parentIds.some(id => nodeIdentityIds(node).has(id)))
+    return matches.length === 1 ? matches[0]!.id : undefined
+  }
+
   const result: ReviewInteractionPresentationEntry[] = []
   let tools: ReviewToolNodeDto[] = []
   let rawEvents: ReviewEventNodeDto[] = []
   const flushTools = () => {
     if (!tools.length) return
-    result.push({ type: 'tool-group', items: tools })
+    // Split only at explicit parent boundaries. Original tool order and
+    // visibility are unchanged; uncertain tools remain direct Process children.
+    let segment: ReviewToolNodeDto[] = []
+    let parentReasoningId: string | undefined
+    const flushSegment = () => {
+      if (segment.length) result.push({ type: 'tool-group', items: segment,
+        ...(parentReasoningId ? { parentReasoningId } : {}) })
+    }
+    for (const tool of tools) {
+      const parent = toolReasoningParent(tool)
+      if (segment.length && parent !== parentReasoningId) {
+        flushSegment()
+        segment = []
+      }
+      parentReasoningId = parent
+      segment.push(tool)
+    }
+    flushSegment()
     tools = []
   }
   const flushRawEvents = () => {
