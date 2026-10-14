@@ -48,7 +48,7 @@ export function WorkspaceSidebar({
 }: WorkspaceSidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { t } = useTranslation(['navigation', 'settings', 'shell'])
+  const { t } = useTranslation(['navigation', 'settings', 'shell', 'common'])
   const sidebarRef = useRef<HTMLElement>(null)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
