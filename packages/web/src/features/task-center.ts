@@ -74,7 +74,7 @@ function decodeTextEntities(value: string): string {
 function cleanSessionTitle(value: string | undefined, fallback: string): string {
   const text = decodeTextEntities(value ?? '').replace(/\s+/g, ' ').trim()
   if (!text) return fallback
-  return text.length > 74 ? `${text.slice(0, 74)}…` : text
+  return text
 }
 
 /** 左侧会话列表的标题契约：只呈现任务名，不重复 Pi 工具标记或模型信息。 */
@@ -84,7 +84,8 @@ export function sessionListTitle(value: string | undefined, fallback: string, so
     ? normalized.replace(/\s*[·•]\s*Pi\s*$/i, '').trim()
     : normalized
   const text = withoutPiSuffix || fallback
-  return text.length > 30 ? `${text.slice(0, 30)}…` : text
+  // CSS owns viewport-dependent ellipsis; the source title is never silently cut to 30 characters.
+  return text
 }
 
 function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
