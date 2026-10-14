@@ -94,3 +94,21 @@ test('错误 Tool Call 仍以具体行出现并保留错误语义', () => {
   assert.match(html, /运行测试/)
   assert.match(html, /失败 · 1\.2s/)
 })
+
+test('工具运行与结果共用固定状态图标占位，不改变事实行顺序', () => {
+  const runningModel: TaskToolGroupModel = {
+    ...model,
+    itemCount: 2,
+    kindCounts: [{ kind: 'shell', label: 'Shell', count: 2 }],
+    tools: [
+      { id: 'tool-running', name: 'exec', kind: 'shell', kindLabel: 'Shell', status: 'running' },
+      { id: 'tool-error', name: 'exec', kind: 'shell', kindLabel: 'Shell', status: 'error' },
+    ],
+  }
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: runningModel }))
+  assert.equal((html.match(/class="task-tool-status-mark"/g) ?? []).length, 2)
+  assert.match(html, /task-tool-status-run/)
+  assert.match(html, /task-tool-status-error/)
+  assert.ok(html.indexOf('tool-running') < 0 || html.indexOf('task-tool-status-run') < html.indexOf('task-tool-status-error'))
+})
+
