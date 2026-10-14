@@ -355,8 +355,10 @@ async function inspect(win, viewport, theme) {
 async function runInspectorReturn(win) {
   const setup = await withTimeout(win.webContents.executeJavaScript(`(async () => {
     const pane = document.querySelector('.review-reader-pane')
-    const trigger = document.querySelector('[data-tool-fact="true"] button.task-tool-row')
-    if (!(pane instanceof HTMLElement) || !(trigger instanceof HTMLElement)) return { skipped: true, reason: '缺少 Review Reader 或可点击 Tool Row' }
+    const call = document.querySelector('[data-tool-fact="true"]')
+    if (call instanceof HTMLDetailsElement && !call.open) call.querySelector('summary')?.click()
+    const trigger = call?.querySelector('button.task-tool-inspect')
+    if (!(pane instanceof HTMLElement) || !(trigger instanceof HTMLElement)) return { skipped: true, reason: '缺少 Review Reader 或折叠内 Inspector 操作' }
     trigger.dataset.acceptanceInspectorTrigger = 'true'
     trigger.scrollIntoView({ block: 'center' })
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
