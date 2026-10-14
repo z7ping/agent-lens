@@ -757,15 +757,27 @@
   display: flex;
   min-width: 0;
   flex: 0 0 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 5px;
   padding: 0 10px 6px;
 }
+.workspace-sidebar-context > .task-center-rail .task-center-active-filter-list {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.workspace-sidebar-context > .task-center-rail .task-center-active-filter-list::-webkit-scrollbar { display: none; }
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-chip.btn {
   height: 26px;
   min-width: 0;
+  max-width: 148px;
+  flex: 0 0 auto;
   gap: 4px;
   padding: 0 7px;
   border-color: color-mix(in srgb, var(--al-accent) 16%, var(--al-line));
@@ -775,6 +787,7 @@
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-clear.btn {
   height: 26px;
+  flex: 0 0 auto;
   padding-inline: 5px;
   border-color: transparent;
   background: transparent;
@@ -783,60 +796,6 @@
 
 .workspace-sidebar-context > .task-center-rail .task-center-scroll {
   padding: 1px 10px 12px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-group-title {
-  margin: 4px 0 0;
-  padding: 7px 5px 5px;
-  background: var(--al-soft-2);
-  color: var(--al-muted-2);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item {
-  width: 100%;
-  margin: 3px 0;
-  padding: 8px 8px 8px 9px;
-  border: 1px solid color-mix(in srgb, var(--al-line) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--al-surface) 74%, transparent);
-  box-shadow: none;
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item:hover {
-  border-color: var(--al-line);
-  background: var(--al-surface);
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item-active {
-  border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
-  background: color-mix(in srgb, var(--al-accent-soft) 34%, var(--al-surface));
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item-active::before {
-  display: none;
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item-title {
-  margin-top: 3px;
-  color: var(--al-ink);
-  font-size: 13px;
-  font-weight: 630;
-  line-height: 1.4;
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item-meta,
-.workspace-sidebar-context > .task-center-rail .session-item-foot {
-  gap: 6px;
-  color: var(--al-muted-2);
-  font-size: 12px;
-  line-height: 1.32;
-}
-
-.workspace-sidebar-context > .task-center-rail .session-item-foot {
-  margin-top: 3px;
-  gap: 10px;
 }
 
 .app-shell .task-center-page {
