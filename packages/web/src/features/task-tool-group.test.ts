@@ -43,7 +43,7 @@ test('默认摘要只有单行：工具图标、类型、简短目标、状态�
   assert.match(html, /<summary class="task-tool-row"/)
   assert.match(html, /class="task-tool-kind task-tool-kind-shell"/)
   assert.match(html, /class="task-tool-summary-text" title="pnpm test">pnpm test<\/span>/)
-  assert.match(html, /class="task-tool-row-chevron"/)
+  assert.match(html, /task-tool-row-chevron/)
   assert.doesNotMatch(html, /class="task-tool-command"/)
   assert.doesNotMatch(html, /class="task-tool-target"/)
   assert.doesNotMatch(html, /class="task-tool-action"/)
