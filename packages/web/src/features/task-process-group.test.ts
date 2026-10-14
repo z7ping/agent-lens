@@ -16,6 +16,8 @@ test('处理详情完成态默认折叠并展示统一摘要', () => {
   }))
   assert.match(html, /处理详情/)
   assert.match(html, /8 条消息/)
+  assert.match(html, /lucide-brain-circuit|lucide-brain/)
+  assert.equal((html.match(/<summary/g) ?? []).length, 1)
   assert.match(html, /16 次工具调用/)
   assert.match(html, /耗时 2分18秒/)
   assert.match(html, /1 次失败/)
@@ -23,7 +25,7 @@ test('处理详情完成态默认折叠并展示统一摘要', () => {
   assert.doesNotMatch(html, /process body/)
 })
 
-test('处理详情运行态默认展开以保留实时可观察性', () => {
+test('处理详情运行态默认折叠，展开仍能实时观察', () => {
   const html = renderToStaticMarkup(createElement(TaskProcessGroup, {
     id: 'process:running',
     messageCount: 1,
@@ -31,9 +33,34 @@ test('处理详情运行态默认展开以保留实时可观察性', () => {
     state: 'running',
     children: 'live process body',
   }))
-  assert.match(html, /<details[^>]*open=""/)
+  assert.doesNotMatch(html, /<details[^>]*open=""/)
   assert.match(html, /处理中/)
-  assert.match(html, /live process body/)
+  assert.doesNotMatch(html, /live process body/)
+  const expanded = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:running', messageCount: 1, toolCount: 2,
+    state: 'running', defaultExpanded: true, children: 'live process body',
+  }))
+  assert.match(expanded, /live process body/)
+})
+
+test('思考耗时只在可靠可用时进入同一处理详情标题，不增加第二层 disclosure', () => {
+  const html = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:duration', messageCount: 3, toolCount: 2,
+    thinkingDurationMs: 42_000, durationMs: 86_000, defaultExpanded: true,
+    children: '思考正文和工具',
+  }))
+  assert.match(html, /处理详情（思考了 42秒）/)
+  assert.match(html, /3 条消息/)
+  assert.match(html, /2 次工具调用/)
+  assert.match(html, /耗时 1分26秒/)
+  assert.equal((html.match(/<summary/g) ?? []).length, 1)
+  assert.equal((html.match(/思考了 42秒/g) ?? []).length, 1)
+  assert.match(html, /思考正文和工具/)
+  const unknown = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:unknown', messageCount: 1, toolCount: 1,
+    durationMs: 86_000, thinkingDurationMs: Number.NaN, children: '正文',
+  }))
+  assert.doesNotMatch(unknown, /思考了/)
 })
 
 test('精确耗时保留秒级而不复用分钟近似格式', () => {

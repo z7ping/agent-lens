@@ -30,10 +30,11 @@ test('Tool Group 不再生成独立“执行过程 / 工具执行”父层', () 
 
 test('测试类和未知 Tool 使用稳定语义降级', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
-  assert.match(html, /data-kind="test"/)
-  assert.match(html, /task-tool-kind-test/)
-  assert.match(html, />测试</)
-  assert.match(html, /data-kind="tool"/)
+  // npm test is only a native name, not evidence that the call belongs to
+  // the 'test' tool kind. Both it and unknown calls remain generic.
+  assert.doesNotMatch(html, /data-kind="test"/)
+  assert.doesNotMatch(html, /task-tool-kind-test/)
+  assert.equal((html.match(/data-kind="tool"/g) ?? []).length, 2)
   assert.match(html, />工具</)
 })
 
@@ -79,7 +80,7 @@ test('工具状态和耗时紧跟工具类型，而不是放到最右侧', () =>
   assert.ok(kind >= 0 && status > kind && action > status && target > action)
 })
 
-test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实时输出', () => {
+test('Pi Running Tool 收在单一处理详情中，运行中摘要默认折叠且不丢失调用统计', () => {
   const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
     model: runningRound,
     items: [
@@ -91,11 +92,11 @@ test('Pi Running Tool 直接展示事实行，并在行下展示有限高度实�
   assert.match(html, /处理详情/)
   assert.match(html, /1 条消息/)
   assert.match(html, /1 次工具调用/)
-  assert.match(html, /data-status="running"/)
-  assert.match(html, /data-tool-fact="true"/)
-  assert.match(html, /class="task-tool-live-output"/)
-  assert.match(html, /line 1/)
-  assert.match(html, /data-task-tool-group="true"/)
+  assert.match(html, /data-task-thinking-state="running"/)
+  assert.match(html, /处理中/)
+  assert.doesNotMatch(html, /data-status="running"/)
+  assert.doesNotMatch(html, /data-tool-fact="true"/)
+  assert.doesNotMatch(html, /line 1/)
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
 })
 

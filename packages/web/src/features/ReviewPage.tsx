@@ -914,13 +914,11 @@ function ReviewProcessGroup({
     </div>}
     {loadState === 'loaded' && <div className="task-process-sequence">
       {items.map((item, index) => {
-        if (item.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
+        if (item.type === 'tool-group') return <div key={`tools-${index}`} className={item.parentReasoningId ? 'task-process-related-tool' : undefined} data-reasoning-parent={item.parentReasoningId}><ReviewToolGroupAdapter items={item.items} inspect={inspect}/></div>
         if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
         if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
         return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-          <div className="task-process-message-kind">{item.node.role === 'reasoning'
-            ? agentLensI18n.t('review:local.process.thinking')
-            : agentLensI18n.t('review:local.process.output')}</div>
+          {item.node.role === 'commentary' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.output')}</div>}
           <MarkdownSurface text={item.node.text}/>
           <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
         </div>

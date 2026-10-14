@@ -104,7 +104,20 @@ if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('cha
 if (!taskMessage.includes('{!user && <button') || !taskMessage.includes("t('message.source')")) throw new Error('源码切换只属于 Agent Markdown，且必须走国际化文案')
 if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) throw new Error('Agent 源码切换必须悬浮在正文内，不得单独占行')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(taskToolGroup)) throw new Error('Tool Group 不得制造独立折叠父层')
-if (!reviewPresentation.includes("if (node.type === 'tool')") || !reviewPresentation.includes('tools.push(node)') || !reviewPresentation.includes("result.push({ type: 'tool-group', items: tools })") || !reviewPresentation.includes("node.role === 'reasoning') result.push({ type: 'reasoning', node, tools: [] })")) throw new Error('Thinking / Tool 必须保持 Canonical 原始顺序，不得恢复 Tool 重挂载')
+// The old gate compared a single tool-group push expression. It rejected a
+// behavior-preserving segmentation of consecutive tools by *explicit* native
+// reasoning parent. Keep hard checks for source order and evidence boundaries.
+if (!reviewPresentation.includes("if (node.type === 'tool')")
+  || !reviewPresentation.includes('tools.push(node)')
+  || !reviewPresentation.includes('for (const tool of tools)')
+  || !reviewPresentation.includes('segment.push(tool)')
+  || !reviewPresentation.includes("result.push({ type: 'tool-group', items: segment")
+  || !reviewPresentation.includes("node.role === 'reasoning') result.push({ type: 'reasoning', node, tools: [] })")
+  || !reviewPresentation.includes('parentIds = [tool.nativeParentEventId, tool.parentObservationId]')
+  || !reviewPresentation.includes('node.sourceId === tool.sourceId')
+  || !reviewPresentation.includes('matches.length === 1')
+  || !reviewPresentation.includes('parentReasoningId ? { parentReasoningId } : {}'))
+  throw new Error('Thinking / Tool 必须遵守 Canonical 顺序：只允许唯一、同源、显式父级证据，不得猜测或重排')
 if (!reviewPage.includes('projectReviewInteractionPresentation(effectiveInteraction.nodes)')) throw new Error('Review 必须用当前 Summary/Detail 对应的有效 Interaction 执行统一 Turn 投影')
 
 if (!taskDetailCss.includes('.task-round-summary::after') || !taskDetailCss.includes('max-width: 56px') || /\.task-round-summary::before\s*\{[^}]*background:/s.test(taskDetailCss)) throw new Error('轮次标题只允许短右分隔线，不得恢复左右贯穿式分割线')

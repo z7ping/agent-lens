@@ -10,6 +10,8 @@ export interface TaskProcessGroupProps {
   errorCount?: number | undefined
   /** 兼容已知的直接耗时；优先使用 startedAtMs / endedAtMs 的真实过程边界。 */
   durationMs?: number | undefined
+  /** Only native measured reasoning intervals, never total process/round duration. */
+  thinkingDurationMs?: number | undefined
   startedAtMs?: number | undefined
   endedAtMs?: number | undefined
   state?: TaskRoundState | undefined
@@ -27,10 +29,11 @@ export function TaskProcessGroup({
   toolCount,
   errorCount = 0,
   durationMs = 0,
+  thinkingDurationMs,
   startedAtMs,
   endedAtMs,
   state = 'settled',
-  defaultExpanded = state === 'running',
+  defaultExpanded = false,
   expansionStore,
   onExpandedChange,
   summaryExtra,
@@ -51,9 +54,13 @@ export function TaskProcessGroup({
     ? Math.max(0, (endedAtMs ?? nowMs) - startedAtMs)
     : Math.max(0, durationMs)
 
+  const hasThinkingDuration = thinkingDurationMs !== undefined && Number.isFinite(thinkingDurationMs) && thinkingDurationMs > 0
+  const thoughtLabel = hasThinkingDuration
+    ? t('thinking.thoughtFor', { value: taskPreciseDurationLabel(thinkingDurationMs) })
+    : ''
   const model: TaskThinkingModel = {
     id,
-    label: t('process.details'),
+    label: thoughtLabel ? t('process.detailsWithThinking', { thinking: thoughtLabel }) : t('process.details'),
     text: '',
     state,
   }

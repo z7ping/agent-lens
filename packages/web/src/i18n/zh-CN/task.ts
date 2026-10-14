@@ -65,6 +65,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
     },
     process: {
       details: '处理详情',
+      detailsWithThinking: '处理详情（{{thinking}}）',
       messages: '{{count}} 条消息',
       tools: '{{count}} 次工具调用',
       duration: '耗时 {{value}}',

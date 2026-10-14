@@ -4,6 +4,9 @@ export interface PiLiveDeltaOptions {
   contentIndex?: number | undefined
   messageEpoch?: number | undefined
   at?: string | undefined
+  /** Client-observed native reasoning start/end. No inferred duration from message or tool timestamps. */
+  startedAtMs?: number | undefined
+  endedAtMs?: number | undefined
 }
 
 export interface PiLiveCurrentToolInput {
@@ -115,6 +118,7 @@ export function startPiLiveContentBlock(
     at: options.at ?? '',
     state: 'running',
     contentIndex: options.contentIndex,
+    startedAtMs: options.startedAtMs,
   }]
 }
 
@@ -162,6 +166,7 @@ export function appendPiLiveDelta(
     at: options.at ?? '',
     state: 'running',
     contentIndex: options.contentIndex,
+    startedAtMs: options.startedAtMs,
   }]
 }
 
@@ -175,7 +180,15 @@ export function finishPiLiveContentBlock(
   if (options.contentIndex === undefined) return items
   const prepared = startPiLiveContentBlock(items, kind, options, content)
   const index = contentBlockIndex(prepared, kind, options)
-  return updateContentBlock(prepared, index, kind, content || contentText(prepared[index], kind) || '', 'settled') ?? prepared
+  const updated = updateContentBlock(prepared, index, kind, content || contentText(prepared[index], kind) || '', 'settled') ?? prepared
+  if (kind !== 'thinking' || options.endedAtMs === undefined) return updated
+  const current = updated[index]
+  if (current?.kind !== 'thinking' || current.startedAtMs === undefined
+    || !Number.isFinite(current.startedAtMs) || !Number.isFinite(options.endedAtMs)
+    || options.endedAtMs < current.startedAtMs) return updated
+  const next = [...updated]
+  next[index] = { ...current, durationMs: options.endedAtMs - current.startedAtMs }
+  return next
 }
 
 export function startPiLiveTool(items: PiLiveHistoryItem[], input: PiLiveCurrentToolInput): PiLiveHistoryItem[] {
@@ -284,7 +297,8 @@ function settleLiveItem(live: PiLiveHistoryItem, persisted?: PiLiveHistoryItem):
     return { ...persisted, id: live.id, state: 'settled', contentIndex: live.contentIndex ?? persisted.contentIndex }
   }
   if (live.kind === 'thinking' && persisted.kind === 'thinking') {
-    return { ...persisted, id: live.id, state: 'settled', contentIndex: live.contentIndex ?? persisted.contentIndex }
+    return { ...persisted, id: live.id, state: 'settled', contentIndex: live.contentIndex ?? persisted.contentIndex,
+      startedAtMs: live.startedAtMs, durationMs: live.durationMs ?? persisted.durationMs }
   }
   if (live.kind === 'tool' && persisted.kind === 'tool') {
     return {

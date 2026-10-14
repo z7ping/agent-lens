@@ -109,6 +109,30 @@ test('Pi Live 历史轮将处理中间过程默认折叠且最终输出保留模
 })
 
 
+test('Pi Live 思考时长仅出现于处理摘要，展开后不重复思考耗时标题', () => {
+  const html = renderToStaticMarkup(createElement(PiLiveHistoryTaskRound, {
+    projection: {
+      continuation: false,
+      model: {
+        id: 'round-thought:0', label: '第 2 轮', state: 'settled',
+        toolCount: 1, errorCount: 0, durationMs: 86_000, highLatency: false,
+      },
+      items: [
+        { id: 'think-native', kind: 'thinking', text: '观察结果', durationMs: 42_000,
+          at: '2026-09-01T00:00:00.000Z', turnSection: 'process' },
+        { id: 'tool-native', kind: 'tool', callId: 'call-native', name: 'mcp__dbx__execute_query',
+          summary: 'select 1', output: '1', status: 'success',
+          at: '2026-09-01T00:00:42.000Z', turnSection: 'process' },
+      ],
+    },
+  }))
+  assert.match(html, /处理详情（思考了 42秒）/)
+  assert.equal((html.match(/思考了 42秒/g) ?? []).length, 1)
+  assert.equal((html.match(/<summary class="task-thinking-summary"/g) ?? []).length, 1)
+  assert.doesNotMatch(html, /观察结果/)
+  assert.doesNotMatch(html, /select 1/)
+})
+
 test('Pi Indexed 外层 Round 不重复展示 Process 耗时', () => {
   const html = renderToStaticMarkup(createElement(PiLiveIndexedTaskRound, {
     item: {
