@@ -53,8 +53,8 @@
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-clear {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   z-index: 2;
   width: 26px;
   min-width: 26px;
