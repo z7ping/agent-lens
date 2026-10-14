@@ -128,6 +128,8 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       modelGenericTitle: 'Pi model',
       thinkingAria: 'Pi reasoning effort',
       thinkingTitle: 'Pi reasoning effort · {{level}}',
+      thinkingNoAlternatives: 'This model offers no other reasoning levels',
+      thinkingNotApplied: 'Reasoning level did not change: requested {{requested}}, runtime reports {{actual}}',
       thinkingUnset: 'Not set',
       thinkingPlaceholder: 'Reasoning',
       modeAria: 'Send mode',
