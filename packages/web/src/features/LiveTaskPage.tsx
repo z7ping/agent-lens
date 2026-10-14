@@ -515,11 +515,13 @@ const GenericLiveRound = memo(function GenericLiveRound({
   messageActions,
   actionPending,
   runtimeStreaming,
+  showResponsePending = false,
   onMessageAction,
 }: {
   projection: LiveTaskRoundProjection
   agentLabel: string
   eager: boolean
+  showResponsePending?: boolean
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
@@ -541,6 +543,12 @@ const GenericLiveRound = memo(function GenericLiveRound({
         runtimeStreaming={runtimeStreaming}
         onMessageAction={onMessageAction}
       />)}
+      {showResponsePending
+        && projection.items.some(item => item.kind === 'message' && item.role === 'user')
+        && !projection.items.some(item => item.kind === 'thinking'
+          || item.kind === 'tool'
+          || (item.kind === 'message' && item.role === 'assistant'))
+        && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
     </TaskRound>
   </VirtualRoundMount>
 }, sameStableLiveTaskRoundProps)
@@ -1966,6 +1974,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             messageActions={messageActions}
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
+            showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
             onMessageAction={runMessageAction}
           />)}
           {historyPage?.hasLater && <div
