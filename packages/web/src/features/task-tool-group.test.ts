@@ -114,5 +114,8 @@ test('成功绿色、失败红色且状态标记无额外圆框', () => {
   assert.match(failed, /data-status="error"/)
   assert.match(failed, /task-tool-status-error/)
   assert.doesNotMatch(failed, /lucide-circle-x|lucide-circle-check/)
-  assert.match(failed, /data-code-language="json"/)
+  // Tool rows tokenize large payloads only after the user expands one call.
+  assert.doesNotMatch(failed, /data-code-language="json"/)
+  assert.match(failed, /data-tool-section="input"/)
+  assert.match(failed, /data-tool-section="output"/)
 })
