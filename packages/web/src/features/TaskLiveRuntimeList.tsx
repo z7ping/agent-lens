@@ -154,7 +154,7 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
       >
         <div className="session-item-title-row">
           <div className="session-item-title" title={title}>{sessionListTitle(title, fallback, [item.productId])}</div>
-          <StatusBadge tone={badge.tone} dot={badge.dot}>{badge.label}</StatusBadge>
+          <StatusBadge className="task-live-status-badge" tone={badge.tone} dot={badge.dot} title={badge.label}>{badge.label}</StatusBadge>
         </div>
         <div className="session-item-meta">
           <span className={item.state.isStreaming || item.state.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>
