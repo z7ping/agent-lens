@@ -282,6 +282,7 @@ export type LiveEventDto =
       type: 'tool.start'
       callId?: string | undefined
       name: string
+      parentToolCallId?: string | undefined
       toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
       mcpServerId?: string | undefined
       inputPreview?: string | undefined
@@ -292,6 +293,7 @@ export type LiveEventDto =
       type: 'tool.end'
       callId?: string | undefined
       name?: string | undefined
+      parentToolCallId?: string | undefined
       status: 'success' | 'error'
       output?: string | undefined
       durationMs?: number | undefined
@@ -614,6 +616,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       type,
       name: event.name,
       ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
+      ...(eventText(event.parentToolCallId) !== undefined ? { parentToolCallId: eventText(event.parentToolCallId) } : {}),
       ...(['builtin', 'mcp', 'plugin', 'extension', 'skill-runtime', 'unknown'].includes(String(event.toolSourceType))
         ? { toolSourceType: event.toolSourceType as 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' } : {}),
       ...(eventText(event.mcpServerId) !== undefined ? { mcpServerId: eventText(event.mcpServerId) } : {}),
@@ -639,6 +642,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       ...(eventText(event.callId) !== undefined ? { callId: eventText(event.callId) } : {}),
       ...(eventText(event.name) !== undefined ? { name: eventText(event.name) } : {}),
       ...(eventText(event.output) !== undefined ? { output: eventText(event.output) } : {}),
+      ...(eventText(event.parentToolCallId) !== undefined ? { parentToolCallId: eventText(event.parentToolCallId) } : {}),
       ...(durationMs !== undefined ? { durationMs } : {}),
     }
   }
