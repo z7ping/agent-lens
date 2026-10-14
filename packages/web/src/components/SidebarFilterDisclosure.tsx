@@ -4,6 +4,7 @@ import type { AgentFacetDto } from '@agent-lens/protocol'
 import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
 import { useIntegrationOrder } from './IntegrationOrderProvider'
 import { Button, Disclosure, IconButton, UiIcon } from './ui'
+import { nextAgentFilterSelection } from './task-agent-selection'
 
 type AgentSelection =
   | { mode: 'single'; value: string; onChange(value: string): void }
@@ -20,6 +21,8 @@ interface SidebarFilterDisclosureProps {
   showAllOption?: boolean
   agentOrderManagement?: boolean
   closeOnOutside?: boolean
+  /** In a filter, selecting an agent from All narrows to that agent instead of excluding it. */
+  multipleSelectionBehavior?: 'toggle' | 'pick-from-all'
 }
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
@@ -34,6 +37,7 @@ export function SidebarFilterDisclosure({
   showAllOption = false,
   agentOrderManagement = false,
   closeOnOutside = false,
+  multipleSelectionBehavior = 'toggle',
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
   const { t: tAgents } = useTranslation('agents')
@@ -67,11 +71,14 @@ export function SidebarFilterDisclosure({
   const resolvedSummary = summary ?? t('sidebarFilter.summary')
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
+  const pickFromAll = agentSelection?.mode === 'multiple' && multipleSelectionBehavior === 'pick-from-all'
   const selectedIds = agentSelection?.mode === 'multiple'
-    ? agentSelection.value === null ? detectedIds : agentSelection.value
+    ? agentSelection.value === null ? (pickFromAll ? [] : detectedIds) : agentSelection.value
     : agentSelection?.value ? [agentSelection.value] : []
   const allSelected = agentSelection?.mode === 'multiple'
-    ? detectedIds.length > 0 && detectedIds.every(id => selectedIds.includes(id))
+    ? pickFromAll
+      ? agentSelection.value === null
+      : detectedIds.length > 0 && detectedIds.every(id => selectedIds.includes(id))
     : !agentSelection?.value
   const selectedCount = selectedIds.filter(id => detectedIds.includes(id)).length
   const reorderableAgents = orderedAgents.filter(agent => canReorder(agent.sourceId))
@@ -91,6 +98,10 @@ export function SidebarFilterDisclosure({
       agentSelection.onChange(sourceId)
       return
     }
+    if (pickFromAll) {
+      agentSelection.onChange(nextAgentFilterSelection(agentSelection.value, sourceId, detectedIds))
+      return
+    }
     const current = agentSelection.value === null ? detectedIds : agentSelection.value
     const next = current.includes(sourceId)
       ? current.filter(id => id !== sourceId)
@@ -107,7 +118,7 @@ export function SidebarFilterDisclosure({
     onToggle={event => setOpen(event.currentTarget.open)}
   >
     {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={typeof resolvedSummary === 'string' ? resolvedSummary : t('sidebarFilter.summary')}>
-      {(agentSelection.mode === 'multiple' || showAllOption) && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}>{t('sidebarFilter.allAgents')}</button>}
+      {(agentSelection.mode === 'multiple' || showAllOption) && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}><span>{t('sidebarFilter.allAgents')}</span>{allSelected && <UiIcon name="check" size={14} aria-hidden="true"/>}</button>}
       {orderedAgents.map(agent => {
         const selected = selectedIds.includes(agent.sourceId)
         return <button
@@ -121,6 +132,7 @@ export function SidebarFilterDisclosure({
           <span className={`source-dot ${sourceDot(agent.sourceId)}`} aria-hidden="true"/>
           <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
           {!agent.detected && <span className="workspace-agent-filter-state">{t('sidebarFilter.notDetected')}</span>}
+          {selected && <UiIcon name="check" size={14} aria-hidden="true"/>}
         </button>
       })}
       {!orderedAgents.length && <div className="workspace-context-empty">{t('sidebarFilter.empty')}</div>}
