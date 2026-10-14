@@ -66,6 +66,10 @@
   flex: 0 1 190px;
 }
 
+.backup-mobile-scope {
+  display: none;
+}
+
 .backup-toolbar-actions {
   min-width: 0;
   flex: 0 0 auto;
