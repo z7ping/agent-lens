@@ -36,7 +36,7 @@ function textFromChildren(children: ReactNode): string {
 function fencedLanguage(children: ReactNode): string | undefined {
   if (Array.isArray(children)) return children.map(fencedLanguage).find(Boolean)
   if (isValidElement<{ className?: string; children?: ReactNode }>(children)) {
-    const match = children.props.className?.match(/(?:^|\\s)language-([a-z0-9+-]+)/i)
+    const match = children.props.className?.match(/(?:^|\s)language-([a-z0-9+-]+)/i)
     return match ? match[1] : fencedLanguage(children.props.children)
   }
   return undefined
