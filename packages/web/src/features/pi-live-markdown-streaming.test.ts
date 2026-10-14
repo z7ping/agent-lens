@@ -5,6 +5,9 @@ import { splitStreamingMarkdown } from '../components/MarkdownContent'
 
 const composer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
+const genericLive = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
+const piLive = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
 
@@ -48,4 +51,22 @@ test('显式草稿 revision 才重建 Lexical 文档，本地编辑不会形成�
 test('Pi Live 边界导航使用整数描边，避免 1.75px 小尺寸抗锯齿发虚', () => {
   assert.match(taskSurface, /<UiIcon name="arrow-big-up" size=\{20\} strokeWidth=\{2\}\/>/)
   assert.match(taskSurface, /<UiIcon name="arrow-big-down" size=\{20\} strokeWidth=\{2\}\/>/)
+})
+
+test('Pi 与通用 Live 共享等待首响应占位，动画只作用于状态标记', () => {
+  assert.match(taskMessage, /awaitingFirstContent = !user && \(pending \|\| \(streaming && !text && attachments\.length === 0\)\)/)
+  assert.match(taskMessage, /task-message-response-activity/)
+  assert.match(genericLive, /showResponsePending=\{Boolean\(state\?\.isStreaming\)/)
+  assert.match(genericLive, /<TaskMessage role="assistant" text="" author=\{agentLabel\} pending/)
+  assert.match(taskDetailCss, /\.task-surface \.task-message-response-pending\s*\{[\s\S]*?min-height:\s*28px/)
+  assert.match(taskDetailCss, /prefers-reduced-motion:\s*reduce/)
+})
+
+test('工具/思考正在执行时固定布局与图标，Token 速度不用字符数估算', () => {
+  assert.match(taskDetailCss, /grid-template-columns:\s*66px 122px minmax\(88px, auto\)/)
+  assert.match(taskDetailCss, /\.task-tool-status-mark/)
+  assert.match(taskDetailCss, /\.task-thinking-running-mark/)
+  assert.match(piLive, /normalizePiUsage\(rawUsage\)/)
+  assert.match(piLive, /observedOutputTokenSpeed\(usage\.outputTokens/)
+  assert.match(piLive, /observedOutputSpeed === null \? '—'/)
 })
