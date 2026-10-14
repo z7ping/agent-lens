@@ -19,7 +19,7 @@ const model: TaskToolGroupModel = {
   tools: [
     { id: 'read-1', name: '读取文件', kind: 'read', kindLabel: '读取', status: 'success', primary: 'src/review.ts', durationLabel: '42ms' },
     { id: 'search-1', name: '代码搜索', kind: 'search', kindLabel: '搜索', status: 'success', primary: 'TaskToolGroup', durationLabel: '51ms' },
-    { id: 'shell-1', name: '执行命令', kind: 'shell', kindLabel: 'Shell', status: 'success', primary: 'pnpm test', durationLabel: '38s' },
+    { id: 'shell-1', name: '执行命令', kind: 'shell', kindLabel: 'Shell', status: 'success', primary: 'pnpm test', rawInput: '{"command":"pnpm test"}', output: 'passed 42 tests', durationLabel: '38s' },
   ],
 }
 
@@ -27,88 +27,78 @@ function render(defaultExpanded?: boolean): string {
   return renderToStaticMarkup(createElement(TaskToolGroup, defaultExpanded === undefined ? { model } : { model, defaultExpanded }))
 }
 
-function classTokens(html: string): string[] {
-  return [...html.matchAll(/class="([^"]+)"/g)].flatMap(match => (match[1] ?? '').split(/\s+/).filter(Boolean))
-}
-
-test('TaskToolGroup 不再创建“工具执行”折叠父层，具体调用直接可见', () => {
+test('每次 Tool Call 独立默认收起，Group 不额外折叠，原生顺序不变', () => {
   const html = render()
   assert.match(html, /data-task-tool-group="true"/)
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
-  assert.doesNotMatch(html, />工具执行</)
+  assert.equal((html.match(/<details class="task-tool-call/g) ?? []).length, 3)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
-  assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 3)
-  const tokens = classTokens(html)
-  for (const legacyClass of ['execution-row', 'tool-row', 'execution-group', 'tool-group', 'agent-lane-node']) {
-    assert.ok(!tokens.includes(legacyClass), `不应恢复旧类名 ${legacyClass}`)
+  assert.doesNotMatch(html, /<details class="task-tool-call[^>]* open=/)
+  assert.ok(html.indexOf('读取文件') < html.indexOf('代码搜索'))
+  assert.ok(html.indexOf('代码搜索') < html.indexOf('pnpm test'))
+})
+
+test('默认摘要只有单行：工具图标、类型、简短目标、状态图标及展开箭头', () => {
+  const html = render()
+  assert.match(html, /<summary class="task-tool-row"/)
+  assert.match(html, /class="task-tool-kind task-tool-kind-shell"/)
+  assert.match(html, /class="task-tool-summary-text" title="pnpm test">pnpm test<\/span>/)
+  assert.match(html, /task-tool-row-chevron/)
+  assert.doesNotMatch(html, /class="task-tool-command"/)
+  assert.doesNotMatch(html, /class="task-tool-target"/)
+  assert.doesNotMatch(html, /class="task-tool-action"/)
+  assert.match(html, /class="task-tool-status-mark"/)
+})
+
+test('展开后入参和出参是两个平级区域，原始数据可复制，错误也不自动展开', () => {
+  const html = render()
+  assert.match(html, /data-tool-section="input"[^>]*aria-label="入参"/)
+  assert.match(html, /data-tool-section="output"[^>]*aria-label="出参"/)
+  assert.match(html, /\{&quot;command&quot;:&quot;pnpm test&quot;\}/)
+  assert.match(html, /passed 42 tests/)
+  assert.doesNotMatch(html, /task-tool-input-details/)
+  assert.doesNotMatch(html, /task-tool-output-details/)
+  const error: TaskToolGroupModel = {
+    ...model,
+    tools: [{ id: 'error', name: 'bash', kind: 'shell', kindLabel: 'Shell', status: 'error', rawInput: '{"command":"exit 1"}', output: 'Exit code: 1' }],
   }
-  assert.match(html, /读取文件/)
+  const rendered = renderToStaticMarkup(createElement(TaskToolGroup, { model: error }))
+  assert.match(rendered, /class="task-tool-call task-tool-row-error"/)
+  assert.doesNotMatch(rendered, /<details[^>]*open=""/)
+  assert.match(rendered, /Exit code: 1/)
+})
+
+test('缺少原始入参时，摘要不能冒充真实入参；缺少出参不伪造结果', () => {
+  const html = render()
+  assert.match(html, /调用摘要（原始入参未记录）/)
   assert.match(html, /src\/review\.ts/)
-  assert.match(html, /完成 · 42ms/)
-  assert.match(html, /代码搜索/)
-  assert.match(html, /TaskToolGroup/)
-  assert.match(html, /执行命令/)
-  assert.match(html, /pnpm test/)
+  assert.match(html, /未记录出参/)
 })
 
-test('Tool 是否折叠由真实父级控制，defaultExpanded 不再制造独立层级', () => {
-  const expanded = render(true)
-  const collapsed = render(false)
-  assert.doesNotMatch(expanded, /<details[^>]*data-task-tool-group/)
-  assert.doesNotMatch(collapsed, /<details[^>]*data-task-tool-group/)
-  assert.equal((collapsed.match(/data-tool-fact="true"/g) ?? []).length, 3)
-})
-
-test('工具类型后紧跟状态和耗时，再展示动作与目标', () => {
-  const html = render()
-  const kind = html.indexOf('>读取</span>')
-  const status = html.indexOf('完成 · 42ms')
-  const action = html.indexOf('读取文件')
-  const target = html.indexOf('src/review.ts')
-  assert.ok(kind >= 0 && status > kind && action > status && target > action)
-})
-
-test('Shell 命令使用共享的全宽等宽命令表现', () => {
-  const html = render()
-  assert.match(html, /data-kind="shell"/)
-  assert.match(html, /data-command="true"/)
-  assert.match(html, /<code class="task-tool-target-text task-tool-command" title="pnpm test">pnpm test<\/code>/)
-})
-
-test('Shell 命令行去掉 Live 历史摘要的 JSON 包装', () => {
+test('Shell JSON 输入仍提取命令作单行预览，但展开保留原始 JSON', () => {
   assert.equal(taskToolTargetText({
     id: 'shell-json', name: 'bash', kind: 'shell', kindLabel: 'Shell', status: 'success', primary: '{"command":"git status"}',
   }, 'shell'), 'git status')
 })
 
-test('错误 Tool Call 仍以具体行出现并保留错误语义', () => {
-  const errorModel: TaskToolGroupModel = {
-    ...model,
-    itemCount: 1,
-    errorCount: 1,
-    kindCounts: [{ kind: 'shell', label: 'Shell', count: 1 }],
-    tools: [{ id: 'shell-error', name: '运行测试', kind: 'shell', kindLabel: 'Shell', status: 'error', primary: 'pnpm test', durationLabel: '1.2s' }],
-  }
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: errorModel }))
-  assert.match(html, /task-tool-row task-tool-row-error/)
-  assert.match(html, /运行测试/)
-  assert.match(html, /失败 · 1\.2s/)
-})
-
-test('工具运行与结果共用固定状态图标占位，不改变事实行顺序', () => {
-  const runningModel: TaskToolGroupModel = {
-    ...model,
-    itemCount: 2,
-    kindCounts: [{ kind: 'shell', label: 'Shell', count: 2 }],
-    tools: [
-      { id: 'tool-running', name: 'exec', kind: 'shell', kindLabel: 'Shell', status: 'running' },
-      { id: 'tool-error', name: 'exec', kind: 'shell', kindLabel: 'Shell', status: 'error' },
+test('没有状态结果时用中性状态，不按名称猜工具类型', () => {
+  const unknown: TaskToolGroupModel = {
+    ...model, tools: [
+      { id: 'mcp', name: 'dbx_execute_query', kind: 'mcp', kindLabel: 'MCP', status: 'success', rawInput: '{"sql":"select 1"}', output: '{"rows":[1]}' },
+      { id: 'unknown', name: 'npm test', kind: 'tool', kindLabel: '工具', status: 'unknown' },
     ],
   }
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: runningModel }))
-  assert.equal((html.match(/class="task-tool-status-mark"/g) ?? []).length, 2)
-  assert.match(html, /task-tool-status-run/)
-  assert.match(html, /task-tool-status-error/)
-  assert.deepEqual([...html.matchAll(/data-status="([^"]+)"/g)].map(match => match[1]), ['running', 'error'])
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: unknown }))
+  assert.match(html, /data-kind="mcp"/)
+  assert.match(html, /data-kind="tool"/)
+  assert.doesNotMatch(html, /data-kind="test"/)
+  assert.match(html, /select 1/)
+  assert.match(html, /rows/)
 })
 
+test('Review Inspector 保留为展开面板内的明确操作按钮，不劫持折叠点击', () => {
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model, onToolClick: () => {} }))
+  assert.match(html, /<button[^>]*class="task-tool-inspect"/)
+  assert.match(html, /查看原始证据/)
+  assert.doesNotMatch(html, /<button[^>]*class="task-tool-row"/)
+})

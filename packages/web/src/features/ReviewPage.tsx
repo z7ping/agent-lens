@@ -778,6 +778,7 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
     primary: info.primary || undefined,
     secondary: info.secondary || undefined,
     ...(node.input === undefined ? {} : { rawInput: typeof node.input === 'string' ? node.input : JSON.stringify(node.input, null, 2) ?? '' }),
+    ...(node.output === undefined ? {} : { output: toolOutputText(node.output) }),
     durationLabel: node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at),
   }
 }
@@ -807,12 +808,6 @@ function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]
     renderMeta={tool => {
       const node = nodes.get(tool.id)
       return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
-    }}
-    renderDetails={tool => {
-      const node = nodes.get(tool.id)
-      if (!node || toolVisualKind(node.name) !== 'shell') return null
-      const output = toolOutputText(node.output)
-      return output ? <div className="task-tool-live-output"><CopyableCodeBlock copyValue={output}>{output}</CopyableCodeBlock></div> : null
     }}
     onToolClick={tool => {
       const node = nodes.get(tool.id)

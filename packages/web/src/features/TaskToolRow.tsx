@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { ToolOutputContent } from './ToolOutputContent'
 import type { TaskToolModel } from './task-detail-model'
 
 export interface TaskToolRowProps {
@@ -11,6 +12,7 @@ export interface TaskToolRowProps {
   meta?: ReactNode
   details?: ReactNode
   last?: boolean
+  /** Keep the original Inspector action available *inside* the disclosure. */
   onClick?: (() => void) | undefined
   className?: string
 }
@@ -57,6 +59,8 @@ export function taskToolTargetText(model: TaskToolModel, visualKind: ReturnType<
   return target
 }
 
+/** One native Tool call = one folded row. Arguments and results are not
+ * additional disclosures; they are separate named sections inside that row. */
 export function TaskToolRow({ model, meta, details, onClick, className = '' }: TaskToolRowProps) {
   const { t } = useTranslation('task')
   const [now, setNow] = useState(() => Date.now())
@@ -64,10 +68,13 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
     : model.kind
   const target = taskToolTargetText(model, visualKind)
-  const commandTarget = visualKind === 'shell' && Boolean(model.primary)
-  const fullInput = model.rawInput ?? model.primary
-  const hasExpandedInput = Boolean(fullInput && (fullInput.length > 96 || /[\r\n]/.test(fullInput)))
-  const rowClass = `task-tool-row ${model.status === 'error' ? 'task-tool-row-error' : ''} ${className}`.trim()
+  const hasTarget = target !== '—' && Boolean(target.trim())
+  const heading = visualKind === 'shell' && hasTarget ? target : model.name
+  // A preview is not necessarily the original invocation. Show it as a
+  // summary rather than silently relabeling it as complete input parameters.
+  const input = model.rawInput
+  const preview = !input && hasTarget ? target : undefined
+  const commandTarget = visualKind === 'shell' && hasTarget
 
   useEffect(() => {
     if (model.status !== 'running' || model.startedAtMs === undefined) return
@@ -79,37 +86,51 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
   const elapsedLabel = model.durationLabel
     ?? (model.durationMs !== undefined ? durationLabel(model.durationMs) : undefined)
     ?? (model.status === 'running' && model.startedAtMs !== undefined ? durationLabel(now - model.startedAtMs) : undefined)
-  const icon = model.kind === 'tool'
-    ? <ToolKindIcon kind={visualKind}/>
-    : <ToolKindIcon kind={model.kind}/>
-  const content = <>
-    <span className={`task-tool-kind task-tool-kind-${visualKind}`}>{icon}<span>{t(`tool.kind.${visualKind}`)}</span></span>
-    <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[statusLabel(model.status, t), elapsedLabel].filter(Boolean).join(' · ')}>
-      <span className="task-tool-status-mark" aria-hidden="true">
-        {model.status === 'running' ? <UiIcon name="loading" size={14}/>
-          : model.status === 'success' ? <UiIcon name="status-success" size={14}/>
-            : model.status === 'error' ? <UiIcon name="status-error" size={14}/>
-              : <UiIcon name="clock" size={14}/>}
-      </span>
-      <span className="task-tool-status-label">{statusLabel(model.status, t)}{elapsedLabel ? ` · ${elapsedLabel}` : ''}</span>
-    </span>
-    <b className="task-tool-action" title={model.name}>{model.name}</b>
-    <span className="task-tool-target">
-      {commandTarget
-        ? <code className="task-tool-target-text task-tool-command" title={target}>{target}</code>
-        : <span className="task-tool-target-text" title={target}>{target}</span>}
-      {meta && <span className="task-tool-meta">{meta}</span>}
-    </span>
-  </>
+  const status = statusLabel(model.status, t)
 
-  return <div className={`task-tool-row-shell ${details ? 'has-details' : ''}`.trim()} data-tool-fact="true">
-    {onClick
-      ? <button className={rowClass} data-status={model.status} data-kind={visualKind} data-command={commandTarget} onClick={onClick} aria-label={`${model.name}，${statusLabel(model.status, t)}`}>{content}</button>
-      : <div className={rowClass} data-status={model.status} data-kind={visualKind} data-command={commandTarget}>{content}</div>}
-    {hasExpandedInput && fullInput && <details className="task-tool-input-details">
-      <summary>{t('tool.fullInput')}</summary>
-      <CopyableCodeBlock copyValue={fullInput}>{fullInput}</CopyableCodeBlock>
-    </details>}
-    {details && <div className="task-tool-payload">{details}</div>}
-  </div>
+  return <details
+    className={`task-tool-call ${model.status === 'error' ? 'task-tool-row-error ' : ''}${className}`.trim()}
+    data-tool-fact="true"
+    data-status={model.status}
+    data-kind={visualKind}
+    data-command={commandTarget}
+  >
+    <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading} · ${status}`}>
+      <span className={`task-tool-kind task-tool-kind-${visualKind}`}>
+        <ToolKindIcon kind={visualKind}/>
+        <span>{t(`tool.kind.${visualKind}`)}</span>
+      </span>
+      <span className="task-tool-summary-text" title={heading}>{heading}</span>
+      <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
+        <span className="task-tool-status-mark" aria-hidden="true">
+          {model.status === 'running' ? <UiIcon name="loading" size={14}/>
+            : model.status === 'success' ? <UiIcon name="status-success" size={14}/>
+              : model.status === 'error' ? <UiIcon name="status-error" size={14}/>
+                : <UiIcon name="clock" size={14}/>}
+        </span>
+      </span>
+      <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
+    </summary>
+    <div className="task-tool-sections">
+      <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
+        <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
+        {input !== undefined
+          ? <CopyableCodeBlock copyValue={input}>{input}</CopyableCodeBlock>
+          : preview ? <CopyableCodeBlock copyValue={preview}>{preview}</CopyableCodeBlock>
+            : <span className="task-tool-section-empty">{t('tool.inputUnavailable')}</span>}
+      </section>
+      <section className="task-tool-section" data-tool-section="output" aria-label={t('tool.output')}>
+        <div className="task-tool-section-title">{t('tool.output')}</div>
+        {model.output !== undefined
+          ? <ToolOutputContent text={model.output} streaming={model.status === 'running'}/>
+          : <span className="task-tool-section-empty">{model.status === 'running' ? t('tool.outputPending') : t('tool.outputUnavailable')}</span>}
+      </section>
+      {(meta || elapsedLabel || onClick || details) && <div className="task-tool-detail-footer">
+        {elapsedLabel && <span>{status} · {elapsedLabel}</span>}
+        {meta && <span className="task-tool-meta">{meta}</span>}
+        {onClick && <button type="button" className="task-tool-inspect" onClick={onClick}>{t('tool.inspect')}</button>}
+        {details}
+      </div>}
+    </div>
+  </details>
 }

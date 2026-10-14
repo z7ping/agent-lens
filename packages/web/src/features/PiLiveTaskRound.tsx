@@ -4,7 +4,6 @@ import type { LiveHistoryEventSummaryDto, LiveHistoryIndexItemDto } from '@agent
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
-import { ToolOutputContent } from './ToolOutputContent'
 import { toolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/UiIcon'
 import { TaskEvent } from './TaskEvent'
@@ -70,18 +69,6 @@ function toolGroup(id: string, tools: TaskToolModel[], t: TFunction): TaskToolGr
     kindCounts: [...counts.entries()].map(([kind, count]) => ({ kind, label: toolKindLabel(kind, t), count })),
     tools,
   }
-}
-
-function ToolOutput({ tool }: { tool: TaskToolModel }) {
-  const { t } = useTranslation('piLive')
-  if (!tool.output) return null
-  if (tool.status === 'running') {
-    return <div className="task-tool-live-output" role="status" aria-label={t('history.liveOutput', { tool: tool.name })}><ToolOutputContent text={tool.output} streaming/></div>
-  }
-  return <details className="task-tool-output-details" open={tool.status === 'error'}>
-    <summary><UiIcon className="task-tool-output-chevron" name="chevron-right" size={14}/><span>{tool.status === 'error' ? t('history.errorOutput') : t('history.viewOutput')}</span></summary>
-    <ToolOutputContent text={tool.output}/>
-  </details>
 }
 
 type HistoryTool = Extract<PiLiveHistoryItem, { kind: 'tool' }>
@@ -154,7 +141,7 @@ function HistoryToolGroup({ id, items, settled = false }: { id: string; items: H
     { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
     t,
   )), t)
-  return <TaskToolGroup model={model} renderDetails={tool => <ToolOutput tool={tool}/>}/>
+  return <TaskToolGroup model={model}/>
 }
 
 function HistoryUsageEvent({ entry }: { entry: Extract<PiLiveHistoryItem, { kind: 'usage' }> }) {

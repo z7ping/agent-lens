@@ -310,6 +310,13 @@ export const chineseTaskMessages: LocaleMessagesDto = {
     },
     tool: {
       fullInput: '查看完整参数',
+      input: '入参',
+      inputPreview: '调用摘要（原始入参未记录）',
+      inputUnavailable: '未记录入参',
+      output: '出参',
+      outputUnavailable: '未记录出参',
+      outputPending: '等待工具返回',
+      inspect: '查看原始证据',
       calls: '{{count}} 次工具调用',
       status: {
         error: '失败',
