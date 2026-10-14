@@ -200,6 +200,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const location = useLocation()
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>(() => cachedLaunchableProjects()?.items ?? [])
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
   const [projectSearch, setProjectSearch] = useState('')
@@ -216,6 +217,18 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       ? t('center.history.selectedAgents', { count: review.filters.sourceIds.length })
       : t('center.history.noneSelected')
   const projects = snapshot.facets?.projects ?? []
+
+  // Display-only clock: update relative labels and Today/Yesterday boundaries
+  // without fetching sessions again or forcing a tab-visibility page refresh.
+  useEffect(() => {
+    const refreshClock = () => { if (!document.hidden) setNowMs(Date.now()) }
+    const timer = window.setInterval(refreshClock, 60_000)
+    document.addEventListener('visibilitychange', refreshClock)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshClock)
+    }
+  }, [])
 
   useEffect(() => {
     if (mode === 'history' || review.response || review.loading) return
@@ -325,7 +338,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   const localSessions = review.response?.items ?? []
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
-  const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t)), [hubSessions, review, t])
+  const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t, nowMs)), [hubSessions, review, t, nowMs])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
       ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item })),
@@ -339,12 +352,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       return left.id.localeCompare(right.id)
     })
     const groups = new Map<TaskDayGroup, HistoryTaskEntry[]>([['today', []], ['yesterday', []], ['earlier', []]])
-    const now = new Date()
+    const now = new Date(nowMs)
     for (const item of combined) groups.get(taskDayGroup(item.at, now))!.push(item)
     return (['today', 'yesterday', 'earlier'] as const)
       .map(key => ({ key, label: t(`center.day.${key}`), items: groups.get(key)! }))
       .filter(group => group.items.length > 0)
-  }, [localSessions, visibleHub, t])
+  }, [localSessions, visibleHub, t, nowMs])
   const preferredProjectId = new URLSearchParams(location.search).get('project') || review.detail?.projectId || review.filters.projectId || undefined
 
   const newTask = () => {
@@ -523,8 +536,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
-          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
-          : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
+          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} nowMs={nowMs} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
+          : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} nowMs={nowMs} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
 
       {review.response && !historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}
