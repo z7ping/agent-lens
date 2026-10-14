@@ -28,14 +28,17 @@ test('任务中心智能体/项目/高级筛选共享 32px 控件规格', () => 
   assert.ok(projectFilter)
   assert.match(projectFilter, /variant="toolbar"/)
   assert.match(projectFilter, /searchable/)
-  assert.match(taskCenterSource, /<SidebarFilterDisclosure\s+className="task-center-agent-filter"/)
-  const sharedTriggerRule = sidebarStyles.match(/\.workspace-sidebar-context > \.task-center-rail \.task-center-agent-filter > summary,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger,\s*\.workspace-sidebar-context > \.task-center-rail \.task-center-advanced-filter > summary \{([^}]*)\}/)?.[1]
-  assert.ok(sharedTriggerRule, '项目 SelectMenu 和智能体 Disclosure 必须使用同一条视觉契约')
-  assert.match(sharedTriggerRule, /height:\s*32px;/)
-  assert.match(sharedTriggerRule, /min-height:\s*32px;/)
-  assert.match(sharedTriggerRule, /font-size:\s*13px;/)
-  assert.match(sharedTriggerRule, /border-radius:\s*8px;/)
-  assert.doesNotMatch(sidebarStyles, /\.task-center-project-filter\s+\.select-menu-trigger/)
+  assert.match(taskCenterSource, /<SidebarFilterDisclosure\s+[\s\S]*?className="task-center-agent-filter"/)
+  const popoverTriggerRule = sidebarStyles.match(/\.workspace-sidebar-filter-disclosure\.is-popover > summary \{([^}]*)\}/)?.[1]
+  const projectTriggerRule = sidebarStyles.match(/\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger \{([^}]*)\}/)?.[1]
+  assert.ok(popoverTriggerRule, '智能体和高级筛选应复用共享弹层触发器')
+  assert.ok(projectTriggerRule, '项目筛选应保持与共享弹层一致的尺寸')
+  for (const rule of [popoverTriggerRule, projectTriggerRule]) {
+    assert.match(rule, /height:\s*32px;/)
+    assert.match(rule, /min-height:\s*32px;/)
+    assert.match(rule, /font-size:\s*13px;/)
+    assert.match(rule, /border-radius:\s*8px;/)
+  }
 })
 
 test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => {

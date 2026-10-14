@@ -46,7 +46,7 @@ test('所有智能体展示列表统一消费用户排序', () => {
   assert.doesNotMatch(sidebarFilter, /<Disclosure[^>]*\sopen(?:\s|>)/, '统一侧栏筛选默认必须收起')
 
   const sidebar = readFileSync(new URL('./WorkspaceSidebar.tsx', import.meta.url), 'utf8')
-  assert.match(sidebar, /<SidebarFilterDisclosure defaultOpen agentOrderManagement/, '智能体工作栏必须公开排序入口')
+  assert.match(sidebar, /<SidebarFilterDisclosure variant="popover" closeOnOutside agentOrderManagement/, '智能体工作栏必须公开排序入口')
 
   const agentsPage = readFileSync(new URL('../features/AgentsPage.tsx', import.meta.url), 'utf8')
   assert.doesNotMatch(agentsPage, /agent-source-nav/, '智能体正文不得保留被工作栏替代的来源导航')

@@ -6,7 +6,6 @@ const backupPage = readFileSync(new URL('./BackupPage.tsx', import.meta.url), 'u
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../backup-responsive.css', import.meta.url), 'utf8')
 const backupMainCss = readFileSync(new URL('../backup.css', import.meta.url), 'utf8')
-const sidebar = readFileSync(new URL('../components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
 const sidebarFilter = readFileSync(new URL('../components/SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
 const directoryTree = readFileSync(new URL('../components/BackupDirectoryTree.tsx', import.meta.url), 'utf8')
 
@@ -82,10 +81,10 @@ test('单智能体由左侧筛选驱动，主区域直接展示完整资产详�
 })
 
 test('资产范围复用工作区智能体筛选，并支持全部智能体单选入口', () => {
-  assert.match(sidebar, /onBackup && <div className="workspace-context-menu workspace-agent-context">/)
-  assert.match(sidebar, /showAllOption/)
-  assert.match(sidebar, /navigation:backupScope/)
-  assert.match(sidebar, /backupAssetSourceId/)
+  assert.match(backupPage, /const backupScopeFilter = <SidebarFilterDisclosure/)
+  assert.match(backupPage, /className="backup-mobile-scope">\{backupScopeFilter\}/)
+  assert.match(backupPage, /showAllOption/)
+  assert.match(backupPage, /selectedAssetSourceId/)
   assert.match(sidebarFilter, /showAllOption\?: boolean/)
   assert.match(sidebarFilter, /agentSelection\.mode === 'multiple' \|\| showAllOption/)
 })
@@ -93,7 +92,7 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
 test('导入、创建与视图切换和面包屑共用一条 Workspace Topbar', () => {
   assert.match(app, /function WorkspaceTopBar/)
   assert.match(app, /className="workspace-topbar-page-tools"/)
-  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} topbarHost=\{workspaceTopbarHost\} \/>/)
+  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} onSelectedAssetSourceIdChange=\{setBackupAssetSourceId\} agents=\{agentSelectionItems\} topbarHost=\{workspaceTopbarHost\} \/>/)
   assert.match(backupPage, /createPortal\(/)
   assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
   assert.match(backupPage, /activeView === 'history'.*t\('snapshots\.verifyAll'\)/)
