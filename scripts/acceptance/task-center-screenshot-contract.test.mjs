@@ -40,3 +40,15 @@ test('real Review acceptance expands the single Process disclosure before checki
   assert.match(source, /state\.toolCount >= 1/)
   assert.doesNotMatch(source, /toolCount:\s*1\b/)
 })
+
+test('Task Center viewport acceptance checks current search/filter layout and each native Tool row shape', () => {
+  assert.match(source, /const searchPanel = pick\('\.task-center-search-panel'\)/)
+  assert.match(source, /const quickFilters = pick\('\.task-center-quick-filters'\)/)
+  assert.match(source, /const workspaceTopbar = pick\('\.workspace-topbar'\)/)
+  assert.doesNotMatch(source, /const toolbar = pick\('\.task-center-toolbar'\)/)
+  assert.match(source, /!value\.searchPanel \|\| !value\.quickFilters \|\| !value\.workspaceTopbar/)
+  assert.match(source, /for \(const \[index, row\] of p\.toolRowsLayout\.entries\(\)\)/)
+  assert.match(source, /row\.kind === 'shell' && row\.command \? 3 : 4/)
+  assert.match(source, /row\.columnCount !== expectedColumns/)
+  assert.match(source, /Tool Row 内部横向溢出/)
+})
