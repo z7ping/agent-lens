@@ -61,3 +61,24 @@ test('展开状态可由外部 store 恢复，供虚拟列表卸载后重建', (
   assert.match(html, /<details[^>]*open=""/)
   assert.match(html, /恢复后的处理正文/)
 })
+
+test('思考与处理详情使用稳定语义图标槽，执行状态不会改动内容身份', () => {
+  const running = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { ...model, state: 'running' },
+    kind: 'thinking',
+    children: '正在分析',
+  }))
+  assert.match(running, /data-task-thinking-state="running"/)
+  assert.match(running, /aria-busy="true"/)
+  assert.match(running, /task-thinking-kind-mark/)
+  assert.match(running, /task-thinking-running-mark/)
+  const process = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { ...model, id: 'process:test' },
+    kind: 'process',
+    defaultExpanded: false,
+    children: '历史处理详情',
+  }))
+  assert.match(process, /task-thinking-kind-mark/)
+  assert.match(process, /task-thinking-running-mark/)
+})
+
