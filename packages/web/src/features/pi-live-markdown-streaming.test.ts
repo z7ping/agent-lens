@@ -57,6 +57,7 @@ test('Pi 与通用 Live 共享等待首响应占位，动画只作用于状态�
   assert.match(taskMessage, /awaitingFirstContent = !user && \(pending \|\| \(streaming && !text && attachments\.length === 0\)\)/)
   assert.match(taskMessage, /task-message-response-activity/)
   assert.match(genericLive, /showResponsePending=\{Boolean\(state\?\.isStreaming\)/)
+  assert.match(genericLive, /model=\{awaitingResponse \? \{ \.\.\.projection\.model, state: 'running' \} : projection\.model\}/)
   assert.match(genericLive, /<TaskMessage role="assistant" text="" author=\{agentLabel\} pending/)
   assert.match(taskDetailCss, /\.task-surface \.task-message-response-pending\s*\{[\s\S]*?min-height:\s*28px/)
   assert.match(taskDetailCss, /prefers-reduced-motion:\s*reduce/)
