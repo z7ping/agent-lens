@@ -25,3 +25,10 @@ test('switch stability waits for the async task list without weakening the 100-s
   assert.match(source, /withTimeout\(runSwitchStability\(switchWin\), 25_000, '100 次任务切换稳定性'\)/)
   assert.doesNotMatch(source, /真实任务不足 2 条[^\n]+ok: true/)
 })
+
+test('viewport geometry accepts only the new Task Center context lane widths, including 1280/1366', () => {
+  assert.match(source, /viewport\.width >= 1200 \? 300 : viewport\.width >= 992 \? 260/)
+  assert.doesNotMatch(source, /viewport\.width >= 1200 \? 276 : viewport\.width >= 992 \? 246/)
+  assert.match(source, /Math\.abs\(geometry\.railWidth - expectedRail\) <= 2/)
+  assert.match(source, /任务列表与详情发生重叠/)
+})
