@@ -167,7 +167,8 @@
   background: color-mix(in srgb, var(--al-surface) 74%, transparent);
 }
 .task-center-rail .task-center-live-group .session-item:hover { background: var(--al-surface); }
-.task-center-rail .task-center-live-group .session-item-active {
+.task-center-rail .task-center-live-group .session-item-active,
+.task-center-rail .task-center-live-group .session-item-active:hover {
   border-color: color-mix(in srgb, var(--al-accent) 34%, var(--al-line));
   background: color-mix(in srgb, var(--al-accent-soft) 40%, var(--al-surface));
 }

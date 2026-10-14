@@ -130,20 +130,22 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   const sourceNames = sourceIds.map(id => agentLabel(id))
   const fullSourceNames = sourceNames.join(' · ')
   const compactSourceNames = sourceNames.length > 1 ? `${sourceNames[0]} +${sourceNames.length - 1}` : (sourceNames[0] ?? item.productId)
+  const projectLabel = item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')
+  const updatedLabel = formatTime(localTime(item), t, locale)
   const fallback = item.projectName
     ? t('center.history.taskSuffix', { name: item.projectName })
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${presentation.title} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
       <div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>
       {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
       <span className={`source-dot ${sourceDot(sourceId)}`}/>
-      <span className="session-item-source" title={fullSourceNames} aria-label={fullSourceNames}>{compactSourceNames}</span>
-      <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')}</span>
-      <time>{formatTime(localTime(item), t, locale)}</time>
+      <span className="session-item-source" title={fullSourceNames}>{compactSourceNames}</span>
+      <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
+      <time>{updatedLabel}</time>
     </div>
   </button>
 }
