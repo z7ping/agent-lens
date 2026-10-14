@@ -162,7 +162,7 @@ export function BackupPage({
   agents: AgentFacetDto[]
   topbarHost?: HTMLDivElement | null
 }) {
-  const { t, i18n } = useTranslation('backup')
+  const { t, i18n } = useTranslation(['backup', 'common'])
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const api = useMemo(() => new AgentLensApi(), [])
   const [overview, setOverview] = useState<BackupOverviewResponseDto | null>(null)
