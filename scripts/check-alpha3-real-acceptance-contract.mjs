@@ -45,7 +45,7 @@ requireText(desktop, /deviceScaleFactor:\s*1/, '桌面验收必须锁定 deviceS
 requireText(desktop, /Page\.captureScreenshot/, '桌面验收必须保存真实 Chromium 截图')
 requireText(desktop, /captureBeyondViewport:\s*false/, '桌面截图不得越过目标 viewport')
 requireText(desktop, /safeDetachDebugger/, '桌面验收必须处理 Window teardown / debugger detach 竞态')
-requireText(desktop, /viewport 几何未稳定到原型基线/, '截图前必须等待 viewport / dvh / Rail 几何稳定')
+requireText(desktop, /viewport 几何未稳定到当前响应式基线/, '截图前必须等待 viewport / dvh / Rail 几何稳定')
 for (const selector of ['.task-center-scroll', '.review-reader-pane', '.pi-live-reader', '.task-tool-row', '.task-tool-action', '.task-tool-target', '.task-tool-status', '.task-thinking-content', '.task-tool-live-output pre', '.task-tool-output-details']) {
   if (!desktop.includes(selector)) failures.push(`桌面验收仍未使用当前 Task Surface 选择器：${selector}`)
 }
