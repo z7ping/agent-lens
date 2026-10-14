@@ -319,6 +319,15 @@
   color: var(--al-ink);
 }
 
+.workspace-agent-filter-option:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: -2px;
+}
+.workspace-agent-filter-option > svg:last-child {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 .workspace-agent-filter-option.is-selected {
   border-color: color-mix(in srgb, var(--al-accent) 25%, var(--al-line));
   background: color-mix(in srgb, var(--al-accent) 10%, transparent);
