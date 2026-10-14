@@ -454,6 +454,10 @@
   overflow: visible;
 }
 
+.workspace-context-menu .workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body {
+  width: min(240px, 100%);
+}
+
 .workspace-insight-filter-disclosure + .workspace-insight-filter-fields {
   margin-top: 10px;
 }
