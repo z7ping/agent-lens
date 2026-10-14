@@ -471,6 +471,21 @@
 .task-surface .task-tool-status-ok .task-tool-status-mark { color: var(--al-success); }
 .task-surface .task-tool-status-run { color: var(--al-accent); }
 .task-surface .task-tool-status-error { color: var(--al-danger); }
+/* Color is a state signal, not a surrounding box around every icon. Keep the
+ * command itself neutral and readable; tint kind + glyph for decisive calls. */
+.task-surface .task-tool-call[data-status='success'] .task-tool-kind { color: var(--al-success); }
+.task-surface .task-tool-call[data-status='error'] .task-tool-kind { color: var(--al-danger); }
+.task-surface .task-tool-call .tool-kind-svg {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.task-surface .task-tool-section .code-block-copy {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
 @keyframes task-activity-spin { to { transform: rotate(360deg); } }
 .task-surface .task-tool-row-chevron { color: var(--al-muted-2); transition: transform .18s cubic-bezier(.2,.8,.2,1); }
 .task-surface .task-tool-call[open] > summary .task-tool-row-chevron { transform: rotate(90deg); }
@@ -489,7 +504,7 @@
   border-radius: 7px;
   background: var(--al-soft-2);
   color: var(--al-ink-2);
-  font: 12px/1.55 var(--font-mono);
+  font: 13px/1.65 var(--font-mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

@@ -25,6 +25,7 @@
     "i18next": "26.4.2",
     "lexical": "0.49.0",
     "lucide-react": "1.41.0",
+    "prismjs": "1.30.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-i18next": "17.0.13",

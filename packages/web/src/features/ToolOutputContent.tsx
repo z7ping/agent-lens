@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { codeLanguageFromContent, normalizedCodeLanguage } from '../components/code-language'
 import { MarkdownContent } from '../components/MarkdownContent'
 
 export type ToolOutputFormat = 'json' | 'markdown' | null
@@ -16,12 +17,15 @@ export function detectToolOutputFormat(text: string): ToolOutputFormat {
   const tableSeparator = /^\|?\s*:?-{1,}:?\s*\|\s*:?-{1,}:?(?:\s*\|\s*:?-{1,}:?)*\s*\|?$/
   if (lines.length >= 3 && lines[0]?.includes('|') && tableSeparator.test(lines[1] ?? '')
     && lines[2]?.includes('|')) return 'markdown'
-  if (/^\x60{3}(?:markdown|md)\s*\n/i.test(value)) return 'markdown'
+  // A genuine fenced code block carries its own language; MarkdownContent
+  // hands that language to the shared Prism renderer, without guessing logs.
+  const fence = value.match(/^\x60{3}([a-z0-9+-]+)\s*\n[\s\S]*\n\x60{3}\s*$/i)
+  if (fence && (['markdown', 'md'].includes(fence[1]!.toLowerCase()) || normalizedCodeLanguage(fence[1]))) return 'markdown'
   return null
 }
 
 /** Source is preserved exactly; structured rendering is an explicit opt-in. */
-export function ToolOutputContent({ text, streaming = false }: { text: string; streaming?: boolean }) {
+export function ToolOutputContent({ text, streaming = false, highlight = true }: { text: string; streaming?: boolean; highlight?: boolean }) {
   const { t } = useTranslation('task')
   const [formatted, setFormatted] = useState(false)
   const format = streaming ? null : detectToolOutputFormat(text)
@@ -37,6 +41,6 @@ export function ToolOutputContent({ text, streaming = false }: { text: string; s
     </div>}
     {view === 'formatted' && format === 'markdown'
       ? <div className="task-tool-formatted-output"><MarkdownContent text={text}/></div>
-      : <div className="task-tool-original-output"><CopyableCodeBlock copyValue={text}>{pretty}</CopyableCodeBlock></div>}
+      : <div className="task-tool-original-output"><CopyableCodeBlock copyValue={text} language={highlight && !streaming ? codeLanguageFromContent(pretty) : undefined}>{pretty}</CopyableCodeBlock></div>}
   </div>
 }
