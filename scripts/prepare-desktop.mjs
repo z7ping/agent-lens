@@ -1,9 +1,10 @@
 import { createReadStream, createWriteStream, existsSync } from 'node:fs'
-import { access, cp, mkdir, readFile, rm } from 'node:fs/promises'
+import { access, cp, mkdir, rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
+import { resolveWindowsElectronRuntime } from './electron-runtime.mjs'
 
 const require = createRequire(import.meta.url)
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,15 +22,8 @@ await rm(runtime, { recursive: true, force: true })
 await cp(dist, runtime, { recursive: true })
 
 if (process.platform === 'win32') {
-  const pkg = JSON.parse(await readFile(resolve(root, 'apps', 'desktop', 'package.json'), 'utf8'))
-  const target = resolve(
-    root,
-    'apps',
-    'desktop',
-    '.electron-dist',
-    `electron-v${pkg.devDependencies.electron}-win32-x64`,
-  )
-  await ensureWindowsElectronDist(target, pkg.devDependencies.electron)
+  const { distPath, version } = resolveWindowsElectronRuntime(root)
+  await ensureWindowsElectronDist(distPath, version)
 }
 
 console.log(`[AgentLens] desktop runtime prepared for ${process.platform}/${process.arch}`)
