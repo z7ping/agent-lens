@@ -1,3 +1,12 @@
+/** 提供方原生 outputTokens / 客户端实际观测的文本/推理增量时间；绝不拿字符数冒充 Token。 */
+export function observedOutputTokenSpeed(outputTokens: number, firstDeltaAtMs: number | null, observedAtMs: number): number | null {
+  if (!Number.isFinite(outputTokens) || outputTokens <= 0 || !Number.isFinite(observedAtMs)
+    || firstDeltaAtMs === null || !Number.isFinite(firstDeltaAtMs)) return null
+  const durationMs = observedAtMs - firstDeltaAtMs
+  if (durationMs < 250) return null
+  return Math.round((outputTokens * 1000 / durationMs) * 10) / 10
+}
+
 export type PiLivePresentationMutation<T> = (current: T) => T
 
 export interface PiLivePresentationDiagnostics {
