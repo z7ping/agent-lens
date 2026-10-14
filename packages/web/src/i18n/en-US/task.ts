@@ -310,6 +310,13 @@ export const englishTaskMessages: LocaleMessagesDto = {
     },
     tool: {
       fullInput: 'View full arguments',
+      input: 'Input',
+      inputPreview: 'Invocation summary (raw input unavailable)',
+      inputUnavailable: 'Input not recorded',
+      output: 'Output',
+      outputUnavailable: 'Output not recorded',
+      outputPending: 'Waiting for tool result',
+      inspect: 'View source evidence',
       calls: '{{count}} tool calls',
       status: {
         error: 'Failed',
