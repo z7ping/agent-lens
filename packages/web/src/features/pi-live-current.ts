@@ -232,12 +232,16 @@ export function finishPiLiveTool(
   status: 'success' | 'error',
   output: string,
   endedAtMs = Date.now(),
+  nativeDurationMs?: number,
 ): PiLiveHistoryItem[] {
   const index = items.findIndex(item => item.kind === 'tool' && item.callId === callId)
   if (index < 0) return items
   const current = items[index]
   if (!current || current.kind !== 'tool') return items
-  const durationMs = current.startedAtMs === undefined ? current.durationMs : Math.max(0, endedAtMs - current.startedAtMs)
+  // Pi 1.2's monotonic execute() duration takes precedence over UI arrival times.
+  const durationMs = typeof nativeDurationMs === 'number' && Number.isFinite(nativeDurationMs) && nativeDurationMs >= 0
+    ? nativeDurationMs
+    : current.startedAtMs === undefined ? current.durationMs : Math.max(0, endedAtMs - current.startedAtMs)
   const next = [...items]
   next[index] = { ...current, status, output: output || current.output, durationMs }
   return next
