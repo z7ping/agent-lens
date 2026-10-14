@@ -60,6 +60,7 @@ export function TaskProcessGroup({
 
   return <TaskThinking
     model={model}
+    kind="process"
     defaultExpanded={defaultExpanded}
     expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
