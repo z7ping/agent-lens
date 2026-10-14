@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
-import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sortProjectFacetsByActivity, normalizedSessionSources } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sortProjectFacetsByActivity, normalizedSessionSources, sessionListTitle, sessionTimeFact } from './task-center'
 
 function session(overrides: Partial<ReviewSessionSummaryDto>): ReviewSessionSummaryDto {
   return {
@@ -180,4 +180,21 @@ test('会话来源规范化保留全部身份且缺失来源才降级使用产�
   assert.deepEqual(normalizedSessionSources(['pi', 'codex', 'pi', '  hermes '], 'pi'), ['pi', 'codex', 'hermes'])
   assert.deepEqual(normalizedSessionSources([], 'claude-code'), ['claude-code'])
   assert.deepEqual(normalizedSessionSources(['codex'], 'pi'), ['codex'])
+})
+
+test('标题不再写死 30/74 字，长会话由 CSS 截断且完整文字可用于 tooltip', () => {
+  const longTitle = '检查 AgentLens 当前会话列表的名称、历史关联、项目筛选、观察时间和最后活动字段。'.repeat(3)
+  assert.equal(historyTaskPresentation(session({ title: longTitle, sessionActivity: 'user-task' }), '任务').title, longTitle)
+  assert.equal(sessionListTitle(longTitle, '任务'), longTitle)
+  assert.equal(sessionListTitle('开发任务 · Pi', '任务', ['pi']), '开发任务')
+  assert.equal(sessionListTitle('开发任务 · Pi', '任务', ['codex']), '开发任务 · Pi')
+})
+
+test('会话时间严格区分最后观测与首次观测，无效字段不冒充最近活动', () => {
+  const start = '2026-10-13T08:00:00.000Z'
+  const end = '2026-10-14T09:30:00.000Z'
+  assert.deepEqual(sessionTimeFact(start, end), { at: end, source: 'last-activity' })
+  assert.deepEqual(sessionTimeFact(start, ''), { at: start, source: 'session-start' })
+  assert.deepEqual(sessionTimeFact(start, 'invalid-date'), { at: start, source: 'session-start' })
+  assert.equal(sessionTimeFact('', 'invalid-date'), undefined)
 })

@@ -1778,10 +1778,12 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           showStatus={false}
           title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title, 15)}</span>}
           metrics={[]}
-          infoItems={taskDetailModel?.startedAt && taskDetailModel.endedAt ? [
+          infoItems={taskDetailModel ? [
             { label: t('local.header.project'), value: taskDetailModel.projectLabel ?? t('local.session.unlinkedProject') },
-            { label: t('local.header.startTime'), value: formatDateTime(taskDetailModel.startedAt) },
-            { label: t('local.header.endTime'), value: formatDateTime(taskDetailModel.endedAt) },
+            ...(taskDetailModel.startedAt && Number.isFinite(Date.parse(taskDetailModel.startedAt))
+              ? [{ label: t('local.header.startTime'), value: formatDateTime(taskDetailModel.startedAt) }] : []),
+            ...(taskDetailModel.endedAt && Number.isFinite(Date.parse(taskDetailModel.endedAt))
+              ? [{ label: t('local.header.endTime'), value: formatDateTime(taskDetailModel.endedAt) }] : []),
             { label: t('local.header.duration'), value: duration(detail.durationMs) },
             ...(taskDetailModel.workspacePath ? [{
               label: t('local.header.workspace'),

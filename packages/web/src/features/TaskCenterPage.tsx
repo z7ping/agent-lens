@@ -12,7 +12,7 @@ import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScop
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
 import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
@@ -43,11 +43,21 @@ function mergeLaunchableProjects(
   })
 }
 
-function formatTime(value: string, t: TFunction, locale: string): string {
+function absoluteTime(value: string, locale: string): string {
   const date = new Date(value)
-  if (!Number.isFinite(date.getTime())) return value
-  const now = new Date()
-  const diff = Math.max(0, now.getTime() - date.getTime())
+  if (!Number.isFinite(date.getTime())) return ''
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(date)
+}
+
+function formatTime(value: string, t: TFunction, locale: string, nowMs: number): string {
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return t('center.time.notAvailable')
+  const now = new Date(nowMs)
+  const diff = now.getTime() - date.getTime()
+  if (diff < 0) return absoluteTime(value, locale)
   if (date.toDateString() === now.toDateString()) {
     const minutes = Math.floor(diff / 60_000)
     if (minutes < 1) return t('center.time.justNow')
@@ -60,7 +70,10 @@ function formatTime(value: string, t: TFunction, locale: string): string {
       time: new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(date),
     })
   }
-  return new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+  return new Intl.DateTimeFormat(locale, {
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(date)
 }
 
 function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
@@ -75,7 +88,7 @@ function taskDayGroup(value: string, now = new Date()): TaskDayGroup {
 function cleanTitle(value: string | undefined, fallback: string): string {
   const text = value?.replace(/\s+/g, ' ').trim() ?? ''
   if (!text) return fallback
-  return text.length > 74 ? `${text.slice(0, 74)}…` : text
+  return text
 }
 
 function availabilityString(value: HubReadAvailability): string | undefined {
@@ -85,11 +98,11 @@ function availabilityString(value: HubReadAvailability): string | undefined {
 }
 
 function localTime(item: ReviewSessionSummaryDto): string {
-  return item.endedAt || item.startedAt
+  return sessionTimeFact(item.startedAt, item.endedAt)?.at ?? ''
 }
 
 function remoteTime(item: HubReviewSessionSummaryDto): string {
-  return availabilityString(item.endedAt) ?? availabilityString(item.startedAt) ?? ''
+  return sessionTimeFact(availabilityString(item.startedAt), availabilityString(item.endedAt))?.at ?? ''
 }
 
 function remoteTitle(item: HubReviewSessionSummaryDto, t: TFunction): string {
@@ -104,15 +117,17 @@ function remoteVisible(
   item: HubReviewSessionSummaryDto,
   review: ReturnType<AgentLensClientModel['getSnapshot']>['review'],
   t: TFunction,
+  nowMs: number,
 ): boolean {
   if (review.filters.sourceIds !== null || review.filters.projectId || review.filters.status !== 'all') return false
   const search = review.filters.search.trim().toLowerCase()
   if (search && !remoteTitle(item, t).toLowerCase().includes(search) && !item.origin.nodeId.toLowerCase().includes(search)) return false
   const time = remoteTime(item)
-  if (!time || review.filters.range === 'all') return true
+  if (review.filters.range === 'all') return true
+  if (!time) return false
   const at = Date.parse(time)
   if (!Number.isFinite(at)) return false
-  const now = Date.now()
+  const now = nowMs
   if (review.filters.range === 'today') {
     const date = new Date(at)
     const today = new Date(now)
@@ -122,7 +137,7 @@ function remoteVisible(
   return at >= now - days * 86_400_000
 }
 
-function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSessionSummaryDto; active: boolean; nowMs: number; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const sourceIds = normalizedSessionSources(item.sourceIds, item.productId)
@@ -130,34 +145,50 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   const sourceNames = sourceIds.map(id => agentLabel(id))
   const fullSourceNames = sourceNames.join(' · ')
   const compactSourceNames = sourceNames.length > 1 ? `${sourceNames[0]} +${sourceNames.length - 1}` : (sourceNames[0] ?? item.productId)
-  const projectLabel = item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')
-  const updatedLabel = formatTime(localTime(item), t, locale)
-  const fallback = item.projectName
-    ? t('center.history.taskSuffix', { name: item.projectName })
+  const projectLabel = item.projectName?.trim() || item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) || t('center.history.noProject')
+  const moment = sessionTimeFact(item.startedAt, item.endedAt)
+  const updatedLabel = formatTime(moment?.at ?? '', t, locale, nowMs)
+  const createdLabel = absoluteTime(item.startedAt, locale)
+  const recentLabel = moment ? absoluteTime(moment.at, locale) : ''
+  const timeTooltip = [
+    ...(createdLabel ? [t('center.time.startedAt', { time: createdLabel })] : []),
+    ...(recentLabel ? [t(moment?.source === 'last-activity' ? 'center.time.lastActivityAt' : 'center.time.onlyStartedAt', { time: recentLabel })] : []),
+  ].join(' · ')
+  const fallback = item.projectName?.trim()
+    ? t('center.history.taskSuffix', { name: item.projectName.trim() })
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${presentation.title} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
+  const displayTitle = sessionListTitle(presentation.title, fallback, sourceIds)
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${displayTitle} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
-      <div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>
+      <div className="session-item-title" title={displayTitle}>{displayTitle}</div>
       {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
       <span className={`source-dot ${sourceDot(sourceId)}`}/>
       <span className="session-item-source" title={fullSourceNames}>{compactSourceNames}</span>
       <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
-      <time>{updatedLabel}</time>
+      <time dateTime={moment?.at} title={timeTooltip || undefined}>{updatedLabel}</time>
     </div>
   </button>
 }
 
-function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+function RemoteTaskItem({ item, active, nowMs, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; nowMs: number; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const time = remoteTime(item)
-  const title = remoteTitle(item, t)
+  const title = sessionListTitle(remoteTitle(item, t), t('center.remote.task'))
+  const created = availabilityString(item.startedAt)
+  const moment = sessionTimeFact(created, availabilityString(item.endedAt))
+  const createdLabel = created ? absoluteTime(created, locale) : ''
+  const recentLabel = moment ? absoluteTime(moment.at, locale) : ''
+  const timeTooltip = [
+    ...(createdLabel ? [t('center.time.startedAt', { time: createdLabel })] : []),
+    ...(recentLabel ? [t(moment?.source === 'last-activity' ? 'center.time.lastActivityAt' : 'center.time.onlyStartedAt', { time: recentLabel })] : []),
+  ].join(' · ')
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-title-row"><div className="session-item-title" title={title}>{sessionListTitle(title, t('center.remote.task'))}</div></div>
-    <div className="session-item-meta"><span className="hub-session-source remote">{t('center.remote.source', { node: item.origin.nodeId })}</span><time>{time ? formatTime(time, t, locale) : t('center.remote.timeNotSynced')}</time></div>
+    <div className="session-item-title-row"><div className="session-item-title" title={title}>{title}</div></div>
+    <div className="session-item-meta"><span className="hub-session-source remote">{t('center.remote.source', { node: item.origin.nodeId })}</span><time dateTime={moment?.at} title={timeTooltip || undefined}>{time ? formatTime(time, t, locale, nowMs) : t('center.remote.timeNotSynced')}</time></div>
   </button>
 }
 
@@ -169,6 +200,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const location = useLocation()
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>(() => cachedLaunchableProjects()?.items ?? [])
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
   const [projectSearch, setProjectSearch] = useState('')
@@ -185,6 +217,18 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       ? t('center.history.selectedAgents', { count: review.filters.sourceIds.length })
       : t('center.history.noneSelected')
   const projects = snapshot.facets?.projects ?? []
+
+  // Display-only clock: update relative labels and Today/Yesterday boundaries
+  // without fetching sessions again or forcing a tab-visibility page refresh.
+  useEffect(() => {
+    const refreshClock = () => { if (!document.hidden) setNowMs(Date.now()) }
+    const timer = window.setInterval(refreshClock, 60_000)
+    document.addEventListener('visibilitychange', refreshClock)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshClock)
+    }
+  }, [])
 
   useEffect(() => {
     if (mode === 'history' || review.response || review.loading) return
@@ -294,7 +338,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
   const localSessions = review.response?.items ?? []
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
-  const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t)), [hubSessions, review, t])
+  const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t, nowMs)), [hubSessions, review, t, nowMs])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
       ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item })),
@@ -308,12 +352,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       return left.id.localeCompare(right.id)
     })
     const groups = new Map<TaskDayGroup, HistoryTaskEntry[]>([['today', []], ['yesterday', []], ['earlier', []]])
-    const now = new Date()
+    const now = new Date(nowMs)
     for (const item of combined) groups.get(taskDayGroup(item.at, now))!.push(item)
     return (['today', 'yesterday', 'earlier'] as const)
       .map(key => ({ key, label: t(`center.day.${key}`), items: groups.get(key)! }))
       .filter(group => group.items.length > 0)
-  }, [localSessions, visibleHub, t])
+  }, [localSessions, visibleHub, t, nowMs])
   const preferredProjectId = new URLSearchParams(location.search).get('project') || review.detail?.projectId || review.filters.projectId || undefined
 
   const newTask = () => {
@@ -492,8 +536,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
-          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
-          : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
+          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} nowMs={nowMs} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
+          : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} nowMs={nowMs} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
 
       {review.response && !historyCount && !review.loading && <div className="task-center-empty">{t('center.history.empty')}</div>}

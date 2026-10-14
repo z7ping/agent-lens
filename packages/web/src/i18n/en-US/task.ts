@@ -175,6 +175,10 @@ export const englishTaskMessages: LocaleMessagesDto = {
         earlier: 'Earlier',
       },
       time: {
+        notAvailable: 'Time unavailable',
+        startedAt: 'Session started: {{time}}',
+        lastActivityAt: 'Last activity: {{time}}',
+        onlyStartedAt: 'Start time only: {{time}}',
         justNow: 'Just now',
         minutesAgo: '{{count}} min ago',
         hoursAgo: '{{count}} h ago',

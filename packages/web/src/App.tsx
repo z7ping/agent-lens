@@ -395,7 +395,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     model={model}
   >
     <PinnedAgentsProvider agents={agents}>
-      <div className={`app-shell ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
+      <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
         agents={agents}

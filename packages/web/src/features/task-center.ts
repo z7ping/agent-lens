@@ -22,6 +22,17 @@ export function normalizedSessionSources(sourceIds: readonly string[], productId
   return unique
 }
 
+/** Review startedAt is the earliest captured session fact; endedAt is the latest.
+ * Do not substitute a missing/invalid end time with a fabricated "last active" stamp. */
+export function sessionTimeFact(startedAt: string | undefined, endedAt: string | undefined): {
+  at: string
+  source: 'last-activity' | 'session-start'
+} | undefined {
+  if (endedAt && Number.isFinite(Date.parse(endedAt))) return { at: endedAt, source: 'last-activity' }
+  if (startedAt && Number.isFinite(Date.parse(startedAt))) return { at: startedAt, source: 'session-start' }
+  return undefined
+}
+
 export interface HistoryTaskPresentation {
   title: string
   activityLabel?: string
@@ -74,7 +85,7 @@ function decodeTextEntities(value: string): string {
 function cleanSessionTitle(value: string | undefined, fallback: string): string {
   const text = decodeTextEntities(value ?? '').replace(/\s+/g, ' ').trim()
   if (!text) return fallback
-  return text.length > 74 ? `${text.slice(0, 74)}…` : text
+  return text
 }
 
 /** 左侧会话列表的标题契约：只呈现任务名，不重复 Pi 工具标记或模型信息。 */
@@ -84,7 +95,8 @@ export function sessionListTitle(value: string | undefined, fallback: string, so
     ? normalized.replace(/\s*[·•]\s*Pi\s*$/i, '').trim()
     : normalized
   const text = withoutPiSuffix || fallback
-  return text.length > 30 ? `${text.slice(0, 30)}…` : text
+  // CSS owns viewport-dependent ellipsis; the source title is never silently cut to 30 characters.
+  return text
 }
 
 function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
