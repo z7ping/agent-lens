@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { TaskThinkingModel } from './task-detail-model'
@@ -13,6 +13,7 @@ export interface TaskThinkingProps {
   expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: ((expanded: boolean) => void) | undefined
   className?: string | undefined
+  kind?: 'thinking' | 'process' | undefined
 }
 
 function DisclosureChevron() {
@@ -34,13 +35,18 @@ export function TaskThinking({
   expansionStore,
   onExpandedChange,
   className = '',
+  kind = 'thinking',
 }: TaskThinkingProps) {
   const { t } = useTranslation('task')
   const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
+  const identityRef = useRef(model.id)
   const label = presentationLabel(model.label, t)
   const running = model.state === 'running'
 
   useEffect(() => {
+    // 运行中 -> 已完成时不要重新按 defaultExpanded 折叠已经打开的内容。
+    if (identityRef.current === model.id) return
+    identityRef.current = model.id
     const stored = expansionStore?.get(model.id)
     const next = stored ?? defaultExpanded
     setExpanded(next)
@@ -63,7 +69,7 @@ export function TaskThinking({
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">
         <DisclosureChevron/>
-        <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name={className.includes('task-process-group') ? 'task' : 'thinking'} size={14}/></span>
+        <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name={kind === 'process' ? 'task' : 'thinking'} size={14}/></span>
         <span className="task-thinking-label">{label}</span>
         <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
         {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}
