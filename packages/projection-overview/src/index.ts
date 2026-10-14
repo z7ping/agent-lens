@@ -94,10 +94,18 @@ function updateFacetRange(range: { from?: string; to?: string }, from: string, t
 
 async function loadFacetScopeFallback(storage: StorageService): Promise<{
   projectIds: string[]
+  projectLastActivityAt: Record<string, string>
   from?: string
   to?: string
 }> {
   const projectIds = new Set<string>()
+  const lastActivityByProject = new Map<string, string>()
+  const noteActivity = (id: string | undefined, at: string) => {
+    if (!id) return
+    projectIds.add(id)
+    const current = lastActivityByProject.get(id)
+    if (!current || current < at) lastActivityByProject.set(id, at)
+  }
   const range: { from?: string; to?: string } = {}
 
   if (storage.sessionSummaries) {
@@ -108,7 +116,7 @@ async function loadFacetScopeFallback(storage: StorageService): Promise<{
         ...(after ? { after } : {}),
       })
       for (const session of page.items) {
-        if (session.projectId) projectIds.add(session.projectId)
+        noteActivity(session.projectId, session.endedAt)
         updateFacetRange(range, session.startedAt, session.endedAt)
       }
       if (!page.hasMore) break
@@ -116,7 +124,7 @@ async function loadFacetScopeFallback(storage: StorageService): Promise<{
       if (!last) break
       after = { activeAt: last.endedAt, logicalSessionId: last.logicalSessionId }
     }
-    return { projectIds: [...projectIds], ...range }
+    return { projectIds: [...projectIds], projectLastActivityAt: Object.fromEntries(lastActivityByProject), ...range }
   }
 
   let after: ObservationCursor | undefined
@@ -128,8 +136,8 @@ async function loadFacetScopeFallback(storage: StorageService): Promise<{
     })
     if (!observations.length) break
     for (const observation of observations) {
-      if (observation.projectId) projectIds.add(observation.projectId)
       const at = observation.occurredAt ?? observation.capturedAt
+      noteActivity(observation.projectId, at)
       updateFacetRange(range, at)
     }
     if (observations.length < FACET_OBSERVATION_PAGE_SIZE) break
@@ -141,7 +149,7 @@ async function loadFacetScopeFallback(storage: StorageService): Promise<{
       id: last.id,
     }
   }
-  return { projectIds: [...projectIds], ...range }
+  return { projectIds: [...projectIds], projectLastActivityAt: Object.fromEntries(lastActivityByProject), ...range }
 }
 
 function fastFacetScope(storage: StorageService): (() => Promise<FastFacetScope>) | undefined {
@@ -182,6 +190,7 @@ export class FacetProjection {
         id: item.id,
         ...(item.name ? { name: item.name } : {}),
         ...(item.repositoryIdentity ? { repositoryIdentity: item.repositoryIdentity } : {}),
+        ...(fallback.projectLastActivityAt[item.id] ? { lastActivityAt: fallback.projectLastActivityAt[item.id] } : {}),
       }))
     const scope = {
       projects,

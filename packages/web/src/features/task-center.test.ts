@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LaunchableProjectDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
-import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, pickTaskProject, sortProjectFacetsByActivity } from './task-center'
 
 function session(overrides: Partial<ReviewSessionSummaryDto>): ReviewSessionSummaryDto {
   return {
@@ -162,4 +162,16 @@ test('新建相关任务在服务端项目结果中优先继承当前项目，�
   assert.equal(pickTaskProject(options, 'project-a')?.cwd, '/work/a')
   assert.equal(pickTaskProject(options, undefined, '/work/a')?.label, 'A')
   assert.equal(pickTaskProject(options)?.label, 'B')
+})
+
+
+test('全部项目筛选按全历史最近活动倒序，未记录时间的项目稳定排后', () => {
+  const sorted = sortProjectFacetsByActivity([
+    { id: 'older', name: '老项目', lastActivityAt: '2026-06-01T09:00:00.000Z' },
+    { id: 'unknown', name: '未记录' },
+    { id: 'recent', name: '最近项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
+    { id: 'tie-z', name: 'Z 项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
+    { id: 'tie-a', name: 'A 项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
+  ])
+  assert.deepEqual(sorted.map(item => item.id), ['tie-a', 'recent', 'tie-z', 'older', 'unknown'])
 })

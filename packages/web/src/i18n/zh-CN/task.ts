@@ -242,6 +242,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         allProjects: '全部项目',
         railAria: '任务列表：进行中 + 历史',
         newTask: '新建任务',
+        newTaskShort: '新建',
         filterAria: '筛选历史任务',
         collapseSearch: '收起搜索',
         searchTasks: '搜索历史任务',

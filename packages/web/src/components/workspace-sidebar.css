@@ -896,12 +896,16 @@
 }
 
 @media (max-width: 1199.98px) {
+  /* Narrow context lanes prioritize a readable section title and the create action. */
+  .workspace-sidebar-context > .task-center-rail .task-center-context-brand-logo { display: none; }
   .app-shell {
     grid-template-columns: 286px minmax(0, 1fr);
   }
 }
 
 @media (max-width: 991.98px) {
+  .workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy b,
+  .workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy > span { display: none; }
   .app-shell {
     grid-template-columns: 252px minmax(0, 1fr);
   }

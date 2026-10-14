@@ -57,6 +57,8 @@ test('facet 会分页读取 Session Summary，不会漏掉第 500 条之后的�
     logicalSessionId: firstPage.at(-1)?.logicalSessionId,
   })
   assert.deepEqual(result.projects.map(item => item.id).sort(), ['project-old', 'project-recent'])
+  assert.equal(result.projects.find(item => item.id === 'project-old')?.lastActivityAt, old.endedAt)
+  assert.ok((result.projects.find(item => item.id === 'project-recent')?.lastActivityAt ?? '') > old.endedAt)
   assert.equal(result.dateRange.from, '2025-01-02T03:04:05.000Z')
   assert.ok(result.dateRange.to?.startsWith('2026-09-01T'))
 })

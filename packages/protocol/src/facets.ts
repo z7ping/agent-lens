@@ -14,6 +14,8 @@ export interface ProjectFacetDto {
   id: string
   name?: string
   repositoryIdentity?: string
+  /** Most recent activity of any indexed session for this project, across all time ranges. */
+  lastActivityAt?: string
 }
 
 export interface FacetResponseDto {
