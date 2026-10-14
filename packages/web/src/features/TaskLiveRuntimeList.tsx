@@ -45,11 +45,16 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
     let inFlight = false
     let dirty = false
     let invalidatedWhileHidden = false
+    let invalidationVersion = 0
     let hiddenSince: number | null = document.hidden ? Date.now() : null
     let lastSuccessfulAt = 0
 
     const schedule = (delay = 100) => {
       if (disposed) return
+      if (document.hidden) {
+        invalidatedWhileHidden = true
+        return
+      }
       if (timer !== undefined) window.clearTimeout(timer)
       timer = window.setTimeout(() => {
         timer = undefined
@@ -64,11 +69,14 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
       }
       inFlight = true
       dirty = false
+      const versionAtRequest = invalidationVersion
       try {
         const snapshot = await liveApi.knownRuntimeSnapshot()
         if (!disposed) {
           lastSuccessfulAt = Date.now()
-          invalidatedWhileHidden = false
+          // An event received while this request was pending must not be erased
+          // by a snapshot that was fetched before that event.
+          if (versionAtRequest === invalidationVersion) invalidatedWhileHidden = false
           setRuntimes(previous => {
             const next = mergeTaskLiveRuntimes(previous, snapshot.items, snapshot.failedLiveIds)
             return sameTaskRuntimeList(previous, next) ? previous : next
@@ -87,6 +95,11 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
     const onVisibility = () => {
       if (document.hidden) {
         hiddenSince = Date.now()
+        if (timer !== undefined) {
+          window.clearTimeout(timer)
+          timer = undefined
+          invalidatedWhileHidden = true
+        }
         return
       }
       const now = Date.now()
@@ -95,6 +108,7 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
       if (shouldRefreshRuntimeListOnVisible(now, lastSuccessfulAt, hiddenForMs, invalidatedWhileHidden)) schedule(0)
     }
     const onLiveStateChanged = () => {
+      invalidationVersion += 1
       if (document.hidden) {
         invalidatedWhileHidden = true
         return
