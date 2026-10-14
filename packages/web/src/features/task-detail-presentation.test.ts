@@ -6,6 +6,7 @@ import { PiLiveCurrentTaskRound } from './PiLiveTaskRound'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
+import { TaskThinking } from './TaskThinking'
 import type { TaskRoundModel, TaskToolGroupModel } from './task-detail-model'
 
 const toolGroup: TaskToolGroupModel = {
@@ -122,4 +123,38 @@ test('Pi settled 失败 Tool 默认收进处理详情且摘要保留失败数', 
   assert.match(html, /1 次失败/)
   assert.doesNotMatch(html, /data-status="error"/)
   assert.doesNotMatch(html, /1 assertion failed/)
+})
+
+test('assistant controls have no invisible status spacer after streaming settles', () => {
+  const html = renderToStaticMarkup(createElement(TaskMessage, { role: 'assistant', text: 'rendered answer', collapsible: false }))
+  assert.doesNotMatch(html, /task-message-output-state/)
+  assert.match(html, /task-message-copy-action/)
+  assert.match(html, />源码</)
+})
+
+test('thinking title uses a measured duration only and does not masquerade as execution time', () => {
+  const html = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { id: 'reasoning', label: '思考过程', text: 'work', durationMs: 83_000, state: 'settled' },
+    defaultExpanded: false,
+    children: 'work',
+  }))
+  assert.match(html, /思考了 1分23秒/)
+  assert.doesNotMatch(html, /task-thinking-kind-mark/)
+  const unknown = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { id: 'reasoning-unknown', label: '思考过程', text: 'work' },
+    defaultExpanded: false, children: 'work',
+  }))
+  assert.match(unknown, /思考过程/)
+  assert.doesNotMatch(unknown, /思考了/)
+})
+
+test('long tool arguments expose all source input in a separate copyable disclosure', () => {
+  const input = JSON.stringify({ database: 'auth-center-v3', sql: 'SELECT * FROM organization WHERE ancestors LIKE ?', args: ['%sample%'] })
+  const data: TaskToolGroupModel = { ...toolGroup, tools: [
+    { id: 'mcp', name: 'dbx_execute_query', kind: 'mcp', kindLabel: 'MCP', status: 'success', primary: input.slice(0, 30), rawInput: input },
+  ], itemCount: 1 }
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: data }))
+  assert.match(html, /task-tool-input-details/)
+  assert.match(html, /查看完整参数/)
+  assert.match(html, /SELECT \* FROM organization WHERE ancestors LIKE \?/)
 })

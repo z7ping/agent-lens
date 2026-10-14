@@ -365,3 +365,16 @@ test('generic Live projection preserves pre-user activity as a background round'
   assert.equal(rounds[0]?.items[0]?.id, 'a0')
   assert.equal(rounds[1]?.model.ordinal, 1)
 })
+
+test('a complete native reasoning interval is needed before displaying thinking duration', () => {
+  let items = reduceLiveTaskEvent([], event(1, { type: 'reasoning.start', contentIndex: 0, text: '' }))
+  items = reduceLiveTaskEvent(items, event(2, { type: 'reasoning.delta', contentIndex: 0, delta: 'investigating' }))
+  assert.equal(items.find(item => item.kind === 'thinking')?.durationMs, undefined)
+  items = reduceLiveTaskEvent(items, event(5, { type: 'reasoning.end', contentIndex: 0, text: 'investigating' }))
+  const thinking = items.find(item => item.kind === 'thinking')
+  assert.ok(thinking?.kind === 'thinking')
+  assert.equal(thinking.durationMs, 4_000)
+  assert.equal(thinking.streaming, false)
+  const unpaired = reduceLiveTaskEvent([], event(6, { type: 'reasoning.end', contentIndex: 1, text: 'late' }))
+  assert.equal(unpaired.find(item => item.kind === 'thinking')?.durationMs, undefined)
+})
