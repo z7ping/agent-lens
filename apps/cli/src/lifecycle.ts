@@ -139,20 +139,15 @@ function windowsManagedCommand(options: LifecycleOptions): string {
   ].join('; ')
 }
 
-function windowsManagedArgument(options: LifecycleOptions): string {
-  const encodedCommand = Buffer.from(windowsManagedCommand(options), 'utf16le').toString('base64')
-  return `-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
-}
-
+// The scheduled task must own the long-lived PowerShell process. A detached
+// WScript Shell.Run(..., False) made Task Scheduler report Ready while the
+// daemon continued running outside its lifecycle.
 function windowsLauncherPath(options: LifecycleOptions): string {
-  return join(runtimeDir(options.homeDir), 'windows-service-launcher.vbs')
+  return join(runtimeDir(options.homeDir), 'windows-service-launcher.ps1')
 }
 
 function windowsLauncherScript(options: LifecycleOptions): string {
-  return [
-    'Set shell = CreateObject("WScript.Shell")',
-    `shell.Run "powershell.exe ${windowsManagedArgument(options)}", 0, False`,
-  ].join('\r\n') + '\r\n'
+  return windowsManagedCommand(options) + '\r\n'
 }
 
 export function windowsTaskScript(options: LifecycleOptions, autostart: boolean): string {
@@ -165,9 +160,9 @@ export function windowsTaskScript(options: LifecycleOptions, autostart: boolean)
     `$launcherPath = ${psQuote(launcherPath)}`,
     `$launcherScript = ${psQuote(launcherScript)}`,
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $launcherPath) | Out-Null',
-    '[System.IO.File]::WriteAllText($launcherPath, $launcherScript, [System.Text.UTF8Encoding]::new($false))',
-    "$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument (\"`\"$launcherPath`\"\")",
-    '$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)',
+    '[System.IO.File]::WriteAllText($launcherPath, $launcherScript, [System.Text.UTF8Encoding]::new($true))',
+    `$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $launcherPath + '"')`,
+    '$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries',
     '$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited',
     autostart
       ? '$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user\nRegister-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Principal $principal -Trigger $trigger -Description \'AgentLens 用户级后台运行时\' -Force | Out-Null'
@@ -472,7 +467,6 @@ export const lifecycleInternals = {
   preferencesPath,
   managedEnvironment,
   windowsManagedCommand,
-  windowsManagedArgument,
   windowsLauncherPath,
   windowsLauncherScript,
   windowsTaskScript,
