@@ -457,6 +457,8 @@ export function BackupPage({
     </label>
   }
 
+  const backupScopeFilter = {backupScopeFilter}
+
   return <>
     <main className="workspace-page backup-page">
     {topbarHost ? createPortal(<div className="backup-topbar-controls">
@@ -482,6 +484,7 @@ export function BackupPage({
       </ToolbarGroup>
     </div>, topbarHost) : null}
     <div className="page-content backup-content">
+      <div className="backup-mobile-scope">{backupScopeFilter}</div>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
       {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="backup-link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}
