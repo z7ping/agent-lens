@@ -60,7 +60,7 @@ export function TaskProcessGroup({
     : ''
   const model: TaskThinkingModel = {
     id,
-    label: `${t('process.details')}${thoughtLabel ? `（${thoughtLabel}）` : ''}`,
+    label: thoughtLabel ? t('process.detailsWithThinking', { thinking: thoughtLabel }) : t('process.details'),
     text: '',
     state,
   }
