@@ -114,6 +114,14 @@ if (!appShell.includes("onIntegrations || onBackup ? 'is-maintenance-contextless
   || sidebarView.includes('onBackup && <div className="workspace-context-menu')) {
   throw new Error('智能体接入与资产备份只能保留图标导航轨；备份范围筛选必须位于统一 Topbar')
 }
+if (!workspaceSidebar.includes('.workspace-agent-filter-option {')
+  || readFileSync(p('components/workspace-sidebar-menu.css'), 'utf8').includes('.workspace-agent-filter-option {')) {
+  throw new Error('共享智能体筛选选项样式必须统一由 workspace-sidebar.css 持有')
+}
+if (!/@media \(max-width: 767\.98px\)[\s\S]*?\.app-shell\.is-maintenance-contextless\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/.test(workspaceSidebar)) {
+  throw new Error('移动端维护页侧栏为覆盖层，不得保留 40px 空白网格列')
+}
+
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
 const sidebarInteractions = readFileSync(p('components/workspace-sidebar-interactions.css'), 'utf8')
 if (!/\.workspace-sidebar\s*\{[\s\S]*?grid-template-columns:\s*40px minmax\(0, 1fr\);/m.test(workspaceSidebar)) throw new Error('桌面 WorkspaceSidebar 必须保持 40px 图标 Rail + 上下文栏结构')
