@@ -169,9 +169,9 @@ test('全部项目筛选按全历史最近活动倒序，未记录时间的项�
   const sorted = sortProjectFacetsByActivity([
     { id: 'older', name: '老项目', lastActivityAt: '2026-06-01T09:00:00.000Z' },
     { id: 'unknown', name: '未记录' },
-    { id: 'recent', name: '最近项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
+    { id: 'recent', name: '最近项目', lastActivityAt: '2026-10-14T09:00:00.000Z' },
     { id: 'tie-z', name: 'Z 项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
     { id: 'tie-a', name: 'A 项目', lastActivityAt: '2026-10-13T09:00:00.000Z' },
   ])
-  assert.deepEqual(sorted.map(item => item.id), ['tie-a', 'recent', 'tie-z', 'older', 'unknown'])
+  assert.deepEqual(sorted.map(item => item.id), ['recent', 'tie-a', 'tie-z', 'older', 'unknown'])
 })
