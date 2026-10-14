@@ -433,6 +433,12 @@
   margin-left: auto;
 }
 
+.workspace-sidebar-filter-disclosure.is-popover > summary .ui-disclosure-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body {
   position: absolute;
   top: 36px;
