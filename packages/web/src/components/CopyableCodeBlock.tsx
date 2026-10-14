@@ -22,7 +22,7 @@ export interface CopyableCodeBlockProps extends ComponentPropsWithoutRef<'pre'> 
   copyValue?: string
   containerClassName?: string
   /** Explicit syntax evidence, e.g. a Markdown fence or a Tool's original JSON. */
-  language?: string
+  language?: string | undefined
 }
 
 function textFromChildren(children: ReactNode): string {
