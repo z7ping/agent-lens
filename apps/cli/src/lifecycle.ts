@@ -162,7 +162,7 @@ export function windowsTaskScript(options: LifecycleOptions, autostart: boolean)
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $launcherPath) | Out-Null',
     '[System.IO.File]::WriteAllText($launcherPath, $launcherScript, [System.Text.UTF8Encoding]::new($true))',
     `$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $launcherPath + '"')`,
-    '$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)',
+    '$settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries',
     '$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited',
     autostart
       ? '$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user\nRegister-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Principal $principal -Trigger $trigger -Description \'AgentLens 用户级后台运行时\' -Force | Out-Null'
