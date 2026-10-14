@@ -378,7 +378,8 @@
 .task-surface .task-process-group > .task-thinking-summary .task-thinking-summary-meta { justify-self: start; }
 .task-surface .task-process-group > .task-thinking-summary .task-thinking-summary-meta::before { margin-right: 6px; color: var(--al-muted-2); content: '·'; }
 .task-surface .task-process-summary { display: inline-flex; min-width: 0; align-items: center; color: var(--al-muted-2); }
-.task-surface .task-process-summary > span { display: inline-flex; align-items: center; }
+.task-surface .task-process-summary > span { display: inline-flex; align-items: center; font-variant-numeric: tabular-nums; }
+.task-surface .task-process-summary .task-process-duration { min-width: 12ch; }
 .task-surface .task-process-summary > span + span::before { margin: 0 5px; color: var(--al-line-strong); content: '·'; }
 .task-surface .task-process-summary-error { color: var(--al-danger); }
 .task-surface .task-thinking-content { position: relative; margin: 0 2px 2px 26px; padding: 0; color: var(--al-muted); font-size: 13px; line-height: 1.55; }
