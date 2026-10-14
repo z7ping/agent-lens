@@ -236,13 +236,25 @@
 .task-surface .task-message-bubble-user .task-message-attachment-image { border-color: color-mix(in srgb, var(--al-user-bubble-text) 14%, transparent); background: var(--al-user-bubble-code); }
 .task-surface .task-message-response-pending {
   display: inline-flex;
-  min-height: 24px;
+  min-height: 28px;
   align-items: center;
-  gap: 4px;
+  gap: 7px;
   padding: 2px 1px;
   color: var(--al-muted);
+  font-size: 12px;
+  line-height: 20px;
 }
-.task-surface .task-message-response-pending > span {
+.task-surface .task-message-response-activity {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: var(--al-accent);
+}
+.task-surface .task-message-response-activity svg { animation: task-activity-spin 1.4s linear infinite; }
+.task-surface .task-message-response-label { white-space: nowrap; }
+.task-surface .task-message-response-dots { display: inline-flex; align-items: center; gap: 4px; }
+.task-surface .task-message-response-dots > span {
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -250,8 +262,8 @@
   opacity: .28;
   animation: task-message-response-pending 1.15s ease-in-out infinite;
 }
-.task-surface .task-message-response-pending > span:nth-child(2) { animation-delay: .14s; }
-.task-surface .task-message-response-pending > span:nth-child(3) { animation-delay: .28s; }
+.task-surface .task-message-response-dots > span:nth-child(2) { animation-delay: .14s; }
+.task-surface .task-message-response-dots > span:nth-child(3) { animation-delay: .28s; }
 @keyframes task-message-response-pending {
   0%, 60%, 100% { transform: translateY(0); opacity: .28; }
   30% { transform: translateY(-3px); opacity: .78; }
@@ -576,7 +588,8 @@
   .task-surface .task-disclosure-chevron,
   .task-surface .task-tool-output-chevron,
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
-  .task-surface .task-message-response-pending > span { animation: none; opacity: .55; }
+  .task-surface .task-message-response-dots > span { animation: none; opacity: .55; }
+  .task-surface .task-message-response-activity svg { animation: none; }
   .task-surface .task-thinking-running-mark svg,
   .task-surface .task-tool-status-run .task-tool-status-mark svg { animation: none; }
 }
