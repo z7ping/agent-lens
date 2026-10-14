@@ -137,7 +137,7 @@ function remoteVisible(
   return at >= now - days * 86_400_000
 }
 
-function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSessionSummaryDto; active: boolean; nowMs: number; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const sourceIds = normalizedSessionSources(item.sourceIds, item.productId)
@@ -146,33 +146,49 @@ function HistoryTaskItem({ item, active, onClick }: { item: ReviewSessionSummary
   const fullSourceNames = sourceNames.join(' · ')
   const compactSourceNames = sourceNames.length > 1 ? `${sourceNames[0]} +${sourceNames.length - 1}` : (sourceNames[0] ?? item.productId)
   const projectLabel = item.projectName ?? item.workspacePath?.split(/[\\/]/).filter(Boolean).at(-1) ?? t('center.history.noProject')
-  const updatedLabel = formatTime(localTime(item), t, locale)
+  const moment = sessionTimeFact(item.startedAt, item.endedAt)
+  const updatedLabel = formatTime(moment?.at ?? '', t, locale, nowMs)
+  const createdLabel = absoluteTime(item.startedAt, locale)
+  const recentLabel = moment ? absoluteTime(moment.at, locale) : ''
+  const timeTooltip = [
+    ...(createdLabel ? [t('center.time.startedAt', { time: createdLabel })] : []),
+    ...(recentLabel ? [t(moment?.source === 'last-activity' ? 'center.time.lastActivityAt' : 'center.time.onlyStartedAt', { time: recentLabel })] : []),
+  ].join(' · ')
   const fallback = item.projectName
     ? t('center.history.taskSuffix', { name: item.projectName })
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${presentation.title} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
+  const displayTitle = sessionListTitle(presentation.title, fallback, sourceIds)
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${displayTitle} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
-      <div className="session-item-title" title={presentation.title}>{sessionListTitle(presentation.title, fallback, item.sourceIds)}</div>
+      <div className="session-item-title" title={displayTitle}>{displayTitle}</div>
       {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
       <span className={`source-dot ${sourceDot(sourceId)}`}/>
       <span className="session-item-source" title={fullSourceNames}>{compactSourceNames}</span>
       <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
-      <time>{updatedLabel}</time>
+      <time dateTime={moment?.at} title={timeTooltip || undefined}>{updatedLabel}</time>
     </div>
   </button>
 }
 
-function RemoteTaskItem({ item, active, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; onClick(): void }) {
+function RemoteTaskItem({ item, active, nowMs, onClick }: { item: HubReviewSessionSummaryDto; active: boolean; nowMs: number; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const time = remoteTime(item)
-  const title = remoteTitle(item, t)
+  const title = sessionListTitle(remoteTitle(item, t), t('center.remote.task'))
+  const created = availabilityString(item.startedAt)
+  const moment = sessionTimeFact(created, availabilityString(item.endedAt))
+  const createdLabel = created ? absoluteTime(created, locale) : ''
+  const recentLabel = moment ? absoluteTime(moment.at, locale) : ''
+  const timeTooltip = [
+    ...(createdLabel ? [t('center.time.startedAt', { time: createdLabel })] : []),
+    ...(recentLabel ? [t(moment?.source === 'last-activity' ? 'center.time.lastActivityAt' : 'center.time.onlyStartedAt', { time: recentLabel })] : []),
+  ].join(' · ')
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-title-row"><div className="session-item-title" title={title}>{sessionListTitle(title, t('center.remote.task'))}</div></div>
-    <div className="session-item-meta"><span className="hub-session-source remote">{t('center.remote.source', { node: item.origin.nodeId })}</span><time>{time ? formatTime(time, t, locale) : t('center.remote.timeNotSynced')}</time></div>
+    <div className="session-item-title-row"><div className="session-item-title" title={title}>{title}</div></div>
+    <div className="session-item-meta"><span className="hub-session-source remote">{t('center.remote.source', { node: item.origin.nodeId })}</span><time dateTime={moment?.at} title={timeTooltip || undefined}>{time ? formatTime(time, t, locale, nowMs) : t('center.remote.timeNotSynced')}</time></div>
   </button>
 }
 
