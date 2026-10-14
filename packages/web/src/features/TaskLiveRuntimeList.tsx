@@ -22,15 +22,16 @@ function runtimeTitle(item: LiveRuntimeRefDto, fallback: string): string {
 
 function runtimeStatusBadge(
   state: LiveRuntimeStateDto,
-  labels: Record<'failed' | 'initializing' | 'terminating' | 'terminated' | 'streaming' | 'idle', string>,
-): { label: string; tone: 'accent' | 'warning' | 'danger'; dot?: boolean } {
+  labels: Record<'failed' | 'initializing' | 'terminating' | 'terminated' | 'streaming', string>,
+): { label: string; tone: 'accent' | 'warning' | 'danger'; dot?: boolean } | null {
   const status = taskLiveRuntimeStatus(state)
   if (status === 'failed') return { label: labels.failed, tone: 'danger' }
   if (status === 'initializing') return { label: labels.initializing, tone: 'warning', dot: true }
   if (status === 'terminating') return { label: labels.terminating, tone: 'warning', dot: true }
   if (status === 'terminated') return { label: labels.terminated, tone: 'warning' }
   if (status === 'streaming') return { label: labels.streaming, tone: 'accent', dot: true }
-  return { label: labels.idle, tone: 'warning' }
+  // Idle is a normal, non-actionable state. The list's neutral dot is enough.
+  return null
 }
 
 export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
@@ -154,10 +155,10 @@ export function TaskLiveRuntimeList({ deferMs = 150 }: { deferMs?: number }) {
       >
         <div className="session-item-title-row">
           <div className="session-item-title" title={title}>{sessionListTitle(title, fallback, [item.productId])}</div>
-          <StatusBadge className="task-live-status-badge" tone={badge.tone} dot={badge.dot} title={badge.label}>{badge.label}</StatusBadge>
+{badge && <StatusBadge className="task-live-status-badge" tone={badge.tone} dot={badge.dot} title={badge.label}>{badge.label}</StatusBadge>}
         </div>
         <div className="session-item-meta">
-          <span className={item.state.isStreaming || item.state.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'}/>
+          <span className={item.state.isStreaming || item.state.status === 'initializing' ? 'pi-live-pulse' : 'pi-live-idle-dot'} title={badge?.label ?? t('center.runtimeStatus.idle')} aria-hidden="true"/>
           <span>{item.displayName}</span>
           <span className="session-item-project">{workspaceDisplayName(item.state.workspacePath) || t('center.history.unlinkedProject')}</span>
         </div>
