@@ -428,7 +428,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const clearAllFilters = () => model.setReviewFilters({ sourceIds: null, projectId: '', range: '7d', status: 'all', search: '' })
   const removeAgentFilter = (sourceId: string) => {
     const next = selectedAgentIds.filter(id => id !== sourceId)
-    model.setReviewFilters({ sourceIds: next.length ? next : null })
+    model.setReviewFilters({ sourceIds: next })
   }
 
   const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
