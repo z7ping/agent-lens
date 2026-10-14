@@ -226,7 +226,7 @@ test('实时通道断开使用结构化状态提示而不是裸文本警告', ()
 
 test('Task Center context owns search, controlled filters and task list', () => {
   assert.match(taskCenterPage, /createPortal\(taskRail, sidebarHost\)/)
-  assert.match(taskCenterPage, /<Input\s+autoFocus\s+className="task-center-search-input"/)
+  assert.match(taskCenterPage, /<Input\s+className="task-center-search-input"/)
   assert.match(taskCenterPage, /<SidebarFilterDisclosure className="task-center-sidebar-filter"/)
   assert.match(taskCenterPage, /className="workspace-insight-filter-fields" aria-label=\{t\('center\.history\.filterAria'\)\}/)
   assert.doesNotMatch(taskCenterPage, /task-center-filter-popover|task-center-filter-panel/)
