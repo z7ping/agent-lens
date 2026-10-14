@@ -4,6 +4,15 @@
  */
 
 @media (max-width: 991.98px) {
+  .backup-toolbar-label {
+    display: none;
+  }
+
+  .backup-toolbar-actions .btn {
+    min-width: 32px;
+    padding-inline: 7px;
+  }
+
   .backup-content { padding-inline: 18px; }
 
   .backup-asset-overview {
@@ -208,18 +217,9 @@
     margin-bottom: 12px;
   }
 
-  .backup-toolbar-label {
-    display: none;
-  }
-
   .backup-view-switcher .scope-chip {
     padding-inline: 7px;
     font-size: 12px;
-  }
-
-  .backup-toolbar-actions .btn {
-    min-width: 32px;
-    padding-inline: 7px;
   }
 
   .backup-asset-overview {

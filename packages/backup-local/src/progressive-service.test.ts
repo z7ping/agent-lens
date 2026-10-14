@@ -35,7 +35,9 @@ test('局部刷新只扫描指定智能体，并按配置顺序合并到同一 i
   try {
     await mkdir(piRoot, { recursive: true })
     await mkdir(codexRoot, { recursive: true })
-    await writeFile(join(piRoot, 'one.jsonl'), '{"source":"pi"}\n', 'utf8')
+    for (let index = 0; index < 18; index += 1) {
+      await writeFile(join(piRoot, `${index}.jsonl`), '{"source":"pi"}\n', 'utf8')
+    }
     await writeFile(join(codexRoot, 'one.jsonl'), '{"source":"codex"}\n', 'utf8')
     await writeFile(join(codexRoot, 'two.jsonl'), '{"source":"codex"}\n', 'utf8')
 
@@ -67,7 +69,7 @@ test('局部刷新只扫描指定智能体，并按配置顺序合并到同一 i
 
     const pi = await service.refreshIndex({ sourceIds: ['pi'] })
     assert.deepEqual(pi.sources.map(item => item.sourceId), ['pi'])
-    assert.equal(pi.sources[0]?.fileCount, 1)
+    assert.equal(pi.sources[0]?.fileCount, 18)
     assert.deepEqual(calls, { pi: 1 })
 
     const afterPi = await service.peekOverview()
@@ -80,7 +82,7 @@ test('局部刷新只扫描指定智能体，并按配置顺序合并到同一 i
 
     const complete = await service.peekOverview()
     assert.deepEqual(complete?.sources.map(item => item.sourceId), ['pi', 'codex'])
-    assert.deepEqual(complete?.sources.map(item => item.fileCount), [1, 2])
+    assert.deepEqual(complete?.sources.map(item => item.fileCount), [18, 2])
   } finally {
     await rm(root, { recursive: true, force: true })
   }

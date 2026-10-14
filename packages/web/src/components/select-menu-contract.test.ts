@@ -56,6 +56,8 @@ test('SelectMenu 的菜单键盘处理保护 IME，并跟踪 Sidebar 浮层锚�
   assert.match(selectSource, /geometryObserver\?\.observe\(triggerRef\.current\)/)
   assert.match(selectSource, /geometryObserver\?\.observe\(sidebar\)/)
   assert.match(selectSource, /geometryObserver\?\.disconnect\(\)/)
+  assert.match(selectSource, /document\.addEventListener\('keydown', dismissWithEscape, true\)/)
+  assert.match(selectSource, /document\.removeEventListener\('keydown', dismissWithEscape, true\)/)
 })
 
 test('任务中心多选由「全部」进入单项、复选累计；高级筛选不再嵌套 SelectMenu', () => {

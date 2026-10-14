@@ -53,6 +53,7 @@ const BUNDLE_VERSION = 1 as const
 const INVENTORY_VERSION = 1 as const
 const INDEX_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 const INDEX_STARTUP_STALE_MS = 60 * 1000
+const INDEX_STAT_BATCH_SIZE = 16
 const MAX_IMPORT_BYTES = 256 * 1024 * 1024
 const MAX_BUNDLE_JSON_BYTES = 768 * 1024 * 1024
 
@@ -551,6 +552,53 @@ export class LocalBackupService implements BackupService {
           excluded.push(exclusion(target, root.path, root.kinds, 'symbolic-link'))
           continue
         }
+        let pending: Array<{ path: string; relativePath: string }> = []
+        const flush = async () => {
+          const batch = pending
+          pending = []
+          const metadata = await Promise.all(batch.map(async item => {
+            try {
+              return await lstat(item.path)
+            } catch {
+              return null
+            }
+          }))
+          for (let index = 0; index < batch.length; index += 1) {
+            const item = batch[index]!
+            const meta = metadata[index]
+            if (!meta) {
+              excluded.push(exclusion(target, item.path, root.kinds, 'unreadable'))
+              continue
+            }
+            if (!meta.isFile()) continue
+            const sourceRelativePath = safePortableRelative(toPortablePath(item.relativePath))
+            const archivePath = safePortableRelative([
+              safeSegment(target.source.manifest.sourceId),
+              safeSegment(target.installation.id),
+              root.scope,
+              sourceRelativePath,
+            ].join('/'))
+            const key = `${target.source.manifest.sourceId}\u0000${target.installation.id}\u0000${resolve(item.path)}`
+            const existing = files.get(key)
+            if (existing) {
+              for (const kind of root.kinds) existing.kinds.add(kind)
+            } else {
+              files.set(key, {
+                sourceId: target.source.manifest.sourceId,
+                productId: target.detected.productId,
+                installationId: target.installation.id,
+                path: item.path,
+                scope: root.scope,
+                sourceRelativePath,
+                archivePath,
+                kinds: new Set(root.kinds),
+                size: meta.size,
+                mtimeMs: meta.mtimeMs,
+                ctimeMs: meta.ctimeMs,
+              })
+            }
+          }
+        }
         for await (const item of walkFiles(root.path)) {
           if (item.symlink) {
             excluded.push(exclusion(target, item.path, root.kinds, 'symbolic-link'))
@@ -561,41 +609,10 @@ export class LocalBackupService implements BackupService {
             excluded.push(exclusion(target, item.path, root.kinds, 'outside-source-roots'))
             continue
           }
-          let meta
-          try {
-            meta = await lstat(item.path)
-            if (!meta.isFile()) continue
-          } catch {
-            excluded.push(exclusion(target, item.path, root.kinds, 'unreadable'))
-            continue
-          }
-          const sourceRelativePath = safePortableRelative(toPortablePath(relativePath))
-          const archivePath = safePortableRelative([
-            safeSegment(target.source.manifest.sourceId),
-            safeSegment(target.installation.id),
-            root.scope,
-            sourceRelativePath,
-          ].join('/'))
-          const key = `${target.source.manifest.sourceId}\u0000${target.installation.id}\u0000${resolve(item.path)}`
-          const existing = files.get(key)
-          if (existing) {
-            for (const kind of root.kinds) existing.kinds.add(kind)
-          } else {
-            files.set(key, {
-              sourceId: target.source.manifest.sourceId,
-              productId: target.detected.productId,
-              installationId: target.installation.id,
-              path: item.path,
-              scope: root.scope,
-              sourceRelativePath,
-              archivePath,
-              kinds: new Set(root.kinds),
-              size: meta.size,
-              mtimeMs: meta.mtimeMs,
-              ctimeMs: meta.ctimeMs,
-            })
-          }
+          pending.push({ path: item.path, relativePath })
+          if (pending.length === INDEX_STAT_BATCH_SIZE) await flush()
         }
+        if (pending.length) await flush()
       }
     }
 
@@ -710,7 +727,7 @@ export class LocalBackupService implements BackupService {
   private async writeInventory(inventory: BackupInventory): Promise<void> {
     await mkdir(this.options.vaultPath, { recursive: true })
     const stage = `${this.inventoryPath}.${randomUUID().slice(0, 8)}.tmp`
-    await writeFile(stage, `${JSON.stringify(inventory, null, 2)}\n`, { flag: 'wx' })
+    await writeFile(stage, `${JSON.stringify(inventory)}\n`, { flag: 'wx' })
     try {
       await rename(stage, this.inventoryPath)
     } catch (error) {

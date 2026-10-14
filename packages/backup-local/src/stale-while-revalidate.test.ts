@@ -159,6 +159,23 @@ test('旧索引立即可用，后台仍按配置顺序渐进替换各智能体',
   assert.equal(fresh.index?.refreshing, false)
 })
 
+test('默认不会因十分钟内的页面访问重复扫描可用索引', async () => {
+  const refreshCalls: string[] = []
+  const service = new StaleWhileRevalidateBackupService(
+    fakeService({
+      cached: combinedOverview(new Date(Date.now() - 10 * 60_000).toISOString(), { pi: 2 }),
+      refreshCalls,
+      refresh() { throw new Error('unexpected refresh') },
+    }),
+    { vaultPath: 'vault', sourceOrder: ['pi'], safetyRefreshMs: 0 },
+  )
+
+  const overview = await service.overview()
+  assert.equal(overview.index?.stale, false)
+  assert.equal(overview.index?.refreshing, false)
+  assert.deepEqual(refreshCalls, [])
+})
+
 test('服务启动只读取本地缓存，不主动触发冷目录扫描', async () => {
   const refreshCalls: string[] = []
   const service = new StaleWhileRevalidateBackupService(

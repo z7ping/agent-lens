@@ -37,6 +37,7 @@ test('Hermes Source combines native session title, state.db history, assets and 
   const inbox = join(root, 'inbox')
   await mkdir(join(hermesRoot, 'skills', 'reviewer'), { recursive: true })
   await mkdir(workspace, { recursive: true })
+  await mkdir(join(workspace, '.git'))
   await mkdir(inbox, { recursive: true })
   await writeFile(join(workspace, 'AGENTS.md'), '# Hermes workspace instructions\n', 'utf8')
   await writeFile(join(hermesRoot, 'skills', 'reviewer', 'SKILL.md'), '# reviewer\n', 'utf8')

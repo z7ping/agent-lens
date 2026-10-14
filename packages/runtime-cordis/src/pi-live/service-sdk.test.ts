@@ -99,12 +99,12 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
     prompt: async (message, options) => {
       calls.push(`prompt:${message}:${options?.streamingBehavior ?? 'direct'}:${options?.source ?? 'none'}`)
       streaming = true
-      options?.preflightResult?.('started')
+      options?.preflightResult?.(true)
       await new Promise<void>(resolve => { releasePrompt = resolve })
       streaming = false
     },
-    steer: async message => { calls.push(`steer:${message}`); return 'queued' as const },
-    followUp: async message => { calls.push(`follow:${message}`); return 'queued' as const },
+    steer: async message => { calls.push(`steer:${message}`) },
+    followUp: async message => { calls.push(`follow:${message}`) },
     clearQueue: () => ({ steering: ['queued-steer'], followUp: ['queued-follow'] }),
     abortBash: () => { calls.push('abort-bash') },
     abort: async () => { streaming = false; releasePrompt?.(); calls.push('abort') },
@@ -304,8 +304,8 @@ test('Pi Live SDK prompt 在预检失败时向 HTTP 调用方返回错误', asyn
       void options
       throw new Error('No model selected')
     },
-    steer: async () => 'queued' as const,
-    followUp: async () => 'queued' as const,
+    steer: async () => {},
+    followUp: async () => {},
     clearQueue: () => ({ steering: [], followUp: [] }),
     abort: async () => {},
     waitForIdle: async () => {},
@@ -377,10 +377,10 @@ test('Pi Live controls 只读模型快照，只有显式切换模型才触发 av
     setThinkingLevel: level => { currentThinking = level },
     getAvailableThinkingLevels: () => currentModel ? switchedThinkingLevels : initialThinkingLevels,
     prompt: async (_message: string, options?: PiSdkPromptOptions) => {
-      options?.preflightResult?.('started')
+      options?.preflightResult?.(true)
     },
-    steer: async () => 'queued' as const,
-    followUp: async () => 'queued' as const,
+    steer: async () => {},
+    followUp: async () => {},
     clearQueue: () => ({ steering: [], followUp: [] }),
     abort: async () => {},
     waitForIdle: async () => {},

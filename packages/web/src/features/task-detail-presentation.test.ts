@@ -14,7 +14,7 @@ const toolGroup: TaskToolGroupModel = {
   tools: [
     { id: 'read', name: '读取文件', kind: 'read', kindLabel: '读取', status: 'success', primary: 'packages/web/src/App.tsx', durationMs: 42 },
     { id: 'search', name: '代码搜索', kind: 'search', kindLabel: '搜索', status: 'success', primary: 'startedAt / capturedAt', durationMs: 51 },
-    { id: 'test', name: 'npm test', kind: 'tool', kindLabel: '工具', status: 'success', primary: 'packages/web', durationMs: 830 },
+    { id: 'test', name: 'test', kind: 'tool', kindLabel: '工具', status: 'success', primary: 'npm test packages/web', durationMs: 830 },
     { id: 'unknown', name: 'custom_native_call', kind: 'tool', kindLabel: '工具', status: 'success', primary: 'opaque target' },
   ],
 }

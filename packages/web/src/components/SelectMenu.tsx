@@ -155,6 +155,12 @@ export function SelectMenu({
       if (!target || triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return
       close(false)
     }
+    const dismissWithEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return
+      event.preventDefault()
+      event.stopPropagation()
+      close(true)
+    }
     // Portal 下拉位置依赖锚点真实几何；侧栏展开不会触发 window.resize。
     const geometryObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
       const trigger = triggerRef.current
@@ -168,12 +174,14 @@ export function SelectMenu({
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
     document.addEventListener('pointerdown', dismiss, true)
+    document.addEventListener('keydown', dismissWithEscape, true)
     return () => {
       cancelAnimationFrame(focusFrame)
       geometryObserver?.disconnect()
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
       document.removeEventListener('pointerdown', dismiss, true)
+      document.removeEventListener('keydown', dismissWithEscape, true)
     }
   }, [close, open, searchable, selected?.value, updatePosition])
 

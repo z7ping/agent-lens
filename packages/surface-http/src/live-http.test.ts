@@ -375,7 +375,7 @@ class FakeLiveService implements LiveService {
 test('generic Live HTTP surface coalesces concurrent identical adapter reads', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
-  const adapter = new FakeLiveAdapter(false, 20)
+  const adapter = new FakeLiveAdapter(false, 200)
   const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
   const base = `http://${surface.host}:${surface.port}`
 

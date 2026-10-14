@@ -9,8 +9,8 @@ import type {
   BackupVerifyResult,
 } from '@agent-lens/core'
 
-const DEFAULT_ACCESS_STALE_MS = 5 * 60 * 1000
-const DEFAULT_SAFETY_REFRESH_MS = 30 * 60 * 1000
+const DEFAULT_ACCESS_STALE_MS = 30 * 60 * 1000
+const DEFAULT_SAFETY_REFRESH_MS = 2 * 60 * 60 * 1000
 const EMPTY_INDEX_TIME = new Date(0).toISOString()
 
 export interface StaleWhileRevalidateBackupOptions {
