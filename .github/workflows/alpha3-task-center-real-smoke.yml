@@ -21,6 +21,9 @@ on:
       - scripts/acceptance/**
       - scripts/check-alpha3-real-acceptance-contract.mjs
       - scripts/prepare-desktop.mjs
+      - scripts/electron-runtime.mjs
+      - scripts/build-windows-desktop.mjs
+      - scripts/electron-runtime.test.mjs
       - package.json
       - package-lock.json
       - .github/workflows/alpha3-task-center-real-smoke.yml
@@ -109,7 +112,9 @@ jobs:
           $bootstrapPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'electron-bootstrap.txt'
           $semanticReportPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'codex-semantics-report.json'
           $semanticBootstrapPath = Join-Path $env:AGENT_LENS_ACCEPTANCE_OUTPUT 'codex-semantics-bootstrap.txt'
-          $electron = Join-Path $PWD 'apps/desktop/.electron-dist/electron-v43.4.0-win32-x64/electron.exe'
+          $electronDist = node scripts/electron-runtime.mjs
+          if ($LASTEXITCODE -ne 0) { throw '无法解析锁定的 Electron runtime 版本' }
+          $electron = Join-Path ($electronDist.Trim()) 'electron.exe'
           $acceptanceApp = Join-Path $PWD 'scripts/acceptance/task-center-desktop-app'
           $semanticApp = Join-Path $PWD 'scripts/acceptance/codex-semantics-desktop-app'
           if (-not (Test-Path $electron)) { throw "预下载 Electron 不存在：$electron" }
