@@ -23,6 +23,22 @@ try {
   $hookRunnerCheck = $doctor.checks | Where-Object { $_.id -eq 'windows-hook-runner' }
   if ($null -eq $hookRunnerCheck) { throw 'doctor 缺少 Windows Hook 启动器检查' }
   if ($hookRunnerCheck.level -ne 'pass') { throw "Windows Hook 启动器检查未通过：$($hookRunnerCheck.detail)" }
+
+  # Stop must terminate both the scheduled task and its service-owned daemon.
+  # A detached launcher can otherwise pass the start/health assertions.
+  node dist/cli.mjs service stop
+  if ($LASTEXITCODE -ne 0) { throw '停止 npm 后台服务失败：计划任务或 Daemon 仍在运行' }
+  $stopped = $false
+  for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    $stopStatus = node dist/cli.mjs status --json | ConvertFrom-Json
+    if (-not $stopStatus.lifecycle.active -and
+        -not ($stopStatus.online -and $stopStatus.owner -eq 'service')) {
+      $stopped = $true
+      break
+    }
+    Start-Sleep -Milliseconds 250
+  }
+  if (-not $stopped) { throw '停止后台任务后仍存在服务持有的 Daemon 或运行中计划任务' }
 }
 finally {
   node dist/cli.mjs service stop
