@@ -314,6 +314,19 @@
   opacity: .72;
   transition: opacity .12s;
 }
+.task-surface .task-message-output-state {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  visibility: hidden;
+  color: var(--al-accent);
+}
+.task-surface .task-message-output-state[data-active='true'] { visibility: visible; }
+.task-surface .task-message-output-state[data-active='true'] svg { animation: task-activity-spin 1.4s linear infinite; }
+.task-surface .task-message-assistant[data-streaming='true'] .markdown-message-actions { opacity: 1; }
 .task-surface .task-message-assistant:hover .markdown-message-actions,
 .task-surface .task-message-assistant:focus-within .markdown-message-actions,
 .task-surface .task-message-assistant .task-message-content[data-view='source'] .markdown-message-actions { opacity: 1; }
@@ -590,6 +603,7 @@
   .task-surface .task-message-assistant .markdown-message-actions { transition: none; }
   .task-surface .task-message-response-dots > span { animation: none; opacity: .55; }
   .task-surface .task-message-response-activity svg { animation: none; }
+  .task-surface .task-message-output-state[data-active='true'] svg { animation: none; }
   .task-surface .task-thinking-running-mark svg,
   .task-surface .task-tool-status-run .task-tool-status-mark svg { animation: none; }
 }
