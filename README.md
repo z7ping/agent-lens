@@ -40,11 +40,11 @@ AgentLens 展示的是来源能够证明的行为，不声称读取隐藏思维�
 
 ### 桌面版
 
-前往 [GitHub Releases](https://github.com/z7ping/agent-lens/releases) 下载与你的平台和架构匹配的安装包：
+前往 [GitHub Releases](https://github.com/z7ping/agent-lens/releases) 下载与你的平台和架构匹配的安装包。**源码开发版本不等于已发布版本，请以对应 Release 实际提供的文件为准**。
 
 - Windows x64：`AgentLens-<version>-Setup-x64.exe`
-- macOS：Apple Silicon / Intel 对应的 DMG
-- Linux：x64 / arm64 对应的 AppImage 或 DEB
+- macOS：按 Release 实际提供的 Apple Silicon（arm64）/ Intel（x64）DMG 选择
+- Linux x64：AppImage 或 DEB；当前构建不提供 Linux arm64 安装包
 
 桌面版和 npm 版共用同一套 Runtime、默认数据目录与数据模型；同时安装也不会创建第二套数据库。
 

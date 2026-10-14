@@ -40,11 +40,11 @@ AgentLens shows only what its Sources can support with evidence. It does not cla
 
 ### Desktop
 
-Visit [GitHub Releases](https://github.com/z7ping/agent-lens/releases) and download the package matching your platform and architecture:
+Visit [GitHub Releases](https://github.com/z7ping/agent-lens/releases) and download the package matching your platform and architecture. **The development source version may be ahead of the latest published Release; use the assets actually provided for that Release.**
 
 - Windows x64: `AgentLens-<version>-Setup-x64.exe`
-- macOS: DMG for Apple Silicon or Intel
-- Linux: AppImage or DEB for x64 or arm64
+- macOS: select an Apple Silicon (arm64) or Intel (x64) DMG only if offered by the selected Release
+- Linux x64: AppImage or DEB; the current build does not produce Linux arm64 installers
 
 Desktop and npm distributions share the same Runtime, default data root, and data model. Installing both does not create a second database.
 

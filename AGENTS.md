@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-AgentLens 1.0 已发布 **1.0.0-alpha.4**。默认目标是处理发布后的缺陷、收敛 Task Center / Pi Live 的表现层，并提高性能和资源稳定性。
+AgentLens 1.0 处于 Alpha 阶段。当前源码版本以根目录 `package.json` 为准，实际公开发行版必须以 GitHub Releases / npm 发布记录核实，不得将源码版本误认为已发布。默认目标是处理缺陷、收敛 Task Center / Pi Live 的表现层，并提高性能和资源稳定性。
 
 未经用户明确要求：
 
