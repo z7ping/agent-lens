@@ -51,6 +51,12 @@ test('1.2.x 使用 1.2.0 官方类型基线标记为已验证版本', () => {
   assert.equal(inspectPiSdkCompatibility(undefined).testedVersion, false)
 })
 
+test('1.2.0 官方 SDK 提供 MCP / Codemode / Tool Search 工厂供 Worker 复用', () => {
+  assert.equal(typeof officialPiSdk.createCodemodeExtension, 'function')
+  assert.equal(typeof officialPiSdk.createToolSearchExtension, 'function')
+  assert.equal(typeof officialPiSdk.createMcpExtension, 'function')
+})
+
 test('1.2.0 官方 SDK 暴露结构化包更新检查能力', () => {
   const live = assertPiSdkModule(officialPiSdk, '/pi/dist/index.js', PI_SDK_TYPE_BASELINE)
   const updates = resolvePiSdkPackageUpdateApi(live)
