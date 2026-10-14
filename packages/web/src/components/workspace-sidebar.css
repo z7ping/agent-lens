@@ -798,7 +798,8 @@
 }
 .workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-options {
   display: grid;
-  gap: 2px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
 }
 .workspace-sidebar-context > .task-center-rail .task-center-filter-option {
   display: flex;
