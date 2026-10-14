@@ -150,13 +150,23 @@ async function loadTaskCenter(win, label) {
 async function waitForProjectedReviewDetail(win, label) {
   const deadline = Date.now() + 12_000
   while (Date.now() < deadline) {
-    const state = await withTimeout(win.webContents.executeJavaScript(`(() => ({
-      detail: Boolean(document.querySelector('.review-reader-pane')),
-      roundCount: document.querySelectorAll('[data-task-round-state]').length,
-      thinkingCount: document.querySelectorAll('.task-thinking').length,
-      toolCount: document.querySelectorAll('[data-tool-fact="true"] .task-tool-row').length,
-    }))()`), 2_000, `${label} Review 详情状态`).catch(() => null)
-    if (state?.detail && state.roundCount >= 1 && state.thinkingCount >= 1 && state.toolCount >= 1) return
+    const state = await withTimeout(win.webContents.executeJavaScript(`(() => {
+      // The completed Process is intentionally folded by default. Exercise the
+      // real disclosure interaction instead of requiring hidden Tool DOM rows.
+      const process = document.querySelector('.task-review-process')
+      if (process instanceof HTMLDetailsElement && !process.open) {
+        process.querySelector(':scope > summary')?.click()
+      }
+      return {
+        detail: Boolean(document.querySelector('.review-reader-pane')),
+        roundCount: document.querySelectorAll('[data-task-round-state]').length,
+        processExpanded: process instanceof HTMLDetailsElement && process.open,
+        thinkingCount: document.querySelectorAll('.task-thinking').length,
+        toolCount: document.querySelectorAll('[data-tool-fact="true"] .task-tool-row').length,
+      }
+    })()`), 2_000, `${label} Review 详情状态`).catch(() => null)
+    if (state?.detail && state.roundCount >= 1 && state.processExpanded
+      && state.thinkingCount >= 1 && state.toolCount >= 1) return
     await delay(100)
   }
   fail(`${label} 12 秒内未完成真实 Review 详情投影`)
