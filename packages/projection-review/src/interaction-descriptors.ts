@@ -242,6 +242,7 @@ export class InteractionDescriptorStore {
       observationCount += observations.length
 
       for (const observation of observations) {
+        if (observation.kind === 'tool.registration') continue
         if (observation.kind === 'message.user' && current) flush()
         if (!current && observation.kind === 'session.lifecycle') continue
         if (!current) current = newDescriptor(observation, descriptors.length + 1)
@@ -301,6 +302,7 @@ export class InteractionDescriptorStore {
       pages += 1
       observationCount += page.length
       for (const observation of page) {
+        if (observation.kind === 'tool.registration') continue
         if (observation.kind === 'message.user' && current) {
           descriptors.push(current)
           current = null
@@ -338,6 +340,7 @@ export class InteractionDescriptorStore {
       if (!observations.length) break
 
       for (const observation of observations) {
+        if (observation.kind === 'tool.registration') continue
         if (observation.kind === 'message.user' && current) {
           if (current.ordinal === targetOrdinal) return current
           current = null
@@ -389,7 +392,7 @@ export class InteractionDescriptorStore {
         })
         if (!probe.length) break
         for (const observation of probe) {
-          if (observation.kind === 'session.lifecycle') continue
+          if (observation.kind === 'session.lifecycle' || observation.kind === 'tool.registration') continue
           leadingBackground = observation.kind !== 'message.user'
           break outer
         }
@@ -428,7 +431,7 @@ export class InteractionDescriptorStore {
       })
       if (!probe.length) break
       for (const observation of probe) {
-        if (observation.kind === 'session.lifecycle') continue
+        if (observation.kind === 'session.lifecycle' || observation.kind === 'tool.registration') continue
         leadingBackground = observation.kind !== 'message.user'
         break outer
       }
