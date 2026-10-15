@@ -106,6 +106,13 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 - 禁止新组件允许调用方随意传高度、字号、颜色绕过系统；API 应表达 `variant / size / state` 等语义。
 - 禁止为了“组件化”过度抽象只出现一次、没有稳定契约的业务结构。
 
+### CSS 样式所有权与层叠门禁（强制）
+
+- 加载顺序固定：基础与 Token → `components/ui` 共享 Primitive → Workspace 壳层 → 领域/页面样式。不得把 Primitive 放到最后加载。
+- `.ui-*` / `SelectMenu` / `.btn` 基础规则只能由其组件 CSS 所有者定义；页面只能使用有语义的域类，禁止重新覆盖共享触发器的高度、边框、字号或圆角。
+- 单选与多选筛选框统一 32px 高度、1px 边框、8px 圆角、13px 字号。禁止双层边框、反复增加选择器权重和 `!important`。
+- `npm run check:web-presentation` 必须校验共享规则所有权、CSS 导入顺序及筛选器几何；桌面验收要通过 `getComputedStyle` 检查最终生效的样式，而非仅匹配源码字面值。
+
 ### Design Token
 
 `packages/web/src/tokens.css` 是正式运行时 Design Token 基线。页面和组件消费语义 Token，不维护自己的品牌色板。

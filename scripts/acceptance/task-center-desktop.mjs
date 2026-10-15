@@ -230,6 +230,12 @@ async function inspect(win, viewport, theme) {
     const rect = element => element ? (() => { const r = element.getBoundingClientRect(); return { left:r.left, top:r.top, right:r.right, bottom:r.bottom, width:r.width, height:r.height } })() : null
     const fontPx = element => element ? Number.parseFloat(getComputedStyle(element).fontSize) || 0 : 0
     const visible = element => Boolean(element && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden' && getComputedStyle(element).display !== 'none')
+    const filterGeometry = selector => {
+      const element = pick(selector)
+      if (!element || !visible(element)) return null
+      const style = getComputedStyle(element)
+      return { height: rect(element).height, border: [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth], radius: style.borderTopLeftRadius, fontSize: style.fontSize }
+    }
     const page = pick('.task-center-page')
     // Current Task Center has a search panel and quick filters in the sidebar,
     // not the removed standalone task-center-toolbar.
@@ -276,6 +282,10 @@ async function inspect(win, viewport, theme) {
       documentScrollWidth: root?.scrollWidth || 0,
       documentScrollHeight: root?.scrollHeight || 0,
       page: rect(page), searchPanel: rect(searchPanel), quickFilters: rect(quickFilters),
+      filterGeometry: {
+        agent: filterGeometry('.task-center-quick-filters .workspace-sidebar-filter-disclosure > summary'),
+        project: filterGeometry('.task-center-quick-filters .select-menu-trigger'),
+      },
       workspaceTopbar: rect(workspaceTopbar), rail: rect(rail), railScroll: rect(railScroll), main: rect(main), detailScroll: rect(detailScroll),
       overflow: { page: pageStyle?.overflow || '', rail: railStyle?.overflow || '', railY: railScrollStyle?.overflowY || '', main: mainStyle?.overflow || '', detailY: detailStyle?.overflowY || '' },
       messageCount: all('.task-message-row').length,
@@ -323,6 +333,13 @@ async function inspect(win, viewport, theme) {
   if (value.documentScrollHeight > value.innerHeight + 2) errors.push(`出现全局纵向滚动：${value.documentScrollHeight} > ${value.innerHeight}`)
   if (value.rail && value.main && value.rail.right > value.main.left + 2) errors.push('任务列表与详情发生重叠')
   if (value.workspaceTopbar && value.workspaceTopbar.height > 54) errors.push(`Workspace Topbar 过高：${value.workspaceTopbar.height}px`)
+  for (const [name, style] of Object.entries(value.filterGeometry)) {
+    if (!style) { errors.push(`${name} 筛选框未渲染`); continue }
+    if (!within(style.height, 32, 0.75)) errors.push(`${name} 筛选框高度应为 32px，实际 ${style.height}px`)
+    if (style.border.some(side => side !== '1px')) errors.push(`${name} 筛选框应为四边 1px 边框：${style.border.join('/')}`)
+    if (style.radius !== '8px') errors.push(`${name} 筛选框圆角应为 8px：${style.radius}`)
+    if (style.fontSize !== '13px') errors.push(`${name} 筛选框字号应为 13px：${style.fontSize}`)
+  }
   if (value.rail && !within(value.rail.width, viewport.width >= 1200 ? 300 : viewport.width >= 992 ? 260 : 212)) errors.push(`任务上下文栏宽度偏离当前响应式基线：${value.rail.width}px`)
   if (!['auto', 'scroll'].includes(value.overflow.railY)) errors.push(`左侧任务列表不是独立滚动根：overflow-y=${value.overflow.railY}`)
   if (value.overflow.main !== 'hidden') errors.push(`Task Center 主区应隔离全局滚动：overflow=${value.overflow.main}`)

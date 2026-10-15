@@ -12,6 +12,10 @@ import './theme.css'
 import './typography.css'
 import './readability.css'
 import './semantic-colors.css'
+// Shared UI primitives must load before shell, domain and page styling.
+import './components/ui/ui-primitives.css'
+import './components/ui/overlay.css'
+import './components/select-menu.css'
 import './shell.css'
 import './components/workspace-sidebar.css'
 import './components/workspace-sidebar-interactions.css'
@@ -49,9 +53,6 @@ import './components/task-continuation.css'
 import './task-detail.css'
 // Session View 最后持有 Review / Pi Live 的 Header 几何、Reader、阅读轴与可选 Composer 外层。
 import './task-session-view.css'
-import './components/ui/ui-primitives.css'
-import './components/ui/overlay.css'
-import './components/select-menu.css'
 
 writeTheme(readTheme())
 const disposeLiveRecovery = installLiveRecovery(clientModel)

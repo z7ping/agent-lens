@@ -41,7 +41,15 @@ test('real Review acceptance expands the single Process disclosure before checki
   assert.doesNotMatch(source, /toolCount:\s*1\b/)
 })
 
-test('Task Center viewport acceptance checks current search/filter layout and each native Tool row shape', () => {
+test('Task Center viewport acceptance checks computed styles, not only CSS source declarations', () => {
+  assert.match(source, /getComputedStyle\(element\)/)
+  assert.match(source, /filterGeometry: \{/)
+  assert.match(source, /filterGeometry\('\.task-center-quick-filters \.workspace-sidebar-filter-disclosure > summary'\)/)
+  assert.match(source, /style\.border\.some\(side => side !== '1px'\)/)
+  assert.match(source, /!within\(style\.height, 32, 0\.75\)/)
+})
+
+test('Task Center viewport acceptance checks current search/filter layout and each native Tool row shape', () {
   assert.match(source, /const searchPanel = pick\('\.task-center-search-panel'\)/)
   assert.match(source, /const quickFilters = pick\('\.task-center-quick-filters'\)/)
   assert.match(source, /const workspaceTopbar = pick\('\.workspace-topbar'\)/)
