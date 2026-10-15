@@ -42,26 +42,6 @@
 }
 
 /* 备份业务操作位于共享 Workspace 业务工具栏；视图导航由 WorkspaceViewTabs 管理。 */
-.backup-toolbar-controls {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
-.backup-agent-filter-slot {
-  min-width: 130px;
-  max-width: 220px;
-  flex: 0 1 190px;
-}
-
-.backup-toolbar-actions {
-  min-width: 0;
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-
 /* 当前资产是一块连续内容面，不是裸露在 Canvas 上的文本，也不是逐智能体卡片。 */
 .backup-assets-surface {
   min-width: 0;
@@ -520,23 +500,9 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 2px;
+  gap: 6px;
   white-space: nowrap;
 }
-
-.backup-link-btn {
-  min-height: 26px;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--al-accent);
-  font-size: 12px;
-  font-weight: 620;
-}
-
-.backup-link-btn:hover:not(:disabled) { background: var(--al-soft-2); text-decoration: none; }
-.backup-link-btn:disabled { cursor: default; opacity: .45; }
 
 /* 快照物理路径：只展示真实来源根目录，不复用含义不明的状态图标。 */
 .backup-physical-path-drawer .ui-overlay-body { padding: 0; }
