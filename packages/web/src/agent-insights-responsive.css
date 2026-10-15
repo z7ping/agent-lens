@@ -18,7 +18,6 @@
   .agent-workspace-topbar-tools { flex: 1 1 auto; }
   .agent-workspace-agent-picker { width: 105px; flex: 1 1 105px; }
   .app-shell.is-agent-workspace .workspace-topbar-actions .agent-rescan-label { display: none; }
-  .app-shell.is-agent-workspace .workspace-topbar-actions .btn { padding-inline: 8px; }
 }
 
 /*
