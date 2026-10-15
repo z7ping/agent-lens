@@ -294,6 +294,11 @@ export class AgentLensApi {
       method: 'POST',
     })
   }
+  updateIntegration(integrationId: string): Promise<IntegrationPackageOperationResponseDto> {
+    return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}/update`, {
+      method: 'POST',
+    })
+  }
   removeIntegration(integrationId: string): Promise<IntegrationPackageOperationResponseDto> {
     return requestJson(`/api/v1/integrations/${encodeURIComponent(integrationId)}`, {
       method: 'DELETE',
