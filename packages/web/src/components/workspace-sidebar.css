@@ -674,6 +674,86 @@
   flex: 1;
 }
 
+/* Common workspace structure: title (50px), secondary links (40px), business tools (min 48px). */
+.workspace-view-tabs {
+  display: flex;
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  min-height: 40px;
+  flex: 0 0 40px;
+  align-items: stretch;
+  gap: 22px;
+  padding: 0 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+  scrollbar-width: none;
+}
+.workspace-view-tabs::-webkit-scrollbar { display: none; }
+.workspace-view-tab {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 2px;
+  color: var(--al-muted);
+  font-size: 13px;
+  font-weight: 560;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.workspace-view-tab:hover { color: var(--al-ink); }
+.workspace-view-tab.is-active { color: var(--al-ink); font-weight: 670; }
+.workspace-view-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--al-accent);
+  content: '';
+}
+.workspace-view-tab:focus-visible { border-radius: 4px; outline: 2px solid var(--al-accent); outline-offset: -3px; }
+.workspace-view-tabs.is-nested { flex: 0 0 40px; background: var(--al-canvas); }
+
+.workspace-view-toolbar {
+  position: relative;
+  z-index: 32;
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 20px;
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+.workspace-view-toolbar-content { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; }
+.workspace-view-toolbar-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
+.workspace-view-controls { display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px; }
+.workspace-view-filter { width: 190px; min-width: 130px; flex: 0 1 190px; }
+.workspace-view-filter-time { width: 140px; flex-basis: 140px; }
+.workspace-view-filter-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; }
+.workspace-view-clear-filter { border: 0; background: transparent; color: var(--al-muted); font-size: 12px; cursor: pointer; }
+.workspace-view-clear-filter:hover { color: var(--al-accent); }
+.workspace-view-clear-filter:focus-visible { outline: 2px solid var(--al-accent); outline-offset: 2px; }
+.workspace-view-toolbar .workspace-sidebar-filter-disclosure .ui-disclosure-body { z-index: 42; }
+
+@media (max-width: 767.98px) {
+  .workspace-view-tabs { gap: 16px; padding-inline: 12px; }
+  .workspace-view-toolbar { flex-wrap: wrap; padding: 7px 12px; }
+  .workspace-view-toolbar-content, .workspace-view-controls { flex-wrap: wrap; }
+  .workspace-view-filter { width: auto; flex: 1 1 140px; }
+  .workspace-view-filter-time { flex: 1 1 110px; }
+  .workspace-view-filter-actions { margin-left: auto; }
+}
+@media (max-width: 575.98px) {
+  .workspace-view-toolbar-actions .agent-rescan-label { display: none; }
+}
+
 /*
  * Task Center Rail 通过 Portal 挂到 WorkspaceSidebar 的 276px 上下文区。
  * 标题 / 新建、常驻搜索、智能体 / 项目快捷筛选与低频筛选按固定层级排列。
