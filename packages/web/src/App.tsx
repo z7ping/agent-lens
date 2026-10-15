@@ -7,7 +7,8 @@ import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } fr
 import { useReviewUrlSync } from './client/useReviewUrlSync'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
 import { BackgroundDataNotice } from './components/BackgroundDataNotice'
-import { IntegrationOrderProvider } from './components/IntegrationOrderProvider'
+import { IntegrationOrderProvider, useIntegrationOrder } from './components/IntegrationOrderProvider'
+import { orderAgentsByPreference, resolveAgentOverviewSource } from './components/agent-order'
 import { PinnedAgentsProvider } from './components/PinnedAgentsProvider'
 import { ReviewStateOverlay } from './components/ReviewStateOverlay'
 import { WorkspaceSidebar } from './components/WorkspaceSidebar'
@@ -186,6 +187,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const [theme, setTheme] = useState(readTheme)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [agentOverviewSourceId, setAgentOverviewSourceId] = useState('')
+  const { ordered: integrationDisplayOrder } = useIntegrationOrder()
   const [backupAssetSourceId, setBackupAssetSourceId] = useState('')
   const [workspaceToolbarHost, setWorkspaceToolbarHost] = useState<HTMLDivElement | null>(null)
   const [sidebarHost, setSidebarHost] = useState<HTMLDivElement | null>(null)
@@ -259,41 +261,22 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     })
   }
   const agentSelectionItems = [...agentSelectionMap.values()]
-  const firstPresentIntegration = managedIntegrationItems.find(item =>
-    item.tool?.presence === 'present' || item.tool?.presence === 'data-only'
+  // Use the same integration order as the visible SelectMenu, including pending reorder changes.
+  const orderedAgentSelectionItems = orderAgentsByPreference(agentSelectionItems, integrationDisplayOrder)
+  const requestedAgentId = onAgents ? new URLSearchParams(location.search).get('agent') ?? '' : ''
+  // Preserve deep links using integration/product ids from the legacy management route.
+  const requestedManagedIntegration = managedIntegrationItems.find(item =>
+    item.integrationId === requestedAgentId || item.productId === requestedAgentId
   )
-  const firstPresentSourceId = firstPresentIntegration
-    ? agentSummaryItems.find(item =>
-      item.productId === firstPresentIntegration.productId || item.sourceId === firstPresentIntegration.integrationId
-    )?.sourceId ?? firstPresentIntegration.integrationId
-    : undefined
-  const resolvedAgentOverviewSourceId = agentSelectionMap.has(agentOverviewSourceId)
-    ? agentOverviewSourceId
-    : firstPresentSourceId
-      ?? agentSummaryItems.find(item => item.detected)?.sourceId
-      ?? agentSummaryItems[0]?.sourceId
-      ?? agents.find(agent => agent.detected)?.sourceId
-      ?? agents[0]?.sourceId
-      ?? ''
-
-  // Deep links from the former /integrations route select the same agent in the unified workspace.
-  useEffect(() => {
-    if (!onAgents) return
-    const requestedId = new URLSearchParams(location.search).get('agent')
-    if (!requestedId) return
-    const managed = managedIntegrationItems.find(item => item.integrationId === requestedId || item.productId === requestedId)
-    const resolvedId = agentSummaryItems.find(item => item.sourceId === requestedId || (managed && item.productId === managed.productId))?.sourceId
-      ?? managed?.integrationId ?? requestedId
-    if (agentSelectionItems.some(item => item.sourceId === resolvedId)) {
-      setAgentOverviewSourceId(current => current === resolvedId ? current : resolvedId)
-    }
-  }, [onAgents, location.search, snapshot.agentSummaries, snapshot.integrationManagement])
-
-  useEffect(() => {
-    if (resolvedAgentOverviewSourceId && resolvedAgentOverviewSourceId !== agentOverviewSourceId) {
-      setAgentOverviewSourceId(resolvedAgentOverviewSourceId)
-    }
-  }, [agentOverviewSourceId, resolvedAgentOverviewSourceId])
+  const requestedSourceId = agentSummaryItems.find(item =>
+    item.sourceId === requestedAgentId
+      || (requestedManagedIntegration && item.productId === requestedManagedIntegration.productId)
+  )?.sourceId ?? requestedManagedIntegration?.integrationId ?? requestedAgentId
+  const resolvedAgentOverviewSourceId = resolveAgentOverviewSource(
+    orderedAgentSelectionItems.map(item => item.sourceId),
+    requestedSourceId,
+    agentOverviewSourceId,
+  )
 
   useEffect(() => {
     void model.ensureIntegrationPreferences().catch(() => undefined)
@@ -419,12 +402,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     : onAgents ? (currentView === 'management' ? 'management' : 'overview')
       : onBackup ? (currentView === 'history' ? 'history' : 'assets') : 'overview'
 
-  return <IntegrationOrderProvider
-    management={snapshot.integrationManagement}
-    preferences={snapshot.integrationPreferences}
-    model={model}
-  >
-    <PinnedAgentsProvider agents={agents}>
+  return <PinnedAgentsProvider agents={agents}>
       <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${hasWorkspaceTabs ? 'is-contextless-workspace' : ''} ${onAgents ? 'is-agent-workspace' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
@@ -492,9 +470,20 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       </div>
     </div>
     </PinnedAgentsProvider>
+}
+
+/** Order context must be above Shell so default selection matches the visible agent list. */
+function OrderedShell({ model }: { model: AgentLensClientModel }) {
+  const snapshot = useClientSnapshot(model)
+  return <IntegrationOrderProvider
+    management={snapshot.integrationManagement}
+    preferences={snapshot.integrationPreferences}
+    model={model}
+  >
+    <Shell model={model}/>
   </IntegrationOrderProvider>
 }
 
 export function App({ model }: { model: AgentLensClientModel }) {
-  return <BrowserRouter><Shell model={model} /></BrowserRouter>
+  return <BrowserRouter><OrderedShell model={model} /></BrowserRouter>
 }
