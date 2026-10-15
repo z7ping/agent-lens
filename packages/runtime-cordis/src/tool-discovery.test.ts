@@ -8,7 +8,7 @@ import {
   OfficialToolDiscoveryService,
 } from './tool-discovery'
 
-test('tool discovery reports present from executable evidence without running the Agent CLI', async () => {
+test('tool discovery reports present from executable evidence even when CLI version is unavailable', async () => {
   const calls: string[] = []
   const items = await discoverOfficialTools({
     env: { PATH: '' },
@@ -20,6 +20,7 @@ test('tool discovery reports present from executable evidence without running th
       calls.push(name)
       return name === 'pi' ? '/opt/bin/pi' : undefined
     },
+    versionResolver: async () => undefined,
   })
   const pi = items.find(item => item.integrationId === 'pi')
   assert.equal(pi?.presence, 'present')
@@ -178,6 +179,7 @@ test('discovery service can rescan one integration without replacing other disco
     timeoutMs: 1_000,
     shellPathResolver: async () => undefined,
     executableResolver: async name => name === 'pi' ? piExecutable : undefined,
+    versionResolver: async () => undefined,
   })
 
   const baseline = await service.rescan()
