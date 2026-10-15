@@ -13,6 +13,17 @@ export interface IntegrationLifecyclePresentation {
   className: string
 }
 
+/** Overview and management use the same lifecycle-to-status-color mapping. */
+export function integrationLifecycleTone(
+  className: IntegrationLifecyclePresentation['className'],
+  isNew = false,
+): 'neutral' | 'accent' | 'success' | 'warning' | 'danger' {
+  if (className === 'is-error') return 'danger'
+  if (className === 'is-enabled' || className === 'is-detected' || className === 'is-discovered') return 'success'
+  if (className === 'is-history' || className === 'is-scanning') return 'warning'
+  return isNew ? 'accent' : 'neutral'
+}
+
 export function integrationPackageReady(
   state: IntegrationPackageStateDto | null | undefined,
 ): boolean {
