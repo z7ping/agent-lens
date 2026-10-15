@@ -12,12 +12,8 @@ type AgentSelection =
 
 interface SidebarFilterDisclosureProps {
   summary?: ReactNode
-  summaryMeta?: ReactNode
-  className?: string
   agents?: AgentFacetDto[]
   agentSelection?: AgentSelection
-  children?: ReactNode
-  defaultOpen?: boolean
   showAllOption?: boolean
   agentOrderManagement?: boolean
 }
@@ -25,18 +21,14 @@ interface SidebarFilterDisclosureProps {
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
 export function SidebarFilterDisclosure({
   summary,
-  summaryMeta,
-  className = '',
   agents = [],
   agentSelection,
-  children,
-  defaultOpen = false,
   showAllOption = false,
   agentOrderManagement = false,
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
   const { t: tAgents } = useTranslation('agents')
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(false)
   const disclosureRef = useRef<HTMLDetailsElement>(null)
   const [managingOrder, setManagingOrder] = useState(false)
   const [draggedId, setDraggedId] = useState('')
@@ -72,11 +64,7 @@ export function SidebarFilterDisclosure({
   const allSelected = agentSelection?.mode === 'multiple'
     ? agentSelection.value === null
     : !agentSelection?.value
-  const selectedCount = selectedIds.filter(id => detectedIds.includes(id)).length
   const reorderableAgents = orderedAgents.filter(agent => canReorder(agent.sourceId))
-  const computedSummary = agentSelection?.mode === 'multiple'
-    ? allSelected ? t('sidebarFilter.all') : selectedCount ? t('sidebarFilter.selected', { count: selectedCount }) : t('sidebarFilter.none')
-    : agentSelection?.value ? agentLabel(agentSelection.value, orderedAgents.find(agent => agent.sourceId === agentSelection.value)?.displayName) : t('sidebarFilter.all')
 
   const selectAll = () => {
     if (!agentSelection) return
@@ -101,10 +89,10 @@ export function SidebarFilterDisclosure({
 
   return <Disclosure
     ref={disclosureRef}
-    className={`workspace-sidebar-filter-disclosure ${className}`.trim()}
+    className="workspace-sidebar-filter-disclosure"
     summary={resolvedSummary}
     title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
-    summaryMeta={summaryMeta ?? computedSummary}
+    summaryMeta={false}
     open={open}
     onToggle={event => setOpen(event.currentTarget.open)}
   >
@@ -173,6 +161,5 @@ export function SidebarFilterDisclosure({
         </div>
       </> : <Button size="small" onClick={() => setManagingOrder(true)}>{tAgents('page.manageOrder')}</Button>}
     </section>}
-    {children}
   </Disclosure>
 }
