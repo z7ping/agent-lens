@@ -71,6 +71,7 @@ export class ReviewInteractionPager {
       })
 
       for (const item of page.items) {
+        if (item.kind === 'tool.registration') continue
         if (item.kind === 'message.user' && pending.length) {
           completed.push(pending)
           pending = []
@@ -207,6 +208,7 @@ export class ReviewInteractionPager {
         limit: TIMELINE_CHUNK,
       })
       for (const item of [...page.items].reverse()) {
+        if (item.kind === 'tool.registration') continue
         pendingDescending.push(item)
         scannedObservations += 1
         if (item.kind === 'message.user') {
