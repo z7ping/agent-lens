@@ -440,15 +440,16 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       {mobileNavigationOpen && <button type="button" className="workspace-mobile-backdrop" aria-label={t('navigation:closeWorkspaceNavigation')} onClick={() => setMobileNavigationOpen(false)}/>} 
       <MarkdownThemeManager open={markdownThemeManagerOpen} onClose={() => setMarkdownThemeManagerOpen(false)}/>
       <div ref={mainRef} className="app-main">
-        <WorkspaceTopBar
+        {!hasWorkspaceTabs && <WorkspaceTopBar
           pathname={location.pathname}
           onOpenNavigation={() => setMobileNavigationOpen(true)}
-        />
+        />}
         {hasWorkspaceTabs && <>
           <WorkspaceViewTabs
             label={onAgents ? t('navigation:agentViews') : onTools || onInsights ? t('navigation:insightsView') : t('backup:assetView.tabsAria')}
             value={selectedWorkspaceTab}
             tabs={workspaceTabs}
+            onOpenNavigation={() => setMobileNavigationOpen(true)}
           />
           <div className="workspace-view-toolbar">
             <div className="workspace-view-toolbar-content" ref={setWorkspaceToolbarHost}/>
