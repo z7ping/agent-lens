@@ -49,7 +49,7 @@ test('Task Center viewport acceptance checks computed styles, not only CSS sourc
   assert.match(source, /!within\(style\.height, 32, 0\.75\)/)
 })
 
-test('Task Center viewport acceptance checks current search/filter layout and each native Tool row shape', () {
+test('Task Center viewport acceptance checks current search/filter layout and each native Tool row shape', () => {
   assert.match(source, /const searchPanel = pick\('\.task-center-search-panel'\)/)
   assert.match(source, /const quickFilters = pick\('\.task-center-quick-filters'\)/)
   assert.match(source, /const workspaceTopbar = pick\('\.workspace-topbar'\)/)
