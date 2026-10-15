@@ -693,3 +693,7 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   height: 1px;
   pointer-events: none;
 }
+
+/* Live 扩展的选择弹窗共用 Dialog，选项仅保留领域布局。 */
+.live-extension-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.live-extension-input { width: 100%; }

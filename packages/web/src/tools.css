@@ -125,9 +125,21 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.tool-table .tool-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.tool-table .tool-table-sort:hover { color: var(--al-ink); }
 .tool-table tbody tr { cursor: pointer; }
 .tool-table tbody tr:hover td { background: var(--al-soft-2); }
-.tool-table th[role='button']:focus-visible,
+.tool-table .tool-table-sort:focus-visible,
 .tool-table tbody tr:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--al-accent) 55%, transparent);
   outline-offset: -2px;

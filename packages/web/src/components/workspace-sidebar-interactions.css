@@ -47,10 +47,6 @@
   color: var(--al-accent);
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field {
-  padding-right: 36px;
-}
-
 .workspace-sidebar-context > .task-center-rail .task-center-search-clear {
   position: absolute;
   top: 3px;
