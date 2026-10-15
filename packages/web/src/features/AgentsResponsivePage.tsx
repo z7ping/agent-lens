@@ -2,75 +2,134 @@ import { createPortal } from 'react-dom'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
+import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentInsightsRail } from '../components/AgentInsightsRail'
-import { ToolbarGroup } from '../components/ui'
+import { SelectMenu, ToolbarGroup } from '../components/ui'
 import { AgentsPage } from './AgentsPage'
+import { IntegrationManagementPage } from './IntegrationManagementPage'
 
-type PiAgentView = 'overview' | 'ecosystem'
+type AgentWorkspaceView = 'overview' | 'ecosystem' | 'management'
 
 export function AgentsResponsivePage({
   model,
   sourceId,
+  agents,
+  onSelectAgent,
   topbarHost,
 }: {
   model: AgentLensClientModel
   sourceId: string
+  agents: AgentFacetDto[]
+  onSelectAgent(id: string): void
   topbarHost?: HTMLDivElement | null
 }) {
-  const { t } = useTranslation('piEcosystem')
+  const { t } = useTranslation(['navigation', 'piEcosystem'])
   const snapshot = useClientSnapshot(model)
+  const orderedAgents = useOrderedAgents(agents)
   const [searchParams, setSearchParams] = useSearchParams()
   const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
+  const hasSelectedSummary = Boolean(snapshot.agentSummaries?.items.some(item => item.sourceId === sourceId))
+  const isPi = sourceId === 'pi'
+  const requestedView = searchParams.get('view')
+  const activeView: AgentWorkspaceView = requestedView === 'management'
+    ? 'management'
+    : isPi && requestedView === 'ecosystem'
+      ? 'ecosystem'
+      : 'overview'
 
   useEffect(() => {
-    if (!sourceId) return
+    // Supported-but-undetected catalog entries have no overview to hydrate.
+    if (!sourceId || !hasSelectedSummary) return
     void model.ensureAgentDetail(sourceId).catch(() => undefined)
-  }, [model, sourceId])
+  }, [model, sourceId, hasSelectedSummary])
 
   useEffect(() => {
-    if (!hasSelectedOverview) return
+    if (!hasSelectedOverview || activeView !== 'overview') return
     const timer = window.setTimeout(() => {
       void model.refreshAgentCoverage().catch(() => undefined)
     }, 1_000)
     return () => window.clearTimeout(timer)
-  }, [hasSelectedOverview, model, sourceId])
-  const isPi = sourceId === 'pi'
-  const activeView: PiAgentView = isPi && searchParams.get('view') === 'ecosystem'
-    ? 'ecosystem'
-    : 'overview'
+  }, [hasSelectedOverview, model, sourceId, activeView])
 
-  const setActiveView = (view: PiAgentView) => {
+  const integrationIdFor = (nextSourceId: string) => {
+    const selected = agents.find(item => item.sourceId === nextSourceId)
+    return snapshot.integrationManagement?.items.find(item =>
+      item.integrationId === nextSourceId || (selected && item.productId === selected.productId),
+    )?.integrationId ?? nextSourceId
+  }
+
+  const setActiveView = (view: AgentWorkspaceView) => {
     const next = new URLSearchParams(searchParams)
-    if (view === 'ecosystem') next.set('view', 'ecosystem')
-    else next.delete('view')
+    if (view === 'overview') {
+      next.delete('view')
+      if (sourceId) next.set('agent', sourceId)
+    } else {
+      next.set('view', view)
+      if (view === 'management' && sourceId) {
+        next.set('agent', integrationIdFor(sourceId))
+      }
+    }
+    setSearchParams(next, { replace: true })
+  }
+
+  const selectAgent = (nextSourceId: string) => {
+    onSelectAgent(nextSourceId)
+    const next = new URLSearchParams(searchParams)
+    next.set('agent', activeView === 'management' ? integrationIdFor(nextSourceId) : nextSourceId)
+    if (next.get('view') === 'ecosystem' && nextSourceId !== 'pi') next.delete('view')
     setSearchParams(next, { replace: true })
   }
 
   const showInsights = hasSelectedOverview && activeView === 'overview'
+  const agentOptions = orderedAgents.map(agent => ({
+    value: agent.sourceId,
+    label: agentLabel(agent.sourceId, agent.displayName),
+  }))
 
   return <>
-    {isPi && topbarHost ? createPortal(
-      <ToolbarGroup className="agent-view-switcher" role="group" aria-label={t('tabsAria')}>
-        <button
-          type="button"
-          aria-pressed={activeView === 'overview'}
-          className={`scope-chip ${activeView === 'overview' ? 'scope-chip-active' : ''}`}
-          onClick={() => setActiveView('overview')}
-        >{t('overviewTab')}</button>
-        <button
-          type="button"
-          aria-pressed={activeView === 'ecosystem'}
-          className={`scope-chip ${activeView === 'ecosystem' ? 'scope-chip-active' : ''}`}
-          onClick={() => setActiveView('ecosystem')}
-        >{t('ecosystemTab')}</button>
-      </ToolbarGroup>,
+    {topbarHost ? createPortal(
+      <div className="agent-workspace-topbar-tools">
+        <ToolbarGroup className="agent-view-switcher" role="group" aria-label={t('navigation:agentViews')}>
+          <button
+            type="button"
+            aria-pressed={activeView === 'overview'}
+            className={`scope-chip ${activeView === 'overview' ? 'scope-chip-active' : ''}`}
+            onClick={() => setActiveView('overview')}
+          >{t('navigation:overview')}</button>
+          <button
+            type="button"
+            aria-pressed={activeView === 'management'}
+            className={`scope-chip ${activeView === 'management' ? 'scope-chip-active' : ''}`}
+            onClick={() => setActiveView('management')}
+          >{t('navigation:integrationManagement')}</button>
+          {isPi && <button
+            type="button"
+            aria-pressed={activeView === 'ecosystem'}
+            className={`scope-chip ${activeView === 'ecosystem' ? 'scope-chip-active' : ''}`}
+            onClick={() => setActiveView('ecosystem')}
+          >{t('piEcosystem:ecosystemTab')}</button>}
+        </ToolbarGroup>
+        <div className="agent-workspace-agent-picker">
+          <SelectMenu
+            value={sourceId}
+            options={agentOptions}
+            onChange={selectAgent}
+            ariaLabel={t('navigation:agentSelection')}
+            placeholder={t('navigation:agentSelection')}
+            searchable
+          />
+        </div>
+      </div>,
       topbarHost,
     ) : null}
-    <div className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'}`}>
-      <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
-      {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
-    </div>
+    {activeView === 'management'
+      ? <IntegrationManagementPage model={model} topbarHost={topbarHost}/>
+      : <div className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'}`}>
+        <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
+        {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
+      </div>}
   </>
 }

@@ -808,14 +808,14 @@ export function AgentsPage({
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
             piView={piView}
-            onManageIntegration={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
+            onManageIntegration={id => navigate(`/agents?view=management&agent=${encodeURIComponent(id)}`)}
           /> : detailPending || selectedRow?.summary ? <WorkspaceSkeleton kind="cards"/> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}
             discoveryScanning={discoveryScanning}
             discoveryError={snapshot.integrationDiscoveryError}
-            onManage={id => navigate(`/integrations?agent=${encodeURIComponent(id)}`)}
+            onManage={id => navigate(`/agents?view=management&agent=${encodeURIComponent(id)}`)}
           /> : null}
       </div> : <div className="empty-state roomy">{t('page.empty')}</div>}
     </div>

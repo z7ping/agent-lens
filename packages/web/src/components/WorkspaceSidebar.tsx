@@ -1,25 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { ClientSnapshot } from '../client/model'
 import { LocaleSelector } from '../i18n/LocaleSelector'
 import { BackgroundActivityStatus } from './BackgroundActivityStatus'
 import { BrandVersion, ReleaseInfo } from './ReleaseInfo'
 import { RuntimeStatus } from './RuntimeStatus'
-import { agentLabel } from './AgentScope'
-import { SidebarFilterDisclosure } from './SidebarFilterDisclosure'
 import { WorkspacePrimaryNavigation } from './WorkspacePrimaryNavigation'
 import { IconButton, Popover, UiIcon, useModalFocusScope } from './ui'
 import './workspace-sidebar-menu.css'
 
 interface WorkspaceSidebarProps {
   snapshot: ClientSnapshot
-  agents: AgentFacetDto[]
-  agentSelectionAgents: AgentFacetDto[]
-  selectedAgentId: string
-  onSelectAgent(id: string): void
-  onRefreshAgents(): void
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onOpenMarkdownThemes(): void
@@ -32,11 +24,6 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   snapshot,
-  agents,
-  agentSelectionAgents,
-  selectedAgentId,
-  onSelectAgent,
-  onRefreshAgents,
   theme,
   onToggleTheme,
   onOpenMarkdownThemes,
@@ -47,7 +34,6 @@ export function WorkspaceSidebar({
   onMobileClose = () => undefined,
 }: WorkspaceSidebarProps) {
   const location = useLocation()
-  const navigate = useNavigate()
   const { t } = useTranslation(['navigation', 'settings', 'shell', 'common'])
   const sidebarRef = useRef<HTMLElement>(null)
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
@@ -55,18 +41,10 @@ export function WorkspaceSidebar({
   const onReview = location.pathname.startsWith('/review')
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
-  const onIntegrations = location.pathname.startsWith('/integrations')
   const onBackup = location.pathname.startsWith('/backup')
-  const hasNewIntegrations = snapshot.integrationManagement?.items.some(item => item.isNew) ?? false
   const contextTitle = onInsights
     ? t('navigation:insights')
-    : onAgents
-      ? t('navigation:agents')
-      : onIntegrations
-        ? t('navigation:agentIntegration')
-        : onBackup
-          ? t('navigation:assetBackup')
-          : ''
+    : ''
 
   useModalFocusScope({ open: mobileOpen, onClose: onMobileClose, panelRef: sidebarRef })
 
@@ -94,9 +72,9 @@ export function WorkspaceSidebar({
     </div>
 
     <WorkspacePrimaryNavigation
-      activeSection={onReview ? 'review' : onInsights ? 'insights' : onAgents ? 'agents' : undefined}
+      activeSection={onReview ? 'review' : onInsights ? 'insights' : onAgents ? 'agents' : onBackup ? 'backup' : undefined}
       hasInsightsUpdate={snapshot.usage.hasNewData}
-      hasAgentsUpdate={snapshot.agentsHasNewData}
+      hasAgentsUpdate={snapshot.agentsHasNewData || Boolean(snapshot.integrationManagement?.items.some(item => item.isNew))}
       onNavigate={onMobileClose}
     />
 
@@ -110,22 +88,13 @@ export function WorkspaceSidebar({
         <NavLink to="/tools" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>{t('navigation:tools')}{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
       </nav>}
 
-      {onAgents && <div className="workspace-context-menu workspace-agent-context">
-        <div className="workspace-context-utility">
-          <span>{t('navigation:agentCount', { count: agentSelectionAgents.length })}</span>
-          <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
-        </div>
-        <SidebarFilterDisclosure agentOrderManagement summary={selectedAgentId ? agentLabel(selectedAgentId, agentSelectionAgents.find(agent => agent.sourceId === selectedAgentId)?.displayName) : t('common:sidebarFilter.allAgents')}  agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
-      </div>}
-
-
     </div>
 
     <div className="workspace-sidebar-footer">
       <div className="workspace-settings-anchor">
         <IconButton
           ref={settingsButtonRef}
-          className={`workspace-settings-button ${settingsOpen || onIntegrations || onBackup ? 'is-active' : ''}`}
+          className={`workspace-settings-button ${settingsOpen ? 'is-active' : ''}`}
           aria-label={t('settings:openMenu')}
           aria-expanded={settingsOpen}
           title={t('navigation:settings')}
@@ -140,38 +109,6 @@ export function WorkspaceSidebar({
           className="workspace-settings-popover"
         >
           <section aria-label={t('settings:menu')}>
-          <section className="workspace-settings-group" aria-labelledby="workspace-settings-management-title">
-            <div id="workspace-settings-management-title" className="workspace-settings-group-title">{t('settings:management')}</div>
-            <div className="workspace-settings-menu">
-              <button
-                type="button"
-                autoFocus
-                className={`workspace-settings-menu-item ${onIntegrations ? 'is-active' : ''}`}
-                onClick={() => {
-                  navigate('/integrations')
-                  onMobileClose()
-                }}
-              >
-                <UiIcon name="agent" size={14}/>
-                <span>{t('navigation:agentIntegration')}</span>
-                {hasNewIntegrations && <i className="workspace-nav-dot" aria-hidden="true"/>}
-                <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
-              </button>
-              <button
-                type="button"
-                className={`workspace-settings-menu-item ${onBackup ? 'is-active' : ''}`}
-                onClick={() => {
-                  navigate('/backup')
-                  onMobileClose()
-                }}
-              >
-                <UiIcon name="upload" size={14}/>
-                <span>{t('navigation:assetBackup')}</span>
-                <UiIcon className="workspace-settings-menu-tail" name="chevron-right" size={14}/>
-              </button>
-            </div>
-          </section>
-
           <section className="workspace-settings-group" aria-labelledby="workspace-settings-appearance-title">
             <div id="workspace-settings-appearance-title" className="workspace-settings-group-title">{t('settings:appearance')}</div>
             <div className="workspace-settings-menu">

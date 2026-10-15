@@ -153,7 +153,7 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       retry: 'Retry',
       skip: 'Skip',
       noneFound: 'No supported agents found yet',
-      noneFoundDescription: 'You can rescan later from Settings → Agent Integration. AgentLens will not automatically install or take over any tool.',
+      noneFoundDescription: 'You can rescan later from Agents → Agent Integration. AgentLens will not automatically install or take over any tool.',
       noneConfirmed: 'No agents are confirmed as detected yet',
       noneConfirmedDescription: 'Some discovery checks failed. Failed items remain unknown and can be rescanned; a failed scan is never treated as not installed.',
       scanFailedAgents: 'Discovery failed: {{agents}}. These agents remain unknown and can be rescanned later.',

@@ -88,12 +88,11 @@ if (!/export \{ UiIcon \} from '\.\.\/UiIcon'/.test(readFileSync(p('components/u
 const appShell = readFileSync(p('App.tsx'), 'utf8')
 const workspaceSidebar = readFileSync(p('components/workspace-sidebar.css'), 'utf8')
 const taskCenterPage = readFileSync(p('features/TaskCenterPage.tsx'), 'utf8')
-// 所有智能体筛选只能消费共享 Disclosure 弹层；维护页仅保留 40px 导航轨。
+// Shared Disclosure remains in Task/Insights/Backup; Agents use the same 32px SelectMenu.
 const sidebarFilter = readFileSync(p('components/SidebarFilterDisclosure.tsx'), 'utf8')
 const sidebarView = readFileSync(p('components/WorkspaceSidebar.tsx'), 'utf8')
 const filterConsumers = [
   ['任务中心', taskCenterPage],
-  ['智能体总览', sidebarView],
   ['使用洞察', readFileSync(p('features/InsightsPage.tsx'), 'utf8')],
   ['工具分析', readFileSync(p('features/ToolsPage.tsx'), 'utf8')],
   ['资产备份', readFileSync(p('features/BackupPage.tsx'), 'utf8')],
@@ -114,18 +113,28 @@ for (const [name, source] of filterConsumers) {
     throw new Error(`${name} 必须消费共享智能体筛选，禁止页面私有控件`)
   }
 }
-if (!appShell.includes("onIntegrations || onBackup ? 'is-maintenance-contextless'")
-  || !/\.app-shell\.is-maintenance-contextless\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/.test(workspaceSidebar)
+const agentsWorkspace = readFileSync(p('features/AgentsResponsivePage.tsx'), 'utf8')
+const primaryNavigation = readFileSync(p('components/WorkspacePrimaryNavigation.tsx'), 'utf8')
+if (!/<SelectMenu\b/.test(agentsWorkspace) || !agentsWorkspace.includes('onSelectAgent(nextSourceId)')
+  || !agentsWorkspace.includes("activeView === 'management'") || !agentsWorkspace.includes('<IntegrationManagementPage')) {
+  throw new Error('智能体概览/接入必须共享一个工作区、一个智能体选择器和统一 SelectMenu')
+}
+if (!primaryNavigation.includes("id: 'backup', to: '/backup'") || !primaryNavigation.includes("id: 'agents', to: '/agents'")
+  || sidebarView.includes('workspace-settings-management-title') || sidebarView.includes("navigate('/integrations')")) {
+  throw new Error('资产备份必须为一级入口；接入管理只属于智能体工作区，不得留在设置中')
+}
+if (!appShell.includes("onAgents || onBackup ? 'is-contextless-workspace'")
+  || !/\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/.test(workspaceSidebar)
   || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('className="backup-agent-filter-slot"')
   || sidebarView.includes('onBackup && <div className="workspace-context-menu')) {
-  throw new Error('智能体接入与资产备份只能保留图标导航轨；备份范围筛选必须位于统一 Topbar')
+  throw new Error('智能体与资产备份只能保留图标导航轨；备份范围筛选必须位于统一 Topbar')
 }
 if (!workspaceSidebar.includes('.workspace-agent-filter-option {')
   || readFileSync(p('components/workspace-sidebar-menu.css'), 'utf8').includes('.workspace-agent-filter-option {')) {
   throw new Error('共享智能体筛选选项样式必须统一由 workspace-sidebar.css 持有')
 }
-if (!/@media \(max-width: 767\.98px\)[\s\S]*?\.app-shell\.is-maintenance-contextless\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/.test(workspaceSidebar)) {
-  throw new Error('移动端维护页侧栏为覆盖层，不得保留 40px 空白网格列')
+if (!/@media \(max-width: 767\.98px\)[\s\S]*?\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/.test(workspaceSidebar)) {
+  throw new Error('移动端无上下文工作区侧栏为覆盖层，不得保留 40px 空白网格列')
 }
 
 const runtimeStatus = readFileSync(p('components/RuntimeStatus.tsx'), 'utf8')
