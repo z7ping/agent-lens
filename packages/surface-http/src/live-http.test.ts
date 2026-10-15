@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
@@ -374,6 +374,46 @@ class FakeLiveService implements LiveService {
     return liveId === this.adapter.manifest.liveId ? this.adapter : null
   }
 }
+
+test('Live browser folder route lists only subdirectories with explicit POST and no file contents', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(new FakeLiveAdapter()) })
+  const root = await mkdtemp(join(tmpdir(), 'al-folder-route-'))
+  const endpoint = `http://${surface.host}:${surface.port}/api/v1/live/project-directory/browse`
+  const browse = (path: unknown) => fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  try {
+    await mkdir(join(root, 'code'))
+    await writeFile(join(root, 'token.txt'), 'do-not-expose')
+
+    const response = await browse(root)
+    assert.equal(response.status, 200)
+    const payload = await response.json() as { path: string; directories: Array<{ name: string; path: string }>; selectable: boolean }
+    assert.equal(payload.path, root)
+    assert.deepEqual(payload.directories, [{ name: 'code', path: join(root, 'code') }])
+    assert.equal(Array.isArray((payload as unknown as { breadcrumbs: unknown[] }).breadcrumbs), true)
+    assert.equal(payload.selectable, true)
+    assert.equal(JSON.stringify(payload).includes('token.txt'), false)
+
+    assert.equal((await fetch(endpoint)).status, 405)
+    assert.equal((await browse('relative/path')).status, 400)
+    assert.equal((await browse(join(root, 'missing'))).status, 404)
+    const invalidField = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path: root, recursive: true }),
+    })
+    assert.equal(invalidField.status, 400)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await surface.dispose()
+    storage.close()
+  }
+})
 
 test('Live host directory validation accepts existing directories and rejects missing paths', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })

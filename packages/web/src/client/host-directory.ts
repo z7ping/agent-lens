@@ -41,3 +41,32 @@ export async function validateHostProjectDirectory(workspacePath: string, signal
   }
   throw new Error(message || `Directory validation failed (${response.status})`)
 }
+
+export interface HostDirectoryListing {
+  path: string
+  parentPath: string | null
+  roots: string[]
+  directories: Array<{ name: string; path: string }>
+  breadcrumbs: Array<{ name: string; path: string }>
+  truncated: boolean
+  selectable: boolean
+}
+
+/** Browser-only, read-only directory navigation on the running AgentLens host. */
+export async function browseHostProjectDirectory(path?: string, signal?: AbortSignal): Promise<HostDirectoryListing> {
+  const response = await fetch('/api/v1/live/project-directory/browse', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(path ? { path } : {}),
+    signal,
+  })
+  if (!response.ok) {
+    let message = ''
+    try {
+      const payload = await response.json() as { message?: unknown }
+      if (typeof payload.message === 'string') message = payload.message
+    } catch { /* Use the HTTP status below. */ }
+    throw new Error(message || `Directory browsing failed (${response.status})`)
+  }
+  return await response.json() as HostDirectoryListing
+}
