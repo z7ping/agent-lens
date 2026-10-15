@@ -205,9 +205,6 @@
 .live-command-menu-options {
   max-height: min(300px, calc(100vh - 36px));
 }
-.live-command-menu .select-menu-option {
-  min-height: 42px;
-}
 .live-command-menu .select-menu-option > span:first-child {
   min-width: 0;
   flex: 1 1 auto;

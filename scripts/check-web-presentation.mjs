@@ -46,9 +46,95 @@ if (!(at('./styles.css') < at('./tokens.css')
   && at('./agents.css') < at('./agent-insights-responsive.css')
   && at('./review.css') + 1 === at('./review-long-session.css')
   && at('./backup.css') < at('./backup-responsive.css')
-  && at('./task-center.css') < at('./task-detail.css'))) {
-  throw new Error('正式样式加载顺序不符合“基础/Token → 壳层 → 页面所有者 → Task Surface 共享组件”契约')
+  && at('./task-center.css') < at('./task-detail.css')
+  && at('./typography.css') < at('./components/ui/ui-primitives.css')
+  && at('./components/ui/ui-primitives.css') < at('./components/workspace-sidebar.css')
+  && at('./components/ui/ui-primitives.css') < at('./agents.css')
+  && at('./components/ui/overlay.css') < at('./task-center.css')
+  && at('./components/select-menu.css') < at('./components/live-markdown-composer.css'))) {
+  throw new Error('正式样式加载顺序不符合“基础/Token → 共享 Primitive → 壳层 → 领域/页面所有者”契约')
 }
+
+
+// Explicit CSS ownership: domain variants may customize their own appearance,
+// but cannot silently redefine the shared primitive's base selector.
+const cssOwners = new Map([
+  ['.btn', 'styles.css'],
+  ['.ui-field', 'components/ui/ui-primitives.css'],
+  ['.ui-icon-button', 'components/ui/ui-primitives.css'],
+  ['.ui-disclosure', 'components/ui/ui-primitives.css'],
+  ['.ui-disclosure > summary', 'components/ui/ui-primitives.css'],
+  ['.ui-disclosure-body', 'components/ui/ui-primitives.css'],
+  ['.select-menu-trigger', 'components/select-menu.css'],
+  ['.select-menu-option', 'components/select-menu.css'],
+  ['.workspace-sidebar-filter-disclosure', 'components/workspace-sidebar.css'],
+  ['.workspace-sidebar-filter-disclosure > summary', 'components/workspace-sidebar.css'],
+])
+function webCssFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const absolute = join(dir, entry.name)
+    return entry.isDirectory() ? webCssFiles(absolute) : entry.isFile() && entry.name.endsWith('.css') ? [absolute] : []
+  })
+}
+function cssRules(source) {
+  const clean = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*@(?:reference|import|charset|namespace)[^;]*;/gm, '')
+  const result = []
+  // Flat rules also match declarations inside @media and @supports blocks.
+  for (const match of clean.matchAll(/(?:^|[{}])\s*([^{}]+?)\s*\{([^{}]*)\}/gm)) {
+    const declarations = Object.fromEntries(
+      [...match[2].matchAll(/(?:^|;)\s*([-\w]+)\s*:\s*([^;]+)/g)]
+        .map(item => [item[1], item[2].trim()]),
+    )
+    for (const selector of match[1].trim().split(',')) {
+      const name = selector.trim()
+      if (name && !name.startsWith('@')) result.push({ selector: name, declarations })
+    }
+  }
+  return result
+}
+const sharedRules = new Map()
+const fontOwners = new Map()
+for (const absolute of webCssFiles(root)) {
+  const relative = absolute.slice(root.length + 1).replaceAll('\\', '/')
+  for (const rule of cssRules(readFileSync(absolute, 'utf8'))) {
+    const owner = cssOwners.get(rule.selector)
+    if (owner && owner !== relative) {
+      throw new Error(relative + ' 越权重定义 ' + rule.selector + '，CSS 所有者是 ' + owner)
+    }
+    if (owner) sharedRules.set(rule.selector, rule.declarations)
+    if (relative !== 'components/select-menu.css'
+      && rule.selector.includes('.select-menu-option')
+      && ['height', 'min-height', 'border-width', 'border-radius'].some(key => key in rule.declarations)) {
+      throw new Error(relative + ' 禁止覆盖 SelectMenu 选项几何')
+    }
+    if (rule.selector === ':root') {
+      for (const token of ['--font-ui', '--font-mono']) {
+        if (!(token in rule.declarations)) continue
+        const previous = fontOwners.get(token)
+        if (previous) throw new Error(token + ' 重复定义：' + previous + ' 和 ' + relative)
+        fontOwners.set(token, relative)
+      }
+    }
+  }
+}
+for (const token of ['--font-ui', '--font-mono']) {
+  if (fontOwners.get(token) !== 'typography.css') throw new Error(token + ' 必须仅由 typography.css 定义')
+}
+function assertCssValue(selector, property, value) {
+  const actual = sharedRules.get(selector)?.[property]
+  if (actual !== value) throw new Error(selector + ' 的 ' + property + ' 应为 ' + value + '，实际为 ' + (actual ?? 'undefined'))
+}
+assertCssValue('.ui-disclosure', 'border', '1px solid var(--al-line)')
+assertCssValue('.workspace-sidebar-filter-disclosure', 'border', '0')
+assertCssValue('.workspace-sidebar-filter-disclosure > summary', 'height', '32px')
+assertCssValue('.workspace-sidebar-filter-disclosure > summary', 'min-height', '32px')
+assertCssValue('.workspace-sidebar-filter-disclosure > summary', 'border', '1px solid var(--al-line)')
+assertCssValue('.workspace-sidebar-filter-disclosure > summary', 'border-radius', '8px')
+assertCssValue('.workspace-sidebar-filter-disclosure > summary', 'font-size', '13px')
+assertCssValue('.select-menu-trigger', 'height', '32px')
+assertCssValue('.select-menu-trigger', 'border', '1px solid var(--al-line)')
+assertCssValue('.select-menu-trigger', 'border-radius', '8px')
+assertCssValue('.select-menu-trigger', 'font-size', '13px')
 
 const read = key => readFileSync(files[key], 'utf8')
 const css = Object.fromEntries(Object.keys(files).filter(key => key !== 'main').map(key => [key, read(key)]))
