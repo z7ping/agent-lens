@@ -428,6 +428,34 @@ async function collectDomCounters(win, label) {
   return withTimeout(win.webContents.debugger.sendCommand('Memory.getDOMCounters'), 3_000, `${label} DOM Counters`)
 }
 
+// CDP 只观测真实 DOM listener 归属，便于区分全局订阅泄漏和切换后尚未清理的树。
+async function snapshotRootEventListeners(win) {
+  const targets = {
+    window: 'window',
+    document: 'document',
+    body: 'document.body',
+    reader: "document.querySelector('.review-reader-pane')",
+    rail: "document.querySelector('.task-center-rail')",
+  }
+  const result = {}
+  for (const [name, expression] of Object.entries(targets)) {
+    try {
+      const evaluated = await withTimeout(win.webContents.debugger.sendCommand('Runtime.evaluate', { expression, objectGroup: 'acceptance-event-listeners' }), 2_000, `查看 ${name} 监听器`)
+      const objectId = evaluated.result?.objectId
+      if (!objectId) continue
+      const response = await withTimeout(win.webContents.debugger.sendCommand('DOMDebugger.getEventListeners', { objectId }), 2_000, `获取 ${name} 监听器`)
+      result[name] = Object.fromEntries(Object.entries((response.listeners || []).reduce((counts, item) => {
+        counts[item.type] = (counts[item.type] || 0) + 1
+        return counts
+      }, {})).sort(([a], [b]) => a.localeCompare(b)))
+    } catch (error) {
+      result[name] = { diagnosticError: error instanceof Error ? error.message : String(error) }
+    }
+  }
+  await win.webContents.debugger.sendCommand('Runtime.releaseObjectGroup', { objectGroup: 'acceptance-event-listeners' }).catch(() => undefined)
+  return result
+}
+
 async function runSwitchStability(win) {
   ensureDebugger(win)
   let initialCount = 0
@@ -444,10 +472,15 @@ async function runSwitchStability(win) {
   await waitForProjectedReviewDetail(win, '切换前基线')
   const beforePath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取基线任务路径')
   const before = await collectDomCounters(win, '切换前')
+  const listenerRootsBefore = await snapshotRootEventListeners(win)
   const switched = await clickTaskSequence(win, 100)
   await waitForProjectedReviewDetail(win, '切换后目标')
   const afterPath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取切换后任务路径')
   const after = await collectDomCounters(win, '切换后')
+  const listenerRootsAfter = await snapshotRootEventListeners(win)
+  await delay(1_200)
+  const afterSettled = await collectDomCounters(win, '切换后延迟稳定')
+  const listenerRootsAfterSettled = await snapshotRootEventListeners(win)
   const listenerGrowth = after.jsEventListeners - before.jsEventListeners
   const nodeGrowth = after.nodes - before.nodes
   const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
@@ -456,7 +489,7 @@ async function runSwitchStability(win) {
   if (beforePath !== afterPath) errors.push(`100 次切换前后会话路径不一致：${beforePath} → ${afterPath}`)
   if (listenerGrowth > 20) errors.push(`GC 后 Listener 增长 ${listenerGrowth}，超过 +20`)
   if (nodeGrowth > maxNodeGrowth) errors.push(`GC 后 DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
-  return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth }, errors, ok: errors.length === 0 }
+  return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, settled: { nodes: afterSettled.nodes, documents: afterSettled.documents, jsEventListeners: afterSettled.jsEventListeners }, listenerRoots: { before: listenerRootsBefore, after: listenerRootsAfter, settled: listenerRootsAfterSettled }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth, settledListeners: afterSettled.jsEventListeners - before.jsEventListeners }, errors, ok: errors.length === 0 }
 }
 
 function createAcceptanceWindow() {
