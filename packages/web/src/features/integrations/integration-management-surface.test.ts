@@ -14,7 +14,7 @@ test('智能体接入管理保留连续分组列表，改为紧凑折叠行而�
   assert.match(page, /className="integration-management-surface"/)
   assert.match(page, /className="integration-management-row"/)
   assert.match(page, /className="integration-management-disclosure"/)
-  assert.match(page, /className="integration-management-supported-disclosure"/)
+  assert.match(page, /className="integration-management-section integration-management-section-secondary"/)
   assert.doesNotMatch(page, /className="integration-management-table-head"/)
   assert.doesNotMatch(page, /<h1/)
   assert.match(integrationCss, /\.integration-management-summary\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/)
@@ -46,12 +46,14 @@ test('展开明细复用 Disclosure 并沿用真实本机路径、接入包版�
   assert.doesNotMatch(page, /child_process|execFile|spawn\(/)
 })
 
-test('未发现组默认收起，搜索、筛选和深链可展开而不吞掉结果', () => {
-  assert.match(page, /const \[supportedExpanded, setSupportedExpanded\] = useState\(false\)/)
-  assert.match(page, /supportedItems\.some\(item => item\.integrationId === targetIntegrationId\)/)
-  assert.match(page, /if \(revealSupported\) setSupportedExpanded\(true\)/)
-  assert.match(page, /open=\{supportedExpanded\}/)
-  assert.match(page, /onToggle=\{event => setSupportedExpanded\(event\.currentTarget\.open\)\}/)
+test('两组始终可见，只有智能体自身一级 Disclosure，深链自动展开目标行', () => {
+  assert.match(page, /className="integration-management-section-head"/)
+  assert.match(page, /className="integration-management-list"/)
+  assert.match(page, /className="integration-management-section integration-management-section-secondary"/)
+  assert.match(page, /open={expanded}/)
+  assert.match(page, /if \(highlighted \|\| ordering\) setExpanded\(true\)/)
+  assert.match(page, /target\?\.scrollIntoView/)
+  assert.doesNotMatch(page, /supportedExpanded|integration-management-supported-disclosure/)
 })
 
 test('智能体接入页面以 Integration Management 为管理清单，不读取 Source Facet', () => {
