@@ -94,6 +94,12 @@ export function HostDirectoryBrowser({ open, initialPath, recentPaths, onChoose,
         <Button size="small" disabled={loading} onClick={() => navigate(undefined)}>{t('center.newTask.browserHome')}</Button>
         {listing?.roots.map(root => <Button key={root} size="small" title={root} disabled={loading} onClick={() => navigate(root)}>{root}</Button>)}
       </div>
+      {listing && <nav className="host-directory-browser-breadcrumbs" aria-label={t('center.newTask.browserBreadcrumbs')}>
+        {listing.breadcrumbs.map((part, index) => <span key={part.path}>
+          {index > 0 && <UiIcon name="chevron-right" size={12}/>}
+          <Button size="small" disabled={loading || index === listing.breadcrumbs.length - 1} title={part.path} onClick={() => navigate(part.path)}>{part.name}</Button>
+        </span>)}
+      </nav>}
       {recentPaths.length > 0 && <div className="host-directory-browser-recent">
         <span>{t('center.newTask.recentDirectories')}</span>
         {recentPaths.map(path => <Button key={path} size="small" title={path} onClick={() => navigate(path)} disabled={loading}>{folderName(path)}</Button>)}
