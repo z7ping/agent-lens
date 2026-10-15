@@ -349,8 +349,11 @@ export class AgentLensApi {
     )
   }
 
-  reviewFileChanges(id: string): Promise<TaskFileChangesResponseDto> {
+  reviewFileChanges(id: string, signal?: AbortSignal): Promise<TaskFileChangesResponseDto> {
     const requestPath = `/api/v1/review/${encodeURIComponent(id)}/file-changes`
+    // A session-switch request must be cancellable without aborting the shared
+    // background/SSE aggregate read used by other consumers.
+    if (signal) return requestJson<TaskFileChangesResponseDto>(requestPath, { signal })
     return shareInFlight(
       aggregateReadInFlight,
       `review-file-changes:${id}`,
@@ -373,6 +376,7 @@ export class AgentLensApi {
       direction?: ReviewDetailDirection
       filter?: ReviewDetailFilter
       process?: ReviewProcessMode
+      signal?: AbortSignal
     } = {},
   ): Promise<ReviewSessionDetailDto> {
     const params = new URLSearchParams()
@@ -384,7 +388,7 @@ export class AgentLensApi {
     if (options.process) params.set('process', options.process)
     if (options.limit !== undefined) params.set('limit', String(Math.max(1, Math.min(options.limit, 100))))
     const query = params.toString()
-    return requestJson<ReviewSessionDetailDto>(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`)
+    return requestJson<ReviewSessionDetailDto>(`/api/v1/review/${encodeURIComponent(id)}${query ? `?${query}` : ''}`, options.signal ? { signal: options.signal } : {})
   }
 
   reviewProcessDetail(
@@ -402,8 +406,8 @@ export class AgentLensApi {
     ).then(detail => detail.interactions.find(interaction => interaction.ordinal === ordinal) ?? null)
   }
 
-  relationships(id: string): Promise<SessionRelationshipResponseDto> {
-    return requestJson(`/api/v1/relationships?logicalSessionId=${encodeURIComponent(id)}`)
+  relationships(id: string, signal?: AbortSignal): Promise<SessionRelationshipResponseDto> {
+    return requestJson(`/api/v1/relationships?logicalSessionId=${encodeURIComponent(id)}`, signal ? { signal } : {})
   }
 
   sourceRecord(id: string): Promise<SourceRecordResponseDto> {

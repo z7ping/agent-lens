@@ -151,6 +151,10 @@ async function waitForProjectedReviewDetail(win, label) {
   const deadline = Date.now() + 12_000
   while (Date.now() < deadline) {
     const state = await withTimeout(win.webContents.executeJavaScript(`(() => {
+      const pane = document.querySelector('.review-reader-pane')
+      const expected = location.pathname.startsWith('/review/') ? decodeURIComponent(location.pathname.slice('/review/'.length)) : ''
+      const sessionMatches = !expected || pane?.getAttribute('data-review-session-id') === expected
+      if (!sessionMatches) return { detail: false, roundCount: 0, processExpanded: false, thinkingCount: 0, toolCount: 0 }
       // The completed Process is intentionally folded by default. Exercise the
       // real disclosure interaction instead of requiring hidden Tool DOM rows.
       const process = document.querySelector('.task-review-process')
@@ -434,16 +438,22 @@ async function runSwitchStability(win) {
   }
   if (initialCount < 2) return { skipped: true, reason: `任务列表在 4 秒内未就绪：需要至少 2 条，实际 ${initialCount} 条`, requiredSwitches: 100, completedSwitches: 0, ok: false }
   await clickTaskSequence(win, 4)
-  await delay(750)
+  // Compare the same *settled Review UI* before and after rapid switching.
+  // A fixed sleep can sample one finished task against another still loading,
+  // spuriously counting an extra Reader tree as leaked DOM/listeners.
+  await waitForProjectedReviewDetail(win, '切换前基线')
+  const beforePath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取基线任务路径')
   const before = await collectDomCounters(win, '切换前')
   const switched = await clickTaskSequence(win, 100)
-  await delay(1500)
+  await waitForProjectedReviewDetail(win, '切换后目标')
+  const afterPath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取切换后任务路径')
   const after = await collectDomCounters(win, '切换后')
   const listenerGrowth = after.jsEventListeners - before.jsEventListeners
   const nodeGrowth = after.nodes - before.nodes
   const maxNodeGrowth = Math.max(100, Math.ceil(before.nodes * 0.25))
   const errors = []
   if (switched.completed !== 100) errors.push(`仅完成 ${switched.completed}/100 次切换`)
+  if (beforePath !== afterPath) errors.push(`100 次切换前后会话路径不一致：${beforePath} → ${afterPath}`)
   if (listenerGrowth > 20) errors.push(`GC 后 Listener 增长 ${listenerGrowth}，超过 +20`)
   if (nodeGrowth > maxNodeGrowth) errors.push(`GC 后 DOM Node 增长 ${nodeGrowth}，超过允许 ${maxNodeGrowth}`)
   return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth }, errors, ok: errors.length === 0 }
