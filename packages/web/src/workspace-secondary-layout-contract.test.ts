@@ -33,6 +33,7 @@ test('non-task workspaces share 40px linked tabs, a stable toolbar and no duplic
 test('non-task workspaces share the Task Center white surface and 1320px reading axis', () => {
   assert.match(css, /--al-workspace-content-max:\s*1320px;/)
   assert.match(css, /--al-workspace-content-inset:\s*28px;/)
+  assert.match(css, /\.app-shell\.is-contextless-workspace \.app-main \{[\s\S]*?background:\s*var\(--al-surface\);/)
   assert.match(css, /\.app-main > \.workspace-page,[\s\S]*?\.app-main > \.agents-responsive-shell,[\s\S]*?background:\s*var\(--al-surface\);/)
   assert.match(css, /\.workspace-view-tabs\s*\{[\s\S]*?padding-inline:\s*max\(var\(--al-workspace-content-inset\)/)
   assert.match(css, /\.workspace-view-toolbar\s*\{[\s\S]*?padding-inline:\s*max\(var\(--al-workspace-content-inset\)/)
