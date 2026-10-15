@@ -21,7 +21,7 @@ test('only four primary entries; backup is separate while integration belongs to
 })
 
 test('analytics, agents and backup retain only the 40px navigation rail on desktop and a drawer on mobile', () => {
-  assert.match(app, /onAgents \|\| onBackup \? 'is-contextless-workspace'/)
+  assert.match(app, /hasWorkspaceTabs \\? 'is-contextless-workspace'/)
   assert.match(sidebarCss, /\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/)
   assert.match(sidebarCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/)
 })
