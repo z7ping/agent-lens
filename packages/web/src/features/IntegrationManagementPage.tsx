@@ -95,6 +95,13 @@ function IntegrationManagementRow({
   const versions = [...new Set((installations ?? []).map(installation => installation.version).filter((version): version is string => Boolean(version)))]
   const localAgentVersion = versions.length ? versions.join(' / ') : t('installation.versionUnavailable')
   const versionComparison = agentVersionComparison(versions, latestVersion)
+  const onlineVersionLabel = latestVersion?.status === 'ready' && latestVersion.version
+    ? latestVersion.version
+    : t(latestVersion?.status === 'error'
+      ? 'managementPage.versionCheckFailedShort'
+      : latestVersion?.status === 'unsupported'
+        ? 'managementPage.versionCheckUnsupportedShort'
+        : 'managementPage.versionCheckingShort')
   const canInstall = integrationCanInstall(item.tool)
   const status = integrationManagementLifecycleState(item, t)
   const statusLabel = item.isNew && !packageState?.installed && canInstall
@@ -265,20 +272,25 @@ function IntegrationManagementRow({
           <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
         </span>
       </span>}
-      summaryMeta={<span className="integration-management-summary-states"><StatusBadge
-        className={`integration-management-status ${status.className}`}
-        tone={status.className.includes('error')
-          ? 'danger'
-          : status.className.includes('enabled')
-            ? 'success'
-            : status.className.includes('history') || status.className.includes('scanning')
-              ? 'warning'
-              : item.isNew
-                ? 'accent'
-                : 'neutral'}
-        title={status.title}
-      >{statusLabel}</StatusBadge>
+      summaryMeta={<span className="integration-management-summary-states">
+        <span className="integration-management-version-summary" role="status">
+          <span title={t('managementPage.localAgentVersion')}>{t('managementPage.versionInstalledShort')} <b>{localAgentVersion}</b></span>
+          <span title={t('managementPage.remoteAgentVersion', { source: latestVersion?.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel })}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
+        </span>
         {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
+        <StatusBadge
+          className={`integration-management-status ${status.className}`}
+          tone={status.className.includes('error')
+            ? 'danger'
+            : status.className.includes('enabled')
+              ? 'success'
+              : status.className.includes('history') || status.className.includes('scanning')
+                ? 'warning'
+                : item.isNew
+                  ? 'accent'
+                  : 'neutral'}
+          title={status.title}
+        >{statusLabel}</StatusBadge>
       </span>}
     >
       <div className="integration-management-details">
@@ -291,10 +303,6 @@ function IntegrationManagementRow({
           <div className="integration-management-fact">
             <span>{t('toolPresence.location')}</span>
             <code title={presencePath}>{presencePath || t('installation.pathUnavailable')}</code>
-          </div>
-          <div className="integration-management-fact">
-            <span>{t('managementPage.localAgentVersion')}</span>
-            <strong>{localAgentVersion}</strong>
           </div>
           <div className="integration-management-fact">
             <span>{t('installation.integrationVersion')}</span>
@@ -313,22 +321,11 @@ function IntegrationManagementRow({
         <div className="integration-management-agent-upgrade">
           <span className="integration-management-detail-label">{t('managementPage.agentUpgradeHeading')}</span>
           <div className="integration-management-version-check">
-            <span role="status">
-              {latestVersion?.status === 'ready'
-                ? t('managementPage.remoteAgentVersion', {
-                    version: latestVersion.version,
-                    source: latestVersion.source === 'npm' ? 'npm' : 'GitHub',
-                  })
-                : t(latestVersion?.status === 'error'
-                  ? 'managementPage.versionCheckFailed'
-                  : latestVersion?.status === 'unsupported'
-                    ? 'managementPage.versionCheckUnsupported'
-                    : 'managementPage.versionChecking')}
-            </span>
             {latestVersion?.status !== 'unsupported' && <Button size="small" disabled={versionChecking} loading={versionChecking}
               onClick={() => void refreshLatestVersion()}>{t('managementPage.checkVersion')}</Button>}
-            {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
-            {versionComparison === 'current' && <StatusBadge tone="success">{t('managementPage.versionCurrent')}</StatusBadge>}
+            {versionComparison === 'current' && <span className="integration-management-version-hint">{t('managementPage.versionCurrent')}</span>}
+            {versionComparison === 'unknown' && latestVersion?.status === 'ready' && <span className="integration-management-version-hint">{t('managementPage.versionComparisonUnknown')}</span>}
+            {latestVersion?.status === 'error' && <span className="integration-management-version-hint">{t('managementPage.versionCheckFailed')}</span>}
           </div>
           <p>{t('managementPage.agentUpgradeWarning')}</p>
           {methods.length > 0
@@ -526,6 +523,18 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
+
+  // The management summary has only presence/path facts; installation versions
+  // arrive through Agent detail. Hydrate discovered agents without requiring
+  // users to open each overview page first.
+  useEffect(() => {
+    if (!management || !snapshot.agentSummaries) return
+    for (const item of management.items) {
+      if (item.tool?.presence !== 'present') continue
+      const source = snapshot.agentSummaries.items.find(agent => agent.productId === item.productId)
+      if (source) void model.ensureAgentDetail(source.sourceId).catch(() => undefined)
+    }
+  }, [management, snapshot.agentSummaries, model])
 
   if (!management) {
     return <main className="workspace-page">
