@@ -33,27 +33,89 @@ export function integrationPackageUpdateAvailable(
 
 export interface AgentUpgradeMethod {
   value: string
-  labelKey: 'npmGlobal' | 'officialCli'
-  command: string
+  labelKey: 'npmGlobal' | 'officialUnix' | 'officialWindows' | 'homebrew'
+  installCommand: string
+  updateCommand: string
   docsUrl: string
 }
 
-/** Official commands, never inferred from an executable path or run by AgentLens. */
+/** Documentation-based examples, not an inferred package manager or automatic execution. */
 const OFFICIAL_AGENT_UPGRADE_METHODS: Readonly<Record<string, readonly AgentUpgradeMethod[]>> = {
   pi: [
-    { value: 'npm', labelKey: 'npmGlobal', command: 'npm install -g @mariozechner/pi-coding-agent@latest', docsUrl: 'https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent' },
+    {
+      value: 'npm', labelKey: 'npmGlobal',
+      installCommand: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
+      updateCommand: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent@latest',
+      docsUrl: 'https://www.npmjs.com/package/@earendil-works/pi-coding-agent',
+    },
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://pi.dev/install.sh | sh',
+      updateCommand: 'pi update --self',
+      docsUrl: 'https://www.npmjs.com/package/@earendil-works/pi-coding-agent',
+    },
+    {
+      value: 'installer-windows', labelKey: 'officialWindows',
+      installCommand: 'powershell -c "irm https://pi.dev/install.ps1 | iex"',
+      updateCommand: 'pi update --self',
+      docsUrl: 'https://www.npmjs.com/package/@earendil-works/pi-coding-agent',
+    },
   ],
   codex: [
-    { value: 'npm', labelKey: 'npmGlobal', command: 'npm install -g @openai/codex@latest', docsUrl: 'https://github.com/openai/codex' },
+    {
+      value: 'npm', labelKey: 'npmGlobal',
+      installCommand: 'npm install -g @openai/codex',
+      updateCommand: 'npm install -g @openai/codex@latest',
+      docsUrl: 'https://github.com/openai/codex',
+    },
+    {
+      value: 'homebrew', labelKey: 'homebrew',
+      installCommand: 'brew install --cask codex',
+      updateCommand: 'brew upgrade --cask codex',
+      docsUrl: 'https://github.com/openai/codex',
+    },
   ],
   'claude-code': [
-    { value: 'official', labelKey: 'officialCli', command: 'claude update', docsUrl: 'https://code.claude.com/docs/en/setup' },
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+      updateCommand: 'claude update',
+      docsUrl: 'https://code.claude.com/docs/en/setup',
+    },
+    {
+      value: 'installer-windows', labelKey: 'officialWindows',
+      installCommand: 'irm https://claude.ai/install.ps1 | iex',
+      updateCommand: 'claude update',
+      docsUrl: 'https://code.claude.com/docs/en/setup',
+    },
   ],
   hermes: [
-    { value: 'official', labelKey: 'officialCli', command: 'hermes update', docsUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/updating/' },
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash',
+      updateCommand: 'hermes update',
+      docsUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/updating',
+    },
+    {
+      value: 'installer-windows', labelKey: 'officialWindows',
+      installCommand: 'iex (irm https://hermes-agent.nousresearch.com/install.ps1)',
+      updateCommand: 'hermes update',
+      docsUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/installation',
+    },
   ],
   opencode: [
-    { value: 'official', labelKey: 'officialCli', command: 'opencode upgrade', docsUrl: 'https://opencode.ai/docs/cli/' },
+    {
+      value: 'npm', labelKey: 'npmGlobal',
+      installCommand: 'npm install -g opencode-ai',
+      updateCommand: 'npm install -g opencode-ai@latest',
+      docsUrl: 'https://opencode.ai/docs',
+    },
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://opencode.ai/install | bash',
+      updateCommand: 'opencode upgrade',
+      docsUrl: 'https://opencode.ai/docs/cli/',
+    },
   ],
 }
 
