@@ -298,10 +298,8 @@ function IntegrationManagementRow({
                   value={upgradeMethod}
                   ariaLabel={t('managementPage.agentUpgradeMethod')}
                   onChange={value => { setUpgradeMethod(value); setCommandCopied(false) }}
-                  options={[
-                    { value: '', label: t('managementPage.agentUpgradeSelect') },
-                    ...methods.map(method => ({ value: method.value, label: t(`managementPage.method.${method.labelKey}`) })),
-                  ]}
+                  placeholder={t('managementPage.agentUpgradeSelect')}
+                  options={methods.map(method => ({ value: method.value, label: t(`managementPage.method.${method.labelKey}`) }))}
                 />
               </div>
               {selectedMethod && <div className="integration-management-command">
