@@ -37,6 +37,7 @@ const OBSERVATION_KIND = [
   'model.changed',
   'thinking.level.changed',
   'tool.call',
+  'tool.registration',
   'tool.progress',
   'tool.result',
   'permission.request',
