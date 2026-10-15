@@ -45,8 +45,11 @@ const index = read('packages/web/index.html')
 requireText(index.includes('/agentlens-icon-small.svg'), 'Web favicon 未使用品牌图标')
 requireText(!index.includes('/favicon.ico') && !index.includes('/favicon.png'), 'Web 仍引用旧 favicon')
 
-const workspaceSidebar = read('packages/web/src/components/WorkspaceSidebar.tsx')
-requireText(workspaceSidebar.includes('src="/agentlens-icon.svg"'), 'Web 工作栏未使用主品牌图标')
+const taskCenter = read('packages/web/src/features/TaskCenterPage.tsx')
+const sidebar = read('packages/web/src/components/WorkspaceSidebar.tsx')
+requireText(taskCenter.includes('src="/agentlens-icon.svg"') && taskCenter.includes('task-center-context-brand-logo'),
+  'Task Center 工作栏未使用主品牌图标')
+requireText(sidebar.includes('workspace-sidebar-context'), '全局导航工作栏缺少 Task Center 的品牌挂载槽')
 
 const desktopPackage = read('apps/desktop/package.json')
 requireText(desktopPackage.includes('"icon": "assets/icon-app.ico"'), 'Windows EXE/安装器未使用多尺寸 ICO')
@@ -80,4 +83,4 @@ for (const asset of ['icon-app.ico', 'icon-window.png', 'tray.ico']) {
 }
 requireText(gitignore.includes('apps/desktop/build/icon.icns'), 'macOS 生成 ICNS 未加入 .gitignore')
 
-console.log('AgentLens 品牌图标检查通过：正式主母版已同步到 Web 工作栏与 Windows/macOS/Linux 桌面派生链。')
+console.log('AgentLens 品牌图标检查通过：正式主母版已同步到 Task Center 工作栏与 Windows/macOS/Linux 桌面派生链。')
