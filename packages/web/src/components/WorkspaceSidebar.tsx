@@ -115,7 +115,7 @@ export function WorkspaceSidebar({
           <span>{t('navigation:agentCount', { count: agentSelectionAgents.length })}</span>
           <IconButton size="small" onClick={onRefreshAgents} title={t('navigation:refreshAgents')} aria-label={t('navigation:refreshAgents')}><UiIcon name="refresh" size={14}/></IconButton>
         </div>
-        <SidebarFilterDisclosure variant="popover" closeOnOutside agentOrderManagement summary={selectedAgentId ? agentLabel(selectedAgentId, agentSelectionAgents.find(agent => agent.sourceId === selectedAgentId)?.displayName) : t('common:sidebarFilter.allAgents')} summaryMeta={false} agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
+        <SidebarFilterDisclosure agentOrderManagement summary={selectedAgentId ? agentLabel(selectedAgentId, agentSelectionAgents.find(agent => agent.sourceId === selectedAgentId)?.displayName) : t('common:sidebarFilter.allAgents')} summaryMeta={false} agents={agentSelectionAgents} agentSelection={{ mode: 'single', value: selectedAgentId, onChange: sourceId => { onSelectAgent(sourceId); onMobileClose() } }} />
       </div>}
 
 
