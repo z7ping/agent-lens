@@ -312,6 +312,36 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
   )
 })
 
+test('Pi 1.2 MCP 注册来源与 Codemode 嵌套调用保留为通用 Live 事实', () => {
+  const start = normalizePiLiveEvent({
+    type: 'tool_execution_start', toolCallId: 'parent-1/0', parentToolCallId: 'parent-1',
+    toolName: 'mcp__dbx__execute_query', args: { sql: 'select 1' },
+    toolSourceType: 'mcp', mcpServerId: 'dbx',
+    toolRegistration: { registry: 'pi.AgentSession.getAllTools', source: 'builtin:mcp', namespace: 'mcp__dbx' },
+  })
+  assert.deepEqual(start, {
+    type: 'tool.start', callId: 'parent-1/0', parentToolCallId: 'parent-1',
+    name: 'mcp__dbx__execute_query', toolSourceType: 'mcp', mcpServerId: 'dbx',
+    inputPreview: '{"sql":"select 1"}',
+  })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'tool_execution_end', toolCallId: 'parent-1/0', parentToolCallId: 'parent-1',
+    toolName: 'mcp__dbx__execute_query', result: { content: [{ type: 'text', text: 'ok' }] },
+    isError: false,
+  }), {
+    type: 'tool.end', callId: 'parent-1/0', parentToolCallId: 'parent-1',
+    name: 'mcp__dbx__execute_query', status: 'success',
+    output: '{"content":[{"type":"text","text":"ok"}]}',
+  })
+  const unknown = normalizePiLiveEvent({
+    type: 'tool_execution_start', toolCallId: 'tool-2',
+    toolName: 'mcp__dbx__execute_query', args: {},
+  })
+  assert.ok(unknown?.type === 'tool.start')
+  assert.equal(unknown.toolSourceType, undefined, '名称无法单独证明 MCP 归属')
+  assert.equal(unknown.mcpServerId, undefined)
+})
+
 test('Pi Live Adapter exposes queue control and restores queued messages on interrupt', async () => {
   const calls: string[] = []
   const service = {
