@@ -62,6 +62,8 @@ test('prepare, package and Windows smoke all use one version resolver', () => {
   const smoke = read('.github/workflows/alpha3-task-center-real-smoke.yml')
   assert.match(prepare, /resolveWindowsElectronRuntime\(root\)/)
   assert.match(build, /resolveWindowsElectronRuntime\(root\)/)
+  assert.match(build, /--config\.electronVersion=\$\{version\}/)
+  assert.match(build, /--config\.electronDist=\$\{distPath\}/)
   assert.match(smoke, /node scripts\/electron-runtime\.mjs/)
   assert.match(pkg.scripts['dist:win'], /build-windows-desktop\.mjs nsis --x64/)
   assert.match(pkg.scripts['dist:win:dir'], /build-windows-desktop\.mjs dir --x64/)
