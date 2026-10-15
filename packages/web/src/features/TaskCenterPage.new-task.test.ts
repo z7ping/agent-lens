@@ -56,7 +56,7 @@ test('新建实时任务的目录选择只回填路径，启动前校验路径�
   assert.doesNotMatch(picker, /await start\(/)
   assert.doesNotMatch(panel, /selectDirectoryAndStart|manualDirectoryOpen/)
   assert.match(panel, /isAbsoluteWorkspacePath\(path\)/)
-  assert.match(panel, /directoryIsInvalid \|\| undefined/)
+  assert.match(panel, /directoryIsInvalid \|\| currentDirectoryCheck\?\.valid === false \|\| undefined/)
   assert.match(panel, /recentDirectories\.map\(/)
   assert.match(panel, /validateHostProjectDirectory\(directoryPath, controller\.signal\)/)
   assert.match(panel, /controller\.abort\(\)/)
