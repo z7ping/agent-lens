@@ -1,16 +1,14 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import type {
-  AgentInstallationOverviewDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { copyText } from '../client/clipboard'
-import { AgentLensApi } from '../client/api'
 import { useClientSnapshot } from '../App'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
@@ -26,8 +24,6 @@ import {
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
 import { agentVersionComparison, checkAgentLatestVersion, type AgentLatestVersion } from './integrations/agent-online-versions'
-
-const managementVersionApi = new AgentLensApi()
 
 const capabilityLabelKey: Record<string, string> = {
   source: 'integrationCapability.source',
@@ -54,27 +50,18 @@ function isPrimaryRow(item: IntegrationManagementItemDto): boolean {
 
 function IntegrationManagementRow({
   item,
-  installations,
-  moveUpTargetId,
-  moveDownTargetId,
   model,
   discoveryScanning,
   discoveryError,
-  ordering,
   highlighted,
 }: {
   item: IntegrationManagementItemDto
-  installations?: readonly AgentInstallationOverviewDto[]
-  moveUpTargetId?: string | undefined
-  moveDownTargetId?: string | undefined
   model: AgentLensClientModel
   discoveryScanning: boolean
   discoveryError: string
-  ordering: boolean
   highlighted: boolean
 }) {
   const { t } = useTranslation('agents')
-  const { move } = useIntegrationOrder()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [removeOpen, setRemoveOpen] = useState(false)
@@ -85,18 +72,19 @@ function IntegrationManagementRow({
   const [copiedCommand, setCopiedCommand] = useState<'install' | 'update' | null>(null)
   const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
   const [versionChecking, setVersionChecking] = useState(false)
-  const [expanded, setExpanded] = useState(highlighted || ordering)
+  const [expanded, setExpanded] = useState(highlighted)
 
   useEffect(() => {
-    if (highlighted || ordering) setExpanded(true)
-  }, [highlighted, ordering])
+    if (highlighted) setExpanded(true)
+  }, [highlighted])
 
   const packageState = item.packageState
   const packageReady = integrationPackageReady(packageState)
   const canUpdatePackage = integrationPackageUpdateAvailable(packageState)
   const methods = agentUpgradeMethods(item.productId)
   const selectedMethod = methods.find(method => method.value === upgradeMethod) ?? methods[0]
-  const versions = [...new Set((installations ?? []).map(installation => installation.version).filter((version): version is string => Boolean(version)))]
+  // This view reports the installed executable version, not Source metadata or the Pi SDK package version.
+  const versions = item.tool?.presence === 'present' && item.tool.version ? [item.tool.version] : []
   const localAgentVersion = versions.length ? versions.join(' / ') : t('installation.versionUnavailable')
   const versionComparison = agentVersionComparison(versions, latestVersion)
   const onlineVersionLabel = latestVersion?.status === 'ready' && latestVersion.version
@@ -366,7 +354,7 @@ function IntegrationManagementRow({
           </div>
         </div>
 
-        {(primaryAction || canUpdatePackage || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured) || ordering) && <div className="integration-management-actions">
+        {(primaryAction || canUpdatePackage || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured)) && <div className="integration-management-actions">
           {pendingAuthorization.length > 0 && item.enabled.configured && <Button
             size="small"
             disabled={saving}
@@ -388,20 +376,6 @@ function IntegrationManagementRow({
               setRemoveOpen(true)
             }}
           >{t('managementPage.uninstall')}</Button>}
-          {ordering && <span className="integration-management-order-actions" aria-label={t('managementPage.orderAria')}>
-            <IconButton
-              size="small"
-              aria-label={t('managementPage.moveUp', { agent: item.displayName })}
-              disabled={!moveUpTargetId}
-              onClick={() => { if (moveUpTargetId) move(item.integrationId, moveUpTargetId) }}
-            ><UiIcon name="sort-up" size={14}/></IconButton>
-            <IconButton
-              size="small"
-              aria-label={t('managementPage.moveDown', { agent: item.displayName })}
-              disabled={!moveDownTargetId}
-              onClick={() => { if (moveDownTargetId) move(item.integrationId, moveDownTargetId) }}
-            ><UiIcon name="sort-down" size={14}/></IconButton>
-          </span>}
         </div>}
         {updateNotice && <p className="integration-management-note" role="status">{updateNotice}</p>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
@@ -454,10 +428,10 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const [ordering, setOrdering] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
-  const [installationVersions, setInstallationVersions] = useState<Record<string, readonly AgentInstallationOverviewDto[]>>({})
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
-  const { ordered } = useIntegrationOrder()
+  const { ordered, move, moveBy, reset } = useIntegrationOrder()
+  const [draggedId, setDraggedId] = useState('')
 
   useEffect(() => {
     if (!management || acknowledgementInFlightRef.current) return
@@ -521,27 +495,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
 
-  // Read installation versions without triggering the Agent enrichment/asset
-  // pipeline: management needs version facts, not every Agent's assets.
-  useEffect(() => {
-    if (!management || !snapshot.agentSummaries) return
-    let active = true
-    for (const item of management.items) {
-      if (item.tool?.presence !== 'present') continue
-      if (model.getSnapshot().agents?.items.some(agent => agent.productId === item.productId)) continue
-      const source = snapshot.agentSummaries.items.find(agent => agent.productId === item.productId)
-      if (!source) continue
-      void managementVersionApi.agentDetail(source.sourceId).then(detail => {
-        if (!active || !detail) return
-        setInstallationVersions(current => ({
-          ...current,
-          [item.productId]: detail.item.installations,
-        }))
-      }).catch(() => undefined)
-    }
-    return () => { active = false }
-  }, [management, snapshot.agentSummaries, model])
-
   if (!management) {
     return <main className="workspace-page">
       <div className="page-content integration-management-content">
@@ -581,22 +534,60 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           <span className="workspace-metric-card"><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
         </div>
 
+        {ordering ? <section className="integration-management-section" aria-label={t('page.orderTitle')}>
+          <div className="integration-management-section-head">
+            <h2>{t('page.orderTitle')}</h2>
+            <span className="integration-management-order-hint">{t('scope.reorderHint')}</span>
+            <Button size="small" onClick={() => { reset(); setDraggedId('') }}>{t('scope.reset')}</Button>
+          </div>
+          <div className="integration-management-order-list">
+            {items.map((item, index) => {
+              const status = integrationManagementLifecycleState(item, t)
+              return <div key={item.integrationId}
+                className="integration-management-order-row"
+                data-dragging={draggedId === item.integrationId ? 'true' : undefined}
+                draggable
+                onDragStart={(event: DragEvent<HTMLDivElement>) => {
+                  setDraggedId(item.integrationId)
+                  event.dataTransfer.effectAllowed = 'move'
+                }}
+                onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }}
+                onDrop={event => {
+                  event.preventDefault()
+                  if (draggedId && draggedId !== item.integrationId) move(draggedId, item.integrationId)
+                  setDraggedId('')
+                }}
+                onDragEnd={() => setDraggedId('')}
+              >
+                <UiIcon name="drag" size={16} className="integration-management-order-grip"/>
+                <span className="integration-management-order-number">{index + 1}</span>
+                <AgentLogo sourceId={item.integrationId} size="compact"/>
+                <span className="integration-management-order-name">{item.displayName}</span>
+                <StatusBadge tone={integrationLifecycleTone(status.className, item.isNew)}>{status.label}</StatusBadge>
+                <div className="integration-management-order-buttons">
+                  <IconButton size="small" disabled={index === 0}
+                    aria-label={t('managementPage.moveUp', { agent: item.displayName })}
+                    onClick={() => moveBy(item.integrationId, -1)}><UiIcon name="sort-up" size={14}/></IconButton>
+                  <IconButton size="small" disabled={index === items.length - 1}
+                    aria-label={t('managementPage.moveDown', { agent: item.displayName })}
+                    onClick={() => moveBy(item.integrationId, 1)}><UiIcon name="sort-down" size={14}/></IconButton>
+                </div>
+              </div>
+            })}
+          </div>
+        </section> : <>
         <section className="integration-management-section">
           <div className="integration-management-section-head">
             <h2>{t('managementPage.localAndAdded')}</h2>
             <span className="integration-management-section-count">{primaryItems.length}</span>
           </div>
           <div className="integration-management-list">
-          {primaryItems.map((item, index) => <IntegrationManagementRow
+          {primaryItems.map(item => <IntegrationManagementRow
             key={item.integrationId}
             item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-            installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations ?? installationVersions[item.productId]}
-            moveUpTargetId={primaryItems[index - 1]?.integrationId}
-            moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
             discoveryScanning={Boolean(discoveryScanning)}
             discoveryError={snapshot.integrationDiscoveryError}
-            ordering={ordering}
             highlighted={item.integrationId === targetIntegrationId}
           />)}
           {!primaryItems.length && <div className="integration-management-empty">{supportedItems.length === 0 && (searchQuery.trim() || statusFilter !== 'all') ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
@@ -609,20 +600,18 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             <span className="integration-management-section-count">{supportedItems.length}</span>
           </div>
           <div className="integration-management-list">
-            {supportedItems.map((item, index) => <IntegrationManagementRow
+            {supportedItems.map(item => <IntegrationManagementRow
               key={item.integrationId}
               item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
               installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations ?? installationVersions[item.productId]}
-              moveUpTargetId={supportedItems[index - 1]?.integrationId}
-              moveDownTargetId={supportedItems[index + 1]?.integrationId}
               model={model}
               discoveryScanning={Boolean(discoveryScanning)}
               discoveryError={snapshot.integrationDiscoveryError}
-              ordering={ordering}
               highlighted={item.integrationId === targetIntegrationId}
             />)}
           </div>
         </section>}
+        </>}
       </div>
     </div>
   </main>
