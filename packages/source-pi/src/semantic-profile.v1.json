@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1",
-  "profileVersion": "1.1.0",
+  "profileVersion": "1.2.0",
   "source": "pi",
   "sourceProtocol": "pi-session-jsonl-v3",
   "purpose": "Pi 原生事件到 AgentLens 统一观察语义的声明式契约；复杂拆块和关联逻辑仍由 Source Adapter 执行。",
@@ -136,6 +136,14 @@
       "nativeType": "compaction",
       "kind": "context.compaction",
       "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "context_edit",
+      "nativeType": "context_edit",
+      "kind": "session.lifecycle",
+      "semantic": "context.edited",
       "semanticSource": "native",
       "coverage": "complete"
     },

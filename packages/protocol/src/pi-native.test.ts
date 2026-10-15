@@ -201,3 +201,21 @@ test('Pi Native Normalizer keeps custom and unknown entries visible', () => {
   const unknown = normalizePiSessionEntry({ type: 'future_entry', id: 'x2', future: { enabled: true } })
   assert.equal(unknown[0]?.kind, 'unknown')
 })
+
+test('Pi 官方 context_edit 不是 unknown，保留目标和省略/替换语义，正文仅留原始证据', () => {
+  for (const [replacement, operation] of [[null, 'omit'], ['secret replacement', 'replace']] as const) {
+    const facts = normalizePiSessionEntry({
+      type: 'context_edit', id: 'edit-1', parentId: 'entry-1', targetId: 'message-1',
+      replacement,
+    })
+    assert.equal(facts.length, 1)
+    const fact = facts[0]
+    assert.equal(fact?.kind, 'event')
+    if (fact?.kind !== 'event') throw new Error('Pi context edit must be an event')
+    assert.equal(fact.event, 'context.edited')
+    assert.equal(fact.parentId, 'entry-1')
+    assert.equal((fact.payload as { operation: string }).operation, operation)
+    assert.equal((fact.payload as { targetEntryId: string }).targetEntryId, 'message-1')
+    assert.equal(JSON.stringify(fact.payload).includes('secret replacement'), false)
+  }
+})
