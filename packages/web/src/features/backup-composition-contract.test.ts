@@ -81,7 +81,7 @@ test('单智能体由左侧筛选驱动，主区域直接展示完整资产详�
 })
 
 test('资产范围复用工作区智能体筛选，并支持全部智能体单选入口', () => {
-  assert.match(backupPage, /const backupScopeFilter = <SidebarFilterDisclosure/)
+  assert.match(backupPage, /const backupScopeFilter = <div className="backup-agent-filter-slot"><SidebarFilterDisclosure/)
   assert.match(backupPage, /className="backup-mobile-scope">\{backupScopeFilter\}/)
   assert.match(backupPage, /showAllOption/)
   assert.match(backupPage, /selectedAssetSourceId/)
