@@ -10,6 +10,7 @@ const review = readFileSync(new URL('./features/TaskCenterPage.tsx', import.meta
 const insights = readFileSync(new URL('./features/InsightsPage.tsx', import.meta.url), 'utf8')
 const tools = readFileSync(new URL('./features/ToolsPage.tsx', import.meta.url), 'utf8')
 const agents = readFileSync(new URL('./features/AgentsResponsivePage.tsx', import.meta.url), 'utf8')
+const agentsPage = readFileSync(new URL('./features/AgentsPage.tsx', import.meta.url), 'utf8')
 const management = readFileSync(new URL('./features/IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const backup = readFileSync(new URL('./features/BackupPage.tsx', import.meta.url), 'utf8')
 
@@ -42,8 +43,9 @@ test('insights and tools use the same multiselect/project/time filter layout wit
 
 test('agents have only overview and management as global views; Pi discovery is nested', () => {
   assert.match(app, /value: 'management', label: t\('navigation:integrationManagement'\)/)
-  assert.match(agents, /<WorkspaceViewTabs\s+nested/)
-  assert.match(agents, /value: 'ecosystem'/)
+  assert.doesNotMatch(agents, /<WorkspaceViewTabs/)
+  assert.match(agentsPage, /<WorkspaceViewTabs inline/)
+  assert.match(agentsPage, /value: 'ecosystem'/)
   assert.match(management, /searchQuery/)
   assert.match(management, /statusFilter/)
   assert.doesNotMatch(agents, /agent-view-switcher/)
