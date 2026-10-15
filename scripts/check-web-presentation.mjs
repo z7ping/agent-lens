@@ -98,19 +98,25 @@ const filterConsumers = [
   ['工具分析', readFileSync(p('features/ToolsPage.tsx'), 'utf8')],
   ['资产备份', readFileSync(p('features/BackupPage.tsx'), 'utf8')],
 ]
-if (!sidebarFilter.includes("variant?: 'inline' | 'popover'")
-  || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure.is-popover > summary')
-  || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body')) {
-  throw new Error('智能体筛选样式和弹层行为必须由共享 SidebarFilterDisclosure 持有')
+const selectMenuSource = readFileSync(p('components/SelectMenu.tsx'), 'utf8')
+const selectMenuCss = readFileSync(p('components/select-menu.css'), 'utf8')
+// 统一组件必须只有一套 CSS/事件契约：页面只给业务数据，不能给样式和选择策略。
+if (!sidebarFilter.includes('nextAgentFilterSelection(agentSelection.value, sourceId, detectedIds)')
+  || /multipleSelectionBehavior|variant\?: 'inline'|closeOnOutside\?:|defaultOpen\?:|className\?:/.test(sidebarFilter)
+  || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure > summary')
+  || !workspaceSidebar.includes('.workspace-sidebar-filter-disclosure .ui-disclosure-body')
+  || /select-menu-trigger-(?:toolbar|field|pill)|SelectMenuVariant|menuWidth|variant\?:|className\?:/.test(selectMenuSource + selectMenuCss)
+  || !/\.select-menu-trigger\s*\{[^}]*height:\s*32px;/s.test(selectMenuCss)) {
+  throw new Error('智能体/项目筛选必须使用唯一共享样式及一套选择行为（32px）')
 }
 for (const [name, source] of filterConsumers) {
-  if (!/<SidebarFilterDisclosure\s+variant="popover"/.test(source)) {
-    throw new Error(`${name} 必须消费统一智能体弹层，禁止恢复页面展开式列表`)
+  if (!/<SidebarFilterDisclosure\b/.test(source)) {
+    throw new Error(`${name} 必须消费共享智能体筛选，禁止页面私有控件`)
   }
 }
 if (!appShell.includes("onIntegrations || onBackup ? 'is-maintenance-contextless'")
   || !/\.app-shell\.is-maintenance-contextless\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/.test(workspaceSidebar)
-  || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('className="backup-agent-filter"')
+  || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('className="backup-agent-filter-slot"')
   || sidebarView.includes('onBackup && <div className="workspace-context-menu')) {
   throw new Error('智能体接入与资产备份只能保留图标导航轨；备份范围筛选必须位于统一 Topbar')
 }
@@ -130,7 +136,7 @@ if (appShell.includes('workspace-sidebar-restore-button') || appShell.includes('
 if (!taskCenterPage.includes('task-center-context-brand-logo') || !workspaceSidebar.includes('.workspace-context-brand-logo')) throw new Error('AgentLens Logo 必须展示在上下文标题区，不得重新占用 40px Rail')
 if (!/\.workspace-primary-link > span\s*\{[\s\S]*?display:\s*none;/m.test(workspaceSidebar)) throw new Error('桌面一级工作区必须保持图标 Rail，不得恢复横向文字导航')
 if (!taskCenterPage.includes('className="task-center-search-panel"') || taskCenterPage.includes('searchOpen')) throw new Error('任务中心搜索必须常驻上下文栏，不得恢复折叠搜索')
-if (!taskCenterPage.includes('className="task-center-quick-filters"') || !taskCenterPage.includes('className="task-center-project-filter"')) throw new Error('任务中心必须常驻智能体 / 项目快捷筛选')
+if (!taskCenterPage.includes('className="task-center-quick-filters"') || !/<SelectMenu\s+value=\{review\.filters\.projectId\}/.test(taskCenterPage)) throw new Error('任务中心必须常驻智能体 / 项目快捷筛选')
 if (!appShell.includes('<WorkspaceTopBar') || !appShell.includes('className="workspace-breadcrumb"') || !appShell.includes('className="workspace-topbar-page-tools"')) throw new Error('右侧工作区必须保留统一单行 Topbar：面包屑 / 页面控件 / 页面操作共用同一层')
 if (!runtimeStatus.includes('<Popover') || !runtimeStatus.includes('placement="right-end"')) throw new Error('Runtime 详情必须通过统一 Portal Popover 逃离侧栏裁剪')
 if (!/\.workspace-sidebar-footer\s*\{[\s\S]*?justify-content:\s*flex-start;[\s\S]*?padding:\s*0;/m.test(sidebarInteractions)) throw new Error('设置入口必须固定在 40px 图标 Rail 左下角')
@@ -154,6 +160,11 @@ const normalizedStylesFile = files.styles.replaceAll('\\', '/')
 for (const file of cssFiles(root)) {
   const normalizedFile = file.replaceAll('\\', '/')
   const source = readFileSync(file, 'utf8')
+  // Only the SelectMenu stylesheet may define the SelectMenu trigger.
+  if (!normalizedFile.endsWith('/components/select-menu.css')
+    && /\.select-menu-trigger(?:[.#:\s]|-|$)/.test(source)) {
+    throw new Error(`${normalizedFile} 不得覆盖共享 SelectMenu 样式`)
+  }
   const tooSmall = [...pixelFonts(source), ...shorthandFonts(source)].filter(value => value > 0 && value < 12)
   if (tooSmall.length) throw new Error(`${normalizedFile} 出现小于 12px 的有效字号：${[...new Set(tooSmall)].join(', ')}px`)
 
@@ -169,6 +180,11 @@ for (const file of cssFiles(root)) {
 }
 for (const file of tsxFiles(root)) {
   const source = readFileSync(file, 'utf8')
+  for (const tag of source.matchAll(/<SelectMenu\b[^>]*>/g)) {
+    if (/\b(?:variant|className|menuWidth)\s*=/.test(tag[0])) {
+      throw new Error(`${file} 禁止指定 SelectMenu 页面变体/尺寸/样式`)
+    }
+  }
   if (/<select\b/i.test(source)) {
     throw new Error(`${file} 不得使用原生 select；统一复用 SelectMenu`)
   }
@@ -191,7 +207,7 @@ if (!/\.app-header\s*\{[\s\S]*?backdrop-filter\s*:\s*none/m.test(css.shell)) thr
 if (!css.shell.includes('.runtime-status-popover') || !css.shell.includes('.runtime-status-grid') || !css.shell.includes('.runtime-status-wide')) throw new Error('顶部运行状态事实 Popover 能力缺失')
 if (!/\.workspace-toolbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(css.shell)) throw new Error('工作区工具栏必须保持 50px 基线')
 if (!/\.workspace-topbar\s*\{[\s\S]*?height:\s*50px;[\s\S]*?min-height:\s*50px;/m.test(workspaceSidebar)) throw new Error('统一 Workspace Topbar 必须由 workspace-sidebar.css 持有 50px 单行基线')
-if (!/\.filter\s*\{[\s\S]*?height:\s*34px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('筛选控件必须保持 34px / 13px')
+if (!/\.filter\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('筛选控件必须保持 32px / 13px')
 if (!/\.scope-chip\s*\{[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*13px;/m.test(css.shell)) throw new Error('Agent 筛选 Chip 必须保持 32px / 13px')
 for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (!css.shellResponsive.includes(breakpoint)) throw new Error(`shell-responsive.css 缺少断点 ${breakpoint}`)
 if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(css.shellResponsive)) throw new Error('xs 窄窗口必须保留 Logo')
