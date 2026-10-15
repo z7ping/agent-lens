@@ -27,12 +27,12 @@
   padding: 12px 16px;
   border: 1px solid var(--al-line);
   border-radius: var(--radius-md);
-  background: var(--al-soft-2);
+  background: var(--al-surface);
 }
 
 .integration-management-summary strong {
   color: var(--al-ink);
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 720;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
