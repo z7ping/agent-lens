@@ -50,7 +50,7 @@ function registrationScope(item: TimelineItemDto): string | undefined {
   const toolName = text(payload.nativeToolName)
   if (!runtimeId || !toolName) return undefined
   const profileId = text(payload.profileId) ?? ''
-  return key([item.installationId, item.sourceId, runtimeId, profileId, toolName])
+  return key([item.installationId, item.sourceId, item.logicalSessionId, runtimeId, profileId, toolName])
 }
 
 function callScope(item: TimelineItemDto): string | undefined {
@@ -59,7 +59,7 @@ function callScope(item: TimelineItemDto): string | undefined {
   const toolName = text(payload.nativeToolName)
   if (!runtimeId || !toolName) return undefined
   const profileId = text(payload.profileId) ?? ''
-  return key([item.installationId, item.sourceId, runtimeId, profileId, toolName])
+  return key([item.installationId, item.sourceId, item.logicalSessionId, runtimeId, profileId, toolName])
 }
 
 function trustworthy(item: TimelineItemDto): boolean {
