@@ -1,11 +1,12 @@
 import { createPortal } from 'react-dom'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { UiIcon } from './UiIcon'
 
 export interface SelectMenuOption {
   value: string
   label: string
+  leading?: ReactNode
   description?: string | undefined
   keywords?: string | undefined
   tooltip?: string | undefined
@@ -241,6 +242,7 @@ export function SelectMenu({
       }}
     >
       <span className="select-menu-trigger-copy">
+        {selected?.leading && <span className="select-menu-trigger-leading" aria-hidden="true">{selected.leading}</span>}
         <span className="select-menu-trigger-label">{selectedLabel}</span>
       </span>
       <UiIcon className="select-menu-chevron" name="chevron-down" size={14}/>
@@ -288,7 +290,10 @@ export function SelectMenu({
               onMouseEnter={() => { if (!option.disabled) setActiveValue(option.value) }}
               onClick={() => choose(option.value)}
             >
-              <span><b>{displayLabel}</b>{option.description && <small>{option.description}</small>}</span>
+              <span className="select-menu-option-copy">
+                {option.leading && <span className="select-menu-option-leading" aria-hidden="true">{option.leading}</span>}
+                <span className="select-menu-option-text"><b>{displayLabel}</b>{option.description && <small>{option.description}</small>}</span>
+              </span>
               <span className="select-menu-check" aria-hidden="true">{checked && <UiIcon name="check" size={16}/>}</span>
             </button>
           })}
