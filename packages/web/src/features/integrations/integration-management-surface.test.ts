@@ -190,3 +190,21 @@ test('没有更新或本机工具未被发现时，安装/更新两条命令及�
   assert.match(page, /versionCheckFailed/)
   assert.doesNotMatch(page, /latestVersion\?\.status === 'ready' && methods\.length/)
 })
+
+test('全部智能体接入主行直接显示本机及线上版本，不再要求先展开或先进入概览', () => {
+  assert.match(page, /className="integration-management-version-summary" role="status"/)
+  assert.match(page, /managementPage\.versionInstalledShort/)
+  assert.match(page, /managementPage\.versionLatestShort/)
+  assert.match(page, /onlineVersionLabel/)
+  assert.match(page, /versionComparison === 'newer' && <StatusBadge tone="warning">/)
+  assert.match(page, /versionCheckFailedShort/)
+  assert.match(page, /versionCheckUnsupportedShort/)
+  assert.match(page, /snapshot\.agentSummaries\.items\.find\(agent => agent\.productId === item\.productId\)/)
+  assert.match(page, /model\.ensureAgentDetail\(source\.sourceId\)/)
+  assert.match(page, /item\.tool\?\.presence !== 'present'/)
+  assert.match(integrationCss, /\.integration-management-version-summary \{/)
+  assert.match(integrationCss, /\.integration-management-version-hint \{/)
+  assert.match(integrationCss, /\.integration-management-disclosure > summary > \.ui-disclosure-meta/)
+  assert.doesNotMatch(page, /latestVersion\?\.status === 'ready' && methods\.length/)
+})
+
