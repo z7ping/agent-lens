@@ -408,9 +408,14 @@ if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
 if (backupPage.includes('backup-link-btn') || backupPage.includes('ToolbarGroup') || css.backup.includes('.backup-link-btn')) {
   throw new Error('资产备份操作必须消费统一 Button，禁止私有按钮方言')
 }
-if (!readFileSync(p('features/AgentsPage.tsx'), 'utf8').includes('<StatusBadge tone={statusTone}')
+const agentOverviewPage = readFileSync(p('features/AgentsPage.tsx'), 'utf8')
+const integrationManagementPage = readFileSync(p('features/IntegrationManagementPage.tsx'), 'utf8')
+const lifecycle = readFileSync(p('features/integrations/integration-lifecycle.ts'), 'utf8')
+if (!agentOverviewPage.includes('<StatusBadge tone={integrationLifecycleTone(status.className)}')
+  || !integrationManagementPage.includes('tone={integrationLifecycleTone(status.className, item.isNew)}')
+  || !lifecycle.includes('export function integrationLifecycleTone(')
   || css.agents.includes('.agent-status {')) {
-  throw new Error('智能体状态应复用 StatusBadge 语义状态')
+  throw new Error('智能体概览与接入管理必须复用同一状态徽标及生命周期语义色映射')
 }
 if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
 if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
