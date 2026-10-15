@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next'
+import * as semver from 'semver'
 import type {
   AgentOverviewDto,
   IntegrationManagementItemDto,
