@@ -40,7 +40,7 @@
 .agent-card[data-source='hermes'] { --agent-accent: var(--src-hermes); }
 .agent-card[data-source='opencode'] { --agent-accent: var(--src-opencode); }
 
-.agent-card-head { display: flex; align-items: flex-start; gap: 11px; padding: 16px 18px 13px; }
+.agent-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 11px; padding: 16px 18px 13px; }
 .agent-identity { display: flex; min-width: 0; flex: 1; align-items: flex-start; gap: 10px; }
 .agent-identity h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .agent-identity p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
