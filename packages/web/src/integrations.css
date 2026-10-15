@@ -3,11 +3,7 @@
  * 共享 Disclosure / Button / SelectMenu 仍由各自 Primitive 定义；
  * 本文件只持有接入管理的布局和领域信息层级。
  */
-.integration-management-content {
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 20px 28px 64px;
-}
+/* 接入管理与概览、洞察、备份共用 page-content 的 1320px 内容轴和边距。 */
 
 .integration-management-surface {
   display: grid;
@@ -466,10 +462,6 @@
 }
 
 @media (max-width: 991.98px) {
-  .integration-management-content {
-    padding: 16px 20px 48px;
-  }
-
   .integration-management-summary > span {
     padding: 10px 12px;
   }
@@ -480,10 +472,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .integration-management-content {
-    padding: 12px 12px 36px;
-  }
-
   .integration-management-surface {
     gap: 12px;
   }
