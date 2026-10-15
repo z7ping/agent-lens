@@ -211,6 +211,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         waitingProject: '等待可启动项目',
         directoryRequired: '请输入要启动任务的工作目录。',
         directoryInvalid: '请输入有效的绝对路径。',
+        directoryChecking: '正在检查目录…',
+        directoryReady: '目录已验证，可以开始任务。',
         workingDirectory: '工作目录',
         recentDirectories: '最近使用的目录',
         kicker: '新建任务',
