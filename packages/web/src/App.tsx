@@ -279,9 +279,11 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const firstPresentIntegration = managedIntegrationItems.find(item =>
     item.tool?.presence === 'present' || item.tool?.presence === 'data-only'
   )
-  const firstPresentSourceId = agentSummaryItems.find(item =>
-    item.productId === firstPresentIntegration?.productId || item.sourceId === firstPresentIntegration?.integrationId
-  )?.sourceId ?? firstPresentIntegration?.integrationId
+  const firstPresentSourceId = firstPresentIntegration
+    ? agentSummaryItems.find(item =>
+      item.productId === firstPresentIntegration.productId || item.sourceId === firstPresentIntegration.integrationId
+    )?.sourceId ?? firstPresentIntegration.integrationId
+    : undefined
   const resolvedAgentOverviewSourceId = agentSelectionMap.has(agentOverviewSourceId)
     ? agentOverviewSourceId
     : firstPresentSourceId
