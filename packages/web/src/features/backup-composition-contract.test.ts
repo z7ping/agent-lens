@@ -26,15 +26,14 @@ test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定
   assert.match(backupPage, /sourceDot\(source\.sourceId\)/)
 })
 
-test('Backup 默认以当前资产为主视图，并把视图切换注入统一工作区顶栏', () => {
-  assert.match(backupPage, /useState<'assets' \| 'history'>\('assets'\)/)
-  assert.match(backupPage, /createPortal\(<div className="backup-topbar-controls"/)
-  assert.match(backupPage, /<ToolbarGroup className="backup-view-switcher" role="group"/)
-  assert.match(backupPage, /aria-pressed=\{activeView === 'assets'\}/)
-  assert.match(backupPage, /scope-chip-active/)
-  assert.match(backupPage, /t\('assetView\.currentTab'\)/)
-  assert.match(backupPage, /t\('assetView\.historyTab'\)/)
+test('Backup 默认以当前资产为主视图，URL 二级导航控制快照历史', () => {
+  assert.match(backupPage, /searchParams.get\('view'\) === 'history'/)
+  assert.match(backupPage, /createPortal\(<div className="backup-toolbar-controls"/)
+  assert.match(app, /<WorkspaceViewTabs/)
+  assert.match(app, /t\('backup:assetView.currentTab'\)/)
+  assert.match(app, /t\('backup:assetView.historyTab'\)/)
   assert.match(backupPage, /activeView === 'assets'/)
+  assert.doesNotMatch(backupPage, /backup-view-switcher/)
   assert.doesNotMatch(backupPage, /className="future-kpis"/)
   assert.doesNotMatch(backupPage, /className="backup-restore-section"/)
 })
@@ -71,7 +70,7 @@ test('文件规模与真实路径在智能体行内降级展示，不再占据�
   assert.doesNotMatch(backupPage, /className="backup-agent-size"/)
 })
 
-test('单智能体由左侧筛选驱动，主区域直接展示完整资产详情', () => {
+test('单智能体由共享业务工具栏筛选驱动，主区域直接展示完整资产详情', () => {
   assert.match(backupPage, /const focusedSource = selectedAssetSourceId/)
   assert.match(backupPage, /className="backup-agent-detail"/)
   assert.match(backupPage, /className="backup-asset-kind-list"/)
@@ -89,7 +88,7 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
   assert.match(sidebarFilter, /agentSelection\.mode === 'multiple' \|\| showAllOption/)
 })
 
-test('导入、创建与视图切换和面包屑共用一条 Workspace Topbar', () => {
+test('导入与创建位于业务工具栏，视图切换位于独立的二级导航行', () => {
   assert.match(app, /function WorkspaceTopBar/)
   assert.match(app, /className="workspace-topbar-page-tools"/)
   assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} onSelectedAssetSourceIdChange=\{setBackupAssetSourceId\} agents=\{agentSelectionItems\} topbarHost=\{workspaceTopbarHost\} \/>/)
