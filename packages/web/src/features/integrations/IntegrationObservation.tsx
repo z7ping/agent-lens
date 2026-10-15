@@ -4,7 +4,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
-import { sourceDot } from '../../components/AgentScope'
+import { AgentLogo } from '../../components/AgentLogo'
 import { Button, StatusBadge } from '../../components/ui'
 import {
   integrationManagementLifecycleState,
@@ -144,7 +144,7 @@ export function IntegrationOnlyObservationCard({
   return <article className="agent-card agent-integration-placeholder" data-source={management.integrationId}>
     <header className="agent-card-head">
       <div className="agent-identity">
-        <span className={`source-dot large ${sourceDot(management.integrationId)}`}/>
+        <AgentLogo sourceId={management.integrationId} size="large"/>
         <div><h2>{management.displayName}</h2></div>
       </div>
       <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>

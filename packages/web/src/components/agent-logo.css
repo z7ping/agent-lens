@@ -1,0 +1,21 @@
+/* Shared brand-mark geometry (only this file owns agent-logo styling). */
+.agent-logo {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--al-muted);
+}
+.agent-logo--compact { width: 16px; height: 16px; }
+.agent-logo--large { width: 28px; height: 28px; }
+.agent-logo > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+:root[data-theme='dark'] .agent-logo--monochrome > img {
+  filter: invert(1);
+}

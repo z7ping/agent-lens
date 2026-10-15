@@ -15,6 +15,7 @@ import './semantic-colors.css'
 // Shared UI primitives must load before shell, domain and page styling.
 import './components/ui/ui-primitives.css'
 import './components/ui/overlay.css'
+import './components/agent-logo.css'
 import './components/select-menu.css'
 import './shell.css'
 import './components/workspace-sidebar.css'
