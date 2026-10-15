@@ -9,6 +9,7 @@ import {
   type ReviewNodeSourceDto,
   type ReviewToolNodeDto,
   type TimelineItemDto,
+  ToolRegistrationIndex,
 } from '@agent-lens/protocol'
 
 export function asRecord(value: JsonValue): Record<string, JsonValue>
@@ -137,9 +138,11 @@ function reviewNodeSource(item: TimelineItemDto): ReviewNodeSourceDto {
   }
 }
 
-export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
+export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistrationIndex(items)): ReviewNodeDto[] {
   const nodes: ReviewNodeDto[] = []
   const toolsByCallId = new Map<string, ReviewToolNodeDto>()
+  const scopedCallId = (item: TimelineItemDto, callId: string) =>
+    JSON.stringify([item.installationId, item.sourceId, item.sourceSessionId, callId])
 
   for (const item of items) {
     if (item.kind === 'message.user' || item.kind === 'message.assistant' || item.kind === 'message.commentary' || item.kind === 'message.reasoning') {
@@ -170,9 +173,19 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
       continue
     }
 
+    if (item.kind === 'tool.registration') continue // Canonical metadata is not a Task activity row.
+
     if (item.kind === 'tool.call') {
       const payload = asRecord(item.payload)
       const id = toolCallId(item)
+      const direct = toolOrigin(item)
+      const registered = registry.resolve(item)
+      // Conflicting native facts are not a license to guess a classification.
+      const conflict = registered && (
+        (direct.toolSourceType && direct.toolSourceType !== registered.toolSourceType)
+        || (direct.mcpServerId && direct.mcpServerId !== registered.mcpServerId)
+      )
+      const origin = conflict ? {} : registered ?? direct
       const node: ReviewToolNodeDto = {
         type: 'tool',
         id: item.id,
@@ -180,24 +193,25 @@ export function buildNodes(items: TimelineItemDto[]): ReviewNodeDto[] {
         sourceId: item.sourceId,
         ...reviewNodeSource(item),
         name: toolName(item),
-        ...toolOrigin(item),
+        ...origin,
+        ...(registered && !conflict ? { registrationObservationId: registered.registrationObservationId } : {}),
         ...(id ? { callId: id } : {}),
         status: 'running',
         startedAt: item.effectiveAt,
         ...(payload.input !== undefined ? { input: payload.input } : {}),
         payload: item.payload,
-        evidence: item.evidence,
+        evidence: registered && !conflict ? [...item.evidence, ...registered.evidence] : item.evidence,
         observationIds: [item.id],
       }
       nodes.push(node)
-      if (id) toolsByCallId.set(id, node)
+      if (id) toolsByCallId.set(scopedCallId(item, id), node)
       continue
     }
 
     if (item.kind === 'tool.result') {
       const payload = asRecord(item.payload)
       const id = toolCallId(item)
-      const linked = id ? toolsByCallId.get(id) : undefined
+      const linked = id ? toolsByCallId.get(scopedCallId(item, id)) : undefined
       if (linked) {
         linked.endedAt = item.effectiveAt
         linked.status = payload.success === false ? 'error' : payload.success === true ? 'success' : 'unknown'
@@ -250,6 +264,7 @@ export function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDt
   }
 
   for (const item of items) {
+    if (item.kind === 'tool.registration') continue
     if (item.kind === 'message.user') linearRoot = item.id
     const root = rootUser(item) ?? linearRoot
     if (!root) {
@@ -270,7 +285,7 @@ export function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDt
   return groups
 }
 
-export function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdinal = 1): ReviewInteractionDto[] {
+export function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdinal = 1, registry?: ToolRegistrationIndex): ReviewInteractionDto[] {
   return groups.map((group, index) => {
     const ordinal = startingOrdinal + index
     return {
@@ -279,11 +294,11 @@ export function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdi
       trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
       startedAt: group[0]!.effectiveAt,
       endedAt: group[group.length - 1]!.effectiveAt,
-      nodes: buildNodes(group),
+      nodes: buildNodes(group, registry),
     }
   })
 }
 
 export function buildInteractions(items: TimelineItemDto[], startingOrdinal = 1): ReviewInteractionDto[] {
-  return buildInteractionGroups(splitInteractionGroups(items), startingOrdinal)
+  return buildInteractionGroups(splitInteractionGroups(items), startingOrdinal, new ToolRegistrationIndex(items))
 }
