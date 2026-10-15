@@ -313,6 +313,7 @@ export class ReviewProjection {
               id: node.id,
               kind: 'tool.call' as const,
               installationId: summary.installationId,
+              logicalSessionId,
               sourceId: node.sourceId,
               effectiveAt: node.at,
               payload: node.payload,
