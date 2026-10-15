@@ -22,7 +22,8 @@ test('一级工作区统一使用单行 Workspace Topbar', () => {
 test('面包屑只作为 Topbar 左侧内容，不再拥有独立行高和边框', () => {
   assert.match(workspaceCss, /\.workspace-breadcrumb \{[\s\S]*?flex: 0 1 auto;/)
   assert.doesNotMatch(workspaceCss, /\.workspace-breadcrumb \{[\s\S]*?flex: 0 0 38px;/)
-  assert.doesNotMatch(workspaceCss, /\.workspace-breadcrumb \{[\s\S]*?border-bottom:/)
+  const breadcrumbStyles = workspaceCss.match(/\.workspace-breadcrumb\s*\{([^}]*)\}/)?.[1] ?? ''
+  assert.doesNotMatch(breadcrumbStyles, /border-bottom:/)
 })
 
 test('Backup 使用统一 40px 二级标签 + 独立业务工具栏，不恢复页面私有 Toolbar', () => {
