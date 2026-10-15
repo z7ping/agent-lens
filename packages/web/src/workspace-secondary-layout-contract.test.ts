@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
+import { orderAgentsByPreference, resolveAgentOverviewSource } from './components/agent-order'
 
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8')
 const sidebar = readFileSync(new URL('./components/WorkspaceSidebar.tsx', import.meta.url), 'utf8')
@@ -44,6 +45,29 @@ test('non-task workspaces share the Task Center white surface and 1320px reading
   assert.match(agentLayoutCss, /\.agent-insights-rail \{[\s\S]*?max-width:\s*var\(--al-workspace-content-max, 1320px\);/)
   assert.match(tokensCss, /--al-surface:#FFFFFF;/)
   assert.match(tokensCss, /:root\[data-theme='dark'\] \{[\s\S]*?--al-surface:#171A20;/)
+})
+
+test('agent overview follows the visible order, explicit URL and last manual selection', () => {
+  const agents = [
+    { sourceId: 'claude-code' },
+    { sourceId: 'codex' },
+    { sourceId: 'pi' },
+  ]
+  const visible = orderAgentsByPreference(agents, ['pi', 'codex'])
+  const ids = visible.map(agent => agent.sourceId)
+  assert.deepEqual(ids, ['pi', 'codex', 'claude-code'])
+  assert.equal(resolveAgentOverviewSource(ids, '', ''), 'pi', 'first visible option is the default')
+  assert.equal(resolveAgentOverviewSource(ids, '', 'codex'), 'codex', 'retain last manual selection')
+  assert.equal(resolveAgentOverviewSource(ids, 'claude-code', 'codex'), 'claude-code', 'URL wins')
+  assert.equal(resolveAgentOverviewSource(ids, 'removed-agent', ''), 'pi', 'stale URL falls back')
+  assert.equal(resolveAgentOverviewSource(ids, 'removed-agent', 'codex'), 'codex')
+  assert.equal(resolveAgentOverviewSource([], '', ''), '')
+  assert.match(app, /const \{ ordered: integrationDisplayOrder \} = useIntegrationOrder\(\)/)
+  assert.match(app, /orderAgentsByPreference\(agentSelectionItems, integrationDisplayOrder\)/)
+  assert.match(app, /requestedAgentId = onAgents \? new URLSearchParams\(location\.search\)\.get\('agent'\)/)
+  assert.match(app, /<IntegrationOrderProvider[\s\S]*?<Shell model=\{model\}\/?>/)
+  assert.doesNotMatch(app, /const firstPresentIntegration =/)
+  assert.doesNotMatch(app, /setAgentOverviewSourceId\(resolvedAgentOverviewSourceId\)/)
 })
 
 test('task center preserves its original independently scrolling session rail', () => {
