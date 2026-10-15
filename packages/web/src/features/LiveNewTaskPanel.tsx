@@ -31,6 +31,12 @@ function basename(path: string): string {
   return parts.at(-1) ?? path
 }
 
+/** Accept only host-absolute paths; the Live start API remains authoritative for existence and permissions. */
+function isAbsoluteWorkspacePath(value: string): boolean {
+  const path = value.trim()
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\/]+[\\/][^\\/]+/.test(path)
+}
+
 export function LiveNewTaskPanel({
   options,
   preferredProjectId,
@@ -53,7 +59,6 @@ export function LiveNewTaskPanel({
   const projectSelectionInitializedRef = useRef(false)
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
-  const [manualDirectoryOpen, setManualDirectoryOpen] = useState(false)
   const [manualDirectory, setManualDirectory] = useState('')
   const [taskTitle, setTaskTitle] = useState('')
   const [launchMode, setLaunchMode] = useState<'existing' | 'directory'>('existing')
@@ -101,6 +106,18 @@ export function LiveNewTaskPanel({
     () => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })),
     [options],
   )
+  const recentDirectories = useMemo(() => {
+    const seen = new Set<string>()
+    return [...options]
+      .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))
+      .filter(option => {
+        if (!option.cwd.trim() || seen.has(option.cwd)) return false
+        seen.add(option.cwd)
+        return true
+      })
+      .slice(0, 3)
+  }, [options])
+  const directoryIsInvalid = Boolean(manualDirectory.trim()) && !isAbsoluteWorkspacePath(manualDirectory)
   const agentOptions = useMemo(() => products.map(product => ({
     value: product.liveId,
     label: product.displayName,
@@ -143,14 +160,13 @@ export function LiveNewTaskPanel({
     }
   }
 
-  const selectDirectoryAndStart = async () => {
-    if (starting || selectingDirectory || !available || !workspaceSupported) return
+  const selectDirectory = async () => {
+    if (starting || selectingDirectory || !workspaceSupported) return
     setSelectingDirectory(true)
     setError('')
     try {
       const path = await selectHostProjectDirectory()
-      if (!path) return
-      await start(path, basename(path))
+      if (path) setManualDirectory(path)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -164,13 +180,16 @@ export function LiveNewTaskPanel({
       setError(t('center.newTask.directoryRequired'))
       return
     }
+    if (!isAbsoluteWorkspacePath(path)) {
+      setError(t('center.newTask.directoryInvalid'))
+      return
+    }
     await start(path, basename(path))
   }
 
   const selectLaunchMode = (mode: 'existing' | 'directory') => {
     setLaunchMode(mode)
     setError('')
-    if (mode === 'directory' && !nativeDirectoryPicker) setManualDirectoryOpen(true)
   }
 
   return <div className="task-center-new">
@@ -243,22 +262,36 @@ export function LiveNewTaskPanel({
                 </div>
               </section>
             : <section className="task-center-launch-panel" aria-label={t('center.newTask.newProject')}>
-                {nativeDirectoryPicker && <div className="task-center-new-directory-actions">
-                  <Button variant="primary" loading={selectingDirectory} disabled={!available || starting} onClick={() => void selectDirectoryAndStart()}>{t('center.newTask.selectDirectory')} <UiIcon name="arrow-right" size={14}/></Button>
-                  <Button size="small" disabled={!available || starting} onClick={() => { setManualDirectoryOpen(value => !value); setError('') }}>{t('center.newTask.inputPath')}</Button>
+                <div className="task-center-new-manual-directory">
+                  <label className="task-center-directory-field">
+                    <span>{t('center.newTask.workingDirectory')}</span>
+                    <Input
+                      value={manualDirectory}
+                      onChange={event => { setManualDirectory(event.target.value); setError('') }}
+                      placeholder={t('center.newTask.pathPlaceholder')}
+                      aria-label={t('center.newTask.pathAria')}
+                      aria-invalid={directoryIsInvalid || undefined}
+                      disabled={starting || selectingDirectory}
+                      autoComplete="off"
+                      onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) void startManualDirectory() }}
+                    />
+                  </label>
+                  {nativeDirectoryPicker && <Button loading={selectingDirectory} disabled={starting} onClick={() => void selectDirectory()}><UiIcon name="folder-open" size={14}/> {t('center.newTask.selectDirectory')}</Button>}
+                </div>
+                {directoryIsInvalid
+                  ? <p className="task-center-directory-error" role="alert">{t('center.newTask.directoryInvalid')}</p>
+                  : <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
+                {recentDirectories.length > 0 && <div className="task-center-recent-directories">
+                  <span>{t('center.newTask.recentDirectories')}</span>
+                  <div className="task-center-recent-directory-items">
+                    {recentDirectories.map(option => <Button key={option.cwd} size="small" title={option.cwd} onClick={() => { setManualDirectory(option.cwd); setError('') }} disabled={starting || selectingDirectory}>
+                      <UiIcon name="folder" size={14}/> {basename(option.cwd)}
+                    </Button>)}
+                  </div>
                 </div>}
-                {(!nativeDirectoryPicker || manualDirectoryOpen) && <div className="task-center-new-manual-directory">
-                  <Input
-                    value={manualDirectory}
-                    onChange={event => setManualDirectory(event.target.value)}
-                    placeholder={t('center.newTask.pathPlaceholder')}
-                    aria-label={t('center.newTask.pathAria')}
-                    disabled={starting}
-                    onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) void startManualDirectory() }}
-                  />
-                  <Button variant="primary" loading={starting} disabled={!available} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
-                  {!nativeDirectoryPicker && <p className="task-center-new-directory-hint">{t('center.newTask.pathHint')}</p>}
-                </div>}
+                <div className="task-center-launch-panel-actions">
+                  <Button variant="primary" loading={starting} disabled={!available || selectingDirectory || !manualDirectory.trim() || directoryIsInvalid} onClick={() => void startManualDirectory()}>{t('center.newTask.openPath')} <UiIcon name="arrow-right" size={14}/></Button>
+                </div>
               </section>}
         </> : <section className="task-center-direct-start" aria-label={t('center.newTask.startAgent')}>
           <div className="task-center-direct-start-copy">
