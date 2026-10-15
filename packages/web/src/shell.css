@@ -462,6 +462,16 @@
   scrollbar-gutter: stable;
 }
 
+/* Shared metric surfaces: Insights and Integration Management share one visual contract. */
+.workspace-metric-card {
+  min-width: 0;
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+  background: var(--al-surface);
+}
+
 /* Non-session workspaces share one centered content axis and horizontal inset. */
 .tools-content,
 .insights-content,
