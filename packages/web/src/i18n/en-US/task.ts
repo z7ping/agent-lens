@@ -211,6 +211,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
         waitingProject: 'Waiting for a launchable project',
         directoryRequired: 'Enter a working directory for the task.',
         directoryInvalid: 'Enter a valid absolute path.',
+        directoryChecking: 'Checking directory…',
+        directoryReady: 'Directory verified. Ready to start.',
         workingDirectory: 'Working directory',
         recentDirectories: 'Recently used directories',
         kicker: 'New task',
