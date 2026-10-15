@@ -110,7 +110,7 @@ export class ReviewProjection {
       ? lifecycleActivity.parentSessionId
       : undefined
     const toolCount = observations.filter(item => item.kind === 'tool.call').length
-    const toolEventCount = observations.filter(item => item.kind.startsWith('tool.')).length
+    const toolEventCount = observations.filter(item => item.kind.startsWith('tool.') && item.kind !== 'tool.registration').length
     const errorCount = observations.filter(observationError).length
     return {
       id: session.id,
