@@ -19,7 +19,7 @@ test('MCP evidence has priority over misleading keywords in native tool names', 
 test('MCP origin metadata survives a normalized Live start and later output/end events', () => {
   const normalized = parseLiveEventDto({
     type: 'tool.start', name: 'dbx_execute_query', callId: 'call-1',
-    toolSourceType: 'mcp', mcpServerId: 'dbx', inputPreview: '{"sql":"SELECT 1"}',
+    toolSourceType: 'mcp', mcpServerId: 'dbx', parentToolCallId: 'codemode-1', inputPreview: '{"sql":"SELECT 1"}',
   })
   assert.ok(normalized?.type === 'tool.start')
   assert.equal(normalized.toolSourceType, 'mcp')
@@ -33,11 +33,12 @@ test('MCP origin metadata survives a normalized Live start and later output/end 
   })
   let items = reduceLiveTaskEvent([], envelope(1, normalized))
   items = reduceLiveTaskEvent(items, envelope(2, { type: 'tool.output', callId: 'call-1', output: '| col | val |' }))
-  items = reduceLiveTaskEvent(items, envelope(3, { type: 'tool.end', callId: 'call-1', status: 'success' }))
+  items = reduceLiveTaskEvent(items, envelope(3, { type: 'tool.end', callId: 'call-1', parentToolCallId: 'codemode-1', status: 'success' }))
   const tool = items.find(item => item.kind === 'tool')
   assert.ok(tool?.kind === 'tool')
   assert.equal(tool.toolSourceType, 'mcp')
   assert.equal(tool.mcpServerId, 'dbx')
+  assert.equal(tool.parentToolCallId, 'codemode-1')
 })
 
 test('unknown tool names are not turned into Shell without trusted evidence', () => {
