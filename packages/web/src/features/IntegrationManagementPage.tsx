@@ -274,7 +274,7 @@ function IntegrationManagementRow({
   </article>
 }
 
-export function IntegrationManagementPage({ model, topbarHost }: { model: AgentLensClientModel; topbarHost?: HTMLDivElement | null }) {
+export function IntegrationManagementPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
   const [searchParams] = useSearchParams()
@@ -347,13 +347,13 @@ export function IntegrationManagementPage({ model, topbarHost }: { model: AgentL
   }
 
   return <main className="workspace-page">
-    {topbarHost ? createPortal(
+    {toolbarHost ? createPortal(
       <ToolbarGroup className="integration-management-topbar-tools">
         <Button size="small" onClick={() => setOrdering(value => !value)}>
           {ordering ? t('page.orderDone') : t('page.manageOrder')}
         </Button>
       </ToolbarGroup>,
-      topbarHost,
+      toolbarHost,
     ) : null}
     <div className="page-content integration-management-content">
       <div className="integration-management-surface">
