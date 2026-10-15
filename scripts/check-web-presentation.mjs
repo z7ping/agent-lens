@@ -288,7 +288,7 @@ if (!/\.backup-asset-overview\s*\{[\s\S]*?display:\s*flex;[\s\S]*?background:\s*
 }
 if (!appShell.includes('toolbarHost={workspaceToolbarHost}')
   || !appShell.includes('<WorkspaceViewTabs')
-  || !/\\.workspace-view-tabs\\s*\\{[\\s\\S]*?height:\\s*40px;/.test(workspaceSidebar)
+  || !/\.workspace-view-tabs\s*\{[\s\S]*?height:\s*40px;/.test(workspaceSidebar)
   || !appShell.includes('className="workspace-view-toolbar"')) {
   throw new Error('洞察 / 智能体 / 资产备份必须共享 40px 二级导航和独立业务工具栏')
 }
