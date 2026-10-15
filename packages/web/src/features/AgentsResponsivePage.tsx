@@ -55,8 +55,19 @@ export function AgentsResponsivePage({
 
   const setActiveView = (view: AgentWorkspaceView) => {
     const next = new URLSearchParams(searchParams)
-    if (view === 'overview') next.delete('view')
-    else next.set('view', view)
+    if (view === 'overview') {
+      next.delete('view')
+      if (sourceId) next.set('agent', sourceId)
+    } else {
+      next.set('view', view)
+      if (view === 'management' && sourceId) {
+        const selected = agents.find(item => item.sourceId === sourceId)
+        const management = snapshot.integrationManagement?.items.find(item =>
+          item.integrationId === sourceId || (selected && item.productId === selected.productId),
+        )
+        next.set('agent', management?.integrationId ?? sourceId)
+      }
+    }
     setSearchParams(next, { replace: true })
   }
 
