@@ -123,11 +123,11 @@ if (!primaryNavigation.includes("id: 'backup', to: '/backup'") || !primaryNaviga
   || sidebarView.includes('workspace-settings-management-title') || sidebarView.includes("navigate('/integrations')")) {
   throw new Error('资产备份必须为一级入口；接入管理只属于智能体工作区，不得留在设置中')
 }
-if (!appShell.includes("onAgents || onBackup ? 'is-contextless-workspace'")
+if (!appShell.includes("hasWorkspaceTabs ? 'is-contextless-workspace'")
   || !/\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/.test(workspaceSidebar)
   || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('className="backup-agent-filter-slot"')
   || sidebarView.includes('onBackup && <div className="workspace-context-menu')) {
-  throw new Error('智能体与资产备份只能保留图标导航轨；备份范围筛选必须位于统一 Topbar')
+  throw new Error('洞察、智能体与备份只能保留图标导航轨；业务筛选必须位于统一工具栏')
 }
 if (!workspaceSidebar.includes('.workspace-agent-filter-option {')
   || readFileSync(p('components/workspace-sidebar-menu.css'), 'utf8').includes('.workspace-agent-filter-option {')) {
@@ -232,7 +232,7 @@ if (!css.insights.includes('使用洞察正式样式') || !css.insights.includes
 if (!css.agents.includes('智能体概览正式样式') || !css.agents.includes(".agent-card[data-source='hermes']") || !css.agents.includes(".agent-card[data-source='opencode']") || !css.agents.includes('.frequent-asset-row') || !css.agents.includes('.skill-funnel')) throw new Error('智能体概览关键能力样式缺失')
 if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentResponsive.includes('.agents-responsive-shell') || !css.agentResponsive.includes('.agent-insights-rail')) throw new Error('Agents xxl 响应式必须由 agent-insights-responsive.css 持有')
 if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
-  || !css.backup.includes('.backup-topbar-controls')
+  || !css.backup.includes('.backup-toolbar-controls')
   || !css.backup.includes('.backup-assets-surface')
   || !css.backup.includes('.backup-asset-overview')
   || !css.backup.includes('.backup-agent-list')
@@ -249,9 +249,9 @@ if (!css.backupResponsive.includes('.backup-agent-group') || !css.backupResponsi
 const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
 for (const required of [
   "from '../components/ui'",
-  'createPortal(<div className="backup-topbar-controls"',
+  'createPortal(<div className="backup-toolbar-controls"',
   '<ToolbarGroup className="backup-toolbar-actions" align="end">',
-  'scope-chip-active',
+  "searchParams.get('view') === 'history'",
   'className="backup-snapshot-header"',
   '<StatusBadge',
   '<IconButton',
@@ -286,8 +286,11 @@ if (!/\.backup-asset-overview\s*\{[\s\S]*?display:\s*flex;[\s\S]*?background:\s*
   || !css.backup.includes('.backup-agent-list')) {
   throw new Error('当前资产必须保留轻量摘要与“智能体 → 核心资产 / 数据”分组阅读轴，不能退化为空散文本列表')
 }
-if (!appShell.includes('topbarHost={workspaceTopbarHost}')) {
-  throw new Error('资产备份页面控件必须通过统一 Workspace Topbar Host 注入，不得恢复第二条横向控制栏')
+if (!appShell.includes('toolbarHost={workspaceToolbarHost}')
+  || !appShell.includes('<WorkspaceViewTabs')
+  || !/\\.workspace-view-tabs\\s*\\{[\\s\\S]*?height:\\s*40px;/.test(workspaceSidebar)
+  || !appShell.includes('className="workspace-view-toolbar"')) {
+  throw new Error('洞察 / 智能体 / 资产备份必须共享 40px 二级导航和独立业务工具栏')
 }
 if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
   throw new Error('资产备份状态必须复用 StatusBadge，不得恢复页面私有 badge 方言')
