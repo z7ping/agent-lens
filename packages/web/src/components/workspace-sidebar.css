@@ -1058,8 +1058,11 @@
   }
 }
 
-@media (max-width: 991.98px) {
+@media (min-width: 768px) and (max-width: 991.98px) {
   .app-main { --al-workspace-content-inset: 18px; }
+}
+
+@media (max-width: 991.98px) {
   .workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy b,
   .workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy > span { display: none; }
   .app-shell {
