@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { AgentInstallationOverviewDto } from '@agent-lens/protocol'
-import { installationChoices } from './agent-installation-choices'
+import { installationChoiceKey, installationChoices } from './agent-installation-choices'
 
 const installation = (id: string, configRoot: string, version = '0.84.4'): AgentInstallationOverviewDto => ({
   id,
@@ -40,4 +40,11 @@ test('POSIX path casing is distinct while Windows roots are case-insensitive', (
     installation('win-b', 'd:/agents/pi/'),
   ])
   assert.deepEqual(choices.map(item => item.id), ['upper', 'lower', 'win-a'])
+})
+
+test('distinct IDs grouped in the selector share the same key for asset binding aggregation', () => {
+  assert.equal(
+    installationChoiceKey(installation('id-a', 'C:\\Users\\Administrator\\.pi\\agent')),
+    installationChoiceKey(installation('id-b', 'c:/users/administrator/.pi/agent/')),
+  )
 })
