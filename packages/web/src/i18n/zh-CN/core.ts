@@ -243,6 +243,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     maintenance: '维护',
     refreshAgents: '刷新智能体',
     agentSelection: '选择智能体',
+    agentViews: '智能体视图',
     backupScope: '资产范围',
     agentCount: '{{count}} 个智能体',
     sourceCount: '{{count}} 个来源',
@@ -256,8 +257,8 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     reconnecting: '正在重连',
   },
   settings: {
-    openMenu: '打开设置与维护菜单',
-    menu: '设置与维护',
+    openMenu: '打开设置菜单',
+    menu: '设置',
     management: '管理',
     appearance: '外观',
     maintenanceAndAppearance: '管理与外观',
