@@ -245,6 +245,53 @@
   line-height: 1.45;
 }
 
+
+/* Executable upgrades only offer verified commands for manual copying. */
+.integration-management-agent-upgrade {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+  background: var(--al-surface);
+}
+.integration-management-agent-upgrade > p,
+.integration-management-agent-upgrade > small {
+  margin: 0;
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.integration-management-upgrade-method {
+  width: min(280px, 100%);
+  min-width: 0;
+}
+.integration-management-command {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.integration-management-command > code {
+  max-width: 100%;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-sm);
+  background: var(--al-soft-2);
+  color: var(--al-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.integration-management-command > a {
+  color: var(--al-accent);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .integration-management-detail-section {
   display: flex;
   min-width: 0;
