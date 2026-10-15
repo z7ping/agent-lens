@@ -10,11 +10,12 @@ const agents = readFileSync(new URL('./features/AgentsPage.tsx', import.meta.url
 const tools = readFileSync(new URL('./features/ToolsPage.tsx', import.meta.url), 'utf8')
 const insights = readFileSync(new URL('./features/InsightsPage.tsx', import.meta.url), 'utf8')
 
-test('任务中心保留面包屑顶栏，其他工作区不重复一级标题', () => {
+test('任务中心移除重复面包屑，窄屏保留共享导航入口', () => {
   assert.match(app, /!hasWorkspaceTabs && <WorkspaceTopBar/)
   assert.match(app, /onOpenNavigation=\{\(\) => setMobileNavigationOpen\(true\)\}/)
   assert.match(app, /function WorkspaceTopBar/)
-  assert.match(app, /className="workspace-topbar"/)
+  assert.match(app, /workspace-topbar\$\{taskContext \? ' is-task-context' : ''\}/)
+  assert.match(app, /!taskContext && <Breadcrumb/)
   assert.match(app, /className="workspace-topbar-page-tools"/)
   assert.doesNotMatch(app, /workspace-breadcrumb-shell/)
   assert.doesNotMatch(app, /WorkspaceBreadcrumb/)

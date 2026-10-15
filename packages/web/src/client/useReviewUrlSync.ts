@@ -58,28 +58,30 @@ export function useReviewUrlSync({
   filters: ReviewFilters
 }): void {
   const readyRef = useRef(false)
-  const skipWriteRef = useRef(false)
+  const pendingUrlFiltersRef = useRef<ReviewFilters | null>(null)
 
   useEffect(() => {
     if (!active) {
       readyRef.current = false
-      skipWriteRef.current = false
+      pendingUrlFiltersRef.current = null
       return
     }
     if (readyRef.current && !search) return
     const nextFilters = reviewFiltersFromSearch(search)
     readyRef.current = true
     if (!sameReviewFilters(nextFilters, model.getSnapshot().review.filters)) {
-      skipWriteRef.current = true
+      pendingUrlFiltersRef.current = nextFilters
       model.setReviewFilters(nextFilters)
     }
   }, [active, model, search])
 
   useEffect(() => {
     if (!active || !readyRef.current) return
-    if (skipWriteRef.current) {
-      skipWriteRef.current = false
-      return
+    // 等到当前渲染真正收到 URL 中的筛选条件后再回写。
+    // StrictMode 重放 Effect 或其他状态更新时，跳过一次不足以防止旧筛选覆盖 URL。
+    if (pendingUrlFiltersRef.current) {
+      if (!sameReviewFilters(filters, pendingUrlFiltersRef.current)) return
+      pendingUrlFiltersRef.current = null
     }
     const nextSearch = reviewSearchFromFilters(filters)
     if (search === nextSearch) return

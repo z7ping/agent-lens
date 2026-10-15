@@ -262,6 +262,7 @@ export type LiveEventDto =
   | { type: 'runtime-disclosure.changed' }
   | {
       type: 'message.start' | 'message.end'
+      phase?: 'commentary' | 'final' | undefined
       role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
       messageId?: string | undefined
     }
@@ -595,6 +596,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     return {
       type,
       ...(role === undefined ? {} : { role }),
+      ...(event.phase === 'commentary' || event.phase === 'final' ? { phase: event.phase } : {}),
       ...(eventText(event.messageId) !== undefined ? { messageId: eventText(event.messageId) } : {}),
     }
   }

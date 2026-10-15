@@ -181,6 +181,7 @@ export async function normalizePiRecord(
           ...(fact.model ? { model: fact.model } : {}),
           ...(fact.provider ? { provider: fact.provider } : {}),
           ...(fact.stopReason ? { stopReason: fact.stopReason } : {}),
+          ...(fact.stopReason === 'toolUse' ? { phase: 'commentary' } : {}),
           ...(fact.errorMessage ? { errorMessage: fact.errorMessage } : {}),
         }, offset, { identity: fact.model ? { modelName: fact.model } : {} }))
         return

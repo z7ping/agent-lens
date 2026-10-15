@@ -12,6 +12,7 @@ export type LiveTaskProjectionItem =
       id: string
       kind: 'message'
       role: 'user' | 'assistant'
+      phase?: 'commentary' | 'final' | undefined
       text: string
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
@@ -132,6 +133,8 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
   entries.forEach((value, entryIndex) => {
     const item = record(value)
     const nested = record(item.message)
+    const phase = nested.phase === 'commentary' || item.phase === 'commentary' || nested.stopReason === 'toolUse'
+      ? 'commentary' as const : 'final' as const
     const rawRole = text(item.role) || text(nested.role)
     const nativeEntryId = item.type === 'message' ? text(item.id) : ''
     const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
@@ -192,6 +195,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         id: baseId,
         kind: 'message',
         role: 'assistant',
+        phase,
         text: body,
         ...(nativeEntryId ? { entryId: nativeEntryId } : {}),
         streaming: false,
@@ -207,6 +211,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
           id: `${baseId}:content:${contentIndex}`,
           kind: 'message',
           role: 'assistant',
+          phase,
           text: rawPart,
           streaming: false,
           ...(at ? { at } : {}),
@@ -223,6 +228,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
           id: content.length === 1 ? baseId : `${baseId}:content:${contentIndex}`,
           kind: 'message',
           role: 'assistant',
+          phase,
           text: value,
           streaming: false,
           ...(at ? { at } : {}),
@@ -372,6 +378,7 @@ export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjection
 export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined): boolean {
   if (!event) return false
   return event.type === 'text.start'
+    || (event.type === 'message.end' && event.phase !== undefined)
     || event.type === 'text.delta'
     || event.type === 'text.end'
     || event.type === 'reasoning.start'
@@ -391,12 +398,23 @@ export function reduceLiveTaskEvent(
   if (!event) return [...items]
   const fallback = String(envelope.sequence)
 
+  if (event.type === 'message.end' && event.role === 'assistant' && event.phase) {
+    // 原生消息结束事件明确给出阶段；只修正该消息，不按文案或时间猜测。
+    const lastUser = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'user')
+    const lastMessage = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'assistant')
+    const prefix = event.messageId ? `message:${event.messageId}:` : undefined
+    return items.map((item, index) => item.kind === 'message' && item.role === 'assistant'
+      && (prefix ? item.id.startsWith(prefix) : index === lastMessage && index > lastUser)
+      ? { ...item, phase: event.phase, streaming: false } : item)
+  }
+
   if (event.type === 'text.start' || event.type === 'text.delta' || event.type === 'text.end') {
     const id = contentId(event, 'message', fallback)
     return upsertMessage(items, id, current => ({
       id,
       kind: 'message',
       role: 'assistant',
+      ...(current?.phase ? { phase: current.phase } : {}),
       text: event.type === 'text.delta'
         ? `${current?.text ?? ''}${event.delta ?? ''}`
         : event.text ?? current?.text ?? '',

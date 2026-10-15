@@ -669,6 +669,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
                    )
                    ELSE NULL
                  END AS lifecycle_action,
+                 CASE WHEN kind = 'message.assistant' THEN json_extract(payload_json, '$.phase') ELSE NULL END AS message_phase,
                  CASE
                    WHEN kind IN ('tool.call', 'tool.result') THEN COALESCE(
                      json_extract(payload_json, '$.callId'),
@@ -693,6 +694,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           ...(typeof row.canonical_sequence === 'number' ? { canonicalSequence: row.canonical_sequence } : {}),
           ...(typeof row.occurred_at === 'string' ? { occurredAt: row.occurred_at } : {}),
           capturedAt: String(row.captured_at),
+          ...(typeof row.message_phase === 'string' ? { messagePhase: row.message_phase } : {}),
           ...(typeof row.error_flag === 'number' ? { error: row.error_flag === 1 } : {}),
           ...(typeof row.lifecycle_action === 'string' && row.lifecycle_action
             ? { lifecycleAction: row.lifecycle_action.trim().toLowerCase().replace(/[\s_:\-]+/g, '.') }

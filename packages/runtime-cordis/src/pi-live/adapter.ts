@@ -208,6 +208,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     return {
       type: type === 'message_start' ? 'message.start' : 'message.end',
       role,
+      ...(type === 'message_end' && role === 'assistant' && ['toolUse', 'stop'].includes(liveText(message.stopReason))
+        ? { phase: liveText(message.stopReason) === 'toolUse' ? 'commentary' as const : 'final' as const } : {}),
       ...(messageId ? { messageId } : {}),
     }
   }

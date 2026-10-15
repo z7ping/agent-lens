@@ -12,7 +12,6 @@ const productSurfaceFiles = [
 const liveComposer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const runtimeDisclosures = readFileSync(new URL('../components/LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
-const taskLiveRuntimeList = readFileSync(new URL('./TaskLiveRuntimeList.tsx', import.meta.url), 'utf8')
 const liveTaskProjection = readFileSync(new URL('./live-task-projection.ts', import.meta.url), 'utf8')
 const liveTaskRenderBoundary = readFileSync(new URL('./live-task-render-boundary.ts', import.meta.url), 'utf8')
 const appShell = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
@@ -180,7 +179,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
 
   assert.match(appShell, /<Route path="\/review\/live\/:liveId\/:runtimeSessionId" element=\{<TaskCenterPage model=\{model\} mode="live" sidebarHost=\{sidebarHost\}\/>\} \/>/)
   assert.match(taskCenter, /TaskCenterMode = 'history' \| 'live' \| 'new' \| 'hub'/)
-  assert.match(taskCenter, /<TaskLiveRuntimeList/)
+  assert.doesNotMatch(taskCenter, /TaskLiveRuntimeList/)
   assert.match(taskCenter, /mode === 'live' && <LiveTaskPage embedded\/>/)
   assert.match(taskCenter, /mode === 'history' \|\| review\.response \|\| review\.loading/)
   assert.match(taskCenter, /model\.ensureReview\(\)/)
@@ -207,16 +206,14 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.doesNotMatch(liveTask, /\{items\.map\(item => <GenericLiveItem/)
 })
 
-test('通用 Live 标题在任务中心与 Live 详情保持一致', () => {
+test('Live 详情优先展示通用任务标题', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.match(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/)
-  assert.match(taskLiveRuntimeList, /item\.state\.title\?\.trim\(\) \|\| workspace \|\| fallback/)
 })
 
 test('Live task navigation stays agent-neutral and outside LiveTaskPage', () => {
   const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
   assert.doesNotMatch(liveTask, /pi-live-sessions|liveApi\.list\(current\.liveId\)/)
-  assert.doesNotMatch(taskLiveRuntimeList, /piLiveApi|PiLivePage|sourceId\s*===\s*['"]pi['"]/)
 })
 
 

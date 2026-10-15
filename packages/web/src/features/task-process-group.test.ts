@@ -16,7 +16,7 @@ test('处理详情完成态默认折叠并展示统一摘要', () => {
   }))
   assert.match(html, /处理详情/)
   assert.match(html, /8 条消息/)
-  assert.match(html, /lucide-brain-circuit|lucide-brain/)
+  assert.doesNotMatch(html, /lucide-brain-circuit|lucide-brain/)
   assert.equal((html.match(/<summary/g) ?? []).length, 1)
   assert.match(html, /16 次工具调用/)
   assert.match(html, /耗时 2分18秒/)

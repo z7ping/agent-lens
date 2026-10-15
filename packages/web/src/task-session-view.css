@@ -70,6 +70,20 @@
 .task-session-view .task-header-metrics { grid-column: 4; grid-row: 1; }
 .task-session-view .task-header-actions { grid-column: 5; grid-row: 1; }
 
+/* 筛选与正文分离；槽位只画上边线，底边线复用 Toolbar，避免双层边框。 */
+.task-session-view .task-header:has(.task-header-reading-controls) {
+  grid-template-rows: 30px auto;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.task-session-view .task-header-reading-controls {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  border-top: 1px solid var(--al-line);
+  background: var(--al-surface);
+}
+
 /*
  * 1280px 窗口配合工作栏时，实际 Task Surface 会落入 lg 宽度。
  * 96px 是已确认的稳定阅读列留白；真实小屏仍由下面 viewport media 收窄。
@@ -115,6 +129,8 @@
   .task-session-view .task-header-meta { display: none; }
   .task-session-view .task-header-title { grid-column: 1; grid-row: 2; font-size: 15px; }
   .task-session-view .task-header-actions { grid-column: 1; grid-row: 1; justify-self: end; }
+  .task-session-view .task-header:has(.task-header-reading-controls) { grid-template-rows: 30px 22px auto; }
+  .task-session-view .task-header-reading-controls { grid-row: 3; }
   .task-session-view .task-header-submeta,
   .task-session-view .task-header-metrics { display: none; }
 

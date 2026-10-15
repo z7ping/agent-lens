@@ -18,6 +18,8 @@ interface PiLiveHistoryItemBase {
   turnSection?: PiLiveTurnSection | undefined
   /** Explicit live assistant identity when native IDs cannot encode it (currently live Tool events). */
   assistantEntryId?: string | undefined
+  /** 原始消息明确声明工具续执行；不能根据文字猜测。 */
+  assistantPhase?: 'commentary' | 'final' | undefined
 }
 
 export type PiLiveHistoryItem =
@@ -113,6 +115,7 @@ export function projectPiLiveHistory(snapshot: PiLiveSnapshotDto | null): PiLive
           id: fact.id,
           kind: 'message',
           role: fact.role,
+          ...(fact.role === 'assistant' && fact.stopReason === 'toolUse' ? { assistantPhase: 'commentary' as const } : {}),
           text: presentation.text,
           ...(presentation.attachments.length ? { attachments: presentation.attachments } : {}),
           ...(fact.role === 'assistant'

@@ -287,10 +287,12 @@ function evidenceLabel(map: Record<string, string>, value: string): string {
 function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvidenceDto[]; compact?: boolean }) {
   const { i18n } = useTranslation('review')
   const localeRevision = i18n.resolvedLanguage ?? i18n.language
+  const displayEvidence = useMemo(() => evidence.filter(item => item.captureMethod !== 'native-log'
+    || item.derivation === 'inferred' || item.derivation === 'estimated'), [evidence])
   const visible = useMemo(() => {
     const seen = new Set<string>()
     const items: Array<{ key: string; label: string; confidence: string; title: string }> = []
-    for (const item of evidence) {
+    for (const item of displayEvidence) {
       const key = `${item.captureMethod}:${item.derivation}:${item.confidence}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -309,12 +311,12 @@ function EvidenceBadges({ evidence, compact = false }: { evidence: TimelineEvide
       })
     }
     return items.slice(0, compact ? 1 : 2)
-  }, [evidence, compact, localeRevision])
+  }, [displayEvidence, compact, localeRevision])
 
   if (!visible.length) return null
   return <span className="evidence-inline-list">
     {visible.map(item => <span key={item.key} className="evidence-inline" data-confidence={item.confidence} title={item.title}>{item.label}</span>)}
-    {evidence.length > visible.length && !compact && <span className="evidence-inline-more">+{evidence.length - visible.length}</span>}
+    {displayEvidence.length > visible.length && !compact && <span className="evidence-inline-more">+{displayEvidence.length - visible.length}</span>}
   </span>
 }
 
@@ -909,13 +911,20 @@ function ReviewProcessGroup({
     </div>}
     {loadState === 'loaded' && <div className="task-process-sequence">
       {items.map((item, index) => {
-        if (item.type === 'tool-group') return <div key={`tools-${index}`} className={item.parentReasoningId ? 'task-process-related-tool' : undefined} data-reasoning-parent={item.parentReasoningId}><ReviewToolGroupAdapter items={item.items} inspect={inspect}/></div>
+        if (item.type === 'tool-group') return <div key={`tools-${index}`} data-reasoning-parent={item.parentReasoningId}><ReviewToolGroupAdapter items={item.items} inspect={inspect}/></div>
         if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
         if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
-        return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-          {item.node.role === 'commentary' && <div className="task-process-message-kind">{agentLensI18n.t('review:local.process.output')}</div>}
+        if (item.node.role === 'reasoning') return <TaskThinking
+          key={item.node.id}
+          model={{ id: item.node.id, label: t('local.process.thinking'), text: item.node.text, state: 'settled' }}
+          className="task-process-thinking-card"
+          defaultExpanded={false}
+          expansionStore={expansionStore}
+        >
           <MarkdownSurface text={item.node.text}/>
-          <div className="task-process-message-meta"><EvidenceBadges evidence={item.node.evidence} compact/></div>
+        </TaskThinking>
+        return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
+          <MarkdownSurface text={item.node.text}/>
         </div>
       })}
     </div>}
@@ -1773,6 +1782,18 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           showStatus={false}
           title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title, 15)}</span>}
           metrics={[]}
+          viewActions={<Button role="menuitem" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</Button>}
+          readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
+            <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
+              <Button className={roundFilter === 'all' && !isBackward ? 'active' : ''} aria-pressed={roundFilter === 'all' && !isBackward} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')}{roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+              <Button className={roundFilter === 'errors' ? 'active' : ''} aria-pressed={roundFilter === 'errors'} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')}{roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+              <Button className={roundFilter === 'latency' ? 'active' : ''} aria-pressed={roundFilter === 'latency'} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')}{roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
+            </div>
+            <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
+              {review.detailHasNewData && <Button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')}<UiIcon name="arrow-down" size={14}/></Button>}
+            </div>
+            {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
+          </Toolbar>}
           infoItems={taskDetailModel ? [
             { label: t('local.header.project'), value: taskDetailModel.projectLabel ?? t('local.session.unlinkedProject') },
             ...(taskDetailModel.startedAt && Number.isFinite(Date.parse(taskDetailModel.startedAt))
@@ -1832,19 +1853,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
             </details> : null}
-
-            <div className="round-nav" aria-label={t('local.roundNav.aria')}>
-              <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
-                <button className={roundFilter === 'all' && !isBackward ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')} {roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'errors' ? 'active' : ''} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('errors')}>{t('local.roundNav.errors')} {roundFilter === 'errors' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-                <button className={roundFilter === 'latency' ? 'active' : ''} title={t('local.roundNav.latencyNote')} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('latency')}>{t('local.roundNav.latency')} {roundFilter === 'latency' && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</button>
-              </div>
-              <div className="round-nav-actions" aria-label={t('local.roundNav.actionsAria')}>
-                <button className="round-nav-expand" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</button>
-                {review.detailHasNewData && <button className="round-nav-live" onClick={() => void jumpToLatest()}>{t('local.roundNav.newRecords')} <UiIcon name="arrow-down" size={14}/></button>}
-              </div>
-              {roundFilterLoading && <span className="round-nav-status">{t('local.roundNav.querying')}</span>}
-            </div>
 
             <div className="review-flow">
               {isBackward && roundFilter === 'all' && pageIncomplete && <div ref={detailLoadSentinelRef} className="detail-load-sentinel detail-load-sentinel-top" aria-live="polite">

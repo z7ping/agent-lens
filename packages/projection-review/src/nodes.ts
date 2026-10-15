@@ -155,7 +155,7 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         id: item.id,
         role: item.kind === 'message.user'
           ? 'user'
-          : item.kind === 'message.commentary'
+          : item.kind === 'message.commentary' || (item.kind === 'message.assistant' && asRecord(item.payload).phase === 'commentary')
             ? 'commentary'
             : item.kind === 'message.reasoning'
               ? 'reasoning'
@@ -285,6 +285,10 @@ export function splitInteractionGroups(items: TimelineItemDto[]): TimelineItemDt
   return groups
 }
 
+export function isSessionMetadataAction(value: unknown): boolean {
+  return typeof value === 'string' && ['session.info', 'session.title', 'session.renamed'].includes(value)
+}
+
 export function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdinal = 1, registry?: ToolRegistrationIndex): ReviewInteractionDto[] {
   return groups.map((group, index) => {
     const ordinal = startingOrdinal + index
@@ -293,7 +297,8 @@ export function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdi
       ordinal,
       trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
       startedAt: group[0]!.effectiveAt,
-      endedAt: group[group.length - 1]!.effectiveAt,
+      endedAt: [...group].reverse().find(item => !(item.kind === 'session.lifecycle'
+        && isSessionMetadataAction(stringField(asRecord(item.payload), 'event', 'action', 'type'))))?.effectiveAt ?? group[0]!.effectiveAt,
       nodes: buildNodes(group, registry),
     }
   })

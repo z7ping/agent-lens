@@ -63,7 +63,9 @@ function factTime(item: PiLiveHistoryItem): number | null {
 }
 
 function roundDuration(items: PiLiveHistoryItem[]): number {
-  const times = items.map(factTime).filter((value): value is number => value !== null)
+  const times = items.filter(item => !(item.kind === 'lifecycle'
+    && ['session.info', 'session.title', 'session.renamed'].includes(item.event)))
+    .map(factTime).filter((value): value is number => value !== null)
   if (times.length < 2) return 0
   return Math.max(0, Math.max(...times) - Math.min(...times))
 }
@@ -103,8 +105,7 @@ function withTurnSection(item: PiLiveHistoryItem, turnSection: PiLiveTurnSection
  * 完整语义轮次先统一成 prompt → process(只含明确模型执行) → meta / assistant text → terminal → artifacts，
  * 然后才允许做 8 条事实的渲染分片。
  *
- * Pi 的 Assistant entry 可以同时包含 thinking / toolCall / text。普通 Assistant Text 因此不能因为
- * 同 entry 带 Tool 就被推断成 Process；只有 Thinking / Tool 才进入 Process。
+ * 工具续执行消息的文字由原生 stopReason 明确标为执行说明；其余 Assistant Text 保留在正文。
  */
 export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistoryItem[] {
   const assistantEntryIds = new Set(items
@@ -124,7 +125,8 @@ export function projectPiLiveTurnItems(items: PiLiveHistoryItem[]): PiLiveHistor
       continue
     }
     if (item.kind === 'message' && item.role === 'assistant') {
-      postProcess.push(withTurnSection(item, 'final'))
+      if (item.assistantPhase === 'commentary') process.push(withTurnSection(item, 'process'))
+      else postProcess.push(withTurnSection(item, 'final'))
       continue
     }
     const identity = assistantEntryIdentity(item)

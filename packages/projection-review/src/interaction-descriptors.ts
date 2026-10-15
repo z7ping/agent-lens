@@ -10,7 +10,7 @@ import type {
   ReviewProcessSummaryDto,
   ReviewSessionSummaryDto,
 } from '@agent-lens/protocol'
-import { asRecord, buildInteractionGroups, buildNodes, stringField, textFromPayload } from './nodes'
+import { asRecord, buildInteractionGroups, buildNodes, isSessionMetadataAction, stringField, textFromPayload } from './nodes'
 
 const DESCRIPTOR_SCAN_CHUNK = 1000
 const MAX_DESCRIPTOR_CACHE = 32
@@ -65,7 +65,9 @@ function updateDescriptor(descriptor: InteractionDescriptor, observation: Canoni
     if (preview) descriptor.preview = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview
   }
   descriptor.end = observationCursor(observation)
-  descriptor.endedAt = observationEffectiveAt(observation)
+  if (!(observation.kind === 'session.lifecycle' && isSessionMetadataAction(normalizedLifecycleAction(observation)))) {
+    descriptor.endedAt = observationEffectiveAt(observation)
+  }
   descriptor.hasError ||= observationError(observation)
   descriptor.observationCount += 1
 }
@@ -103,6 +105,8 @@ function observationHeader(item: CanonicalObservation): ObservationHeader {
     ...(item.canonicalSequence === undefined ? {} : { canonicalSequence: item.canonicalSequence }),
     ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
     capturedAt: item.capturedAt,
+    ...(item.kind === 'message.assistant' && typeof asRecord(item.payload).phase === 'string'
+      ? { messagePhase: String(asRecord(item.payload).phase) } : {}),
     ...(item.kind === 'tool.result' ? { error: observationError(item) } : {}),
     ...((item.kind === 'tool.call' || item.kind === 'tool.result') && stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')
       ? { toolCallId: stringField(asRecord(item.payload), 'callId', 'call_id', 'toolUseId', 'tool_use_id')! }
@@ -143,12 +147,13 @@ function isTerminalLifecycle(observation: CanonicalObservation): boolean {
   return observation.kind === 'session.lifecycle' && isTerminalLifecycleAction(normalizedLifecycleAction(observation))
 }
 
-function isProcessDriverKind(kind: ObservationHeader['kind']): boolean {
+function isProcessDriverKind(kind: ObservationHeader['kind'], messagePhase?: string): boolean {
   return kind === 'message.commentary'
     || kind === 'message.reasoning'
     || kind === 'tool.call'
     || kind === 'tool.result'
     || kind === 'tool.progress'
+    || (kind === 'message.assistant' && messagePhase === 'commentary')
 }
 
 function boundedSummaryMetaHeaders(headers: readonly ObservationHeader[]): ObservationHeader[] {
@@ -160,7 +165,9 @@ function boundedSummaryMetaHeaders(headers: readonly ObservationHeader[]): Obser
 
 function updateStructureDescriptor(descriptor: InteractionDescriptor, observation: ObservationHeader): void {
   descriptor.end = headerCursor(observation)
-  descriptor.endedAt = headerEffectiveAt(observation)
+  if (!(observation.kind === 'session.lifecycle' && isSessionMetadataAction(observation.lifecycleAction))) {
+    descriptor.endedAt = headerEffectiveAt(observation)
+  }
   descriptor.hasError ||= observation.error === true
   descriptor.observationCount += 1
 }
@@ -536,8 +543,8 @@ export class InteractionDescriptorStore {
         const prompt = header.kind === 'message.user'
         const artifact = header.kind === 'artifact.action'
         const terminal = terminalIds.has(header.id)
-        const process = isProcessDriverKind(header.kind)
-        const finalAssistant = header.kind === 'message.assistant'
+        const process = isProcessDriverKind(header.kind, header.messagePhase)
+        const finalAssistant = header.kind === 'message.assistant' && !process
         if (prompt || finalAssistant || artifact || terminal) displayIds.add(header.id)
         if (process && !prompt && !artifact && !terminal) {
           processHeaders.push(header)
@@ -552,7 +559,8 @@ export class InteractionDescriptorStore {
         : preliminary
       const messageCount = processHeaders.filter(header =>
         header.kind === 'message.commentary'
-        || header.kind === 'message.reasoning').length
+        || header.kind === 'message.reasoning'
+        || (header.kind === 'message.assistant' && header.messagePhase === 'commentary')).length
       const toolCallIds = new Set(processHeaders
         .filter(header => header.kind === 'tool.call' && header.toolCallId)
         .map(header => header.toolCallId!))

@@ -27,6 +27,10 @@ export interface TaskHeaderProps {
   metrics?: TaskHeaderMetric[]
   infoItems?: TaskHeaderInfoItem[]
   actions?: ReactNode
+  /** 领域阅读操作复用共享视图菜单，不占用常驻工具栏。 */
+  viewActions?: ReactNode
+  /** 固定在会话页头中的阅读筛选，不随正文滚动或参与吸顶。 */
+  readingControls?: ReactNode
   /** 只读历史会话正文末尾的续会话操作；普通页头动作不可放入此处。 */
   continuationActions?: ReactNode
   className?: string
@@ -83,7 +87,7 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
-export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, continuationActions, className = '' }: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, viewActions, readingControls, continuationActions, className = '' }: TaskHeaderProps) {
   const { t } = useTranslation('task')
   const resolvedStatus = status ?? t('header.completed')
   const resolvedContext = context === t('header.noProject') ? t('header.unlinkedProject') : context
@@ -122,7 +126,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     sessionTailHost?.remove()
   }, [sessionTailHost])
 
-  const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || inlineActions.length > 0
+  const hasHeaderActions = hasCompactInfo || Boolean(auditToggle) || Boolean(viewActions) || inlineActions.length > 0
   const tailActions = sessionTailHost && primaryActions.length > 0
     ? createPortal(
         <section className="task-session-continuation" aria-label={t('header.continueSession')}>
@@ -158,7 +162,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             aria-expanded={compactInfoOpen}
             onClick={() => setCompactInfoOpen(true)}
           >{t('header.taskInfo')}</Button>}
-          {auditToggle && <>
+          {(auditToggle || viewActions) && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
               <Button
                 size="small"
@@ -176,14 +180,16 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
               onClose={() => setViewMenuOpen(false)}
             >
               <div className="task-view-menu-list" role="menu" aria-label={t('header.viewOptions')}>
-                <button type="button" role="menuitemcheckbox" aria-checked={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>{t('header.allEvents')}</span><b>{showAllEvents && <UiIcon name="check" size={14}/>}</b></button>
+                {auditToggle && <button type="button" role="menuitemcheckbox" aria-checked={showAllEvents} onClick={() => auditToggle.props.onClick?.()}><span>{t('header.allEvents')}</span><b>{showAllEvents && <UiIcon name="check" size={14}/>}</b></button>}
                 <button type="button" role="menuitemcheckbox" aria-checked={showUsageDetails} onClick={() => setShowUsageDetails(!showUsageDetails)}><span>{t('header.usageDetails')}</span><b>{showUsageDetails && <UiIcon name="check" size={14}/>}</b></button>
+                {viewActions}
               </div>
             </Popover>
           </>}
           {inlineActions}
         </div>}
       </div>}
+      {readingControls && <div className="task-header-reading-controls">{readingControls}</div>}
     </header>
     {tailActions}
     <Drawer

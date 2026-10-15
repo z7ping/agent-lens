@@ -349,7 +349,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  padding: 0 2px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--al-muted);
@@ -411,10 +411,16 @@
 .task-surface .task-thinking-content .task-tool-group { margin-left: 12px; }
 .task-surface .task-process-sequence { display: grid; gap: 5px; }
 .task-surface .task-process-message { min-width: 0; }
-.task-surface .task-process-message-kind { margin-bottom: 2px; color: var(--al-muted-2); font-size: 12px; font-weight: 650; }
-.task-surface .task-process-message-meta { margin-top: 2px; }
+.task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
+.task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }
+.task-surface .task-process-thinking-card { border: 1px solid var(--al-line); border-radius: var(--radius-sm); background: var(--al-soft-2); }
+.task-surface .task-process-thinking-card > .task-thinking-summary { padding: 4px 8px; }
+.task-surface .task-process-thinking-card > .task-thinking-content { margin: 0; padding: 4px 8px 8px; }
+.task-surface .task-process-sequence .task-tool-group { margin-left: 0; }
+.task-surface .task-process-sequence .task-tool-list { padding-left: 0; border-left: 0; }
+.task-surface .task-process-sequence .task-tool-call[data-kind='shell'] > .task-tool-row { grid-template-columns: 16px minmax(0, 1fr) 18px 14px; }
+.task-surface .task-process-sequence .task-tool-kind-shell > span:last-child { display: none; }
 /* Preserve explicit native reasoning ancestry without moving events. */
-.task-surface .task-process-related-tool { margin-left: 16px; min-width: 0; }
 .task-surface .task-tool-call { min-width: 0; margin: 2px 0; overflow: hidden; border: 0; border-radius: 6px; }
 .task-surface .task-tool-call > summary.task-tool-row {
   display: grid;
@@ -523,11 +529,11 @@
   display: grid;
   width: 100%;
   min-height: 30px;
-  grid-template-columns: 18px minmax(0, 1fr) auto minmax(72px, auto) 66px;
+  grid-template-columns: 16px minmax(0, 1fr) auto minmax(72px, auto) 66px;
   align-items: center;
   gap: 6px;
   margin: 1px 0;
-  padding: 2px 6px;
+  padding: 2px 0;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--al-line) 38%, transparent);
   background: transparent;
@@ -538,9 +544,9 @@
 .task-surface .task-event-row:hover { background: var(--al-soft-2); }
 .task-surface .task-event-mark {
   display: grid;
-  width: 15px;
-  height: 15px;
-  justify-self: center;
+  width: 14px;
+  height: 14px;
+  justify-self: start;
   place-items: center;
   color: var(--al-muted);
 }

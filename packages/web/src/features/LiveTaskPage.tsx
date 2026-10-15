@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -62,6 +62,7 @@ import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus, shouldRecoverLiveO
 import { TaskHeader } from './TaskHeader'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
+import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
@@ -531,6 +532,33 @@ const GenericLiveRound = memo(function GenericLiveRound({
     && !projection.items.some(item => item.kind === 'thinking'
       || item.kind === 'tool'
       || (item.kind === 'message' && item.role === 'assistant'))
+  const content: ReactNode[] = []
+  let process: LiveTaskProjectionItem[] = []
+  const renderItem = (item: LiveTaskProjectionItem) => <GenericLiveItem
+    key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
+    actionPending={actionPending} runtimeStreaming={runtimeStreaming} onMessageAction={onMessageAction}
+  />
+  const flushProcess = () => {
+    if (!process.length) return
+    const items = process
+    process = []
+    content.push(<TaskProcessGroup
+      key={`process:${items[0]!.id}`} id={`process:${items[0]!.id}`}
+      messageCount={items.filter(item => item.kind === 'thinking' || item.kind === 'message').length}
+      toolCount={items.filter(item => item.kind === 'tool').length}
+      errorCount={items.filter(item => item.kind === 'tool' && item.status === 'error').length}
+      state={projection.model.state} defaultExpanded={projection.model.state === 'running'}
+    >
+      {items.map(item => item.kind === 'thinking' || (item.kind === 'message' && item.phase === 'commentary')
+        ? <MarkdownContent key={item.id} text={item.text} streaming={item.streaming}/>
+        : renderItem(item))}
+    </TaskProcessGroup>)
+  }
+  for (const item of projection.items) {
+    if (item.kind === 'thinking' || item.kind === 'tool' || (item.kind === 'message' && item.phase === 'commentary')) process.push(item)
+    else { flushProcess(); content.push(renderItem(item)) }
+  }
+  flushProcess()
   return <VirtualRoundMount
     rootSelector=".pi-live-reader"
     flowRoot
@@ -538,15 +566,7 @@ const GenericLiveRound = memo(function GenericLiveRound({
     estimate={liveTaskRoundEstimate(projection)}
   >
     <TaskRound model={awaitingResponse ? { ...projection.model, state: 'running' } : projection.model} className="live-task-round">
-      {projection.items.map(item => <GenericLiveItem
-        key={item.id}
-        item={item}
-        agentLabel={agentLabel}
-        messageActions={messageActions}
-        actionPending={actionPending}
-        runtimeStreaming={runtimeStreaming}
-        onMessageAction={onMessageAction}
-      />)}
+      {content}
       {awaitingResponse && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
     </TaskRound>
   </VirtualRoundMount>

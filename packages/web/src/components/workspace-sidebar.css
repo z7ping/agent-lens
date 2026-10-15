@@ -632,6 +632,11 @@
   flex: 0 1 auto;
 }
 
+/* 桌面任务已有会话页头；窄屏保留共享顶栏中的侧栏入口。 */
+@media (min-width: 768px) {
+  .workspace-topbar.is-task-context { display: none; }
+}
+
 .workspace-topbar-page-tools {
   display: flex;
   min-width: 0;

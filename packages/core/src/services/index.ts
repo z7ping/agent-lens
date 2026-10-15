@@ -143,6 +143,8 @@ export interface ObservationHeader {
   error?: boolean
   /** Normalized lifecycle action when kind=session.lifecycle; avoids hydrating payload just to classify terminal state. */
   lifecycleAction?: string
+  /** 来源明确提供的助手消息阶段；摘要查询无需读取整段正文。 */
+  messagePhase?: string
   /** Native Tool correlation id for tool.call / tool.result without hydrating heavy payloads. */
   toolCallId?: string
 }

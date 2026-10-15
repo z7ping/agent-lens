@@ -16,7 +16,6 @@ import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
-import { TaskLiveRuntimeList } from './TaskLiveRuntimeList'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -572,8 +571,6 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      <TaskLiveRuntimeList deferMs={mode === 'new' ? 500 : 150}/>
-
       {!review.response && <div className="task-center-list-skeleton" aria-hidden="true">
         <span/><span/><span/>
       </div>}

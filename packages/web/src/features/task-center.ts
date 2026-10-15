@@ -102,10 +102,26 @@ export function sessionListTitle(value: string | undefined, fallback: string, so
 function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
   // Codex 的 legacy session_index.thread_name 是来源原生会话标签，但当前格式无法证明
   // 它一定来自显式 /rename；它也可能由应用注入上下文派生。真实 event_msg.user_message
-  // 已由 Source Adapter 归一为 preview，因此仅 Codex 用户任务优先使用该结构化用户请求。
-  // 其他来源继续保留自身已经提供的原生会话标题，不用统一规则覆盖来源语义。
+  // 已由 Source Adapter 归一为 preview，因此 Codex 用户任务优先使用该结构化用户请求。
   if (item.sourceIds.includes('codex') && item.preview?.trim()) return item.preview
-  return item.title || item.preview
+  const title = cleanSessionTitle(item.title, '')
+  const visibleTitle = sessionListTitle(title, '', item.sourceIds)
+  const projectName = cleanSessionTitle(item.projectName, '')
+  const workspacePath = cleanSessionTitle(item.workspacePath, '')
+  const directoryName = workspacePath ? basename(workspacePath) : ''
+  const normalizePath = (value: string) => {
+    const path = value.replace(/\\/g, '/').replace(/\/+$/, '')
+    return /^(?:[a-z]:\/|\/\/)/i.test(path) ? path.toLowerCase() : path
+  }
+  const contextOnly = Boolean(visibleTitle) && (
+    visibleTitle === projectName
+    || visibleTitle === directoryName
+    || (Boolean(workspacePath) && normalizePath(visibleTitle) === normalizePath(workspacePath))
+  )
+  // 项目名和目录路径只表达上下文，不能区分同一项目下的不同用户任务。
+  // 没有真实用户请求时保留原生名称，不编造摘要，也不改写来源数据。
+  if (contextOnly && item.preview?.trim()) return item.preview
+  return title || item.preview
 }
 
 function systemActivityTitle(item: ReviewSessionSummaryDto): string {

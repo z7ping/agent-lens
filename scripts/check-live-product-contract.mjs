@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises'
 const [
   app,
   taskCenter,
-  taskLiveRuntimeList,
   taskLiveRuntime,
   legacyRedirect,
   liveNewTask,
@@ -28,7 +27,6 @@ const [
 ] = await Promise.all([
   readFile(new URL('../packages/web/src/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/TaskCenterPage.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/web/src/features/TaskLiveRuntimeList.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/task-live-runtime.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/LegacyLiveTaskRedirect.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/LiveNewTaskPanel.tsx', import.meta.url), 'utf8'),
@@ -78,8 +76,7 @@ requireText(legacyRedirect, /to=\{`\/review\/live\/pi\/\$\{encodeURIComponent\(r
 
 /* Task Center only hosts generic Live Product surfaces. */
 requireText(taskCenter, /import \{ LiveNewTaskPanel \} from '\.\/LiveNewTaskPanel'/, 'Task Center 必须接入通用 LiveNewTaskPanel')
-requireText(taskCenter, /import \{ TaskLiveRuntimeList \} from '\.\/TaskLiveRuntimeList'/, 'Task Center 必须使用通用实时任务列表')
-requireText(taskCenter, /<TaskLiveRuntimeList\b/, '任务列表必须展示通用 Live runtimes')
+forbidText(taskCenter, /TaskLiveRuntimeList/, '任务中心侧栏不得恢复独立实时会话列表')
 requireText(taskCenter, /TaskCenterMode = 'history' \| 'live' \| 'new' \| 'hub'/, 'Task Center 必须显式承载 Live detail 模式')
 requireText(taskCenter, /mode === 'live' && <LiveTaskPage embedded\/>/, '实时任务详情必须内嵌在 Task Center 唯一导航壳层中')
 requireText(taskCenter, /mode === 'history' \|\| review\.response \|\| review\.loading/, '历史页仍由 App 负责 P0 Summary，非历史详情才延后补齐任务栏摘要')
@@ -89,13 +86,7 @@ requireText(taskCenter, /mode === 'new' && <LiveNewTaskPanel/, '新建任务必�
 requireText(taskCenter, /onStarted=\{\(liveId, state\) => navigate\(taskLiveRuntimeHref\(\{ liveId, state \}\)\)\}/, '新建 Live 任务后必须进入通用 liveId/runtimeSessionId 路由')
 forbidText(taskCenter, /\bpiLiveApi\b|<PiLivePage\b|PiLiveCompatibilityPage/, 'Task Center 不得直接依赖 Pi Live 兼容 Client/Page')
 
-/* Running task rail discovers every Live Product through the generic client. */
-requireText(taskLiveRuntimeList, /liveApi\.knownRuntimeSnapshot\(\)/, '实时任务列表必须通过通用 liveApi 读取带失败来源的 runtime 快照')
-requireText(taskLiveRuntimeList, /item\.liveId[\s\S]{0,120}item\.state\.runtimeSessionId/, '实时任务列表 key/identity 必须包含 liveId + runtimeSessionId')
-requireText(taskLiveRuntimeList, /navigate\(taskLiveRuntimeHref\(item\)\)/, '实时任务列表必须进入通用 Live route')
-requireText(taskLiveRuntimeList, /agent-lens:live-state-changed/, '实时任务列表必须监听通用 Live 状态变化事件')
-requireText(taskLiveRuntimeList, /shouldRefreshRuntimeListOnVisible\(now, lastSuccessfulAt, hiddenForMs, invalidatedWhileHidden\)/, '切回标签不得每次强制刷新完整运行任务列表')
-requireText(taskLiveRuntimeList, /sameTaskRuntimeList\(previous, next\) \? previous : next/, '相同运行任务数据必须复用现有 React 列表')
+/* Live detail reconciles state without restoring a separate runtime list. */
 requireText(liveTask, /reconcileState\(shouldRecoverLiveOnVisible\(hiddenForMs, streamDisconnected\)\)/, 'Live 重新可见时必须按断线和时间缺口决定历史快照恢复')
 requireText(liveTask, /if \(!sameLiveRuntimeState\(previous, runtime\)\)/, 'Live 轻量状态不变时不得重复发布 React State')
 forbidText(liveTask, /if \(document\.visibilityState === 'visible'\) void reconcileState\(true\)/, '普通标签切换不得无条件强制 Live 快照对账')
@@ -264,7 +255,6 @@ requireText(piLiveAdapter, /type === ['"]runtime_exit['"][\s\S]{0,180}type:\s*['
 requireText(piLiveAdapter, /type === ['"]extension_error['"][\s\S]{0,180}type:\s*['"]error['"]/, 'Pi extension_error 必须保留为非终止性通用 error')
 requireText(piLiveAdapter, /type === ['"]runtime_resources['"][\s\S]{0,180}runtime-disclosure\.changed/, 'Pi 私有诊断变化必须只在 Adapter 边界映射为 Runtime Disclosure 失效事件')
 requireText(liveHttp, /const title = typeof row\.title === ['"]string['"]/, 'Live HTTP 必须安全投影通用 Runtime title')
-requireText(taskLiveRuntimeList, /item\.state\.title\?\.trim\(\) \|\| workspace \|\| fallback/, '任务中心实时任务列表必须优先展示通用任务标题')
 requireText(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/, 'Live 页头必须优先展示通用任务标题')
 requireText(liveProtocol, /export interface LiveRuntimeActionResultDto[\s\S]{0,180}runtime:\s*LiveRuntimeStateDto/, 'Runtime action 只能返回通用 Runtime state')
 requireText(liveProtocol, /export interface LiveProductDto[\s\S]{0,500}liveId:\s*string[\s\S]{0,500}capabilities:\s*LiveCapabilityNameDto\[\][\s\S]{0,500}inputCapabilities:\s*LiveInputCapabilitiesDto[\s\S]{0,500}startCapabilities:\s*LiveStartCapabilitiesDto/, 'LiveProductDto 必须保持 capability/input/start 三层产品契约')
@@ -352,4 +342,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log('Live Product 表现层契约检查通过：通用路由、Live catalog、能力驱动 New Task/Live Task、通用运行列表、Review resume/fork 与 Pi 兼容边界均已锁定。')
+console.log('Live Product 表现层契约检查通过：通用路由、Live catalog、能力驱动 New Task/Live Task、历史任务侧栏、Review resume/fork 与 Pi 兼容边界均已锁定。')

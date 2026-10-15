@@ -321,6 +321,7 @@ export interface LiveRuntimeDisclosureChangedEvent {
 
 export interface LiveMessageBoundaryEvent {
   type: 'message.start' | 'message.end'
+  phase?: 'commentary' | 'final' | undefined
   role?: 'user' | 'assistant' | 'tool' | 'system' | 'unknown' | undefined
   messageId?: string | undefined
 }

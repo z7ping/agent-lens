@@ -159,14 +159,15 @@ function WorkspaceTopBar({
     items = [{ label: 'AgentLens' }]
   }
 
-  return <div className="workspace-topbar">
+  const taskContext = pathname === '/review' || pathname.startsWith('/review/')
+  return <div className={`workspace-topbar${taskContext ? ' is-task-context' : ''}`}>
     <IconButton className="workspace-mobile-nav-button" onClick={onOpenNavigation} title={t('openWorkspaceNavigation')} aria-label={t('openWorkspaceNavigation')}><UiIcon name="menu" size={16}/></IconButton>
-    <Breadcrumb
+    {!taskContext && <Breadcrumb
       className="workspace-breadcrumb"
       items={items.map((item, index) => item.to && index < items.length - 1
         ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
         : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
-    />
+    />}
     <div className="workspace-topbar-page-tools"/>
   </div>
 }
