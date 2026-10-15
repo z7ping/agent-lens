@@ -56,7 +56,7 @@ export function HostDirectoryBrowser({ open, initialPath, recentPaths, onChoose,
   }, [open, requestedPath])
 
   const visible = useMemo(() => (listing?.directories ?? []).filter(item => item.name.toLowerCase().includes(filter.trim().toLowerCase())), [listing, filter])
-  const navigate = (path?: string) => { setFilter(''); setRequestedPath(path) }
+  const navigate = (path?: string) => { setListing(undefined); setLoading(true); setFilter(''); setRequestedPath(path) }
   const submitPath = () => {
     const path = pathInput.trim()
     if (path) navigate(path)
@@ -110,8 +110,8 @@ export function HostDirectoryBrowser({ open, initialPath, recentPaths, onChoose,
       </div>
       {loading ? <div className="host-directory-browser-state" role="status">{t('center.newTask.browserLoading')}</div>
         : error ? <div className="host-directory-browser-state is-error" role="alert">{error}</div>
-          : visible.length ? <div className="host-directory-browser-list" role="list" aria-label={t('center.newTask.browserDirectories')}>
-            {visible.map(item => <Button className="host-directory-browser-item" key={item.path} role="listitem" title={item.path} onClick={() => navigate(item.path)}>
+          : visible.length ? <div className="host-directory-browser-list" aria-label={t('center.newTask.browserDirectories')}>
+            {visible.map(item => <Button className="host-directory-browser-item" key={item.path} title={item.path} onClick={() => navigate(item.path)}>
               <UiIcon name="folder-open" size={16}/> <span>{item.name}</span> <UiIcon name="chevron-right" size={14}/>
             </Button>)}
           </div> : <div className="host-directory-browser-state">{t('center.newTask.browserEmpty')}</div>}
