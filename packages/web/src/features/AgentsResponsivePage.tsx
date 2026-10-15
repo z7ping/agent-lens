@@ -8,7 +8,6 @@ import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentInsightsRail } from '../components/AgentInsightsRail'
 import { SelectMenu } from '../components/ui'
-import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { AgentsPage } from './AgentsPage'
 import { IntegrationManagementPage } from './IntegrationManagementPage'
 
@@ -85,15 +84,6 @@ export function AgentsResponsivePage({
       </div>,
       toolbarHost,
     ) : null}
-    {isPi && activeView !== 'management' && <WorkspaceViewTabs
-      nested
-      label={t('piEcosystem:ecosystemTab')}
-      value={activeView}
-      tabs={[
-        { value: 'overview', label: t('piEcosystem:overviewTab'), to: '/agents?agent=pi' },
-        { value: 'ecosystem', label: t('piEcosystem:ecosystemTab'), to: '/agents?agent=pi&view=ecosystem' },
-      ]}
-    />}
     {activeView === 'management'
       ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
       : <div className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'}`}>
