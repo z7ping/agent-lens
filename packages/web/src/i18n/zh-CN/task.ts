@@ -238,6 +238,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         browserCancel: '取消',
         browserUseDirectory: '选择此目录',
         browserPath: '目录路径',
+        browserBreadcrumbs: '目录层级',
         browserGo: '前往',
         browserParent: '上级目录',
         browserHome: '主目录',
