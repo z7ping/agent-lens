@@ -260,7 +260,7 @@ export async function discoverOfficialTools(
   return Promise.all(entries.map(entry =>
     timeout(
       discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver, executableResolver, versionResolver }),
-      timeoutMs,
+      timeoutMs + 3_000,
       `Tool discovery for ${entry.integrationId}`,
     ).catch(error => ({
       integrationId: entry.integrationId,
