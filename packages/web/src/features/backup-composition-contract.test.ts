@@ -81,7 +81,7 @@ test('单智能体由共享业务工具栏筛选驱动，主区域直接展示�
 
 test('资产范围复用工作区智能体筛选，并支持全部智能体单选入口', () => {
   assert.match(backupPage, /const backupScopeFilter = <div className="backup-agent-filter-slot"><SidebarFilterDisclosure/)
-  assert.match(backupPage, /className="backup-mobile-scope">\{backupScopeFilter\}/)
+  assert.doesNotMatch(backupPage, /backup-mobile-scope/)
   assert.match(backupPage, /showAllOption/)
   assert.match(backupPage, /selectedAssetSourceId/)
   assert.match(sidebarFilter, /showAllOption\?: boolean/)
@@ -91,7 +91,7 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
 test('导入与创建位于业务工具栏，视图切换位于独立的二级导航行', () => {
   assert.match(app, /function WorkspaceTopBar/)
   assert.match(app, /className="workspace-topbar-page-tools"/)
-  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} onSelectedAssetSourceIdChange=\{setBackupAssetSourceId\} agents=\{agentSelectionItems\} topbarHost=\{workspaceTopbarHost\} \/>/)
+  assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} onSelectedAssetSourceIdChange=\{setBackupAssetSourceId\} agents=\{agentSelectionItems\} toolbarHost=\{workspaceToolbarHost\} \/>/)
   assert.match(backupPage, /createPortal\(/)
   assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
   assert.match(backupPage, /activeView === 'history'.*t\('snapshots\.verifyAll'\)/)
