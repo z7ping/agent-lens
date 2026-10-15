@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { AgentLogo } from '../components/AgentLogo'
 import type { IntegrationManagementItemDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { Button, StatusBadge } from '../components/ui'
@@ -170,6 +171,7 @@ export function IntegrationOnboarding({
                 disabled={running || finishing || state.step === 'done'}
                 onChange={() => toggle(item.integrationId)}
               />
+              <AgentLogo sourceId={item.integrationId} size="normal"/>
               <span className="integration-onboarding-copy">
                 <b>{item.displayName}</b>
                 <small>
