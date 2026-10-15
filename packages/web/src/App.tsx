@@ -95,7 +95,7 @@ function AgentRescanAction({
       }).catch(() => undefined)}
     >
       <UiIcon name="refresh" size={14}/>
-      {scanBusy ? t('page.scanning') : t('page.rescan')}
+      <span className="agent-rescan-label">{scanBusy ? t('page.scanning') : t('page.rescan')}</span>
     </Button>
   </>
 }
@@ -123,7 +123,7 @@ function IntegrationRescanAction({
       onClick={() => void model.rescanIntegrationDiscovery().catch(() => undefined)}
     >
       <UiIcon name="refresh" size={14}/>
-      {scanBusy ? t('status.scanning') : t('onboarding.rescan')}
+      <span className="agent-rescan-label">{scanBusy ? t('status.scanning') : t('onboarding.rescan')}</span>
     </Button>
   </>
 }
