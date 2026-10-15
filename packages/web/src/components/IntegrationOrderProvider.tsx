@@ -44,6 +44,7 @@ export function IntegrationOrderProvider({
   const legacyOrder = useRef(readLegacyAgentOrderPreference())
   const migrationAttempted = useRef(false)
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null)
+  const orderWriteId = useRef(0)
 
   const managedIds = useMemo(
     () => new Set(management?.items.map(item => item.integrationId) ?? []),
@@ -74,10 +75,11 @@ export function IntegrationOrderProvider({
   }, [model, preferenceState])
 
   const persistOrder = (next: string[]) => {
+    const writeId = ++orderWriteId.current
     setOptimisticOrder(next)
     void model.updateIntegrationPreferences({ displayOrder: next }).then(
-      () => setOptimisticOrder(null),
-      () => setOptimisticOrder(null),
+      () => { if (orderWriteId.current === writeId) setOptimisticOrder(null) },
+      () => { if (orderWriteId.current === writeId) setOptimisticOrder(null) },
     )
   }
 
@@ -104,6 +106,7 @@ export function IntegrationOrderProvider({
       persistOrder(managedOrder)
     },
     reset() {
+      ++orderWriteId.current
       setOptimisticOrder(null)
       void model.updateIntegrationPreferences({ displayOrder: [] }).catch(() => undefined)
     },
