@@ -14,6 +14,7 @@ test('read-only browser returns directory names without exposing ordinary files'
     const result = await browseHostWorkingDirectory(root)
     assert.equal(result.path, root)
     assert.equal(result.parentPath, dirname(root))
+    assert.equal(result.breadcrumbs.at(-1)?.path, root)
     assert.deepEqual(result.directories, [{ name: 'subfolder', path: child }])
     assert.equal(result.selectable, true)
     assert.equal(result.truncated, false)
