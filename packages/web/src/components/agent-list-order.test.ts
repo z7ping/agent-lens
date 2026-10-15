@@ -48,7 +48,10 @@ test('所有智能体展示列表统一消费用户排序', () => {
   const integrationManagement = readFileSync(new URL('../features/IntegrationManagementPage.tsx', import.meta.url), 'utf8')
   assert.match(integrationManagement, /useIntegrationOrder\(\)/, '接入管理继续消费统一用户排序')
   assert.match(integrationManagement, /setOrdering\(value => !value\)/, '接入管理必须公开排序入口')
-  assert.match(integrationManagement, /moveUpTargetId=\{primaryItems\[index - 1\]\?\.integrationId\}/, '排序必须继续传递到接入行')
+  assert.match(integrationManagement, /ordering \? <section className="integration-management-section"/, '排序必须使用独立的列表模式')
+  assert.match(integrationManagement, /onClick=\{\(\) => moveBy\(item\.integrationId, -1\)\}/, '排序模式支持直接上移')
+  assert.match(integrationManagement, /onDrop=\{event => \{/, '排序模式支持拖动')
+  assert.doesNotMatch(integrationManagement, /moveUpTargetId/, '不允许将排序动作藏在详情中')
   const agentsWorkspace = readFileSync(new URL('../features/AgentsResponsivePage.tsx', import.meta.url), 'utf8')
   assert.match(agentsWorkspace, /useOrderedAgents\(agents\)/, '智能体概览选择器沿用用户排序')
 
