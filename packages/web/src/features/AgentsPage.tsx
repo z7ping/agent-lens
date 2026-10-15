@@ -263,8 +263,6 @@ function AssetCard({
         ariaLabel={t('managedFiles.location')}
         value={binding.id}
         options={bindingOptions}
-        variant="pill"
-        menuWidth={420}
         onChange={setSelectedBindingId}
       />
     </div>}
@@ -577,8 +575,6 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
                 tooltip: labelPath,
               }
             })}
-            variant="toolbar"
-            menuWidth={420}
             onChange={value => {
               setSelectedInstallationId(value)
               setManagedRoot(null)
