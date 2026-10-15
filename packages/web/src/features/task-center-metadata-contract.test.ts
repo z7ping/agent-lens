@@ -66,3 +66,11 @@ test('idle 状态不创建视觉徽标，保留中性状态圆点和其余异常
   assert.match(runtimeList, /badge\?\.label \?\? t\('center.runtimeStatus.idle'\)/)
   assert.match(runtimeList, /'pi-live-idle-dot'/)
 })
+
+test('A → B → A 快速切换按轮次取消旧 RAF，卸载时释放动画和锚点', () => {
+  assert.match(page, /const revision = \+\+historyScrollRevisionRef\.current/)
+  assert.match(page, /historyScrollRevisionRef\.current !== revision/)
+  assert.match(page, /window\.cancelAnimationFrame\(historyScrollFrameRef\.current\)/)
+  assert.match(page, /useEffect\(\(\) => \(\) => \{[\s\S]*?historyScrollRevisionRef\.current \+= 1/)
+  assert.doesNotMatch(page, /historyScrollTargetRef/)
+})
