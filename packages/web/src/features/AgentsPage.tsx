@@ -528,6 +528,15 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
   const userUsageCount = agent.usedAssets.reduce((sum, item) => sum + item.callCount, 0)
   const status = agentObservationState(agent, discovery, discoveryScanning, t, discoveryError)
+  const statusTone = status.className === 'is-error'
+    ? 'danger'
+    : status.className === 'is-scanning' || status.className === 'is-history'
+      ? 'warning'
+      : status.className === 'is-discovered' || status.className === 'is-detected' || status.className === 'is-enabled'
+        ? 'success'
+        : status.className === 'is-not-added'
+          ? 'accent'
+          : 'neutral'
   const presencePath = integrationToolPresencePath(discovery)
   const configPath = installation?.configRoot ?? discovery?.configRoot ?? discovery?.dataRoot
   const assetsAvailable = agent.integration?.capabilities.some(capability =>
@@ -564,7 +573,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         { value: 'overview', label: tPi('overviewTab'), to: '/agents?agent=pi' },
         { value: 'ecosystem', label: tPi('ecosystemTab'), to: '/agents?agent=pi&view=ecosystem' },
       ]}/>}
-      <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
+      <StatusBadge tone={statusTone} title={status.title}>{status.label}</StatusBadge>
     </header>
 
     <div className="agent-installation">
