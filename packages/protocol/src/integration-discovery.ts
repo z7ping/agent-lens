@@ -9,6 +9,8 @@ export interface IntegrationToolDiscoveryItemDto {
   displayName: string
   presence: IntegrationToolPresenceDto
   executable?: string | undefined
+  /** Version reported by the discovered local CLI, never a bundled adapter/SDK version. */
+  version?: string | undefined
   configRoot?: string | undefined
   dataRoot?: string | undefined
   reason?: string | undefined
