@@ -101,10 +101,10 @@ export function AgentsResponsivePage({
     <div ref={shellRef} className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'} ${activeView === 'management' ? 'is-management' : ''}`.trim()}>
       {activeView === 'management'
         ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
-        : <>
+        : <div className={`agents-overview-layout ${showInsights ? '' : 'without-insights'}`.trim()}>
           <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
           {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
-        </>}
+        </div>}
     </div>
   </>
 }
