@@ -8,7 +8,6 @@ import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
-import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
@@ -218,8 +217,6 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
     {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page tools-page">
       <div className="page-content tools-content">
-        <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
-
         {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
         {projectionPartial && projection && <div className="tool-projection-status" role="status" aria-live="polite">
           <UiIcon name="refresh" size={14}/>
