@@ -1,3 +1,26 @@
+/* Agents workspace owns layout only; shared SelectMenu and scope chips own control visuals. */
+.agent-workspace-topbar-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.agent-workspace-agent-picker {
+  width: clamp(130px, 14vw, 200px);
+  min-width: 0;
+}
+@media (max-width: 991.98px) {
+  .app-shell.is-agent-workspace .workspace-topbar .workspace-breadcrumb { display: none; }
+  .agent-workspace-topbar-tools { gap: 5px; }
+  .agent-workspace-agent-picker { width: clamp(110px, 22vw, 160px); }
+}
+@media (max-width: 575.98px) {
+  .agent-workspace-topbar-tools { flex: 1 1 auto; }
+  .agent-workspace-agent-picker { width: 105px; flex: 1 1 105px; }
+  .app-shell.is-agent-workspace .workspace-topbar-actions .agent-rescan-label { display: none; }
+  .app-shell.is-agent-workspace .workspace-topbar-actions .btn { padding-inline: 8px; }
+}
+
 /*
  * 智能体概览洞察区布局/响应式所有者。
  * 负责诊断、覆盖矩阵与右侧洞察栏在 xl/xxl/md 视口的组合；不再依赖 desktop-responsive.css 覆盖。
