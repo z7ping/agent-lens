@@ -13,7 +13,7 @@
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--al-canvas);
-  transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1);
+
 }
 
 /* 智能体、资产备份不显示会话/上下文栏，只保留全局 40px 导航轨。 */
