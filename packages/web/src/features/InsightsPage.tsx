@@ -118,7 +118,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
       ]}/>
     </div>
     <div className="workspace-view-filter-actions">
-      {canRelaxFilters && <button type="button" className="workspace-view-clear-filter" onClick={relaxFilters}>{t('page.relaxFilters')}</button>}
+      {canRelaxFilters && <Button className="workspace-view-clear-filter" onClick={relaxFilters}>{t('page.relaxFilters')}</Button>}
       <IconButton size="small" onClick={() => void insightsModel.refresh()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
   </div>

@@ -389,7 +389,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     : onAgents
       ? [
           { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
-          { value: 'management', label: t('navigation:integrationManagement'), to: '/agents?view=management' },
+          { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${resolvedAgentOverviewSourceId ? `&agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
         ]
       : [
           { value: 'assets', label: t('backup:assetView.currentTab'), to: '/backup' },

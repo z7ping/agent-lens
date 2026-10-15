@@ -17,15 +17,17 @@ export function useModalFocusScope({
   open,
   onClose,
   panelRef,
+  closeDisabled = false,
 }: {
   open: boolean
   onClose(): void
   panelRef: RefObject<HTMLElement | null>
+  closeDisabled?: boolean
 }) {
   const closeRef = useRef(onClose)
-  useEffect(() => {
-    closeRef.current = onClose
-  }, [onClose])
+  const closeDisabledRef = useRef(closeDisabled)
+  closeRef.current = onClose
+  closeDisabledRef.current = closeDisabled
 
   useLayoutEffect(() => {
     if (!open) return
@@ -37,7 +39,7 @@ export function useModalFocusScope({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        closeRef.current()
+        if (!closeDisabledRef.current) closeRef.current()
         return
       }
       if (event.key !== 'Tab' || !panelRef.current) return
@@ -106,7 +108,7 @@ function OverlayFrame({
   const titleId = useId()
   const descriptionId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
-  useModalFocusScope({ open, onClose, panelRef })
+  useModalFocusScope({ open, onClose, panelRef, closeDisabled })
   if (!open) return null
 
   return createPortal(

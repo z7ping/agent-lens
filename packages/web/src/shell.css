@@ -433,19 +433,8 @@
 .agent-scope-option input { width: 13px; height: 13px; accent-color: var(--al-accent); }
 .agent-scope-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-scope-order-actions { display: inline-flex; margin-left: auto; gap: 1px; }
-.agent-scope-order-actions button {
-  display: grid;
-  width: 23px;
-  height: 23px;
-  place-items: center;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--al-muted);
-  cursor: pointer;
-}
-.agent-scope-order-actions button:hover:not(:disabled) { background: var(--al-surface); color: var(--al-ink); }
-.agent-scope-order-actions button:disabled { opacity: .25; cursor: default; }
+.agent-scope-order-actions .ui-icon-button { border-color: transparent; background: transparent; color: var(--al-muted); }
+.agent-scope-order-actions .ui-icon-button:hover:not(:disabled) { background: var(--al-surface); color: var(--al-ink); }
 .agent-scope-option-state { margin-left: auto; color: var(--al-muted-2); font-size: 12px; }
 .agent-scope-order-actions + .agent-scope-option-state { margin-left: 3px; }
 .agent-scope-option-state.is-detected { color: var(--al-success); }

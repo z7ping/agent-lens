@@ -203,7 +203,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
       ]}/>
     </div>
     <div className="workspace-view-filter-actions">
-      {canRelaxFilters && <button type="button" className="workspace-view-clear-filter" onClick={relaxFilters}>{t('filters.clear')}</button>}
+      {canRelaxFilters && <Button className="workspace-view-clear-filter" onClick={relaxFilters}>{t('filters.clear')}</Button>}
       <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
   </div>

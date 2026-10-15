@@ -1,11 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { orderAgentsByPreference } from './agent-order'
 import { useIntegrationOrder } from './IntegrationOrderProvider'
+import { AgentOrderActions, useAgentOrderDrag } from './AgentOrderControls'
 import { usePinnedAgents } from './PinnedAgentsProvider'
 import { UiIcon } from './UiIcon'
+import { Button } from './ui'
 import { AgentLogo } from './AgentLogo'
 
 export function agentLabel(sourceId: string, fallback?: string): string {
@@ -43,9 +45,9 @@ export function AgentScope({ agents, value, onChange, allLabel }: { agents: Agen
   const { t } = useTranslation('agents')
   const resolvedAllLabel = allLabel === undefined ? t('scope.all') : allLabel
   const { pinned, toggle } = usePinnedAgents()
-  const { ordered, canReorder, move, moveBy, reset } = useIntegrationOrder()
+  const { ordered, canReorder, reset } = useIntegrationOrder()
+  const { draggedId, dragProps } = useAgentOrderDrag()
   const orderedAgents = useOrderedAgents(agents)
-  const reorderableAgents = orderedAgents.filter(agent => canReorder(agent.sourceId))
   const visible = orderedAgents.filter(agent => pinned.includes(agent.sourceId))
   const shown = resolvedAllLabel === false ? orderedAgents : (() => {
     const shortcuts = visible.slice(0, 4)
@@ -61,7 +63,6 @@ export function AgentScope({ agents, value, onChange, allLabel }: { agents: Agen
   const menuRef = useRef<HTMLDivElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState<ScopeMenuPosition | null>(null)
-  const [draggedId, setDraggedId] = useState('')
 
   const updateMenuPosition = () => {
     const anchor = summaryRef.current
@@ -133,40 +134,19 @@ export function AgentScope({ agents, value, onChange, allLabel }: { agents: Agen
       overflowY: 'auto',
     } : { position: 'fixed', visibility: 'hidden' }}
   >
-    <div className="agent-scope-menu-head"><div><b>{t('scope.title')}</b><span>{t('scope.reorderHint')}</span></div><button type="button" onClick={reset}>{t('scope.reset')}</button></div>
+    <div className="agent-scope-menu-head"><div><b>{t('scope.title')}</b><span>{t('scope.reorderHint')}</span></div><Button size="small" onClick={reset}>{t('scope.reset')}</Button></div>
     {orderedAgents.length ? orderedAgents.map(agent => {
       const reorderable = canReorder(agent.sourceId)
-      const reorderIndex = reorderableAgents.findIndex(item => item.sourceId === agent.sourceId)
       return <div
         key={agent.sourceId}
         className={`agent-scope-option ${draggedId === agent.sourceId ? 'is-dragging' : ''} ${reorderable ? '' : 'is-fixed-order'}`}
-        draggable={reorderable}
-        onDragStart={(event: DragEvent<HTMLDivElement>) => {
-          if (!reorderable) return
-          setDraggedId(agent.sourceId)
-          event.dataTransfer.effectAllowed = 'move'
-        }}
-        onDragOver={event => {
-          if (!reorderable) return
-          event.preventDefault()
-          event.dataTransfer.dropEffect = 'move'
-        }}
-        onDrop={event => {
-          if (!reorderable) return
-          event.preventDefault()
-          if (draggedId) move(draggedId, agent.sourceId)
-          setDraggedId('')
-        }}
-        onDragEnd={() => setDraggedId('')}
+        {...dragProps(agent.sourceId)}
       >
         <UiIcon name="drag" size={16} className={`agent-scope-drag ${reorderable ? '' : 'is-disabled'}`} />
         <input type="checkbox" aria-label={t('scope.showInToolbar', { agent: agentLabel(agent.sourceId, agent.displayName) })} checked={pinned.includes(agent.sourceId)} onChange={() => toggle(agent.sourceId)} />
         <AgentLogo sourceId={agent.sourceId} size="compact" />
         <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
-        <span className="agent-scope-order-actions">
-          <button type="button" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={t('scope.moveUp', { agent: agentLabel(agent.sourceId, agent.displayName) })}><UiIcon name="arrow-big-up" size={14}/></button>
-          <button type="button" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={t('scope.moveDown', { agent: agentLabel(agent.sourceId, agent.displayName) })}><UiIcon name="arrow-big-down" size={14}/></button>
-        </span>
+        <AgentOrderActions sourceId={agent.sourceId} label={agentLabel(agent.sourceId, agent.displayName)} className="agent-scope-order-actions"/>
         <span className={`agent-scope-option-state ${agent.detected ? 'is-detected' : ''}`}>{agent.detected ? t('scope.detected') : t('scope.notDetected')}</span>
       </div>
     }) : <div className="agent-scope-empty">{t('scope.empty')}</div>}
