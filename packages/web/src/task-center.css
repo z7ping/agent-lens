@@ -409,6 +409,26 @@
 .task-center-project-hint { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .task-center-new-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
 
+/* Browser directory navigator: uses the shared Dialog; only business rows are local. */
+.host-directory-browser-content { display: grid; min-width: 0; gap: 12px; }
+.host-directory-browser-location { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.host-directory-browser-shortcuts,
+.host-directory-browser-recent { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.host-directory-browser-recent > span { color: var(--al-muted); font-size: 12px; margin-right: 4px; }
+.host-directory-browser-shortcuts .btn,
+.host-directory-browser-recent .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.host-directory-browser-results-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; min-width: 0; gap: 8px; padding-top: 9px; border-top: 1px solid var(--al-line); }
+.host-directory-browser-results-head > span { flex: 1 1 auto; min-width: 140px; color: var(--al-ink-2); font-size: 12px; overflow-wrap: anywhere; }
+.host-directory-browser-results-head .ui-field { flex: 0 1 220px; min-width: 130px; }
+.host-directory-browser-list { display: grid; align-content: start; gap: 2px; min-height: 72px; max-height: min(44vh, 360px); overflow: auto; overscroll-behavior: contain; }
+.host-directory-browser-item.btn { display: flex; width: 100%; height: auto; min-height: 34px; justify-content: flex-start; text-align: left; gap: 10px; padding: 7px 10px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--al-ink-2); }
+.host-directory-browser-item.btn:hover { background: var(--al-soft-2); }
+.host-directory-browser-item > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.host-directory-browser-item > svg:last-child { color: var(--al-muted); flex: 0 0 auto; }
+.host-directory-browser-state { padding: 30px 12px; text-align: center; color: var(--al-muted); font-size: 13px; }
+.host-directory-browser-state.is-error { color: var(--al-danger); }
+.host-directory-browser-note { margin: 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
+
 @media (max-width: 767.98px) {
   .task-center-page { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .task-center-main { grid-column: 1; grid-row: 1; }
