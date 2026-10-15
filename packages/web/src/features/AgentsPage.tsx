@@ -555,7 +555,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   }
 
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
-    <header className="agent-card-head">
+    <header className={`agent-card-head ${isPi ? 'has-inline-tabs' : ''}`.trim()}>
       <div className="agent-identity">
         <AgentLogo sourceId={agent.sourceId} size="large"/>
         <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2></div>
