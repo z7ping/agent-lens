@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
+import { resolveWindowsNpmShimNodeEntry } from './pi-live/sdk-loader'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
