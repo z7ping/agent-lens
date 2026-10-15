@@ -104,7 +104,7 @@ export function AgentsResponsivePage({
             aria-pressed={activeView === 'management'}
             className={`scope-chip ${activeView === 'management' ? 'scope-chip-active' : ''}`}
             onClick={() => setActiveView('management')}
-          >{t('navigation:agentIntegration')}</button>
+          >{t('navigation:integrationManagement')}</button>
           {isPi && <button
             type="button"
             aria-pressed={activeView === 'ecosystem'}
