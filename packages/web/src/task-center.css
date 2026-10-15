@@ -400,6 +400,7 @@
 .task-center-directory-field { min-width: 0; }
 .task-center-new-directory-hint { margin: 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
 .task-center-directory-error { margin: 0; color: var(--al-danger); font-size: 12px; line-height: 1.5; }
+.task-center-directory-valid { margin: 0; color: var(--al-success); font-size: 12px; line-height: 1.5; }
 .task-center-recent-directories { display: grid; gap: 6px; }
 .task-center-recent-directories > span { color: var(--al-muted); font-size: 12px; font-weight: 650; }
 .task-center-recent-directory-items { display: flex; flex-wrap: wrap; gap: 6px; }
