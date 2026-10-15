@@ -27,15 +27,17 @@ let inFlightDrives: Promise<string[]> | undefined
 async function availableWindowsDrives(): Promise<string[]> {
   if (cachedWindowsDrives && Date.now() - cachedWindowsDrives.at < 60_000) return cachedWindowsDrives.roots
   if (inFlightDrives) return inFlightDrives
-  inFlightDrives = Promise.all('CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(async letter => {
+  const probe = Promise.all('CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(async letter => {
     const root = `${letter}:\\`
     try { return (await stat(root)).isDirectory() ? root : undefined }
     catch { return undefined }
-  })).then(roots => {
-    const present = roots.filter((root): root is string => Boolean(root))
-    cachedWindowsDrives = { at: Date.now(), roots: present }
-    return present
-  }).finally(() => { inFlightDrives = undefined })
+  })).then(roots => roots.filter((root): root is string => Boolean(root)))
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<string[]>(resolve => { timer = setTimeout(() => resolve([]), 1_500) })
+  inFlightDrives = Promise.race([probe, timeout]).then(roots => {
+    cachedWindowsDrives = { at: Date.now(), roots }
+    return roots
+  }).finally(() => { if (timer) clearTimeout(timer); inFlightDrives = undefined })
   return inFlightDrives
 }
 
