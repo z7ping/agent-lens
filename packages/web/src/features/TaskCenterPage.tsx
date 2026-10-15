@@ -472,11 +472,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         summaryMeta={false}
         agents={agents}
         agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}
-        multipleSelectionBehavior="pick-from-all"
       />
       <SelectMenu
-        className="task-center-project-filter"
-        variant="toolbar"
+
         value={review.filters.projectId}
         onChange={projectId => model.setReviewFilters({ projectId })}
         ariaLabel={t('center.history.filterProject')}
