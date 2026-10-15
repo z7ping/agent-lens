@@ -49,7 +49,15 @@ interface HookCoordinate {
   handler: HookHandler
 }
 
-const CLAUDE_EVENTS = ['PreToolUse', 'PostToolUse'] as const
+// Low-frequency, source-visible lifecycle hooks supplement History without
+// substituting ephemeral Runtime notifications for persisted messages.
+const CLAUDE_EVENTS = [
+  'PreToolUse', 'PostToolUse', 'PostToolUseFailure',
+  'PermissionRequest', 'PermissionDenied',
+  'SessionStart', 'SessionEnd', 'Stop', 'StopFailure',
+  'PreCompact', 'PostCompact', 'SubagentStart', 'SubagentStop',
+  'InstructionsLoaded', 'ConfigChange', 'TaskCreated', 'TaskCompleted', 'Notification',
+] as const
 const CODEX_EVENTS = [
   'SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PermissionRequest',
   'PreToolUse', 'PostToolUse', 'PreCompact', 'PostCompact',
