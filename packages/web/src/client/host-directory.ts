@@ -1,3 +1,5 @@
+import { translateProduct } from '../i18n/runtime'
+
 interface HostDirectorySelection {
   workspacePath: string | null
 }
@@ -13,7 +15,8 @@ export async function selectHostProjectDirectory(): Promise<string | undefined> 
     } catch {
       // Use HTTP status below.
     }
-    throw new Error(message || `Directory selection failed (${response.status})`)
+    if (response.status === 501) throw new Error(translateProduct('task:center.newTask.pickerUnavailable'))
+    throw new Error(message || translateProduct('task:center.newTask.pickerFailed', { status: response.status }))
   }
   const result = await response.json() as HostDirectorySelection
   return result.workspacePath ?? undefined
