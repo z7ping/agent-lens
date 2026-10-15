@@ -441,7 +441,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             ordering={ordering}
             highlighted={item.integrationId === targetIntegrationId}
           />)}
-          {!primaryItems.length && <div className="integration-management-empty">{searchQuery.trim() || statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
+          {!primaryItems.length && <div className="integration-management-empty">{supportedItems.length === 0 && (searchQuery.trim() || statusFilter !== 'all') ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
           </div>
         </section>
 
