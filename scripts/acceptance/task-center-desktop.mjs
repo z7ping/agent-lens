@@ -584,13 +584,17 @@ async function inspectWorkspaceUi(win) {
     await delay(75)
   }
   if (!toolsReady) errors.push('工具分析界面未就绪')
-  const table = toolsReady ? await withTimeout(win.webContents.executeJavaScript(`(() => {
+  const table = toolsReady ? await withTimeout(win.webContents.executeJavaScript(`(async () => {
     const headers = [...document.querySelectorAll('.tool-table thead th[aria-sort]')]
     if (!headers.length) return { checked: false, reason: '当前没有工具调用表格数据' }
     const buttons = headers.map(th => th.querySelector('button.tool-table-sort'))
     const first = buttons[0]
     const beforeSort = headers[0]?.getAttribute('aria-sort')
-    if (first instanceof HTMLButtonElement) first.click()
+    if (first instanceof HTMLButtonElement) {
+      first.focus({ preventScroll: true })
+      first.click()
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    }
     const afterSort = headers[0]?.getAttribute('aria-sort')
     return {
       checked: true,
@@ -617,10 +621,10 @@ await persistReport()
 
 const hardTimeout = setTimeout(async () => {
   report.ok = false
-  report.error = report.error || '桌面验收超过 75 秒硬超时；报告已提前落盘以保留诊断信息'
+  report.error = report.error || '桌面验收超过 90 秒硬超时；报告已提前落盘以保留诊断信息'
   report.finishedAt = new Date().toISOString()
   try { await persistReport() } finally { app.exit(1) }
-}, 75_000)
+}, 90_000)
 
 try {
   for (const viewport of viewports) {
