@@ -11,7 +11,7 @@ if (process.platform !== 'win32' || !['nsis', 'dir'].includes(target) || arch !=
   throw new Error('Usage (Windows only): node scripts/build-windows-desktop.mjs <nsis|dir> --x64')
 }
 
-const { distPath } = resolveWindowsElectronRuntime(root)
+const { distPath, version } = resolveWindowsElectronRuntime(root)
 const desktopRequire = createRequire(resolve(root, 'apps/desktop/package.json'))
 const builderPackagePath = desktopRequire.resolve('electron-builder/package.json')
 const builder = JSON.parse(readFileSync(builderPackagePath, 'utf8'))
@@ -20,7 +20,7 @@ if (!builderBin) throw new Error('Installed electron-builder has no executable i
 
 const cli = resolve(dirname(builderPackagePath), builderBin)
 const result = spawnSync(process.execPath, [
-  cli, '--win', target, '--x64', `--config.electronDist=${distPath}`,
+  cli, '--win', target, '--x64', `--config.electronDist=${distPath}`, `--config.electronVersion=${version}`,
 ], { cwd: resolve(root, 'apps/desktop'), stdio: 'inherit', windowsHide: true })
 if (result.error) throw result.error
 process.exit(result.status ?? 1)
