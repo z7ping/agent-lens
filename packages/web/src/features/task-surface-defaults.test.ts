@@ -4,7 +4,6 @@ import test from 'node:test'
 
 const reviewPage = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
 const liveTaskPage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
-const piLivePage = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const taskProcessGroup = readFileSync(new URL('./TaskProcessGroup.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
@@ -78,25 +77,24 @@ test('Task Review 允许离屏卸载重正文，并通过 expansionStore 保留�
   assert.match(reviewPage, /expansionStore=\{roundExpansionRef\.current\}/)
 })
 
-test('Pi Live defaults and resets to full observable events natively', () => {
-  assert.match(piLivePage, /const \[showAllEvents, setShowAllEvents\] = useState\(true\)/)
-  assert.match(piLivePage, /setShowAllEvents\(true\)/)
-  assert.doesNotMatch(piLivePage, /setShowAllEvents\(false\)/)
+test('通用 Live 的事件和轮次由统一 Task Surface 投影负责', () => {
+  assert.match(liveTaskPage, /<StableLiveRounds/)
+  assert.match(liveTaskPage, /<GenericLiveRound/)
+  assert.doesNotMatch(liveTaskPage, /PiLivePage|piLiveApi/)
 })
 
-test('Pi Live Header 保持安全边距并使用统一 Pi Agent 图标', () => {
-  assert.match(piLivePage, /marker=\{<span className="agent-icon source-pi" aria-hidden="true"><UiIcon name="agent" size=\{14\}\/\><\/span>\}/)
-  assert.doesNotMatch(piLivePage, /marker=\{<span className=\{state\?\.isStreaming/)
+test('Live Header 使用统一的任务表头与安全边距', () => {
+  assert.match(liveTaskPage, /<TaskHeader/)
   assert.match(taskSessionCss, /\.task-session-view \.task-header \{[\s\S]*?padding-inline: var\(--al-space-page-x\);/)
   assert.doesNotMatch(taskDetailCss, /\.task-surface-live \.task-header\s*\{/)
 })
 
-test('Task 信息明确展示历史会话与 Pi Live 的开始时间', () => {
+test('任务信息保留历史会话开始/结束时间，实时会话由统一运行时状态驱动', () => {
   assert.match(reviewPage, /label: t\('local\.header\.startTime'\)/)
   assert.match(reviewPage, /label: t\('local\.header\.endTime'\)/)
   assert.match(reviewPage, /label: t\('local\.header\.duration'\)/)
-  assert.match(piLivePage, /state\.startedAt/)
-  assert.match(piLivePage, /label: t\('header\.elapsed'\)/)
+  assert.match(liveTaskPage, /runtimeStatus/)
+  assert.match(liveTaskPage, /<TaskHeader/)
 })
 
 test('legacy Task Surface MutationObserver compatibility layer is removed', () => {
