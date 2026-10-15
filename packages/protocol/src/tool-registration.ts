@@ -15,6 +15,20 @@ import type { TimelineEvidenceDto, TimelineItemDto } from './timeline'
  */
 export type ToolRegistrationSourceType = 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown'
 
+/** Source adapters produce this payload via ObservationCandidate.kind=tool.registration.
+ * runtimeId is the real runtime identity, not a process name or executable path.
+ * The adapter must preserve its own scoped registrationId across removal.
+ */
+export type ToolRegistrationPayloadDto = {
+  registrationId: string
+  runtimeId: string
+  profileId?: string
+  nativeToolName: string
+} & (
+  | { action: 'registered'; toolSourceType: ToolRegistrationSourceType; mcpServerId?: string }
+  | { action: 'removed' }
+)
+
 export interface ResolvedToolRegistration {
   toolSourceType: ToolRegistrationSourceType
   mcpServerId?: string
