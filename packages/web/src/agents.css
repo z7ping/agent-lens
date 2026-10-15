@@ -42,6 +42,9 @@
 
 .agent-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 11px; padding: 16px 18px 13px; }
 .agent-identity { display: flex; min-width: 0; flex: 1; align-items: flex-start; gap: 10px; }
+/* Inline agent tabs anchor next to the identity, not to the variable card width. */
+.agent-card-head.has-inline-tabs .agent-identity { flex: 0 1 auto; }
+.agent-card-head.has-inline-tabs .agent-status { margin-left: auto; }
 .agent-identity h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .agent-identity p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .source-dot.large { width: 10px; height: 10px; margin-top: 5px; }
