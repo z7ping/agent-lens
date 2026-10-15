@@ -19,7 +19,10 @@ const HOST_OPEN_DIRECTORY_RESULT_HEADER = 'X-AgentLens-Host-Open-Directory-Resul
 const PROJECT_DIRECTORY_PICKER = 'project-directory'
 const port = process.env.AGENT_LENS_PORT ? Number(process.env.AGENT_LENS_PORT) : DEFAULT_PORT
 const trustedOrigin = `http://127.0.0.1:${port}`
-const projectDirectoryUrl = `${trustedOrigin}/api/v1/pi-live/project-directory`
+const projectDirectoryUrls = [
+  `${trustedOrigin}/api/v1/live/project-directory`,
+  `${trustedOrigin}/api/v1/pi-live/project-directory`,
+]
 const openPathUrl = `${trustedOrigin}/api/v1/host/open-path`
 const openDirectoryUrl = `${trustedOrigin}/api/v1/host/open-directory`
 let pendingSelection = null
@@ -68,7 +71,7 @@ async function openLocalPath(path) {
 function selectProjectDirectory(owner) {
   if (pendingSelection) return pendingSelection
   const options = {
-    title: '选择 Pi 项目目录',
+    title: '选择任务工作目录',
     buttonLabel: '选择此目录',
     properties: ['openDirectory'],
   }
@@ -82,7 +85,7 @@ function selectProjectDirectory(owner) {
 
 function registerDesktopHostRequests() {
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: [projectDirectoryUrl, openPathUrl, openDirectoryUrl] },
+    { urls: [...projectDirectoryUrls, openPathUrl, openDirectoryUrl] },
     (details, callback) => {
       if (details.method !== 'POST') {
         callback({ requestHeaders: details.requestHeaders })
