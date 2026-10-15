@@ -73,6 +73,10 @@
   font-size: 12px;
 }
 .agent-installation > span { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.agent-installation .agent-config { flex: 0 1 auto; max-width: 100%; }
+.agent-installation .agent-config > small { flex: 0 0 auto; white-space: nowrap; }
+.agent-installation .agent-config > .select-menu-trigger { flex: 1 1 320px; width: min(320px, 100%); min-width: 0; }
+.agent-installation .agent-config > .local-path-actions { flex: 0 0 auto; }
 .agent-installation small { font-size: 12px; }
 .agent-installation b { color: var(--al-ink-2); font-weight: 620; }
 .agent-installation code { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -613,7 +617,9 @@
 .agent-managed-files-dialog .ui-overlay-header-actions {
   flex: 0 0 auto;
   gap: 7px;
+  white-space: nowrap;
 }
+.agent-managed-files-dialog .ui-overlay-header-actions > * { flex-shrink: 0; }
 .agent-managed-files-dialog .ui-overlay-body {
   overflow: hidden;
   padding: 0;
@@ -744,6 +750,8 @@
   font-weight: 620;
 }
 .managed-file-view-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   padding: 2px;
@@ -752,6 +760,8 @@
   background: var(--al-surface);
 }
 .managed-file-view-toggle button {
+  flex: 0 0 auto;
+  white-space: nowrap;
   min-height: 24px;
   padding: 0 8px;
   border: 0;
