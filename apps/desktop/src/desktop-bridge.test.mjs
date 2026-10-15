@@ -16,7 +16,9 @@ test('Desktop 在主窗口创建前注册宿主请求适配', async () => {
 
 test('Desktop 由主进程接管宿主能力并持有原生目录选择器', async () => {
   const bridge = await readFile(bridgePath, 'utf8')
+  assert.match(bridge, /\/api\/v1\/live\/project-directory/)
   assert.match(bridge, /\/api\/v1\/pi-live\/project-directory/)
+  assert.match(bridge, /\.\.\.projectDirectoryUrls/)
   assert.match(bridge, /webRequest\.onBeforeSendHeaders/)
   assert.match(bridge, /details\.webContents/)
   assert.match(bridge, /webContents\.fromId\(details\.webContentsId\)/)

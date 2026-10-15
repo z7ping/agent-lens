@@ -602,7 +602,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           {mode === 'new' && <LiveNewTaskPanel
             options={projectOptions}
             preferredProjectId={preferredProjectId}
-            nativeDirectoryPicker={snapshot.health?.runtime?.owner === 'desktop' || snapshot.health?.runtime?.mode === 'foreground'}
+            nativeDirectoryPicker={snapshot.health?.runtime?.mode === 'foreground' || (snapshot.health?.runtime?.owner === 'desktop' && /\bElectron\/\d+/i.test(navigator.userAgent))}
             projectLoading={projectLoading || (!projectDiscoveryError && !launchableProjects.length && (projectLoadingMore || Boolean(launchablePage?.nextCursor)))}
             projectHasMore={launchablePage?.hasMore ?? false}
             projectLoadingMore={projectLoadingMore}

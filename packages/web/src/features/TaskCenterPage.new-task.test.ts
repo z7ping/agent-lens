@@ -62,7 +62,7 @@ test('新建实时任务的目录选择只回填路径，启动前校验路径�
   assert.match(panel, /controller\.abort\(\)/)
   assert.match(panel, /directoryIsVerified/)
   assert.match(panel, /disabled=\{!available \|\| selectingDirectory \|\| !directoryIsVerified\}/)
-  assert.match(page, /nativeDirectoryPicker=\{snapshot\.health\?\.runtime\?\.owner === 'desktop' \|\| snapshot\.health\?\.runtime\?\.mode === 'foreground'\}/)
+  assert.match(page, /nativeDirectoryPicker=\{snapshot\.health\?\.runtime\?\.mode === 'foreground'[\s\S]{0,140}Electron/)
   assert.match(styles, /\.task-center-new \{[^}]*background: var\(--al-surface\)/)
   assert.doesNotMatch(styles, /\.task-center-new-card \{[^}]*box-shadow:/)
   assert.match(chinese, /newProject: '选择其他目录'/)

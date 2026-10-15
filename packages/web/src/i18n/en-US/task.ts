@@ -233,6 +233,8 @@ export const englishTaskMessages: LocaleMessagesDto = {
         newDescription: 'Use any local working directory',
         launchModeAria: 'Choose how to start the task',
         selectDirectory: 'Browse directory',
+        pickerUnavailable: 'Directory selection is unavailable in this mode. Enter an absolute path instead.',
+        pickerFailed: 'Directory selection failed ({{status}}). Enter the path manually.',
         inputPath: 'Enter path',
         pathPlaceholder: 'Example: F:\\workspace\\my-project',
         pathAria: 'Enter the task working directory',

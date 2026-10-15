@@ -405,6 +405,34 @@ test('Live host directory validation accepts existing directories and rejects mi
   }
 })
 
+test('generic Live directory picker forwards browser requests to the configured host picker', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  let selected: string | undefined = '/tmp/agent-lens-picked'
+  let calls = 0
+  const surface = await startHttpSurface(storage, {
+    port: 0,
+    lives: new FakeLiveService(new FakeLiveAdapter()),
+    selectProjectDirectory: async () => { calls += 1; return selected },
+  })
+  const endpoint = `http://${surface.host}:${surface.port}/api/v1/live/project-directory`
+
+  try {
+    const chosen = await fetch(endpoint, { method: 'POST' })
+    assert.equal(chosen.status, 200)
+    assert.deepEqual(await chosen.json(), { workspacePath: selected })
+    selected = undefined
+    const cancelled = await fetch(endpoint, { method: 'POST' })
+    assert.equal(cancelled.status, 200)
+    assert.deepEqual(await cancelled.json(), { workspacePath: null })
+    assert.equal(calls, 2)
+    assert.equal((await fetch(endpoint)).status, 405)
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
 test('generic Live HTTP surface coalesces concurrent identical adapter reads', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

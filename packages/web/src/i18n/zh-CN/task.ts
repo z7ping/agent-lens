@@ -233,6 +233,8 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         newDescription: '指定任意本机工作目录',
         launchModeAria: '选择任务启动方式',
         selectDirectory: '浏览目录',
+        pickerUnavailable: '当前运行模式不支持弹出目录选择器，请直接输入绝对路径。',
+        pickerFailed: '目录选择失败（{{status}}），请直接输入路径。',
         inputPath: '输入路径',
         pathPlaceholder: '例如 F:\\workspace\\my-project',
         pathAria: '输入任务工作目录',
