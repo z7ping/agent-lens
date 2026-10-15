@@ -380,7 +380,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     || supportedItems.some(item => item.integrationId === targetIntegrationId))
   useEffect(() => {
     if (revealSupported) setSupportedExpanded(true)
-  }, [revealSupported])
+  }, [revealSupported, searchQuery, statusFilter, targetIntegrationId])
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
