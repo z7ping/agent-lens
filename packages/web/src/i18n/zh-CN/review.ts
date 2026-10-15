@@ -97,6 +97,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         filesUpdated: '修改文件',
         filesChanged: '文件变更',
         filesCount: '{{first}} 等 {{count}} 个文件',
+        hiddenCount: '当前已加载 {{count}} 条未识别事件，查看全部事件',
         imageViewed: '查看图片',
         imageGenerated: '生成图片',
         runtimeStartupInfo: '运行启动信息',

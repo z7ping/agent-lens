@@ -20,3 +20,9 @@ test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 A
   assert.doesNotMatch(taskMessageSource, /sourceId\s*===\s*['"]pi['"]/)
   assert.match(taskDetailCss, /\.task-message-attachment-image \{[\s\S]*?object-fit: contain;/)
 })
+
+test('Native 消息操作不能因样式隐藏，扩展动作保留可见入口', () => {
+  assert.match(taskDetailCss, /\.task-message-actions \{ display: flex;/)
+  assert.doesNotMatch(taskDetailCss, /\.task-message-actions \{ display: none;/)
+  assert.match(taskMessageSource, /\{actions && <div className="task-message-actions">\{actions\}<\/div>\}/)
+})

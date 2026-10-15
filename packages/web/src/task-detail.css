@@ -339,7 +339,8 @@
 .task-surface .markdown-message-actions button:hover,
 .task-surface .task-message-actions button:hover { background: var(--al-soft-2); color: var(--al-ink-2); }
 .task-surface .task-message-user .markdown-message-actions { margin-top: 4px; }
-.task-surface .task-message-actions { display: none; }
+.task-surface .task-message-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.task-surface .task-message-actions:empty { display: none; }
 
 /* ── Thinking ── */
 .task-surface .task-thinking { position: relative; z-index: 1; margin: 1px 0 2px; overflow: visible; border: 0; background: transparent; }
@@ -410,10 +411,11 @@
 .task-surface .task-tool-list { margin: 0; padding-left: 9px; overflow: visible; border-left: 2px solid color-mix(in srgb, var(--al-accent) 58%, var(--al-line)); }
 .task-surface .task-thinking-content .task-tool-group { margin-left: 12px; }
 .task-surface .task-process-sequence { display: grid; gap: 5px; }
-.task-surface .task-process-message { min-width: 0; }
+.task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }
+.task-surface .task-process-sequence > .task-event-row { padding-inline-start: 8px; }
 .task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
 .task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }
-.task-surface .task-process-thinking-card { border: 1px solid var(--al-line); border-radius: var(--radius-sm); background: var(--al-soft-2); }
+.task-surface .task-process-thinking-card { border: 0; border-radius: var(--radius-sm); background: var(--al-soft-2); }
 .task-surface .task-process-thinking-card > .task-thinking-summary { padding: 4px 8px; }
 .task-surface .task-process-thinking-card > .task-thinking-content { margin: 0; padding: 4px 8px 8px; }
 .task-surface .task-process-sequence .task-tool-group { margin-left: 0; }

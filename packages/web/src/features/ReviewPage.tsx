@@ -993,6 +993,7 @@ function ReviewRoundAdapter({
   forceExpanded,
   forceRevision,
   showAllEvents,
+  onShowAllEvents,
 }: {
   sessionId: string
   interaction: ReviewInteractionDto
@@ -1005,6 +1006,7 @@ function ReviewRoundAdapter({
   forceExpanded: boolean
   forceRevision: number
   showAllEvents: boolean
+  onShowAllEvents: () => void
 }) {
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
@@ -1073,6 +1075,11 @@ function ReviewRoundAdapter({
   const promptEntries = groups.filter(entry => entry.type === 'message' && entry.node.role === 'user')
   const afterProcessEntries = groups.filter(entry => !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
   const hasFinalAnswer = afterProcessEntries.some(entry => entry.type === 'message' && entry.node.role === 'assistant')
+  // 只统计当前已经加载的原始事件，避免把未展开的惰性过程误报为 0。
+  const unknownCount = groups.reduce((sum, entry) => sum + (entry.type === 'raw-event-group'
+    ? entry.items.length : entry.type === 'process'
+      ? entry.items.reduce((total, item) => total + (item.type === 'raw-event-group' ? item.items.length : 0), 0)
+      : 0), 0)
   const resolvedProcessState = hasFinalAnswer ? 'settled' : round.state
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
@@ -1112,6 +1119,9 @@ function ReviewRoundAdapter({
     {promptEntries.map(renderEntry)}
     {processGroup}
     {afterProcessEntries.map(renderEntry)}
+    {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
+      <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
+    </button>}
   </TaskRound>
 }
 
@@ -1877,6 +1887,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   forceExpanded={expandAllRounds}
                   forceRevision={roundExpansionRevision}
                   showAllEvents={showAllEvents}
+                  onShowAllEvents={toggleEventVisibility}
                   inspect={setInspect}
                   loadAttachments={model.reviewAttachments}
                   loadProcess={model.reviewProcessDetail}

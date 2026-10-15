@@ -487,6 +487,7 @@ function GenericLiveItem({
         state: item.streaming ? 'running' : 'settled',
       }}
       defaultExpanded={item.streaming}
+      className="task-process-thinking-card"
     >
       <MarkdownContent text={item.text} streaming={item.streaming}/>
     </TaskThinking>
@@ -561,9 +562,11 @@ const GenericLiveRound = memo(function GenericLiveRound({
       thinkingDurationMs={items.reduce((sum, item) => sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
       state={processState} defaultExpanded={processState === 'running'}
     >
-      {items.map(item => item.kind === 'message' && item.phase === 'commentary'
-        ? <div key={item.id} className="task-process-message" data-message-role="commentary"><MarkdownContent text={item.text} streaming={item.streaming}/></div>
-        : renderItem(item))}
+      <div className="task-process-sequence">
+        {items.map(item => item.kind === 'message' && item.phase === 'commentary'
+          ? <div key={item.id} className="task-process-message" data-message-role="commentary"><MarkdownContent text={item.text} streaming={item.streaming}/></div>
+          : renderItem(item))}
+      </div>
     </TaskProcessGroup>)
   }
   for (const item of projection.items) {

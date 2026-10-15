@@ -226,8 +226,8 @@
 .evidence-link { min-height: 0; height: auto; padding: 1px 5px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); font-size: 12px; font-weight: 620; line-height: 1.45; }
 .evidence-link:hover { background: var(--al-soft); color: var(--al-ink-2); }
 
-.raw-event-group { margin: 7px 0 7px 26px; overflow: hidden; border: 1px dashed var(--al-line-strong); border-radius: 8px; background: var(--al-soft-2); color: var(--al-muted); }
-.raw-event-group > summary { display: grid; min-height: 48px; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; list-style: none; font-size: 12px; }
+.raw-event-group { margin: 4px 0; overflow: hidden; border: 0; border-radius: 6px; background: var(--al-soft-2); color: var(--al-muted); }
+.raw-event-group > summary { display: grid; min-height: 30px; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; list-style: none; font-size: 12px; }
 .raw-event-group > summary::marker { content: ''; }
 .raw-event-group > summary::-webkit-details-marker { display: none; }
 .raw-event-group-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
@@ -238,6 +238,9 @@
 .raw-event-summary-copy small { overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-weight: 400; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .raw-event-group > summary time { flex: 0 0 auto; color: var(--al-muted-2); font-variant-numeric: tabular-nums; }
 .raw-event-group > div { padding: 0 2px 2px; }
+.review-unknown-count { display: inline-flex; align-items: center; gap: 6px; margin: 3px 0; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); cursor: pointer; font: 12px/1.5 var(--font-ui); }
+.review-unknown-count:hover, .review-unknown-count:focus-visible { background: var(--al-soft-2); color: var(--al-ink-2); }
+.review-unknown-count svg { flex: 0 0 14px; color: var(--al-muted-2); }
 .injected-context-content { margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-ink-2); font-family: var(--font-mono); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
 
 /* Inspector 只保留业务内容，遮罩、抽屉几何、滚动与键盘行为由统一 Drawer 持有。 */

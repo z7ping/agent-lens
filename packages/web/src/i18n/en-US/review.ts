@@ -97,6 +97,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         filesUpdated: 'Files updated',
         filesChanged: 'Files changed',
         filesCount: '{{first}} and {{count}} files',
+        hiddenCount: '{{count}} unidentified events loaded · show all events',
         imageViewed: 'Image viewed',
         imageGenerated: 'Image generated',
         runtimeStartupInfo: 'Runtime startup information',
