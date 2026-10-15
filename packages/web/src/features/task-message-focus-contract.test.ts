@@ -33,5 +33,5 @@ test('核心视图保留未识别事件可达性，不用无依据的全量计�
   assert.match(review, /!showAllEvents && unknownCount > 0/)
   assert.match(review, /onShowAllEvents=\{toggleEventVisibility\}/)
   assert.match(review, /onClick=\{onShowAllEvents\}/)
-  assert.match(review, /type="raw-event-group"/)
+  assert.match(review, /entry\.type === 'raw-event-group'/)
 })
