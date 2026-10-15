@@ -48,3 +48,25 @@ test('Pi 真实生命周期事件获得友好标签，同时原始事件保持�
     assert.equal(reviewEventLabel(node), label)
   }
 })
+
+test('新原生事件保留一致的人类可读标签，且不因跨 Agent 丢失语义', () => {
+  const cases: Array<[string, string, string, string]> = [
+    ['pi', 'session.lifecycle', 'context.edited', '上下文条目已编辑'],
+    ['claude-code', 'session.lifecycle', 'task.completed', '任务已完成'],
+    ['claude-code', 'session.lifecycle', 'turn.error', '轮次执行失败'],
+    ['claude-code', 'context.injected', 'instructions.loaded', '项目规则已加载'],
+    ['hermes', 'session.lifecycle', 'session.reset', '会话已重置'],
+    ['hermes', 'permission.response', 'human.input.resolved', '权限响应'],
+    ['opencode', 'session.lifecycle', 'subtask.requested', '子任务已请求'],
+    ['opencode', 'session.lifecycle', 'model.retry', '模型请求重试'],
+    ['dsh', 'context.compaction', '', '上下文压缩'],
+  ]
+  for (const [sourceId, kind, event, expected] of cases) {
+    const node = { sourceId, kind, label: '通用事件', payload: { event } } as ReviewEventNodeDto
+    assert.equal(reviewEventLabel(node), expected, `${sourceId}/${event}`)
+  }
+  assert.equal(reviewArtifactLabel({ action: 'file.patch', files: ['a.ts'] }), '应用文件补丁')
+  assert.equal(reviewArtifactSummary({ action: 'file.patch', files: ['/workspace/src/a.ts', 'b.ts'] }), 'a.ts 等 2 个文件')
+  assert.equal(reviewArtifactLabel({ action: 'file.attached', filename: 'image.png' }), '添加附件')
+  assert.equal(reviewArtifactSummary({ action: 'file.attached', filename: 'image.png' }), 'image.png')
+})

@@ -37,6 +37,8 @@ export function reviewArtifactLabel(payload: JsonValue): string | undefined {
   const action = stringValue(value, 'action', 'event', 'type').toLowerCase()
   if (action === 'image.view') return agentLensI18n.t('review:local.event.imageViewed')
   if (action === 'image.generate' || action === 'image.generation') return agentLensI18n.t('review:local.event.imageGenerated')
+  if (action === 'file.patch') return agentLensI18n.t('review:local.event.patchApplied')
+  if (action === 'file.attached') return agentLensI18n.t('review:local.event.fileAttached')
   if (action !== 'file.change') return undefined
 
   const types = new Set(artifactChangeTypes(value.changes))
@@ -50,8 +52,12 @@ export function reviewArtifactSummary(payload: JsonValue): string {
   const value = record(payload)
   const action = stringValue(value, 'action', 'event', 'type').toLowerCase()
   const files = artifactFiles(value.changes)
-  if (files.length) {
-    const names = files.map(path => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path)
+  const nativeFiles = Array.isArray(value.files)
+    ? value.files.filter((item): item is string => typeof item === 'string')
+    : []
+  const visibleFiles = files.length ? files : nativeFiles
+  if (visibleFiles.length) {
+    const names = visibleFiles.map(path => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path)
     return names.length === 1
       ? names[0]!
       : agentLensI18n.t('review:local.event.filesCount', { count: names.length, first: names[0] })
@@ -59,6 +65,7 @@ export function reviewArtifactSummary(payload: JsonValue): string {
   if (action === 'image.view' || action === 'image.generate' || action === 'image.generation') {
     return stringValue(value, 'path', 'savedPath', 'saved_path')
   }
+  if (action === 'file.attached') return stringValue(value, 'filename', 'mime')
   return action
 }
 
@@ -109,5 +116,32 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
     if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.branchSummary')
   }
 
+  // Common source-backed actions use stable vocabulary across Agent adapters.
+  const commonLifecycle: Record<string, string> = {
+    'context.edited': 'contextEdited',
+    'config.changed': 'configChanged',
+    'task.created': 'taskCreated',
+    'task.completed': 'taskCompleted',
+    'notification.received': 'notificationReceived',
+    'subtask.requested': 'subtaskRequested',
+    'agent.selected': 'agentSelected',
+    'model.retry': 'modelRetry',
+    'session.finalized': 'sessionFinalized',
+    'session.reset': 'sessionReset',
+    'human.input.requested': 'humanInputRequested',
+    'human.input.resolved': 'humanInputResolved',
+    'turn.error': 'turnFailed',
+  }
+  const commonKey = node.kind === 'session.lifecycle' ? commonLifecycle[action] : undefined
+  if (commonKey) return agentLensI18n.t(`review:local.event.${commonKey}`)
+  if (node.kind === 'context.injected' && action === 'instructions.loaded') {
+    return agentLensI18n.t('review:local.event.instructionsLoaded')
+  }
+  if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
+  if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
+  if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
+  if (node.kind === 'permission.response') return agentLensI18n.t('review:local.event.permissionResponse')
+  if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
+  if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
   return node.label
 }
