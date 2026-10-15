@@ -14,6 +14,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
+import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentManagedFilesDialog } from '../components/AgentManagedFilesDialog'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -470,6 +471,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   onManageIntegration(integrationId: string): void
 }) {
   const { t } = useTranslation('agents')
+  const { t: tPi } = useTranslation('piEcosystem')
   const [showAllBindings, setShowAllBindings] = useState(false)
   const [managedRoot, setManagedRoot] = useState<ManagedAssetRoot | null>(null)
   const [pathError, setPathError] = useState('')
@@ -553,6 +555,10 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         <AgentLogo sourceId={agent.sourceId} size="large"/>
         <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2></div>
       </div>
+      {isPi && <WorkspaceViewTabs inline label={tPi('ecosystemTab')} value={piView} tabs={[
+        { value: 'overview', label: tPi('overviewTab'), to: '/agents?agent=pi' },
+        { value: 'ecosystem', label: tPi('ecosystemTab'), to: '/agents?agent=pi&view=ecosystem' },
+      ]}/>}
       <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
     </header>
 
