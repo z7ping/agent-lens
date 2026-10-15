@@ -70,22 +70,13 @@
 }
 
 @media (max-width: 767.98px) {
-  .backup-topbar-controls {
+  .backup-toolbar-controls {
     gap: 4px;
   }
 
   .backup-agent-filter-slot {
     min-width: 100px;
     flex-basis: 140px;
-  }
-
-  .backup-view-switcher,
-  .backup-toolbar-actions {
-    gap: 3px;
-  }
-
-  .backup-view-switcher .scope-chip {
-    padding-inline: 8px;
   }
 
   .backup-toolbar-actions .btn {
@@ -207,21 +198,6 @@
 }
 
 @media (max-width: 575.98px) {
-  .backup-topbar-controls > .backup-agent-filter-slot {
-    display: none;
-  }
-
-  .backup-mobile-scope {
-    display: block;
-    width: min(240px, 100%);
-    margin-bottom: 12px;
-  }
-
-  .backup-view-switcher .scope-chip {
-    padding-inline: 7px;
-    font-size: 12px;
-  }
-
   .backup-asset-overview {
     align-items: flex-start;
     flex-direction: column;
