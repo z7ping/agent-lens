@@ -142,7 +142,7 @@ function HistoryToolGroup({ id, items, settled = false }: { id: string; items: H
     item.output,
     item.rawInput,
     { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
-    { toolSourceType: item.toolSourceType, mcpServerId: item.mcpServerId },
+    { ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}), ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}) },
     t,
   )), t)
   return <TaskToolGroup model={model}/>
