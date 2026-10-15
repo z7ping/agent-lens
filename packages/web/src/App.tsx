@@ -379,10 +379,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     return <IntegrationOnboarding model={model} snapshot={snapshot}/>
   }
 
-  const agentManagementId = managedIntegrationItems.find(item =>
-    item.integrationId === resolvedAgentOverviewSourceId
-      || item.productId === agentSelectionMap.get(resolvedAgentOverviewSourceId)?.productId
-  )?.integrationId ?? resolvedAgentOverviewSourceId
   const currentView = new URLSearchParams(location.search).get('view')
   const workspaceTabs = onTools || onInsights
     ? [
@@ -392,7 +388,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     : onAgents
       ? [
           { value: 'overview', label: t('navigation:overview'), to: `/agents${resolvedAgentOverviewSourceId ? `?agent=${encodeURIComponent(resolvedAgentOverviewSourceId)}` : ''}` },
-          { value: 'management', label: t('navigation:integrationManagement'), to: `/agents?view=management${agentManagementId ? `&agent=${encodeURIComponent(agentManagementId)}` : ''}` },
+          { value: 'management', label: t('navigation:integrationManagement'), to: '/agents?view=management' },
         ]
       : [
           { value: 'assets', label: t('backup:assetView.currentTab'), to: '/backup' },

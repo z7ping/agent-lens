@@ -453,11 +453,10 @@
 /* 一级页面公共骨架 */
 .page-content {
   width: 100%;
-  max-width: 1500px;
   min-height: 0;
   flex: 1;
-  margin: 0 auto;
-  padding: 28px 28px 56px;
+  margin: 0;
+  padding: 28px max(28px, calc((100% - 1500px) / 2 + 28px)) 56px;
   overflow: auto;
   scrollbar-gutter: stable;
 }
@@ -478,8 +477,11 @@
 .agents-content,
 .integration-management-content,
 .backup-content {
-  max-width: var(--al-workspace-content-max, 1320px);
-  padding: 16px var(--al-workspace-content-inset, 28px) 64px;
+  /* Keep the reading axis centered, but let the scrollbar reach the right edge. */
+  padding: 16px max(
+    var(--al-workspace-content-inset, 28px),
+    calc((100% - var(--al-workspace-content-max, 1320px)) / 2 + var(--al-workspace-content-inset, 28px))
+  ) 64px;
 }
 @media (max-width: 767.98px) {
   .tools-content,

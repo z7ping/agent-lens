@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -176,6 +176,11 @@ export function BackupPage({
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
   const [searchParams] = useSearchParams()
   const activeView = searchParams.get('view') === 'history' ? 'history' : 'assets'
+  const contentRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    // Views share one page node, so reset their reading position on tab changes.
+    if (contentRef.current) contentRef.current.scrollTop = 0
+  }, [activeView])
   const [createOpen, setCreateOpen] = useState(false)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [physicalPathSnapshot, setPhysicalPathSnapshot] = useState<BackupSnapshotManifestDto | null>(null)
@@ -479,7 +484,7 @@ export function BackupPage({
         <IconButton disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
       </div>
     </div>, toolbarHost) : null}
-    <div className="page-content backup-content">
+    <div ref={contentRef} className="page-content backup-content">
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
       {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><Button size="small" onClick={() => setError('')}>{t('page.close')}</Button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}

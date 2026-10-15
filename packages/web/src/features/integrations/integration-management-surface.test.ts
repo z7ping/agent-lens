@@ -53,7 +53,7 @@ test('两组始终可见，只有智能体自身一级 Disclosure，深链自动
   assert.match(page, /className="integration-management-section integration-management-section-secondary"/)
   assert.match(page, /open={expanded}/)
   assert.match(page, /if \(highlighted\) setExpanded\(true\)/)
-  assert.match(page, /target\?\.scrollIntoView/)
+  assert.match(page, /target\?\.scrollIntoView\(\{ block: 'nearest'/)
   assert.doesNotMatch(page, /supportedExpanded|integration-management-supported-disclosure/)
 })
 
@@ -63,12 +63,13 @@ test('智能体接入页面以 Integration Management 为管理清单，不读�
   assert.doesNotMatch(page, /facets\?\.agents/)
 })
 
-test('接入管理在独立业务工具栏提供搜索、状态筛选与排序，旧路由兼容', () => {
+test('接入管理在独立业务工具栏提供状态筛选与排序，不再重复搜索 6 个智能体', () => {
   assert.match(app, /toolbarHost=\{workspaceToolbarHost\}/)
   assert.match(app, /<WorkspaceViewTabs/)
   assert.match(page, /createPortal/)
   assert.match(page, /className="workspace-view-controls"/)
-  assert.match(page, /searchQuery/)
+  assert.doesNotMatch(page, /searchQuery|managementPage\.searchPlaceholder/)
+  assert.match(page, /statusFilter === 'detected'/)
   assert.match(page, /statusFilter/)
   assert.match(page, /setOrdering\(value => !value\)/)
   assert.match(page, /integration-management-order-list/)

@@ -41,7 +41,6 @@ export function AgentsResponsivePage({
     : isPi && requestedView === 'ecosystem'
       ? 'ecosystem'
       : 'overview'
-  const previousViewRef = useRef<AgentWorkspaceView>(activeView)
 
   useEffect(() => {
     // Supported-but-undetected catalog entries have no overview to hydrate.
@@ -57,14 +56,9 @@ export function AgentsResponsivePage({
     return () => window.clearTimeout(timer)
   }, [hasSelectedOverview, model, sourceId, activeView])
 
-  // Switching Pi's inline tabs should not jump the workspace scroll position.
-  // Only the independent management view starts from the top.
+  // Each view starts at its own beginning; deep links may subsequently reveal a specific row.
   useLayoutEffect(() => {
-    const previousView = previousViewRef.current
-    previousViewRef.current = activeView
-    if ((previousView === 'management' || activeView === 'management') && shellRef.current) {
-      shellRef.current.scrollTop = 0
-    }
+    if (shellRef.current) shellRef.current.scrollTop = 0
   }, [activeView])
 
   const selectAgent = (nextSourceId: string) => {
@@ -101,10 +95,10 @@ export function AgentsResponsivePage({
     <div ref={shellRef} className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'} ${activeView === 'management' ? 'is-management' : ''}`.trim()}>
       {activeView === 'management'
         ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
-        : <>
+        : <div className={`agents-overview-layout ${showInsights ? '' : 'without-insights'}`.trim()}>
           <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
           {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
-        </>}
+        </div>}
     </div>
   </>
 }
