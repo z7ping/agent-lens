@@ -23,7 +23,7 @@ interface PiLiveHistoryItemBase {
 export type PiLiveHistoryItem =
   | (PiLiveHistoryItemBase & { kind: 'message'; role: 'user' | 'assistant'; text: string; attachments?: ReviewMessageAttachmentDto[] | undefined; modelLabel?: string | undefined; state?: PiLiveItemState | undefined; contentIndex?: number | undefined })
   | (PiLiveHistoryItemBase & { kind: 'thinking'; text: string; state?: PiLiveItemState | undefined; contentIndex?: number | undefined; startedAtMs?: number | undefined; durationMs?: number | undefined })
-  | (PiLiveHistoryItemBase & { kind: 'tool'; callId: string; name: string; summary: string; rawInput?: string | undefined; output: string; status: 'running' | 'success' | 'error' | 'unknown'; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined })
+  | (PiLiveHistoryItemBase & { kind: 'tool'; callId: string; name: string; summary: string; rawInput?: string | undefined; output: string; status: 'running' | 'success' | 'error' | 'unknown'; toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined; mcpServerId?: string | undefined; parentToolCallId?: string | undefined; durationMs?: number | undefined; startedAtMs?: number | undefined; contentIndex?: number | undefined })
   | (PiLiveHistoryItemBase & { kind: 'usage'; usage: PiNativeUsage; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown })
   | (PiLiveHistoryItemBase & { kind: 'lifecycle'; event: string; label: string; detail: string; nativeType?: string | undefined; parentId?: string | undefined; raw?: unknown })
 
