@@ -377,7 +377,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }
 
   const openHistoryTask = useCallback((id: string) => {
-    // A → B → A may reuse the same session ID before an older RAF finishes.
+    // Repeated A-B-A switches may reuse the same session ID before an older RAF finishes.
     // Generation identity and explicit cancellation prevent stale scroll ownership.
     const revision = ++historyScrollRevisionRef.current
     if (historyScrollFrameRef.current !== null) window.cancelAnimationFrame(historyScrollFrameRef.current)
