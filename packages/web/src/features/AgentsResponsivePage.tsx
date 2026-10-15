@@ -31,6 +31,7 @@ export function AgentsResponsivePage({
   const orderedAgents = useOrderedAgents(agents)
   const [searchParams, setSearchParams] = useSearchParams()
   const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
+  const hasSelectedSummary = Boolean(snapshot.agentSummaries?.items.some(item => item.sourceId === sourceId))
   const isPi = sourceId === 'pi'
   const requestedView = searchParams.get('view')
   const activeView: AgentWorkspaceView = requestedView === 'management'
@@ -41,9 +42,9 @@ export function AgentsResponsivePage({
 
   useEffect(() => {
     // Supported-but-undetected catalog entries have no overview to hydrate.
-    if (!sourceId || !snapshot.agentSummaries?.items.some(item => item.sourceId === sourceId)) return
+    if (!sourceId || !hasSelectedSummary) return
     void model.ensureAgentDetail(sourceId).catch(() => undefined)
-  }, [model, sourceId, snapshot.agentSummaries])
+  }, [model, sourceId, hasSelectedSummary])
 
   useEffect(() => {
     if (!hasSelectedOverview || activeView !== 'overview') return
@@ -53,6 +54,13 @@ export function AgentsResponsivePage({
     return () => window.clearTimeout(timer)
   }, [hasSelectedOverview, model, sourceId, activeView])
 
+  const integrationIdFor = (nextSourceId: string) => {
+    const selected = agents.find(item => item.sourceId === nextSourceId)
+    return snapshot.integrationManagement?.items.find(item =>
+      item.integrationId === nextSourceId || (selected && item.productId === selected.productId),
+    )?.integrationId ?? nextSourceId
+  }
+
   const setActiveView = (view: AgentWorkspaceView) => {
     const next = new URLSearchParams(searchParams)
     if (view === 'overview') {
@@ -61,11 +69,7 @@ export function AgentsResponsivePage({
     } else {
       next.set('view', view)
       if (view === 'management' && sourceId) {
-        const selected = agents.find(item => item.sourceId === sourceId)
-        const management = snapshot.integrationManagement?.items.find(item =>
-          item.integrationId === sourceId || (selected && item.productId === selected.productId),
-        )
-        next.set('agent', management?.integrationId ?? sourceId)
+        next.set('agent', integrationIdFor(sourceId))
       }
     }
     setSearchParams(next, { replace: true })
@@ -74,11 +78,7 @@ export function AgentsResponsivePage({
   const selectAgent = (nextSourceId: string) => {
     onSelectAgent(nextSourceId)
     const next = new URLSearchParams(searchParams)
-    const selected = agents.find(item => item.sourceId === nextSourceId)
-    const management = snapshot.integrationManagement?.items.find(item =>
-      item.integrationId === nextSourceId || (selected && item.productId === selected.productId),
-    )
-    next.set('agent', activeView === 'management' ? management?.integrationId ?? nextSourceId : nextSourceId)
+    next.set('agent', activeView === 'management' ? integrationIdFor(nextSourceId) : nextSourceId)
     if (next.get('view') === 'ecosystem' && nextSourceId !== 'pi') next.delete('view')
     setSearchParams(next, { replace: true })
   }
