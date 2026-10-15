@@ -8,8 +8,10 @@ export function installationChoices(
 ): AgentInstallationOverviewDto[] {
   const seen = new Set<string>()
   return installations.filter(item => {
-    const directory = (item.configRoot ?? item.dataRoot ?? item.executable ?? item.id)
-      .trim().replace(/\\/g, '/').replace(/\/+$/, '').toLocaleLowerCase()
+    const path = (item.configRoot ?? item.dataRoot ?? item.executable ?? item.id)
+      .trim().replace(/\\/g, '/').replace(/\/+$/, '')
+    // Only Windows drive/UNC paths are case-insensitive; preserve POSIX casing.
+    const directory = /^(?:[a-z]:\/|\/\/)/i.test(path) ? path.toLocaleLowerCase() : path
     const key = JSON.stringify([item.version?.trim() ?? '', directory])
     if (seen.has(key)) return false
     seen.add(key)
