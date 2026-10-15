@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
@@ -131,20 +131,10 @@ function IntegrationRescanAction({
 
 function WorkspaceTopBar({
   pathname,
-  search,
-  snapshot,
-  selectedAgentId,
   onOpenNavigation,
-  actions,
-  onPageToolsHost,
 }: {
   pathname: string
-  search: string
-  snapshot: ClientSnapshot
-  selectedAgentId: string
   onOpenNavigation(): void
-  actions?: ReactNode
-  onPageToolsHost(node: HTMLDivElement | null): void
 }) {
   const { t } = useTranslation('navigation')
   let items: Array<{ label: string; to?: string }>
@@ -158,18 +148,10 @@ function WorkspaceTopBar({
     items = [{ label: t('taskCenter'), to: '/review' }, { label: t('sessionDetail') }]
   } else if (pathname === '/review') {
     items = [{ label: t('taskCenter') }]
-  } else if (pathname.startsWith('/tools')) {
-    items = [{ label: t('insights'), to: '/insights' }, { label: t('tools') }]
-  } else if (pathname.startsWith('/insights')) {
-    items = [{ label: t('insights') }, { label: t('usageOverview') }]
+  } else if (pathname.startsWith('/tools') || pathname.startsWith('/insights')) {
+    items = [{ label: t('insights') }]
   } else if (pathname.startsWith('/agents')) {
-    const selected = snapshot.agents?.items.find(item => item.sourceId === selectedAgentId)
-      ?? snapshot.agentSummaries?.items.find(item => item.sourceId === selectedAgentId)
-    const managed = snapshot.integrationManagement?.items.find(item =>
-      item.integrationId === selectedAgentId || item.productId === selectedAgentId
-    )
-    const isManagement = new URLSearchParams(search).get('view') === 'management'
-    items = [{ label: t('agents') }, { label: isManagement ? t('integrationManagement') : selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
+    items = [{ label: t('agents') }]
   } else if (pathname.startsWith('/backup')) {
     items = [{ label: t('assetBackup') }]
   } else {
@@ -184,8 +166,7 @@ function WorkspaceTopBar({
         ? <NavLink key={item.to} to={item.to}>{item.label}</NavLink>
         : <span key={`${item.label}:${index}`} title={item.label}>{item.label}</span>)}
     />
-    <div className="workspace-topbar-page-tools" ref={onPageToolsHost}/>
-    {actions && <div className="workspace-topbar-actions">{actions}</div>}
+    <div className="workspace-topbar-page-tools"/>
   </div>
 }
 
@@ -461,11 +442,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <div ref={mainRef} className="app-main">
         <WorkspaceTopBar
           pathname={location.pathname}
-          search={location.search}
-          snapshot={snapshot}
-          selectedAgentId={resolvedAgentOverviewSourceId}
           onOpenNavigation={() => setMobileNavigationOpen(true)}
-          onPageToolsHost={() => undefined}
         />
         {hasWorkspaceTabs && <>
           <WorkspaceViewTabs
