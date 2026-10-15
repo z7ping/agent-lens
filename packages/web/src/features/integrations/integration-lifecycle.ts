@@ -31,6 +31,36 @@ export function integrationPackageUpdateAvailable(
   return Boolean(installed && bundled && semver.valid(installed) && semver.valid(bundled) && semver.gt(bundled, installed))
 }
 
+export interface AgentUpgradeMethod {
+  value: string
+  labelKey: 'npmGlobal' | 'officialCli'
+  command: string
+  docsUrl: string
+}
+
+/** Official commands, never inferred from an executable path or run by AgentLens. */
+const OFFICIAL_AGENT_UPGRADE_METHODS: Readonly<Record<string, readonly AgentUpgradeMethod[]>> = {
+  pi: [
+    { value: 'npm', labelKey: 'npmGlobal', command: 'npm install -g @mariozechner/pi-coding-agent@latest', docsUrl: 'https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent' },
+  ],
+  codex: [
+    { value: 'npm', labelKey: 'npmGlobal', command: 'npm install -g @openai/codex@latest', docsUrl: 'https://github.com/openai/codex' },
+  ],
+  'claude-code': [
+    { value: 'official', labelKey: 'officialCli', command: 'claude update', docsUrl: 'https://code.claude.com/docs/en/setup' },
+  ],
+  hermes: [
+    { value: 'official', labelKey: 'officialCli', command: 'hermes update', docsUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/updating/' },
+  ],
+  opencode: [
+    { value: 'official', labelKey: 'officialCli', command: 'opencode upgrade', docsUrl: 'https://opencode.ai/docs/cli/' },
+  ],
+}
+
+export function agentUpgradeMethods(productId: string): readonly AgentUpgradeMethod[] {
+  return OFFICIAL_AGENT_UPGRADE_METHODS[productId] ?? []
+}
+
 export function agentObservationState(
   agent: Pick<AgentOverviewDto, 'supported' | 'detected'> | undefined,
   discovery: IntegrationToolDiscoveryItemDto | undefined,
