@@ -10,6 +10,7 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { copyText } from '../client/clipboard'
+import { AgentLensApi } from '../client/api'
 import { useClientSnapshot } from '../App'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
@@ -24,6 +25,8 @@ import {
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
 import { agentVersionComparison, checkAgentLatestVersion, type AgentLatestVersion } from './integrations/agent-online-versions'
+
+const managementVersionApi = new AgentLensApi()
 
 const capabilityLabelKey: Record<string, string> = {
   source: 'integrationCapability.source',
@@ -275,7 +278,7 @@ function IntegrationManagementRow({
       summaryMeta={<span className="integration-management-summary-states">
         <span className="integration-management-version-summary" role="status">
           <span title={t('managementPage.localAgentVersion')}>{t('managementPage.versionInstalledShort')} <b>{localAgentVersion}</b></span>
-          <span title={t('managementPage.remoteAgentVersion', { source: latestVersion?.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel })}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
+          <span title={latestVersion?.status === 'ready' ? t('managementPage.remoteAgentVersion', { source: latestVersion.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel }) : onlineVersionLabel}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
         </span>
         {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
         <StatusBadge
@@ -458,6 +461,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const [ordering, setOrdering] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
+  const [installationVersions, setInstallationVersions] = useState<Record<string, readonly AgentInstallationOverviewDto[]>>({})
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
   const { ordered } = useIntegrationOrder()
@@ -524,16 +528,25 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
 
-  // The management summary has only presence/path facts; installation versions
-  // arrive through Agent detail. Hydrate discovered agents without requiring
-  // users to open each overview page first.
+  // Read installation versions without triggering the Agent enrichment/asset
+  // pipeline: management needs version facts, not every Agent's assets.
   useEffect(() => {
     if (!management || !snapshot.agentSummaries) return
+    let active = true
     for (const item of management.items) {
       if (item.tool?.presence !== 'present') continue
+      if (model.getSnapshot().agents?.items.some(agent => agent.productId === item.productId)) continue
       const source = snapshot.agentSummaries.items.find(agent => agent.productId === item.productId)
-      if (source) void model.ensureAgentDetail(source.sourceId).catch(() => undefined)
+      if (!source) continue
+      void managementVersionApi.agentDetail(source.sourceId).then(detail => {
+        if (!active || !detail) return
+        setInstallationVersions(current => ({
+          ...current,
+          [item.productId]: detail.item.installations,
+        }))
+      }).catch(() => undefined)
     }
+    return () => { active = false }
   }, [management, snapshot.agentSummaries, model])
 
   if (!management) {
@@ -584,7 +597,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           {primaryItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
             item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-            installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations}
+            installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations ?? installationVersions[item.productId]}
             moveUpTargetId={primaryItems[index - 1]?.integrationId}
             moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
@@ -606,7 +619,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             {supportedItems.map((item, index) => <IntegrationManagementRow
               key={item.integrationId}
               item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-              installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations}
+              installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations ?? installationVersions[item.productId]}
               moveUpTargetId={supportedItems[index - 1]?.integrationId}
               moveDownTargetId={supportedItems[index + 1]?.integrationId}
               model={model}
