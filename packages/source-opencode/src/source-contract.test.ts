@@ -337,3 +337,49 @@ test('OpenCode Raw recovery 能实际重读 SQLite row 并识别 drift', async (
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('OpenCode 官方 Part Schema 语义映射：压缩、重试、子任务、Agent、文件及补丁', async () => {
+  const cases: Array<{ part: Record<string, unknown>; kind: string; action?: string; event?: string }> = [
+    { part: { type: 'compaction', auto: true, tail_start_id: 'msg-1' }, kind: 'context.compaction' },
+    { part: { type: 'retry', attempt: 2, error: { name: 'APIError' } }, kind: 'session.lifecycle', event: 'model.retry' },
+    { part: { type: 'subtask', agent: 'reviewer', description: '检查模块', prompt: 'find bugs' }, kind: 'session.lifecycle', event: 'subtask.requested' },
+    { part: { type: 'agent', name: 'build' }, kind: 'session.lifecycle', event: 'agent.selected' },
+    { part: { type: 'patch', hash: 'hash-1', files: ['a.ts', 'b.ts'] }, kind: 'artifact.action', action: 'file.patch' },
+    { part: { type: 'file', filename: 'screenshot.png', mime: 'image/png', url: 'data:image/png;base64,private-raw' }, kind: 'artifact.action', action: 'file.attached' },
+  ]
+  for (const { part, kind, action, event } of cases) {
+    const normalized = await normalizeOpenCodeRecord(record(part, { role: 'assistant' }), {} as never)
+    assert.equal(normalized.observations.length, 1, String(part.type))
+    const observation = normalized.observations[0]
+    assert.equal(observation?.kind, kind, String(part.type))
+    const payload = observation?.payload as { action?: string; event?: string }
+    if (action) assert.equal(payload.action, action)
+    if (event) assert.equal(payload.event, event)
+    assert.equal(JSON.stringify(payload).includes('private-raw'), false)
+  }
+})
+
+test('OpenCode snapshot is evidence-only; future Part remains explicit unknown', async () => {
+  const snapshot = await normalizeOpenCodeRecord(record({ type: 'snapshot', snapshot: 'opaque-ref' }, { role: 'assistant' }), {} as never)
+  assert.equal(snapshot.observations.length, 0)
+  assert.equal(snapshot.evidenceCandidates.length, 1)
+  const unknown = await normalizeOpenCodeRecord(record({ type: 'future-part', future: 42 }, { role: 'assistant' }), {} as never)
+  assert.equal(unknown.observations[0]?.kind, 'unknown')
+  assert.equal((unknown.observations[0]?.payload as { rawType: string }).rawType, 'part/future-part')
+})
+
+test('OpenCode StepFinishPart has sourced usage only if native tokens exist', async () => {
+  const step = await normalizeOpenCodeRecord(record({
+    type: 'step-finish', reason: 'stop', cost: 0.04,
+    tokens: { input: 100, output: 50, reasoning: 12, cache: { read: 80, write: 10 } },
+  }, { role: 'assistant' }), {} as never)
+  assert.deepEqual(step.observations.map(item => item.kind), ['session.lifecycle', 'usage'])
+  const usage = step.observations[1]?.payload as { inputTokens: number; outputTokens: number; cacheReadTokens: number; totalTokens: number; cost: { total: number } }
+  assert.equal(usage.inputTokens, 100)
+  assert.equal(usage.outputTokens, 50)
+  assert.equal(usage.cacheReadTokens, 80)
+  assert.equal(usage.totalTokens, 150)
+  assert.equal(usage.cost.total, 0.04)
+  const legacy = await normalizeOpenCodeRecord(record({ type: 'step-finish' }, { role: 'assistant' }), {} as never)
+  assert.deepEqual(legacy.observations.map(item => item.kind), ['session.lifecycle'])
+})
