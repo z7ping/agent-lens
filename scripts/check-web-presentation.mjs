@@ -77,7 +77,7 @@ function webCssFiles(dir) {
   })
 }
 function cssRules(source) {
-  const clean = source.replace(/\/\*[\s\S]*?\*\//g, '')
+  const clean = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*@(?:reference|import|charset|namespace)[^;]*;/gm, '')
   const result = []
   // Flat rules also match declarations inside @media and @supports blocks.
   for (const match of clean.matchAll(/(?:^|[{}])\s*([^{}]+?)\s*\{([^{}]*)\}/gm)) {
