@@ -30,11 +30,11 @@
 .agent-insights-rail {
   display: grid;
   width: 100%;
-  max-width: 1500px;
+  max-width: var(--al-workspace-content-max, 1320px);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin: 14px auto 64px;
-  padding: 0 20px;
+  padding: 0 var(--al-workspace-content-inset, 28px);
 }
 .agent-insight-card { min-width: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 12px; background: var(--al-surface); }
 .agent-insight-head { display: flex; min-height: 52px; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--al-line); }
@@ -88,6 +88,9 @@
 @media (min-width: 1400px) {
   .agents-responsive-shell {
     --agent-insights-width: clamp(360px, 22vw, 420px);
+    width: 100%;
+    max-width: var(--al-workspace-content-max, 1320px);
+    margin-inline: auto;
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--agent-insights-width);
     align-items: start;
