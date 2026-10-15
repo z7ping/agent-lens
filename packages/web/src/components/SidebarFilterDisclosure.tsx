@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
-import { agentLabel, sourceDot, useOrderedAgents } from './AgentScope'
+import { agentLabel, useOrderedAgents } from './AgentScope'
+import { AgentLogo } from './AgentLogo'
 import { useIntegrationOrder } from './IntegrationOrderProvider'
 import { Button, Disclosure, IconButton, UiIcon } from './ui'
 import { nextAgentFilterSelection } from './task-agent-selection'
@@ -108,7 +109,7 @@ export function SidebarFilterDisclosure({
           disabled={!agent.detected}
           onClick={() => selectAgent(agent.sourceId)}
         >
-          <span className={`source-dot ${sourceDot(agent.sourceId)}`} aria-hidden="true"/>
+          <AgentLogo sourceId={agent.sourceId} size="compact"/>
           <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
           {!agent.detected && <span className="workspace-agent-filter-state">{t('sidebarFilter.notDetected')}</span>}
           {selected && <UiIcon name="check" size={14} aria-hidden="true"/>}
@@ -150,7 +151,7 @@ export function SidebarFilterDisclosure({
               onDragEnd={() => setDraggedId('')}
             >
               <UiIcon name="drag" size={16} className="workspace-agent-order-drag"/>
-              <span className={`source-dot ${sourceDot(agent.sourceId)}`} aria-hidden="true"/>
+              <AgentLogo sourceId={agent.sourceId} size="compact"/>
               <b>{label}</b>
               <span className="workspace-agent-order-buttons">
                 <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={tAgents('scope.moveUp', { agent: label })}><UiIcon name="arrow-big-up" size={14}/></IconButton>
