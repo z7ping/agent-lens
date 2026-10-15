@@ -19,6 +19,13 @@ test('Pi ecosystem links live within agent card instead of a fourth full-width w
   assert.match(agent, /to: '\/agents\?agent=pi'/)
 })
 
+test('Pi inline tabs stay anchored beside agent identity as content width changes', () => {
+  assert.match(agent, /className=\{`agent-card-head \$\{isPi \? 'has-inline-tabs' : ''\}`\.trim\(\)\}/)
+  assert.match(css, /\.agent-card-head\.has-inline-tabs \.agent-identity \{ flex: 0 1 auto; \}/)
+  assert.match(css, /\.agent-card-head\.has-inline-tabs \.agent-status \{ margin-left: auto; \}/)
+  assert.match(overview, /previousView === 'management' \|\| activeView === 'management'/)
+})
+
 test('installation selector has actual dedup and one-line directory label', () => {
   assert.match(agent, /installationChoices\(agent\.installations\)/)
   assert.match(agent, /options=\{choices\.map\(/)
