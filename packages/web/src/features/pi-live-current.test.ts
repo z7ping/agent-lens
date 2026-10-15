@@ -3,6 +3,30 @@ import test from 'node:test'
 import { appendPiLiveDelta, finishPiLiveContentBlock, finishPiLiveTool, markPiLiveItemsRunning, reconcilePiLiveItems, settlePiLiveItems, startPiLiveContentBlock, startPiLiveTool } from './pi-live-current'
 import type { PiLiveHistoryItem } from './pi-live-history'
 
+test('Pi MCP 元数据与嵌套父调用 ID 经过 Live 更新及 Snapshot 对账不会丢失', () => {
+  const live = startPiLiveTool([], {
+    callId: 'codemode-1/0', name: 'mcp__dbx__execute_query',
+    summary: '{"sql":"select 1"}', toolSourceType: 'mcp',
+    mcpServerId: 'dbx', parentToolCallId: 'codemode-1',
+  })
+  const settled = finishPiLiveTool(live, 'codemode-1/0', 'success', 'ok')
+  const tool = settled[0]
+  assert.ok(tool?.kind === 'tool')
+  assert.equal(tool.toolSourceType, 'mcp')
+  assert.equal(tool.mcpServerId, 'dbx')
+  assert.equal(tool.parentToolCallId, 'codemode-1')
+  const persisted: PiLiveHistoryItem[] = [{
+    id: 'stored', kind: 'tool', callId: 'codemode-1/0',
+    name: 'mcp__dbx__execute_query', summary: '', output: 'ok',
+    status: 'success', at: '',
+  }]
+  const reconciled = reconcilePiLiveItems(settled, persisted)[0]
+  assert.ok(reconciled?.kind === 'tool')
+  assert.equal(reconciled.toolSourceType, 'mcp')
+  assert.equal(reconciled.mcpServerId, 'dbx')
+  assert.equal(reconciled.parentToolCallId, 'codemode-1')
+})
+
 test('Pi Live 按 SSE 到达顺序保留 thinking / text / tool 的交错块', () => {
   let items: PiLiveHistoryItem[] = []
   items = appendPiLiveDelta(items, 'thinking', '先分析', { messageEpoch: 1, contentIndex: 0 })
