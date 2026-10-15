@@ -12,8 +12,6 @@ export interface SelectMenuOption {
   disabled?: boolean | undefined
 }
 
-export type SelectMenuVariant = 'toolbar' | 'field' | 'pill'
-
 interface MenuPosition {
   left: number
   top?: number | undefined
@@ -61,8 +59,6 @@ export function SelectMenu({
   onChange,
   ariaLabel,
   placeholder,
-  variant = 'toolbar',
-  className = '',
   disabled = false,
   searchable = false,
   searchPlaceholder,
@@ -72,7 +68,6 @@ export function SelectMenu({
   onLoadMore,
   loadingMore = false,
   loadMoreLabel,
-  menuWidth = 220,
   title,
 }: {
   value: string
@@ -80,8 +75,6 @@ export function SelectMenu({
   onChange(value: string): void
   ariaLabel: string
   placeholder?: string
-  variant?: SelectMenuVariant
-  className?: string
   disabled?: boolean
   searchable?: boolean
   searchPlaceholder?: string
@@ -91,7 +84,6 @@ export function SelectMenu({
   onLoadMore?: () => void
   loadingMore?: boolean
   loadMoreLabel?: string
-  menuWidth?: number
   title?: string | undefined
 }) {
   const { t } = useTranslation('common')
@@ -123,7 +115,7 @@ export function SelectMenu({
     const trigger = triggerRef.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
-    const width = Math.min(Math.max(rect.width, menuWidth), Math.max(176, window.innerWidth - 16))
+    const width = Math.min(Math.max(rect.width, 280), Math.max(176, window.innerWidth - 16))
     const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
     const footerHeight = onLoadMore && (hasMore || loadingMore) ? 38 : 0
     const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12) + footerHeight))
@@ -131,7 +123,7 @@ export function SelectMenu({
     setPosition(openAbove
       ? { left, bottom: window.innerHeight - rect.top + 8, width }
       : { left, top: rect.bottom + 8, width })
-  }, [hasMore, loadingMore, menuWidth, onLoadMore, options.length, searchable])
+  }, [hasMore, loadingMore, onLoadMore, options.length, searchable])
 
   const close = useCallback((restoreFocus = false) => {
     setOpen(false)
@@ -233,7 +225,7 @@ export function SelectMenu({
     <button
       ref={triggerRef}
       type="button"
-      className={`select-menu-trigger select-menu-trigger-${variant} ${open ? 'is-open' : ''} ${className}`.trim()}
+      className={`select-menu-trigger ${open ? 'is-open' : ''}`.trim()}
       disabled={disabled}
       aria-label={ariaLabel}
       aria-haspopup="listbox"
@@ -250,7 +242,6 @@ export function SelectMenu({
     >
       <span className="select-menu-trigger-copy">
         <span className="select-menu-trigger-label">{selectedLabel}</span>
-        {variant === 'field' && selected?.description && <small>{selected.description}</small>}
       </span>
       <UiIcon className="select-menu-chevron" name="chevron-down" size={14}/>
     </button>
@@ -258,7 +249,7 @@ export function SelectMenu({
     {open && position && createPortal(
       <div
         ref={menuRef}
-        className={`select-menu-popover select-menu-popover-${variant}`}
+        className="select-menu-popover"
         style={menuStyle}
         onPointerDown={event => event.stopPropagation()}
         onKeyDown={handleMenuKeyDown}
