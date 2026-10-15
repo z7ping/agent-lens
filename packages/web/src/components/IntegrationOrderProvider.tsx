@@ -57,12 +57,18 @@ export function IntegrationOrderProvider({
     && !preferenceState.displayOrderConfigured
     && legacyOrder.current.length,
   )
-  const ordered = optimisticOrder
+  const preferredOrder = optimisticOrder
     ?? (pendingLegacyMigration
       ? legacyOrder.current
       : serverOrder.length
         ? serverOrder
         : legacyOrder.current)
+  // Legacy preferences may be partial; append the management catalog so every
+  // supported agent can always be moved, even before the first custom save.
+  const ordered = [...new Set([
+    ...preferredOrder,
+    ...(management?.items.map(item => item.integrationId) ?? []),
+  ])]
 
   useEffect(() => {
     if (!preferenceState || preferenceState.displayOrderConfigured || migrationAttempted.current) return
