@@ -74,7 +74,7 @@ export function WorkspaceSidebar({
     <WorkspacePrimaryNavigation
       activeSection={onReview ? 'review' : onInsights ? 'insights' : onAgents ? 'agents' : onBackup ? 'backup' : undefined}
       hasInsightsUpdate={snapshot.usage.hasNewData}
-      hasAgentsUpdate={snapshot.agentsHasNewData}
+      hasAgentsUpdate={snapshot.agentsHasNewData || Boolean(snapshot.integrationManagement?.items.some(item => item.isNew))}
       onNavigate={onMobileClose}
     />
 
