@@ -689,6 +689,11 @@
   flex: 1;
 }
 
+/* Keep the full right workspace white even when centered content has outer gutters. */
+.app-shell.is-contextless-workspace .app-main {
+  background: var(--al-surface);
+}
+
 /* Match the white Task Center reading surface without introducing page-specific cards. */
 .app-main > .workspace-page,
 .app-main > .agents-responsive-shell,
