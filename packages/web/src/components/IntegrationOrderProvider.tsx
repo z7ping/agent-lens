@@ -45,6 +45,7 @@ export function IntegrationOrderProvider({
   const migrationAttempted = useRef(false)
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null)
   const orderWriteId = useRef(0)
+  const orderWriteQueue = useRef<Promise<void>>(Promise.resolve())
 
   const managedIds = useMemo(
     () => new Set(management?.items.map(item => item.integrationId) ?? []),
@@ -83,7 +84,10 @@ export function IntegrationOrderProvider({
   const persistOrder = (next: string[]) => {
     const writeId = ++orderWriteId.current
     setOptimisticOrder(next)
-    void model.updateIntegrationPreferences({ displayOrder: next }).then(
+    // Persist gestures in order: rapid drag/click sequences must not race on the server.
+    const request = orderWriteQueue.current.then(() => model.updateIntegrationPreferences({ displayOrder: next }))
+    orderWriteQueue.current = request.then(() => undefined, () => undefined)
+    void request.then(
       () => { if (orderWriteId.current === writeId) setOptimisticOrder(null) },
       () => { if (orderWriteId.current === writeId) setOptimisticOrder(null) },
     )
@@ -112,9 +116,7 @@ export function IntegrationOrderProvider({
       persistOrder(managedOrder)
     },
     reset() {
-      ++orderWriteId.current
-      setOptimisticOrder(null)
-      void model.updateIntegrationPreferences({ displayOrder: [] }).catch(() => undefined)
+      persistOrder([])
     },
   }), [managedIds, model, ordered])
 
