@@ -1,6 +1,7 @@
 import type { SVGProps } from 'react'
 import {
   type LucideIcon,
+  ArchiveRestore,
   BrainCircuit,
   LoaderCircle,
   CheckCircle2,
@@ -52,6 +53,7 @@ import {
 
 export type UiIconName =
   | 'agent'
+  | 'backup'
   | 'thinking'
   | 'loading'
   | 'status-success'
@@ -106,6 +108,7 @@ export type UiIconName =
 
 const icons = {
   agent: Bot,
+  backup: ArchiveRestore,
   thinking: BrainCircuit,
   loading: LoaderCircle,
   'status-success': CheckCircle2,
