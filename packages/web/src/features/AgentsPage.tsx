@@ -12,7 +12,8 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
-import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
+import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentManagedFilesDialog } from '../components/AgentManagedFilesDialog'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -549,7 +550,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   return <article className="agent-card" data-source={agent.sourceId} data-enabled={String(agent.enabled)}>
     <header className="agent-card-head">
       <div className="agent-identity">
-        <span className={`source-dot large ${sourceDot(agent.sourceId)}`}/>
+        <AgentLogo sourceId={agent.sourceId} size="large"/>
         <div><h2>{agentLabel(agent.sourceId, agent.displayName)}</h2></div>
       </div>
       <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
