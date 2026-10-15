@@ -58,9 +58,10 @@
 }
 
 .insight-kpi {
+  min-height: 78px;
   padding: 14px;
   border: 1px solid var(--al-line);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--al-surface);
 }
 
@@ -92,7 +93,7 @@
   overflow: hidden;
   padding: 16px;
   border: 1px solid var(--al-line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--al-surface);
 }
 
