@@ -299,14 +299,12 @@ export function AgentManagedFilesDialog({
     {preview?.redacted && <span className="managed-file-redacted">{t('managedFiles.redacted')}</span>}
     {previewSize !== undefined && <small className="managed-file-header-size">{t('managedFiles.bytes', { count: previewSize })}</small>}
     {previewMarkdown && previewView === 'rendered' && <SelectMenu
-      className="managed-file-theme-select"
       value={markdownTheme}
       onChange={value => {
         if (!isMarkdownThemeId(value)) return
         writeMarkdownTheme(value)
       }}
       ariaLabel={t('managedFiles.themeAria')}
-      menuWidth={220}
       options={[
         { value: 'next-helvetica', label: t('managedFiles.themeNextHelvetica'), description: t('managedFiles.themeNextHelveticaDescription') },
         { value: 'agent-lens', label: t('managedFiles.themeAgentLens'), description: t('managedFiles.themeAgentLensDescription') },
