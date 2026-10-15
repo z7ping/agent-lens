@@ -71,7 +71,9 @@ test('Markdown 资产使用统一宽 Dialog 并把阅读控制收进 Header', ()
 
 test('Markdown 文档皮肤默认使用 Next Helvetica 且被限制在预览内容作用域', () => {
   assert.match(previewDialog, /useSyncExternalStore\(subscribeMarkdownTheme, readMarkdownTheme, readMarkdownTheme\)/)
-  assert.match(previewDialog, /<SelectMenu[\s\S]*?managed-file-theme-select/)
+  assert.match(previewDialog, /<SelectMenu[\s\S]*?value=\{markdownTheme\}/)
+  assert.match(previewDialog, /onChange=\{value => \{[\s\S]*?writeMarkdownTheme\(value\)/)
+  assert.doesNotMatch(previewDialog, /managed-file-theme-select|menuWidth=/)
   assert.match(previewDialog, /<MarkdownContent[^>]*theme=\{markdownTheme\}/)
   assert.match(previewDialog, /customMarkdownThemes\.map/)
   assert.match(markdownThemes, /\.markdown\[data-markdown-theme='next-helvetica'\]/)

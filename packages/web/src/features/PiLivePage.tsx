@@ -1619,8 +1619,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 title={state?.model ? t('composer.modelTitle', { model: modelLabel(state) }) : t('composer.modelGenericTitle')}
                 value={selectedModel}
                 placeholder={modelCompactLabel(state)}
-                className="pi-live-model-picker"
-                menuWidth={280}
                 disabled={!runtimeReady || controlBusy || controls.models.length === 0}
                 options={controls.models.map(item => ({
                   value: JSON.stringify([item.provider, item.id]),
@@ -1634,8 +1632,6 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 title={thinkingOptions.length <= 1 ? t('composer.thinkingNoAlternatives') : t('composer.thinkingTitle', { level: currentThinkingLabel })}
                 value={thinkingControl.value}
                 placeholder={currentThinkingLabel || t('composer.thinkingPlaceholder')}
-                className="pi-live-thinking-picker"
-                menuWidth={168}
                 disabled={!runtimeReady || controlBusy || thinkingOptions.length <= 1}
                 options={thinkingOptions}
                 onChange={level => void changeThinkingLevel(level)}
