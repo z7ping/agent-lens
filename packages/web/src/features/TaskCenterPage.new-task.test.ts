@@ -40,3 +40,28 @@ test('新建 Pi 任务复用任务中心 rail，并从统一服务端项目发�
   assert.doesNotMatch(page, /projectHistory/)
   assert.match(projectClient, /\/api\/v1\/projects\/launchable/)
 })
+
+test('新建实时任务的目录选择只回填路径，启动前校验路径并使用统一白色内容区', async () => {
+  const [page, panel, styles, chinese, english] = await Promise.all([
+    readFile(pagePath, 'utf8'),
+    readFile(newTaskPanelPath, 'utf8'),
+    readFile(fileURLToPath(new URL('../task-center.css', import.meta.url)), 'utf8'),
+    readFile(fileURLToPath(new URL('../i18n/zh-CN/task.ts', import.meta.url)), 'utf8'),
+    readFile(fileURLToPath(new URL('../i18n/en-US/task.ts', import.meta.url)), 'utf8'),
+  ])
+
+  const picker = panel.slice(panel.indexOf('const selectDirectory = async'), panel.indexOf('const startManualDirectory = async'))
+  assert.match(picker, /selectHostProjectDirectory\(\)/)
+  assert.match(picker, /if \(path\) setManualDirectory\(path\)/)
+  assert.doesNotMatch(picker, /await start\(/)
+  assert.doesNotMatch(panel, /selectDirectoryAndStart|manualDirectoryOpen/)
+  assert.match(panel, /isAbsoluteWorkspacePath\(path\)/)
+  assert.match(panel, /directoryIsInvalid \|\| undefined/)
+  assert.match(panel, /recentDirectories\.map\(/)
+  assert.match(panel, /disabled=\{!available \|\| selectingDirectory \|\| !manualDirectory\.trim\(\) \|\| directoryIsInvalid\}/)
+  assert.match(page, /nativeDirectoryPicker=\{snapshot\.health\?\.runtime\?\.owner === 'desktop' \|\| snapshot\.health\?\.runtime\?\.mode === 'foreground'\}/)
+  assert.match(styles, /\.task-center-new \{[^}]*background: var\(--al-surface\)/)
+  assert.doesNotMatch(styles, /\.task-center-new-card \{[^}]*box-shadow:/)
+  assert.match(chinese, /newProject: '选择其他目录'/)
+  assert.match(english, /newProject: 'Other directory'/)
+})
