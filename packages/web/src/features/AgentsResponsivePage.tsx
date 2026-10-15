@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import type { AgentFacetDto } from '@agent-lens/protocol'
@@ -7,6 +7,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentInsightsRail } from '../components/AgentInsightsRail'
+import { AgentLogo } from '../components/AgentLogo'
 import { SelectMenu } from '../components/ui'
 import { AgentsPage } from './AgentsPage'
 import { IntegrationManagementPage } from './IntegrationManagementPage'
@@ -30,6 +31,7 @@ export function AgentsResponsivePage({
   const snapshot = useClientSnapshot(model)
   const orderedAgents = useOrderedAgents(agents)
   const [searchParams, setSearchParams] = useSearchParams()
+  const shellRef = useRef<HTMLDivElement>(null)
   const hasSelectedOverview = Boolean(snapshot.agents?.items.some(item => item.sourceId === sourceId))
   const hasSelectedSummary = Boolean(snapshot.agentSummaries?.items.some(item => item.sourceId === sourceId))
   const isPi = sourceId === 'pi'
@@ -54,6 +56,11 @@ export function AgentsResponsivePage({
     return () => window.clearTimeout(timer)
   }, [hasSelectedOverview, model, sourceId, activeView])
 
+  // Only the workspace body scrolls when switching views; the navigation stays fixed.
+  useLayoutEffect(() => {
+    if (shellRef.current) shellRef.current.scrollTop = 0
+  }, [activeView])
+
   const selectAgent = (nextSourceId: string) => {
     onSelectAgent(nextSourceId)
     const next = new URLSearchParams(searchParams)
@@ -66,6 +73,7 @@ export function AgentsResponsivePage({
   const agentOptions = orderedAgents.map(agent => ({
     value: agent.sourceId,
     label: agentLabel(agent.sourceId, agent.displayName),
+    leading: <AgentLogo sourceId={agent.sourceId} size="compact"/>,
   }))
 
   return <>
@@ -84,11 +92,13 @@ export function AgentsResponsivePage({
       </div>,
       toolbarHost,
     ) : null}
-    {activeView === 'management'
-      ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
-      : <div className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'}`}>
-        <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
-        {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
-      </div>}
+    <div ref={shellRef} className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'} ${activeView === 'management' ? 'is-management' : ''}`.trim()}>
+      {activeView === 'management'
+        ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
+        : <>
+          <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
+          {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
+        </>}
+    </div>
   </>
 }
