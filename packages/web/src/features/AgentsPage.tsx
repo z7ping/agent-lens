@@ -30,7 +30,7 @@ import {
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
 import { PiEcosystemPanel } from './PiEcosystemPanel'
-import { installationChoices } from './agent-installation-choices'
+import { installationChoiceKey, installationChoices } from './agent-installation-choices'
 
 const capabilityLabelKey: Record<string, string> = {
   session: 'capability.session',
@@ -518,8 +518,11 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     .map(item => item.asset), [agent])
 
   const allBindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
+  const backingInstallationIds = new Set(agent.installations
+    .filter(item => installation && installationChoiceKey(item) === installationChoiceKey(installation))
+    .map(item => item.id))
   const bindings = installation
-    ? allBindings.filter(item => item.binding.installationId === installation.id)
+    ? allBindings.filter(item => backingInstallationIds.has(item.binding.installationId))
     : allBindings
   const visibleBindings = showAllBindings ? bindings : bindings.slice(0, RUNTIME_CONFIG_PATH_LIMIT)
   const userAssetCount = userGrouped.reduce((sum, [, assets]) => sum + assets.length, 0)
