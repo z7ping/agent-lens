@@ -3,7 +3,7 @@ import test from 'node:test'
 import { agentVersionComparison, checkAgentLatestVersion } from './agent-online-versions'
 
 function success(version: string, key: 'version' | 'tag_name' = 'version') {
-  return (async () => ({ ok: true, json: async () => ({ [key]: version }) })) as typeof fetch
+  return (async () => new Response(JSON.stringify({ [key]: version }), { status: 200 })) as typeof fetch
 }
 
 test('official package latest version is fetched from the explicitly allowlisted npm source', async () => {
@@ -12,7 +12,7 @@ test('official package latest version is fetched from the explicitly allowlisted
     force: true,
     fetchImpl: (async (url: string | URL | Request) => {
       urls.push(String(url))
-      return { ok: true, json: async () => ({ version: '1.2.0' }) }
+      return new Response(JSON.stringify({ version: '1.2.0' }), { status: 200 })
     }) as typeof fetch,
   })
   assert.equal(result.status, 'ready')
@@ -55,7 +55,7 @@ test('version checks are cached, and a deliberate refresh bypasses a prior succe
   let calls = 0
   const fetchImpl = (async () => {
     calls++
-    return { ok: true, json: async () => ({ version: '1.0.0' }) }
+    return new Response(JSON.stringify({ version: '1.0.0' }), { status: 200 })
   }) as typeof fetch
   await checkAgentLatestVersion('opencode', { force: true, fetchImpl, now: 500 })
   await checkAgentLatestVersion('opencode', { fetchImpl, now: 600 })
