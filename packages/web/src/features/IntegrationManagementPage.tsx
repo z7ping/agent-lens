@@ -249,7 +249,7 @@ function IntegrationManagementRow({
           </div>
         </div>
 
-        <div className="integration-management-actions">
+        {(primaryAction || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured) || ordering) && <div className="integration-management-actions">
           {pendingAuthorization.length > 0 && item.enabled.configured && <Button
             size="small"
             disabled={saving}
@@ -280,7 +280,7 @@ function IntegrationManagementRow({
               onClick={() => { if (moveDownTargetId) move(item.integrationId, moveDownTargetId) }}
             ><UiIcon name="sort-down" size={14}/></IconButton>
           </span>}
-        </div>
+        </div>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
       </div>
     </Disclosure>
@@ -313,6 +313,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const [ordering, setOrdering] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
+  const [supportedExpanded, setSupportedExpanded] = useState(false)
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
   const { ordered } = useIntegrationOrder()
@@ -375,6 +376,11 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   })
   const primaryItems = filteredItems.filter(item => discoveryFailed || isPrimaryRow(item))
   const supportedItems = discoveryFailed ? [] : filteredItems.filter(item => !isPrimaryRow(item))
+  const revealSupported = Boolean(searchQuery.trim() || statusFilter !== 'all'
+    || supportedItems.some(item => item.integrationId === targetIntegrationId))
+  useEffect(() => {
+    if (revealSupported) setSupportedExpanded(true)
+  }, [revealSupported])
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
@@ -442,8 +448,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
         {supportedItems.length > 0 && <section className="integration-management-section integration-management-section-secondary">
           <Disclosure
             className="integration-management-supported-disclosure"
-            key={`${searchQuery.trim()}:${statusFilter}:${targetIntegrationId}`}
-            defaultOpen={Boolean(searchQuery.trim() || statusFilter !== 'all' || supportedItems.some(item => item.integrationId === targetIntegrationId))}
+            open={supportedExpanded}
+            onToggle={event => setSupportedExpanded(event.currentTarget.open)}
             summary={t('managementPage.otherSupported')}
             summaryMeta={<span className="integration-management-section-count">{supportedItems.length}</span>}
           >
