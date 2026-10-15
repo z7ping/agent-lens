@@ -468,7 +468,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className="task-center-quick-filters" aria-label={t('center.history.filterAria')}>
       <SidebarFilterDisclosure
         summary={agentSelectionSummary}
-        summaryMeta={false}
+      
         agents={agents}
         agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}
       />
