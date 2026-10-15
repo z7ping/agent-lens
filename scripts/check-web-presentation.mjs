@@ -115,7 +115,7 @@ for (const [name, source] of filterConsumers) {
 }
 const agentsWorkspace = readFileSync(p('features/AgentsResponsivePage.tsx'), 'utf8')
 const primaryNavigation = readFileSync(p('components/WorkspacePrimaryNavigation.tsx'), 'utf8')
-if (!/<SelectMenu\\b/.test(agentsWorkspace) || !agentsWorkspace.includes('onSelectAgent(nextSourceId)')
+if (!/<SelectMenu\b/.test(agentsWorkspace) || !agentsWorkspace.includes('onSelectAgent(nextSourceId)')
   || !agentsWorkspace.includes("activeView === 'management'") || !agentsWorkspace.includes('<IntegrationManagementPage')) {
   throw new Error('智能体概览/接入必须共享一个工作区、一个智能体选择器和统一 SelectMenu')
 }
