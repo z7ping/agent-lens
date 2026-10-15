@@ -7,7 +7,8 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentInsightsRail } from '../components/AgentInsightsRail'
-import { SelectMenu, ToolbarGroup } from '../components/ui'
+import { SelectMenu } from '../components/ui'
+import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'
 import { AgentsPage } from './AgentsPage'
 import { IntegrationManagementPage } from './IntegrationManagementPage'
 
@@ -18,13 +19,13 @@ export function AgentsResponsivePage({
   sourceId,
   agents,
   onSelectAgent,
-  topbarHost,
+  toolbarHost,
 }: {
   model: AgentLensClientModel
   sourceId: string
   agents: AgentFacetDto[]
   onSelectAgent(id: string): void
-  topbarHost?: HTMLDivElement | null
+  toolbarHost?: HTMLDivElement | null
 }) {
   const { t } = useTranslation(['navigation', 'piEcosystem'])
   const snapshot = useClientSnapshot(model)
@@ -54,31 +55,10 @@ export function AgentsResponsivePage({
     return () => window.clearTimeout(timer)
   }, [hasSelectedOverview, model, sourceId, activeView])
 
-  const integrationIdFor = (nextSourceId: string) => {
-    const selected = agents.find(item => item.sourceId === nextSourceId)
-    return snapshot.integrationManagement?.items.find(item =>
-      item.integrationId === nextSourceId || (selected && item.productId === selected.productId),
-    )?.integrationId ?? nextSourceId
-  }
-
-  const setActiveView = (view: AgentWorkspaceView) => {
-    const next = new URLSearchParams(searchParams)
-    if (view === 'overview') {
-      next.delete('view')
-      if (sourceId) next.set('agent', sourceId)
-    } else {
-      next.set('view', view)
-      if (view === 'management' && sourceId) {
-        next.set('agent', integrationIdFor(sourceId))
-      }
-    }
-    setSearchParams(next, { replace: true })
-  }
-
   const selectAgent = (nextSourceId: string) => {
     onSelectAgent(nextSourceId)
     const next = new URLSearchParams(searchParams)
-    next.set('agent', activeView === 'management' ? integrationIdFor(nextSourceId) : nextSourceId)
+    next.set('agent', nextSourceId)
     if (next.get('view') === 'ecosystem' && nextSourceId !== 'pi') next.delete('view')
     setSearchParams(next, { replace: true })
   }
@@ -90,29 +70,9 @@ export function AgentsResponsivePage({
   }))
 
   return <>
-    {topbarHost ? createPortal(
-      <div className="agent-workspace-topbar-tools">
-        <ToolbarGroup className="agent-view-switcher" role="group" aria-label={t('navigation:agentViews')}>
-          <button
-            type="button"
-            aria-pressed={activeView === 'overview'}
-            className={`scope-chip ${activeView === 'overview' ? 'scope-chip-active' : ''}`}
-            onClick={() => setActiveView('overview')}
-          >{t('navigation:overview')}</button>
-          <button
-            type="button"
-            aria-pressed={activeView === 'management'}
-            className={`scope-chip ${activeView === 'management' ? 'scope-chip-active' : ''}`}
-            onClick={() => setActiveView('management')}
-          >{t('navigation:integrationManagement')}</button>
-          {isPi && <button
-            type="button"
-            aria-pressed={activeView === 'ecosystem'}
-            className={`scope-chip ${activeView === 'ecosystem' ? 'scope-chip-active' : ''}`}
-            onClick={() => setActiveView('ecosystem')}
-          >{t('piEcosystem:ecosystemTab')}</button>}
-        </ToolbarGroup>
-        <div className="agent-workspace-agent-picker">
+    {toolbarHost && activeView !== 'management' ? createPortal(
+      <div className="workspace-view-controls">
+        <div className="workspace-view-filter">
           <SelectMenu
             value={sourceId}
             options={agentOptions}
@@ -123,10 +83,19 @@ export function AgentsResponsivePage({
           />
         </div>
       </div>,
-      topbarHost,
+      toolbarHost,
     ) : null}
+    {isPi && activeView !== 'management' && <WorkspaceViewTabs
+      nested
+      label={t('piEcosystem:ecosystemTab')}
+      value={activeView}
+      tabs={[
+        { value: 'overview', label: t('piEcosystem:overviewTab'), to: '/agents?agent=pi' },
+        { value: 'ecosystem', label: t('piEcosystem:ecosystemTab'), to: '/agents?agent=pi&view=ecosystem' },
+      ]}
+    />}
     {activeView === 'management'
-      ? <IntegrationManagementPage model={model} topbarHost={topbarHost}/>
+      ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost}/>
       : <div className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'}`}>
         <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
         {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
