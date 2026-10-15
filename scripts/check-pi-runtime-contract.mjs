@@ -131,12 +131,27 @@ requireText(inProcessHost, /assertPiSdkSession\(created\.session, installed\.sdk
 requireText(workerEntry, /extensionUi\.respond\(value\.requestId, value\.response\)/, 'Pi Extension UI 必须关联 Worker request id')
 
 requireText(sdkAdapter, /from '@earendil-works\/pi-coding-agent'/, 'Pi SDK Adapter 必须从官方包派生类型')
-requireText(sdkAdapter, /PI_SDK_TYPE_BASELINE = '1\.2\.0'/, 'Pi SDK Adapter 必须记录 1.2.0 类型基线')
+
 requireText(sdkAdapter, /type PiSdkModel = Pick<OfficialPiModel/, 'Pi SDK Adapter 只暴露所需官方类型能力')
 requireText(sdkAdapter, /export function assertPiSdkModule/, 'Pi SDK Adapter 缺少 Module capability 校验')
 requireText(sdkAdapter, /export function assertPiSdkSession/, 'Pi SDK Adapter 缺少 Session capability 校验')
 requireText(sdkAdapter, /export function asPiSdkExtensionUiContext/, 'Pi SDK Adapter 缺少 Extension UI capability 校验')
-requireText(runtimePackage, /"@earendil-works\/pi-coding-agent":\s*"1\.2\.0"/, 'runtime-cordis 必须以官方 Pi SDK 0.84.4 为类型基线')
+// Package manifest owns the exact compile-time SDK; the adapter must declare the
+// same type baseline and tested minor. Never hardcode a prior SDK version here.
+const declaredPiSdkVersion = JSON.parse(runtimePackage).devDependencies?.['@earendil-works/pi-coding-agent']
+const adapterTypeBaseline = sdkAdapter.match(/export const PI_SDK_TYPE_BASELINE\s*=\s*'([^']+)'/)?.[1]
+const adapterTestedMinor = sdkAdapter.match(/export const PI_SDK_TESTED_MINOR\s*=\s*'([^']+)'/)?.[1]
+if (typeof declaredPiSdkVersion !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/.test(declaredPiSdkVersion)) {
+  failures.push('runtime-cordis 必须精确固定官方 Pi SDK 版本，禁止范围/浮动依赖')
+} else {
+  if (adapterTypeBaseline !== declaredPiSdkVersion) {
+    failures.push(`Pi SDK 类型基线与 runtime-cordis 依赖不一致：${adapterTypeBaseline ?? '未声明'} != ${declaredPiSdkVersion}`)
+  }
+  const expectedMinor = declaredPiSdkVersion.match(/^(\d+\.\d+)\./)?.[1]
+  if (adapterTestedMinor !== expectedMinor) {
+    failures.push(`Pi SDK 已验证 minor 与依赖不一致：${adapterTestedMinor ?? '未声明'} != ${expectedMinor}`)
+  }
+}
 requireText(sdkLoader, /PI_SDK_PACKAGE_NAME/, 'Pi SDK Loader 必须只定位官方 Pi npm 包')
 requireText(workerHost, /discoverInstalledPiSdk\(input\.executable\)/, 'Pi Worker Host 必须统一发现并验证官方 Pi SDK')
 requireText(workerHost, /sdkEntry:\s*sdk\.sdkEntry/, 'Pi Worker Host 必须把验证后的 SDK 入口传给 Worker')
