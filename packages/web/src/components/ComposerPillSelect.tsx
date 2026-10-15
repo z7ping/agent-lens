@@ -9,8 +9,6 @@ export function ComposerPillSelect({
   disabled = false,
   title,
   ariaLabel,
-  className = '',
-  menuWidth = 220,
   onChange,
 }: {
   value: string
@@ -19,8 +17,6 @@ export function ComposerPillSelect({
   disabled?: boolean
   title?: string | undefined
   ariaLabel: string
-  className?: string
-  menuWidth?: number
   onChange(value: string): void
 }) {
   return <SelectMenu
@@ -30,9 +26,6 @@ export function ComposerPillSelect({
     disabled={disabled}
     title={title}
     ariaLabel={ariaLabel}
-    className={className}
-    menuWidth={menuWidth}
-    variant="pill"
     onChange={onChange}
   />
 }
