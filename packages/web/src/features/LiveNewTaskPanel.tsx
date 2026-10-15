@@ -6,6 +6,7 @@ import { selectHostProjectDirectory, validateHostProjectDirectory } from '../cli
 import { Button, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
+import { HostDirectoryBrowser } from './HostDirectoryBrowser'
 import { pickTaskProject, type TaskProjectOption } from './task-center'
 
 export interface LiveNewTaskPanelProps {
@@ -59,6 +60,7 @@ export function LiveNewTaskPanel({
   const projectSelectionInitializedRef = useRef(false)
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
+  const [browserOpen, setBrowserOpen] = useState(false)
   const [manualDirectory, setManualDirectory] = useState('')
   const [directoryCheck, setDirectoryCheck] = useState<{ path: string; valid: boolean; error?: string }>()
   const [taskTitle, setTaskTitle] = useState('')
@@ -305,7 +307,9 @@ export function LiveNewTaskPanel({
                       onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) void startManualDirectory() }}
                     />
                   </label>
-                  {nativeDirectoryPicker && <Button loading={selectingDirectory} disabled={starting} onClick={() => void selectDirectory()}><UiIcon name="folder-open" size={14}/> {t('center.newTask.selectDirectory')}</Button>}
+                  {nativeDirectoryPicker
+                    ? <Button loading={selectingDirectory} disabled={starting} onClick={() => void selectDirectory()}><UiIcon name="folder-open" size={14}/> {t('center.newTask.selectDirectory')}</Button>
+                    : <Button disabled={starting} onClick={() => setBrowserOpen(true)}><UiIcon name="folder-open" size={14}/> {t('center.newTask.selectDirectory')}</Button>}
                 </div>
                 {directoryIsInvalid || currentDirectoryCheck?.valid === false
                   ? <p className="task-center-directory-error" role="alert">{directoryIsInvalid ? t('center.newTask.directoryInvalid') : currentDirectoryCheck?.error}</p>
@@ -338,5 +342,12 @@ export function LiveNewTaskPanel({
       {workspaceSupported && !options.length && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
       {!productsLoading && products.length === 0 && !productsError && <div className="task-center-project-hint">{t('center.newTask.noLiveAgents')}</div>}
     </section>
+    {browserOpen && <HostDirectoryBrowser
+      open
+      initialPath={directoryIsVerified ? directoryPath : recentDirectories[0]?.cwd}
+      recentPaths={recentDirectories.map(option => option.cwd)}
+      onClose={() => setBrowserOpen(false)}
+      onChoose={path => { setManualDirectory(path); setError(''); setBrowserOpen(false) }}
+    />}
   </div>
 }
