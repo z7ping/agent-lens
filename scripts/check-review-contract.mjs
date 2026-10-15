@@ -55,7 +55,8 @@ for (const retiredClass of ['round-nav-from-start', 'round-nav-latest']) {
 }
 
 const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  async refreshUsage/)?.[1] ?? ''
-if (!selectSessionBody.includes("this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })")) throw new Error('默认选择会话必须请求 backward 最新窗口，并只读取 Process Summary')
+if (!/this\.api\.reviewDetail\(id, \{\s*direction: 'backward',\s*limit: REVIEW_DETAIL_PAGE_SIZE,\s*process: 'summary'(?:,\s*signal: controller\.signal)?\s*\}\)/.test(selectSessionBody)) throw new Error('默认选择会话必须请求 backward 最新窗口，并只读取 Process Summary')
+if (!selectSessionBody.includes('this.reviewSelectionAbort?.abort()') || !selectSessionBody.includes('signal: controller.signal')) throw new Error('切换会话必须中止旧会话详情请求')
 const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  acknowledgeReviewNewData/)?.[1] ?? ''
 if (!fromStartBody.includes("direction: 'forward'")) throw new Error('从头查看必须显式请求 forward 窗口')
 if (!fromStartBody.includes("process: 'summary'")) throw new Error('从头查看首屏不得回退为完整 Process 读取')
