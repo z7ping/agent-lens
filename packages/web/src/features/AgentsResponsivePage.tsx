@@ -95,7 +95,7 @@ export function AgentsResponsivePage({
       ]}
     />}
     {activeView === 'management'
-      ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost}/>
+      ? <IntegrationManagementPage model={model} toolbarHost={toolbarHost ?? null}/>
       : <div className={`agents-responsive-shell ${showInsights ? '' : 'without-insights'}`}>
         <AgentsPage model={model} sourceId={sourceId} piView={activeView}/>
         {showInsights && <AgentInsightsRail snapshot={snapshot} sourceId={sourceId}/>}
