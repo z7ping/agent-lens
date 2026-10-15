@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { UiIcon } from './ui'
 
-export type WorkspacePrimarySection = 'review' | 'insights' | 'agents'
+export type WorkspacePrimarySection = 'review' | 'insights' | 'agents' | 'backup'
 
 interface WorkspacePrimaryNavigationProps {
   activeSection?: WorkspacePrimarySection | undefined
@@ -14,14 +14,15 @@ interface WorkspacePrimaryNavigationProps {
 const PRIMARY_SECTIONS: Array<{
   id: WorkspacePrimarySection
   to: string
-  labelKey: 'task' | 'insights' | 'agents'
+  labelKey: 'task' | 'insights' | 'agents' | 'assetBackup'
   ariaLabelKey?: 'taskCenter'
-  icon: 'task' | 'trend' | 'agent'
+  icon: 'task' | 'trend' | 'agent' | 'backup'
   update: 'insights' | 'agents' | null
 }> = [
   { id: 'review', to: '/review', labelKey: 'task', ariaLabelKey: 'taskCenter', icon: 'task', update: null },
   { id: 'insights', to: '/insights', labelKey: 'insights', icon: 'trend', update: 'insights' },
   { id: 'agents', to: '/agents', labelKey: 'agents', icon: 'agent', update: 'agents' },
+  { id: 'backup', to: '/backup', labelKey: 'assetBackup', icon: 'backup', update: null },
 ]
 
 /** 工作区一级导航的唯一渲染入口，页面只提供当前状态与数据提示。 */
