@@ -31,3 +31,13 @@ test('installation options use a data-root fallback without discarding unknown p
   second.dataRoot = '/tmp/pi-data/'
   assert.deepEqual(installationChoices([first, second]).map(item => item.id), ['first'])
 })
+
+test('POSIX path casing is distinct while Windows roots are case-insensitive', () => {
+  const choices = installationChoices([
+    installation('upper', '/home/user/Agent'),
+    installation('lower', '/home/user/agent'),
+    installation('win-a', 'D:\\Agents\\Pi'),
+    installation('win-b', 'd:/agents/pi/'),
+  ])
+  assert.deepEqual(choices.map(item => item.id), ['upper', 'lower', 'win-a'])
+})
