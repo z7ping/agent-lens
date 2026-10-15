@@ -730,7 +730,7 @@
   border-bottom: 0;
   background: transparent;
 }
-.workspace-view-tabs.is-inline .workspace-view-tab { font-size: 12px; }
+.workspace-view-tabs.is-inline .workspace-view-tab { font-size: 12px; font-weight: 620; }
 
 .workspace-view-toolbar {
   position: relative;
