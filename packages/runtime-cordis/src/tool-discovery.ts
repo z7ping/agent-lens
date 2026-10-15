@@ -1,4 +1,6 @@
 import { access } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -12,6 +14,43 @@ import {
   type ExecutableDiscoveryOptions,
 } from './executable-discovery'
 
+const execFileAsync = promisify(execFile)
+
+/** Read a CLI version from the executable actually discovered on the host. */
+export async function probeAgentCliVersion(
+  executable: string,
+  options: { platform?: NodeJS.Platform; timeoutMs?: number; env?: Readonly<Record<string, string | undefined>> } = {},
+): Promise<string | undefined> {
+  const platform = options.platform ?? process.platform
+  const timeoutMs = Math.min(options.timeoutMs ?? 1500, 2500)
+  let command = executable
+  let args = ['--version']
+  if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)) {
+    // Do not use shell:true for paths that could contain cmd metacharacters.
+    // An npm shim resolves to a JS entry and can run safely using Node directly.
+    const entry = await resolveWindowsNpmShimNodeEntry(executable)
+    if (!entry) return undefined
+    const node = await resolveExecutable('node', { platform, pathValue: options.env?.PATH })
+    if (!node) return undefined
+    command = node
+    args = [entry, '--version']
+  }
+  try {
+    const result = await execFileAsync(command, args, {
+      windowsHide: true,
+      timeout: timeoutMs,
+      maxBuffer: 16 * 1024,
+      encoding: 'utf8',
+      env: options.env ? { ...process.env, ...options.env } : process.env,
+    })
+    // Ignore diagnostics and arbitrary numbers; only a semantic CLI version is evidence.
+    const text = `${result.stdout}\n${result.stderr}`
+    return text.match(/(?:^|[^\w.])v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)(?=$|[^\w.])/m)?.[1]
+  } catch {
+    return undefined
+  }
+}
+
 export type ToolPresence = 'present' | 'data-only' | 'absent' | 'error'
 export type ToolDiscoveryScanStatus = 'idle' | 'scanning' | 'complete'
 
@@ -21,6 +60,7 @@ export interface OfficialToolDiscoveryItem {
   displayName: string
   presence: ToolPresence
   executable?: string | undefined
+  version?: string | undefined
   configRoot?: string | undefined
   dataRoot?: string | undefined
   reason?: string | undefined
@@ -40,6 +80,7 @@ export interface OfficialToolDiscoveryOptions {
   homeDir?: string | undefined
   timeoutMs?: number | undefined
   shellPathResolver?: (() => Promise<string | undefined>) | undefined
+  versionResolver?: ((executable: string) => Promise<string | undefined>) | undefined
   executableResolver?: ((
     name: string,
     options?: ExecutableDiscoveryOptions,
@@ -118,6 +159,7 @@ async function discoverEntry(
     env: Readonly<Record<string, string | undefined>>
     shellPathResolver: () => Promise<string | undefined>
     executableResolver: NonNullable<OfficialToolDiscoveryOptions['executableResolver']>
+    versionResolver: NonNullable<OfficialToolDiscoveryOptions['versionResolver']>
   },
 ): Promise<OfficialToolDiscoveryItem> {
   try {
@@ -153,6 +195,9 @@ async function discoverEntry(
       Promise.all(roots.map(probeRoot)),
     ])
     const executable = executableResult.executable
+    const version = executable
+      ? await options.versionResolver(executable).catch(() => undefined)
+      : undefined
     const configRoot = probes.find(item => item.role === 'config' && item.exists)?.path
     const dataRoot = probes.find(item => item.role === 'data' && item.exists)?.path
     const errors = [
@@ -174,6 +219,7 @@ async function discoverEntry(
       displayName: entry.displayName,
       presence,
       ...(executable ? { executable } : {}),
+      ...(version ? { version } : {}),
       ...(configRoot ? { configRoot } : {}),
       ...(dataRoot ? { dataRoot } : {}),
       ...(presence === 'error' && errors.length ? { reason: errors[0] } : {}),
@@ -198,6 +244,7 @@ export async function discoverOfficialTools(
   const homeDir = options.homeDir ?? homedir()
   const timeoutMs = options.timeoutMs ?? DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS
   const executableResolver = options.executableResolver ?? resolveExecutable
+  const versionResolver = options.versionResolver ?? (executable => probeAgentCliVersion(executable, { platform, timeoutMs, env }))
   let shellPathPromise: Promise<string | undefined> | undefined
   const sourceShellPathResolver = options.shellPathResolver ?? (() => resolveLoginShellPath(platform))
   const shellPathResolver = () => {
@@ -211,7 +258,7 @@ export async function discoverOfficialTools(
 
   return Promise.all(entries.map(entry =>
     timeout(
-      discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver, executableResolver }),
+      discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver, executableResolver, versionResolver }),
       timeoutMs,
       `Tool discovery for ${entry.integrationId}`,
     ).catch(error => ({
