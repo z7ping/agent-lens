@@ -11,7 +11,7 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Button, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
 
 const toolDetailApi = new AgentLensApi()
 

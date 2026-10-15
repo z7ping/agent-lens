@@ -10,7 +10,7 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
 
 function duration(ms: number, t: TFunction): string {
   if (ms < 1000) return t('duration.milliseconds', { value: ms })
