@@ -20,6 +20,7 @@ import {
   integrationCanInstall,
   integrationPackageUpdateAvailable,
   integrationManagementLifecycleState,
+  integrationLifecycleTone,
   integrationPackageReady,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
@@ -282,16 +283,8 @@ function IntegrationManagementRow({
         </span>
         {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
         <StatusBadge
-          className={`integration-management-status ${status.className}`}
-          tone={status.className.includes('error')
-            ? 'danger'
-            : status.className.includes('enabled')
-              ? 'success'
-              : status.className.includes('history') || status.className.includes('scanning')
-                ? 'warning'
-                : item.isNew
-                  ? 'accent'
-                  : 'neutral'}
+          className="integration-management-status"
+          tone={integrationLifecycleTone(status.className, item.isNew)}
           title={status.title}
         >{statusLabel}</StatusBadge>
       </span>}
