@@ -11,7 +11,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { sourceDot } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
-import { Button, Dialog, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
+import { Button, Dialog, IconButton, Input, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   integrationCanInstall,
   integrationManagementLifecycleState,
@@ -281,6 +281,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const targetIntegrationId = searchParams.get('agent') ?? ''
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
   const { ordered } = useIntegrationOrder()
@@ -332,8 +334,17 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     || snapshot.integrationDiscoveryRescanning
     || management?.discovery.status === 'scanning'
   const discoveryFailed = Boolean(snapshot.integrationDiscoveryError)
-  const primaryItems = items.filter(item => discoveryFailed || isPrimaryRow(item))
-  const supportedItems = discoveryFailed ? [] : items.filter(item => !isPrimaryRow(item))
+  const filteredItems = items.filter(item => {
+    const query = searchQuery.trim().toLocaleLowerCase()
+    if (query && ![item.displayName, item.integrationId, item.productId]
+      .some(text => text.toLocaleLowerCase().includes(query))) return false
+    if (statusFilter === 'detected') return isDetected(item)
+    if (statusFilter === 'installed') return Boolean(item.packageState?.installed)
+    if (statusFilter === 'enabled') return item.enabled.configured
+    return true
+  })
+  const primaryItems = filteredItems.filter(item => discoveryFailed || isPrimaryRow(item))
+  const supportedItems = discoveryFailed ? [] : filteredItems.filter(item => !isPrimaryRow(item))
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
@@ -348,11 +359,24 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
 
   return <main className="workspace-page">
     {toolbarHost ? createPortal(
-      <ToolbarGroup className="integration-management-topbar-tools">
-        <Button size="small" onClick={() => setOrdering(value => !value)}>
-          {ordering ? t('page.orderDone') : t('page.manageOrder')}
-        </Button>
-      </ToolbarGroup>,
+      <div className="workspace-view-controls" aria-label={t('managementPage.summaryAria')}>
+        <div className="workspace-view-filter">
+          <Input value={searchQuery} onChange={event => { setSearchQuery(event.target.value); setOrdering(false) }} aria-label={t('managementPage.searchAria')} placeholder={t('managementPage.searchPlaceholder')}/>
+        </div>
+        <div className="workspace-view-filter workspace-view-filter-time">
+          <SelectMenu value={statusFilter} onChange={value => { setStatusFilter(value as typeof statusFilter); setOrdering(false) }} ariaLabel={t('managementPage.statusFilterAria')} options={[
+            { value: 'all', label: t('managementPage.allStatuses') },
+            { value: 'detected', label: t('managementPage.detected') },
+            { value: 'installed', label: t('managementPage.added') },
+            { value: 'enabled', label: t('managementPage.enabled') },
+          ]}/>
+        </div>
+        <div className="workspace-view-filter-actions">
+          <Button size="small" disabled={Boolean(searchQuery.trim()) || statusFilter !== 'all'} onClick={() => setOrdering(value => !value)}>
+            {ordering ? t('page.orderDone') : t('page.manageOrder')}
+          </Button>
+        </div>
+      </div>,
       toolbarHost,
     ) : null}
     <div className="page-content integration-management-content">
@@ -387,7 +411,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             ordering={ordering}
             highlighted={item.integrationId === targetIntegrationId}
           />)}
-          {!primaryItems.length && <div className="integration-management-empty">{t('managementPage.noLocalOrAdded')}</div>}
+          {!primaryItems.length && <div className="integration-management-empty">{searchQuery.trim() || statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
           </div>
         </section>
 
