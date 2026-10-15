@@ -456,6 +456,34 @@ async function snapshotRootEventListeners(win) {
   return result
 }
 
+// Trigger the real shared SelectMenu portal once before collecting the listener baseline.
+// React installs roughly 139 delegated event listeners on document.body on its first
+// body Portal mount. This is one-time initialization, not per-session listener growth.
+async function primePortalEventDelegation(win) {
+  const opened = await withTimeout(win.webContents.executeJavaScript(`(() => {
+    const trigger = document.querySelector('.task-center-quick-filters .select-menu-trigger')
+    if (!(trigger instanceof HTMLButtonElement) || trigger.disabled) return false
+    trigger.click()
+    return true
+  })()`), 2_000, '打开共享项目下拉框以预热 Portal')
+  if (!opened) fail('100 次切换前无法打开共享项目下拉框')
+
+  let portalMounted = false
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    portalMounted = await withTimeout(win.webContents.executeJavaScript("Boolean(document.querySelector('.select-menu-popover'))"), 2_000, '检测项目下拉 Portal')
+    if (portalMounted) break
+    await delay(25)
+  }
+  if (!portalMounted) fail('共享项目下拉框未渲染 body Portal，无法建立公平监听器基线')
+  await withTimeout(win.webContents.executeJavaScript("document.querySelector('.task-center-quick-filters .select-menu-trigger')?.click()"), 2_000, '关闭项目下拉框')
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const closed = await withTimeout(win.webContents.executeJavaScript("!document.querySelector('.select-menu-popover')"), 2_000, '确认下拉框关闭')
+    if (closed) return
+    await delay(25)
+  }
+  fail('共享项目下拉框未能关闭，不能开始会话切换测量')
+}
+
 async function runSwitchStability(win) {
   ensureDebugger(win)
   let initialCount = 0
@@ -470,9 +498,11 @@ async function runSwitchStability(win) {
   // A fixed sleep can sample one finished task against another still loading,
   // spuriously counting an extra Reader tree as leaked DOM/listeners.
   await waitForProjectedReviewDetail(win, '切换前基线')
+  await primePortalEventDelegation(win)
   const beforePath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取基线任务路径')
   const before = await collectDomCounters(win, '切换前')
   const listenerRootsBefore = await snapshotRootEventListeners(win)
+  if (Object.keys(listenerRootsBefore.body ?? {}).length < 50) fail('切换前 body Portal 事件代理未预热，监听器基线不可比')
   const switched = await clickTaskSequence(win, 100)
   await waitForProjectedReviewDetail(win, '切换后目标')
   const afterPath = await withTimeout(win.webContents.executeJavaScript('location.pathname'), 2_000, '读取切换后任务路径')
