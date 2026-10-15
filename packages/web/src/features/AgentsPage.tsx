@@ -11,7 +11,7 @@ import type {
   ManagedAssetRoot,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import { WorkspaceViewTabs } from '../components/WorkspaceViewTabs'

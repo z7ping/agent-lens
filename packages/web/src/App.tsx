@@ -1,8 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { BrowserRouter, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel, ClientSnapshot } from './client/model'
+import { useClientSnapshot } from './client/use-client-snapshot'
 import { readSidebarCollapsed, readTheme, writeSidebarCollapsed, writeTheme } from './client/preferences'
 import { useReviewUrlSync } from './client/useReviewUrlSync'
 import { AgentsStateOverlay } from './components/AgentsStateOverlay'
@@ -25,9 +26,7 @@ const LegacyLiveTaskRedirect = lazy(() => import('./features/LegacyLiveTaskRedir
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
 
-export function useClientSnapshot(model: AgentLensClientModel): ClientSnapshot {
-  return useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot)
-}
+export { useClientSnapshot } from './client/use-client-snapshot'
 
 function AgentRescanAction({
   model,

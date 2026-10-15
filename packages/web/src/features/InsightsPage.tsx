@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import type { InsightMetricDeltaDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { InsightsClientModel } from '../client/insights-model'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
@@ -75,7 +75,9 @@ function MetricDelta({ label, value }: { label: string; value: number | null }) 
 export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('insights')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
-  const appSnapshot = useClientSnapshot(model)
+  const facets = useClientSnapshotField(model, 'facets')
+  const health = useClientSnapshotField(model, 'health')
+  const liveConnected = useClientSnapshotField(model, 'liveConnected')
   const insightsModel = useMemo(() => new InsightsClientModel(), [])
   const insights = useSyncExternalStore(insightsModel.subscribe, insightsModel.getSnapshot, insightsModel.getSnapshot)
 
@@ -85,9 +87,9 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
   }, [insightsModel, model])
 
   const data = insights.response
-  const agents = useOrderedAgents(appSnapshot.facets?.agents ?? [])
+  const agents = useOrderedAgents(facets?.agents ?? [])
   const insightAgents = useOrderedAgents(data?.agents ?? [])
-  const projects = appSnapshot.facets?.projects ?? []
+  const projects = facets?.projects ?? []
   const agentSelectionSummary = insights.filters.sourceIds === null
     ? t('filters.allAgents')
     : insights.filters.sourceIds.length
@@ -95,7 +97,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
       : t('filters.none')
   const maxTrendSessions = Math.max(1, ...(data?.trend.map(item => item.sessionCount) ?? [1]))
   const canRelaxFilters = Boolean(insights.filters.sourceIds !== null || insights.filters.projectId || insights.filters.range !== 'all')
-  const hasSseBanner = Boolean(appSnapshot.health && !appSnapshot.liveConnected)
+  const hasSseBanner = Boolean(health && !liveConnected)
   const comparison = data?.comparison
   const delta: InsightMetricDeltaDto | undefined = comparison?.delta
   const boundedRange = insights.filters.range !== 'all'

@@ -9,7 +9,7 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { copyText } from '../client/clipboard'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshot } from '../client/use-client-snapshot'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentOrderActions, useAgentOrderDrag } from '../components/AgentOrderControls'
