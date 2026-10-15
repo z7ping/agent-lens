@@ -543,3 +543,58 @@ test('Review full ordinal reuses the header index and only materializes the targ
     storage.close()
   }
 })
+
+test('Canonical 注册事实经过存储和 Review 分页可归因工具，不增加任务轮次', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'tool-registration-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'pi' })
+    const nativeSessionId = 'native-registry-session'
+    const add = async (kind: 'tool.registration' | 'tool.call' | 'tool.result' | 'message.user', id: string, offset: number, payload: unknown) => {
+      const at = new Date(Date.parse('2026-10-15T00:00:00.000Z') + offset).toISOString()
+      return observations.commit({
+        sourceId: 'pi', host, installation,
+        candidate: {
+          kind, nativeEventId: id, occurredAt: at, capturedAt: at, payload,
+          identityHints: { nativeSessionId },
+          dedupHints: { nativeEventId: id },
+        },
+        evidenceCandidates: [{
+          captureMethod: 'runtime-hook', derivation: 'observed', nativeStableId: id, capturedAt: at,
+        }],
+      })
+    }
+
+    const registration = await add('tool.registration', 'registry-created', 1000, {
+      registrationId: 'tool-registered-1', runtimeId: 'runtime-1', profileId: 'profile-1',
+      nativeToolName: 'fetch_record', action: 'registered',
+      toolSourceType: 'mcp', mcpServerId: 'records',
+    })
+    const user = await add('message.user', 'user-start', 2000, { text: '读取记录' })
+    await add('tool.call', 'tool-call-1', 3000, {
+      callId: 'call-1', runtimeId: 'runtime-1', profileId: 'profile-1',
+      nativeToolName: 'fetch_record', input: { id: 4 },
+    })
+    await add('tool.result', 'tool-result-1', 4000, { callId: 'call-1', success: true, output: 'ok' })
+    const projection = new ReviewProjection(storage)
+    const summary = await projection.getSummary(user.observation.logicalSessionId)
+    assert.ok(summary)
+    assert.equal(summary.toolCount, 1)
+    const detail = await projection.get(user.observation.logicalSessionId)
+    assert.ok(detail)
+    assert.equal(detail.interactions.length, 1, '注册元数据不是后台任务轮次')
+    const tool = detail.interactions.flatMap(group => group.nodes).find(node => node.type === 'tool')
+    assert.ok(tool?.type === 'tool')
+    assert.equal(tool.toolSourceType, 'mcp')
+    assert.equal(tool.mcpServerId, 'records')
+    assert.equal(tool.registrationObservationId, registration.observation.id)
+    assert.equal(tool.evidence.some(evidence => evidence.captureMethod === 'runtime-hook'), true)
+    assert.equal(tool.status, 'success')
+    assert.equal(tool.output, 'ok')
+  } finally {
+    storage.close()
+  }
+})
