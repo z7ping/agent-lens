@@ -247,3 +247,59 @@ test('DSH normalization carries the native profile id so parser replay can reatt
   const output = await normalizeDshRecord(record, {} as never)
   assert.equal(output.observations[0]?.identityHints.runtimeProfileNativeId, 'writer')
 })
+
+test('DSH assembled assistant/message and tool/result read native message.content', async () => {
+  const make = (type: string, data: Record<string, unknown>): SourceRecord => ({
+    id: 'dsh-test-' + type,
+    sourceId: 'dsh', installationId: 'installation-dsh-test',
+    sourceSessionNativeId: 'session-dsh', nativeType: type,
+    sourceSequence: 30, capturedAt: '2026-10-16T00:00:00.000Z',
+    locator: { kind: 'file', path: '/tmp/dsh.jsonl', offset: 30 },
+    parserVersion: '3',
+    payload: {
+      event: { seq: 30, type, data },
+      session: { nativeSessionId: 'session-dsh', profile: 'base' },
+      captureChannel: 'history',
+    },
+  })
+  const assistant = await normalizeDshRecord(make('assistant/message', {
+    message: { role: 'assistant', content: [{ type: 'text', text: '模型已完成回答' }], model: 'deepseek-chat' },
+  }), {} as never)
+  assert.equal(assistant.observations[0]?.kind, 'message.assistant')
+  assert.equal((assistant.observations[0]?.payload as { text: string }).text, '模型已完成回答')
+
+  const result = await normalizeDshRecord(make('tool/result', {
+    callId: 'call-1', message: { role: 'user', content: [{ type: 'text', text: '工具结果正文' }] },
+  }), {} as never)
+  assert.equal(result.observations[0]?.kind, 'tool.result')
+  const resultPayload = result.observations[0]?.payload as { output: unknown }
+  assert.deepEqual(resultPayload.output, [{ type: 'text', text: '工具结果正文' }])
+})
+
+test('DSH source-only chunks do not become unknown, stable compaction and retry have semantics', async () => {
+  const make = (type: string, data: Record<string, unknown>): SourceRecord => ({
+    id: 'dsh-test-' + type,
+    sourceId: 'dsh', installationId: 'installation-dsh-test',
+    sourceSessionNativeId: 'session-dsh', nativeType: type,
+    sourceSequence: 31, capturedAt: '2026-10-16T00:00:00.000Z',
+    locator: { kind: 'file', path: '/tmp/dsh.jsonl', offset: 31 },
+    parserVersion: '3',
+    payload: { event: { seq: 31, type, data }, session: { nativeSessionId: 'session-dsh', profile: 'base' }, captureChannel: 'history' },
+  })
+  const chunks = await normalizeDshRecord(make('assistant/chunk', {
+    chunk: { type: 'reasoning', text: 'opaque model stream' },
+  }), {} as never)
+  assert.equal(chunks.observations.length, 0)
+  assert.equal(chunks.evidenceCandidates.length, 1)
+  for (const [type, expectedKind] of [
+    ['compaction/start', 'context.compaction'],
+    ['compaction/end', 'context.compaction'],
+    ['compaction/summary', 'context.summary'],
+    ['llm/retry', 'session.lifecycle'],
+  ]) {
+    const observation = await normalizeDshRecord(make(type!, { attempt: 2 }), {} as never)
+    assert.equal(observation.observations[0]?.kind, expectedKind, type)
+  }
+  const future = await normalizeDshRecord(make('extension/future', { feature: true }), {} as never)
+  assert.equal(future.observations[0]?.kind, 'unknown')
+})
