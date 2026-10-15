@@ -11,7 +11,7 @@ export interface ToolOriginEvidence {
 export function toolVisualKind(name: string, evidence?: ToolOriginEvidence): ToolVisualKind {
   if (evidence?.sourceType === 'mcp' || evidence?.mcpServerId?.trim()) return 'mcp'
   const value = name.trim().toLowerCase()
-  if (/^mcp__[a-z0-9_-]+__[a-z0-9_-]+$/.test(value) || /^mcp:[^:]+:[^:]+$/.test(value)) return 'mcp'
+  // An MCP-shaped name is not evidence: only native registration metadata may classify MCP.
   if (/(?:^|[_:./-])(web|browser|http|url)(?:$|[_:./-])/.test(value)) return 'web'
   if (/(?:^|[_:./-])(test|spec|vitest|jest|playwright|pytest|unittest|测试)(?:$|[_:./-])/.test(value)) return 'test'
   // "execute" is not "exec": dbx_execute_query must not be presented as Shell.
