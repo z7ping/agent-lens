@@ -47,8 +47,8 @@
   line-height: 1.5;
 }
 
-/* 页面级视图与操作注入统一 Workspace Topbar，不再占据第二行。 */
-.backup-topbar-controls {
+/* 备份业务操作位于共享 Workspace 业务工具栏；视图导航由 WorkspaceViewTabs 管理。 */
+.backup-toolbar-controls {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -56,18 +56,10 @@
   gap: 8px;
 }
 
-.backup-view-switcher {
-  flex: 0 0 auto;
-}
-
 .backup-agent-filter-slot {
   min-width: 130px;
   max-width: 220px;
   flex: 0 1 190px;
-}
-
-.backup-mobile-scope {
-  display: none;
 }
 
 .backup-toolbar-actions {
