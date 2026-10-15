@@ -1810,6 +1810,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         <div
           ref={readerPaneRef}
           className="review-reader-pane"
+          data-review-session-id={detail?.id}
           onScroll={onReaderScroll}
           onWheelCapture={noteReaderUserIntent}
           onTouchStartCapture={noteReaderUserIntent}
