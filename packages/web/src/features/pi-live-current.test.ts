@@ -45,6 +45,18 @@ test('Pi Live *_end 用权威完整内容原位结算 block', () => {
   assert.equal(items[0]!.kind === 'thinking' ? items[0].state : undefined, 'settled')
 })
 
+test('Pi 1.2 工具原生耗时优先于客户端 SSE 传输耗时', () => {
+  const started = startPiLiveTool([], { callId: 'native-1', name: 'bash', summary: '', startedAtMs: 100 })
+  const settled = finishPiLiveTool(started, 'native-1', 'success', 'ok', 900, 127.5)
+  assert.equal(settled[0]?.kind === 'tool' ? settled[0].durationMs : undefined, 127.5)
+
+  const oldRuntime = finishPiLiveTool(started, 'native-1', 'success', 'ok', 900)
+  assert.equal(oldRuntime[0]?.kind === 'tool' ? oldRuntime[0].durationMs : undefined, 800)
+
+  const invalidNative = finishPiLiveTool(started, 'native-1', 'success', 'ok', 900, -1)
+  assert.equal(invalidNative[0]?.kind === 'tool' ? invalidNative[0].durationMs : undefined, 800)
+})
+
 test('Pi Live 仅由原生 reasoning.start/end 形成思考耗时，跨工具不改变顺序', () => {
   let items: PiLiveHistoryItem[] = []
   items = startPiLiveContentBlock(items, 'thinking', {

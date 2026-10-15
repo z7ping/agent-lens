@@ -312,6 +312,47 @@ test('Pi Live Adapter maps native streaming events into the shared Live event vo
   )
 })
 
+test('Pi 1.2 Live maps settled aborts without treating intermediate agent_end as terminal', () => {
+  assert.equal(normalizePiLiveEvent({ type: 'agent_end', willRetry: false }), undefined)
+  assert.deepEqual(normalizePiLiveEvent({ type: 'agent_settled', aborted: true }), {
+    type: 'completed',
+    status: 'cancelled',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'agent_settled', aborted: false }), {
+    type: 'completed',
+    status: 'completed',
+  })
+})
+
+test('Pi 1.2 Live carries native monotonic tool duration when present', () => {
+  const base = {
+    type: 'tool_execution_end',
+    toolCallId: 'call-1',
+    toolName: 'bash',
+    result: 'done',
+    isError: false,
+  }
+  const result = {
+    type: 'tool.end',
+    callId: 'call-1',
+    name: 'bash',
+    status: 'success',
+    output: 'done',
+  }
+  assert.deepEqual(normalizePiLiveEvent({ ...base, durationMs: 127.5 }), {
+    ...result,
+    durationMs: 127.5,
+  })
+  assert.deepEqual(normalizePiLiveEvent({ ...base, durationMs: 0 }), {
+    ...result,
+    durationMs: 0,
+  })
+  // Absent/invalid durations are not guessed from the client clock.
+  for (const durationMs of [undefined, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.deepEqual(normalizePiLiveEvent({ ...base, durationMs }), result)
+  }
+})
+
 test('Pi Live Adapter exposes queue control and restores queued messages on interrupt', async () => {
   const calls: string[] = []
   const service = {
