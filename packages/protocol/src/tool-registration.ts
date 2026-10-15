@@ -98,13 +98,23 @@ function registration(item: TimelineItemDto): Registration | undefined {
  */
 export class ToolRegistrationIndex {
   private readonly scopes = new Map<string, Registration[]>()
+  private readonly uncertainSince = new Map<string, number>()
 
   constructor(items: readonly TimelineItemDto[]) {
     for (const item of items) {
       const scope = registrationScope(item)
-      if (!scope) continue
+      if (!scope || item.kind !== 'tool.registration') continue
       const parsed = registration(item)
-      if (!parsed) continue
+      if (!parsed) {
+        // A malformed or untrusted change might be a removal; carrying forward
+        // the previous owner would be a false positive.
+        const at = Date.parse(item.effectiveAt)
+        if (Number.isFinite(at)) {
+          const first = this.uncertainSince.get(scope)
+          this.uncertainSince.set(scope, first === undefined ? at : Math.min(first, at))
+        }
+        continue
+      }
       const rows = this.scopes.get(scope) ?? []
       rows.push(parsed)
       this.scopes.set(scope, rows)
@@ -120,6 +130,8 @@ export class ToolRegistrationIndex {
     if (!scope) return undefined
     const callMs = Date.parse(call.effectiveAt)
     if (!Number.isFinite(callMs)) return undefined
+    const uncertainSince = this.uncertainSince.get(scope)
+    if (uncertainSince !== undefined && uncertainSince <= callMs) return undefined
 
     const active = new Map<string, Registration>()
     for (const row of this.scopes.get(scope) ?? []) {
