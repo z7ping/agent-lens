@@ -13,6 +13,7 @@ export const TIMELINE_OBSERVATION_KINDS = [
   'model.changed',
   'thinking.level.changed',
   'tool.call',
+  'tool.registration',
   'tool.progress',
   'tool.result',
   'permission.request',
