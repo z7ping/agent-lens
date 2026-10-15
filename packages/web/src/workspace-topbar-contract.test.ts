@@ -25,11 +25,13 @@ test('面包屑只作为 Topbar 左侧内容，不再拥有独立行高和边框
   assert.doesNotMatch(workspaceCss, /\.workspace-breadcrumb \{[\s\S]*?border-bottom:/)
 })
 
-test('Backup 视图切换和一级操作注入 Topbar，不恢复第二条 Toolbar', () => {
-  assert.match(app, /topbarHost=\{workspaceTopbarHost\}/)
-  assert.match(backup, /createPortal\(<div className="backup-topbar-controls"/)
-  assert.match(backup, /<ToolbarGroup className="backup-view-switcher"/)
+test('Backup 使用统一 40px 二级标签 + 独立业务工具栏，不恢复页面私有 Toolbar', () => {
+  assert.match(app, /<WorkspaceViewTabs/)
+  assert.match(app, /className="workspace-view-toolbar"/)
+  assert.match(app, /toolbarHost=\{workspaceToolbarHost\}/)
+  assert.match(backup, /createPortal\(<div className="backup-toolbar-controls"/)
   assert.match(backup, /<ToolbarGroup className="backup-toolbar-actions"/)
+  assert.doesNotMatch(backup, /backup-view-switcher/)
   assert.doesNotMatch(backup, /<Toolbar className="workspace-toolbar/)
 })
 
