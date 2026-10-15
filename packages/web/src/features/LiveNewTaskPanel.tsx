@@ -285,7 +285,7 @@ export function LiveNewTaskPanel({
                   <span>{t('center.newTask.recentDirectories')}</span>
                   <div className="task-center-recent-directory-items">
                     {recentDirectories.map(option => <Button key={option.cwd} size="small" title={option.cwd} onClick={() => { setManualDirectory(option.cwd); setError('') }} disabled={starting || selectingDirectory}>
-                      <UiIcon name="folder" size={14}/> {basename(option.cwd)}
+                      <UiIcon name="folder-open" size={14}/> {basename(option.cwd)}
                     </Button>)}
                   </div>
                 </div>}
