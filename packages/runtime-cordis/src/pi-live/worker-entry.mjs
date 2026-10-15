@@ -1114,6 +1114,20 @@ function createExtensionUi() {
   }
 }
 
+// Match Pi 1.2's native CLI built-ins using the official SDK extension factories.
+// The SDK does not add these automatically; Pi's loader still owns trust,
+// disabled built-ins and replacement by third-party extensions.
+function piBuiltinToolExtensionFactories(sdkModule) {
+  if (typeof sdkModule.createCodemodeExtension !== 'function'
+    || typeof sdkModule.createToolSearchExtension !== 'function'
+    || typeof sdkModule.createMcpExtension !== 'function') return []
+  return [
+    { name: 'codemode', factory: sdkModule.createCodemodeExtension({ mode: 'on' }), replaceable: true, builtin: true },
+    { name: 'tool-search', factory: sdkModule.createToolSearchExtension(), replaceable: true, builtin: true },
+    { name: 'mcp', factory: sdkModule.createMcpExtension(), replaceable: true, builtin: true },
+  ]
+}
+
 function runtimeCapabilities(hasSessionRuntime) {
   return {
     protocolVersion: VERSION,
@@ -1201,6 +1215,7 @@ async function initialize(input) {
         ...(baseModelRuntime
           ? { modelRuntime: baseModelRuntime }
           : { modelRuntimeSignal: AbortSignal.timeout(15_000) }),
+        resourceLoaderOptions: { extensionFactories: piBuiltinToolExtensionFactories(loadedSdk) },
       })
       recordStartupMetric('cwd_services_create_ms', Date.now() - resourcesStartedAt)
       const resources = startupResourceSnapshot(services.resourceLoader, input.cwd, services.diagnostics)
