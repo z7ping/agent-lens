@@ -237,9 +237,6 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         ariaLabel={t('typeFilter')}
         value={typeFilter}
         options={typeOptions}
-        variant="toolbar"
-        className="pi-ecosystem-type-filter"
-        menuWidth={190}
         onChange={value => {
           setActionError('')
           setTypeFilter(value as TypeFilter)
@@ -249,9 +246,6 @@ export function PiEcosystemPanel({ agent }: { agent: AgentOverviewDto }) {
         ariaLabel={t('sort.label')}
         value={sort}
         options={sortOptions}
-        variant="toolbar"
-        className="pi-ecosystem-sort-filter"
-        menuWidth={180}
         onChange={value => {
           setActionError('')
           setSort(value as PiEcosystemSortDto)
