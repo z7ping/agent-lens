@@ -11,7 +11,7 @@ import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { sourceDot } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
-import { Button, Dialog, IconButton, Input, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, Disclosure, IconButton, Input, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   integrationCanInstall,
   integrationManagementLifecycleState,
@@ -68,6 +68,11 @@ function IntegrationManagementRow({
   const [error, setError] = useState('')
   const [removeOpen, setRemoveOpen] = useState(false)
   const [removeMessage, setRemoveMessage] = useState('')
+  const [expanded, setExpanded] = useState(highlighted || ordering)
+
+  useEffect(() => {
+    if (highlighted || ordering) setExpanded(true)
+  }, [highlighted, ordering])
 
   const packageState = item.packageState
   const packageReady = integrationPackageReady(packageState)
@@ -183,77 +188,102 @@ function IntegrationManagementRow({
     data-new={item.isNew ? 'true' : undefined}
     data-target={highlighted ? 'true' : undefined}
   >
-    <div className="integration-management-identity">
-      <span className={`source-dot ${sourceDot(item.integrationId)}`} aria-hidden="true"/>
-      <div>
-        <b>{item.displayName}</b>
-        <small title={presencePath}>{presencePath || t('managementPage.officialSupport')}</small>
-      </div>
-    </div>
-
-    <div className="integration-management-detection">
-      <span>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</span>
-      {item.tool?.presence === 'data-only' && <small>{t('toolPresence.dataOnlyHint')}</small>}
-    </div>
-
-    <StatusBadge
-      className={`integration-management-status ${status.className}`}
-      tone={status.className.includes('error')
-        ? 'danger'
-        : status.className.includes('enabled')
-          ? 'success'
-          : status.className.includes('history') || status.className.includes('scanning')
-            ? 'warning'
-            : item.isNew
-              ? 'accent'
-              : 'neutral'}
-      title={status.title}
-    >
-      {statusLabel}
-    </StatusBadge>
-
-    <div className="integration-management-capabilities">
-      {item.capabilities.length
-        ? item.capabilities.map(capability => <span key={capability.capability} className="integration-management-capability">
-            {capabilityLabel(capability.capability, t)}
-          </span>)
-        : <span className="integration-management-capability is-muted">{t('managementPage.capabilitiesPending')}</span>}
-    </div>
-
-    <div className="integration-management-actions">
-      {pendingAuthorization.length > 0 && item.enabled.configured && <Button
-        size="small"
-        disabled={saving}
-        onClick={() => void authorize()}
-      >{t('managementPage.authorize')}</Button>}
-      {primaryAction}
-      {packageState?.installed && !item.enabled.configured && <Button
-        size="small"
-        variant="danger"
-        disabled={saving}
-        onClick={() => {
-          setRemoveMessage('')
-          setError('')
-          setRemoveOpen(true)
-        }}
-      >{t('managementPage.uninstall')}</Button>}
-      {ordering && <span className="integration-management-order-actions" aria-label={t('managementPage.orderAria')}>
-        <IconButton
-          size="small"
-          aria-label={t('managementPage.moveUp', { agent: item.displayName })}
-          disabled={!moveUpTargetId}
-          onClick={() => { if (moveUpTargetId) move(item.integrationId, moveUpTargetId) }}
-        ><UiIcon name="sort-up" size={14}/></IconButton>
-        <IconButton
-          size="small"
-          aria-label={t('managementPage.moveDown', { agent: item.displayName })}
-          disabled={!moveDownTargetId}
-          onClick={() => { if (moveDownTargetId) move(item.integrationId, moveDownTargetId) }}
-        ><UiIcon name="sort-down" size={14}/></IconButton>
+    <Disclosure
+      className="integration-management-disclosure"
+      open={expanded}
+      onToggle={event => setExpanded(event.currentTarget.open)}
+      summary={<span className="integration-management-identity">
+        <span className={`source-dot ${sourceDot(item.integrationId)}`} aria-hidden="true"/>
+        <span className="integration-management-identity-text">
+          <b>{item.displayName}</b>
+          <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
+        </span>
       </span>}
-    </div>
+      summaryMeta={<StatusBadge
+        className={`integration-management-status ${status.className}`}
+        tone={status.className.includes('error')
+          ? 'danger'
+          : status.className.includes('enabled')
+            ? 'success'
+            : status.className.includes('history') || status.className.includes('scanning')
+              ? 'warning'
+              : item.isNew
+                ? 'accent'
+                : 'neutral'}
+        title={status.title}
+      >{statusLabel}</StatusBadge>}
+    >
+      <div className="integration-management-details">
+        <div className="integration-management-facts" aria-label={t('managementPage.detailsLabel')}>
+          <div className="integration-management-fact">
+            <span>{t('toolPresence.label')}</span>
+            <strong>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</strong>
+            {item.tool?.presence === 'data-only' && <small>{t('toolPresence.dataOnlyHint')}</small>}
+          </div>
+          <div className="integration-management-fact">
+            <span>{t('toolPresence.location')}</span>
+            <code title={presencePath}>{presencePath || t('installation.pathUnavailable')}</code>
+          </div>
+          <div className="integration-management-fact">
+            <span>{t('installation.integrationVersion')}</span>
+            <strong>{!packageState
+              ? t('installation.versionUnavailable')
+              : !packageState.installed
+                ? t('installation.notAdded')
+                : packageState.installedVersion || t('installation.versionUnavailable')}</strong>
+          </div>
+          <div className="integration-management-fact">
+            <span>{t('managementPage.availableIntegrationVersion')}</span>
+            <strong>{packageState?.availableVersion || t('installation.versionUnavailable')}</strong>
+          </div>
+        </div>
 
-    {error && <p className="integration-management-error" role="alert">{error}</p>}
+        <div className="integration-management-detail-section">
+          <span className="integration-management-detail-label">{t('managementPage.columnCapabilities')}</span>
+          <div className="integration-management-capabilities">
+            {item.capabilities.length
+              ? item.capabilities.map(capability => <span key={capability.capability} className="integration-management-capability">
+                  {capabilityLabel(capability.capability, t)}
+                </span>)
+              : <span className="integration-management-capability is-muted">{t('managementPage.capabilitiesPending')}</span>}
+          </div>
+        </div>
+
+        <div className="integration-management-actions">
+          {pendingAuthorization.length > 0 && item.enabled.configured && <Button
+            size="small"
+            disabled={saving}
+            onClick={() => void authorize()}
+          >{t('managementPage.authorize')}</Button>}
+          {primaryAction}
+          {packageState?.installed && !item.enabled.configured && <Button
+            size="small"
+            variant="danger"
+            disabled={saving}
+            onClick={() => {
+              setRemoveMessage('')
+              setError('')
+              setRemoveOpen(true)
+            }}
+          >{t('managementPage.uninstall')}</Button>}
+          {ordering && <span className="integration-management-order-actions" aria-label={t('managementPage.orderAria')}>
+            <IconButton
+              size="small"
+              aria-label={t('managementPage.moveUp', { agent: item.displayName })}
+              disabled={!moveUpTargetId}
+              onClick={() => { if (moveUpTargetId) move(item.integrationId, moveUpTargetId) }}
+            ><UiIcon name="sort-up" size={14}/></IconButton>
+            <IconButton
+              size="small"
+              aria-label={t('managementPage.moveDown', { agent: item.displayName })}
+              disabled={!moveDownTargetId}
+              onClick={() => { if (moveDownTargetId) move(item.integrationId, moveDownTargetId) }}
+            ><UiIcon name="sort-down" size={14}/></IconButton>
+          </span>}
+        </div>
+        {error && <p className="integration-management-error" role="alert">{error}</p>}
+      </div>
+    </Disclosure>
 
     <Dialog
       open={removeOpen}
@@ -382,22 +412,16 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     <div className="page-content integration-management-content">
       <div className="integration-management-surface">
         <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
-          <span><strong>{items.length}</strong>{t('managementPage.supported')}</span>
-          <span><strong>{discoveryFailed ? '—' : detectedCount}</strong>{t('managementPage.detected')}</span>
-          <span><strong>{installedCount}</strong>{t('managementPage.added')}</span>
-          <span><strong>{enabledCount}</strong>{t('managementPage.enabled')}</span>
+          <span><strong>{items.length}</strong><small>{t('managementPage.supported')}</small></span>
+          <span><strong>{discoveryFailed ? '—' : detectedCount}</strong><small>{t('managementPage.detected')}</small></span>
+          <span><strong>{installedCount}</strong><small>{t('managementPage.added')}</small></span>
+          <span><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
         </div>
 
         <section className="integration-management-section">
           <div className="integration-management-section-head">
             <h2>{t('managementPage.localAndAdded')}</h2>
-          </div>
-          <div className="integration-management-table-head" aria-hidden="true">
-            <span>{t('managementPage.columnAgent')}</span>
-            <span>{t('managementPage.columnLocal')}</span>
-            <span>{t('managementPage.columnStatus')}</span>
-            <span>{t('managementPage.columnCapabilities')}</span>
-            <span>{t('managementPage.columnActions')}</span>
+            <span className="integration-management-section-count">{primaryItems.length}</span>
           </div>
           <div className="integration-management-list">
           {primaryItems.map((item, index) => <IntegrationManagementRow
@@ -416,10 +440,14 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
         </section>
 
         {supportedItems.length > 0 && <section className="integration-management-section integration-management-section-secondary">
-          <div className="integration-management-section-head">
-            <h2>{t('managementPage.otherSupported')}</h2>
-          </div>
-          <div className="integration-management-list">
+          <Disclosure
+            className="integration-management-supported-disclosure"
+            key={`${searchQuery.trim()}:${statusFilter}:${targetIntegrationId}`}
+            defaultOpen={Boolean(searchQuery.trim() || statusFilter !== 'all' || supportedItems.some(item => item.integrationId === targetIntegrationId))}
+            summary={t('managementPage.otherSupported')}
+            summaryMeta={<span className="integration-management-section-count">{supportedItems.length}</span>}
+          >
+            <div className="integration-management-list">
           {supportedItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
             item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
@@ -431,7 +459,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             ordering={ordering}
             highlighted={item.integrationId === targetIntegrationId}
           />)}
-          </div>
+            </div>
+          </Disclosure>
         </section>}
       </div>
     </div>
