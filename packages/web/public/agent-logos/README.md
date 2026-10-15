@@ -5,7 +5,7 @@ Locally bundled to avoid remote image requests at runtime.
 | Local file | Source | Notes |
 | --- | --- | --- |
 | `pi.svg` | [LobeHub icons: Pi](https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/pi.svg) | Pi brand mark |
-| `codex.svg` | [LobeHub icons: Codex](https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/codex.svg) | Monochrome |
+| `codex.svg` | [LobeHub icons: Codex](https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/codex-color.svg) | Color mark with a built-in light background; never invert |
 | `claude-code.svg` | [LobeHub icons: Claude Code](https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/claudecode-color.svg) | Official brand color |
 | `hermes.svg` | [LobeHub icons: Hermes Agent](https://github.com/lobehub/lobe-icons/blob/master/packages/static-svg/icons/hermesagent.svg) | Monochrome |
 | `opencode.svg` | [OpenCode favicon](https://github.com/anomalyco/opencode/blob/dev/packages/app/public/favicon-v3.svg) | Sourced from the OpenCode repository (path and branch reflect retrieval) |

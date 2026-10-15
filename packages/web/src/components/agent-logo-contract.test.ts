@@ -26,6 +26,11 @@ test('brand logos are local, distinct and include an upstream license', () => {
   }
   assert.match(read('../../public/agent-logos/LICENSE.lobe-icons.txt'), /MIT License/)
   assert.match(read('../../public/agent-logos/README.md'), /LobeHub/)
+  const codex = read('../../public/agent-logos/codex.svg')
+  assert.match(codex, /linearGradient/)
+  assert.match(codex, /fill="#fff"/)
+  assert.doesNotMatch(codex, /fill="currentColor"/)
+  assert.match(component, /codex: \{ asset: 'codex.svg', monochrome: false \}/)
   assert.match(component, /<UiIcon name="agent"/) // Unknown/DSH: neutral fallback.
   assert.doesNotMatch(component, /fetch\(/)
 })
