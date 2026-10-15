@@ -10,6 +10,7 @@ import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskProcessGroup } from './TaskProcessGroup'
+import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
 import type { TaskEventCategory, TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
@@ -252,9 +253,13 @@ function HistoryProcessGroup({
     <div className="task-process-sequence">
       {items.map(item => {
         if (item.kind === 'tool-group') return <HistoryToolGroup key={item.id} id={item.id} items={item.items} settled={state !== 'running'}/>
-        if (item.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={item.id}>
+        if (item.kind === 'thinking') return <TaskThinking
+          key={item.id}
+          model={{ id: item.id, label: t('task:thinking.thinkingProcess'), text: item.text, state: state === 'running' && item.state === 'running' ? 'running' : 'settled' }}
+          className="task-process-thinking-card" defaultExpanded={false}
+        >
           <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
-        </div>
+        </TaskThinking>
         if (item.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={item.id}>
           <div className="task-process-message-kind">{t('history.commentary')}</div>
           <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
@@ -465,9 +470,13 @@ export function PiLiveIndexedTaskRound({
       {loadState === 'loaded' && processEntry && <div className="task-process-sequence">
         {processEntry.items.map(processItem => {
           if (processItem.kind === 'tool-group') return <HistoryToolGroup key={processItem.id} id={processItem.id} items={processItem.items}/>
-          if (processItem.kind === 'thinking') return <div className="task-process-message" data-message-role="reasoning" key={processItem.id}>
+          if (processItem.kind === 'thinking') return <TaskThinking
+            key={processItem.id}
+            model={{ id: processItem.id, label: t('task:thinking.thinkingProcess'), text: processItem.text, state: 'settled' }}
+            className="task-process-thinking-card" defaultExpanded={false} expansionStore={expansionStore}
+          >
             <ThinkingMarkdown text={processItem.text}/>
-          </div>
+          </TaskThinking>
           if (processItem.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={processItem.id}>
             <div className="task-process-message-kind">{t('history.commentary')}</div>
             <ThinkingMarkdown text={processItem.text}/>
