@@ -23,6 +23,7 @@ import {
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
+import { agentVersionComparison, checkAgentLatestVersion, type AgentLatestVersion } from './integrations/agent-online-versions'
 
 const capabilityLabelKey: Record<string, string> = {
   source: 'integrationCapability.source',
@@ -76,8 +77,10 @@ function IntegrationManagementRow({
   const [removeMessage, setRemoveMessage] = useState('')
   const [updateOpen, setUpdateOpen] = useState(false)
   const [updateNotice, setUpdateNotice] = useState('')
-  const [upgradeMethod, setUpgradeMethod] = useState('')
-  const [commandCopied, setCommandCopied] = useState(false)
+  const [upgradeMethod, setUpgradeMethod] = useState(() => agentUpgradeMethods(item.productId)[0]?.value ?? '')
+  const [copiedCommand, setCopiedCommand] = useState<'install' | 'update' | null>(null)
+  const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
+  const [versionChecking, setVersionChecking] = useState(false)
   const [expanded, setExpanded] = useState(highlighted || ordering)
 
   useEffect(() => {
@@ -88,9 +91,10 @@ function IntegrationManagementRow({
   const packageReady = integrationPackageReady(packageState)
   const canUpdatePackage = integrationPackageUpdateAvailable(packageState)
   const methods = agentUpgradeMethods(item.productId)
-  const selectedMethod = methods.find(method => method.value === upgradeMethod)
+  const selectedMethod = methods.find(method => method.value === upgradeMethod) ?? methods[0]
   const versions = [...new Set((installations ?? []).map(installation => installation.version).filter((version): version is string => Boolean(version)))]
   const localAgentVersion = versions.length ? versions.join(' / ') : t('installation.versionUnavailable')
+  const versionComparison = agentVersionComparison(versions, latestVersion)
   const canInstall = integrationCanInstall(item.tool)
   const status = integrationManagementLifecycleState(item, t)
   const statusLabel = item.isNew && !packageState?.installed && canInstall
@@ -143,11 +147,27 @@ function IntegrationManagementRow({
     }
   }
 
-  const copyAgentUpgrade = async () => {
+  useEffect(() => {
+    let active = true
+    void checkAgentLatestVersion(item.productId).then(result => {
+      if (active) setLatestVersion(result)
+    })
+    return () => { active = false }
+  }, [item.productId])
+
+  const refreshLatestVersion = async () => {
+    if (versionChecking) return
+    setVersionChecking(true)
+    const result = await checkAgentLatestVersion(item.productId, { force: true })
+    setLatestVersion(result)
+    setVersionChecking(false)
+  }
+
+  const copyAgentUpgrade = async (kind: 'install' | 'update') => {
     if (!selectedMethod) return
     try {
-      await copyText(selectedMethod.command)
-      setCommandCopied(true)
+      await copyText(kind === 'install' ? selectedMethod.installCommand : selectedMethod.updateCommand)
+      setCopiedCommand(kind)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     }
@@ -245,7 +265,7 @@ function IntegrationManagementRow({
           <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
         </span>
       </span>}
-      summaryMeta={<StatusBadge
+      summaryMeta={<span className="integration-management-summary-states"><StatusBadge
         className={`integration-management-status ${status.className}`}
         tone={status.className.includes('error')
           ? 'danger'
@@ -257,7 +277,9 @@ function IntegrationManagementRow({
                 ? 'accent'
                 : 'neutral'}
         title={status.title}
-      >{statusLabel}</StatusBadge>}
+      >{statusLabel}</StatusBadge>
+        {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
+      </span>}
     >
       <div className="integration-management-details">
         <div className="integration-management-facts" aria-label={t('managementPage.detailsLabel')}>
@@ -290,23 +312,50 @@ function IntegrationManagementRow({
 
         <div className="integration-management-agent-upgrade">
           <span className="integration-management-detail-label">{t('managementPage.agentUpgradeHeading')}</span>
+          <div className="integration-management-version-check">
+            <span role="status">
+              {latestVersion?.status === 'ready'
+                ? t('managementPage.remoteAgentVersion', {
+                    version: latestVersion.version,
+                    source: latestVersion.source === 'npm' ? 'npm' : 'GitHub',
+                  })
+                : t(latestVersion?.status === 'error'
+                  ? 'managementPage.versionCheckFailed'
+                  : latestVersion?.status === 'unsupported'
+                    ? 'managementPage.versionCheckUnsupported'
+                    : 'managementPage.versionChecking')}
+            </span>
+            {latestVersion?.status !== 'unsupported' && <Button size="small" disabled={versionChecking} loading={versionChecking}
+              onClick={() => void refreshLatestVersion()}>{t('managementPage.checkVersion')}</Button>}
+            {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
+            {versionComparison === 'current' && <StatusBadge tone="success">{t('managementPage.versionCurrent')}</StatusBadge>}
+          </div>
           <p>{t('managementPage.agentUpgradeWarning')}</p>
-          {item.tool?.presence === 'present' && methods.length > 0
+          {methods.length > 0
             ? <>
               <div className="integration-management-upgrade-method">
                 <SelectMenu
-                  value={upgradeMethod}
+                  value={selectedMethod?.value ?? ''}
                   ariaLabel={t('managementPage.agentUpgradeMethod')}
-                  onChange={value => { setUpgradeMethod(value); setCommandCopied(false) }}
-                  placeholder={t('managementPage.agentUpgradeSelect')}
+                  onChange={value => { setUpgradeMethod(value); setCopiedCommand(null) }}
                   options={methods.map(method => ({ value: method.value, label: t(`managementPage.method.${method.labelKey}`) }))}
                 />
               </div>
-              {selectedMethod && <div className="integration-management-command">
-                <code>{selectedMethod.command}</code>
-                <Button size="small" onClick={() => void copyAgentUpgrade()}>
-                  {t(commandCopied ? 'managementPage.copiedCommand' : 'managementPage.copyCommand')}
-                </Button>
+              {selectedMethod && <div className="integration-management-command-pair">
+                <div className="integration-management-command">
+                  <span className="integration-management-detail-label">{t('managementPage.installCommand')}</span>
+                  <code>{selectedMethod.installCommand}</code>
+                  <Button size="small" onClick={() => void copyAgentUpgrade('install')}>
+                    {t(copiedCommand === 'install' ? 'managementPage.copiedCommand' : 'managementPage.copyCommand')}
+                  </Button>
+                </div>
+                <div className="integration-management-command">
+                  <span className="integration-management-detail-label">{t('managementPage.upgradeCommand')}</span>
+                  <code>{selectedMethod.updateCommand}</code>
+                  <Button size="small" onClick={() => void copyAgentUpgrade('update')}>
+                    {t(copiedCommand === 'update' ? 'managementPage.copiedCommand' : 'managementPage.copyCommand')}
+                  </Button>
+                </div>
                 <a href={selectedMethod.docsUrl} target="_blank" rel="noopener noreferrer">{t('managementPage.officialUpgradeDocs')}</a>
               </div>}
             </>
