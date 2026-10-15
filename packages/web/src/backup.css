@@ -10,12 +10,6 @@
   min-height: 0;
 }
 
-.backup-content {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 16px 28px 64px;
-}
-
 .backup-file-input { display: none; }
 
 .backup-error {
