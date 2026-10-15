@@ -8,13 +8,17 @@ export function installationChoices(
 ): AgentInstallationOverviewDto[] {
   const seen = new Set<string>()
   return installations.filter(item => {
-    const path = (item.configRoot ?? item.dataRoot ?? item.executable ?? item.id)
-      .trim().replace(/\\/g, '/').replace(/\/+$/, '')
-    // Only Windows drive/UNC paths are case-insensitive; preserve POSIX casing.
-    const directory = /^(?:[a-z]:\/|\/\/)/i.test(path) ? path.toLocaleLowerCase() : path
-    const key = JSON.stringify([item.version?.trim() ?? '', directory])
+    const key = installationChoiceKey(item)
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+}
+
+/** Keep every backing installation ID reachable for duplicated display choices. */
+export function installationChoiceKey(item: AgentInstallationOverviewDto): string {
+  const path = (item.configRoot ?? item.dataRoot ?? item.executable ?? item.id)
+    .trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  const directory = /^(?:[a-z]:\/|\/\/)/i.test(path) ? path.toLocaleLowerCase() : path
+  return JSON.stringify([item.version?.trim() ?? '', directory])
 }
