@@ -512,14 +512,19 @@ async function runService(action: string, json: boolean): Promise<number> {
 
   let health = await healthOrNull()
   if (startsService && !health) health = await waitForHealth()
-  if (action === 'stop' && health && runtimeOwner(health) === 'service') {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      await delay(150)
-      health = await healthOrNull()
-      if (!health || runtimeOwner(health) !== 'service') break
+  if (action === 'stop') {
+    // Windows Task Scheduler can report Ready before its Node child finishes
+    // shutting down. Confirm both the task and the service-owned daemon have
+    // stopped, instead of rejecting after a fixed ~1.5-second race window.
+    const deadline = Date.now() + 12_000
+    while (lifecycle.active || (health && runtimeOwner(health) === 'service')) {
+      if (Date.now() >= deadline) break
+      await delay(250)
+      ;[lifecycle, health] = await Promise.all([getLifecycleStatus(options), healthOrNull()])
     }
+  } else if (action !== 'status') {
+    lifecycle = await getLifecycleStatus(options)
   }
-  if (action !== 'status') lifecycle = await getLifecycleStatus(options)
 
   const owner = health ? runtimeOwner(health) : null
   let reason: string | null = null
