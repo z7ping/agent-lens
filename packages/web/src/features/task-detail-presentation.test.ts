@@ -150,6 +150,28 @@ test('thinking title uses a measured duration only and does not masquerade as ex
   assert.doesNotMatch(unknown, /思考了/)
 })
 
+test('已验证的 Pi MCP 以服务器和工具名展示，未确认来源不得伪装 MCP', () => {
+  const trusted: TaskToolGroupModel = {
+    ...toolGroup,
+    tools: [{
+      id: 'trusted-mcp', name: 'mcp__dbx__execute_query', kind: 'tool',
+      kindLabel: '工具', toolSourceType: 'mcp', mcpServerId: 'dbx',
+      status: 'success', output: 'ok',
+    }],
+    itemCount: 1,
+  }
+  const trustedHtml = renderToStaticMarkup(createElement(TaskToolGroup, { model: trusted }))
+  assert.match(trustedHtml, /data-kind="mcp"/)
+  assert.match(trustedHtml, /dbx · execute_query/)
+  const unknown: TaskToolGroupModel = {
+    ...trusted,
+    tools: [{ ...trusted.tools[0]!, id: 'unknown', toolSourceType: undefined, mcpServerId: undefined }],
+  }
+  const unknownHtml = renderToStaticMarkup(createElement(TaskToolGroup, { model: unknown }))
+  assert.match(unknownHtml, /data-kind="tool"/)
+  assert.doesNotMatch(unknownHtml, /dbx · execute_query/)
+})
+
 test('MCP 完整入参与出参位于同一个默认折叠的 Tool 内，不被再次套娃', () => {
   const input = JSON.stringify({ database: 'auth-center-v3', sql: 'SELECT * FROM organization WHERE ancestors LIKE ?', args: ['%sample%'] })
   const data: TaskToolGroupModel = { ...toolGroup, tools: [
