@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type {
   Disposable,
   LiveAdapter,
@@ -371,6 +374,36 @@ class FakeLiveService implements LiveService {
     return liveId === this.adapter.manifest.liveId ? this.adapter : null
   }
 }
+
+test('Live host directory validation accepts existing directories and rejects missing paths', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(new FakeLiveAdapter()) })
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-live-dir-'))
+  const endpoint = `http://${surface.host}:${surface.port}/api/v1/live/project-directory/validate`
+  const validate = (workspacePath: string) => fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ workspacePath }),
+  })
+
+  try {
+    const valid = await validate(root)
+    assert.equal(valid.status, 200)
+    assert.deepEqual(await valid.json(), { workspacePath: root })
+
+    const relative = await validate('relative/path')
+    assert.equal(relative.status, 400)
+    const missing = await validate(join(root, 'missing'))
+    assert.equal(missing.status, 400)
+    const get = await fetch(endpoint)
+    assert.equal(get.status, 405)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+    await surface.dispose()
+    storage.close()
+  }
+})
 
 test('generic Live HTTP surface coalesces concurrent identical adapter reads', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
