@@ -335,6 +335,7 @@ export class AgentLensClientModel {
   private unsubscribeLive: (() => void) | null = null
   private reviewGeneration = 0
   private detailGeneration = 0
+  private reviewSelectionAbort: AbortController | null = null
   private usageGeneration = 0
   private agentsGeneration = 0
   private usageInvalidation = 0
@@ -435,6 +436,8 @@ export class AgentLensClientModel {
   }
 
   stop(): void {
+    this.reviewSelectionAbort?.abort()
+    this.reviewSelectionAbort = null
     this.unsubscribeLive?.()
     this.unsubscribeLive = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
@@ -1387,6 +1390,7 @@ export class AgentLensClientModel {
     id: string,
     generation = this.detailGeneration,
     loading = false,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (!id) return
     if (loading && this.snapshot.review.selectedId === id) {
@@ -1400,7 +1404,7 @@ export class AgentLensClientModel {
       })
     }
     try {
-      const fileChanges = await this.api.reviewFileChanges(id)
+      const fileChanges = await this.api.reviewFileChanges(id, signal)
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
@@ -1412,7 +1416,7 @@ export class AgentLensClientModel {
         },
       })
     } catch (error) {
-      if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+      if (signal?.aborted || generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
         review: {
@@ -1426,6 +1430,10 @@ export class AgentLensClientModel {
 
   async selectReviewSession(id: string): Promise<void> {
     if (!id) return
+    // Cancel the previous selection's network reads, not just its stale UI updates.
+    this.reviewSelectionAbort?.abort()
+    const controller = new AbortController()
+    this.reviewSelectionAbort = controller
     const generation = ++this.detailGeneration
     const changingSession = this.snapshot.review.selectedId !== id
     this.publish({
@@ -1442,9 +1450,9 @@ export class AgentLensClientModel {
         ...(changingSession ? { detail: null, relationships: null, fileChanges: null } : {}),
       },
     })
-    void this.refreshReviewFileChanges(id, generation, false)
+    void this.refreshReviewFileChanges(id, generation, false, controller.signal)
     try {
-      const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary' })
+      const detail = await this.api.reviewDetail(id, { direction: 'backward', limit: REVIEW_DETAIL_PAGE_SIZE, process: 'summary', signal: controller.signal })
       if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
       this.publish({
         ...this.snapshot,
@@ -1459,7 +1467,7 @@ export class AgentLensClientModel {
         void this.refreshReview({ preserveDetail: true })
       }
 
-      void this.api.relationships(id).then(
+      void this.api.relationships(id, controller.signal).then(
         relationships => {
           if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
           this.publish({
@@ -1468,7 +1476,7 @@ export class AgentLensClientModel {
           })
         },
         reason => {
-          if (generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
+          if (controller.signal.aborted || generation !== this.detailGeneration || this.snapshot.review.selectedId !== id) return
           this.publish({
             ...this.snapshot,
             review: {
@@ -1480,7 +1488,7 @@ export class AgentLensClientModel {
         },
       )
     } catch (error) {
-      if (generation !== this.detailGeneration) return
+      if (controller.signal.aborted || generation !== this.detailGeneration) return
       this.publish({
         ...this.snapshot,
         review: {
