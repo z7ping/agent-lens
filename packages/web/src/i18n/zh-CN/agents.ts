@@ -251,8 +251,6 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       title: '智能体接入',
       loading: '正在读取智能体接入状态…',
       summaryAria: '智能体接入概览',
-      searchAria: '搜索智能体接入',
-      searchPlaceholder: '搜索智能体',
       statusFilterAria: '筛选接入状态',
       allStatuses: '全部状态',
       noMatches: '没有符合条件的智能体',
