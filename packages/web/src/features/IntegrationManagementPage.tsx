@@ -20,6 +20,7 @@ import {
   integrationCanInstall,
   integrationPackageUpdateAvailable,
   integrationManagementLifecycleState,
+  integrationLifecycleTone,
   integrationPackageReady,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
@@ -282,16 +283,8 @@ function IntegrationManagementRow({
         </span>
         {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
         <StatusBadge
-          className={`integration-management-status ${status.className}`}
-          tone={status.className.includes('error')
-            ? 'danger'
-            : status.className.includes('enabled')
-              ? 'success'
-              : status.className.includes('history') || status.className.includes('scanning')
-                ? 'warning'
-                : item.isNew
-                  ? 'accent'
-                  : 'neutral'}
+          className="integration-management-status"
+          tone={integrationLifecycleTone(status.className, item.isNew)}
           title={status.title}
         >{statusLabel}</StatusBadge>
       </span>}
@@ -582,10 +575,10 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     <div className="page-content integration-management-content">
       <div className="integration-management-surface">
         <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
-          <span><strong>{items.length}</strong><small>{t('managementPage.supported')}</small></span>
-          <span><strong>{discoveryFailed ? '—' : detectedCount}</strong><small>{t('managementPage.detected')}</small></span>
-          <span><strong>{installedCount}</strong><small>{t('managementPage.added')}</small></span>
-          <span><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
+          <span className="workspace-metric-card"><strong>{items.length}</strong><small>{t('managementPage.supported')}</small></span>
+          <span className="workspace-metric-card"><strong>{discoveryFailed ? '—' : detectedCount}</strong><small>{t('managementPage.detected')}</small></span>
+          <span className="workspace-metric-card"><strong>{installedCount}</strong><small>{t('managementPage.added')}</small></span>
+          <span className="workspace-metric-card"><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
         </div>
 
         <section className="integration-management-section">

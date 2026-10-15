@@ -26,6 +26,7 @@ import {
 } from './integrations/IntegrationObservation'
 import {
   agentObservationState,
+  integrationLifecycleTone,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
@@ -564,7 +565,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
         { value: 'overview', label: tPi('overviewTab'), to: '/agents?agent=pi' },
         { value: 'ecosystem', label: tPi('ecosystemTab'), to: '/agents?agent=pi&view=ecosystem' },
       ]}/>}
-      <span className={`agent-status ${status.className}`} title={status.title}>{status.label}</span>
+      <StatusBadge tone={integrationLifecycleTone(status.className)} title={status.title}>{status.label}</StatusBadge>
     </header>
 
     <div className="agent-installation">

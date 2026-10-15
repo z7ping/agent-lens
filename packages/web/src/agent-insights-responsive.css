@@ -36,7 +36,7 @@
   margin: 14px auto 64px;
   padding: 0 var(--al-workspace-content-inset, 28px);
 }
-.agent-insight-card { min-width: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 12px; background: var(--al-surface); }
+.agent-insight-card { min-width: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: var(--radius-md); background: var(--al-surface); }
 .agent-insight-head { display: flex; min-height: 52px; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--al-line); }
 .agent-insight-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
 .agent-insight-head p { margin: 4px 0 0; color: var(--al-muted); font-size: 12px; line-height: 1.45; }

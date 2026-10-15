@@ -8,12 +8,6 @@
     display: none;
   }
 
-  .backup-toolbar-actions .btn {
-    min-width: 32px;
-    padding-inline: 7px;
-  }
-
-
   .backup-asset-overview {
     flex-wrap: wrap;
     gap: 8px 20px;
@@ -69,20 +63,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .backup-toolbar-controls {
-    gap: 4px;
-  }
-
-  .backup-agent-filter-slot {
-    min-width: 100px;
-    flex-basis: 140px;
-  }
-
-  .backup-toolbar-actions .btn {
-    padding-inline: 8px;
-  }
-
-
   .backup-asset-overview {
     padding: 11px 12px;
   }

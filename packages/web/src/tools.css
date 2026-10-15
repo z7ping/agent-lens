@@ -82,7 +82,7 @@
 .tool-table-card {
   overflow: hidden;
   border: 1px solid var(--al-line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--al-surface);
   box-shadow: none;
 }
@@ -151,7 +151,7 @@
   margin-top: 16px;
   padding: 14px 16px 8px;
   border: 1px solid var(--al-line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--al-surface);
 }
 .tool-attention-list { margin-top: 8px; border-top: 1px solid var(--al-line); }
@@ -182,7 +182,7 @@
   margin-top: 14px;
   padding: 14px 16px 8px;
   border: 1px solid var(--al-line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--al-surface);
   box-shadow: none;
 }
