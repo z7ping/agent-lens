@@ -29,6 +29,7 @@ import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
 import { validateHostWorkingDirectory } from './host-working-directory'
+import { browseHostWorkingDirectory } from './host-directory-browser'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const MAX_LIVE_MESSAGE_ACTIONS = 16
@@ -855,6 +856,18 @@ export async function handleLiveRequest(
   if (url.pathname === '/api/v1/live/attachments' || url.pathname.startsWith('/api/v1/live/attachments/')) return false
 
   try {
+    if (url.pathname === '/api/v1/live/project-directory/browse') {
+      if (request.method !== 'POST') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const input = objectBody(await readJson(request))
+      if (Object.keys(input).some(key => key !== 'path')) throw httpError(400, 'Unsupported directory browsing field')
+      if (input.path !== undefined && typeof input.path !== 'string') throw httpError(400, 'path must be a string')
+      writeJson(response, 200, await browseHostWorkingDirectory(input.path as string | undefined))
+      return true
+    }
+
     if (url.pathname === '/api/v1/live/project-directory/validate') {
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })
