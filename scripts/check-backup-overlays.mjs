@@ -28,8 +28,8 @@ if (main.includes("import './backup-scroll.css'") || existsSync('packages/web/sr
 
 for (const required of [
   'className="workspace-page backup-page"',
-  'createPortal(<div className="backup-topbar-controls"',
-  'className="backup-view-switcher"',
+  'createPortal(<div className="backup-toolbar-controls"',
+  'className="backup-agent-filter-slot"',
   'className="backup-agent-list"',
   'className="backup-agent-item"',
   'className="backup-agent-group"',
@@ -51,12 +51,12 @@ if (/\.backup-page\s*\{[^}]*overflow\s*:\s*auto/s.test(pageCss)) {
 for (const required of [
   'function WorkspaceTopBar',
   'className="workspace-topbar-page-tools"',
-  'topbarHost={workspaceTopbarHost}',
+  'toolbarHost={workspaceToolbarHost}',
 ]) {
-  if (!app.includes(required)) throw new Error(`资产备份必须接入单行 Workspace Topbar：${required}`)
+  if (!app.includes(required)) throw new Error(`资产备份必须接入共享工作区工具栏：${required}`)
 }
 if (page.includes('<Toolbar className="workspace-toolbar backup-toolbar"')) {
-  throw new Error('资产备份不得在 Workspace Topbar 下恢复第二行页面 Toolbar')
+  throw new Error('资产备份不得恢复页面自建的旧业务工具栏')
 }
 
 for (const required of [

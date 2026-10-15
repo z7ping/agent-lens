@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { ClientSnapshot } from '../client/model'
 import { LocaleSelector } from '../i18n/LocaleSelector'
@@ -42,9 +42,6 @@ export function WorkspaceSidebar({
   const onInsights = location.pathname.startsWith('/insights') || location.pathname.startsWith('/tools')
   const onAgents = location.pathname.startsWith('/agents')
   const onBackup = location.pathname.startsWith('/backup')
-  const contextTitle = onInsights
-    ? t('navigation:insights')
-    : ''
 
   useModalFocusScope({ open: mobileOpen, onClose: onMobileClose, panelRef: sidebarRef })
 
@@ -78,17 +75,7 @@ export function WorkspaceSidebar({
       onNavigate={onMobileClose}
     />
 
-    <div className="workspace-sidebar-context" ref={onContextHost}>
-      {!onReview && contextTitle && <div className="workspace-context-brand">
-        <img className="workspace-context-brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
-        <div className="workspace-context-brand-copy"><b>AgentLens</b><span aria-hidden="true">·</span><span>{contextTitle}</span></div>
-      </div>}
-      {onInsights && <nav className="workspace-insight-switcher" aria-label={t('navigation:insightsView')}>
-        <NavLink to="/insights" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`} end>{t('navigation:usageOverview')}</NavLink>
-        <NavLink to="/tools" onClick={onMobileClose} className={({ isActive }) => `workspace-insight-link ${isActive ? 'is-active' : ''}`}>{t('navigation:tools')}{snapshot.usage.hasNewData && <i className="workspace-nav-dot" aria-hidden="true"/>}</NavLink>
-      </nav>}
-
-    </div>
+    <div className="workspace-sidebar-context" ref={onContextHost}/>
 
     <div className="workspace-sidebar-footer">
       <div className="workspace-settings-anchor">

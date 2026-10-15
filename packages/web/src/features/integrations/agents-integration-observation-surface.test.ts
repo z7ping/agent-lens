@@ -26,7 +26,7 @@ test('Agents observation surface has no source or Integration lifecycle controls
 })
 
 test('Agents routes lifecycle work to the single integration management surface', () => {
-  assert.match(agentsPage, /navigate\(\x60\/integrations\?agent=\$\{encodeURIComponent\(id\)\}\x60\)/)
+  assert.match(agentsPage, /navigate\(\x60\/agents\?view=management&agent=\$\{encodeURIComponent\(id\)\}\x60\)/)
   assert.match(integrationPage, /useSearchParams/)
   assert.match(integrationPage, /searchParams\.get\('agent'\)/)
   assert.match(integrationPage, /data-target=\{highlighted \? 'true' : undefined\}/)

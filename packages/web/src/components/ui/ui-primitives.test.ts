@@ -72,7 +72,8 @@ test('侧栏设置使用 Popover 锚点，不受折叠侧栏裁切', () => {
   assert.match(workspaceSidebar, /ref=\{settingsButtonRef\}/)
   assert.match(workspaceSidebar, /<Popover[\s\S]*?anchorRef=\{settingsButtonRef\}[\s\S]*?placement="right-end"/)
   assert.doesNotMatch(workspaceSidebar, /settingsAnchorRef/)
-  assert.match(workspaceSidebar, /autoFocus[\s\S]*?workspace-settings-menu-item/)
+  assert.match(workspaceSidebar, /className="workspace-settings-menu-item"/)
+  assert.match(workspaceSidebar, /onClose=\{\(\) => setSettingsOpen\(false\)\}/)
 })
 
 test('DeepSeek Harness 在浅色和深色主题都拥有来源色 Token', () => {
@@ -190,18 +191,20 @@ test('Live Runtime keeps lifecycle in Reader and presents polished copyable diag
   assert.doesNotMatch(piLiveCss, /@media \(max-width: (?:1180|900|820|760|640|560)px\)/)
 })
 
-test('Workspace Shell owns three primary workspaces and one dynamic context host', () => {
+test('Workspace Shell owns four primary workspaces and only Task Center has a context host', () => {
   assert.match(workspaceSidebar, /<WorkspacePrimaryNavigation/)
   assert.match(workspacePrimaryNavigation, /id: 'review',[\s\S]*?to: '\/review',[\s\S]*?labelKey: 'task'/)
   assert.match(workspacePrimaryNavigation, /id: 'insights',[\s\S]*?to: '\/insights',[\s\S]*?labelKey: 'insights'/)
   assert.match(workspacePrimaryNavigation, /id: 'agents',[\s\S]*?to: '\/agents',[\s\S]*?labelKey: 'agents'/)
   assert.match(workspacePrimaryNavigation, /<UiIcon name=\{section\.icon\} size=\{16\}/)
-  assert.doesNotMatch(workspacePrimaryNavigation, /to: '\/(?:tools|backup|review\/live)'/)
+  assert.match(workspacePrimaryNavigation, /id: 'backup',[\s\S]*?to: '\/backup',[\s\S]*?labelKey: 'assetBackup'/)
+  assert.doesNotMatch(workspacePrimaryNavigation, /to: '\/(?:tools|integrations|review\/live)'/)
   assert.match(workspaceSidebar, /workspace-sidebar-context" ref=\{onContextHost\}/)
   assert.match(workspaceSidebar, /collapsed \? t\('navigation:expandSidebar'\) : t\('navigation:collapseSidebar'\)/)
   assert.match(app, /onToggleCollapse=\{\(\) => setDesktopSidebarCollapsed\(!sidebarCollapsed\)\}/)
   assert.match(app, /writeSidebarCollapsed\(collapsed\)/)
-  assert.match(workspaceSidebar, /workspace-insight-switcher/)
+  assert.doesNotMatch(workspaceSidebar, /workspace-insight-switcher/)
+  assert.match(app, /<WorkspaceViewTabs/)
   assert.match(workspaceSidebarCss, /grid-template-columns:\s*316px minmax\(0, 1fr\)/)
   assert.match(workspaceSidebarCss, /\.app-shell\.is-sidebar-collapsed\s*\{[\s\S]*?grid-template-columns:\s*40px minmax\(0, 1fr\)/)
   assert.match(workspaceSidebarCss, /workspace-primary-link\.is-active\s*\{[\s\S]*?background:\s*var\(--al-accent-soft\)/)
@@ -210,8 +213,8 @@ test('Workspace Shell owns three primary workspaces and one dynamic context host
   assert.match(sidebarFilterDisclosure, /open=\{open\}/)
   assert.match(workspaceSidebarCss, /\.task-center-quick-filters\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\) 32px;/)
   assert.doesNotMatch(workspaceSidebarCss, /\.task-center-sidebar-filter[\s\S]{0,300}position:\s*absolute;/)
-  assert.match(app, /<ToolsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
-  assert.match(app, /<InsightsPage model=\{model\} sidebarHost=\{sidebarHost\}/)
+  assert.match(app, /<ToolsPage model=\{model\} toolbarHost=\{workspaceToolbarHost\}/)
+  assert.match(app, /<InsightsPage model=\{model\} toolbarHost=\{workspaceToolbarHost\}/)
 })
 
 test('实时通道断开使用结构化状态提示而不是裸文本警告', () => {
@@ -242,10 +245,10 @@ test('Task Center context owns search, controlled filters and task list', () => 
   assert.doesNotMatch(app, /ReviewTurnRail/)
 })
 
-test('Tools and Insights own filters in the left context, never in a right-side toolbar', () => {
+test('Tools and Insights share view toolbar filters and keep the detail Drawer', () => {
   assert.match(toolsPage, /import \{ SidebarFilterDisclosure \} from '\.\.\/components\/SidebarFilterDisclosure'/)
   assert.match(toolsPage, /import \{ Drawer, IconButton, SelectMenu, UiIcon \} from '\.\.\/components\/ui'/)
-  assert.match(toolsPage, /createPortal\(sidebarFilters, sidebarHost\)/)
+  assert.match(toolsPage, /createPortal\(toolbarFilters, toolbarHost\)/)
   assert.match(toolsPage, /<SidebarFilterDisclosure\s+summary=\{agentSelectionSummary\}/)
   assert.match(toolsPage, /agentSelection=\{\{ mode: 'multiple', value: usage\.filters\.sourceIds/)
   assert.doesNotMatch(toolsPage, /<Toolbar\b/)
@@ -255,7 +258,7 @@ test('Tools and Insights own filters in the left context, never in a right-side 
 
   assert.match(insightsPage, /import \{ SidebarFilterDisclosure \} from '\.\.\/components\/SidebarFilterDisclosure'/)
   assert.match(insightsPage, /import \{[^}]*\bIconButton\b[^}]*\bSelectMenu\b[^}]*\bUiIcon\b[^}]*\} from '\.\.\/components\/ui'/)
-  assert.match(insightsPage, /createPortal\(sidebarFilters, sidebarHost\)/)
+  assert.match(insightsPage, /createPortal\(toolbarFilters, toolbarHost\)/)
   assert.match(insightsPage, /<SidebarFilterDisclosure\s+summary=\{agentSelectionSummary\}/)
   assert.match(insightsPage, /agentSelection=\{\{ mode: 'multiple', value: insights\.filters\.sourceIds/)
   assert.doesNotMatch(insightsPage, /<Toolbar\b/)
@@ -283,7 +286,9 @@ test('Review, Backup and Agent Overview retain their valid local primitives', ()
   assert.doesNotMatch(agentsCss, /@media \(max-width: (?:820|760|560)px\)/)
   assert.match(agentsResponsiveCss, /@media \(min-width: 1400px\)[\s\S]*?\.agent-insights-rail \{[^}]*margin:\s*18px 18px 18px 0;/)
   assert.doesNotMatch(agentsPage, /agent-source-nav|agent-source-option/)
-  assert.match(workspaceSidebar, /<SidebarFilterDisclosure agentOrderManagement/)
+  const managementPage = readFileSync(new URL('../../features/IntegrationManagementPage.tsx', import.meta.url), 'utf8')
+  assert.match(managementPage, /useIntegrationOrder/)
+  assert.match(managementPage, /setOrdering\(value => !value\)/)
   assert.doesNotMatch(agentsCss, /#[0-9a-fA-F]{3,8}\b/)
 })
 

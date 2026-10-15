@@ -21,12 +21,6 @@
 }
 .workspace-filter-clear:hover { text-decoration: underline; }
 
-.insights-content {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 16px 28px 64px;
-}
-
 /* 统计范围：冻结稿使用扁平分隔条，不做卡片化。 */
 .insight-coverage-strip {
   display: grid;
@@ -234,7 +228,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .insights-content { padding: 20px 14px 48px; }
   .insight-trend { gap: 5px; }
 }
 

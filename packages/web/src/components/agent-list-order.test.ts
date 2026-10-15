@@ -45,8 +45,12 @@ test('所有智能体展示列表统一消费用户排序', () => {
   assert.match(sidebarFilter, /agentOrderManagement/, '左侧智能体上下文必须提供排序管理能力')
   assert.doesNotMatch(sidebarFilter, /<Disclosure[^>]*\sopen(?:\s|>)/, '统一侧栏筛选默认必须收起')
 
-  const sidebar = readFileSync(new URL('./WorkspaceSidebar.tsx', import.meta.url), 'utf8')
-  assert.match(sidebar, /<SidebarFilterDisclosure agentOrderManagement/, '智能体工作栏必须公开排序入口，筛选使用共享行为')
+  const integrationManagement = readFileSync(new URL('../features/IntegrationManagementPage.tsx', import.meta.url), 'utf8')
+  assert.match(integrationManagement, /useIntegrationOrder\(\)/, '接入管理继续消费统一用户排序')
+  assert.match(integrationManagement, /setOrdering\(value => !value\)/, '接入管理必须公开排序入口')
+  assert.match(integrationManagement, /moveUpTargetId=\{primaryItems\[index - 1\]\?\.integrationId\}/, '排序必须继续传递到接入行')
+  const agentsWorkspace = readFileSync(new URL('../features/AgentsResponsivePage.tsx', import.meta.url), 'utf8')
+  assert.match(agentsWorkspace, /useOrderedAgents\(agents\)/, '智能体概览选择器沿用用户排序')
 
   const agentsPage = readFileSync(new URL('../features/AgentsPage.tsx', import.meta.url), 'utf8')
   assert.doesNotMatch(agentsPage, /agent-source-nav/, '智能体正文不得保留被工作栏替代的来源导航')

@@ -8,7 +8,6 @@ import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
-import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
@@ -91,7 +90,7 @@ function sortMetric(tool: ToolUsageDto, key: SortKey): number {
   return tool[key]
 }
 
-export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel; sidebarHost?: HTMLDivElement | null }) {
+export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('tools')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const snapshot = useClientSnapshot(model)
@@ -196,27 +195,28 @@ export function ToolsPage({ model, sidebarHost }: { model: AgentLensClientModel;
     { value: '', label: t('filters.allProjects') },
     ...projects.map(project => ({ value: project.id, label: project.name ?? project.repositoryIdentity ?? project.id, description: project.repositoryIdentity ?? undefined })),
   ]
-  const sidebarFilters = <div className="workspace-context-menu workspace-insight-context" aria-label={t('filters.aria')}>
-    <div className="workspace-context-utility">
-      <span>{agentSelectionSummary}</span>
-      <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
+  const toolbarFilters = <div className="workspace-view-controls" aria-label={t('filters.aria')}>
+    <div className="workspace-view-filter">
+      <SidebarFilterDisclosure summary={agentSelectionSummary} agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}/>
     </div>
-    <SidebarFilterDisclosure summary={agentSelectionSummary}  agents={agents} agentSelection={{ mode: 'multiple', value: usage.filters.sourceIds, onChange: sourceIds => model.setUsageFilters({ sourceIds }) }}/>
-    <div className="workspace-insight-filter-fields">
-        <label><span>{t('filters.project')}</span><SelectMenu value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
-        <label><span>{t('filters.time')}</span><SelectMenu value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel={t('filters.timeAria')} options={[
-          { value: 'today', label: t('filters.today') }, { value: '7d', label: t('filters.sevenDays') }, { value: '30d', label: t('filters.thirtyDays') }, { value: 'all', label: t('filters.all') },
-        ]}/></label>
-        {canRelaxFilters && <button type="button" className="workspace-filter-clear" onClick={relaxFilters}>{t('filters.clear')}</button>}
+    <div className="workspace-view-filter">
+      <SelectMenu value={usage.filters.projectId} onChange={projectId => model.setUsageFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/>
+    </div>
+    <div className="workspace-view-filter workspace-view-filter-time">
+      <SelectMenu value={usage.filters.range} onChange={range => model.setUsageFilters({ range: range as typeof usage.filters.range })} ariaLabel={t('filters.timeAria')} options={[
+        { value: 'today', label: t('filters.today') }, { value: '7d', label: t('filters.sevenDays') }, { value: '30d', label: t('filters.thirtyDays') }, { value: 'all', label: t('filters.all') },
+      ]}/>
+    </div>
+    <div className="workspace-view-filter-actions">
+      {canRelaxFilters && <button type="button" className="workspace-view-clear-filter" onClick={relaxFilters}>{t('filters.clear')}</button>}
+      <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
   </div>
 
   return <>
-    {sidebarHost ? createPortal(sidebarFilters, sidebarHost) : null}
+    {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page tools-page">
       <div className="page-content tools-content">
-        <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
-
         {usage.error && <ErrorStateBanner message={usage.error} onRetry={() => void model.refreshUsage()}/>} 
         {projectionPartial && projection && <div className="tool-projection-status" role="status" aria-live="polite">
           <UiIcon name="refresh" size={14}/>

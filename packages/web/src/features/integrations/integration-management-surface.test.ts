@@ -28,17 +28,16 @@ test('智能体接入页面以 Integration Management 为管理清单，不读�
   assert.doesNotMatch(page, /facets\?\.agents/)
 })
 
-test('智能体接入页面控件继续使用统一 Workspace Topbar', () => {
-  assert.match(app, /topbarHost=\{workspaceTopbarHost\}/)
+test('接入管理在独立业务工具栏提供搜索、状态筛选与排序，旧路由兼容', () => {
+  assert.match(app, /toolbarHost=\{workspaceToolbarHost\}/)
+  assert.match(app, /<WorkspaceViewTabs/)
   assert.match(page, /createPortal/)
-  assert.match(page, /<ToolbarGroup className="integration-management-topbar-tools">/)
-})
-
-test('设置菜单持有稳定的智能体接入入口与独立路由', () => {
-  assert.match(sidebar, /navigate\('\/integrations'\)/)
-  assert.match(sidebar, /navigation:agentIntegration/)
-  assert.match(app, /<Route path="\/integrations"/)
-  assert.match(app, /pathname\.startsWith\('\/integrations'\)/)
+  assert.match(page, /className="workspace-view-controls"/)
+  assert.match(page, /searchQuery/)
+  assert.match(page, /statusFilter/)
+  assert.match(page, /setOrdering\(value => !value\)/)
+  assert.doesNotMatch(sidebar, /navigate\('\/integrations'\)/)
+  assert.match(app, /<Route path="\/integrations" element=\{<LegacyIntegrationRedirect\/>\}/)
 })
 
 test('接入控制面覆盖扫描、添加、启停、授权、卸载与排序', () => {
@@ -55,14 +54,12 @@ test('不会把完全未发现的官方 Integration 作为智能体页默认项'
   assert.doesNotMatch(app, /\?\? managedIntegrationItems\[0\]\?\.integrationId/)
 })
 
-test('智能体页选择器合并 Overview 与已发现 Integration，不再只等于 Source Facet', () => {
+test('智能体概览选择器融合 Overview 与 Integration 目录，但不放回侧栏', () => {
   assert.match(app, /const agentSelectionMap = new Map<string, AgentFacetDto>/)
   assert.match(app, /management\.tool\?\.presence === 'present'/)
   assert.match(app, /management\.tool\?\.presence === 'data-only'/)
-  assert.match(app, /agentSelectionAgents=\{agentSelectionItems\}/)
-  assert.match(sidebar, /agents=\{agentSelectionAgents\}/)
-  assert.match(sidebar, /navigation:agentCount/)
-  assert.doesNotMatch(sidebar, /sourceCount[^\n]*agentSelectionAgents/)
+  assert.match(app, /agents=\{agentSelectionItems\}/)
+  assert.doesNotMatch(sidebar, /agentSelectionAgents/)
 })
 
 test('未启用但已发现的智能体保持可见并支持二次接入', () => {
@@ -73,18 +70,20 @@ test('未启用但已发现的智能体保持可见并支持二次接入', () =>
 })
 
 
-test('首次未选择的本机智能体仍可在智能体页二次接入', () => {
-  assert.match(app, /agentSelectionAgents=\{agentSelectionItems\}/)
+test('已发现但未接入的智能体继续显示观察卡与管理入口', () => {
+  assert.match(app, /agents=\{agentSelectionItems\}/)
   assert.match(agentsPage, /const managedRows = managementItems\.map/)
   assert.match(agentsPage, /<IntegrationOnlyObservationCard/)
-  assert.match(agentsPage, /onManage=\{id => navigate\(`\/integrations\?agent=\$\{encodeURIComponent\(id\)\}`\)\}/)
+  assert.match(agentsPage, /onManage=\{id => navigate\(\`\/agents\?view=management&agent=\$\{encodeURIComponent\(id\)\}\`\)\}/)
   assert.doesNotMatch(agentsPage, /model\.installIntegration/)
   assert.doesNotMatch(agentsPage, /model\.setIntegrationEnabled/)
 })
 
-
-test('智能体页刷新同时重扫 Integration Discovery，允许运行中安装的新 Agent 出现', () => {
-  assert.match(app, /onRefreshAgents=\{\(\) => \{ void Promise\.allSettled\(\[model\.rescanIntegrationDiscovery\(\), model\.refreshFacetsAndAgents\(\)\]\) \}\}/)
+test('当前概览和接入管理具有实际重新扫描入口', () => {
+  assert.match(app, /model\.rescanAgentEnvironment\(\{/)
+  assert.match(app, /model\.rescanIntegrationDiscovery\(\)/)
+  assert.match(app, /<AgentRescanAction/)
+  assert.match(app, /<IntegrationRescanAction/)
 })
 
 test('首次向导自动扫描但不默认选择或自动安装', () => {
@@ -118,7 +117,7 @@ test('未发现且未接入的官方智能体不展示无效的禁用添加按�
 
 test('全局扫描失败不会把未知项塞进“其他支持/未检测到”分组', () => {
   assert.match(page, /const discoveryFailed = Boolean\(snapshot\.integrationDiscoveryError\)/)
-  assert.match(page, /const supportedItems = discoveryFailed \? \[\] : items\.filter/)
+  assert.match(page, /const supportedItems = discoveryFailed \? \[\] : filteredItems\.filter/)
 })
 
 test('扫描失败与 data-only 保持独立语义', () => {
@@ -127,6 +126,6 @@ test('扫描失败与 data-only 保持独立语义', () => {
   assert.match(app, /status\.scanFailed/)
 })
 
-test('首次未发现时明确指向设置中的二次接入入口', () => {
-  assert.match(zhAgents, /设置 → 智能体接入/)
+test('首次未发现时明确指向智能体接入管理视图', () => {
+  assert.match(zhAgents, /智能体 → 接入管理/)
 })

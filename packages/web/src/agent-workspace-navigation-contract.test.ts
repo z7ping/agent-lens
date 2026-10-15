@@ -20,17 +20,17 @@ test('only four primary entries; backup is separate while integration belongs to
   assert.doesNotMatch(sidebar, /navigate\('\/integrations'\)/)
 })
 
-test('agents and backup retain only the 40px navigation rail on desktop and a drawer on mobile', () => {
-  assert.match(app, /onAgents \|\| onBackup \? 'is-contextless-workspace'/)
+test('analytics, agents and backup retain only the 40px navigation rail on desktop and a drawer on mobile', () => {
+  assert.match(app, /hasWorkspaceTabs \? 'is-contextless-workspace'/)
   assert.match(sidebarCss, /\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/)
   assert.match(sidebarCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\);/)
 })
 
-test('the agent workspace shares one selector across overview, integration and Pi ecosystem', () => {
+test('the agent workspace keeps stable global tabs and shares a selector for overview/Pi views', () => {
   assert.match(workspace, /<SelectMenu\s+value=\{sourceId\}/)
   assert.match(workspace, /activeView === 'management'/)
   assert.match(workspace, /<IntegrationManagementPage/)
-  assert.match(workspace, /activeView === 'ecosystem'/)
+  assert.match(workspace, /<WorkspaceViewTabs/)
   assert.match(workspace, /<AgentsPage/)
   assert.match(agentsPage, /navigate\(`\/agents\?view=management&agent=/)
 })

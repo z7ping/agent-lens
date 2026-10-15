@@ -470,6 +470,31 @@
   scrollbar-gutter: stable;
 }
 
+/* Same geometry for the three non-session workspaces. Wide agent insight inspector may expand at xxl. */
+.tools-content,
+.insights-content,
+.agents-content,
+.integration-management-content,
+.backup-content {
+  max-width: 1320px;
+  padding: 16px 28px 64px;
+}
+@media (max-width: 991.98px) {
+  .tools-content,
+  .insights-content,
+  .agents-content,
+  .integration-management-content,
+  .backup-content { padding-inline: 18px; }
+}
+@media (max-width: 767.98px) {
+  .tools-content,
+  .insights-content,
+  .agents-content,
+  .integration-management-content,
+  .backup-content { padding: 20px 14px 48px; }
+}
+
+
 .compact-page-heading,
 .tools-content > .page-heading,
 .insights-content > .page-heading,
