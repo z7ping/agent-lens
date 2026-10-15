@@ -57,6 +57,13 @@ export function SidebarFilterDisclosure({
 
 
   const resolvedSummary = summary ?? t('sidebarFilter.summary')
+  const selectedSingleAgentId = agentSelection?.mode === 'single' ? agentSelection.value : ''
+  const displaySummary = selectedSingleAgentId
+    ? <span className="workspace-agent-filter-summary-with-logo">
+        <AgentLogo sourceId={selectedSingleAgentId} size="compact"/>
+        <span>{resolvedSummary}</span>
+      </span>
+    : resolvedSummary
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
   const selectedIds = agentSelection?.mode === 'multiple'
@@ -91,7 +98,7 @@ export function SidebarFilterDisclosure({
   return <Disclosure
     ref={disclosureRef}
     className="workspace-sidebar-filter-disclosure"
-    summary={resolvedSummary}
+    summary={displaySummary}
     title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
     summaryMeta={false}
     open={open}

@@ -23,7 +23,8 @@ test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定
   assert.match(backupPage, /className="page-content backup-content"/)
   assert.doesNotMatch(backupPage, /future-content/)
   assert.doesNotMatch(backupPage, /page-scroll/)
-  assert.match(backupPage, /sourceDot\(source\.sourceId\)/)
+  assert.doesNotMatch(backupPage, /sourceDot\(source\.sourceId\)/)
+  assert.match(backupPage, /<AgentLogo sourceId=\{source\.sourceId\} size="compact"\/>/)
 })
 
 test('Backup 默认以当前资产为主视图，URL 二级导航控制快照历史', () => {
@@ -86,6 +87,13 @@ test('资产范围复用工作区智能体筛选，并支持全部智能体单�
   assert.match(backupPage, /selectedAssetSourceId/)
   assert.match(sidebarFilter, /showAllOption\?: boolean/)
   assert.match(sidebarFilter, /agentSelection\.mode === 'multiple' \|\| showAllOption/)
+})
+
+test('备份复用共享品牌图标：筛选选中值、资产分组、创建快照来源', () => {
+  assert.match(sidebarFilter, /selectedSingleAgentId/)
+  assert.match(sidebarFilter, /<AgentLogo sourceId=\{selectedSingleAgentId\} size="compact"\/>/)
+  assert.match(backupPage, /className="backup-agent-row-head"[\s\S]*?<AgentLogo sourceId=\{source\.sourceId\} size="compact"\/>/)
+  assert.match(backupPage, /className="backup-source-toggle"[\s\S]*?<AgentLogo sourceId=\{source\.sourceId\} size="compact"\/>/)
 })
 
 test('导入与创建位于业务工具栏，视图切换位于独立的二级导航行', () => {

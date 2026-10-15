@@ -14,7 +14,8 @@ import type {
   BackupVerifyResponseDto,
 } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
-import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
+import { AgentLogo } from '../components/AgentLogo'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
@@ -513,7 +514,7 @@ export function BackupPage({
                 return <article key={source.sourceId} className="backup-agent-item">
                   <header className="backup-agent-item-head">
                     <div className="backup-agent-row-head">
-                      <span className={`source-dot large ${sourceDot(source.sourceId)}`}/>
+                      <AgentLogo sourceId={source.sourceId} size="compact"/>
                       <b>{sourceLabel(source.sourceId, source.displayName)}</b>
                     </div>
                     <span className="backup-agent-scale">{t('assetView.sourceScale', {
@@ -640,7 +641,7 @@ export function BackupPage({
             {sources.filter(source => source.detected).map(source => <div key={source.sourceId} className="backup-source-choice">
               <label className="backup-source-toggle">
                 <input type="checkbox" checked={selectedSources.includes(source.sourceId)} onChange={() => toggleSource(source.sourceId)}/>
-                <span className={`source-dot ${sourceDot(source.sourceId)}`}/>
+                <AgentLogo sourceId={source.sourceId} size="compact"/>
                 <span className="backup-source-copy"><b>{sourceLabel(source.sourceId, source.displayName)}</b><small>{source.totalBytes === undefined ? t('create.files', { count: source.fileCount.toLocaleString(locale) }) : t('create.sourceSummary', { count: source.fileCount.toLocaleString(locale), size: formatBytes(source.totalBytes) })}</small></span>
               </label>
             </div>)}

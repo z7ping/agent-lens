@@ -406,6 +406,19 @@
   white-space: nowrap;
 }
 
+.workspace-agent-filter-summary-with-logo {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.workspace-agent-filter-summary-with-logo > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace-sidebar-filter-disclosure .ui-disclosure-body {
   position: absolute;
   top: 36px;
