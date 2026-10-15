@@ -204,3 +204,12 @@ test('事件类型分别使用语义图标，不再全部显示时钟', () => {
     assert.match(html, new RegExp(expected), category)
   }
 })
+
+test('TaskMessage 的额外操作与核心复制/源码操作各有可达入口', () => {
+  const html = renderToStaticMarkup(createElement(TaskMessage, {
+    role: 'assistant', text: '结果', actions: createElement('button', { type: 'button' }, '编辑消息'),
+  }))
+  assert.match(html, /task-message-actions/)
+  assert.match(html, /编辑消息/)
+  assert.match(html, /task-message-copy-action/)
+})

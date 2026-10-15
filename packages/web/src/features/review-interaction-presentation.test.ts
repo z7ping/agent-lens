@@ -470,3 +470,46 @@ test('Review Tool progress 仍属于 Process，不被元事件边界挪出去', 
   }
   assert.equal(entries[1]?.type, 'message')
 })
+
+// 这些输入是由 Source Adapter 已知原生映射构造的 Canonical 形状；不是实机录制结果。
+test('Pi/Codex 的原生处理中间消息和 Tool 进入同一 Process；未知事件仍可诊断', () => {
+  for (const [sourceId, role] of [['pi', 'commentary'], ['codex', 'reasoning']] as const) {
+    const interim: ReviewMessageNodeDto = {
+      type: 'message', id: sourceId + ':interim', role,
+      at: '2026-09-01T00:00:01.000Z', sourceId,
+      text: '检查中', payload: {}, evidence: [], observationIds: ['obs:interim'],
+      capturedAt: '2026-09-01T00:00:01.000Z',
+    }
+    const call = { ...tool(sourceId + ':call'), sourceId }
+    const result: ReviewMessageNodeDto = {
+      ...interim, id: sourceId + ':final', role: 'assistant',
+      at: '2026-09-01T00:00:03.000Z', text: '处理完毕', observationIds: ['obs:final'],
+    }
+    const raw: ReviewEventNodeDto = {
+      ...unknownEvent(sourceId + ':raw', sourceId + ':raw-record'), sourceId,
+      payload: { nativeType: 'unrecognized-future-event' },
+    }
+    const entries = projectReviewInteractionPresentation([interim, call, result, raw])
+    assert.equal(entries[0]?.type, 'process', sourceId)
+    if (entries[0]?.type !== 'process') throw new Error(sourceId + ': process missing')
+    assert.deepEqual(entries[0].items.map(item => item.type), ['message', 'tool-group'])
+    assert.equal(entries[1]?.type, 'message', sourceId)
+    assert.equal(entries[2]?.type, 'raw-event-group', sourceId)
+    if (entries[2]?.type === 'raw-event-group') assert.equal(entries[2].items[0]?.id, raw.id)
+  }
+})
+
+test('Claude Code 不能把普通 assistant 文本仅凭 Tool 相邻关系归入思考', () => {
+  const intermediate: ReviewMessageNodeDto = {
+    type: 'message', id: 'claude:intermediate', role: 'assistant',
+    at: '2026-09-01T00:00:01.000Z', sourceId: 'claude-code', text: '正在检查',
+    payload: {}, evidence: [], observationIds: ['obs:claude-intermediate'],
+    capturedAt: '2026-09-01T00:00:01.000Z',
+  }
+  const result = { ...intermediate, id: 'claude:final', text: '检查完成', observationIds: ['obs:claude-final'] }
+  const entries = projectReviewInteractionPresentation([intermediate, { ...tool('claude:tool'), sourceId: 'claude-code' }, result])
+  const process = entries.find(entry => entry.type === 'process')
+  assert.ok(process?.type === 'process')
+  assert.equal(process.items.filter(item => item.type === 'tool-group').length, 1)
+  assert.deepEqual(entries.filter(entry => entry.type === 'message').map(entry => entry.type === 'message' ? entry.node.id : ''), ['claude:intermediate', 'claude:final'])
+})
