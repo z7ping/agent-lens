@@ -460,7 +460,7 @@ export function BackupPage({
   const backupScopeFilter = <div className="backup-agent-filter-slot"><SidebarFilterDisclosure
         showAllOption
         summary={selectedAssetSourceId ? agentLabel(selectedAssetSourceId, agents.find(agent => agent.sourceId === selectedAssetSourceId)?.displayName) : t('common:sidebarFilter.allAgents')}
-        summaryMeta={false}
+      
         agents={agents}
         agentSelection={{ mode: 'single', value: selectedAssetSourceId, onChange: onSelectedAssetSourceIdChange }}
       /></div>
