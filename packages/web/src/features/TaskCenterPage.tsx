@@ -8,7 +8,8 @@ import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
 import { useClientSnapshot } from '../App'
-import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
+import { agentLabel, useOrderedAgents } from '../components/AgentScope'
+import { AgentLogo } from '../components/AgentLogo'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Button, IconButton, Input, Popover, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
@@ -165,7 +166,7 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
       {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
-      <span className={`source-dot ${sourceDot(sourceId)}`}/>
+      <AgentLogo sourceId={sourceId} size="compact"/>
       <span className="session-item-source" title={fullSourceNames}>{compactSourceNames}</span>
       <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
       <time dateTime={moment?.at} title={timeTooltip || undefined}>{updatedLabel}</time>
