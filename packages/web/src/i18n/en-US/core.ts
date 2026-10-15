@@ -243,6 +243,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
     maintenance: 'Maintenance',
     refreshAgents: 'Refresh agents',
     agentSelection: 'Select agent',
+    agentViews: 'Agent views',
     backupScope: 'Asset scope',
     agentCount: '{{count}} agents',
     sourceCount: '{{count}} sources',
@@ -256,8 +257,8 @@ export const englishCoreMessages: LocaleMessagesDto = {
     reconnecting: 'Reconnecting',
   },
   settings: {
-    openMenu: 'Open settings and maintenance menu',
-    menu: 'Settings & Maintenance',
+    openMenu: 'Open settings menu',
+    menu: 'Settings',
     management: 'Management',
     appearance: 'Appearance',
     maintenanceAndAppearance: 'Management & Appearance',
