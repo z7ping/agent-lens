@@ -19,7 +19,6 @@ import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './component
 const AgentsResponsivePage = lazy(() => import('./features/AgentsResponsivePage').then(module => ({ default: module.AgentsResponsivePage })))
 const BackupPage = lazy(() => import('./features/BackupPage').then(module => ({ default: module.BackupPage })))
 const InsightsPage = lazy(() => import('./features/InsightsPage').then(module => ({ default: module.InsightsPage })))
-const IntegrationManagementPage = lazy(() => import('./features/IntegrationManagementPage').then(module => ({ default: module.IntegrationManagementPage })))
 const LegacyLiveTaskRedirect = lazy(() => import('./features/LegacyLiveTaskRedirect').then(module => ({ default: module.LegacyLiveTaskRedirect })))
 const TaskCenterPage = lazy(() => import('./features/TaskCenterPage').then(module => ({ default: module.TaskCenterPage })))
 const ToolsPage = lazy(() => import('./features/ToolsPage').then(module => ({ default: module.ToolsPage })))
@@ -131,6 +130,7 @@ function IntegrationRescanAction({
 
 function WorkspaceTopBar({
   pathname,
+  search,
   snapshot,
   selectedAgentId,
   onOpenNavigation,
@@ -138,6 +138,7 @@ function WorkspaceTopBar({
   onPageToolsHost,
 }: {
   pathname: string
+  search: string
   snapshot: ClientSnapshot
   selectedAgentId: string
   onOpenNavigation(): void
@@ -166,11 +167,10 @@ function WorkspaceTopBar({
     const managed = snapshot.integrationManagement?.items.find(item =>
       item.integrationId === selectedAgentId || item.productId === selectedAgentId
     )
-    items = [{ label: t('agents') }, { label: selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
-  } else if (pathname.startsWith('/integrations')) {
-    items = [{ label: t('settings') }, { label: t('agentIntegration') }]
+    const isManagement = new URLSearchParams(search).get('view') === 'management'
+    items = [{ label: t('agents') }, { label: isManagement ? t('agentIntegration') : selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
   } else if (pathname.startsWith('/backup')) {
-    items = [{ label: t('settings') }, { label: t('assetBackup') }]
+    items = [{ label: t('assetBackup') }]
   } else {
     items = [{ label: 'AgentLens' }]
   }
@@ -186,6 +186,13 @@ function WorkspaceTopBar({
     <div className="workspace-topbar-page-tools" ref={onPageToolsHost}/>
     {actions && <div className="workspace-topbar-actions">{actions}</div>}
   </div>
+}
+
+function LegacyIntegrationRedirect() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  params.set('view', 'management')
+  return <Navigate to={{ pathname: '/agents', search: `?${params.toString()}` }} replace/>
 }
 
 function Shell({ model }: { model: AgentLensClientModel }) {
@@ -233,7 +240,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
   const onTools = location.pathname.startsWith('/tools')
   const onInsights = location.pathname.startsWith('/insights')
   const onAgents = location.pathname.startsWith('/agents')
-  const onIntegrations = location.pathname.startsWith('/integrations')
+  const onAgentManagement = onAgents && new URLSearchParams(location.search).get('view') === 'management'
   const onBackup = location.pathname.startsWith('/backup')
   const onReviewIndex = location.pathname === '/review'
   const hasSseBanner = Boolean(snapshot.health && !snapshot.liveConnected && !onLiveTask)
@@ -256,7 +263,6 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     const overview = agentSummaryItems.find(item =>
       item.productId === management.productId || item.sourceId === management.integrationId
     )
-    if (!overview && !discoveryDetected) continue
     const sourceId = overview?.sourceId ?? management.integrationId
     const current = agentSelectionMap.get(sourceId)
     agentSelectionMap.set(sourceId, {
@@ -282,6 +288,19 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       ?? agents[0]?.sourceId
       ?? ''
 
+  // Deep links from the former /integrations route select the same agent in the unified workspace.
+  useEffect(() => {
+    if (!onAgents) return
+    const requestedId = new URLSearchParams(location.search).get('agent')
+    if (!requestedId) return
+    const managed = managedIntegrationItems.find(item => item.integrationId === requestedId || item.productId === requestedId)
+    const resolvedId = agentSummaryItems.find(item => item.sourceId === requestedId || (managed && item.productId === managed.productId))?.sourceId
+      ?? managed?.integrationId ?? requestedId
+    if (agentSelectionItems.some(item => item.sourceId === resolvedId)) {
+      setAgentOverviewSourceId(current => current === resolvedId ? current : resolvedId)
+    }
+  }, [onAgents, location.search, snapshot.agentSummaries, snapshot.integrationManagement])
+
   useEffect(() => {
     if (resolvedAgentOverviewSourceId && resolvedAgentOverviewSourceId !== agentOverviewSourceId) {
       setAgentOverviewSourceId(resolvedAgentOverviewSourceId)
@@ -296,14 +315,14 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     const onboardingIncomplete = snapshot.integrationPreferences
       ? !snapshot.integrationPreferences.preferences.onboarding.completed
       : false
-    if (onIntegrations || onboardingIncomplete) {
+    if (onAgentManagement || onboardingIncomplete) {
       void model.ensureIntegrationManagement().catch(() => undefined)
     }
-  }, [model, onIntegrations, snapshot.integrationPreferences])
+  }, [model, onAgentManagement, snapshot.integrationPreferences])
 
   useEffect(() => {
     if (
-      onIntegrations
+      onAgentManagement
       || !snapshot.integrationPreferences?.preferences.onboarding.completed
       || snapshot.integrationManagement
       || snapshot.integrationManagementLoading
@@ -314,7 +333,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     return () => window.clearTimeout(timer)
   }, [
     model,
-    onIntegrations,
+    onAgentManagement,
     snapshot.integrationPreferences,
     snapshot.integrationManagement,
     snapshot.integrationManagementLoading,
@@ -324,9 +343,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     const onboardingIncomplete = snapshot.integrationPreferences
       ? !snapshot.integrationPreferences.preferences.onboarding.completed
       : false
-    model.setIntegrationDiscoveryActive(onAgents || onIntegrations || onboardingIncomplete)
+    model.setIntegrationDiscoveryActive(onAgents || onboardingIncomplete)
     return () => model.setIntegrationDiscoveryActive(false)
-  }, [model, onAgents, onIntegrations, snapshot.integrationPreferences])
+  }, [model, onAgents, snapshot.integrationPreferences])
 
   useEffect(() => {
     setMobileNavigationOpen(false)
@@ -395,14 +414,9 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     model={model}
   >
     <PinnedAgentsProvider agents={agents}>
-      <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${onIntegrations || onBackup ? 'is-maintenance-contextless' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
+      <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${onAgents || onBackup ? 'is-contextless-workspace' : ''} ${onAgents ? 'is-agent-workspace' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
-        agents={agents}
-        agentSelectionAgents={agentSelectionItems}
-        selectedAgentId={resolvedAgentOverviewSourceId}
-        onSelectAgent={setAgentOverviewSourceId}
-        onRefreshAgents={() => { void Promise.allSettled([model.rescanIntegrationDiscovery(), model.refreshFacetsAndAgents()]) }}
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenMarkdownThemes={() => setMarkdownThemeManagerOpen(true)}
@@ -417,14 +431,15 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <div ref={mainRef} className="app-main">
         <WorkspaceTopBar
           pathname={location.pathname}
+          search={location.search}
           snapshot={snapshot}
           selectedAgentId={resolvedAgentOverviewSourceId}
           onOpenNavigation={() => setMobileNavigationOpen(true)}
           onPageToolsHost={setWorkspaceTopbarHost}
-          actions={onAgents
-            ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
-            : onIntegrations
-              ? <IntegrationRescanAction model={model} snapshot={snapshot}/>
+          actions={onAgentManagement
+            ? <IntegrationRescanAction model={model} snapshot={snapshot}/>
+            : onAgents
+              ? <AgentRescanAction model={model} snapshot={snapshot} selectedAgentId={resolvedAgentOverviewSourceId}/>
               : undefined}
         />
         {hasSseBanner && <div className="sse-banner" role="status" aria-live="polite">
@@ -446,8 +461,8 @@ function Shell({ model }: { model: AgentLensClientModel }) {
           <Route path="/review/:sessionId" element={<TaskCenterPage model={model} mode="history" sidebarHost={sidebarHost}/>} />
           <Route path="/tools" element={<ToolsPage model={model} sidebarHost={sidebarHost}/>} />
           <Route path="/insights" element={<InsightsPage model={model} sidebarHost={sidebarHost}/>} />
-          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} topbarHost={workspaceTopbarHost} />} />
-          <Route path="/integrations" element={<IntegrationManagementPage model={model} topbarHost={workspaceTopbarHost} />} />
+          <Route path="/agents" element={<AgentsResponsivePage model={model} sourceId={resolvedAgentOverviewSourceId} agents={agentSelectionItems} onSelectAgent={setAgentOverviewSourceId} topbarHost={workspaceTopbarHost} />} />
+          <Route path="/integrations" element={<LegacyIntegrationRedirect/>} />
           <Route path="/backup" element={<BackupPage selectedAssetSourceId={backupAssetSourceId} onSelectedAssetSourceIdChange={setBackupAssetSourceId} agents={agentSelectionItems} topbarHost={workspaceTopbarHost} />} />
           <Route path="*" element={<Navigate to="/review" replace />} />
         </Routes>
