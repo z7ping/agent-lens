@@ -1,6 +1,4 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { access, constants as fsConstants, stat } from 'node:fs/promises'
-import { isAbsolute } from 'node:path'
 import type { LiveService, StorageService } from '@agent-lens/core'
 import type { PiLiveHistoryAction, PiLiveService } from '@agent-lens/runtime-cordis'
 import {
@@ -12,6 +10,7 @@ import {
 } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
+import { validateHostWorkingDirectory } from './host-working-directory'
 import { resolvePiLiveResumeInput } from './pi-live-resume'
 
 const MAX_PI_LIVE_JSON_BYTES = 1024 * 1024
@@ -89,30 +88,8 @@ function piLiveMessageText(message: LiveMessageDto): string {
   return text
 }
 
-/**
- * Pi 在 HTTP Runtime 所在的主机启动；因此 cwd 必须是该主机上可读写的绝对目录。
- * 在创建 Runtime 前完成校验，避免把一个必然失败的输入显示成“启动中”。
- */
-export async function validatePiWorkingDirectory(cwd: string): Promise<string> {
-  const normalized = cwd.trim()
-  if (!isAbsolute(normalized)) {
-    throw httpError(400, '项目目录必须是运行 AgentLens 的这台计算机上的绝对路径。')
-  }
-  try {
-    const metadata = await stat(normalized)
-    if (!metadata.isDirectory()) {
-      throw httpError(400, `项目路径不是目录：${normalized}`)
-    }
-    await access(normalized, fsConstants.R_OK | fsConstants.W_OK)
-    return normalized
-  } catch (error) {
-    if (error && typeof error === 'object' && 'statusCode' in error) throw error
-    const code = error && typeof error === 'object' ? String((error as { code?: unknown }).code ?? '') : ''
-    if (code === 'ENOENT') throw httpError(400, `找不到项目目录：${normalized}`)
-    if (code === 'ENOTDIR') throw httpError(400, `项目路径不是目录：${normalized}`)
-    throw httpError(400, `项目目录不可读写：${normalized}。请检查路径和访问权限。`)
-  }
-}
+/** Backwards-compatible Pi entrypoint; common Live validation uses the same host checks. */
+export const validatePiWorkingDirectory = validateHostWorkingDirectory
 
 function optionalBoolean(value: unknown, name: string): boolean | undefined {
   if (value === undefined) return undefined
