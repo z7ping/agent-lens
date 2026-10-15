@@ -5,10 +5,11 @@ import { tmpdir } from 'node:os'
 import test from 'node:test'
 import {
   discoverOfficialTools,
+  probeAgentCliVersion,
   OfficialToolDiscoveryService,
 } from './tool-discovery'
 
-test('tool discovery reports present from executable evidence without running the Agent CLI', async () => {
+test('tool discovery reports present from executable evidence even when CLI version is unavailable', async () => {
   const calls: string[] = []
   const items = await discoverOfficialTools({
     env: { PATH: '' },
@@ -20,6 +21,7 @@ test('tool discovery reports present from executable evidence without running th
       calls.push(name)
       return name === 'pi' ? '/opt/bin/pi' : undefined
     },
+    versionResolver: async () => undefined,
   })
   const pi = items.find(item => item.integrationId === 'pi')
   assert.equal(pi?.presence, 'present')
@@ -178,6 +180,7 @@ test('discovery service can rescan one integration without replacing other disco
     timeoutMs: 1_000,
     shellPathResolver: async () => undefined,
     executableResolver: async name => name === 'pi' ? piExecutable : undefined,
+    versionResolver: async () => undefined,
   })
 
   const baseline = await service.rescan()
@@ -214,3 +217,38 @@ test('DSH is reported as data-only from a profiles root without requiring an exe
   }
 })
 
+
+test('tool discovery surfaces the installed CLI version, not the Pi SDK package version', async () => {
+  const items = await discoverOfficialTools({
+    env: { PATH: '' },
+    homeDir: join(tmpdir(), 'agent-lens-version-discovery-home'),
+    platform: process.platform,
+    timeoutMs: 1000,
+    shellPathResolver: async () => undefined,
+    executableResolver: async name => name === 'pi' ? '/opt/bin/pi' : name === 'claude' ? '/opt/bin/claude' : undefined,
+    versionResolver: async executable => executable.endsWith('/pi') ? '1.9.2' : '2.0.4',
+  })
+  assert.equal(items.find(item => item.integrationId === 'pi')?.version, '1.9.2')
+  assert.equal(items.find(item => item.integrationId === 'claude-code')?.version, '2.0.4')
+  assert.equal(items.find(item => item.integrationId === 'codex')?.version, undefined)
+})
+
+test('version probe failure cannot turn an installed executable into discovery failure', async () => {
+  const items = await discoverOfficialTools({
+    env: { PATH: '' },
+    homeDir: join(tmpdir(), 'agent-lens-version-failure-home'),
+    platform: process.platform,
+    timeoutMs: 1000,
+    shellPathResolver: async () => undefined,
+    executableResolver: async name => name === 'pi' ? '/opt/bin/pi' : undefined,
+    versionResolver: async () => { throw new Error('version unavailable') },
+  })
+  const pi = items.find(item => item.integrationId === 'pi')
+  assert.equal(pi?.presence, 'present')
+  assert.equal(pi?.version, undefined)
+})
+
+test('CLI version probe reads --version from the executable without a shell', async () => {
+  const version = await probeAgentCliVersion(process.execPath)
+  assert.match(version ?? '', /^\d+\.\d+\.\d+/)
+})

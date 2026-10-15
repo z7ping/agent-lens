@@ -44,6 +44,8 @@ export function IntegrationOrderProvider({
   const legacyOrder = useRef(readLegacyAgentOrderPreference())
   const migrationAttempted = useRef(false)
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null)
+  const orderWriteId = useRef(0)
+  const orderWriteQueue = useRef<Promise<void>>(Promise.resolve())
 
   const managedIds = useMemo(
     () => new Set(management?.items.map(item => item.integrationId) ?? []),
@@ -56,12 +58,18 @@ export function IntegrationOrderProvider({
     && !preferenceState.displayOrderConfigured
     && legacyOrder.current.length,
   )
-  const ordered = optimisticOrder
+  const preferredOrder = optimisticOrder
     ?? (pendingLegacyMigration
       ? legacyOrder.current
       : serverOrder.length
         ? serverOrder
         : legacyOrder.current)
+  // Legacy preferences may be partial; append the management catalog so every
+  // supported agent can always be moved, even before the first custom save.
+  const ordered = useMemo(() => [...new Set([
+    ...preferredOrder,
+    ...managedIds,
+  ])], [preferredOrder, managedIds])
 
   useEffect(() => {
     if (!preferenceState || preferenceState.displayOrderConfigured || migrationAttempted.current) return
@@ -74,10 +82,14 @@ export function IntegrationOrderProvider({
   }, [model, preferenceState])
 
   const persistOrder = (next: string[]) => {
+    const writeId = ++orderWriteId.current
     setOptimisticOrder(next)
-    void model.updateIntegrationPreferences({ displayOrder: next }).then(
-      () => setOptimisticOrder(null),
-      () => setOptimisticOrder(null),
+    // Persist gestures in order: rapid drag/click sequences must not race on the server.
+    const request = orderWriteQueue.current.then(() => model.updateIntegrationPreferences({ displayOrder: next }))
+    orderWriteQueue.current = request.then(() => undefined, () => undefined)
+    void request.then(
+      () => { if (orderWriteId.current === writeId) setOptimisticOrder(null) },
+      () => { if (orderWriteId.current === writeId) setOptimisticOrder(null) },
     )
   }
 
@@ -104,8 +116,7 @@ export function IntegrationOrderProvider({
       persistOrder(managedOrder)
     },
     reset() {
-      setOptimisticOrder(null)
-      void model.updateIntegrationPreferences({ displayOrder: [] }).catch(() => undefined)
+      persistOrder([])
     },
   }), [managedIds, model, ordered])
 
