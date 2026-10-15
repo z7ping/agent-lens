@@ -251,8 +251,6 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       title: 'Agent Integration',
       loading: 'Loading integration state…',
       summaryAria: 'Agent integration summary',
-      searchAria: 'Search agent integrations',
-      searchPlaceholder: 'Search agents',
       statusFilterAria: 'Filter integration status',
       allStatuses: 'All statuses',
       noMatches: 'No matching agents',
