@@ -34,6 +34,7 @@ export type LiveTaskProjectionItem =
       kind: 'tool'
       callId: string
       name: string
+      parentToolCallId?: string | undefined
       toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
       mcpServerId?: string | undefined
       inputPreview?: string | undefined
@@ -435,6 +436,7 @@ export function reduceLiveTaskEvent(
       kind: 'tool',
       callId,
       name: event.name || current?.name || 'tool',
+      ...(event.parentToolCallId || current?.parentToolCallId ? { parentToolCallId: event.parentToolCallId || current?.parentToolCallId } : {}),
       ...(event.toolSourceType ? { toolSourceType: event.toolSourceType } : {}),
       ...(event.mcpServerId ? { mcpServerId: event.mcpServerId } : {}),
       inputPreview: event.inputPreview ?? current?.inputPreview,
@@ -451,6 +453,7 @@ export function reduceLiveTaskEvent(
       kind: 'tool',
       callId,
       name: event.name || current?.name || 'tool',
+      ...(current?.parentToolCallId ? { parentToolCallId: current.parentToolCallId } : {}),
       ...(current?.toolSourceType ? { toolSourceType: current.toolSourceType } : {}),
       ...(current?.mcpServerId ? { mcpServerId: current.mcpServerId } : {}),
       inputPreview: current?.inputPreview,
@@ -472,6 +475,7 @@ export function reduceLiveTaskEvent(
       inputPreview: current?.inputPreview,
       output: event.output ?? current?.output,
       status: event.status,
+      ...(event.parentToolCallId ? { parentToolCallId: event.parentToolCallId } : {}),
       durationMs: event.durationMs,
       at: current?.at ?? envelope.receivedAt,
     }))

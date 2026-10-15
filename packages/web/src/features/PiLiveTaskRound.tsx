@@ -40,15 +40,18 @@ function taskTool(
   output: string,
   rawInput: string | undefined,
   timing: { durationMs?: number | undefined; startedAtMs?: number | undefined } | undefined,
+  origin: { toolSourceType?: TaskToolModel['toolSourceType']; mcpServerId?: string },
   t: TFunction,
 ): TaskToolModel {
-  const visualKind = toolVisualKind(name)
+  const visualKind = toolVisualKind(name, { sourceType: origin.toolSourceType, mcpServerId: origin.mcpServerId })
   const kind: TaskToolKind = visualKind === 'test' ? 'tool' : visualKind
   return {
     id,
     name,
     kind,
     kindLabel: t(`task:tool.kind.${kind}`),
+    ...(origin.toolSourceType ? { toolSourceType: origin.toolSourceType } : {}),
+    ...(origin.mcpServerId ? { mcpServerId: origin.mcpServerId } : {}),
     status,
     primary: summary || undefined,
     ...(rawInput ? { rawInput } : {}),
@@ -139,6 +142,7 @@ function HistoryToolGroup({ id, items, settled = false }: { id: string; items: H
     item.output,
     item.rawInput,
     { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
+    { ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}), ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}) },
     t,
   )), t)
   return <TaskToolGroup model={model}/>

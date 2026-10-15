@@ -343,6 +343,9 @@ export interface LiveToolStartEvent {
   type: 'tool.start'
   callId?: string | undefined
   name: string
+  parentToolCallId?: string | undefined
+  toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
+  mcpServerId?: string | undefined
   inputPreview?: string | undefined
   contentIndex?: number | undefined
 }
@@ -358,6 +361,7 @@ export interface LiveToolEndEvent {
   type: 'tool.end'
   callId?: string | undefined
   name?: string | undefined
+  parentToolCallId?: string | undefined
   status: 'success' | 'error'
   output?: string | undefined
   durationMs?: number | undefined

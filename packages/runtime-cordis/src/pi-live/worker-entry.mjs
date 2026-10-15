@@ -1018,8 +1018,40 @@ async function loadSdk(discovery) {
   return sdk
 }
 
+// Resolve origin only from this live AgentSession's registered ToolDefinition.
+// Names alone do not establish MCP ownership, especially after server removal.
+function registeredPiToolOrigin(toolName) {
+  if (!toolName || typeof session?.getAllTools !== 'function') return {}
+  const registered = session.getAllTools().find(tool => tool?.name === toolName)
+  if (!registered) return {}
+  const source = record(registered.sourceInfo)
+  const namespace = record(registered.namespace)
+  const namespaceName = typeof namespace.name === 'string' ? namespace.name : ''
+  if (source.path === 'builtin:mcp' && namespaceName.startsWith('mcp__')) {
+    const aliases = Array.isArray(namespace.aliases) ? namespace.aliases : []
+    const server = aliases.find(alias => typeof alias === 'string' && alias.trim())
+      ?? namespaceName.slice('mcp__'.length)
+    if (!server) return {}
+    return {
+      toolSourceType: 'mcp',
+      mcpServerId: server,
+      toolRegistration: { registry: 'pi.AgentSession.getAllTools', source: 'builtin:mcp', namespace: namespaceName },
+    }
+  }
+  if (source.source === 'builtin' && typeof source.path === 'string' && source.path.startsWith('builtin:')) {
+    return { toolSourceType: 'builtin' }
+  }
+  // Third-party extensions can expose MCP themselves; do not infer MCP from
+  // their registered name or a user-controlled namespace without provenance.
+  return {}
+}
+
 function wireEvent(event) {
   const value = record(event)
+  if (value.type === 'tool_execution_start') {
+    const origin = registeredPiToolOrigin(value.toolName)
+    return Object.keys(origin).length ? { ...value, ...origin } : value
+  }
   if (value.type !== 'message_update') return value
   const message = record(value.message)
   const assistantEvent = record(value.assistantMessageEvent)
