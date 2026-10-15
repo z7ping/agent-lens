@@ -12,6 +12,8 @@ const agents = read('../features/AgentsPage.tsx')
 const integrationOverview = read('../features/integrations/IntegrationObservation.tsx')
 const integrationManagement = read('../features/IntegrationManagementPage.tsx')
 const taskCenter = read('../features/TaskCenterPage.tsx')
+const liveTask = read('../features/LiveTaskPage.tsx')
+const onboarding = read('../features/IntegrationOnboarding.tsx')
 const integrationCss = read('../integrations.css')
 
 test('brand logos are local, distinct and include an upstream license', () => {
@@ -36,6 +38,8 @@ test('all branded workspaces reuse a single AgentLogo implementation', () => {
   assert.match(integrationOverview, /<AgentLogo sourceId=\{management\.integrationId\}/)
   assert.match(integrationManagement, /<AgentLogo sourceId=\{item\.integrationId\}/)
   assert.match(taskCenter, /<AgentLogo sourceId=\{sourceId\}/)
+  assert.match(liveTask, /<AgentLogo sourceId=\{product\?\.productId \?\? current\.liveId\}/)
+  assert.match(onboarding, /<AgentLogo sourceId=\{item\.integrationId\}/)
   assert.doesNotMatch(scope, /function AgentIcon\(/)
   assert.doesNotMatch(integrationManagement, /sourceDot\(/)
 })
