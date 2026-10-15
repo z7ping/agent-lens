@@ -138,10 +138,10 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
           </section>
 
           <section className="insight-kpi-grid">
-            <div className="insight-kpi"><span>{t('page.sessions')}</span><strong>{data.summary.sessionCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.sessionCountPercent ?? null, t) })}</small>}</div>
-            <div className="insight-kpi"><span>{t('page.interactions')}</span><strong>{data.summary.interactionCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.interactionCountPercent ?? null, t) })}</small>}</div>
-            <div className="insight-kpi"><span>{t('page.toolCalls')}</span><strong>{data.summary.toolCallCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.toolCallCountPercent ?? null, t) })}</small>}</div>
-            <div className="insight-kpi"><span>{t('page.explicitFailures')}</span><strong>{data.summary.errorCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.errorCountPercent ?? null, t) })}</small>}</div>
+            <div className="workspace-metric-card insight-kpi"><span>{t('page.sessions')}</span><strong>{data.summary.sessionCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.sessionCountPercent ?? null, t) })}</small>}</div>
+            <div className="workspace-metric-card insight-kpi"><span>{t('page.interactions')}</span><strong>{data.summary.interactionCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.interactionCountPercent ?? null, t) })}</small>}</div>
+            <div className="workspace-metric-card insight-kpi"><span>{t('page.toolCalls')}</span><strong>{data.summary.toolCallCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.toolCallCountPercent ?? null, t) })}</small>}</div>
+            <div className="workspace-metric-card insight-kpi"><span>{t('page.explicitFailures')}</span><strong>{data.summary.errorCount}</strong>{comparison && <small>{t('page.comparedPrevious', { delta: deltaLabel(delta?.errorCountPercent ?? null, t) })}</small>}</div>
           </section>
 
           <section className="insight-grid insight-grid-main">
