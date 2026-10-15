@@ -697,7 +697,8 @@
 /* Match the white Task Center reading surface without introducing page-specific cards. */
 .app-main > .workspace-page,
 .app-main > .agents-responsive-shell,
-.agents-responsive-shell > .workspace-page {
+.agents-responsive-shell > .workspace-page,
+.agents-overview-layout > .workspace-page {
   background: var(--al-surface);
 }
 
