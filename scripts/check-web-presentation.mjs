@@ -138,6 +138,30 @@ assertCssValue('.select-menu-trigger', 'font-size', '13px')
 
 const read = key => readFileSync(files[key], 'utf8')
 const css = Object.fromEntries(Object.keys(files).filter(key => key !== 'main').map(key => [key, read(key)]))
+const integrationsCss = readFileSync(p('integrations.css'), 'utf8')
+const integrationLayoutOverrides = cssRules(integrationsCss).filter(rule => rule.selector === '.integration-management-content')
+if (integrationLayoutOverrides.some(rule => ['width', 'max-width', 'margin', 'padding'].some(property => property in rule.declarations))) {
+  throw new Error('接入管理不得覆盖共享 page-content 内容宽度与边距')
+}
+const surfaces = [
+  [css.insights, '.insight-kpi'],
+  [css.insights, '.insight-card'],
+  [css.tools, '.tool-table-card'],
+  [css.tools, '.tool-attention'],
+  [css.tools, '.attributed-assets'],
+  [css.agents, '.agent-card'],
+  [css.agentResponsive, '.agent-insight-card'],
+  [css.backup, '.backup-assets-surface'],
+  [css.backup, '.backup-snapshot-list'],
+  [integrationsCss, '.integration-management-summary > span'],
+  [integrationsCss, '.integration-management-section'],
+]
+for (const [source, selector] of surfaces) {
+  const rule = cssRules(source).find(item => item.selector === selector)
+  if (rule?.declarations['border-radius'] !== 'var(--radius-md)') {
+    throw new Error(`${selector} 未消费统一的内容面圆角 Token`)
+  }
+}
 if (!/--font-size-xs:\s*12px\s*;/.test(css.typography)) throw new Error('正式字体系统最小语义字号必须保持 12px')
 function pixelFonts(source) {
   return [...source.matchAll(/\{([^{}]*)\}/gs)].flatMap(block => [...block[1].matchAll(/font-size\s*:\s*(\d+(?:\.\d+)?)px\b/g)]).map(match => Number(match[1]))
@@ -211,7 +235,7 @@ if (!primaryNavigation.includes("id: 'backup', to: '/backup'") || !primaryNaviga
 }
 if (!appShell.includes("hasWorkspaceTabs ? 'is-contextless-workspace'")
   || !/\.app-shell\.is-contextless-workspace\s*\{\s*grid-template-columns:\s*40px minmax\(0, 1fr\);/.test(workspaceSidebar)
-  || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('className="backup-agent-filter-slot"')
+  || !readFileSync(p('features/BackupPage.tsx'), 'utf8').includes('<div className="workspace-view-filter">{backupScopeFilter}</div>')
   || sidebarView.includes('onBackup && <div className="workspace-context-menu')) {
   throw new Error('洞察、智能体与备份只能保留图标导航轨；业务筛选必须位于统一工具栏')
 }
@@ -318,7 +342,7 @@ if (!css.insights.includes('使用洞察正式样式') || !css.insights.includes
 if (!css.agents.includes('智能体概览正式样式') || !css.agents.includes(".agent-card[data-source='hermes']") || !css.agents.includes(".agent-card[data-source='opencode']") || !css.agents.includes('.frequent-asset-row') || !css.agents.includes('.skill-funnel')) throw new Error('智能体概览关键能力样式缺失')
 if (!css.agentResponsive.includes('@media (min-width: 1400px)') || !css.agentResponsive.includes('.agents-responsive-shell') || !css.agentResponsive.includes('.agent-insights-rail')) throw new Error('Agents xxl 响应式必须由 agent-insights-responsive.css 持有')
 if (!css.backup.includes('AgentLens 1.0 资产备份正式样式')
-  || !css.backup.includes('.backup-toolbar-controls')
+  || css.backup.includes('.backup-toolbar-controls')
   || !css.backup.includes('.backup-assets-surface')
   || !css.backup.includes('.backup-asset-overview')
   || !css.backup.includes('.backup-agent-list')
@@ -335,8 +359,8 @@ if (!css.backupResponsive.includes('.backup-agent-group') || !css.backupResponsi
 const backupPage = readFileSync(p('features/BackupPage.tsx'), 'utf8')
 for (const required of [
   "from '../components/ui'",
-  'createPortal(<div className="backup-toolbar-controls"',
-  '<ToolbarGroup className="backup-toolbar-actions" align="end">',
+  'createPortal(<div className="workspace-view-controls"',
+  '<div className="workspace-view-filter-actions">',
   "searchParams.get('view') === 'history'",
   'className="backup-snapshot-header"',
   '<StatusBadge',
@@ -380,6 +404,13 @@ if (!appShell.includes('toolbarHost={workspaceToolbarHost}')
 }
 if (/className=(?:\{)?[`"']badge\b/.test(backupPage)) {
   throw new Error('资产备份状态必须复用 StatusBadge，不得恢复页面私有 badge 方言')
+}
+if (backupPage.includes('backup-link-btn') || backupPage.includes('ToolbarGroup') || css.backup.includes('.backup-link-btn')) {
+  throw new Error('资产备份操作必须消费统一 Button，禁止私有按钮方言')
+}
+if (!readFileSync(p('features/AgentsPage.tsx'), 'utf8').includes('<StatusBadge tone={statusTone}')
+  || css.agents.includes('.agent-status {')) {
+  throw new Error('智能体状态应复用 StatusBadge 语义状态')
 }
 if (/\.backup-confirm-dialog\b|\.backup-confirm-scrim\b/.test(css.backup)) throw new Error('资产备份确认流程必须由统一 Dialog 持有外壳')
 if (/\.snapshot-create-button\s*\{[^}]*height\s*:/s.test(css.backup)) throw new Error('资产备份不得覆盖统一 Button 高度')
