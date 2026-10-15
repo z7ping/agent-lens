@@ -144,7 +144,7 @@ if (integrationLayoutOverrides.some(rule => ['width', 'max-width', 'margin', 'pa
   throw new Error('接入管理不得覆盖共享 page-content 内容宽度与边距')
 }
 const surfaces = [
-  [css.insights, '.insight-kpi'],
+  [css.shell, '.workspace-metric-card'],
   [css.insights, '.insight-card'],
   [css.tools, '.tool-table-card'],
   [css.tools, '.tool-attention'],
@@ -153,9 +153,16 @@ const surfaces = [
   [css.agentResponsive, '.agent-insight-card'],
   [css.backup, '.backup-assets-surface'],
   [css.backup, '.backup-snapshot-list'],
-  [integrationsCss, '.integration-management-summary > span'],
   [integrationsCss, '.integration-management-section'],
 ]
+const insightMetricPage = readFileSync(p('features/InsightsPage.tsx'), 'utf8')
+const integrationMetricPage = readFileSync(p('features/IntegrationManagementPage.tsx'), 'utf8')
+if ((insightMetricPage.match(/className="workspace-metric-card insight-kpi"/g) ?? []).length !== 4
+  || (integrationMetricPage.match(/<span className="workspace-metric-card">/g) ?? []).length !== 4
+  || /\.insight-kpi\s*\{[^}]*border-radius\s*:/s.test(css.insights)
+  || /\.integration-management-summary > span\s*\{[^}]*border-radius\s*:/s.test(integrationsCss)) {
+  throw new Error('洞察与接入管理的统计卡片必须共享单一 Workspace 视觉 Owner')
+}
 for (const [source, selector] of surfaces) {
   const rule = cssRules(source).find(item => item.selector === selector)
   if (rule?.declarations['border-radius'] !== 'var(--radius-md)') {
