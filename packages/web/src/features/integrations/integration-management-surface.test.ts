@@ -37,7 +37,13 @@ test('展开明细复用 Disclosure 并沿用真实本机路径、接入包版�
   assert.match(page, /installation\.versionUnavailable/)
   assert.match(page, /className="integration-management-capabilities"/)
   assert.match(page, /className="integration-management-actions"/)
-  assert.doesNotMatch(page, /agentVersion|upgradeCommand/)
+  assert.match(page, /const localAgentVersion = versions\.length/)
+  assert.match(page, /agentUpgradeMethods\(item\.productId\)/)
+  assert.match(page, /integrationPackageUpdateAvailable\(packageState\)/)
+  assert.match(page, /model\.updateIntegration\(item\.integrationId\)/)
+  assert.match(page, /copyText\(selectedMethod\.command\)/)
+  assert.match(page, /onChange=\{value => \{ setUpgradeMethod\(value\); setCommandCopied\(false\) \}\}/)
+  assert.doesNotMatch(page, /child_process|execFile|spawn\(/)
 })
 
 test('未发现组默认收起，搜索、筛选和深链可展开而不吞掉结果', () => {
@@ -72,6 +78,7 @@ test('接入控制面覆盖扫描、添加、启停、授权、卸载与排序',
   assert.match(page, /model\.setIntegrationEnabled/)
   assert.match(page, /model\.authorizeIntegration/)
   assert.match(page, /model\.removeIntegration/)
+  assert.match(page, /model\.updateIntegration/)
   assert.match(page, /useIntegrationOrder/)
 })
 
@@ -154,4 +161,17 @@ test('扫描失败与 data-only 保持独立语义', () => {
 
 test('首次未发现时明确指向智能体接入管理视图', () => {
   assert.match(zhAgents, /智能体 → 接入管理/)
+})
+
+test('接入插件更新与智能体本体升级命令是两个明确独立的交互', () => {
+  assert.match(page, /managementPage\.updateIntegration/)
+  assert.match(page, /managementPage\.updateDialogDescription/)
+  assert.match(page, /managementPage\.agentUpgradeHeading/)
+  assert.match(page, /managementPage\.agentUpgradeWarning/)
+  assert.match(page, /managementPage\.agentUpgradeSelect/)
+  assert.match(page, /managementPage\.officialUpgradeDocs/)
+  assert.match(page, /item\.tool\?\.presence === 'present'/)
+  assert.match(page, /snapshot\.agents\?\.items\.find\(agent => agent\.productId === item\.productId\)\?\.installations/)
+  assert.match(zhAgents, /agentUpgradeWarning: 'AgentLens 未确认本机的安装渠道/)
+  assert.match(zhAgents, /updateScope: '仅更新 AgentLens 的接入插件/)
 })
