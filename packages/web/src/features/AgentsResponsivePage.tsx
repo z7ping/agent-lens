@@ -41,6 +41,7 @@ export function AgentsResponsivePage({
     : isPi && requestedView === 'ecosystem'
       ? 'ecosystem'
       : 'overview'
+  const previousViewRef = useRef<AgentWorkspaceView>(activeView)
 
   useEffect(() => {
     // Supported-but-undetected catalog entries have no overview to hydrate.
@@ -56,9 +57,14 @@ export function AgentsResponsivePage({
     return () => window.clearTimeout(timer)
   }, [hasSelectedOverview, model, sourceId, activeView])
 
-  // Only the workspace body scrolls when switching views; the navigation stays fixed.
+  // Switching Pi's inline tabs should not jump the workspace scroll position.
+  // Only the independent management view starts from the top.
   useLayoutEffect(() => {
-    if (shellRef.current) shellRef.current.scrollTop = 0
+    const previousView = previousViewRef.current
+    previousViewRef.current = activeView
+    if ((previousView === 'management' || activeView === 'management') && shellRef.current) {
+      shellRef.current.scrollTop = 0
+    }
   }, [activeView])
 
   const selectAgent = (nextSourceId: string) => {
