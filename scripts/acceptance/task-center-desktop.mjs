@@ -151,6 +151,10 @@ async function waitForProjectedReviewDetail(win, label) {
   const deadline = Date.now() + 12_000
   while (Date.now() < deadline) {
     const state = await withTimeout(win.webContents.executeJavaScript(`(() => {
+      const pane = document.querySelector('.review-reader-pane')
+      const expected = location.pathname.startsWith('/review/') ? decodeURIComponent(location.pathname.slice('/review/'.length)) : ''
+      const sessionMatches = !expected || pane?.getAttribute('data-review-session-id') === expected
+      if (!sessionMatches) return { detail: false, roundCount: 0, processExpanded: false, thinkingCount: 0, toolCount: 0 }
       // The completed Process is intentionally folded by default. Exercise the
       // real disclosure interaction instead of requiring hidden Tool DOM rows.
       const process = document.querySelector('.task-review-process')
