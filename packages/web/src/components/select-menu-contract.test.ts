@@ -20,25 +20,19 @@ function sourceFiles(directory: string): string[] {
 test('Web 下拉入口统一使用 SelectMenu，而不是页面级原生 select', () => {
   const nativeSelectOwners = sourceFiles(sourceRoot).filter(path => /<select(?:\s|>)/.test(readFileSync(path, 'utf8')))
   assert.deepEqual(nativeSelectOwners, [])
-  assert.match(liveNewTaskSource, /<SelectMenu[\s\S]*?variant="field"[\s\S]*?searchable/)
+  assert.match(liveNewTaskSource, /<SelectMenu[\s\S]*?searchable/)
 })
 
-test('任务中心智能体/项目/高级筛选共享 32px 控件规格', () => {
-  const projectFilter = taskCenterSource.match(/<SelectMenu\s+className="task-center-project-filter"[\s\S]*?\/>/)?.[0]
-  assert.ok(projectFilter)
-  assert.match(projectFilter, /variant="toolbar"/)
-  assert.match(projectFilter, /searchable/)
-  assert.match(taskCenterSource, /<SidebarFilterDisclosure\s+[\s\S]*?className="task-center-agent-filter"/)
-  const popoverTriggerRule = sidebarStyles.match(/\.workspace-sidebar-filter-disclosure\.is-popover > summary \{([^}]*)\}/)?.[1]
-  const projectTriggerRule = sidebarStyles.match(/\.workspace-sidebar-context > \.task-center-rail \.task-center-project-filter\.select-menu-trigger \{([^}]*)\}/)?.[1]
-  assert.ok(popoverTriggerRule, '智能体和高级筛选应复用共享弹层触发器')
-  assert.ok(projectTriggerRule, '项目筛选应保持与共享弹层一致的尺寸')
-  for (const rule of [popoverTriggerRule, projectTriggerRule]) {
-    assert.match(rule, /height:\s*32px;/)
-    assert.match(rule, /min-height:\s*32px;/)
-    assert.match(rule, /font-size:\s*13px;/)
-    assert.match(rule, /border-radius:\s*8px;/)
-  }
+test('项目与智能体共享 32px 规格，页面不得覆盖高度和交互', () => {
+  const selectCss = readFileSync(new URL('./select-menu.css', import.meta.url), 'utf8')
+  assert.match(taskCenterSource, /<SelectMenu\s+value=\{review\.filters\.projectId\}/)
+  assert.match(taskCenterSource, /<SidebarFilterDisclosure\s+summary=\{agentSelectionSummary\}/)
+  assert.match(taskCenterSource, /className="task-center-advanced-filter-popover"/)
+  assert.match(sidebarStyles, /\.workspace-sidebar-filter-disclosure > summary \{[^}]*height:\s*32px;/s)
+  assert.match(selectCss, /\.select-menu-trigger \{[^}]*height:\s*32px;/s)
+  assert.doesNotMatch(selectCss, /\.select-menu-trigger-(?:toolbar|field|pill)/)
+  assert.doesNotMatch(taskCenterSource, /task-center-project-filter|multipleSelectionBehavior/)
+  assert.doesNotMatch(selectSource, /SelectMenuVariant|menuWidth|variant\?:|className\?:/)
 })
 
 test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => {
@@ -65,15 +59,15 @@ test('SelectMenu 的菜单键盘处理保护 IME，并跟踪 Sidebar 浮层锚�
 
 test('任务中心多选由「全部」进入单项、复选累计；高级筛选不再嵌套 SelectMenu', () => {
   const agentSource = readFileSync(new URL('./SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
-  const advanced = taskCenterSource.slice(taskCenterSource.indexOf('className="task-center-advanced-filter"'))
-  assert.match(taskCenterSource, /multipleSelectionBehavior="pick-from-all"/)
+  const advanced = taskCenterSource.slice(taskCenterSource.indexOf('className="task-center-advanced-filter-popover"'))
+  assert.doesNotMatch(taskCenterSource, /multipleSelectionBehavior/)
   assert.match(agentSource, /nextAgentFilterSelection\(agentSelection\.value, sourceId, detectedIds\)/)
   assert.match(agentSource, /<UiIcon name="check" size=\{14\} aria-hidden="true"\/>/)
   assert.match(advanced, /task-center-advanced-filter-panel/)
   assert.match(advanced, /className="task-center-advanced-filter-options"/)
   assert.match(advanced, /aria-pressed=\{review\.filters\.range === option\.value\}/)
   assert.match(advanced, /aria-pressed=\{review\.filters\.status === option\.value\}/)
-  assert.doesNotMatch(advanced.split('</SidebarFilterDisclosure>')[0], /<SelectMenu/)
+  assert.doesNotMatch(advanced.split('</Popover>')[0], /<SelectMenu/)
 })
 
 test('任务中心高级筛选的展示和清除行为与筛选条件一致', () => {
