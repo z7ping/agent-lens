@@ -20,6 +20,24 @@ export interface HostDirectoryListing {
 const MAX_SCAN = 2_048
 const MAX_RESULTS = 300
 
+let cachedWindowsDrives: { at: number; roots: string[] } | undefined
+let inFlightDrives: Promise<string[]> | undefined
+
+async function availableWindowsDrives(): Promise<string[]> {
+  if (cachedWindowsDrives && Date.now() - cachedWindowsDrives.at < 60_000) return cachedWindowsDrives.roots
+  if (inFlightDrives) return inFlightDrives
+  inFlightDrives = Promise.all('CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map(async letter => {
+    const root = `${letter}:\\`
+    try { return (await stat(root)).isDirectory() ? root : undefined }
+    catch { return undefined }
+  })).then(roots => {
+    const present = roots.filter((root): root is string => Boolean(root))
+    cachedWindowsDrives = { at: Date.now(), roots: present }
+    return present
+  }).finally(() => { inFlightDrives = undefined })
+  return inFlightDrives
+}
+
 /** Read directory names only. Never read files, follow child symlinks, or mutate the host. */
 export async function browseHostWorkingDirectory(requested?: string): Promise<HostDirectoryListing> {
   const path = requested?.trim() || homedir()
@@ -64,14 +82,7 @@ export async function browseHostWorkingDirectory(requested?: string): Promise<Ho
 
   const roots = new Set<string>([parse(normalized).root, homedir()])
   if (process.platform === 'win32') {
-    // Keep the browser useful on multi-disk Windows hosts without a platform-specific shell dependency.
-    const letters = 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
-    const detected = await Promise.all(letters.map(async letter => {
-      const root = `${letter}:\\`
-      try { return (await stat(root)).isDirectory() ? root : undefined }
-      catch { return undefined }
-    }))
-    for (const root of detected) if (root) roots.add(root)
+    for (const root of await availableWindowsDrives()) roots.add(root)
   }
   return {
     path: normalized,
