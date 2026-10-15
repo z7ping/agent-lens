@@ -13,6 +13,7 @@ export interface HostDirectoryListing {
   parentPath: string | null
   roots: string[]
   directories: BrowsableHostDirectory[]
+  breadcrumbs: BrowsableHostDirectory[]
   truncated: boolean
   selectable: boolean
 }
@@ -84,11 +85,19 @@ export async function browseHostWorkingDirectory(requested?: string): Promise<Ho
   if (process.platform === 'win32') {
     for (const root of await availableWindowsDrives()) roots.add(root)
   }
+  const rootPath = parse(normalized).root
+  let current = rootPath
+  const breadcrumbs = [{ name: rootPath, path: rootPath }]
+  for (const name of normalized.slice(rootPath.length).split(/[\\/]/).filter(Boolean)) {
+    current = join(current, name)
+    breadcrumbs.push({ name, path: current })
+  }
   return {
     path: normalized,
     parentPath: dirname(normalized) === normalized ? null : dirname(normalized),
     roots: [...roots],
     directories,
+    breadcrumbs,
     truncated,
     selectable,
   }
