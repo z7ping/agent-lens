@@ -192,12 +192,10 @@ export function LiveNewTaskPanel({
         <label className="task-center-new-agent-field">
           <span>{t('center.newTask.agent')}</span>
           <SelectMenu
-            variant="field"
             value={selectedLiveId}
             onChange={value => { setSelectedLiveId(value); setError('') }}
             ariaLabel={t('center.newTask.selectAgentAria')}
             placeholder={productsLoading ? t('center.newTask.checkingAgents') : t('center.newTask.selectAgent')}
-            menuWidth={320}
             options={agentOptions}
             disabled={productsLoading || products.length === 0}
           />
@@ -228,9 +226,6 @@ export function LiveNewTaskPanel({
                   onChange={setSelectedKey}
                   ariaLabel={t('center.newTask.selectProjectAria')}
                   placeholder={options.length ? t('center.newTask.selectProject') : projectLoading ? t('center.newTask.loadingProjects') : t('center.newTask.noProject')}
-                  variant="field"
-                  className="task-center-new-project-select"
-                  menuWidth={420}
                   searchable
                   searchPlaceholder={t('center.newTask.searchProject')}
                   onSearchChange={onProjectSearch}

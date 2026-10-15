@@ -111,10 +111,10 @@ export function InsightsPage({ model, sidebarHost }: { model: AgentLensClientMod
       <span>{agentSelectionSummary}</span>
       <IconButton size="small" onClick={() => void insightsModel.refresh()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
-    <SidebarFilterDisclosure variant="popover" closeOnOutside summary={agentSelectionSummary} className="workspace-insight-filter-disclosure" summaryMeta={false} agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds, onChange: sourceIds => insightsModel.setFilters({ sourceIds }) }}/>
+    <SidebarFilterDisclosure summary={agentSelectionSummary}  agents={agents} agentSelection={{ mode: 'multiple', value: insights.filters.sourceIds, onChange: sourceIds => insightsModel.setFilters({ sourceIds }) }}/>
     <div className="workspace-insight-filter-fields">
-        <label><span>{t('filters.project')}</span><SelectMenu variant="field" value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} menuWidth={280} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
-        <label><span>{t('filters.time')}</span><SelectMenu variant="field" value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel={t('filters.timeAria')} menuWidth={156} options={[
+        <label><span>{t('filters.project')}</span><SelectMenu value={insights.filters.projectId} onChange={projectId => insightsModel.setFilters({ projectId })} ariaLabel={t('filters.projectAria')} placeholder={t('filters.allProjects')} searchable searchPlaceholder={t('filters.searchProject')} options={projectFilterOptions}/></label>
+        <label><span>{t('filters.time')}</span><SelectMenu value={insights.filters.range} onChange={range => insightsModel.setFilters({ range: range as typeof insights.filters.range })} ariaLabel={t('filters.timeAria')} options={[
           { value: 'today', label: t('range.today') }, { value: '7d', label: t('range.sevenDays') }, { value: '30d', label: t('range.thirtyDays') }, { value: 'all', label: t('range.all') },
         ]}/></label>
     </div>

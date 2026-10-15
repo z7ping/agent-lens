@@ -10,7 +10,7 @@ import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchablePr
 import { useClientSnapshot } from '../App'
 import { agentLabel, sourceDot, useOrderedAgents } from '../components/AgentScope'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Button, IconButton, Input, SelectMenu, StatusBadge } from '../components/ui'
+import { Button, IconButton, Input, Popover, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
@@ -204,6 +204,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [launchableProjects, setLaunchableProjects] = useState<LaunchableProjectDto[]>(() => cachedLaunchableProjects()?.items ?? [])
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
   const [projectSearch, setProjectSearch] = useState('')
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
+  const advancedFiltersAnchorRef = useRef<HTMLButtonElement>(null)
   const [projectLoading, setProjectLoading] = useState(mode === 'new')
   const [projectLoadingMore, setProjectLoadingMore] = useState(false)
   const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
@@ -465,33 +467,36 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
 
     <div className="task-center-quick-filters" aria-label={t('center.history.filterAria')}>
       <SidebarFilterDisclosure
-        variant="popover"
-        className="task-center-agent-filter"
-        closeOnOutside
         summary={agentSelectionSummary}
-        summaryMeta={false}
+      
         agents={agents}
         agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}
-        multipleSelectionBehavior="pick-from-all"
       />
       <SelectMenu
-        className="task-center-project-filter"
-        variant="toolbar"
         value={review.filters.projectId}
         onChange={projectId => model.setReviewFilters({ projectId })}
         ariaLabel={t('center.history.filterProject')}
         placeholder={t('center.history.allProjects')}
-        menuWidth={280}
         searchable
         searchPlaceholder={t('center.history.searchProject')}
         options={projectFilterOptions}
       />
-      <SidebarFilterDisclosure
-        variant="popover"
-        className="task-center-advanced-filter"
-        closeOnOutside
-        summary={<span className="task-center-advanced-filter-label" role="img" aria-label={t('center.history.filterAria')}><UiIcon name="filter" size={14}/></span>}
-        summaryMeta={false}
+      <IconButton
+        ref={advancedFiltersAnchorRef}
+        size="small"
+        className="task-center-advanced-filter-trigger"
+        aria-label={t('center.history.filterAria')}
+        title={t('center.history.filterAria')}
+        aria-haspopup="dialog"
+        aria-expanded={advancedFiltersOpen}
+        onClick={() => setAdvancedFiltersOpen(open => !open)}
+      ><UiIcon name="filter" size={14}/></IconButton>
+      <Popover
+        open={advancedFiltersOpen}
+        anchorRef={advancedFiltersAnchorRef}
+        onClose={() => setAdvancedFiltersOpen(false)}
+        placement="bottom-end"
+        className="task-center-advanced-filter-popover"
       >
         <div className="task-center-advanced-filter-panel">
           <div className="task-center-advanced-filter-group" role="group" aria-label={t('center.history.filterTime')}>
@@ -528,7 +533,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
             </div>
           </div>
         </div>
-      </SidebarFilterDisclosure>
+      </Popover>
     </div>
 
     {hasActiveFilters && <div className="task-center-active-filters">

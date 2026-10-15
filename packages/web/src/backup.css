@@ -60,7 +60,7 @@
   flex: 0 0 auto;
 }
 
-.backup-agent-filter {
+.backup-agent-filter-slot {
   min-width: 130px;
   max-width: 220px;
   flex: 0 1 190px;

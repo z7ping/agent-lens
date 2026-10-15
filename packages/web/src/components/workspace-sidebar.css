@@ -359,17 +359,9 @@
   font-size: 12px;
 }
 
-.workspace-context-control > .select-menu,
-.workspace-context-control .select-menu-trigger {
-  width: 100%;
-  min-width: 0;
-}
-
-.workspace-context-control .select-menu-trigger {
-  background: color-mix(in srgb, var(--al-surface) 68%, transparent);
-}
-
+/* 智能体筛选唯一控件样式。页面只控制布局，不覆盖其尺寸与交互。 */
 .workspace-sidebar-filter-disclosure {
+  position: relative;
   width: 100%;
   min-width: 0;
   flex: 0 0 auto;
@@ -378,31 +370,6 @@
 }
 
 .workspace-sidebar-filter-disclosure > summary {
-  min-height: 32px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: var(--al-muted);
-}
-
-.workspace-sidebar-filter-disclosure > summary:hover {
-  color: var(--al-ink);
-}
-
-.workspace-sidebar-filter-disclosure .ui-disclosure-body {
-  display: grid;
-  gap: 12px;
-  padding: 10px 4px 7px;
-}
-
-/* 所有工作区智能体筛选使用同一个紧凑弹层样式。 */
-.workspace-sidebar-filter-disclosure.is-popover {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-}
-
-.workspace-sidebar-filter-disclosure.is-popover > summary {
   box-sizing: border-box;
   height: 32px;
   min-height: 32px;
@@ -416,40 +383,42 @@
   font-weight: 560;
 }
 
-.workspace-sidebar-filter-disclosure.is-popover > summary:hover,
-.workspace-sidebar-filter-disclosure.is-popover[open] > summary {
+.workspace-sidebar-filter-disclosure > summary:hover,
+.workspace-sidebar-filter-disclosure[open] > summary {
   border-color: var(--al-line-strong);
   background: var(--al-surface);
   color: var(--al-ink);
 }
 
-.workspace-sidebar-filter-disclosure.is-popover > summary:focus-visible {
+.workspace-sidebar-filter-disclosure > summary:focus-visible {
   outline: 2px solid var(--al-accent);
   outline-offset: 2px;
 }
 
-.workspace-sidebar-filter-disclosure.is-popover > summary .ui-disclosure-chevron {
+.workspace-sidebar-filter-disclosure > summary .ui-disclosure-chevron {
   order: 2;
   margin-left: auto;
 }
 
-.workspace-sidebar-filter-disclosure.is-popover > summary .ui-disclosure-summary {
+.workspace-sidebar-filter-disclosure > summary .ui-disclosure-summary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body {
+.workspace-sidebar-filter-disclosure .ui-disclosure-body {
   position: absolute;
   top: 36px;
   left: 0;
   z-index: 28;
+  display: grid;
   width: min(240px, calc(100vw - 24px));
   max-height: min(380px, calc(100dvh - 210px));
+  gap: 12px;
   overflow-y: auto;
   padding: 8px;
   border: 1px solid var(--al-line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--al-surface-raised);
   box-shadow: var(--al-shadow-lg);
 }
@@ -458,10 +427,6 @@
 .workspace-context-menu.workspace-agent-context,
 .workspace-context-menu.workspace-insight-context {
   overflow: visible;
-}
-
-.workspace-context-menu .workspace-sidebar-filter-disclosure.is-popover .ui-disclosure-body {
-  width: min(240px, 100%);
 }
 
 /* 共享智能体选项与排序，只在工作区侧栏所有者中维护。 */
@@ -568,11 +533,8 @@
 .workspace-agent-order-option.is-fixed .workspace-agent-order-drag { cursor: default; opacity: .38; }
 .workspace-agent-order-buttons { display: flex; gap: 2px; }
 
-.workspace-insight-filter-disclosure + .workspace-insight-filter-fields {
-  margin-top: 10px;
-}
-
 .workspace-insight-filter-fields {
+  margin-top: 10px;
   display: grid;
   min-width: 0;
   gap: 10px;
@@ -584,12 +546,6 @@
   gap: 5px;
   color: var(--al-muted-2);
   font-size: 12px;
-}
-
-.workspace-insight-filter-fields .select-menu,
-.workspace-insight-filter-fields .select-menu-trigger {
-  width: 100%;
-  min-width: 0;
 }
 
 .workspace-sidebar-footer {
@@ -872,130 +828,6 @@
   align-items: start;
   gap: 6px;
   padding: 0 10px 6px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-agent-filter,
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter {
-  position: relative;
-  width: 100%;
-  margin: 0;
-}
-
-/* 项目选择框与共享弹层触发器保持同一几何规范。 */
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger {
-  box-sizing: border-box;
-  height: 32px;
-  min-height: 32px;
-  gap: 4px;
-  padding: 0 8px;
-  border: 1px solid var(--al-line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
-  color: var(--al-ink-2);
-  font-size: 13px;
-  font-weight: 560;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:hover:not(:disabled),
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger.is-open {
-  border-color: var(--al-line-strong);
-  background: var(--al-surface);
-  color: var(--al-ink);
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger:focus-visible {
-  outline: 2px solid var(--al-accent);
-  outline-offset: 2px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter.is-popover .ui-disclosure-body {
-  left: auto;
-  right: 0;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-project-filter.select-menu-trigger {
-  width: 100%;
-  min-width: 0;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary {
-  width: 32px;
-  justify-content: center;
-  padding: 0;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary .ui-disclosure-summary {
-  display: grid;
-  place-items: center;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter > summary .ui-disclosure-chevron {
-  display: none;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-label {
-  display: grid;
-  place-items: center;
-}
-
-/* Advanced filters use the same flat choice rows as the agent popover:
- * one layer, no second SelectMenu portal over the session list. */
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-panel {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-group {
-  display: grid;
-  gap: 5px;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-group + .task-center-advanced-filter-group {
-  padding-top: 9px;
-  border-top: 1px solid color-mix(in srgb, var(--al-line) 60%, transparent);
-}
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-heading {
-  padding-inline: 6px;
-  color: var(--al-muted-2);
-  font-size: 12px;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-advanced-filter-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-filter-option {
-  display: flex;
-  width: 100%;
-  min-height: 30px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 9px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--al-ink-2);
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-filter-option:hover,
-.workspace-sidebar-context > .task-center-rail .task-center-filter-option:focus-visible {
-  background: var(--al-soft);
-  color: var(--al-ink);
-}
-.workspace-sidebar-context > .task-center-rail .task-center-filter-option:focus-visible {
-  outline: 2px solid var(--al-accent);
-  outline-offset: -2px;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-filter-option.is-selected {
-  border-color: color-mix(in srgb, var(--al-accent) 20%, var(--al-line));
-  background: color-mix(in srgb, var(--al-accent) 9%, transparent);
-  color: var(--al-accent);
-  font-weight: 650;
-}
-.workspace-sidebar-context > .task-center-rail .task-center-filter-option > svg:last-child {
-  flex: 0 0 auto;
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-active-filters {

@@ -15,6 +15,77 @@
   background: var(--al-canvas);
 }
 
+
+/* 高级筛选是独立 IconButton + Portal Popover；不修改共享智能体/项目控件样式。 */
+.task-center-advanced-filter-trigger.ui-icon-button {
+  box-sizing: border-box;
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
+  color: var(--al-ink-2);
+}
+.task-center-advanced-filter-trigger.ui-icon-button:hover,
+.task-center-advanced-filter-trigger.ui-icon-button[aria-expanded="true"] {
+  border-color: var(--al-line-strong);
+  background: var(--al-surface);
+  color: var(--al-ink);
+}
+.task-center-advanced-filter-trigger.ui-icon-button:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: 2px;
+}
+.task-center-advanced-filter-popover.ui-popover {
+  z-index: 1200;
+  width: 240px;
+  max-height: min(380px, calc(100dvh - 24px));
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: var(--al-surface-raised);
+  box-shadow: var(--al-shadow-lg);
+}
+.task-center-advanced-filter-panel { display: grid; min-width: 0; gap: 10px; }
+.task-center-advanced-filter-group { display: grid; gap: 5px; }
+.task-center-advanced-filter-group + .task-center-advanced-filter-group {
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--al-line) 60%, transparent);
+}
+.task-center-advanced-filter-heading { padding-inline: 6px; color: var(--al-muted-2); font-size: 12px; }
+.task-center-advanced-filter-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.task-center-filter-option {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--al-ink-2);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.task-center-filter-option:hover,
+.task-center-filter-option:focus-visible { background: var(--al-soft); color: var(--al-ink); }
+.task-center-filter-option:focus-visible { outline: 2px solid var(--al-accent); outline-offset: -2px; }
+.task-center-filter-option.is-selected {
+  border-color: color-mix(in srgb, var(--al-accent) 20%, var(--al-line));
+  background: color-mix(in srgb, var(--al-accent) 9%, transparent);
+  color: var(--al-accent);
+  font-weight: 650;
+}
+.task-center-filter-option > svg:last-child { flex: 0 0 auto; }
+
 /* 筛选属于任务上下文，不再横跨右侧详情。高级条件默认折叠。 */
 .task-center-toolbar {
   grid-column: 1 / -1;

@@ -1,29 +1,31 @@
 @reference "../styles.css";
 
 .select-menu-trigger {
+  box-sizing: border-box;
   display: inline-flex;
+  width: 100%;
   min-width: 0;
+  height: 32px;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  border: 1px solid transparent;
+  gap: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--al-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
   color: var(--al-ink-2);
-  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
   text-align: left;
   cursor: pointer;
   transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease, color .15s ease;
 }
 .select-menu-trigger:hover:not(:disabled),
 .select-menu-trigger.is-open { border-color: var(--al-line-strong); background: var(--al-surface); color: var(--al-ink); }
-.select-menu-trigger:focus-visible { outline: 2px solid color-mix(in srgb, var(--al-accent) 42%, transparent); outline-offset: 2px; }
+.select-menu-trigger:focus-visible { outline: 2px solid var(--al-accent); outline-offset: 2px; }
 .select-menu-trigger:disabled { cursor: default; opacity: .5; }
-.select-menu-trigger-toolbar { height: 34px; min-width: 104px; padding: 0 9px 0 11px; border-radius: 8px; background: var(--al-soft-2); font-size: 13px; }
-.select-menu-trigger-field { width: 100%; min-height: 46px; padding: 7px 10px 7px 12px; border-color: var(--al-line); border-radius: 10px; background: var(--al-surface); }
-.select-menu-trigger-pill { height: 32px; padding: 0 9px 0 10px; border: 0; border-radius: 999px; background: var(--al-soft-2); font-size: 12px; }
 .select-menu-trigger-copy { min-width: 0; }
 .select-menu-trigger-label { display: block; overflow: hidden; font-size: 13px; font-weight: 560; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.select-menu-trigger-field small { display: block; margin-top: 3px; overflow: hidden; color: var(--al-muted); font: 12px/1.25 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
-.select-menu-trigger-pill .select-menu-trigger-label { font-size: 12px; font-weight: 500; }
 .select-menu-chevron { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: var(--al-muted-2); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
 .select-menu-trigger.is-open .select-menu-chevron { transform: rotate(180deg); }
 
@@ -41,7 +43,6 @@
   background: var(--al-surface-raised);
   box-shadow: var(--al-shadow-lg);
 }
-.select-menu-popover-pill { border-radius: 16px; }
 .select-menu-search-wrap { display: flex; height: 36px; align-items: center; gap: 7px; margin-bottom: 5px; padding: 0 9px; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); }
 .select-menu-search-wrap:focus-within { border-color: color-mix(in srgb, var(--al-accent) 48%, var(--al-line)); background: var(--al-surface); }
 .select-menu-search-wrap svg { width: 14px; height: 14px; flex: 0 0 14px; fill: none; stroke: var(--al-muted); stroke-width: 1.5; stroke-linecap: round; }
@@ -64,8 +65,6 @@
 
 @media (max-width: 767.98px) {
   .select-menu-popover { border-radius: 11px; }
-  .select-menu-trigger-toolbar { min-width: 92px; }
-  .select-menu-trigger-pill { max-width: 148px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .select-menu-trigger,

@@ -22,14 +22,6 @@
   width: 100%;
 }
 
-.pi-ecosystem-type-filter.select-menu-trigger-toolbar,
-.pi-ecosystem-sort-filter.select-menu-trigger-toolbar {
-  width: 150px;
-  min-width: 150px;
-  background: var(--al-surface);
-  border-color: var(--al-line-strong);
-}
-
 .pi-ecosystem-heading-status {
   display: flex;
   align-items: center;
@@ -304,12 +296,6 @@
 
   .pi-ecosystem-search {
     grid-column: 1 / -1;
-  }
-
-  .pi-ecosystem-type-filter.select-menu-trigger-toolbar,
-  .pi-ecosystem-sort-filter.select-menu-trigger-toolbar {
-    width: 100%;
-    min-width: 0;
   }
 
   .pi-package-item.ui-disclosure > summary {

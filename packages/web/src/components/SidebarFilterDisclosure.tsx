@@ -12,44 +12,29 @@ type AgentSelection =
 
 interface SidebarFilterDisclosureProps {
   summary?: ReactNode
-  summaryMeta?: ReactNode
-  className?: string
   agents?: AgentFacetDto[]
   agentSelection?: AgentSelection
-  children?: ReactNode
-  defaultOpen?: boolean
   showAllOption?: boolean
   agentOrderManagement?: boolean
-  closeOnOutside?: boolean
-  variant?: 'inline' | 'popover'
-  /** In a filter, selecting an agent from All narrows to that agent instead of excluding it. */
-  multipleSelectionBehavior?: 'toggle' | 'pick-from-all'
 }
 
 /** 工作区左侧筛选的统一折叠壳；页面只提供筛选字段与业务状态。 */
 export function SidebarFilterDisclosure({
   summary,
-  summaryMeta,
-  className = '',
   agents = [],
   agentSelection,
-  children,
-  defaultOpen = false,
   showAllOption = false,
   agentOrderManagement = false,
-  closeOnOutside = false,
-  variant = 'inline',
-  multipleSelectionBehavior = 'toggle',
 }: SidebarFilterDisclosureProps) {
   const { t } = useTranslation('common')
   const { t: tAgents } = useTranslation('agents')
-  const [open, setOpen] = useState(defaultOpen)
+  const [open, setOpen] = useState(false)
   const disclosureRef = useRef<HTMLDetailsElement>(null)
   const [managingOrder, setManagingOrder] = useState(false)
   const [draggedId, setDraggedId] = useState('')
   const { canReorder, move, moveBy, reset } = useIntegrationOrder()
   useEffect(() => {
-    if (!closeOnOutside || !open) return
+    if (!open) return
     const closeOutside = (event: PointerEvent) => {
       const target = event.target
       if (target instanceof Node && !disclosureRef.current?.contains(target)) setOpen(false)
@@ -67,26 +52,19 @@ export function SidebarFilterDisclosure({
       document.removeEventListener('pointerdown', closeOutside)
       document.removeEventListener('keydown', closeEscape)
     }
-  }, [closeOnOutside, open])
+  }, [open])
 
 
   const resolvedSummary = summary ?? t('sidebarFilter.summary')
   const orderedAgents = useOrderedAgents(agents)
   const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
-  const pickFromAll = agentSelection?.mode === 'multiple' && multipleSelectionBehavior === 'pick-from-all'
   const selectedIds = agentSelection?.mode === 'multiple'
-    ? agentSelection.value === null ? (pickFromAll ? [] : detectedIds) : agentSelection.value
+    ? agentSelection.value ?? []
     : agentSelection?.value ? [agentSelection.value] : []
   const allSelected = agentSelection?.mode === 'multiple'
-    ? pickFromAll
-      ? agentSelection.value === null
-      : detectedIds.length > 0 && detectedIds.every(id => selectedIds.includes(id))
+    ? agentSelection.value === null
     : !agentSelection?.value
-  const selectedCount = selectedIds.filter(id => detectedIds.includes(id)).length
   const reorderableAgents = orderedAgents.filter(agent => canReorder(agent.sourceId))
-  const computedSummary = agentSelection?.mode === 'multiple'
-    ? allSelected ? t('sidebarFilter.all') : selectedCount ? t('sidebarFilter.selected', { count: selectedCount }) : t('sidebarFilter.none')
-    : agentSelection?.value ? agentLabel(agentSelection.value, orderedAgents.find(agent => agent.sourceId === agentSelection.value)?.displayName) : t('sidebarFilter.all')
 
   const selectAll = () => {
     if (!agentSelection) return
@@ -106,23 +84,15 @@ export function SidebarFilterDisclosure({
       disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
       return
     }
-    if (pickFromAll) {
-      agentSelection.onChange(nextAgentFilterSelection(agentSelection.value, sourceId, detectedIds))
-      return
-    }
-    const current = agentSelection.value === null ? detectedIds : agentSelection.value
-    const next = current.includes(sourceId)
-      ? current.filter(id => id !== sourceId)
-      : [...current, sourceId]
-    agentSelection.onChange(next)
+    agentSelection.onChange(nextAgentFilterSelection(agentSelection.value, sourceId, detectedIds))
   }
 
   return <Disclosure
     ref={disclosureRef}
-    className={`workspace-sidebar-filter-disclosure ${variant === 'popover' ? 'is-popover' : ''} ${className}`.trim()}
+    className="workspace-sidebar-filter-disclosure"
     summary={resolvedSummary}
     title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
-    summaryMeta={summaryMeta ?? computedSummary}
+    summaryMeta={false}
     open={open}
     onToggle={event => setOpen(event.currentTarget.open)}
   >
@@ -191,6 +161,5 @@ export function SidebarFilterDisclosure({
         </div>
       </> : <Button size="small" onClick={() => setManagingOrder(true)}>{tAgents('page.manageOrder')}</Button>}
     </section>}
-    {children}
   </Disclosure>
 }

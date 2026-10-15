@@ -1,6 +1,6 @@
-/** Task Center uses null for the explicit "all sources" mode, not a mutable
- * list of checked agents. The first click narrows to one agent; later clicks
- * toggle that explicit set without changing the meaning of "all". */
+/** All AgentLens multi-agent filters share the same contract: null means "all",
+ * selecting one agent narrows to that agent, and later clicks toggle explicit IDs.
+ * An empty array stays empty until the user explicitly chooses "all". */
 export function nextAgentFilterSelection(
   selection: readonly string[] | null,
   sourceId: string,
