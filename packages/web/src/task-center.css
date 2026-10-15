@@ -417,6 +417,9 @@
 .host-directory-browser-recent > span { color: var(--al-muted); font-size: 12px; margin-right: 4px; }
 .host-directory-browser-shortcuts .btn,
 .host-directory-browser-recent .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.host-directory-browser-breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; gap: 4px; }
+.host-directory-browser-breadcrumbs > span { display: inline-flex; align-items: center; min-width: 0; gap: 4px; }
+.host-directory-browser-breadcrumbs .btn { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
 .host-directory-browser-results-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; min-width: 0; gap: 8px; padding-top: 9px; border-top: 1px solid var(--al-line); }
 .host-directory-browser-results-head > span { flex: 1 1 auto; min-width: 140px; color: var(--al-ink-2); font-size: 12px; overflow-wrap: anywhere; }
 .host-directory-browser-results-head .ui-field { flex: 0 1 220px; min-width: 130px; }
