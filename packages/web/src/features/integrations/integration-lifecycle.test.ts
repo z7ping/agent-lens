@@ -6,7 +6,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
-import { agentObservationState, integrationLifecycleState, integrationManagementLifecycleState } from './integration-lifecycle'
+import { agentObservationState, agentUpgradeMethods, integrationLifecycleState, integrationManagementLifecycleState, integrationPackageUpdateAvailable } from './integration-lifecycle'
 
 const t = ((key: string) => key) as TFunction
 
@@ -281,4 +281,36 @@ test('agent observation state preserves data-only and scan-failure evidence', ()
     agentObservationState(undefined, discovery('error'), false, t).label,
     'status.scanFailed',
   )
+})
+
+test('Integration upgrade is offered only for a newer verified, compatible bundled version', () => {
+  const base = management().packageState!
+  assert.equal(integrationPackageUpdateAvailable(base), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, availableVersion: '1.0.0-alpha.6' }), true)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, availableVersion: '1.0.0-alpha.4' }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, availableVersion: '1.0.0' }), true)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, availableVersion: undefined }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, installedVersion: undefined }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, availableVersion: 'unknown' }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, installed: false, availableVersion: '9.0.0' }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, integrity: 'invalid', availableVersion: '9.0.0' }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, compatibility: 'incompatible', availableVersion: '9.0.0' }), false)
+  assert.equal(integrationPackageUpdateAvailable({ ...base, restartRequired: true, availableVersion: '9.0.0' }), false)
+  assert.equal(integrationPackageUpdateAvailable(null), false)
+})
+
+test('agent executable upgrade methods use reviewed official commands but no inferred install channel', () => {
+  assert.equal(agentUpgradeMethods('pi')[0]?.command, 'npm install -g @mariozechner/pi-coding-agent@latest')
+  assert.equal(agentUpgradeMethods('codex')[0]?.command, 'npm install -g @openai/codex@latest')
+  assert.equal(agentUpgradeMethods('claude-code')[0]?.command, 'claude update')
+  assert.equal(agentUpgradeMethods('hermes')[0]?.command, 'hermes update')
+  assert.equal(agentUpgradeMethods('opencode')[0]?.command, 'opencode upgrade')
+  assert.deepEqual(agentUpgradeMethods('dsh'), [])
+  assert.deepEqual(agentUpgradeMethods('unknown'), [])
+  for (const id of ['pi', 'codex', 'claude-code', 'hermes', 'opencode']) {
+    for (const method of agentUpgradeMethods(id)) {
+      assert.equal(method.docsUrl.startsWith('https://'), true)
+      assert.equal(method.command.includes('sudo '), false)
+    }
+  }
 })
