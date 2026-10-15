@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import test from 'node:test'
 import {
   discoverOfficialTools,
+  probeAgentCliVersion,
   OfficialToolDiscoveryService,
 } from './tool-discovery'
 
@@ -245,4 +246,9 @@ test('version probe failure cannot turn an installed executable into discovery f
   const pi = items.find(item => item.integrationId === 'pi')
   assert.equal(pi?.presence, 'present')
   assert.equal(pi?.version, undefined)
+})
+
+test('CLI version probe reads --version from the executable without a shell', async () => {
+  const version = await probeAgentCliVersion(process.execPath)
+  assert.match(version ?? '', /^\d+\.\d+\.\d+/)
 })
