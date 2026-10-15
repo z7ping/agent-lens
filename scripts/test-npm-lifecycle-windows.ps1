@@ -24,6 +24,15 @@ try {
   if ($null -eq $hookRunnerCheck) { throw 'doctor 缺少 Windows Hook 启动器检查' }
   if ($hookRunnerCheck.level -ne 'pass') { throw "Windows Hook 启动器检查未通过：$($hookRunnerCheck.detail)" }
 
+  # A restart must wait for the previous service-owned Daemon to exit before
+  # starting another managed process.
+  node dist/cli.mjs service restart
+  if ($LASTEXITCODE -ne 0) { throw '重启 npm 后台服务失败：旧 Daemon 未退出或新服务未就绪' }
+  $restarted = node dist/cli.mjs status --json | ConvertFrom-Json
+  if (-not $restarted.online -or $restarted.owner -ne 'service' -or -not $restarted.lifecycle.active) {
+    throw '重启后 Windows 计划任务与服务持有的 Daemon 未同时就绪'
+  }
+
   # Stop must terminate both the scheduled task and its service-owned daemon.
   # A detached launcher can otherwise pass the start/health assertions.
   node dist/cli.mjs service stop
