@@ -168,7 +168,7 @@ function WorkspaceTopBar({
       item.integrationId === selectedAgentId || item.productId === selectedAgentId
     )
     const isManagement = new URLSearchParams(search).get('view') === 'management'
-    items = [{ label: t('agents') }, { label: isManagement ? t('agentIntegration') : selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
+    items = [{ label: t('agents') }, { label: isManagement ? t('integrationManagement') : selected?.displayName || managed?.displayName || selectedAgentId || t('overview') }]
   } else if (pathname.startsWith('/backup')) {
     items = [{ label: t('assetBackup') }]
   } else {
