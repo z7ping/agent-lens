@@ -165,6 +165,11 @@ def register(ctx: Any) -> None:
         "post_tool_call",
         "on_session_start",
         "on_session_end",
+        "on_session_finalize",
+        "on_session_reset",
+        "subagent_start",
         "subagent_stop",
+        "on_human_input_request",
+        "on_human_input_resolved",
     ):
         ctx.register_hook(event_name, _callback(event_name))

@@ -45,7 +45,7 @@ import { HERMES_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js
 import { hermesRow, tableColumnName, type HermesRow } from './sqlite-rows.js'
 
 const SOURCE_ID = 'hermes'
-const PARSER_VERSION = '3'
+const PARSER_VERSION = '4'
 
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
@@ -680,6 +680,11 @@ function normalizeDbEnvelope(record: SourceRecord, envelope: HermesDbEnvelope): 
       }))
     }
     if (!observations.length) observations.push(candidate(record, envelope, 'message.assistant', { text: '' }))
+  } else if (role === 'system' || role === 'developer') {
+    observations.push(candidate(record, envelope, 'context.injected', {
+      sourceRole: role,
+      text: contentText(message),
+    }))
   } else if (role === 'tool') {
     const callId = stringField(message, 'tool_call_id')
     const content = message.content
@@ -708,6 +713,27 @@ function normalizeHookEnvelope(record: SourceRecord, envelope: HermesHookEnvelop
   }
   if (eventName === 'on_session_end' || eventName === 'session_end') {
     return [candidate(record, envelope, 'session.lifecycle', { event: 'session.ended' })]
+  }
+  if (eventName === 'on_session_finalize' || eventName === 'on_session_reset') {
+    return [candidate(record, envelope, 'session.lifecycle', {
+      event: eventName === 'on_session_finalize' ? 'session.finalized' : 'session.reset',
+      ...(stringField(event, 'reason') ? { reason: stringField(event, 'reason') } : {}),
+      ...(stringField(event, 'old_session_id') ? { oldSessionId: stringField(event, 'old_session_id') } : {}),
+      ...(stringField(event, 'new_session_id') ? { newSessionId: stringField(event, 'new_session_id') } : {}),
+    })]
+  }
+  if (eventName === 'on_human_input_request' || eventName === 'on_human_input_resolved') {
+    const kind = stringField(event, 'kind') ?? 'unknown'
+    const requested = eventName === 'on_human_input_request'
+    const observationKind = kind === 'approval'
+      ? requested ? 'permission.request' : 'permission.response'
+      : 'session.lifecycle'
+    return [candidate(record, envelope, observationKind, {
+      event: requested ? 'human.input.requested' : 'human.input.resolved',
+      kind,
+      ...(stringField(event, 'request_id') ? { requestId: stringField(event, 'request_id') } : {}),
+      // "resolved" does not imply approval: no synthetic grant/deny decision.
+    })]
   }
   if (eventName === 'pre_tool_call') {
     return [candidate(record, envelope, 'tool.call', {
