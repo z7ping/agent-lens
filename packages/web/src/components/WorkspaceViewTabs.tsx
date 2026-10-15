@@ -11,11 +11,12 @@ interface WorkspaceViewTabsProps {
   value: string
   tabs: readonly WorkspaceViewTab[]
   nested?: boolean
+  inline?: boolean
 }
 
 /** Secondary navigation is the same link-based, 40px underline tab across workspaces. */
-export function WorkspaceViewTabs({ label, value, tabs, nested = false }: WorkspaceViewTabsProps) {
-  return <nav className={`workspace-view-tabs ${nested ? 'is-nested' : ''}`} aria-label={label}>
+export function WorkspaceViewTabs({ label, value, tabs, nested = false, inline = false }: WorkspaceViewTabsProps) {
+  return <nav className={`workspace-view-tabs ${nested ? 'is-nested' : ''} ${inline ? 'is-inline' : ''}`.trim()} aria-label={label}>
     {tabs.map(tab => <Link
       key={tab.value}
       to={tab.to}

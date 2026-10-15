@@ -717,6 +717,19 @@
 }
 .workspace-view-tab:focus-visible { border-radius: 4px; outline: 2px solid var(--al-accent); outline-offset: -3px; }
 .workspace-view-tabs.is-nested { flex: 0 0 40px; background: var(--al-canvas); }
+/* Tertiary navigation is inline with its agent, not another workspace-wide bar. */
+.workspace-view-tabs.is-inline {
+  width: auto;
+  height: 32px;
+  min-height: 32px;
+  flex: 0 0 auto;
+  gap: 14px;
+  padding: 0;
+  overflow: visible;
+  border-bottom: 0;
+  background: transparent;
+}
+.workspace-view-tabs.is-inline .workspace-view-tab { font-size: 12px; }
 
 .workspace-view-toolbar {
   position: relative;
