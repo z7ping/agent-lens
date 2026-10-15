@@ -270,7 +270,7 @@ export async function startHttpSurface(
       const url = new URL(request.url ?? '/', `http://${AGENT_LENS_HTTP_HOST}`)
       route = httpRouteLabel(url.pathname)
       if (await handleLiveAttachmentRequest(request, response, url, options.liveAttachments)) return
-      if (await handleLiveRequest(request, response, url, options.lives)) return
+      if (await handleLiveRequest(request, response, url, options.lives, options.selectProjectDirectory)) return
       if (await handlePiLiveRequest(request, response, url, options.piLive, storage, options.lives, options.selectProjectDirectory)) return
       const backgroundBackupRead = request.method === 'GET'
         && url.pathname === '/api/v1/backups'
