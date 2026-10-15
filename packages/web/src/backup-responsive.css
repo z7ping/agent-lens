@@ -13,7 +13,6 @@
     padding-inline: 7px;
   }
 
-  .backup-content { padding-inline: 18px; }
 
   .backup-asset-overview {
     flex-wrap: wrap;
@@ -83,7 +82,6 @@
     padding-inline: 8px;
   }
 
-  .backup-content { padding: 20px 14px 48px; }
 
   .backup-asset-overview {
     padding: 11px 12px;
