@@ -275,11 +275,6 @@
   font-size: 12px;
   line-height: 1.32;
 }
-.task-center-rail .session-item-meta .source-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-}
 .task-center-rail .session-item-meta .session-item-source {
   max-width: 42%;
   flex: 0 1 auto;
@@ -288,7 +283,7 @@
   min-width: 0;
   flex: 1 1 0;
 }
-.task-center-rail .session-item-meta > span:not(.source-dot):not(.pi-live-pulse):not(.pi-live-idle-dot) {
+.task-center-rail .session-item-meta > span:not(.source-dot):not(.agent-logo):not(.pi-live-pulse):not(.pi-live-idle-dot) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
