@@ -107,6 +107,26 @@ test('Live protocol validates normalized streaming events without vendor payload
 })
 
 
+test('Live tool parentCallId survives normalized start and end without guessing MCP source', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'tool.start', callId: 'codemode/0', parentToolCallId: 'codemode',
+    name: 'mcp__dbx__execute_query', toolSourceType: 'mcp', mcpServerId: 'dbx',
+  }), {
+    type: 'tool.start', callId: 'codemode/0', parentToolCallId: 'codemode',
+    name: 'mcp__dbx__execute_query', toolSourceType: 'mcp', mcpServerId: 'dbx',
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'tool.end', callId: 'codemode/0', parentToolCallId: 'codemode',
+    status: 'success',
+  }), {
+    type: 'tool.end', callId: 'codemode/0', parentToolCallId: 'codemode',
+    status: 'success',
+  })
+  const unknown = parseLiveEventDto({ type: 'tool.start', name: 'mcp__dbx__execute_query' })
+  assert.ok(unknown?.type === 'tool.start')
+  assert.equal(unknown.toolSourceType, undefined)
+})
+
 test('Live protocol preserves opaque model values without vendor fields', () => {
   const parsed = parseLiveModelControlDto({
     capability: 'model-switching',
