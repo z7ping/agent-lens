@@ -15,6 +15,8 @@ import {
   type ReviewResponseDto,
   type ReviewSessionDetailDto,
   type ReviewSessionSummaryDto,
+  ToolRegistrationIndex,
+  type TimelineItemDto,
 } from '@agent-lens/protocol'
 import {
   decodeReviewCursor,
@@ -288,6 +290,43 @@ export class ReviewProjection {
 
     const pagerStartedAt = performance.now()
     const result = await this.pager.forQuery(logicalSessionId, query, summary)
+    // Registration facts can precede the current page/turn, so an isolated
+    // interaction cannot safely recover historical origin.
+    const unresolved = query.process !== 'summary' && result.interactions.some(interaction =>
+      interaction.nodes.some(node => node.type === 'tool'
+        && !node.toolSourceType
+        && typeof asRecord(node.payload).runtimeId === 'string'))
+    if (unresolved) {
+      const registrations = await this.timeline.query({
+        logicalSessionId,
+        kind: 'tool.registration',
+        direction: 'forward',
+        limit: 1000,
+      })
+      // A truncated register log must not produce a false historical owner.
+      if (!registrations.meta.hasMore) {
+        const index = new ToolRegistrationIndex(registrations.items)
+        for (const interaction of result.interactions) {
+          for (const node of interaction.nodes) {
+            if (node.type !== 'tool' || node.toolSourceType) continue
+            const call = {
+              id: node.id,
+              kind: 'tool.call' as const,
+              installationId: summary.installationId,
+              sourceId: node.sourceId,
+              effectiveAt: node.at,
+              payload: node.payload,
+            } as TimelineItemDto
+            const origin = index.resolve(call)
+            if (!origin) continue
+            node.toolSourceType = origin.toolSourceType
+            if (origin.mcpServerId) node.mcpServerId = origin.mcpServerId
+            node.registrationObservationId = origin.registrationObservationId
+            node.evidence = [...node.evidence, ...origin.evidence]
+          }
+        }
+      }
+    }
     logSlowReviewPhase('detail-pager', pagerStartedAt, {
       interactions: result.interactions.length,
       filter: query.filter ?? 'all',
