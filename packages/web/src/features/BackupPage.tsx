@@ -457,16 +457,13 @@ export function BackupPage({
     </label>
   }
 
-  const backupScopeFilter = <SidebarFilterDisclosure
-        variant="popover"
-        className="backup-agent-filter"
-        closeOnOutside
+  const backupScopeFilter = <div className="backup-agent-filter-slot"><SidebarFilterDisclosure
         showAllOption
         summary={selectedAssetSourceId ? agentLabel(selectedAssetSourceId, agents.find(agent => agent.sourceId === selectedAssetSourceId)?.displayName) : t('common:sidebarFilter.allAgents')}
         summaryMeta={false}
         agents={agents}
         agentSelection={{ mode: 'single', value: selectedAssetSourceId, onChange: onSelectedAssetSourceIdChange }}
-      />
+      /></div>
 
   return <>
     <main className="workspace-page backup-page">
