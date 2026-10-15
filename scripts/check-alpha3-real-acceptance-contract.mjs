@@ -7,6 +7,8 @@ const realSmokeWorkflow = readFileSync('.github/workflows/alpha3-task-center-rea
 const round = readFileSync('packages/web/src/features/TaskRound.tsx', 'utf8')
 const message = readFileSync('packages/web/src/features/TaskMessage.tsx', 'utf8')
 const thinking = readFileSync('packages/web/src/features/TaskThinking.tsx', 'utf8')
+const processGroup = readFileSync('packages/web/src/features/TaskProcessGroup.tsx', 'utf8')
+const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
 const toolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'utf8')
 const toolRow = readFileSync('packages/web/src/features/TaskToolRow.tsx', 'utf8')
 const toolModel = readFileSync('packages/web/src/features/task-detail-model.ts', 'utf8')
@@ -86,8 +88,10 @@ requireText(soak, /JSHeapUsedSize/, '长时验收必须采集 JS Heap')
 requireText(soak, /residentSet/, '长时验收必须采集 Renderer RSS')
 requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 
-/* Thinking：单一 disclosure，默认展开，用户可主动折叠。 */
-requireText(thinking, /defaultExpanded\s*=\s*true/, 'Thinking 必须默认展开')
+/* Thinking 的独立展开策略不等于 Process 默认值；历史与运行中处理详情应默认折叠。 */
+requireText(processGroup, /defaultExpanded\s*=\s*false/, '共享 Process 必须默认折叠')
+requireText(processGroup, /kind="process"[\s\S]*?defaultExpanded=\{defaultExpanded\}/, 'Process 必须将折叠策略传递给共享 TaskThinking')
+requireText(reviewPage, /<TaskProcessGroup[\s\S]*?defaultExpanded=\{false\}/, 'Review Process 必须默认折叠')
 requireText(thinking, /useState\(\(\) => expansionStore\?\.get\(model\.id\) \?\? defaultExpanded\)/, 'Thinking 必须按语义 ID 初始化可保存的折叠状态')
 requireText(thinking, /expansionStore\?\.set\(model\.id, next\)/, 'Thinking 用户切换必须写回展开意图')
 requireText(thinking, /className={`task-thinking/, 'Thinking 必须使用共享 Task Surface 语义类')
@@ -122,7 +126,7 @@ requireText(toolRow, /streaming=\{model\.status === 'running'\}/, '运行中结�
 requireText(piTaskRound, /startedAtMs/, 'Pi Running Tool 必须保留本轮起始时间')
 requireText(piTaskRound, /<TaskProcessGroup[\s\S]*?state="settled"[\s\S]*?defaultExpanded=\{false\}/, 'Pi 历史 Process 必须复用共享组件并默认折叠')
 const sharedHistoryEntries = piTaskRound.match(/<HistoryEntries\b/g) ?? []
-if (sharedHistoryEntries.length < 2) failures.push('Pi History / Running Thinking 必须共用默认展开的共享渲染链路')
+if (sharedHistoryEntries.length < 2) failures.push('Pi History / Running Process 必须共用 HistoryEntries 渲染链路')
 
 /* Task Surface 视觉与响应式只有 task-detail.css 一个所有者。 */
 requireText(round, /task-round interaction-block/, 'Round 必须保留稳定阅读锚点')
