@@ -12,7 +12,7 @@ import { copyText } from '../client/clipboard'
 import { useClientSnapshot } from '../App'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
-import { Button, Dialog, Disclosure, IconButton, Input, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   agentUpgradeMethods,
   integrationCanInstall,
@@ -426,7 +426,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const targetIntegrationId = searchParams.get('agent') ?? ''
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
@@ -460,7 +459,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     const timer = window.setTimeout(() => {
       const target = [...document.querySelectorAll<HTMLElement>('[data-integration]')]
         .find(node => node.dataset.integration === targetIntegrationId)
-      target?.scrollIntoView({ block: 'center', behavior: 'auto' })
+      target?.scrollIntoView({ block: 'nearest', behavior: 'auto' })
     }, 0)
     return () => window.clearTimeout(timer)
   }, [management, targetIntegrationId])
@@ -481,9 +480,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     || management?.discovery.status === 'scanning'
   const discoveryFailed = Boolean(snapshot.integrationDiscoveryError)
   const filteredItems = items.filter(item => {
-    const query = searchQuery.trim().toLocaleLowerCase()
-    if (query && ![item.displayName, item.integrationId, item.productId]
-      .some(text => text.toLocaleLowerCase().includes(query))) return false
     if (statusFilter === 'detected') return isDetected(item)
     if (statusFilter === 'installed') return Boolean(item.packageState?.installed)
     if (statusFilter === 'enabled') return item.enabled.configured
@@ -506,9 +502,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   return <main className="workspace-page">
     {toolbarHost ? createPortal(
       <div className="workspace-view-controls" aria-label={t('managementPage.summaryAria')}>
-        <div className="workspace-view-filter">
-          <Input value={searchQuery} onChange={event => { setSearchQuery(event.target.value); setOrdering(false) }} aria-label={t('managementPage.searchAria')} placeholder={t('managementPage.searchPlaceholder')}/>
-        </div>
         <div className="workspace-view-filter workspace-view-filter-time">
           <SelectMenu value={statusFilter} onChange={value => { setStatusFilter(value as typeof statusFilter); setOrdering(false) }} ariaLabel={t('managementPage.statusFilterAria')} options={[
             { value: 'all', label: t('managementPage.allStatuses') },
@@ -518,7 +511,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           ]}/>
         </div>
         <div className="workspace-view-filter-actions">
-          <Button size="small" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setOrdering(value => !value) }}>
+          <Button size="small" onClick={() => { setStatusFilter('all'); setOrdering(value => !value) }}>
             {ordering ? t('page.orderDone') : t('page.manageOrder')}
           </Button>
         </div>
@@ -590,7 +583,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             discoveryError={snapshot.integrationDiscoveryError}
             highlighted={item.integrationId === targetIntegrationId}
           />)}
-          {!primaryItems.length && <div className="integration-management-empty">{supportedItems.length === 0 && (searchQuery.trim() || statusFilter !== 'all') ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
+          {!primaryItems.length && <div className="integration-management-empty">{supportedItems.length === 0 && statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
           </div>
         </section>
 
