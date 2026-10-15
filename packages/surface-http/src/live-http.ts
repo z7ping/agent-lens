@@ -28,6 +28,7 @@ import type {
 import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
+import { validateHostWorkingDirectory } from './host-working-directory'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const MAX_LIVE_MESSAGE_ACTIONS = 16
@@ -854,6 +855,18 @@ export async function handleLiveRequest(
   if (url.pathname === '/api/v1/live/attachments' || url.pathname.startsWith('/api/v1/live/attachments/')) return false
 
   try {
+    if (url.pathname === '/api/v1/live/project-directory/validate') {
+      if (request.method !== 'POST') {
+        writeJson(response, 405, { error: 'method_not_allowed' })
+        return true
+      }
+      const input = objectBody(await readJson(request))
+      const workspacePath = optionalString(input.workspacePath)
+      if (!workspacePath || workspacePath.length > 4096) throw httpError(400, 'workspacePath must be a valid absolute directory')
+      writeJson(response, 200, { workspacePath: await validateHostWorkingDirectory(workspacePath) })
+      return true
+    }
+
     if (url.pathname === '/api/v1/live/project-directory') {
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })
