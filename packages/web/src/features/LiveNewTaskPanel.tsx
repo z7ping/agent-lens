@@ -5,6 +5,7 @@ import { liveApi } from '../client/live'
 import { selectHostProjectDirectory } from '../client/host-directory'
 import { Button, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
+import { AgentLogo } from '../components/AgentLogo'
 import { pickTaskProject, type TaskProjectOption } from './task-center'
 
 export interface LiveNewTaskPanelProps {
@@ -103,6 +104,7 @@ export function LiveNewTaskPanel({
   const agentOptions = useMemo(() => products.map(product => ({
     value: product.liveId,
     label: product.displayName,
+    leading: <AgentLogo sourceId={product.productId} size="compact"/>,
     description: product.availability.available
       ? t('center.newTask.ready')
       : t('center.newTask.agentUnavailableShort'),

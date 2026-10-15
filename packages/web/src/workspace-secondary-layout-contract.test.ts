@@ -14,11 +14,13 @@ const agentsPage = readFileSync(new URL('./features/AgentsPage.tsx', import.meta
 const management = readFileSync(new URL('./features/IntegrationManagementPage.tsx', import.meta.url), 'utf8')
 const backup = readFileSync(new URL('./features/BackupPage.tsx', import.meta.url), 'utf8')
 
-test('four workspaces share a 50px title, 40px linked tabs and an independent business toolbar', () => {
+test('non-task workspaces share 40px linked tabs, a stable toolbar and no duplicate title', () => {
+  assert.match(app, /!hasWorkspaceTabs && <WorkspaceTopBar/)
   assert.match(app, /<WorkspaceTopBar/)
   assert.match(app, /<WorkspaceViewTabs/)
   assert.match(app, /className="workspace-view-toolbar"/)
   assert.match(css, /\.workspace-view-tabs\s*\{[\s\S]*?height:\s*40px;/)
+  assert.doesNotMatch(css.match(/\.app-shell\s*\{([^}]*)\}/)?.[1] ?? '', /transition:\s*grid-template-columns/)
   assert.match(css, /\.workspace-view-toolbar\s*\{[\s\S]*?min-height:\s*48px;/)
   assert.match(tabs, /<Link/)
   assert.match(tabs, /aria-current=\{value === tab.value \? 'page'/)

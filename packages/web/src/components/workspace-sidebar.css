@@ -13,7 +13,7 @@
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--al-canvas);
-  transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1);
+
 }
 
 /* 智能体、资产备份不显示会话/上下文栏，只保留全局 40px 导航轨。 */
@@ -674,7 +674,7 @@
   flex: 1;
 }
 
-/* Common workspace structure: title (50px), secondary links (40px), business tools (min 48px). */
+/* Shared workspace: 40px secondary links and 48px business tools; no duplicate page title. */
 .workspace-view-tabs {
   display: flex;
   width: 100%;
@@ -692,6 +692,7 @@
   scrollbar-width: none;
 }
 .workspace-view-tabs::-webkit-scrollbar { display: none; }
+.workspace-view-tabs > .workspace-mobile-nav-button { display: none; }
 .workspace-view-tab {
   position: relative;
   display: flex;
@@ -757,6 +758,7 @@
 
 @media (max-width: 767.98px) {
   .workspace-view-tabs { gap: 16px; padding-inline: 12px; }
+  .workspace-view-tabs > .workspace-mobile-nav-button { display: inline-flex; flex: 0 0 auto; align-self: center; }
   .workspace-view-toolbar { flex-wrap: wrap; padding: 7px 12px; }
   .workspace-view-toolbar-content, .workspace-view-controls { flex-wrap: wrap; }
   .workspace-view-filter { width: auto; flex: 1 1 140px; }

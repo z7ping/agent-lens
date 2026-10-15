@@ -12,6 +12,7 @@
 }
 .agents-responsive-shell > .workspace-page { min-height: auto; flex: none; }
 .agents-responsive-shell .agents-content { overflow: visible; padding-bottom: 0; }
+.agents-responsive-shell.is-management .integration-management-content { overflow: visible; }
 .agents-responsive-shell .cross-agent-matrix { display: none; }
 .agents-responsive-shell .skill-funnel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .agents-responsive-shell .skill-funnel > .skill-funnel-row {

@@ -69,11 +69,11 @@ tokens
 
 ### 工作区顶栏
 
-- `Agents / Insights / Tools / Backup` 等一级工作区统一使用**单行 Workspace Topbar**：左侧当前位置（Breadcrumb）、中间页面级视图/范围控件、右侧页面操作必须共用同一横向层。
-- 面包屑不得再单独占一行；页面也不得在统一 Topbar 下再追加第二条 `workspace-toolbar` 来承载同级视图切换或一级操作。
-- 页面自身有状态切换或操作时，通过工作区提供的 Page Tools Host / 共享 ToolbarGroup 注入统一 Topbar；不要复制第二套 Header。
-- Task Center / Review / Pi Live 若因任务执行态确需独立上下文工具条，可以保留任务域工具条，但不能把普通一级页面的单行 Topbar 退化为两层导航。
-- 窄屏优先保留页面操作；可缩短/隐藏低优先级面包屑信息，但不得把同一级控件重新折成第二行。
+- `Agents / Insights / Tools / Backup` 的一级位置由左侧导航表达，桌面端不再重复展示独占一行的标题。
+- 非任务工作区共用 40px 下划线二级导航与至少 48px 的业务工具栏；筛选位于左侧、操作位于右侧，禁止新增页面私有导航或重复 Toolbar。
+- Task Center / Review / Pi Live 保留必要的会话面包屑与任务上下文。
+- 窄屏侧栏按钮放在共享二级标签行；工作区切换禁止对主列宽施加滑动动画，正文滚动容器尽量保持稳定。
+
 ### 间距与视觉分组
 
 - 状态点 / 图标与相邻文字必须通过 `flex/grid + gap` 明确控制，**不得依赖 JSX / HTML 空白字符形成视觉间距**。

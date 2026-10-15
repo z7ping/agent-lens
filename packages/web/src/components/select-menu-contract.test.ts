@@ -35,6 +35,17 @@ test('项目与智能体共享 32px 规格，页面不得覆盖高度和交互',
   assert.doesNotMatch(selectSource, /SelectMenuVariant|menuWidth|variant\?:|className\?:/)
 })
 
+test('SelectMenu 用可选前置标识保持智能体品牌与其他筛选控件语义一致', () => {
+  const agentOverview = readFileSync(new URL('../features/AgentsResponsivePage.tsx', import.meta.url), 'utf8')
+  const selectCss = readFileSync(new URL('./select-menu.css', import.meta.url), 'utf8')
+  assert.match(selectSource, /leading\?: ReactNode/)
+  assert.match(selectSource, /selected\?\.leading/)
+  assert.match(selectSource, /option\.leading/)
+  assert.match(agentOverview, /leading: <AgentLogo sourceId=\{agent\.sourceId\} size="compact"\/>/)
+  assert.match(liveNewTaskSource, /leading: <AgentLogo sourceId=\{product\.productId\} size="compact"\/>/)
+  assert.match(selectCss, /\.select-menu-trigger-leading/)
+})
+
 test('SelectMenu 提供键盘、搜索、选中态与窗口安全定位', () => {
   assert.match(selectSource, /aria-haspopup="listbox"/)
   assert.match(selectSource, /aria-activedescendant=/)
