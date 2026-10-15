@@ -11,7 +11,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { copyText } from '../client/clipboard'
 import { useClientSnapshot } from '../App'
-import { sourceDot } from '../components/AgentScope'
+import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { Button, Dialog, Disclosure, IconButton, Input, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
@@ -259,7 +259,7 @@ function IntegrationManagementRow({
       open={expanded}
       onToggle={event => setExpanded(event.currentTarget.open)}
       summary={<span className="integration-management-identity">
-        <span className={`source-dot ${sourceDot(item.integrationId)}`} aria-hidden="true"/>
+        <AgentLogo sourceId={item.integrationId} size="large"/>
         <span className="integration-management-identity-text">
           <b>{item.displayName}</b>
           <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
@@ -461,7 +461,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const [ordering, setOrdering] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
-  const [supportedExpanded, setSupportedExpanded] = useState(false)
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
   const { ordered } = useIntegrationOrder()
@@ -524,11 +523,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   })
   const primaryItems = filteredItems.filter(item => discoveryFailed || isPrimaryRow(item))
   const supportedItems = discoveryFailed ? [] : filteredItems.filter(item => !isPrimaryRow(item))
-  const revealSupported = Boolean(searchQuery.trim() || statusFilter !== 'all'
-    || supportedItems.some(item => item.integrationId === targetIntegrationId))
-  useEffect(() => {
-    if (revealSupported) setSupportedExpanded(true)
-  }, [revealSupported, searchQuery, statusFilter, targetIntegrationId])
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
@@ -595,28 +589,24 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
         </section>
 
         {supportedItems.length > 0 && <section className="integration-management-section integration-management-section-secondary">
-          <Disclosure
-            className="integration-management-supported-disclosure"
-            open={supportedExpanded}
-            onToggle={event => setSupportedExpanded(event.currentTarget.open)}
-            summary={t('managementPage.otherSupported')}
-            summaryMeta={<span className="integration-management-section-count">{supportedItems.length}</span>}
-          >
-            <div className="integration-management-list">
-          {supportedItems.map((item, index) => <IntegrationManagementRow
-            key={item.integrationId}
-            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-            installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations}
-            moveUpTargetId={supportedItems[index - 1]?.integrationId}
-            moveDownTargetId={supportedItems[index + 1]?.integrationId}
-            model={model}
-            discoveryScanning={Boolean(discoveryScanning)}
-            discoveryError={snapshot.integrationDiscoveryError}
-            ordering={ordering}
-            highlighted={item.integrationId === targetIntegrationId}
-          />)}
-            </div>
-          </Disclosure>
+          <div className="integration-management-section-head">
+            <h2>{t('managementPage.otherSupported')}</h2>
+            <span className="integration-management-section-count">{supportedItems.length}</span>
+          </div>
+          <div className="integration-management-list">
+            {supportedItems.map((item, index) => <IntegrationManagementRow
+              key={item.integrationId}
+              item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+              installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations}
+              moveUpTargetId={supportedItems[index - 1]?.integrationId}
+              moveDownTargetId={supportedItems[index + 1]?.integrationId}
+              model={model}
+              discoveryScanning={Boolean(discoveryScanning)}
+              discoveryError={snapshot.integrationDiscoveryError}
+              ordering={ordering}
+              highlighted={item.integrationId === targetIntegrationId}
+            />)}
+          </div>
         </section>}
       </div>
     </div>
