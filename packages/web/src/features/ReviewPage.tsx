@@ -781,7 +781,8 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
     secondary: info.secondary || undefined,
     ...(node.input === undefined ? {} : { rawInput: typeof node.input === 'string' ? node.input : JSON.stringify(node.input, null, 2) ?? '' }),
     ...(node.output === undefined ? {} : { output: toolOutputText(node.output) }),
-    durationLabel: node.durationMs !== undefined && node.durationMs > 0 ? duration(node.durationMs) : formatClock(node.at),
+    ...(node.durationMs !== undefined && Number.isFinite(node.durationMs) && node.durationMs >= 0
+      ? { durationMs: node.durationMs } : {}),
   }
 }
 

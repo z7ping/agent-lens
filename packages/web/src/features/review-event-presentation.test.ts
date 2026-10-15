@@ -24,3 +24,10 @@ test('多个文件变更保留首个文件名和准确数量', () => {
   assert.equal(reviewArtifactLabel(payload), '文件变更')
   assert.equal(reviewArtifactSummary(payload), 'a.ts 等 2 个文件')
 })
+
+test('Codex 原生 image.generation 与通用 image.generate 都显示为图片生成', () => {
+  for (const action of ['image.generation', 'image.generate']) {
+    assert.equal(reviewArtifactLabel({ action }), '生成图片')
+    assert.equal(reviewArtifactSummary({ action, path: '/workspace/generated.png' }), '/workspace/generated.png')
+  }
+})

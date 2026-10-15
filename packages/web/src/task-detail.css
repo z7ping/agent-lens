@@ -418,8 +418,6 @@
 .task-surface .task-process-thinking-card > .task-thinking-content { margin: 0; padding: 4px 8px 8px; }
 .task-surface .task-process-sequence .task-tool-group { margin-left: 0; }
 .task-surface .task-process-sequence .task-tool-list { padding-left: 0; border-left: 0; }
-.task-surface .task-process-sequence .task-tool-call[data-kind='shell'] > .task-tool-row { grid-template-columns: 16px minmax(0, 1fr) 18px 14px; }
-.task-surface .task-process-sequence .task-tool-kind-shell > span:last-child { display: none; }
 /* Preserve explicit native reasoning ancestry without moving events. */
 .task-surface .task-tool-call { min-width: 0; margin: 2px 0; overflow: hidden; border: 0; border-radius: 6px; }
 .task-surface .task-tool-call > summary.task-tool-row {

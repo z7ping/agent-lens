@@ -36,7 +36,7 @@ export function reviewArtifactLabel(payload: JsonValue): string | undefined {
   const value = record(payload)
   const action = stringValue(value, 'action', 'event', 'type').toLowerCase()
   if (action === 'image.view') return agentLensI18n.t('review:local.event.imageViewed')
-  if (action === 'image.generate') return agentLensI18n.t('review:local.event.imageGenerated')
+  if (action === 'image.generate' || action === 'image.generation') return agentLensI18n.t('review:local.event.imageGenerated')
   if (action !== 'file.change') return undefined
 
   const types = new Set(artifactChangeTypes(value.changes))
@@ -56,7 +56,7 @@ export function reviewArtifactSummary(payload: JsonValue): string {
       ? names[0]!
       : agentLensI18n.t('review:local.event.filesCount', { count: names.length, first: names[0] })
   }
-  if (action === 'image.view' || action === 'image.generate') {
+  if (action === 'image.view' || action === 'image.generate' || action === 'image.generation') {
     return stringValue(value, 'path', 'savedPath', 'saved_path')
   }
   return action
@@ -69,6 +69,7 @@ export function reviewArtifactSummary(payload: JsonValue): string {
  */
 export function reviewEventLabel(node: ReviewEventNodeDto): string {
   if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupInfo')
+  if (node.kind === 'thinking.level.changed') return agentLensI18n.t('review:local.event.thinkingLevelChanged')
   const payload = record(node.payload)
   const action = stringValue(payload, 'action', 'event', 'type', 'status').toLowerCase()
 

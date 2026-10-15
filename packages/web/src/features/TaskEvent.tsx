@@ -2,9 +2,20 @@ import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { Drawer } from '../components/ui'
-import { UiIcon } from '../components/UiIcon'
+import { UiIcon, type UiIconName } from '../components/UiIcon'
 import { useTaskSurfaceView } from './TaskSurface'
-import type { TaskEventModel } from './task-detail-model'
+import type { TaskEventCategory, TaskEventModel } from './task-detail-model'
+
+const EVENT_ICONS: Record<TaskEventCategory, UiIconName> = {
+  permission: 'event-permission',
+  subagent: 'event-subagent',
+  context: 'event-context',
+  model: 'agent',
+  lifecycle: 'clock',
+  artifact: 'folder-open',
+  usage: 'trend',
+  unknown: 'exclamation',
+}
 
 export function TaskEvent({
   model,
@@ -23,7 +34,7 @@ export function TaskEvent({
   if (model.category === 'usage' && !showUsageDetails) return null
 
   const content = <>
-    <span className="task-event-mark"><UiIcon name="clock" size={14}/></span>
+    <span className="task-event-mark"><UiIcon name={EVENT_ICONS[model.category]} size={14}/></span>
     <span className="task-event-copy"><b>{model.label}</b>{model.summary && <small>{model.summary}</small>}</span>
     {meta}
     {model.sourceLabel && <span className="task-event-source">{model.sourceLabel}</span>}

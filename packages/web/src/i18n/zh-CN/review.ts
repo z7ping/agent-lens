@@ -86,6 +86,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         turnStop: '轮次停止',
         contextSummary: '上下文摘要',
         modelChanged: '模型切换',
+        thinkingLevelChanged: '思考级别调整',
         branchSummary: '分支摘要',
         filesAdded: '新增文件',
         filesDeleted: '删除文件',

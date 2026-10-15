@@ -86,6 +86,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         turnStop: 'Turn stopped',
         contextSummary: 'Context summary',
         modelChanged: 'Model changed',
+        thinkingLevelChanged: 'Thinking level changed',
         branchSummary: 'Branch summary',
         filesAdded: 'Files added',
         filesDeleted: 'Files deleted',
