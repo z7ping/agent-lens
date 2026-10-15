@@ -25,6 +25,7 @@ export * from './review'
 export * from './session'
 export * from './source-record'
 export * from './timeline'
+export * from './tool-registration'
 export * from './usage'
 
 export * from './host-file-preview'
