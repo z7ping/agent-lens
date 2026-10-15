@@ -201,6 +201,8 @@ export interface ReviewToolNodeDto extends ReviewNodeSourceDto {
   callId?: string
   toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown'
   mcpServerId?: string
+  /** Canonical registration fact supporting attribution, when available. */
+  registrationObservationId?: string
   status: 'running' | 'success' | 'error' | 'unknown'
   startedAt: string
   endedAt?: string
