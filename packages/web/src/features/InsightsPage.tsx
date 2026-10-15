@@ -8,7 +8,6 @@ import { InsightsClientModel } from '../client/insights-model'
 import { useClientSnapshot } from '../App'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { BackgroundDataNotice } from '../components/BackgroundDataNotice'
-import { CompactPageHeading } from '../components/CompactPageHeading'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { Disclosure, IconButton, SelectMenu, UiIcon } from '../components/ui'
@@ -128,8 +127,6 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
     {toolbarHost ? createPortal(toolbarFilters, toolbarHost) : null}
     <main className="workspace-page insights-page">
       <div className="page-content insights-content">
-        <CompactPageHeading title={t('page.title')} description={t('page.description')}/>
-
         {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
 
         {insights.loading && !data ? <WorkspaceSkeleton kind="table"/> : data && data.summary.sessionCount > 0 ? <>
