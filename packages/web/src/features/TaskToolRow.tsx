@@ -72,7 +72,16 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     : model.kind
   const target = taskToolTargetText(model, visualKind)
   const hasTarget = target !== '—' && Boolean(target.trim())
-  const heading = visualKind === 'shell' && hasTarget ? target : model.name
+  const mcpPrefix = model.toolSourceType === 'mcp' && model.mcpServerId
+    ? `mcp__${model.mcpServerId}__`
+    : undefined
+  const mcpToolName = mcpPrefix && model.name.startsWith(mcpPrefix)
+    ? model.name.slice(mcpPrefix.length)
+    : model.name
+  const heading = visualKind === 'shell' && hasTarget ? target
+    : model.toolSourceType === 'mcp' && model.mcpServerId
+      ? `${model.mcpServerId} · ${mcpToolName}`
+      : model.name
   // A preview is not necessarily the original invocation. Show it as a
   // summary rather than silently relabeling it as complete input parameters.
   const input = model.rawInput
