@@ -415,15 +415,6 @@
   border-top: 1px solid var(--al-line);
 }
 
-.integration-management-order-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  margin-left: 4px;
-  padding-left: 8px;
-  border-left: 1px solid var(--al-line);
-}
-
 .integration-management-error {
   margin: 0;
   padding: 8px 10px;
@@ -512,4 +503,28 @@
   .integration-management-actions {
     gap: 6px;
   }
+}
+
+/* Dedicated ordering mode: one flat list, no nested integration disclosures. */
+.integration-management-order-list { min-width: 0; }
+.integration-management-order-row {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 16px;
+  background: var(--al-surface);
+}
+.integration-management-order-row + .integration-management-order-row { border-top: 1px solid var(--al-line); }
+.integration-management-order-row:hover { background: var(--al-soft-2); }
+.integration-management-order-row[data-dragging='true'] { background: var(--al-accent-soft); }
+.integration-management-order-grip { flex: 0 0 auto; color: var(--al-muted-2); cursor: grab; }
+.integration-management-order-number { min-width: 18px; color: var(--al-muted-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.integration-management-order-name { min-width: 0; flex: 1; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.integration-management-order-buttons { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
+.integration-management-order-hint { flex: 1; color: var(--al-muted); font-size: 12px; }
+@media (max-width: 767.98px) {
+  .integration-management-order-row { gap: 8px; padding: 7px 12px; }
+  .integration-management-order-hint { display: none; }
 }
