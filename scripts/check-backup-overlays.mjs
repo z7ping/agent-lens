@@ -28,8 +28,9 @@ if (main.includes("import './backup-scroll.css'") || existsSync('packages/web/sr
 
 for (const required of [
   'className="workspace-page backup-page"',
-  'createPortal(<div className="backup-toolbar-controls"',
-  'className="backup-agent-filter-slot"',
+  'createPortal(<div className="workspace-view-controls"',
+  '<div className="workspace-view-filter">{backupScopeFilter}</div>',
+  '<div className="workspace-view-filter-actions">',
   'className="backup-agent-list"',
   'className="backup-agent-item"',
   'className="backup-agent-group"',
@@ -122,4 +123,4 @@ if (!page.includes("useState<string[] | null>(null)") || !page.includes('const s
   throw new Error('渐进扫描期间必须以“全部已检测智能体”作为动态默认范围，不得锁定为首个完成的智能体')
 }
 
-console.log('资产备份单行 Topbar / 滚动所有权 / Overlay / 目录树 / 解释层性能 / 渐进加载检查通过')
+console.log('资产备份统一工具栏 / 滚动所有权 / Overlay / 目录树 / 解释层性能 / 渐进加载检查通过')
