@@ -31,7 +31,6 @@ import { runPluginCommand } from './plugin-command'
 import { waitForServiceStop } from './service-stop-settlement'
 import {
   getLifecycleStatus,
-  serviceRestart,
   serviceStart,
   serviceStop,
   setAutostart,
@@ -506,16 +505,14 @@ async function runService(action: string, json: boolean): Promise<number> {
   }
 
   let lifecycle: LifecycleStatus
-  if (action === 'start') lifecycle = await serviceStart(options)
-  else if (action === 'stop') lifecycle = await serviceStop(options)
-  else if (action === 'restart') lifecycle = await serviceRestart(options)
-  else lifecycle = await getLifecycleStatus(options)
-
-  let health = await healthOrNull()
-  if (startsService && !health) health = await waitForHealth()
-  if (action === 'stop') {
-    // Stop-ScheduledTask can mark the PowerShell task Ready before its child
-    // Node Daemon exits. Keep the release gate strict: settle both facts.
+  let health: Record<string, unknown> | null = null
+  if (action === 'start') {
+    lifecycle = await serviceStart(options)
+  } else if (action === 'stop' || action === 'restart') {
+    lifecycle = await serviceStop(options)
+    health = await healthOrNull()
+    // Task Scheduler may report Ready while the child Daemon still owns
+    // the runtime. A restart must not launch until both have settled.
     await waitForServiceStop(
       { taskActive: lifecycle.active, serviceOwnedRuntimeOnline: Boolean(health && runtimeOwner(health) === 'service') },
       async () => {
@@ -525,7 +522,24 @@ async function runService(action: string, json: boolean): Promise<number> {
       async ms => { await delay(ms) },
       { timeoutMs: lifecycle.manager === 'windows-task-scheduler' ? 12_000 : 4_000 },
     )
+    if (action === 'restart') {
+      if (lifecycle.active || (health && runtimeOwner(health) === 'service')) {
+        const message = `旧后台服务尚未完全退出，拒绝重启：${lifecycleDetail(lifecycle)}；运行时=${health ? runtimeOwnerLabel(runtimeOwner(health)) : '离线'}`
+        if (json) console.log(JSON.stringify({
+          ok: false, action, reason: 'service-still-running', message, lifecycle,
+        }, null, 2))
+        else console.log(message)
+        return 1
+      }
+      lifecycle = await serviceStart(options)
+      health = await healthOrNull()
+    }
+  } else {
+    lifecycle = await getLifecycleStatus(options)
   }
+
+  if (!health) health = await healthOrNull()
+  if (startsService && !health) health = await waitForHealth()
   if (action !== 'status') lifecycle = await getLifecycleStatus(options)
 
   const owner = health ? runtimeOwner(health) : null
