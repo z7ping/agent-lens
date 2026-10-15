@@ -276,12 +276,15 @@ function Shell({ model }: { model: AgentLensClientModel }) {
     })
   }
   const agentSelectionItems = [...agentSelectionMap.values()]
-  const selectedIntegrationExists = managedIntegrationItems.some(item =>
-    item.integrationId === agentOverviewSourceId || item.productId === agentOverviewSourceId
+  const firstPresentIntegration = managedIntegrationItems.find(item =>
+    item.tool?.presence === 'present' || item.tool?.presence === 'data-only'
   )
-  const resolvedAgentOverviewSourceId = agentSummaryItems.some(item => item.sourceId === agentOverviewSourceId) || selectedIntegrationExists
+  const firstPresentSourceId = agentSummaryItems.find(item =>
+    item.productId === firstPresentIntegration?.productId || item.sourceId === firstPresentIntegration?.integrationId
+  )?.sourceId ?? firstPresentIntegration?.integrationId
+  const resolvedAgentOverviewSourceId = agentSelectionMap.has(agentOverviewSourceId)
     ? agentOverviewSourceId
-    : managedIntegrationItems.find(item => item.tool?.presence === 'present' || item.tool?.presence === 'data-only')?.integrationId
+    : firstPresentSourceId
       ?? agentSummaryItems.find(item => item.detected)?.sourceId
       ?? agentSummaryItems[0]?.sourceId
       ?? agents.find(agent => agent.detected)?.sourceId
