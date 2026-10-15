@@ -518,7 +518,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           ]}/>
         </div>
         <div className="workspace-view-filter-actions">
-          <Button size="small" disabled={Boolean(searchQuery.trim()) || statusFilter !== 'all'} onClick={() => setOrdering(value => !value)}>
+          <Button size="small" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setOrdering(value => !value) }}>
             {ordering ? t('page.orderDone') : t('page.manageOrder')}
           </Button>
         </div>
@@ -527,12 +527,12 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     ) : null}
     <div className="page-content integration-management-content">
       <div className="integration-management-surface">
-        <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
+        {!ordering && <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
           <span className="workspace-metric-card"><strong>{items.length}</strong><small>{t('managementPage.supported')}</small></span>
           <span className="workspace-metric-card"><strong>{discoveryFailed ? '—' : detectedCount}</strong><small>{t('managementPage.detected')}</small></span>
           <span className="workspace-metric-card"><strong>{installedCount}</strong><small>{t('managementPage.added')}</small></span>
           <span className="workspace-metric-card"><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
-        </div>
+        </div>}
 
         {ordering ? <section className="integration-management-section" aria-label={t('page.orderTitle')}>
           <div className="integration-management-section-head">
