@@ -28,6 +28,7 @@ import {
 } from '@agent-lens/runtime-cordis'
 import { resolveHookExecutionProfile } from './hook-execution'
 import { runPluginCommand } from './plugin-command'
+import { waitForServiceStop } from './service-stop-settlement'
 import {
   getLifecycleStatus,
   serviceRestart,
@@ -512,12 +513,18 @@ async function runService(action: string, json: boolean): Promise<number> {
 
   let health = await healthOrNull()
   if (startsService && !health) health = await waitForHealth()
-  if (action === 'stop' && health && runtimeOwner(health) === 'service') {
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      await delay(150)
-      health = await healthOrNull()
-      if (!health || runtimeOwner(health) !== 'service') break
-    }
+  if (action === 'stop') {
+    // Stop-ScheduledTask can mark the PowerShell task Ready before its child
+    // Node Daemon exits. Keep the release gate strict: settle both facts.
+    await waitForServiceStop(
+      { taskActive: lifecycle.active, serviceOwnedRuntimeOnline: Boolean(health && runtimeOwner(health) === 'service') },
+      async () => {
+        [lifecycle, health] = await Promise.all([getLifecycleStatus(options), healthOrNull()])
+        return { taskActive: lifecycle.active, serviceOwnedRuntimeOnline: Boolean(health && runtimeOwner(health) === 'service') }
+      },
+      async ms => { await delay(ms) },
+      { timeoutMs: lifecycle.manager === 'windows-task-scheduler' ? 12_000 : 4_000 },
+    )
   }
   if (action !== 'status') lifecycle = await getLifecycleStatus(options)
 
