@@ -37,7 +37,13 @@ test('展开明细复用 Disclosure 并沿用真实本机路径、接入包版�
   assert.match(page, /installation\.versionUnavailable/)
   assert.match(page, /className="integration-management-capabilities"/)
   assert.match(page, /className="integration-management-actions"/)
-  assert.doesNotMatch(page, /agentVersion|upgradeCommand/)
+  assert.match(page, /const localAgentVersion = versions\.length/)
+  assert.match(page, /agentUpgradeMethods\(item\.productId\)/)
+  assert.match(page, /integrationPackageUpdateAvailable\(packageState\)/)
+  assert.match(page, /model\.updateIntegration\(item\.integrationId\)/)
+  assert.match(page, /copyText\(kind === 'install' \? selectedMethod\.installCommand : selectedMethod\.updateCommand\)/)
+  assert.match(page, /onChange=\{value => \{ setUpgradeMethod\(value\); setCopiedCommand\(null\) \}\}/)
+  assert.doesNotMatch(page, /child_process|execFile|spawn\(/)
 })
 
 test('未发现组默认收起，搜索、筛选和深链可展开而不吞掉结果', () => {
@@ -72,6 +78,7 @@ test('接入控制面覆盖扫描、添加、启停、授权、卸载与排序',
   assert.match(page, /model\.setIntegrationEnabled/)
   assert.match(page, /model\.authorizeIntegration/)
   assert.match(page, /model\.removeIntegration/)
+  assert.match(page, /model\.updateIntegration/)
   assert.match(page, /useIntegrationOrder/)
 })
 
@@ -89,7 +96,7 @@ test('智能体概览选择器融合 Overview 与 Integration 目录，但不放
 })
 
 test('未启用但已发现的智能体保持可见并支持二次接入', () => {
-  assert.match(page, /item\.tool\?\.presence === 'present'/)
+  assert.doesNotMatch(page, /item\.tool\?\.presence === 'present' && methods\.length/)
   assert.match(page, /item\.tool\?\.presence === 'data-only'/)
   assert.match(page, /managementPage\.add/)
   assert.match(page, /status\.notAdded/)
@@ -154,4 +161,30 @@ test('扫描失败与 data-only 保持独立语义', () => {
 
 test('首次未发现时明确指向智能体接入管理视图', () => {
   assert.match(zhAgents, /智能体 → 接入管理/)
+})
+
+test('接入插件更新与智能体本体升级命令是两个明确独立的交互', () => {
+  assert.match(page, /managementPage\.updateIntegration/)
+  assert.match(page, /managementPage\.updateDialogDescription/)
+  assert.match(page, /managementPage\.agentUpgradeHeading/)
+  assert.match(page, /managementPage\.agentUpgradeWarning/)
+  assert.match(page, /managementPage\.officialUpgradeDocs/)
+  assert.match(page, /item\.tool\?\.presence === 'present'/)
+  assert.match(page, /snapshot\.agents\?\.items\.find\(agent => agent\.productId === item\.productId\)\?\.installations/)
+  assert.match(zhAgents, /agentUpgradeWarning: '以下是官方安装方式的参考命令/)
+  assert.match(zhAgents, /updateScope: '仅更新 AgentLens 的接入插件/)
+})
+test('没有更新或本机工具未被发现时，安装/更新两条命令及复制操作仍常驻', () => {
+  assert.match(page, /methods\.length > 0/)
+  assert.match(page, /selectedMethod\.installCommand/)
+  assert.match(page, /selectedMethod\.updateCommand/)
+  assert.match(page, /managementPage\.installCommand/)
+  assert.match(page, /managementPage\.upgradeCommand/)
+  assert.match(page, /copyAgentUpgrade\('install'\)/)
+  assert.match(page, /copyAgentUpgrade\('update'\)/)
+  assert.match(page, /checkAgentLatestVersion\(item\.productId\)/)
+  assert.match(page, /checkAgentLatestVersion\(item\.productId, \{ force: true \}\)/)
+  assert.match(page, /versionComparison === 'newer'/)
+  assert.match(page, /versionCheckFailed/)
+  assert.doesNotMatch(page, /latestVersion\?\.status === 'ready' && methods\.length/)
 })

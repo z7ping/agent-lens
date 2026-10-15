@@ -4,21 +4,26 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import type {
+  AgentInstallationOverviewDto,
   IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
+import { copyText } from '../client/clipboard'
 import { useClientSnapshot } from '../App'
 import { sourceDot } from '../components/AgentScope'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { Button, Dialog, Disclosure, IconButton, Input, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
+  agentUpgradeMethods,
   integrationCanInstall,
+  integrationPackageUpdateAvailable,
   integrationManagementLifecycleState,
   integrationPackageReady,
   integrationToolPresenceLabel,
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
+import { agentVersionComparison, checkAgentLatestVersion, type AgentLatestVersion } from './integrations/agent-online-versions'
 
 const capabilityLabelKey: Record<string, string> = {
   source: 'integrationCapability.source',
@@ -45,6 +50,7 @@ function isPrimaryRow(item: IntegrationManagementItemDto): boolean {
 
 function IntegrationManagementRow({
   item,
+  installations,
   moveUpTargetId,
   moveDownTargetId,
   model,
@@ -54,6 +60,7 @@ function IntegrationManagementRow({
   highlighted,
 }: {
   item: IntegrationManagementItemDto
+  installations?: readonly AgentInstallationOverviewDto[]
   moveUpTargetId?: string | undefined
   moveDownTargetId?: string | undefined
   model: AgentLensClientModel
@@ -68,6 +75,12 @@ function IntegrationManagementRow({
   const [error, setError] = useState('')
   const [removeOpen, setRemoveOpen] = useState(false)
   const [removeMessage, setRemoveMessage] = useState('')
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [updateNotice, setUpdateNotice] = useState('')
+  const [upgradeMethod, setUpgradeMethod] = useState(() => agentUpgradeMethods(item.productId)[0]?.value ?? '')
+  const [copiedCommand, setCopiedCommand] = useState<'install' | 'update' | null>(null)
+  const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
+  const [versionChecking, setVersionChecking] = useState(false)
   const [expanded, setExpanded] = useState(highlighted || ordering)
 
   useEffect(() => {
@@ -76,6 +89,12 @@ function IntegrationManagementRow({
 
   const packageState = item.packageState
   const packageReady = integrationPackageReady(packageState)
+  const canUpdatePackage = integrationPackageUpdateAvailable(packageState)
+  const methods = agentUpgradeMethods(item.productId)
+  const selectedMethod = methods.find(method => method.value === upgradeMethod) ?? methods[0]
+  const versions = [...new Set((installations ?? []).map(installation => installation.version).filter((version): version is string => Boolean(version)))]
+  const localAgentVersion = versions.length ? versions.join(' / ') : t('installation.versionUnavailable')
+  const versionComparison = agentVersionComparison(versions, latestVersion)
   const canInstall = integrationCanInstall(item.tool)
   const status = integrationManagementLifecycleState(item, t)
   const statusLabel = item.isNew && !packageState?.installed && canInstall
@@ -104,6 +123,53 @@ function IntegrationManagementRow({
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const updatePackage = async () => {
+    if (!canUpdatePackage || saving || !packageState?.availableVersion) return
+    setSaving(true)
+    setError('')
+    setUpdateNotice('')
+    try {
+      const result = await model.updateIntegration(item.integrationId)
+      if (result.operation.status !== 'completed'
+        || !integrationPackageReady(result.state)
+        || result.state.installedVersion !== packageState.availableVersion) {
+        throw new Error(result.operation.message || result.state.reason || t('managementPage.updateFailed'))
+      }
+      setUpdateOpen(false)
+      setUpdateNotice(t(result.state.restartRequired ? 'managementPage.updateRestart' : 'managementPage.updateComplete'))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    void checkAgentLatestVersion(item.productId).then(result => {
+      if (active) setLatestVersion(result)
+    })
+    return () => { active = false }
+  }, [item.productId])
+
+  const refreshLatestVersion = async () => {
+    if (versionChecking) return
+    setVersionChecking(true)
+    const result = await checkAgentLatestVersion(item.productId, { force: true })
+    setLatestVersion(result)
+    setVersionChecking(false)
+  }
+
+  const copyAgentUpgrade = async (kind: 'install' | 'update') => {
+    if (!selectedMethod) return
+    try {
+      await copyText(kind === 'install' ? selectedMethod.installCommand : selectedMethod.updateCommand)
+      setCopiedCommand(kind)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
     }
   }
 
@@ -199,7 +265,7 @@ function IntegrationManagementRow({
           <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
         </span>
       </span>}
-      summaryMeta={<StatusBadge
+      summaryMeta={<span className="integration-management-summary-states"><StatusBadge
         className={`integration-management-status ${status.className}`}
         tone={status.className.includes('error')
           ? 'danger'
@@ -211,7 +277,9 @@ function IntegrationManagementRow({
                 ? 'accent'
                 : 'neutral'}
         title={status.title}
-      >{statusLabel}</StatusBadge>}
+      >{statusLabel}</StatusBadge>
+        {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
+      </span>}
     >
       <div className="integration-management-details">
         <div className="integration-management-facts" aria-label={t('managementPage.detailsLabel')}>
@@ -223,6 +291,10 @@ function IntegrationManagementRow({
           <div className="integration-management-fact">
             <span>{t('toolPresence.location')}</span>
             <code title={presencePath}>{presencePath || t('installation.pathUnavailable')}</code>
+          </div>
+          <div className="integration-management-fact">
+            <span>{t('managementPage.localAgentVersion')}</span>
+            <strong>{localAgentVersion}</strong>
           </div>
           <div className="integration-management-fact">
             <span>{t('installation.integrationVersion')}</span>
@@ -238,6 +310,58 @@ function IntegrationManagementRow({
           </div>
         </div>
 
+        <div className="integration-management-agent-upgrade">
+          <span className="integration-management-detail-label">{t('managementPage.agentUpgradeHeading')}</span>
+          <div className="integration-management-version-check">
+            <span role="status">
+              {latestVersion?.status === 'ready'
+                ? t('managementPage.remoteAgentVersion', {
+                    version: latestVersion.version,
+                    source: latestVersion.source === 'npm' ? 'npm' : 'GitHub',
+                  })
+                : t(latestVersion?.status === 'error'
+                  ? 'managementPage.versionCheckFailed'
+                  : latestVersion?.status === 'unsupported'
+                    ? 'managementPage.versionCheckUnsupported'
+                    : 'managementPage.versionChecking')}
+            </span>
+            {latestVersion?.status !== 'unsupported' && <Button size="small" disabled={versionChecking} loading={versionChecking}
+              onClick={() => void refreshLatestVersion()}>{t('managementPage.checkVersion')}</Button>}
+            {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
+            {versionComparison === 'current' && <StatusBadge tone="success">{t('managementPage.versionCurrent')}</StatusBadge>}
+          </div>
+          <p>{t('managementPage.agentUpgradeWarning')}</p>
+          {methods.length > 0
+            ? <>
+              <div className="integration-management-upgrade-method">
+                <SelectMenu
+                  value={selectedMethod?.value ?? ''}
+                  ariaLabel={t('managementPage.agentUpgradeMethod')}
+                  onChange={value => { setUpgradeMethod(value); setCopiedCommand(null) }}
+                  options={methods.map(method => ({ value: method.value, label: t(`managementPage.method.${method.labelKey}`) }))}
+                />
+              </div>
+              {selectedMethod && <div className="integration-management-command-pair">
+                <div className="integration-management-command">
+                  <span className="integration-management-detail-label">{t('managementPage.installCommand')}</span>
+                  <code>{selectedMethod.installCommand}</code>
+                  <Button size="small" onClick={() => void copyAgentUpgrade('install')}>
+                    {t(copiedCommand === 'install' ? 'managementPage.copiedCommand' : 'managementPage.copyCommand')}
+                  </Button>
+                </div>
+                <div className="integration-management-command">
+                  <span className="integration-management-detail-label">{t('managementPage.upgradeCommand')}</span>
+                  <code>{selectedMethod.updateCommand}</code>
+                  <Button size="small" onClick={() => void copyAgentUpgrade('update')}>
+                    {t(copiedCommand === 'update' ? 'managementPage.copiedCommand' : 'managementPage.copyCommand')}
+                  </Button>
+                </div>
+                <a href={selectedMethod.docsUrl} target="_blank" rel="noopener noreferrer">{t('managementPage.officialUpgradeDocs')}</a>
+              </div>}
+            </>
+            : <small>{t('managementPage.agentUpgradeUnavailable')}</small>}
+        </div>
+
         <div className="integration-management-detail-section">
           <span className="integration-management-detail-label">{t('managementPage.columnCapabilities')}</span>
           <div className="integration-management-capabilities">
@@ -249,13 +373,18 @@ function IntegrationManagementRow({
           </div>
         </div>
 
-        {(primaryAction || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured) || ordering) && <div className="integration-management-actions">
+        {(primaryAction || canUpdatePackage || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured) || ordering) && <div className="integration-management-actions">
           {pendingAuthorization.length > 0 && item.enabled.configured && <Button
             size="small"
             disabled={saving}
             onClick={() => void authorize()}
           >{t('managementPage.authorize')}</Button>}
           {primaryAction}
+          {canUpdatePackage && <Button
+            size="small"
+            disabled={saving}
+            onClick={() => { setError(''); setUpdateOpen(true) }}
+          >{t('managementPage.updateIntegration')}</Button>}
           {packageState?.installed && !item.enabled.configured && <Button
             size="small"
             variant="danger"
@@ -281,10 +410,29 @@ function IntegrationManagementRow({
             ><UiIcon name="sort-down" size={14}/></IconButton>
           </span>}
         </div>}
+        {updateNotice && <p className="integration-management-note" role="status">{updateNotice}</p>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
       </div>
     </Disclosure>
 
+    <Dialog
+      open={updateOpen}
+      title={t('managementPage.updateDialogTitle', { agent: item.displayName })}
+      description={t('managementPage.updateDialogDescription', {
+        current: packageState?.installedVersion ?? '',
+        available: packageState?.availableVersion ?? '',
+      })}
+      onClose={() => { if (!saving) setUpdateOpen(false) }}
+      closeDisabled={saving}
+      footer={<>
+        <Button disabled={saving} onClick={() => setUpdateOpen(false)}>{t('integration.cancel')}</Button>
+        <Button variant="primary" loading={saving} onClick={() => void updatePackage()}>
+          {t('managementPage.confirmUpdate')}
+        </Button>
+      </>}
+    >
+      <p className="integration-management-note">{t('managementPage.updateScope')}</p>
+    </Dialog>
     <Dialog
       open={removeOpen}
       title={t('integration.uninstallDialogTitle', { agent: item.displayName })}
@@ -433,6 +581,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           {primaryItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
             item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+            installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations}
             moveUpTargetId={primaryItems[index - 1]?.integrationId}
             moveDownTargetId={primaryItems[index + 1]?.integrationId}
             model={model}
@@ -457,6 +606,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           {supportedItems.map((item, index) => <IntegrationManagementRow
             key={item.integrationId}
             item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+            installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations}
             moveUpTargetId={supportedItems[index - 1]?.integrationId}
             moveDownTargetId={supportedItems[index + 1]?.integrationId}
             model={model}

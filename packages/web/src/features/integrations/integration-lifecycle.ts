@@ -1,4 +1,5 @@
 import type { TFunction } from 'i18next'
+import * as semver from 'semver'
 import type {
   AgentOverviewDto,
   IntegrationManagementItemDto,
@@ -18,6 +19,108 @@ export function integrationPackageReady(
   return state?.installed === true
     && state.integrity === 'verified'
     && state.compatibility === 'compatible'
+}
+
+/** Bundles older than an installed Integration must never be offered as upgrades. */
+export function integrationPackageUpdateAvailable(
+  state: IntegrationPackageStateDto | null | undefined,
+): boolean {
+  if (!integrationPackageReady(state) || state?.restartRequired) return false
+  const installed = state.installedVersion
+  const bundled = state.availableVersion
+  return Boolean(installed && bundled && semver.valid(installed) && semver.valid(bundled) && semver.gt(bundled, installed))
+}
+
+export interface AgentUpgradeMethod {
+  value: string
+  labelKey: 'npmGlobal' | 'officialUnix' | 'officialWindows' | 'homebrew'
+  installCommand: string
+  updateCommand: string
+  docsUrl: string
+}
+
+/** Documentation-based examples, not an inferred package manager or automatic execution. */
+const OFFICIAL_AGENT_UPGRADE_METHODS: Readonly<Record<string, readonly AgentUpgradeMethod[]>> = {
+  pi: [
+    {
+      value: 'npm', labelKey: 'npmGlobal',
+      installCommand: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
+      updateCommand: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent@latest',
+      docsUrl: 'https://www.npmjs.com/package/@earendil-works/pi-coding-agent',
+    },
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://pi.dev/install.sh | sh',
+      updateCommand: 'pi update --self',
+      docsUrl: 'https://www.npmjs.com/package/@earendil-works/pi-coding-agent',
+    },
+    {
+      value: 'installer-windows', labelKey: 'officialWindows',
+      installCommand: 'powershell -c "irm https://pi.dev/install.ps1 | iex"',
+      updateCommand: 'pi update --self',
+      docsUrl: 'https://www.npmjs.com/package/@earendil-works/pi-coding-agent',
+    },
+  ],
+  codex: [
+    {
+      value: 'npm', labelKey: 'npmGlobal',
+      installCommand: 'npm install -g @openai/codex',
+      updateCommand: 'npm install -g @openai/codex@latest',
+      docsUrl: 'https://github.com/openai/codex',
+    },
+    {
+      value: 'homebrew', labelKey: 'homebrew',
+      installCommand: 'brew install --cask codex',
+      updateCommand: 'brew upgrade --cask codex',
+      docsUrl: 'https://github.com/openai/codex',
+    },
+  ],
+  'claude-code': [
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://claude.ai/install.sh | bash',
+      updateCommand: 'claude update',
+      docsUrl: 'https://code.claude.com/docs/en/setup',
+    },
+    {
+      value: 'installer-windows', labelKey: 'officialWindows',
+      installCommand: 'irm https://claude.ai/install.ps1 | iex',
+      updateCommand: 'claude update',
+      docsUrl: 'https://code.claude.com/docs/en/setup',
+    },
+  ],
+  hermes: [
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash',
+      updateCommand: 'hermes update',
+      docsUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/updating',
+    },
+    {
+      value: 'installer-windows', labelKey: 'officialWindows',
+      installCommand: 'iex (irm https://hermes-agent.nousresearch.com/install.ps1)',
+      updateCommand: 'hermes update',
+      docsUrl: 'https://hermes-agent.nousresearch.com/docs/getting-started/installation',
+    },
+  ],
+  opencode: [
+    {
+      value: 'npm', labelKey: 'npmGlobal',
+      installCommand: 'npm install -g opencode-ai',
+      updateCommand: 'npm install -g opencode-ai@latest',
+      docsUrl: 'https://opencode.ai/docs',
+    },
+    {
+      value: 'installer-unix', labelKey: 'officialUnix',
+      installCommand: 'curl -fsSL https://opencode.ai/install | bash',
+      updateCommand: 'opencode upgrade',
+      docsUrl: 'https://opencode.ai/docs/cli/',
+    },
+  ],
+}
+
+export function agentUpgradeMethods(productId: string): readonly AgentUpgradeMethod[] {
+  return OFFICIAL_AGENT_UPGRADE_METHODS[productId] ?? []
 }
 
 export function agentObservationState(
