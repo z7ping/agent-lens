@@ -25,7 +25,7 @@ test('Pi ecosystem links live within agent card instead of a fourth full-width w
 test('Pi inline tabs stay anchored beside agent identity as content width changes', () => {
   assert.match(agent, /className=\{`agent-card-head \$\{isPi \? 'has-inline-tabs' : ''\}`\.trim\(\)\}/)
   assert.match(css, /\.agent-card-head\.has-inline-tabs \.agent-identity \{ flex: 0 1 auto; \}/)
-  assert.match(css, /\.agent-card-head\.has-inline-tabs \.agent-status \{ margin-left: auto; \}/)
+  assert.match(css, /\.agent-card-head\.has-inline-tabs \.ui-status-badge \{ margin-left: auto; \}/)
   assert.match(overview, /\[activeView\]/)
 })
 
