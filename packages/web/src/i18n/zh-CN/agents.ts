@@ -153,7 +153,7 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       retry: '重试',
       skip: '跳过',
       noneFound: '暂未发现支持的智能体',
-      noneFoundDescription: '可以稍后进入“设置 → 智能体接入”重新扫描；AgentLens 不会自动安装或接管任何工具。',
+      noneFoundDescription: '可以稍后进入“智能体 → 接入管理”重新扫描；AgentLens 不会自动安装或接管任何工具。',
       noneConfirmed: '暂时没有确认发现的智能体',
       noneConfirmedDescription: '部分扫描失败，失败项保持未知；可以重新扫描，不会把扫描失败当成未安装。',
       scanFailedAgents: '扫描失败：{{agents}}。这些智能体状态保持未知，可稍后重新扫描。',
