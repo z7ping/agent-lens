@@ -893,6 +893,8 @@ export function PiLivePage({ embedded = false }: { embedded?: boolean }) {
                 common.callId!,
                 common.status,
                 common.output ?? '',
+                undefined,
+                common.durationMs,
               ))
             }
           } else if (common?.type === 'error') {
