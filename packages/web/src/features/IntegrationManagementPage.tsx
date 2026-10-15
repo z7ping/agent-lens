@@ -603,7 +603,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
             {supportedItems.map(item => <IntegrationManagementRow
               key={item.integrationId}
               item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-              installations={snapshot.agents?.items.find(agent => agent.productId === item.productId)?.installations ?? installationVersions[item.productId]}
               model={model}
               discoveryScanning={Boolean(discoveryScanning)}
               discoveryError={snapshot.integrationDiscoveryError}
