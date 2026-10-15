@@ -269,6 +269,8 @@ export const englishAgentsMessages: LocaleMessagesDto = {
       columnLocal: 'Local',
       columnStatus: 'Integration',
       columnCapabilities: 'Capabilities',
+      detailsLabel: 'Integration details',
+      availableIntegrationVersion: 'Available Integration version',
       columnActions: 'Actions',
       officialSupport: 'Official AgentLens support',
       capabilitiesPending: 'Capabilities pending',
