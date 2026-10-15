@@ -607,6 +607,8 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--al-canvas);
+  --al-workspace-content-max: 1320px;
+  --al-workspace-content-inset: 28px;
 }
 
 .workspace-topbar {
@@ -687,6 +689,13 @@
   flex: 1;
 }
 
+/* Match the white Task Center reading surface without introducing page-specific cards. */
+.app-main > .workspace-page,
+.app-main > .agents-responsive-shell,
+.agents-responsive-shell > .workspace-page {
+  background: var(--al-surface);
+}
+
 /* Shared workspace: 40px secondary links and 48px business tools; no duplicate page title. */
 .workspace-view-tabs {
   display: flex;
@@ -697,7 +706,7 @@
   flex: 0 0 40px;
   align-items: stretch;
   gap: 22px;
-  padding: 0 20px;
+  padding-inline: max(var(--al-workspace-content-inset), calc((100% - var(--al-workspace-content-max)) / 2 + var(--al-workspace-content-inset)));
   overflow-x: auto;
   overflow-y: hidden;
   border-bottom: 1px solid var(--al-line);
@@ -754,7 +763,8 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
-  padding: 7px 20px;
+  padding-block: 7px;
+  padding-inline: max(var(--al-workspace-content-inset), calc((100% - var(--al-workspace-content-max)) / 2 + var(--al-workspace-content-inset)));
   border-bottom: 1px solid var(--al-line);
   background: var(--al-surface);
 }
@@ -770,9 +780,10 @@
 .workspace-view-toolbar .workspace-sidebar-filter-disclosure .ui-disclosure-body { z-index: 42; }
 
 @media (max-width: 767.98px) {
-  .workspace-view-tabs { gap: 16px; padding-inline: 12px; }
+  .app-main { --al-workspace-content-inset: 14px; }
+  .workspace-view-tabs { gap: 16px; }
   .workspace-view-tabs > .workspace-mobile-nav-button { display: inline-flex; flex: 0 0 auto; align-self: center; }
-  .workspace-view-toolbar { flex-wrap: wrap; padding: 7px 12px; }
+  .workspace-view-toolbar { flex-wrap: wrap; }
   .workspace-view-toolbar-content, .workspace-view-controls { flex-wrap: wrap; }
   .workspace-view-filter { width: auto; flex: 1 1 140px; }
   .workspace-view-filter-time { flex: 1 1 110px; }
@@ -1048,6 +1059,7 @@
 }
 
 @media (max-width: 991.98px) {
+  .app-main { --al-workspace-content-inset: 18px; }
   .workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy b,
   .workspace-sidebar-context > .task-center-rail .task-center-context-brand-copy > span { display: none; }
   .app-shell {
