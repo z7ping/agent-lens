@@ -16,21 +16,21 @@
   transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1);
 }
 
-/* 维护页面不需要会话/上下文栏，保留全局 40px 导航轨。 */
-.app-shell.is-maintenance-contextless {
+/* 智能体、资产备份不显示会话/上下文栏，只保留全局 40px 导航轨。 */
+.app-shell.is-contextless-workspace {
   grid-template-columns: 40px minmax(0, 1fr);
 }
 
-.app-shell.is-maintenance-contextless .workspace-sidebar-context,
-.app-shell.is-maintenance-contextless .workspace-sidebar-footer .workspace-background-activity {
+.app-shell.is-contextless-workspace .workspace-sidebar-context,
+.app-shell.is-contextless-workspace .workspace-sidebar-footer .workspace-background-activity {
   display: none;
 }
 
-.app-shell.is-maintenance-contextless .workspace-sidebar-collapse-button {
+.app-shell.is-contextless-workspace .workspace-sidebar-collapse-button {
   visibility: hidden;
 }
 
-/* Task Center 才扩展会话列表；其他工作区沿用 316px，收起态维持 40px。 */
+/* 任务中心按视口扩展会话列表；无需上下文的工作区固定 40px 导航轨。 */
 @media (min-width: 1200px) {
   .app-shell.is-task-center:not(.is-sidebar-collapsed) {
     grid-template-columns: 340px minmax(0, 1fr);
@@ -966,8 +966,8 @@
     grid-template-columns: 220px minmax(0, 1fr);
   }
 
-  /* 移动端侧栏为覆盖式 Drawer，不再预留维护页的 40px 网格列。 */
-  .app-shell.is-maintenance-contextless {
+  /* 移动端侧栏为覆盖式 Drawer，不再预留无上下文工作区的 40px 网格列。 */
+  .app-shell.is-contextless-workspace {
     grid-template-columns: minmax(0, 1fr);
   }
 
