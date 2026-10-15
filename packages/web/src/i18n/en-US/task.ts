@@ -238,6 +238,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         browserCancel: 'Cancel',
         browserUseDirectory: 'Use this directory',
         browserPath: 'Directory path',
+        browserBreadcrumbs: 'Directory breadcrumbs',
         browserGo: 'Go',
         browserParent: 'Parent folder',
         browserHome: 'Home',
