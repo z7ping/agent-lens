@@ -65,3 +65,12 @@ test('Codex real desktop acceptance validates folded Process/Tool and explicit I
   assert.match(codex, /querySelector\(':scope > summary'\)\?\.click\(\)/)
   assert.doesNotMatch(codex, /聚合执行过程未默认展开/)
 })
+
+test('100 次任务切换先真实预热一次 body Portal，仍强制检测新增监听器', () => {
+  assert.match(source, /await primePortalEventDelegation\(win\)/)
+  assert.match(source, /document\.querySelector\('\.task-center-quick-filters \.select-menu-trigger'\)/)
+  assert.match(source, /if \(Object\.keys\(listenerRootsBefore\.body \?\? \{\}\)\.length < 50\) fail/)
+  assert.match(source, /if \(listenerGrowth > 20\) errors\.push/)
+  assert.match(source, /if \(nodeGrowth > maxNodeGrowth\) errors\.push/)
+  assert.match(source, /completedSwitches: switched\.completed/)
+})
