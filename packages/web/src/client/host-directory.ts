@@ -47,6 +47,7 @@ export interface HostDirectoryListing {
   parentPath: string | null
   roots: string[]
   directories: Array<{ name: string; path: string }>
+  breadcrumbs: Array<{ name: string; path: string }>
   truncated: boolean
   selectable: boolean
 }
