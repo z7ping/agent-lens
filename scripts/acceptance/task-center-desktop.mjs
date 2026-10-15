@@ -563,6 +563,12 @@ try {
     await loadTaskCenter(switchWin, '100 次任务切换')
     await applyViewport(switchWin, viewports[0])
     report.switchStability = await withTimeout(runSwitchStability(switchWin), 25_000, '100 次任务切换稳定性')
+    if (!report.switchStability.skipped) {
+      console.log('100 次切换诊断：', JSON.stringify({
+        growth: report.switchStability.growth,
+        roots: report.switchStability.listenerRoots,
+      }))
+    }
     if (!report.switchStability.ok) report.ok = false
     await persistReport()
     if (report.switchStability.skipped) console.log(`• 100 次任务切换验收 skipped：${report.switchStability.reason}`)
