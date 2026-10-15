@@ -297,7 +297,8 @@ export class ReviewProjection {
         && !node.toolSourceType
         && typeof asRecord(node.payload).runtimeId === 'string'))
     if (unresolved) {
-      const registrations = await this.timeline.query({
+      try {
+        const registrations = await this.timeline.query({
         logicalSessionId,
         kind: 'tool.registration',
         direction: 'forward',
@@ -326,6 +327,11 @@ export class ReviewProjection {
             node.evidence = [...node.evidence, ...origin.evidence]
           }
         }
+      }
+      } catch (error) {
+        // Registration attribution is auxiliary: unavailable evidence must
+        // never turn an otherwise readable Review page into HTTP 500.
+        console.warn('[AgentLens] Tool registration evidence unavailable', error)
       }
     }
     logSlowReviewPhase('detail-pager', pagerStartedAt, {
