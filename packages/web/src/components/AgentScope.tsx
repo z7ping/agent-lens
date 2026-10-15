@@ -6,6 +6,7 @@ import { orderAgentsByPreference } from './agent-order'
 import { useIntegrationOrder } from './IntegrationOrderProvider'
 import { usePinnedAgents } from './PinnedAgentsProvider'
 import { UiIcon } from './UiIcon'
+import { AgentLogo } from './AgentLogo'
 
 export function agentLabel(sourceId: string, fallback?: string): string {
   if (sourceId === 'claude-code') return 'Claude Code'
@@ -25,10 +26,6 @@ export function sourceDot(sourceId: string): string {
   if (sourceId === 'opencode') return 'source-opencode'
   if (sourceId === 'dsh') return 'source-dsh'
   return 'source-unknown'
-}
-
-function AgentIcon({ sourceId }: { sourceId: string }) {
-  return <span className={`agent-icon ${sourceDot(sourceId)}`} aria-hidden="true"><UiIcon name="agent" size={14}/></span>
 }
 
 export function useOrderedAgents<T extends { sourceId: string }>(agents: readonly T[]): T[] {
@@ -164,7 +161,7 @@ export function AgentScope({ agents, value, onChange, allLabel }: { agents: Agen
       >
         <UiIcon name="drag" size={16} className={`agent-scope-drag ${reorderable ? '' : 'is-disabled'}`} />
         <input type="checkbox" aria-label={t('scope.showInToolbar', { agent: agentLabel(agent.sourceId, agent.displayName) })} checked={pinned.includes(agent.sourceId)} onChange={() => toggle(agent.sourceId)} />
-        <AgentIcon sourceId={agent.sourceId} />
+        <AgentLogo sourceId={agent.sourceId} size="compact" />
         <span className="agent-scope-option-name">{agentLabel(agent.sourceId, agent.displayName)}</span>
         <span className="agent-scope-order-actions">
           <button type="button" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={t('scope.moveUp', { agent: agentLabel(agent.sourceId, agent.displayName) })}><UiIcon name="arrow-big-up" size={14}/></button>
@@ -178,7 +175,7 @@ export function AgentScope({ agents, value, onChange, allLabel }: { agents: Agen
   return <div className="agent-scope">
     {resolvedAllLabel && <button className={`scope-chip ${value === '' ? 'scope-chip-active' : ''}`} onClick={() => onChange('')}>{resolvedAllLabel}</button>}
     {shown.map(agent => <button key={agent.sourceId} className={`scope-chip ${value === agent.sourceId ? 'scope-chip-active' : ''}`} onClick={() => onChange(agent.sourceId)}>
-      <AgentIcon sourceId={agent.sourceId} />
+      <AgentLogo sourceId={agent.sourceId} size="compact" />
       <span>{agentLabel(agent.sourceId, agent.displayName)}</span>
     </button>)}
     {resolvedAllLabel !== false && <details ref={detailsRef} className="agent-scope-manage" onToggle={event => setMenuOpen(event.currentTarget.open)}>
