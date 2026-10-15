@@ -21,6 +21,16 @@ export function integrationPackageReady(
     && state.compatibility === 'compatible'
 }
 
+/** Bundles older than an installed Integration must never be offered as upgrades. */
+export function integrationPackageUpdateAvailable(
+  state: IntegrationPackageStateDto | null | undefined,
+): boolean {
+  if (!integrationPackageReady(state) || state?.restartRequired) return false
+  const installed = state.installedVersion
+  const bundled = state.availableVersion
+  return Boolean(installed && bundled && semver.valid(installed) && semver.valid(bundled) && semver.gt(bundled, installed))
+}
+
 export function agentObservationState(
   agent: Pick<AgentOverviewDto, 'supported' | 'detected'> | undefined,
   discovery: IntegrationToolDiscoveryItemDto | undefined,
