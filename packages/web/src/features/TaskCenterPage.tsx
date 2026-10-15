@@ -210,7 +210,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [projectLoadingMore, setProjectLoadingMore] = useState(false)
   const [projectDiscoveryError, setProjectDiscoveryError] = useState('')
   const projectRequestGenerationRef = useRef(0)
-  const historyScrollTargetRef = useRef('')
+  const historyScrollRevisionRef = useRef(0)
+  const historyScrollFrameRef = useRef<number | null>(null)
+  useEffect(() => () => {
+    historyScrollRevisionRef.current += 1
+    if (historyScrollFrameRef.current !== null) window.cancelAnimationFrame(historyScrollFrameRef.current)
+    document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
+  }, [])
   const review = snapshot.review
   const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
   const agentSelectionSummary = review.filters.sourceIds === null
@@ -371,23 +377,26 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   }
 
   const openHistoryTask = useCallback((id: string) => {
-    historyScrollTargetRef.current = id
+    // A → B → A may reuse the same session ID before an older RAF finishes.
+    // Generation identity and explicit cancellation prevent stale scroll ownership.
+    const revision = ++historyScrollRevisionRef.current
+    if (historyScrollFrameRef.current !== null) window.cancelAnimationFrame(historyScrollFrameRef.current)
+    document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
     navigate(`/review/${encodeURIComponent(id)}`)
 
     let remainingFrames = 90
     let stableFrames = 0
     let previousHeight = -1
+    const schedule = () => { historyScrollFrameRef.current = window.requestAnimationFrame(settle) }
     const settle = () => {
-      if (historyScrollTargetRef.current !== id) {
-        document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
-        return
-      }
+      if (historyScrollRevisionRef.current !== revision) return
 
       const current = model.getSnapshot().review
       const pane = document.querySelector<HTMLElement>('.review-reader-pane')
       if (current.selectedId !== id || current.detailLoading || current.detail?.id !== id || !pane) {
         remainingFrames -= 1
-        if (remainingFrames > 0) window.requestAnimationFrame(settle)
+        if (remainingFrames > 0) schedule()
+        else historyScrollFrameRef.current = null
         return
       }
 
@@ -399,12 +408,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       remainingFrames -= 1
       if (stableFrames >= 3 || remainingFrames <= 0) {
         pane.style.removeProperty('overflow-anchor')
-        if (historyScrollTargetRef.current === id) historyScrollTargetRef.current = ''
+        historyScrollFrameRef.current = null
         return
       }
-      window.requestAnimationFrame(settle)
+      schedule()
     }
-    window.requestAnimationFrame(settle)
+    schedule()
   }, [model, navigate])
 
   const historyCount = localSessions.length + visibleHub.length
