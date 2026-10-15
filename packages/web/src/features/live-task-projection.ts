@@ -133,8 +133,11 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
   entries.forEach((value, entryIndex) => {
     const item = record(value)
     const nested = record(item.message)
+    // 不因缺少原生结束语义就假定 final；最终正文是默认呈现，不需要伪造 phase。
     const phase = nested.phase === 'commentary' || item.phase === 'commentary' || nested.stopReason === 'toolUse'
-      ? 'commentary' as const : 'final' as const
+      ? 'commentary' as const
+      : nested.phase === 'final' || item.phase === 'final' || nested.stopReason === 'stop'
+        ? 'final' as const : undefined
     const rawRole = text(item.role) || text(nested.role)
     const nativeEntryId = item.type === 'message' ? text(item.id) : ''
     const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
@@ -195,7 +198,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         id: baseId,
         kind: 'message',
         role: 'assistant',
-        phase,
+        ...(phase ? { phase } : {}),
         text: body,
         ...(nativeEntryId ? { entryId: nativeEntryId } : {}),
         streaming: false,
@@ -211,7 +214,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
           id: `${baseId}:content:${contentIndex}`,
           kind: 'message',
           role: 'assistant',
-          phase,
+          ...(phase ? { phase } : {}),
           text: rawPart,
           streaming: false,
           ...(at ? { at } : {}),
@@ -228,7 +231,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
           id: content.length === 1 ? baseId : `${baseId}:content:${contentIndex}`,
           kind: 'message',
           role: 'assistant',
-          phase,
+          ...(phase ? { phase } : {}),
           text: value,
           streaming: false,
           ...(at ? { at } : {}),

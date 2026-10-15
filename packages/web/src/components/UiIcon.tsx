@@ -8,6 +8,8 @@ import {
   CircleX,
   ArrowBigDown,
   ArrowBigUp,
+  ArrowDown,
+  ArrowUp,
   ArrowDownToLine,
   ArrowLeft,
   ArrowRight,
@@ -26,7 +28,10 @@ import {
   FolderOpen,
   FlaskConical,
   Globe,
+  GitFork,
   GripVertical,
+  Layers,
+  Shield,
   ListTodo,
   Maximize2,
   Menu,
@@ -77,6 +82,9 @@ export type UiIconName =
   | 'dot'
   | 'drag'
   | 'exclamation'
+  | 'event-permission'
+  | 'event-subagent'
+  | 'event-context'
   | 'expand'
   | 'filter'
   | 'folder-open'
@@ -116,11 +124,11 @@ const icons = {
   alert: TriangleAlert,
   'arrow-big-down': ArrowBigDown,
   'arrow-big-up': ArrowBigUp,
-  'arrow-down': ArrowBigDown,
+  'arrow-down': ArrowDown,
   'arrow-down-to-line': ArrowDownToLine,
   'arrow-left': ArrowLeft,
   'arrow-right': ArrowRight,
-  'arrow-up': ArrowBigUp,
+  'arrow-up': ArrowUp,
   'arrow-up-to-line': ArrowUpToLine,
   check: Check,
   'chevron-down': ChevronDown,
@@ -132,6 +140,9 @@ const icons = {
   dot: Dot,
   drag: GripVertical,
   exclamation: CircleAlert,
+  'event-permission': Shield,
+  'event-subagent': GitFork,
+  'event-context': Layers,
   expand: Maximize2,
   filter: Filter,
   'folder-open': FolderOpen,

@@ -487,6 +487,7 @@ function GenericLiveItem({
         state: item.streaming ? 'running' : 'settled',
       }}
       defaultExpanded={item.streaming}
+      className="task-process-thinking-card"
     >
       <MarkdownContent text={item.text} streaming={item.streaming}/>
     </TaskThinking>
@@ -504,7 +505,6 @@ function GenericLiveItem({
       output: item.output,
       durationMs: item.durationMs,
     }}
-    details={item.output ? <div className="task-tool-live-output"><ToolOutputContent text={item.output} streaming={item.status === 'running'}/></div> : undefined}
   />
 }
 
@@ -542,16 +542,31 @@ const GenericLiveRound = memo(function GenericLiveRound({
     if (!process.length) return
     const items = process
     process = []
+    const lastIndex = projection.items.indexOf(items[items.length - 1]!)
+    const hasFollowingAnswer = projection.items.slice(lastIndex + 1).some(item =>
+      item.kind === 'message' && item.role === 'assistant' && item.phase !== 'commentary')
+    const processState = hasFollowingAnswer ? 'settled' : projection.model.state
+    // 只有来源携带时间戳时才计算执行范围，不将整个轮次耗时冒充处理耗时。
+    const times = items.flatMap(item => {
+      const time = Date.parse(item.at ?? '')
+      return Number.isFinite(time) ? [time] : []
+    })
+    const startedAtMs = times.length ? Math.min(...times) : undefined
+    const endedAtMs = times.length && processState !== 'running' ? Math.max(...times) : undefined
     content.push(<TaskProcessGroup
       key={`process:${items[0]!.id}`} id={`process:${items[0]!.id}`}
       messageCount={items.filter(item => item.kind === 'thinking' || item.kind === 'message').length}
       toolCount={items.filter(item => item.kind === 'tool').length}
       errorCount={items.filter(item => item.kind === 'tool' && item.status === 'error').length}
-      state={projection.model.state} defaultExpanded={projection.model.state === 'running'}
+      startedAtMs={startedAtMs} endedAtMs={endedAtMs}
+      thinkingDurationMs={items.reduce((sum, item) => sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
+      state={processState} defaultExpanded={processState === 'running'}
     >
-      {items.map(item => item.kind === 'thinking' || (item.kind === 'message' && item.phase === 'commentary')
-        ? <MarkdownContent key={item.id} text={item.text} streaming={item.streaming}/>
-        : renderItem(item))}
+      <div className="task-process-sequence">
+        {items.map(item => item.kind === 'message' && item.phase === 'commentary'
+          ? <div key={item.id} className="task-process-message" data-message-role="commentary"><MarkdownContent text={item.text} streaming={item.streaming}/></div>
+          : renderItem(item))}
+      </div>
     </TaskProcessGroup>)
   }
   for (const item of projection.items) {

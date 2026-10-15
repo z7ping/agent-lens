@@ -20,3 +20,18 @@ test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 A
   assert.doesNotMatch(taskMessageSource, /sourceId\s*===\s*['"]pi['"]/)
   assert.match(taskDetailCss, /\.task-message-attachment-image \{[\s\S]*?object-fit: contain;/)
 })
+
+test('Native 消息操作不能因样式隐藏，扩展动作保留可见入口', () => {
+  assert.match(taskDetailCss, /\.task-message-actions \{ display: flex;/)
+  assert.doesNotMatch(taskDetailCss, /\.task-message-actions \{ display: none;/)
+  assert.match(taskMessageSource, /\{actions && <div className="task-message-actions">\{actions\}<\/div>\}/)
+})
+
+test('核心视图保留未识别事件可达性，不用无依据的全量计数', () => {
+  const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+  assert.match(review, /const unknownCount = groups\.reduce/)
+  assert.match(review, /!showAllEvents && unknownCount > 0/)
+  assert.match(review, /onShowAllEvents=\{toggleEventVisibility\}/)
+  assert.match(review, /onClick=\{onShowAllEvents\}/)
+  assert.match(review, /entry\.type === 'raw-event-group'/)
+})

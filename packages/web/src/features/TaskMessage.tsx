@@ -91,9 +91,13 @@ export function TaskMessage({
     setCanCollapse(element.scrollHeight > limit + 2)
   }, [collapsible])
 
+  useEffect(() => {
+    // 只在消息角色切换时重设；切换源码/渲染视图不得覆盖用户的折叠选择。
+    setExpanded(!user)
+  }, [user])
+
   useLayoutEffect(() => {
     // Agent 正文默认完整展开；流式阶段不做五行折叠测量，也不重建 ResizeObserver。
-    setExpanded(!user)
     if (streaming && !user && view === 'rendered') {
       setCanCollapse(false)
       setCollapsedHeight(undefined)

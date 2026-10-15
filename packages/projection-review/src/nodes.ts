@@ -100,7 +100,7 @@ export function eventCategory(kind: TimelineItemDto['kind']): ReviewEventCategor
   if (kind.startsWith('subagent.')) return 'subagent'
   if (kind === 'runtime.startup') return 'lifecycle'
   if (kind.startsWith('context.')) return 'context'
-  if (kind.startsWith('model.') || kind.startsWith('reasoning.')) return 'model'
+  if (kind.startsWith('model.') || kind.startsWith('reasoning.') || kind === 'thinking.level.changed') return 'model'
   if (kind === 'session.lifecycle') return 'lifecycle'
   if (kind === 'artifact.action') return 'artifact'
   if (kind === 'usage') return 'usage'

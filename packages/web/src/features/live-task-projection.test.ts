@@ -382,3 +382,12 @@ test('a complete native reasoning interval is needed before displaying thinking 
   assert.ok(unpairedThinking?.kind === 'thinking')
   assert.equal(unpairedThinking.durationMs, undefined)
 })
+
+test('未标注阶段的 Live Snapshot 不猜测 final；仅按原生 stopReason 识别工具续执行', () => {
+  const items = projectLiveSnapshotEntries([
+    { id: 'unknown', role: 'assistant', content: 'plain output' },
+    { id: 'working', type: 'message', message: { role: 'assistant', stopReason: 'toolUse', content: [{ type: 'text', text: 'check files' }] } },
+    { id: 'finished', type: 'message', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }] } },
+  ])
+  assert.deepEqual(items.filter(item => item.kind === 'message').map(item => item.kind === 'message' ? item.phase : undefined), [undefined, 'commentary', 'final'])
+})

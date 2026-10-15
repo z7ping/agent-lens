@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { PiLiveCurrentTaskRound } from './PiLiveTaskRound'
 import { TaskMessage } from './TaskMessage'
+import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
 import { TaskThinking } from './TaskThinking'
@@ -185,4 +186,30 @@ test('MCP 完整入参与出参位于同一个默认折叠的 Tool 内，不被�
   assert.doesNotMatch(html, /task-tool-input-details|task-tool-output-details/)
   assert.match(html, /organization WHERE ancestors LIKE/)
   assert.match(html, /rows/)
+})
+
+
+test('事件类型分别使用语义图标，不再全部显示时钟', () => {
+  const cases = [
+    ['permission', 'lucide-shield'],
+    ['subagent', 'lucide-git-fork'],
+    ['context', 'lucide-layers'],
+    ['model', 'lucide-bot'],
+    ['lifecycle', 'lucide-clock'],
+    ['artifact', 'lucide-folder-open'],
+    ['unknown', 'lucide-circle-alert'],
+  ] as const
+  for (const [category, expected] of cases) {
+    const html = renderToStaticMarkup(createElement(TaskEvent, { model: { id: category, category, label: category } }))
+    assert.match(html, new RegExp(expected), category)
+  }
+})
+
+test('TaskMessage 的额外操作与核心复制/源码操作各有可达入口', () => {
+  const html = renderToStaticMarkup(createElement(TaskMessage, {
+    role: 'assistant', text: '结果', actions: createElement('button', { type: 'button' }, '编辑消息'),
+  }))
+  assert.match(html, /task-message-actions/)
+  assert.match(html, /编辑消息/)
+  assert.match(html, /task-message-copy-action/)
 })
