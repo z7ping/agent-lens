@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import type {
   AgentFacetDto,
   BackupAssetKindDto,
@@ -155,12 +156,12 @@ export function BackupPage({
   selectedAssetSourceId,
   onSelectedAssetSourceIdChange,
   agents,
-  topbarHost,
+  toolbarHost,
 }: {
   selectedAssetSourceId: string
   onSelectedAssetSourceIdChange(sourceId: string): void
   agents: AgentFacetDto[]
-  topbarHost?: HTMLDivElement | null
+  toolbarHost?: HTMLDivElement | null
 }) {
   const { t, i18n } = useTranslation(['backup', 'common'])
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -172,7 +173,8 @@ export function BackupPage({
   const [success, setSuccess] = useState('')
   const [selectedSourceIds, setSelectedSourceIds] = useState<string[] | null>(null)
   const [selectedKinds, setSelectedKinds] = useState<BackupAssetKindDto[]>(RECOMMENDED_KINDS)
-  const [activeView, setActiveView] = useState<'assets' | 'history'>('assets')
+  const [searchParams] = useSearchParams()
+  const activeView = searchParams.get('view') === 'history' ? 'history' : 'assets'
   const [createOpen, setCreateOpen] = useState(false)
   const [verification, setVerification] = useState<Record<string, BackupVerifyResponseDto>>({})
   const [physicalPathSnapshot, setPhysicalPathSnapshot] = useState<BackupSnapshotManifestDto | null>(null)
@@ -467,11 +469,7 @@ export function BackupPage({
 
   return <>
     <main className="workspace-page backup-page">
-    {topbarHost ? createPortal(<div className="backup-topbar-controls">
-      <ToolbarGroup className="backup-view-switcher" role="group" aria-label={t('assetView.tabsAria')}>
-        <button type="button" aria-pressed={activeView === 'assets'} className={`scope-chip ${activeView === 'assets' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('assets')}>{t('assetView.currentTab')}</button>
-        <button type="button" aria-pressed={activeView === 'history'} className={`scope-chip ${activeView === 'history' ? 'scope-chip-active' : ''}`} onClick={() => setActiveView('history')}>{t('assetView.historyTab')}</button>
-      </ToolbarGroup>
+    {toolbarHost ? createPortal(<div className="backup-toolbar-controls">
       {backupScopeFilter}
       <ToolbarGroup className="backup-toolbar-actions" align="end">
         {activeView === 'history' && visibleSnapshots.length > 0 && <Button aria-label={t('snapshots.verifyAll')} title={t('snapshots.verifyAll')} loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}><UiIcon name="check" size={14}/><span className="backup-toolbar-label">{t('snapshots.verifyAll')}</span></Button>}
@@ -479,7 +477,7 @@ export function BackupPage({
         <Button aria-label={t('toolbar.create')} title={t('toolbar.create')} variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/><span className="backup-toolbar-label">{t('toolbar.create')}</span></Button>
         <IconButton disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
       </ToolbarGroup>
-    </div>, topbarHost) : null}
+    </div>, toolbarHost) : null}
     <div className="page-content backup-content">
       <div className="backup-mobile-scope">{backupScopeFilter}</div>
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
