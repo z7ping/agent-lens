@@ -21,7 +21,7 @@
   position: relative;
   overflow: hidden;
   border: 1px solid var(--al-line);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--al-surface);
   box-shadow: none;
 }
