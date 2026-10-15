@@ -793,6 +793,14 @@ export class AgentLensClientModel {
     return result
   }
 
+  async updateIntegration(
+    integrationId: string,
+  ): Promise<IntegrationPackageOperationResponseDto> {
+    const result = await this.api.updateIntegration(integrationId)
+    await this.refreshIntegrationManagement().catch(() => undefined)
+    return result
+  }
+
   async removeIntegration(
     integrationId: string,
   ): Promise<IntegrationPackageOperationResponseDto> {
