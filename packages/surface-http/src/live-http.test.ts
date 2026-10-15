@@ -395,6 +395,7 @@ test('Live browser folder route lists only subdirectories with explicit POST and
     const payload = await response.json() as { path: string; directories: Array<{ name: string; path: string }>; selectable: boolean }
     assert.equal(payload.path, root)
     assert.deepEqual(payload.directories, [{ name: 'code', path: join(root, 'code') }])
+    assert.equal(Array.isArray((payload as unknown as { breadcrumbs: unknown[] }).breadcrumbs), true)
     assert.equal(payload.selectable, true)
     assert.equal(JSON.stringify(payload).includes('token.txt'), false)
 
