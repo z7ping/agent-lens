@@ -13,6 +13,9 @@ export interface PiLiveCurrentToolInput {
   callId: string
   name: string
   summary: string
+  toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
+  mcpServerId?: string | undefined
+  parentToolCallId?: string | undefined
   output?: string | undefined
   at?: string | undefined
   startedAtMs?: number | undefined
@@ -200,6 +203,9 @@ export function startPiLiveTool(items: PiLiveHistoryItem[], input: PiLiveCurrent
     kind: 'tool',
     callId: input.callId,
     name: input.name || previous?.name || 'tool',
+    ...(input.toolSourceType || previous?.toolSourceType ? { toolSourceType: input.toolSourceType ?? previous?.toolSourceType } : {}),
+    ...(input.mcpServerId || previous?.mcpServerId ? { mcpServerId: input.mcpServerId ?? previous?.mcpServerId } : {}),
+    ...(input.parentToolCallId || previous?.parentToolCallId ? { parentToolCallId: input.parentToolCallId ?? previous?.parentToolCallId } : {}),
     summary: input.summary || previous?.summary || '',
     output: input.output ?? previous?.output ?? '',
     status: 'running',
@@ -310,6 +316,9 @@ function settleLiveItem(live: PiLiveHistoryItem, persisted?: PiLiveHistoryItem):
       id: live.id,
       startedAtMs: live.startedAtMs,
       durationMs: persisted.durationMs ?? live.durationMs,
+      ...(live.toolSourceType ? { toolSourceType: live.toolSourceType } : {}),
+      ...(live.mcpServerId ? { mcpServerId: live.mcpServerId } : {}),
+      ...(live.parentToolCallId ? { parentToolCallId: live.parentToolCallId } : {}),
       contentIndex: live.contentIndex ?? persisted.contentIndex,
     }
   }
