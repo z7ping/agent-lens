@@ -22,12 +22,16 @@ test('通用 Live 产品层不再依赖 legacy PiLivePage / piLiveApi', () => {
   assert.doesNotMatch(page, /\bPiLivePage\b|\bpiLiveApi\b|PiLiveTaskRound|pi-live-current|pi-live-task-projection/)
 })
 
-test('通用 Live model / thinking controls 使用共享 Pill Select', () => {
+test('通用 Live 模型和推理选择只使用共享 SelectMenu 契约', () => {
   assert.match(page, /modelControl && <ComposerPillSelect/)
   assert.match(page, /thinking && <ComposerPillSelect/)
   assert.match(page, /value=\{modelControl\.value \?\? ''\}/)
   assert.match(page, /value=\{thinking\.value\}/)
-  assert.match(pill, /<SelectMenu[\s\S]*?variant="pill"/)
+  assert.match(pill, /return <SelectMenu/)
+  assert.match(pill, /value=\{value\}/)
+  assert.match(pill, /onChange=\{onChange\}/)
+  assert.doesNotMatch(pill, /variant=|className=|menuWidth=/)
+  assert.match(selectCss, /\.select-menu-trigger \{[^}]*height:\s*32px;/s)
   assert.match(selectMenu, /createPortal\(/)
   assert.match(selectCss, /\.select-menu-popover\s*\{[\s\S]*?position:\s*fixed;/)
 })
