@@ -42,6 +42,7 @@ test('SelectMenu 用可选前置标识保持智能体品牌与其他筛选控件
   assert.match(selectSource, /selected\?\.leading/)
   assert.match(selectSource, /option\.leading/)
   assert.match(agentOverview, /leading: <AgentLogo sourceId=\{agent\.sourceId\} size="compact"\/>/)
+  assert.match(liveNewTaskSource, /leading: <AgentLogo sourceId=\{product\.productId\} size="compact"\/>/)
   assert.match(selectCss, /\.select-menu-trigger-leading/)
 })
 
