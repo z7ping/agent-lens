@@ -20,7 +20,7 @@ import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { PageLoadingState } from '../components/StateViews'
-import { Button, Dialog, Drawer, IconButton, StatusBadge, ToolbarGroup, UiIcon } from '../components/ui'
+import { Button, Dialog, Drawer, IconButton, StatusBadge, UiIcon } from '../components/ui'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
 const OPTIONAL_KINDS: BackupAssetKindDto[] = ['session', 'memory']
@@ -460,28 +460,28 @@ export function BackupPage({
     </label>
   }
 
-  const backupScopeFilter = <div className="backup-agent-filter-slot"><SidebarFilterDisclosure
+  const backupScopeFilter = <SidebarFilterDisclosure
         showAllOption
         summary={selectedAssetSourceId ? agentLabel(selectedAssetSourceId, agents.find(agent => agent.sourceId === selectedAssetSourceId)?.displayName) : t('common:sidebarFilter.allAgents')}
       
         agents={agents}
         agentSelection={{ mode: 'single', value: selectedAssetSourceId, onChange: onSelectedAssetSourceIdChange }}
-      /></div>
+      />
 
   return <>
     <main className="workspace-page backup-page">
-    {toolbarHost ? createPortal(<div className="backup-toolbar-controls">
-      {backupScopeFilter}
-      <ToolbarGroup className="backup-toolbar-actions" align="end">
+    {toolbarHost ? createPortal(<div className="workspace-view-controls">
+      <div className="workspace-view-filter">{backupScopeFilter}</div>
+      <div className="workspace-view-filter-actions">
         {activeView === 'history' && visibleSnapshots.length > 0 && <Button aria-label={t('snapshots.verifyAll')} title={t('snapshots.verifyAll')} loading={busy === 'verify-all'} disabled={Boolean(busy)} onClick={() => void verifyAll()}><UiIcon name="check" size={14}/><span className="backup-toolbar-label">{t('snapshots.verifyAll')}</span></Button>}
         <Button aria-label={t('toolbar.import')} title={t('toolbar.import')} disabled={Boolean(busy)} onClick={() => importInput.current?.click()}><UiIcon name="upload" size={14}/><span className="backup-toolbar-label">{t('toolbar.import')}</span></Button>
         <Button aria-label={t('toolbar.create')} title={t('toolbar.create')} variant="primary" disabled={Boolean(busy)} onClick={openCreateSnapshot}><UiIcon name="plus" size={14}/><span className="backup-toolbar-label">{t('toolbar.create')}</span></Button>
         <IconButton disabled={refreshing || Boolean(busy)} title={t('page.refresh')} aria-label={t('page.refresh')} onClick={() => void refresh(true)}><UiIcon name="refresh" size={14}/></IconButton>
-      </ToolbarGroup>
+      </div>
     </div>, toolbarHost) : null}
     <div className="page-content backup-content">
       <input ref={importInput} className="backup-file-input" type="file" accept=".agentlens-backup,application/vnd.agentlens.backup" onChange={selectImportBackup}/>
-      {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><button className="backup-link-btn" onClick={() => setError('')}>{t('page.close')}</button></div>}
+      {error && <div className="backup-error" role="alert"><b>{t('page.operationFailed')}</b><span>{error}</span><Button size="small" onClick={() => setError('')}>{t('page.close')}</Button></div>}
       {success && <div className="backup-success" role="status">{success}</div>}
 
         {activeView === 'assets' ? <div className="backup-assets-surface">
@@ -614,7 +614,7 @@ export function BackupPage({
                 <strong className="backup-snapshot-size">{formatBytes(snapshot.totalBytes)}</strong>
                 <div className="backup-snapshot-state">{checked ? <StatusBadge tone={checked.valid ? 'success' : 'danger'}>{checked.valid ? t('snapshots.verifyPassed') : t('snapshots.verifyFailed')}</StatusBadge> : <StatusBadge>{t('snapshots.unverified')}</StatusBadge>}</div>
                 <code className="backup-snapshot-hash" title={snapshot.manifestSha256}>{shortHash(snapshot.manifestSha256)}</code>
-                <div className="backup-table-actions"><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</button><button className="backup-link-btn" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</button></div>
+                <div className="backup-table-actions"><Button size="small" disabled={Boolean(busy)} onClick={() => void inspectPhysicalPaths(snapshot.id)}>{t('snapshots.physicalPaths')}</Button><Button size="small" disabled={Boolean(busy)} onClick={() => void verifySnapshot(snapshot.id)}>{t('snapshots.verify')}</Button><Button size="small" disabled={Boolean(busy)} onClick={() => void showRestorePreview(snapshot.id)}>{t('snapshots.preview')}</Button><Button size="small" disabled={Boolean(busy)} onClick={() => void exportSnapshot(snapshot.id)}>{t('snapshots.export')}</Button></div>
               </article>
             })}
           </div> : <div className="backup-history-empty">{t('assetView.noHistory')}</div>}
