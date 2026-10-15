@@ -39,6 +39,7 @@ import {
 import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton, Input, Textarea } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
+import { AgentLogo } from '../components/AgentLogo'
 import {
   appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
@@ -1920,7 +1921,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       onTurnRailSelect={jumpToIndexedRound}
     >
       <TaskHeader
-        marker={<span className="agent-icon" aria-hidden="true"><UiIcon name="agent" size={14}/></span>}
+        marker={<AgentLogo sourceId={product?.productId ?? current.liveId} size="normal"/>}
         agent={agentLabel}
         context={workspace || t('header.unlinkedProject')}
         status={runtimeStatus}
