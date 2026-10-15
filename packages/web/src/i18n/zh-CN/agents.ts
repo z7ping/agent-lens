@@ -269,6 +269,8 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
       columnLocal: '本机',
       columnStatus: '接入状态',
       columnCapabilities: '能力',
+      detailsLabel: '智能体接入详情',
+      availableIntegrationVersion: '可用接入包版本',
       columnActions: '操作',
       officialSupport: 'AgentLens 官方支持',
       capabilitiesPending: '能力待加载',
