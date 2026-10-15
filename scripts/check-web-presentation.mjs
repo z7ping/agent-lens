@@ -82,7 +82,7 @@ function cssRules(source) {
   // Flat rules also match declarations inside @media and @supports blocks.
   for (const match of clean.matchAll(/(?:^|[{}])\s*([^{}]+?)\s*\{([^{}]*)\}/gm)) {
     const declarations = Object.fromEntries(
-      [...match[2].matchAll(/(?:^|;)\s*([-\w]+)\s*:\s*([^;]+)\s*;?/g)]
+      [...match[2].matchAll(/(?:^|;)\s*([-\w]+)\s*:\s*([^;]+)/g)]
         .map(item => [item[1], item[2].trim()]),
     )
     for (const selector of match[1].trim().split(',')) {
