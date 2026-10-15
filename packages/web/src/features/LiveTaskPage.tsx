@@ -2095,8 +2095,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                 title={t('live.model')}
                 value={modelControl.value ?? ''}
                 placeholder={modelControl.label || t('live.model')}
-                className="pi-live-model-picker"
-                menuWidth={280}
                 disabled={busy || state?.status !== 'ready'}
                 options={modelControl.options.map(option => ({
                   value: option.value,
@@ -2110,8 +2108,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                 title={thinking.options.length <= 1 ? t('live.thinkingNoAlternatives') : t('live.thinking')}
                 value={thinking.value}
                 placeholder={thinking.label || thinking.value}
-                className="pi-live-thinking-picker"
-                menuWidth={180}
                 disabled={busy || state?.status !== 'ready' || thinking.options.length <= 1}
                 options={thinking.options.map(option => ({
                   value: option.value,
