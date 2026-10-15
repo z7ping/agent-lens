@@ -97,6 +97,13 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
   }
 
   if (node.sourceId === 'pi') {
+    // Canonical lifecycle 原样保留；展示层按已经确认的原生 action 给出易读标签。
+    if (node.kind === 'session.lifecycle') {
+      if (action === 'assistant.error') return agentLensI18n.t('review:local.event.piAssistantError')
+      if (action === 'assistant.cancelled') return agentLensI18n.t('review:local.event.piAssistantCancelled')
+      if (action === 'pi.bash' || action === 'pi.bash_execution') return agentLensI18n.t('review:local.event.piShell')
+      if (action === 'pi.bash_result') return agentLensI18n.t('review:local.event.piShellResult')
+    }
     if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
     if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
     if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.branchSummary')
