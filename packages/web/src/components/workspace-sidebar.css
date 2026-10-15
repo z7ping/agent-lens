@@ -1051,6 +1051,31 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Drawer uses readable labels; desktop rail remains icon-only. */
+  .app-shell.is-contextless-workspace .workspace-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-shell.is-contextless-workspace .workspace-primary-nav {
+    border-right: 0;
+    justify-items: stretch;
+    padding-inline: 8px;
+  }
+  .app-shell.is-contextless-workspace .workspace-primary-link {
+    display: flex;
+    width: 100%;
+    gap: 12px;
+    justify-content: flex-start;
+    padding-inline: 12px;
+  }
+  .app-shell.is-contextless-workspace .workspace-primary-link > span {
+    display: inline;
+    font-size: 13px;
+  }
+  .app-shell.is-contextless-workspace .workspace-sidebar-footer {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 8px;
+  }
+
   .workspace-breadcrumb {
     padding-inline: 8px;
   }
