@@ -68,16 +68,17 @@
   color: var(--al-accent);
 }
 
+/* Keep the semantic icon visually attached to its link text.
+ * Both remain inside the same anchor; only the text carries the underline. */
 .markdown-link-type-icon {
   width: 14px;
   height: 14px;
   display: inline-block;
-  vertical-align: -2px;
-  margin-right: 5px;
-  color: var(--al-muted);
+  vertical-align: -0.14em;
+  margin-right: 4px;
+  color: inherit;
 }
-.markdown-external-link .markdown-link-type-icon { margin: 0 0 0 5px; }
-.markdown-local-file-link.is-directory .markdown-link-type-icon { color: var(--al-accent); }
+.markdown-external-link .markdown-link-type-icon { margin: 0 0 0 4px; }
 .local-file-preview-markdown {
   flex: 1 1 auto;
   min-height: 0;
