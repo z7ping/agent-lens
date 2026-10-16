@@ -44,14 +44,62 @@ export async function observedInteractionFileChanges(
   return { items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations)), truncated }
 }
 
-/** 从既有 Canonical 文件事件恢复旧历史摘要，查询有界，不读取当前工作区。 */
-export async function observedSessionFileChanges(storage: StorageService, logicalSessionId: string) {
-  const observations = await storage.repositories.observations.query({
-    logicalSessionIds: [logicalSessionId], kind: 'artifact.action', order: 'desc', limit: MAX_ROUND_OBSERVATIONS + 1,
-  })
-  return {
-    items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations.slice(0, MAX_ROUND_OBSERVATIONS).reverse())),
-    truncated: observations.length > MAX_ROUND_OBSERVATIONS,
+
+// 旧会话只从既有 Canonical 工具与原生文件事件补算；不猜测 Shell 副作用，
+// 不扫描整个数据库，也不伪造 Git 基线。
+const MAX_LEGACY_OBSERVATIONS = 5_000
+const LEGACY_EMPTY_CACHE_MS = 60_000
+const LEGACY_CACHE_LIMIT = 128
+type LegacyResult = { items: TaskFileChangeRecord[]; truncated: boolean }
+const legacyCache = new WeakMap<StorageService, Map<string, {
+  expiresAt: number
+  pending: Promise<LegacyResult>
+}>>()
+
+export async function backfillLegacySessionFileChanges(
+  storage: StorageService,
+  logicalSessionId: string,
+): Promise<LegacyResult> {
+  const existing = legacyCache.get(storage) ?? new Map<string, {
+    expiresAt: number
+    pending: Promise<LegacyResult>
+  }>()
+  legacyCache.set(storage, existing)
+  const cached = existing.get(logicalSessionId)
+  if (cached && cached.expiresAt > Date.now()) return cached.pending
+
+  const pending = (async (): Promise<LegacyResult> => {
+    const observations: CanonicalObservation[] = []
+    let after: ObservationCursor | undefined
+    let truncated = false
+    while (observations.length < MAX_LEGACY_OBSERVATIONS) {
+      const page = await storage.repositories.observations.query({
+        logicalSessionIds: [logicalSessionId],
+        ...(after ? { after } : {}),
+        order: 'asc',
+        limit: PAGE_SIZE,
+      })
+      observations.push(...page)
+      if (page.length < PAGE_SIZE) break
+      if (observations.length >= MAX_LEGACY_OBSERVATIONS) { truncated = true; break }
+      after = cursorFor(page[page.length - 1]!)
+    }
+    const items = summarizeObservedTaskFileChanges(observedTaskFileChanges(observations))
+    // Partial scans must not be persisted as authoritative full-session facts.
+    // Existing finalized captures must remain untouched (caller skips them).
+    if (!truncated && items.length && storage.taskFileChanges) {
+      await storage.taskFileChanges.replaceObservedSession(logicalSessionId, items)
+    }
+    return { items, truncated }
+  })()
+
+  if (existing.size >= LEGACY_CACHE_LIMIT) existing.delete(existing.keys().next().value!)
+  existing.set(logicalSessionId, { expiresAt: Date.now() + LEGACY_EMPTY_CACHE_MS, pending })
+  try {
+    return await pending
+  } catch (error) {
+    existing.delete(logicalSessionId)
+    throw error
   }
 }
 

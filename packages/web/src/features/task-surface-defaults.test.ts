@@ -12,6 +12,7 @@ const liveTaskPage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url)
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const taskProcessGroup = readFileSync(new URL('./TaskProcessGroup.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
+const taskHeader = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
 const taskSessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
 const mainEntry = readFileSync(new URL('../main.tsx', import.meta.url), 'utf8')
 
@@ -86,6 +87,25 @@ test('通用 Live 的事件和轮次由统一 Task Surface 投影负责', () => 
   assert.match(liveTaskPage, /<StableLiveRounds/)
   assert.match(liveTaskPage, /<GenericLiveRound/)
   assert.doesNotMatch(liveTaskPage, /PiLivePage|piLiveApi/)
+})
+
+test('Review / Live 任务页头以任务标题为主，智能体与状态归入次行且不重复项目名', () => {
+  const copy = taskHeader.slice(taskHeader.indexOf('<div className="task-header-copy">'), taskHeader.indexOf('{(metrics.length > 0 || hasHeaderActions)'))
+  assert.ok(copy.indexOf('className="task-header-title"') < copy.indexOf('className="task-header-meta"'))
+  assert.doesNotMatch(copy, /task-header-context/)
+  assert.match(copy, /\{showStatus && <span className="task-header-status"/)
+  assert.match(taskHeader, /\{resolvedContext && <div><span>\{t\('header\.context'\)\}/)
+
+  assert.match(taskSessionCss, /\.task-session-view \.task-header-title \{ grid-column: 1; grid-row: 1; \}/)
+  assert.match(taskSessionCss, /\.task-session-view \.task-header-meta \{ grid-column: 1; grid-row: 2; \}/)
+  assert.match(taskSessionCss, /\.task-session-view \.task-header-actions \{ grid-column: 3; grid-row: 1 \/ 3; \}/)
+  assert.match(taskSessionCss, /\.task-session-view \.task-header-reading-controls \{[\s\S]*?grid-row: 3;/)
+  assert.match(taskSessionCss, /@media \(max-width: 767\.98px\) \{[\s\S]*?\.task-session-view \.task-header-meta \{ grid-column: 1; grid-row: 2; \}/)
+  assert.match(taskDetailCss, /\.task-surface \.task-header-status::before \{/)
+
+  assert.match(liveTaskPage, /label: t\('header\.context'\), value: workspace \|\| t\('header\.unlinkedProject'\)/)
+  assert.match(reviewPage, /title=\{<span title=\{taskDetailModel\?\.title\}>\{compactTitle\(taskDetailModel\?\.title\)\}<\/span>\}/)
+  assert.doesNotMatch(reviewPage, /compactTitle\(taskDetailModel\?\.title, 15\)/)
 })
 
 test('Live Header 使用统一的任务表头与安全边距', () => {

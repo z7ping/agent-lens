@@ -69,3 +69,12 @@ test('host Markdown file links reuse the common renderer and source toggle', () 
   assert.match(managed, /file-preview-view-toggle/)
   assert.match(markdown, /a: \(\{ node: _node, \.\.\.props \}\) => <LocalFileLink/)
 })
+
+test('link icons share the anchor hit area and inherit the link color', () => {
+  const link = readFileSync(new URL('./LocalFileLink.tsx', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('./local-file-preview.css', import.meta.url), 'utf8')
+  assert.match(link, /<UiIcon className="markdown-link-type-icon" name=\{icon\} size=\{14\}\/>\{children\}<\/a>/)
+  assert.match(styles, /\.markdown-link-type-icon \{[^}]*margin-right: 4px;[^}]*color: inherit;/s)
+  assert.match(styles, /\.markdown-external-link \.markdown-link-type-icon \{ margin: 0 0 0 4px; \}/)
+  assert.doesNotMatch(styles, /\.markdown-local-file-link\.is-directory \.markdown-link-type-icon/)
+})

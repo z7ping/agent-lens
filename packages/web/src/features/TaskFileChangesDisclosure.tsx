@@ -54,7 +54,7 @@ export function TaskFileChangesDisclosure({
   }, [diffPath, sessionId, isInteraction])
 
   if (!value && !loading && !error) return null
-  if (value && value.summary.count === 0 && !loading && !error) return null
+  if (value && value.summary.count === 0 && !value.meta.truncated && !loading && !error) return null
 
   const count = value?.summary.count ?? 0
   const displayed = showAll ? value?.items ?? [] : (value?.items ?? []).slice(0, INITIAL_VISIBLE_FILES)
