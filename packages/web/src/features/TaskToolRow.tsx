@@ -87,6 +87,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
   const input = model.rawInput
   const preview = !input && hasTarget ? target : undefined
   const commandTarget = visualKind === 'shell' && hasTarget
+  const showInputSection = !commandTarget || (input !== undefined && input.trim() !== target.trim())
 
   useEffect(() => {
     if (model.status !== 'running' || model.startedAtMs === undefined) return
@@ -121,19 +122,19 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
               : model.status === 'error' ? <UiIcon name="close" size={16}/>
                 : <UiIcon name="clock" size={14}/>}
         </span>
-        <span className="task-tool-status-label">{status}</span>
+        {model.status !== 'unknown' && <span className="task-tool-status-label">{status}</span>}
       </span>
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
       {commandTarget && <code className="task-tool-command-preview" title={target}>{target}</code>}
     </summary>
     <div className="task-tool-sections">
-      <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
+      {showInputSection && <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
           ? <CopyableCodeBlock copyValue={input} language={expanded ? codeLanguageFromContent(input, visualKind === 'shell' ? (/powershell|pwsh/i.test(model.name) ? 'powershell' : 'bash') : undefined) : undefined}>{input}</CopyableCodeBlock>
           : preview ? <CopyableCodeBlock copyValue={preview} language={expanded ? codeLanguageFromContent(preview, visualKind === 'shell' ? 'bash' : undefined) : undefined}>{preview}</CopyableCodeBlock>
             : <span className="task-tool-section-empty">{t('tool.inputUnavailable')}</span>}
-      </section>
+      </section>}
       <section className="task-tool-section" data-tool-section="output" aria-label={t('tool.output')}>
         <div className="task-tool-section-title">{t('tool.output')}</div>
         {model.output !== undefined
