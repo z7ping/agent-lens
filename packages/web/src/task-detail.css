@@ -581,7 +581,7 @@
 .task-surface .task-file-change-row { display: flex; min-height: 34px; min-width: 0; align-items: center; gap: 8px; padding: 6px 11px; color: var(--al-ink-2); font-size: 12px; }
 .task-surface .task-file-change-row + .task-file-change-row { border-top: 1px solid color-mix(in srgb, var(--al-line) 38%, transparent); }
 .task-surface .task-file-change-status { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; color: var(--al-muted); font: 650 12px/1 var(--font-mono); }
-.task-surface .task-file-change-status.is-observed { width: auto; min-width: 34px; flex-basis: auto; font: 11px/1.4 inherit; color: var(--al-muted-2); }
+.task-surface .task-file-change-status.is-observed { width: auto; min-width: 34px; flex-basis: auto; font-size: 11px; line-height: 1.4; font-weight: 500; color: var(--al-muted-2); }
 .task-surface .task-file-change-status.is-added { color: var(--al-success); }
 .task-surface .task-file-change-status.is-deleted { color: var(--al-danger); }
 .task-surface .task-file-change-status.is-modified,
