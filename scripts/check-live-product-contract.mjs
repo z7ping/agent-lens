@@ -191,7 +191,7 @@ requireText(liveStyles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax
 forbidText(liveStyles, /max-width:\s*720px/, 'Live 样式不得引入脱离统一断点体系的 720px 私有断点')
 requireText(liveStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.pi-live-compose-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
 forbidText(liveTaskImplementation, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/, 'LiveTaskPage 不得再次持有独立实时会话导航或重复拉取 runtime list')
-requireText(liveTask, /LiveTaskRoundProjector/, 'LiveTaskPage 必须通过通用增量 Projector 构造语义 Round')
+requireText(liveTaskStateHook, /LiveTaskRoundProjector/, 'LiveTaskPage 必须通过通用增量 Projector 构造语义 Round')
 requireText(liveTaskTimeline, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
 requireText(liveTaskRuntimeHook, /new LiveFollowController\(\)/, 'LiveTaskPage 必须恢复流式阅读自动跟随控制')
 requireText(liveTask, /pi-live-new-records/, 'LiveTaskPage 必须在用户脱离底部后提供新内容提示')
