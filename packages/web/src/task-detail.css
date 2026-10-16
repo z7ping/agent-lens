@@ -220,7 +220,7 @@
 .task-surface .task-message-bubble-user {
   max-width: min(64%, 760px);
   padding: 6px 10px 7px;
-  border: 1px solid color-mix(in srgb, var(--al-user-bubble-text) 9%, transparent);
+  border: 1px solid var(--al-line);
   border-radius: 12px;
   border-bottom-right-radius: 5px;
   background: var(--al-user-bubble);
@@ -302,6 +302,18 @@
 .task-surface .task-message-bubble-user .markdown :not(pre) > code,
 .task-surface .task-message-bubble-user .markdown-source,
 .task-surface .task-message-bubble-user .markdown pre { background: var(--al-user-bubble-code); border-color: transparent; color: var(--al-user-bubble-text); }
+/* 用户消息仍按 Markdown 渲染，但标题不使用文档级字号，避免提示词撑大气泡。 */
+.task-surface .task-message-bubble-user .markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: .5em 0 .2em;
+  padding: 0;
+  border: 0;
+  color: var(--al-user-bubble-text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.task-surface .task-message-bubble-user .markdown :is(h1, h2) { font-size: 16px; }
+.task-surface .task-message-bubble-user .markdown :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 0; }
 .task-surface .task-message-bubble-user .markdown a { color: var(--al-user-bubble-link); }
 .task-surface .task-message-bubble-user .markdown-fade { background: linear-gradient(to bottom, transparent, var(--al-user-bubble)); }
 .task-surface .task-message-bubble-user .evidence-inline { border-color: color-mix(in srgb, var(--al-user-bubble-muted) 48%, transparent); color: var(--al-user-bubble-muted); }
