@@ -631,3 +631,47 @@ test('Process Detail retains an upstream unavailable reason instead of treating 
   assert.equal(knownEmpty.availability, 'complete')
   assert.equal(knownEmpty.reasonCode, undefined)
 })
+
+test('历史 Codex 两轮的终态与新轮启动信息按原始时间边界归属，不混入上一轮', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'review-turn-boundary-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const commit = async (kind: 'message.user' | 'message.assistant' | 'session.lifecycle', id: string, at: string, payload: unknown) => observations.commit({
+      sourceId: 'codex',
+      host,
+      installation,
+      candidate: {
+        kind, nativeEventId: id, occurredAt: at, capturedAt: at, payload,
+        identityHints: { nativeSessionId: 'review-two-turn-boundary-session' },
+        dedupHints: { nativeEventId: id },
+      },
+      evidenceCandidates: [],
+    })
+    const first = await commit('message.user', 'first-prompt', '2026-10-16T21:09:00.000Z', { text: 'first' })
+    await commit('message.assistant', 'first-answer', '2026-10-16T21:09:20.000Z', { text: 'first answer' })
+    await commit('session.lifecycle', 'first-completed', '2026-10-16T21:09:22.000Z', { event: 'turn.completed' })
+    await commit('message.user', 'second-prompt', '2026-10-16T21:11:28.000Z', { text: 'second' })
+    await commit('session.lifecycle', 'second-started', '2026-10-16T21:11:29.000Z', { event: 'turn.started' })
+    await commit('session.lifecycle', 'second-context', '2026-10-16T21:11:30.000Z', { event: 'turn.context' })
+    await commit('message.assistant', 'second-answer', '2026-10-16T21:11:38.000Z', { text: 'second answer' })
+
+    const detail = await new ReviewProjection(storage).get(first.observation.logicalSessionId)
+    assert.ok(detail)
+    assert.equal(detail.interactions.length, 2)
+    const firstIds = detail.interactions[0]!.nodes.flatMap(node => node.observationIds)
+    const secondIds = detail.interactions[1]!.nodes.flatMap(node => node.observationIds)
+    assert.equal(firstIds.includes(first.observation.id), true)
+    assert.ok(detail.interactions[0]!.nodes.some(node => node.type === 'event' && node.payload && typeof node.payload === 'object'
+      && !Array.isArray(node.payload) && node.payload.event === 'turn.completed'))
+    assert.ok(detail.interactions[1]!.nodes.some(node => node.type === 'event' && node.payload && typeof node.payload === 'object'
+      && !Array.isArray(node.payload) && node.payload.event === 'turn.started'))
+    assert.equal(firstIds.some(id => secondIds.includes(id)), false)
+    assert.equal(Date.parse(detail.interactions[0]!.endedAt) < Date.parse(detail.interactions[1]!.startedAt), true)
+  } finally {
+    storage.close()
+  }
+})
