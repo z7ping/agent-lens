@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { taskDurationLabel, type TaskRoundModel } from './task-detail-model'
+import { taskDurationLabel, taskRoundPreview, type TaskRoundModel } from './task-detail-model'
 import { UiIcon } from '../components/UiIcon'
 
 export interface TaskRoundProps {
@@ -55,12 +55,14 @@ export function TaskRound({
     expansionStore?.set(model.id, open)
   }
 
+  const preview = taskRoundPreview(model.preview, t('round.filesMentioned'))
+
   return <details
     className={`task-round interaction-block ${model.errorCount ? 'task-round-has-error' : ''} ${className}`.trim()}
     data-interaction-id={model.id}
     data-round-semantic-id={model.semanticId ?? model.id}
     data-round-label={model.label}
-    data-round-preview={model.preview || undefined}
+    data-round-preview={preview || undefined}
     data-round-error={model.errorCount > 0 ? 'true' : undefined}
     data-round-state={model.state}
     data-task-round-state={model.state}
@@ -70,7 +72,7 @@ export function TaskRound({
     <summary className="task-round-summary">
       <DisclosureChevron/>
       <span className="task-round-label">{model.label}</span>
-      {model.preview && <span className="task-round-preview">{model.preview}</span>}
+      {preview && <span className="task-round-preview">{preview}</span>}
       <span className="task-round-meta">
         {model.state === 'running' && <span className="task-round-live">{t('round.running')}</span>}
         {model.state === 'stopped' && <span>{t('round.stopped')}</span>}
