@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { LiveRuntimeStateDto } from '@agent-lens/protocol'
+import type { LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
@@ -25,6 +25,7 @@ import { AgentLogo } from '../components/AgentLogo'
 import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
 import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
+import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
 import { workspaceDisplayName } from './task-detail-model'
 
@@ -44,6 +45,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const location = useLocation()
   const navigate = useNavigate()
   const hostApi = useMemo(() => new AgentLensApi(), [])
+  const [fileChanges, setFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
@@ -179,6 +181,20 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     () => roundProjectorRef.current.projectSegmented(projection.stable, projection.active),
     [projection.stable, projection.active],
   )
+  // File change projection commits independently from Live transcript SSE.
+  // Coalesce rapid events; never refetch on every streamed token.
+  useEffect(() => { setFileChanges(null) }, [current?.runtimeSessionId])
+  useEffect(() => {
+    if (!current) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      void hostApi.runtimeFileChanges(current.runtimeSessionId, controller.signal)
+        .then(value => { if (!controller.signal.aborted) setFileChanges(value) })
+        .catch(() => undefined)
+    }, 280)
+    return () => { window.clearTimeout(timer); controller.abort() }
+  }, [current?.runtimeSessionId, projection.stable.length, projection.active.length, state?.isStreaming, hostApi])
+
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
   const turnRailItems = useMemo(() => {
     const segments = [...roundSegments.stable, ...roundSegments.active]
@@ -349,6 +365,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
             onMessageAction={runMessageAction}
           />)}
+          {historyPage?.hasLater !== true && <TaskFileChangesDisclosure value={fileChanges}/>}
           {historyPage?.hasLater && <div
             ref={historyNewerSentinelRef}
             className={`live-task-history-sentinel live-task-history-sentinel-newer ${historyLoading ? 'is-loading' : ''}`}
