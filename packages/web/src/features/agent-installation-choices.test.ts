@@ -24,10 +24,10 @@ test('same version and directory are displayed only once even across slash/case 
 
 test('installation options use a data-root fallback without discarding unknown paths', () => {
   const first = installation('first', '')
-  first.configRoot = undefined
+  delete first.configRoot
   first.dataRoot = '/tmp/pi-data'
   const second = installation('second', '')
-  second.configRoot = undefined
+  delete second.configRoot
   second.dataRoot = '/tmp/pi-data/'
   assert.deepEqual(installationChoices([first, second]).map(item => item.id), ['first'])
 })

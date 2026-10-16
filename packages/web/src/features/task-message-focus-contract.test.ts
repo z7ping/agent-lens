@@ -28,7 +28,10 @@ test('Native 消息操作不能因样式隐藏，扩展动作保留可见入口'
 })
 
 test('核心视图保留未识别事件可达性，不用无依据的全量计数', () => {
-  const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+  const review = [
+    readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8'),
+  ].join('\n')
   assert.match(review, /const unknownCount = groups\.reduce/)
   assert.match(review, /!showAllEvents && unknownCount > 0/)
   assert.match(review, /onShowAllEvents=\{toggleEventVisibility\}/)

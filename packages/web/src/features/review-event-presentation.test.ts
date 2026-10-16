@@ -42,9 +42,19 @@ test('Pi 真实生命周期事件获得友好标签，同时原始事件保持�
     ['pi.bash_result', '终端执行结果'],
   ] as const
   for (const [action, label] of cases) {
-    const node = {
-      kind: 'session.lifecycle', sourceId: 'pi', label: '会话生命周期', payload: { event: action },
-    } as ReviewEventNodeDto
+    const node: ReviewEventNodeDto = {
+      type: 'event',
+      id: `lifecycle:${action}`,
+      at: '2026-10-16T00:00:00.000Z',
+      capturedAt: '2026-10-16T00:00:00.000Z',
+      sourceId: 'pi',
+      kind: 'session.lifecycle',
+      category: 'lifecycle',
+      label: '会话生命周期',
+      payload: { event: action },
+      evidence: [],
+      observationIds: [],
+    }
     assert.equal(reviewEventLabel(node), label)
   }
 })

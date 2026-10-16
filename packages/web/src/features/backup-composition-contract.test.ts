@@ -29,7 +29,7 @@ test('Backup 使用统一 workspace-page / page-content 壳层，而不是自定
 
 test('Backup 默认以当前资产为主视图，URL 二级导航控制快照历史', () => {
   assert.match(backupPage, /searchParams.get\('view'\) === 'history'/)
-  assert.match(backupPage, /createPortal\(<div className="backup-toolbar-controls"/)
+  assert.match(backupPage, /createPortal\(<div className="workspace-view-controls"/)
   assert.match(app, /<WorkspaceViewTabs/)
   assert.match(app, /t\('backup:assetView.currentTab'\)/)
   assert.match(app, /t\('backup:assetView.historyTab'\)/)
@@ -81,7 +81,7 @@ test('单智能体由共享业务工具栏筛选驱动，主区域直接展示�
 })
 
 test('资产范围复用工作区智能体筛选，并支持全部智能体单选入口', () => {
-  assert.match(backupPage, /const backupScopeFilter = <div className="backup-agent-filter-slot"><SidebarFilterDisclosure/)
+  assert.match(backupPage, /const backupScopeFilter = <SidebarFilterDisclosure/)
   assert.doesNotMatch(backupPage, /backup-mobile-scope/)
   assert.match(backupPage, /showAllOption/)
   assert.match(backupPage, /selectedAssetSourceId/)
@@ -101,7 +101,7 @@ test('导入与创建位于业务工具栏，视图切换位于独立的二级�
   assert.match(app, /className="workspace-topbar-page-tools"/)
   assert.match(app, /<BackupPage selectedAssetSourceId=\{backupAssetSourceId\} onSelectedAssetSourceIdChange=\{setBackupAssetSourceId\} agents=\{agentSelectionItems\} toolbarHost=\{workspaceToolbarHost\} \/>/)
   assert.match(backupPage, /createPortal\(/)
-  assert.match(backupPage, /<ToolbarGroup className="backup-toolbar-actions" align="end">/)
+  assert.match(backupPage, /className="workspace-view-filter-actions"/)
   assert.match(backupPage, /activeView === 'history'.*t\('snapshots\.verifyAll'\)/)
   assert.match(backupPage, /t\('toolbar\.import'\)/)
   assert.match(backupPage, /t\('toolbar\.create'\)/)

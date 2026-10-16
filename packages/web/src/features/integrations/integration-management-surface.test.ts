@@ -73,7 +73,7 @@ test('接入管理在独立业务工具栏提供状态筛选与排序，不再�
   assert.match(page, /statusFilter/)
   assert.match(page, /setOrdering\(value => !value\)/)
   assert.match(page, /integration-management-order-list/)
-  assert.match(page, /onDrop=\{event => \{/)
+  assert.match(page, /\.\.\.dragProps\(item\.integrationId\)/)
   assert.doesNotMatch(page, /moveDownTargetId/)
   assert.doesNotMatch(sidebar, /navigate\('\/integrations'\)/)
   assert.match(app, /<Route path="\/integrations" element=\{<LegacyIntegrationRedirect\/>\}/)

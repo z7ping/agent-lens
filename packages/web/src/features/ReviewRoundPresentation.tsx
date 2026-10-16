@@ -287,6 +287,7 @@ function ReviewProcessGroup({
           <MarkdownSurface text={item.node.text}/>
         </TaskThinking>
         return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
+          <span className="task-process-message-label">{t('local.process.output')}</span>
           <MarkdownSurface text={item.node.text}/>
         </div>
       })}
@@ -370,6 +371,7 @@ export function ReviewRoundAdapter({
   showAllEvents: boolean
   onShowAllEvents: () => void
 }) {
+  const { t } = useTranslation('review')
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
   const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)

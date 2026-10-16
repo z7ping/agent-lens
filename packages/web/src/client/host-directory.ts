@@ -28,7 +28,7 @@ export async function validateHostProjectDirectory(workspacePath: string, signal
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ workspacePath }),
-    signal,
+    ...(signal ? { signal } : {}),
   })
   if (response.ok) return
 
@@ -58,7 +58,7 @@ export async function browseHostProjectDirectory(path?: string, signal?: AbortSi
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(path ? { path } : {}),
-    signal,
+    ...(signal ? { signal } : {}),
   })
   if (!response.ok) {
     let message = ''
