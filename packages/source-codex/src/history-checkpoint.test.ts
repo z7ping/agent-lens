@@ -3,6 +3,7 @@ import { appendFile, mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import Database from 'better-sqlite3'
 import type { SourceExecutionContext } from '@agent-lens/core'
 import { CODEX_PARSER_VERSION, codexHistoryInternals, ingestCodexHistory } from './history'
 
@@ -214,3 +215,38 @@ test('Codex EOF 未完成 JSON 不消费，补全后只导入一次真实记录'
   }
 })
 
+
+test('Codex title-only SQLite update refreshes an already checkpointed rollout without replaying its messages', async () => {
+  const input = await fixture(1)
+  const checkpoints = new Map<string, unknown>()
+  const writes: unknown[] = []
+  const base = context(input.sessions, checkpoints, writes)
+  const ctx: SourceExecutionContext = {
+    ...base,
+    installation: { ...base.installation, configRoot: input.root },
+  }
+
+  try {
+    const first = []
+    for await (const record of ingestCodexHistory(ctx)) first.push(record)
+    assert.equal(first.length, 1)
+
+    const db = new Database(join(input.root, 'state_5.sqlite'))
+    try {
+      db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, updated_at INTEGER)')
+      db.prepare('INSERT INTO threads VALUES (?, ?, ?)').run('rollout-checkpoint', 'Codex 后来生成的摘要', 1780000000)
+    } finally { db.close() }
+
+    const second = []
+    for await (const record of ingestCodexHistory(ctx)) second.push(record)
+    assert.equal(second.length, 1)
+    assert.equal(second[0]?.nativeType, 'metadata/session_title')
+    assert.equal((second[0]?.payload as { entry: { payload: { title: string } } }).entry.payload.title, 'Codex 后来生成的摘要')
+
+    const third = []
+    for await (const record of ingestCodexHistory(ctx)) third.push(record)
+    assert.equal(third.length, 0)
+  } finally {
+    await rm(input.root, { recursive: true, force: true })
+  }
+})
