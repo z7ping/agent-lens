@@ -3,6 +3,7 @@ import type { HostFilePreviewResponseDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { clientModel } from '../client/model'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
+import { MarkdownContent } from './MarkdownContent'
 import { LocalPathActions } from './LocalPathActions'
 import { Dialog, UiIcon } from './ui'
 
@@ -112,6 +113,7 @@ export function LocalFileLink({
   const { t } = useTranslation('common')
   const target = parseLocalFileTarget(href)
   const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'rendered' | 'source'>('source')
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<HostFilePreviewResponseDto | null>(null)
   const [error, setError] = useState('')
@@ -125,7 +127,9 @@ export function LocalFileLink({
     setPreview(null)
     setError('')
     try {
-      setPreview(await clientModel.previewHostFile(target.path))
+      const result = await clientModel.previewHostFile(target.path)
+      setPreview(result)
+      setView(/\.(?:md|markdown|mdown|mkd)$/i.test(result.name) ? 'rendered' : 'source')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -138,6 +142,8 @@ export function LocalFileLink({
       ? t('localFilePreview.lineColumn', { line: target.line, column: target.column })
       : t('localFilePreview.line', { line: target.line })
     : ''
+
+  const isMarkdown = Boolean(preview?.content !== undefined && /\.(?:md|markdown|mdown|mkd)$/i.test(preview.name))
 
   return <>
     <a
@@ -153,7 +159,13 @@ export function LocalFileLink({
       className="local-file-preview-dialog"
       title={fileName(target.path)}
       description={<span title={target.path}>{target.path}{location ? ` · ${location}` : ''}</span>}
-      headerActions={<LocalPathActions path={target.path} onOpen={clientModel.openHostPath}/>}
+      headerActions={<>
+        {isMarkdown && <div className="file-preview-view-toggle" role="group" aria-label={t('localFilePreview.viewMode')}>
+          <button type="button" aria-pressed={view === 'rendered'} onClick={() => setView('rendered')}>{t('localFilePreview.rendered')}</button>
+          <button type="button" aria-pressed={view === 'source'} onClick={() => setView('source')}>{t('localFilePreview.source')}</button>
+        </div>}
+        <LocalPathActions path={target.path} onOpen={clientModel.openHostPath}/>
+      </>}
       onClose={() => setOpen(false)}
     >
       <section className="local-file-preview-body">
@@ -166,7 +178,9 @@ export function LocalFileLink({
                 <small>{error}</small>
               </div>
             : preview?.content !== undefined
-              ? <CopyableCodeBlock className="local-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
+              ? isMarkdown && view === 'rendered'
+                ? <div className="local-file-preview-markdown"><MarkdownContent text={preview.content} frontmatter/></div>
+                : <CopyableCodeBlock className="local-file-preview-content" copyValue={preview.content}><code>{preview.content}</code></CopyableCodeBlock>
               : preview
                 ? <div className="local-file-preview-state">
                     <UiIcon name="exclamation" size={20}/>
