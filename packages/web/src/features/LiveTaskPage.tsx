@@ -27,7 +27,7 @@ import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live
 import { TaskHeader } from './TaskHeader'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
-import { workspaceDisplayName } from './task-detail-model'
+import { readableTaskHeaderTitle, workspaceDisplayName } from './task-detail-model'
 
 function statusLabel(
   state: LiveRuntimeStateDto | null,
@@ -306,7 +306,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         agent={agentLabel}
         context={workspace || t('header.unlinkedProject')}
         status={runtimeStatus}
-        title={title}
+        title={readableTaskHeaderTitle(title)}
         metrics={[]}
         infoItems={[
           { label: t('header.context'), value: workspace || t('header.unlinkedProject') },

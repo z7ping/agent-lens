@@ -97,15 +97,33 @@ test('Review / Live 任务页头以任务标题为主，智能体与状态归入
   assert.match(taskHeader, /\{resolvedContext && <div><span>\{t\('header\.context'\)\}/)
 
   assert.match(taskSessionCss, /\.task-session-view \.task-header-title \{ grid-column: 1; grid-row: 1; \}/)
-  assert.match(taskSessionCss, /\.task-session-view \.task-header-meta \{ grid-column: 1; grid-row: 2; \}/)
+  assert.match(taskSessionCss, /\.task-session-view \.task-header-secondary \{ grid-column: 1 \/ 3; grid-row: 2; \}/)
   assert.match(taskSessionCss, /\.task-session-view \.task-header-actions \{ grid-column: 3; grid-row: 1 \/ 3; \}/)
-  assert.match(taskSessionCss, /\.task-session-view \.task-header-reading-controls \{[\s\S]*?grid-row: 3;/)
-  assert.match(taskSessionCss, /@media \(max-width: 767\.98px\) \{[\s\S]*?\.task-session-view \.task-header-meta \{ grid-column: 1; grid-row: 2; \}/)
+  assert.match(taskSessionCss, /\.task-session-view \.task-header-reading-controls \{[\s\S]*?flex: 1 1 auto;/)
+  assert.doesNotMatch(taskSessionCss, /grid-template-rows: 26px 20px auto;/)
+  assert.match(taskSessionCss, /@media \(max-width: 767\.98px\) \{[\s\S]*?\.task-session-view \.task-header-secondary \{ grid-column: 1; grid-row: 2; \}/)
   assert.match(taskDetailCss, /\.task-surface \.task-header-status::before \{/)
 
   assert.match(liveTaskPage, /label: t\('header\.context'\), value: workspace \|\| t\('header\.unlinkedProject'\)/)
-  assert.match(reviewPage, /title=\{<span title=\{taskDetailModel\?\.title\}>\{compactTitle\(taskDetailModel\?\.title\)\}<\/span>\}/)
+  assert.match(reviewPage, /title=\{<span title=\{readableTaskHeaderTitle\(taskDetailModel\?\.title\)\}>\{compactTitle\(readableTaskHeaderTitle\(taskDetailModel\?\.title\)\)\}<\/span>\}/)
   assert.doesNotMatch(reviewPage, /compactTitle\(taskDetailModel\?\.title, 15\)/)
+})
+
+test('Review 筛选与智能体处于任务头部次行，页头只有一条底部分隔线', () => {
+  const headerSecondary = taskHeader.slice(taskHeader.indexOf('<div className="task-header-secondary">'), taskHeader.indexOf('{(metrics.length > 0 || hasHeaderActions)'))
+  assert.match(headerSecondary, /className="task-header-meta"/)
+  assert.match(headerSecondary, /className="task-header-reading-controls"/)
+  assert.ok(headerSecondary.indexOf('task-header-meta') < headerSecondary.indexOf('task-header-reading-controls'))
+  assert.equal((taskHeader.match(/className="task-header-reading-controls"/g) ?? []).length, 1)
+  assert.match(taskSessionCss, /grid-template-rows: 26px 28px;/)
+  assert.doesNotMatch(taskSessionCss, /\.task-header:has\(\.task-header-reading-controls\)/)
+  assert.match(taskDetailCss, /\.task-surface \.task-header-actions \.task-header-compact-info-trigger,/)
+  assert.match(taskHeader, /aria-label=\{t\('header\.taskInfo'\)\}/)
+  assert.match(taskHeader, /title=\{t\('header\.viewOptions'\)\}/)
+  assert.match(reviewPage, /<Toolbar className="round-nav"/)
+  const navCss = readFileSync(new URL('../review-long-session.css', import.meta.url), 'utf8')
+  assert.match(navCss, /\.review-page \.round-nav \{[\s\S]*?min-height: 28px;/)
+  assert.doesNotMatch(navCss, /min-height: 48px;/)
 })
 
 test('Live Header 使用统一的任务表头与安全边距', () => {

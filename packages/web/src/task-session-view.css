@@ -50,38 +50,23 @@
   background: var(--al-surface);
 }
 
-/* Review / Live 共用：标题主行，智能体与运行状态辅助行，操作靠右。 */
+/* Review / Live 复用双行任务头部：首行标题/操作，次行智能体/筛选，一条底部分隔线。 */
 .task-session-view .task-header {
   max-width: var(--al-content-task-reading);
   grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-rows: 26px 20px;
+  grid-template-rows: 26px 28px;
   margin-inline: auto;
   padding-inline: var(--al-space-page-x);
 }
 .task-session-view .task-header-title { grid-column: 1; grid-row: 1; }
-.task-session-view .task-header-meta { grid-column: 1; grid-row: 2; }
-.task-session-view .task-header-submeta {
-  display: flex;
-  grid-column: 2;
-  grid-row: 2;
-  max-width: min(30vw, 420px);
-  justify-self: start;
-}
+.task-session-view .task-header-secondary { grid-column: 1 / 3; grid-row: 2; }
+.task-session-view .task-header-submeta { max-width: min(30vw, 420px); }
 .task-session-view .task-header-metrics { grid-column: 2; grid-row: 1; }
 .task-session-view .task-header-actions { grid-column: 3; grid-row: 1 / 3; }
-
-/* 筛选与正文分离；槽位只画上边线，底边线复用 Toolbar，避免双层边框。 */
-.task-session-view .task-header:has(.task-header-reading-controls) {
-  grid-template-rows: 26px 20px auto;
-  border-bottom: 0;
-  padding-bottom: 0;
-}
 .task-session-view .task-header-reading-controls {
-  grid-column: 1 / -1;
-  grid-row: 3;
   min-width: 0;
-  border-top: 1px solid var(--al-line);
-  background: var(--al-surface);
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 /*
@@ -105,6 +90,7 @@
   .task-session-view .task-header { padding-inline: 20px; }
 
   .task-session-view .task-header { grid-template-columns: minmax(0, 1fr) auto; }
+  .task-session-view .task-header-secondary { grid-column: 1; }
   .task-session-view .task-header-submeta,
   .task-session-view .task-header-metrics { display: none; }
   .task-session-view .task-header-actions { grid-column: 2; }
@@ -123,13 +109,11 @@
 
   .task-session-view .task-header {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: 26px 20px;
+    grid-template-rows: 26px 28px;
   }
   .task-session-view .task-header-title { grid-column: 1; grid-row: 1; font-size: 15px; }
-  .task-session-view .task-header-meta { grid-column: 1; grid-row: 2; }
+  .task-session-view .task-header-secondary { grid-column: 1; grid-row: 2; }
   .task-session-view .task-header-actions { grid-column: 2; grid-row: 1 / 3; justify-self: end; }
-  .task-session-view .task-header:has(.task-header-reading-controls) { grid-template-rows: 26px 20px auto; }
-  .task-session-view .task-header-reading-controls { grid-row: 3; }
   .task-session-view .task-header-submeta,
   .task-session-view .task-header-metrics { display: none; }
 

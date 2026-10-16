@@ -125,6 +125,20 @@ export function taskPreciseDurationLabel(ms: number): string {
   return translateProduct('task:duration.preciseHoursMinutesSeconds', { hours, minutes, seconds })
 }
 
+/** 页头标题只处理明确的行内 Markdown 语法，不修改原始 Session title。 */
+export function readableTaskHeaderTitle(value: string | undefined): string {
+  if (!value) return ''
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/__([^_\n]+)__/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /**
  * 轮次标题只展示可读摘要，不改变原始用户消息或证据。
  * Codex 的文件上下文包头不是提问，统一转为语义标签。

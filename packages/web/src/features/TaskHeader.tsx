@@ -140,12 +140,15 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     <header ref={headerRef} className={`task-header ${className}`.trim()}>
       <div className="task-header-copy">
         <h1 className="task-header-title">{title}</h1>
-        <div className="task-header-meta">
-          {marker && <span className="task-header-marker">{marker}</span>}
-          <b>{agent}</b>
-          {showStatus && <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>}
+        <div className="task-header-secondary">
+          <div className="task-header-meta">
+            {marker && <span className="task-header-marker">{marker}</span>}
+            <b>{agent}</b>
+            {showStatus && <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>}
+          </div>
+          {readingControls && <div className="task-header-reading-controls">{readingControls}</div>}
+          {submeta && <div className="task-header-submeta">{submeta}</div>}
         </div>
-        {submeta && <div className="task-header-submeta">{submeta}</div>}
       </div>
       {(metrics.length > 0 || hasHeaderActions) && <div className="task-header-side">
         {metrics.length > 0 && <div className="task-header-metrics">
@@ -160,7 +163,9 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             aria-haspopup="dialog"
             aria-expanded={compactInfoOpen}
             onClick={() => setCompactInfoOpen(true)}
-          >{t('header.taskInfo')}</Button>}
+            title={t('header.taskInfo')}
+            aria-label={t('header.taskInfo')}
+          ><UiIcon name="info" size={16}/></Button>
           {(auditToggle || viewActions) && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
               <Button
@@ -170,7 +175,8 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
                 aria-haspopup="menu"
                 aria-expanded={viewMenuOpen}
                 onClick={() => setViewMenuOpen(value => !value)}
-              >{t('header.view')} <UiIcon name="chevron-down" size={14}/></Button>
+                title={t('header.viewOptions')}
+              ><UiIcon name="sliders-horizontal" size={16}/></Button>
             </span>
             <Popover
               open={viewMenuOpen}
@@ -188,7 +194,6 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
           {inlineActions}
         </div>}
       </div>}
-      {readingControls && <div className="task-header-reading-controls">{readingControls}</div>}
     </header>
     {tailActions}
     <Drawer

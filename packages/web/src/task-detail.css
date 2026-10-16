@@ -17,10 +17,10 @@
   width: 100%;
   max-width: none;
   grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-rows: 26px 20px;
+  grid-template-rows: 26px 28px;
   align-items: center;
   column-gap: 10px;
-  row-gap: 1px;
+  row-gap: 0;
   margin: 0;
   padding: 7px 0;
   border-bottom: 1px solid var(--al-line);
@@ -28,11 +28,18 @@
 }
 .task-surface .task-header-copy,
 .task-surface .task-header-side { display: contents; }
-.task-surface .task-header-meta {
-  grid-column: 1;
+.task-surface .task-header-secondary {
+  grid-column: 1 / 3;
   grid-row: 2;
   display: flex;
   min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+.task-surface .task-header-meta {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
   overflow: hidden;
   align-items: center;
   gap: 6px;
@@ -90,10 +97,9 @@
   white-space: nowrap;
 }
 .task-surface .task-header-submeta {
-  grid-column: 2;
-  grid-row: 2;
   display: flex;
   min-width: 0;
+  margin-left: auto;
   flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
@@ -113,6 +119,17 @@
   gap: 6px;
 }
 .task-surface .task-header-actions button { pointer-events: auto; }
+/* 图标操作复用共享 Button、Popover 与 Drawer，完整文案由 title / aria-label 提供。 */
+.task-surface .task-header-actions .task-header-compact-info-trigger,
+.task-surface .task-header-actions .task-view-menu-trigger {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  justify-content: center;
+  padding: 0;
+}
+.task-surface .task-header-actions .task-view-menu-anchor { display: inline-flex; }
 .task-surface .task-header-metrics {
   grid-column: 2;
   grid-row: 1;
@@ -651,8 +668,9 @@
   .task-surface .task-message-bubble-user { max-width: 88%; }
 }
 @media (max-width: 767.98px) {
-  .task-surface .task-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 26px 20px; padding: 7px 0 8px; }
-  .task-surface .task-header-meta { grid-column: 1; grid-row: 2; }
+  .task-surface .task-header { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 26px 28px; padding: 7px 0; }
+  .task-surface .task-header-secondary { grid-column: 1; grid-row: 2; gap: 8px; }
+  .task-surface .task-header-meta { flex: 0 1 auto; }
   .task-surface .task-header-title { grid-column: 1; grid-row: 1; font-size: 15px; }
   .task-surface .task-header-actions { grid-column: 2; grid-row: 1 / 3; }
   .task-surface .task-header-submeta,
