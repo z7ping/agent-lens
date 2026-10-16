@@ -46,8 +46,8 @@ export async function observedInteractionFileChanges(
 
 export function taskFileChangesResponse(
   logicalSessionId: string,
-  items: TaskFileChangeRecord[],
-  capture?: { workspacePath?: string; gitRootPath?: string } | null,
+  items: readonly TaskFileChangeRecord[],
+  capture?: { workspacePath?: string | undefined; gitRootPath?: string | undefined } | null,
   options: { interactionId?: string; truncated?: boolean } = {},
 ): TaskFileChangesResponseDto {
   const counted = items.filter(item => item.additions !== undefined || item.deletions !== undefined)
