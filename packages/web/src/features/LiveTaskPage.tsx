@@ -195,6 +195,19 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     return () => { window.clearTimeout(timer); controller.abort() }
   }, [current?.runtimeSessionId, projection.stable.length, projection.active.length, state?.isStreaming, hostApi])
 
+  // When a tool changes its result without adding a new timeline item, the
+  // regular snapshot count stays stable. A bounded poll keeps Live changes fresh.
+  useEffect(() => {
+    if (!current || !state?.isStreaming) return
+    let active = true
+    const timer = window.setInterval(() => {
+      void hostApi.runtimeFileChanges(current.runtimeSessionId)
+        .then(result => { if (active) setFileChanges(result) })
+        .catch(() => undefined)
+    }, 4_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [current?.runtimeSessionId, state?.isStreaming, hostApi])
+
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
   const turnRailItems = useMemo(() => {
     const segments = [...roundSegments.stable, ...roundSegments.active]
