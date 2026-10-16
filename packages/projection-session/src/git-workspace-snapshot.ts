@@ -227,3 +227,27 @@ export const gitWorkspaceSnapshotInternals = {
   parseNameStatus,
   parseNumStat,
 }
+
+/** Read a recorded Git Tree-to-Tree diff; never stages, checks out or modifies the workspace. */
+export async function readGitWorkspaceFileDiff(
+  rootPath: string,
+  baselineTreeSha: string,
+  finalTreeSha: string,
+  path: string,
+  oldPath?: string,
+): Promise<{ diff: string; truncated: boolean }> {
+  const validPath = (value: string) =>
+    Boolean(value) && !value.startsWith('/') && !value.startsWith('\\')
+    && !/^[A-Za-z]:/.test(value)
+    && !value.split(/[\\/]/).some(part => part === '..' || part === '.git')
+  if (!validPath(path) || (oldPath && !validPath(oldPath))) throw new Error('Unsafe Git diff path')
+  for (const sha of [baselineTreeSha, finalTreeSha]) {
+    if (!/^[0-9a-f]{40,64}$/i.test(sha)) throw new Error('Invalid recorded Git tree')
+  }
+  const output = await git(rootPath, [
+    'diff', '--no-ext-diff', '--no-textconv', '--find-renames', '--unified=3',
+    baselineTreeSha, finalTreeSha, '--', ...(oldPath ? [oldPath] : []), path,
+  ])
+  const maxChars = 160_000
+  return { diff: output.slice(0, maxChars), truncated: output.length > maxChars }
+}

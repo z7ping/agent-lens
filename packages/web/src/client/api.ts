@@ -40,6 +40,7 @@ import {
   type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
   type TaskFileChangesResponseDto,
+  type TaskFileDiffResponseDto,
   type SourceRecordResponseDto,
   type SourceRecordsResponseDto,
   type ToolAssetUsageResponseDto,
@@ -363,6 +364,37 @@ export class AgentLensApi {
       aggregateReadInFlight,
       `review-file-changes:${id}`,
       () => requestJson<TaskFileChangesResponseDto>(requestPath),
+    )
+  }
+
+  reviewInteractionFileChanges(
+    id: string,
+    interaction: { id: string; startedAt: string; endedAt: string },
+    signal?: AbortSignal,
+  ): Promise<TaskFileChangesResponseDto> {
+    const params = new URLSearchParams({
+      interactionId: interaction.id,
+      from: interaction.startedAt,
+      to: interaction.endedAt,
+    })
+    return requestJson<TaskFileChangesResponseDto>(
+      `/api/v1/review/${encodeURIComponent(id)}/file-changes?${params}`,
+      signal ? { signal } : {},
+    )
+  }
+
+  runtimeFileChanges(runtimeSessionId: string, signal?: AbortSignal): Promise<TaskFileChangesResponseDto | null> {
+    return requestJson<TaskFileChangesResponseDto | null>(
+      `/api/v1/task-file-changes/runtime/${encodeURIComponent(runtimeSessionId)}`,
+      signal ? { signal } : {},
+    )
+  }
+
+  reviewFileDiff(id: string, path: string, signal?: AbortSignal): Promise<TaskFileDiffResponseDto> {
+    const query = new URLSearchParams({ path })
+    return requestJson<TaskFileDiffResponseDto>(
+      `/api/v1/review/${encodeURIComponent(id)}/file-diff?${query}`,
+      signal ? { signal } : {},
     )
   }
 

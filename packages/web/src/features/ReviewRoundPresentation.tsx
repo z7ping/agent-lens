@@ -2,6 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from 'react-i18next'
 import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewProcessSummaryDto, ReviewToolNodeDto } from '@agent-lens/protocol'
 import { agentLabel } from '../components/AgentScope'
+import { AgentLensApi } from '../client/api'
+import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { type ToolVisualKind } from '../components/ToolKindIcon'
@@ -18,6 +20,8 @@ import { agentLensI18n } from '../i18n/runtime'
 import { type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
 import { brief, EvidenceBadges, sourceEventSummary, toolKindLabel, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
+
+const taskFileApi = new AgentLensApi()
 
 function MarkdownSurface({ text }: { text: string }) {
   const { t } = useTranslation('review')
@@ -357,6 +361,7 @@ export function ReviewRoundAdapter({
   forceRevision,
   showAllEvents,
   onShowAllEvents,
+  fileChangesEnabled,
 }: {
   sessionId: string
   interaction: ReviewInteractionDto
@@ -370,8 +375,22 @@ export function ReviewRoundAdapter({
   forceRevision: number
   showAllEvents: boolean
   onShowAllEvents: () => void
+  fileChangesEnabled?: boolean
 }) {
   const { t } = useTranslation('review')
+  const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
+  useEffect(() => {
+    if (!fileChangesEnabled) return
+    const controller = new AbortController()
+    void taskFileApi.reviewInteractionFileChanges(sessionId, {
+      id: interaction.id,
+      startedAt: interaction.startedAt,
+      endedAt: interaction.endedAt,
+    }, controller.signal)
+      .then(value => { if (!controller.signal.aborted) setRoundFileChanges(value) })
+      .catch(() => { if (!controller.signal.aborted) setRoundFileChanges(null) })
+    return () => controller.abort()
+  }, [fileChangesEnabled, sessionId, interaction.id, interaction.startedAt, interaction.endedAt])
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
   const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)
@@ -483,6 +502,7 @@ export function ReviewRoundAdapter({
     {promptEntries.map(renderEntry)}
     {processGroup}
     {afterProcessEntries.map(renderEntry)}
+    {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && roundFileChanges.summary.count > 0 && <TaskFileChangesDisclosure value={roundFileChanges}/>}
     {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
       <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
     </button>}
