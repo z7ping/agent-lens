@@ -581,6 +581,7 @@
 .task-surface .task-file-change-row { display: flex; min-height: 34px; min-width: 0; align-items: center; gap: 8px; padding: 6px 11px; color: var(--al-ink-2); font-size: 12px; }
 .task-surface .task-file-change-row + .task-file-change-row { border-top: 1px solid color-mix(in srgb, var(--al-line) 38%, transparent); }
 .task-surface .task-file-change-status { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; color: var(--al-muted); font: 650 12px/1 var(--font-mono); }
+.task-surface .task-file-change-status.is-observed { width: auto; min-width: 34px; flex-basis: auto; font: 11px/1.4 inherit; color: var(--al-muted-2); }
 .task-surface .task-file-change-status.is-added { color: var(--al-success); }
 .task-surface .task-file-change-status.is-deleted { color: var(--al-danger); }
 .task-surface .task-file-change-status.is-modified,
@@ -590,7 +591,13 @@
 .task-surface .task-file-change-path .local-resource-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-file-change-path code { font: 12px/1.45 var(--font-mono); }
 .task-surface .task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
-.task-surface .task-file-change-diff-action { flex: 0 0 auto; }
+.task-surface .task-file-change-diff-action,
+.task-surface .task-file-change-evidence-action { flex: 0 0 auto; }
+.task-file-change-evidence { display: grid; gap: 10px; font-size: 13px; color: var(--al-ink-2); }
+.task-file-change-evidence p { margin: 0; color: var(--al-muted); line-height: 1.6; }
+.task-file-change-evidence dl { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; margin: 0; overflow-wrap: anywhere; }
+.task-file-change-evidence dt { color: var(--al-muted-2); }
+.task-file-change-evidence dd { min-width: 0; margin: 0; }
 .task-surface .task-file-changes-more { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--al-line); border-radius: 0; background: transparent; color: var(--al-muted); }
 .task-surface .task-file-changes-error,
 .task-surface .task-file-changes-empty { padding: 9px 11px; color: var(--al-muted); font-size: 12px; }
