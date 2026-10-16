@@ -181,32 +181,33 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     () => roundProjectorRef.current.projectSegmented(projection.stable, projection.active),
     [projection.stable, projection.active],
   )
+  const fileChangeRuntimeId = current?.runtimeSessionId
   // File change projection commits independently from Live transcript SSE.
   // Coalesce rapid events; never refetch on every streamed token.
-  useEffect(() => { setFileChanges(null) }, [current?.runtimeSessionId])
+  useEffect(() => { setFileChanges(null) }, [fileChangeRuntimeId])
   useEffect(() => {
-    if (!current) return
+    if (!fileChangeRuntimeId) return
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
-      void hostApi.runtimeFileChanges(current.runtimeSessionId, controller.signal)
+      void hostApi.runtimeFileChanges(fileChangeRuntimeId, controller.signal)
         .then(value => { if (!controller.signal.aborted) setFileChanges(value) })
         .catch(() => undefined)
     }, 280)
     return () => { window.clearTimeout(timer); controller.abort() }
-  }, [current?.runtimeSessionId, projection.stable.length, projection.active.length, state?.isStreaming, hostApi])
+  }, [fileChangeRuntimeId, projection.stable.length, projection.active.length, state?.isStreaming, hostApi])
 
   // When a tool changes its result without adding a new timeline item, the
   // regular snapshot count stays stable. A bounded poll keeps Live changes fresh.
   useEffect(() => {
-    if (!current || !state?.isStreaming) return
+    if (!fileChangeRuntimeId || !state?.isStreaming) return
     let active = true
     const timer = window.setInterval(() => {
-      void hostApi.runtimeFileChanges(current.runtimeSessionId)
+      void hostApi.runtimeFileChanges(fileChangeRuntimeId)
         .then(result => { if (active) setFileChanges(result) })
         .catch(() => undefined)
     }, 4_000)
     return () => { active = false; window.clearInterval(timer) }
-  }, [current?.runtimeSessionId, state?.isStreaming, hostApi])
+  }, [fileChangeRuntimeId, state?.isStreaming, hostApi])
 
   const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
   const turnRailItems = useMemo(() => {
