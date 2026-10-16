@@ -62,7 +62,7 @@ export function TaskFileChangesDisclosure({
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
   const isObserved = Boolean(value?.interactionId)
   return <>
-    <details className="task-file-changes" open>
+    <details className="task-file-changes">
       <summary>
         <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="tool-edit" size={16}/></span>
         <span className="task-file-changes-heading">
