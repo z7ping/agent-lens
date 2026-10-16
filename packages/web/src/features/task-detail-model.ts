@@ -126,6 +126,27 @@ export function taskPreciseDurationLabel(ms: number): string {
 }
 
 /**
+ * 轮次标题只展示可读摘要，不改变原始用户消息或证据。
+ * Codex 的文件上下文包头不是提问，统一转为语义标签。
+ */
+export function taskRoundPreview(value: string | undefined, filesMentionedLabel: string): string | undefined {
+  const original = value?.trim()
+  if (!original) return undefined
+  if (/^(?:#{1,6}\s*)?files mentioned by the user\s*:/i.test(original)) return filesMentionedLabel
+  const text = original
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+    .replace(/^[ \t]{0,3}(?:>\s*|[-*+]\s+)/gm, '')
+    .replace(/\*\*|__|~~/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return undefined
+  return text.length > 86 ? `${text.slice(0, 86)}…` : text
+}
+
+/**
  * 用于缺少项目关联时的紧凑展示；完整工作区路径仍应在任务信息中呈现。
  */
 export function workspaceDisplayName(workspacePath: string | undefined): string | undefined {
