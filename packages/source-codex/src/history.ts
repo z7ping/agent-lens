@@ -30,6 +30,7 @@ interface MetadataCheckpoint {
 interface CodexThreadName {
   title: string
   updatedAt?: string
+  source?: 'sqlite'
 }
 
 const CHECKPOINT_BATCH_SIZE = 100
@@ -86,7 +87,7 @@ function sessionIdFromFilename(filePath: string): string {
 function normalizeTimestamp(value: unknown): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const ms = value < 10_000_000_000 ? value * 1000 : value
-    return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined
+    return Number.isFinite(ms) && Number.isFinite(new Date(ms).getTime()) ? new Date(ms).toISOString() : undefined
   }
   if (typeof value !== 'string' || !value.trim()) return undefined
   const parsed = Date.parse(value)
@@ -100,6 +101,7 @@ function chooseThreadName(
   if (!previous) return current
   // Where both timestamps exist, use the newest known title. Without a comparable
   // timestamp, the later source is preferred (SQLite follows the legacy index).
+  if (previous.updatedAt && !current.updatedAt) return previous
   if (previous.updatedAt && current.updatedAt && previous.updatedAt > current.updatedAt) return previous
   return current
 }
@@ -123,6 +125,7 @@ function readSqliteThreadNames(codexHome: string): Map<string, CodexThreadName> 
       result.set(id, chooseThreadName(result.get(id), {
         title,
         ...(updatedAt ? { updatedAt } : {}),
+        source: 'sqlite',
       }))
     }
   } catch {
@@ -311,8 +314,10 @@ function metadataRecord(
     capturedAt: new Date().toISOString(),
     locator: {
       kind: 'file',
-      path: kind === 'session_title' && ctx.installation.configRoot
-        ? join(ctx.installation.configRoot, 'session_index.jsonl')
+      path: kind === 'session_title' && indexedTitle?.source === 'sqlite' && ctx.installation.configRoot
+        ? join(ctx.installation.configRoot, 'state_5.sqlite')
+        : kind === 'session_title' && ctx.installation.configRoot
+          ? join(ctx.installation.configRoot, 'session_index.jsonl')
         : filePath,
     },
     fingerprint: sha256(JSON.stringify(payload)),
