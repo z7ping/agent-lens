@@ -780,7 +780,7 @@ export async function startHttpSurface(
           : null
         writeJson(response, 200, taskFileChangesResponse(
           id, recovered?.items ?? items, capture,
-          { truncated: recovered?.truncated },
+          ...(recovered?.truncated ? { truncated: true } : {}),
         ))
         return
       }
