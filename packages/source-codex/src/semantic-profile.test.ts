@@ -89,7 +89,7 @@ test('Codex profile covers current official Rollout, ResponseItem, TurnItem and 
     'message', 'additional_tools', 'agent_message', 'reasoning', 'local_shell_call',
     'function_call', 'tool_search_call', 'function_call_output', 'tool_search_output',
     'custom_tool_call', 'custom_tool_call_output', 'web_search_call', 'image_generation_call',
-    'compaction', 'configuration_update', 'compaction_trigger', 'context_compaction', 'other',
+    'compaction', 'configuration_update', 'compaction_trigger', 'context_compaction', 'compaction_summary', 'other',
   ]) {
     assert.equal(nativeTypes.has(`response_item/${type}`), true, `response:${type}`)
   }

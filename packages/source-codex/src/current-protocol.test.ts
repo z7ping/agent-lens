@@ -20,8 +20,8 @@ function record(entry: unknown, sourceSequence: number): SourceRecord {
   }
 }
 
-test('current Codex parser version is 22 so earlier semantic derivations replay', () => {
-  assert.equal(CODEX_CURRENT_PARSER_VERSION, '22')
+test('current Codex parser version is 23 so earlier semantic derivations replay', () => {
+  assert.equal(CODEX_CURRENT_PARSER_VERSION, '23')
 })
 
 test('event_msg.agent_message becomes canonical assistant output instead of background unknown', async () => {
@@ -290,4 +290,20 @@ test('empty assistant/reasoning records preserve evidence but do not create raw 
     assert.equal(output.observations.length, 0)
     assert.equal(output.evidenceCandidates.length, 1)
   }
+})
+
+test('persisted Codex compaction_summary has canonical context semantics without exposing encrypted bytes', async () => {
+  const output = await normalizeCurrentCodexRecord(record({
+    type: 'response_item',
+    payload: {
+      type: 'compaction_summary',
+      summary: '之前已检查模块 A',
+      encrypted_content: 'opaque-private-snapshot',
+    },
+  }, 90), codexTestContext)
+  assert.equal(output.observations[0]?.kind, 'context.compaction')
+  const payload = asRecord(output.observations[0]?.payload)
+  assert.equal(payload.summary, '之前已检查模块 A')
+  assert.equal(payload.opaque, false)
+  assert.equal(JSON.stringify(payload).includes('opaque-private-snapshot'), false)
 })

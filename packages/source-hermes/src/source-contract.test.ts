@@ -391,3 +391,42 @@ test('Hermes Raw recovery 能实际重读 SQLite row 并识别 drift', async () 
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Hermes 官方 Observer 生命周期 Hook 保留会话与人类输入语义', async () => {
+  const cases: Array<[string, string, string, Record<string, unknown>]> = [
+    ['on_session_finalize', 'session.lifecycle', 'session.finalized', { reason: 'exit' }],
+    ['on_session_reset', 'session.lifecycle', 'session.reset', { old_session_id: 'old', new_session_id: 'new' }],
+    ['subagent_start', 'subagent.spawn', '', { subagent_id: 'worker-1' }],
+    ['on_human_input_request', 'permission.request', 'human.input.requested', { kind: 'approval', request_id: 'approval-1' }],
+    ['on_human_input_resolved', 'permission.response', 'human.input.resolved', { kind: 'approval', request_id: 'approval-1' }],
+    ['on_human_input_request', 'session.lifecycle', 'human.input.requested', { kind: 'clarify' }],
+  ]
+  for (const [hookName, kind, eventName, fields] of cases) {
+    const normalized = await normalizeHermesRecord(record({
+      runtimeEvent: { hook_event_name: hookName, session_id: 'session-hermes', ...fields },
+      session: { nativeSessionId: 'session-hermes' },
+      captureChannel: 'runtime-hook',
+    }, {
+      nativeType: `hook/${hookName}`,
+      locator: { kind: 'runtime-hook', path: '/tmp/hermes-event.json', hookEventId: 'event-test' },
+    }), {} as never)
+    assert.equal(normalized.observations[0]?.kind, kind, hookName)
+    const payload = normalized.observations[0]?.payload as { event?: string; decision?: string }
+    if (eventName) assert.equal(payload.event, eventName)
+    assert.equal(payload.decision, undefined, 'resolved is not proof of approval')
+    assert.equal(normalized.evidenceCandidates.length, 1)
+  }
+})
+
+test('Hermes system and developer messages are context, not generic unknown', async () => {
+  for (const role of ['system', 'developer']) {
+    const normalized = await normalizeHermesRecord(record({
+      message: { role, content: 'source-visible context' },
+      session: { nativeSessionId: 'session-hermes' },
+      captureChannel: 'history',
+    }), {} as never)
+    assert.equal(normalized.observations[0]?.kind, 'context.injected')
+    const payload = normalized.observations[0]?.payload as { sourceRole: string }
+    assert.equal(payload.sourceRole, role)
+  }
+})

@@ -101,7 +101,12 @@ for (const absolute of webCssFiles(root)) {
     if (owner && owner !== relative) {
       throw new Error(relative + ' 越权重定义 ' + rule.selector + '，CSS 所有者是 ' + owner)
     }
-    if (owner) sharedRules.set(rule.selector, rule.declarations)
+    // CSS properties cascade across repeated selectors. A later @media rule
+    // may only override transition without erasing height/border contracts.
+    if (owner) sharedRules.set(rule.selector, {
+      ...(sharedRules.get(rule.selector) ?? {}),
+      ...rule.declarations,
+    })
     if (relative !== 'components/select-menu.css'
       && rule.selector.includes('.select-menu-option')
       && ['height', 'min-height', 'border-width', 'border-radius'].some(key => key in rule.declarations)) {

@@ -46,9 +46,12 @@ test('Claude hook management is idempotent and preserves third-party handlers', 
   await installHooks('claude', { homeDir: home })
   await installHooks('claude', { homeDir: home })
   const installed = JSON.parse(await readFile(settings, 'utf8'))
-  assert.equal(handlerCount(installed, 'agent-lens-hook-claude'), 2)
+  assert.equal(handlerCount(installed, 'agent-lens-hook-claude'), 18)
   assert.equal(handlerCount(installed, 'third-party-hook'), 1)
   assert.equal((await getHookStatus('claude', { homeDir: home })).installed, true)
+  for (const name of ['PostToolUseFailure', 'StopFailure', 'PermissionDenied', 'InstructionsLoaded', 'ConfigChange', 'TaskCreated', 'TaskCompleted', 'Notification']) {
+    assert.equal(Array.isArray(installed.hooks[name]), true, name)
+  }
 
   await uninstallHooks('claude', { homeDir: home })
   const removed = JSON.parse(await readFile(settings, 'utf8'))

@@ -61,7 +61,7 @@ import {
 } from './workspace-context.js'
 
 const SOURCE_ID = 'claude-code'
-const PARSER_VERSION = '4'
+const PARSER_VERSION = '5'
 const RUNTIME_POLL_MS = 250
 
 interface ClaudeSessionMetadata {
@@ -718,6 +718,62 @@ function normalizeRuntime(record: SourceRecord): ObservationCandidate | null {
     }, {
       ...(callId ? { nativeCallId: callId } : { sharedEventKey: `claude-runtime:${record.id}` }),
       identity,
+    })
+  }
+  if (hookName === 'PostToolUseFailure') {
+    return candidate(record, envelope, 'tool.result', {
+      ...(callId ? { callId } : {}),
+      nativeToolName: toolName,
+      success: false,
+      status: 'error',
+      ...(stringField(event, 'error', 'error_message') ? { error: stringField(event, 'error', 'error_message') } : {}),
+      ...(turnId ? { turnId } : {}),
+    }, {
+      ...(callId ? { nativeCallId: callId } : { sharedEventKey: `claude-runtime:${record.id}` }),
+      identity,
+    })
+  }
+  if (hookName === 'PermissionDenied') {
+    return candidate(record, envelope, 'permission.response', {
+      decision: 'deny',
+      nativeToolName: toolName,
+      ...(callId ? { callId } : {}),
+      ...(turnId ? { turnId } : {}),
+    }, { identity })
+  }
+  if (hookName === 'StopFailure') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: 'turn.error',
+      ...(stringField(event, 'error') ? { error: stringField(event, 'error') } : {}),
+      ...(turnId ? { turnId } : {}),
+    }, { identity })
+  }
+  if (hookName === 'InstructionsLoaded') {
+    return candidate(record, envelope, 'context.injected', {
+      event: 'instructions.loaded',
+      ...(stringField(event, 'file_path', 'path') ? { path: stringField(event, 'file_path', 'path') } : {}),
+      ...(stringField(event, 'load_reason') ? { loadReason: stringField(event, 'load_reason') } : {}),
+      contentAvailable: false,
+    })
+  }
+  if (hookName === 'ConfigChange') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: 'config.changed',
+      ...(stringField(event, 'source') ? { source: stringField(event, 'source') } : {}),
+    })
+  }
+  if (hookName === 'TaskCreated' || hookName === 'TaskCompleted') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: hookName === 'TaskCreated' ? 'task.created' : 'task.completed',
+      ...(stringField(event, 'task_id', 'taskId') ? { taskId: stringField(event, 'task_id', 'taskId') } : {}),
+      ...(stringField(event, 'subject') ? { subject: stringField(event, 'subject') } : {}),
+    }, { identity })
+  }
+  if (hookName === 'Notification') {
+    return candidate(record, envelope, 'session.lifecycle', {
+      event: 'notification.received',
+      ...(stringField(event, 'notification_type') ? { notificationType: stringField(event, 'notification_type') } : {}),
+      ...(stringField(event, 'message') ? { message: stringField(event, 'message') } : {}),
     })
   }
   if (hookName === 'SessionStart' || hookName === 'SessionEnd') {

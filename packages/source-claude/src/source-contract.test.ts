@@ -453,3 +453,41 @@ test('Claude Raw recovery 区分 JSONL history 与 ephemeral runtime hook', () =
   assert.equal(runtimeCapability?.canReread, false)
   assert.equal(runtimeCapability?.persistencePreference, 'preserve')
 })
+
+test('Claude Code 官方 Hook 扩展获得原生语义，未知 Hook 仍保留 raw evidence', async () => {
+  const cases: Array<[string, string, Record<string, unknown>, string | undefined]> = [
+    ['PostToolUseFailure', 'tool.result', { tool_use_id: 'call-fail', tool_name: 'Bash', error: 'exit 1' }, undefined],
+    ['PermissionDenied', 'permission.response', { tool_name: 'Write', tool_use_id: 'call-denied' }, undefined],
+    ['StopFailure', 'session.lifecycle', { error: 'rate_limit' }, 'turn.error'],
+    ['InstructionsLoaded', 'context.injected', { file_path: '/workspace/CLAUDE.md', load_reason: 'startup' }, 'instructions.loaded'],
+    ['ConfigChange', 'session.lifecycle', { source: 'user_settings' }, 'config.changed'],
+    ['TaskCreated', 'session.lifecycle', { task_id: 'task-1' }, 'task.created'],
+    ['TaskCompleted', 'session.lifecycle', { task_id: 'task-1' }, 'task.completed'],
+    ['Notification', 'session.lifecycle', { notification_type: 'permission_prompt', message: 'approval needed' }, 'notification.received'],
+    ['FutureHookEvent', 'unknown', { new_signal: true }, undefined],
+  ]
+  for (const [hookName, kind, fields, eventName] of cases) {
+    const envelope = claudeInternals.parseRuntimeEnvelope(JSON.stringify({
+      id: 'claude-hook-' + hookName,
+      capturedAt: '2026-10-16T00:00:00.000Z',
+      event: { hook_event_name: hookName, session_id: 'session-claude', ...fields },
+    }), 'hook.json')
+    const source = claudeInternals.runtimeRecord(envelope, '/tmp/hook.json', {
+      installation: { id: 'installation-claude', hostId: 'host', productId: 'claude-code',
+        firstSeenAt: '2026-10-16T00:00:00.000Z', lastSeenAt: '2026-10-16T00:00:00.000Z' },
+      abortSignal: new AbortController().signal,
+    } as SourceExecutionContext)
+    const normalized = await normalizeClaudeRecord(source, {} as never)
+    const observation = normalized.observations[0]
+    assert.equal(observation?.kind, kind, hookName)
+    const payload = observation?.payload as { event?: string; success?: boolean; decision?: string; error?: string; contentAvailable?: boolean }
+    if (eventName) assert.equal(payload.event, eventName, hookName)
+    if (hookName === 'PostToolUseFailure') {
+      assert.equal(observation?.nativeCallId, 'call-fail')
+      assert.equal(payload.success, false)
+    }
+    if (hookName === 'PermissionDenied') assert.equal(payload.decision, 'deny')
+    if (hookName === 'InstructionsLoaded') assert.equal(payload.contentAvailable, false)
+    assert.equal(normalized.evidenceCandidates.length, 1)
+  }
+})

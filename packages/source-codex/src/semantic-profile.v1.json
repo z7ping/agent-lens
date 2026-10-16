@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.1",
-  "profileVersion": "1.0.0",
+  "profileVersion": "1.1.0",
   "source": "codex",
   "sourceProtocol": "codex-rollout-current",
   "purpose": "Codex Rollout / ResponseItem / EventMsg / Hook 到 AgentLens 统一观察语义的声明式契约。",
@@ -198,6 +198,14 @@
       "nativeType": "response_item/context_compaction",
       "kind": "context.compaction",
       "semantic": "compaction",
+      "semanticSource": "native",
+      "coverage": "complete"
+    },
+    {
+      "id": "response.compaction_summary",
+      "nativeType": "response_item/compaction_summary",
+      "kind": "context.compaction",
+      "semantic": "compaction-summary",
       "semanticSource": "native",
       "coverage": "complete"
     },

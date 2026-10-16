@@ -25,7 +25,7 @@ import type {
 } from '@agent-lens/core'
 
 const SOURCE_ID = 'dsh'
-const PARSER_VERSION = '2'
+const PARSER_VERSION = '3'
 const MAX_STRING = 64 * 1024
 const RUNTIME_POLL_MS = 2000
 const RUNTIME_DEBOUNCE_MS = 180
@@ -552,9 +552,10 @@ export async function normalizeDshRecord(record: SourceRecord, _ctx: SourceNorma
   if (type === 'user/message') {
     observations.push(candidate(record, envelope, 'message.user', { text: textFromContent(data.content ?? data.message ?? data.text) }))
   } else if (type === 'assistant/message') {
-    const model = stringField(data, 'model', 'modelId')
+    const message = asRecord(data.message)
+    const model = stringField(data, 'model', 'modelId') ?? stringField(message, 'model', 'modelId')
     observations.push(candidate(record, envelope, 'message.assistant', {
-      text: textFromContent(data.content ?? data.message ?? data.text),
+      text: textFromContent(data.content ?? message.content ?? data.message ?? data.text),
       ...(model ? { model } : {}),
     }))
     const usage = usageData(data)
@@ -572,7 +573,7 @@ export async function normalizeDshRecord(record: SourceRecord, _ctx: SourceNorma
       callId,
       nativeToolName: stringField(data, 'name', 'toolName', 'tool') ?? 'unknown',
       success: !(data.isError === true || data.error != null),
-      output: sanitize(data.result ?? data.output ?? data.content ?? data),
+      output: sanitize(data.result ?? data.output ?? asRecord(data.message).content ?? data.content ?? data),
       ...(data.error != null ? { error: sanitize(data.error) } : {}),
     }, { nativeCallId: callId }))
   } else if (type === 'request/header') {
@@ -590,6 +591,25 @@ export async function normalizeDshRecord(record: SourceRecord, _ctx: SourceNorma
       parentSessionId: envelope.session.parentSessionId,
       parentEventSeq: envelope.session.parentEventSeq,
     }))
+  } else if (type === 'assistant/chunk') {
+    // StreamChunk is a replay-only source record; displaying each token as an
+    // unknown event both duplicates the assembled message and creates huge UI noise.
+    // Preserve the original chunk in Evidence; do not guess hidden reasoning.
+  } else if (type === 'compaction/start' || type === 'compaction/end') {
+    observations.push(candidate(record, envelope, 'context.compaction', {
+      phase: type === 'compaction/start' ? 'start' : 'end',
+      sourceType: type,
+    }))
+  } else if (type === 'compaction/summary') {
+    observations.push(candidate(record, envelope, 'context.summary', {
+      sourceType: type,
+      ...(stringField(data, 'summary', 'text') ? { text: stringField(data, 'summary', 'text') } : {}),
+    }))
+  } else if (type === 'llm/retry') {
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'model.retry',
+      ...(numberField(data, 'attempt') === undefined ? {} : { attempt: numberField(data, 'attempt') }),
+    }))
   } else {
     observations.push(candidate(record, envelope, 'unknown', { rawType: type, rawPayload: sanitize(data) }))
   }
@@ -604,7 +624,7 @@ async function declareDshCapabilities(_detected: DetectedSource): Promise<Observ
     { sourceId: SOURCE_ID, name: 'tool-call', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'tool-result', status: 'available', captureModes: ['history', 'native-tail'] },
     { sourceId: SOURCE_ID, name: 'usage', status: 'available', captureModes: ['history', 'native-tail'] },
-    { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'request/header 可作为模型请求上下文证据；压缩 assistant/chunk 暂不展开' },
+    { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'native-tail'], reason: '原生 compaction/* 生命周期可观测；assistant/chunk 为回放证据，不展开压缩流' },
     { sourceId: SOURCE_ID, name: 'permission', status: 'unavailable', captureModes: [], reason: '当前 SessionEventMap 没有稳定权限事件映射' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'SessionHeader lineage 已进入 SourceSession.nativeParentSessionId；关系类型仍保持保守，不把所有父子会话强行判定为 subagent' },
     { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'available', captureModes: ['static-scan'] },

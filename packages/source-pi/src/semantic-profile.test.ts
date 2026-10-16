@@ -79,7 +79,7 @@ test('Pi profile covers current official persisted entries, message roles and St
   const nativeTypes = new Set(profile.mappings.map(item => item.nativeType))
   for (const type of [
     'session', 'message', 'thinking_level_change', 'model_change', 'usage', 'compaction',
-    'branch_summary', 'custom', 'custom_message', 'label', 'session_info',
+    'branch_summary', 'context_edit', 'custom', 'custom_message', 'label', 'session_info',
   ]) {
     assert.equal(nativeTypes.has(type), true, type)
   }

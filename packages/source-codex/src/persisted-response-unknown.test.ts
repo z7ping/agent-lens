@@ -42,6 +42,7 @@ test('official persisted ResponseItem variants do not degrade to unknown', async
     { type: 'compaction_trigger' },
     { type: 'compaction', id: 'compaction-1', encrypted_content: 'opaque' },
     { type: 'context_compaction', id: 'context-compaction-1', encrypted_content: 'opaque' },
+    { type: 'compaction_summary', summary: 'visible summary', encrypted_content: 'opaque' },
   ]
 
   for (const [index, payload] of payloads.entries()) {

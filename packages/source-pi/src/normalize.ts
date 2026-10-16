@@ -253,6 +253,7 @@ export async function normalizePiRecord(
                     || fact.event === 'pi.bash_result'
                     || fact.event === 'pi.custom'
                     || fact.event === 'pi.label'
+                    || fact.event === 'context.edited'
                   ? 'session.lifecycle'
                   : 'unknown'
       const name = fact.event === 'session.info' ? stringField(asRecord(fact.payload), 'name')?.trim() : undefined

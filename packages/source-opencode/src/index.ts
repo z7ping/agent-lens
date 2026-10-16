@@ -33,7 +33,7 @@ import { discoverOpenCodeAssets } from './assets.js'
 import { OPENCODE_KNOWN_PROJECT_CWDS_CHECKPOINT_KEY } from './workspace-context.js'
 
 const SOURCE_ID = 'opencode'
-const PARSER_VERSION = '3'
+const PARSER_VERSION = '4'
 
 const HISTORY_BATCH = 1000
 const RUNTIME_RECENT_ROWS = 500
@@ -628,7 +628,71 @@ export async function normalizeOpenCodeRecord(
   } else if (type === 'step-start') {
     observations.push(candidate(record, envelope, 'session.lifecycle', { event: 'step.started' }))
   } else if (type === 'step-finish') {
-    observations.push(candidate(record, envelope, 'session.lifecycle', { event: 'step.finished' }))
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'step.finished',
+      ...(stringField(part, 'reason') ? { reason: stringField(part, 'reason') } : {}),
+    }))
+    // OpenCode's native StepFinishPart owns the step's token and cost figures.
+    // Never infer usage for a step without the native tokens object.
+    const tokens = asRecord(part.tokens)
+    if (typeof tokens.input === 'number' && Number.isFinite(tokens.input)
+      && typeof tokens.output === 'number' && Number.isFinite(tokens.output)) {
+      const cache = asRecord(tokens.cache)
+      const inputTokens = tokens.input
+      const outputTokens = tokens.output
+      observations.push(candidate(record, envelope, 'usage', {
+        inputTokens, outputTokens,
+        totalTokens: typeof tokens.total === 'number' && Number.isFinite(tokens.total)
+          ? tokens.total : inputTokens + outputTokens,
+        cacheReadTokens: typeof cache.read === 'number' && Number.isFinite(cache.read) ? cache.read : 0,
+        cacheWriteTokens: typeof cache.write === 'number' && Number.isFinite(cache.write) ? cache.write : 0,
+        ...(typeof tokens.reasoning === 'number' && Number.isFinite(tokens.reasoning) ? { reasoningOutputTokens: tokens.reasoning } : {}),
+        ...(typeof part.cost === 'number' && Number.isFinite(part.cost) ? { cost: { total: part.cost } } : {}),
+        sourceType: 'step-finish',
+      }, { offset: 1 }))
+    }
+  } else if (type === 'compaction') {
+    observations.push(candidate(record, envelope, 'context.compaction', {
+      phase: 'snapshot',
+      ...(typeof part.auto === 'boolean' ? { auto: part.auto } : {}),
+      ...(typeof part.overflow === 'boolean' ? { overflow: part.overflow } : {}),
+      ...(stringField(part, 'tail_start_id') ? { tailStartId: stringField(part, 'tail_start_id') } : {}),
+    }))
+  } else if (type === 'retry') {
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'model.retry',
+      ...(typeof part.attempt === 'number' && Number.isFinite(part.attempt) ? { attempt: part.attempt } : {}),
+      ...(stringField(asRecord(part.error), 'name') ? { errorType: stringField(asRecord(part.error), 'name') } : {}),
+    }))
+  } else if (type === 'subtask') {
+    // A requested subtask is not proof that a child Agent actually started.
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'subtask.requested',
+      ...(stringField(part, 'agent') ? { agent: stringField(part, 'agent') } : {}),
+      ...(stringField(part, 'description') ? { description: stringField(part, 'description') } : {}),
+      ...(Object.keys(asRecord(part.model)).length ? { model: asRecord(part.model) } : {}),
+    }))
+  } else if (type === 'agent') {
+    observations.push(candidate(record, envelope, 'session.lifecycle', {
+      event: 'agent.selected',
+      ...(stringField(part, 'name') ? { agent: stringField(part, 'name') } : {}),
+    }))
+  } else if (type === 'patch') {
+    observations.push(candidate(record, envelope, 'artifact.action', {
+      action: 'file.patch',
+      files: Array.isArray(part.files) ? part.files.filter((value): value is string => typeof value === 'string') : [],
+      ...(stringField(part, 'hash') ? { hash: stringField(part, 'hash') } : {}),
+    }))
+  } else if (type === 'file') {
+    observations.push(candidate(record, envelope, 'artifact.action', {
+      action: 'file.attached',
+      ...(stringField(part, 'filename') ? { filename: stringField(part, 'filename') } : {}),
+      ...(stringField(part, 'mime') ? { mime: stringField(part, 'mime') } : {}),
+      // A data: URL may contain large private bytes; the native evidence owns it.
+    }))
+  } else if (type === 'snapshot') {
+    // Workspace snapshots are source evidence, not user-facing mutations.
+    // Avoid an extra event on every model step.
   } else {
     observations.push(candidate(record, envelope, 'unknown', {
       rawType: `part/${type}`,
@@ -651,10 +715,10 @@ export async function declareOpenCodeCapabilities(
     { sourceId: SOURCE_ID, name: 'asset-discovery', status: 'partial', captureModes: ['static-scan'], reason: 'V2 global/project AGENTS, standard Skills, Agents, Commands, local Plugins and config-declared MCP/plugins are observable; OPENCODE_CONFIG/OPENCODE_CONFIG_DIR, remote/managed config, extra skill/instruction sources, final merge and runtime-loaded state require stronger OpenCode evidence' },
     { sourceId: SOURCE_ID, name: 'permission', status: 'unavailable', captureModes: [], reason: 'Permission lifecycle mapping is not implemented' },
     { sourceId: SOURCE_ID, name: 'subagent', status: 'unavailable', captureModes: [], reason: 'Subagent lifecycle mapping is not implemented' },
-    { sourceId: SOURCE_ID, name: 'usage', status: 'unavailable', captureModes: [], reason: 'Usage mapping is not implemented' },
-    { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history'], reason: 'Compaction parts are retained as unknown until their schema is proven' },
+    { sourceId: SOURCE_ID, name: 'usage', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'Native step-finish tokens and cost are captured when persisted; there is no global usage total fallback' },
+    { sourceId: SOURCE_ID, name: 'context', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'Native compaction events are captured; full context remains unavailable' },
     { sourceId: SOURCE_ID, name: 'asset-invocation', status: 'unavailable', captureModes: [], reason: 'Asset attribution is not implemented' },
-    { sourceId: SOURCE_ID, name: 'artifact-action', status: 'unavailable', captureModes: [], reason: 'Artifact attribution is not implemented' },
+    { sourceId: SOURCE_ID, name: 'artifact-action', status: 'partial', captureModes: ['history', 'native-tail'], reason: 'Native patch and file attachment metadata are observed; not every workspace mutation has an event' },
   ]
 }
 

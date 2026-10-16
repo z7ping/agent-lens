@@ -494,6 +494,20 @@ export function normalizePiSessionEntry(
     facts.push({ ...base, kind: 'event', event: 'context.compaction', label: '上下文已压缩', detail: [payload.tokensBefore === undefined ? '' : `${payload.tokensBefore} tokens`, 'summary' in payload ? String(payload.summary) : ''].filter(Boolean).join(' · '), payload })
     const usage = usageFact(base, entry.usage)
     if (usage) facts.push(usage)
+  } else if (type === 'context_edit') {
+    // Pi context edits affect future model context, not the original transcript.
+    // Keep metadata here and leave the replacement bytes in raw Source Evidence.
+    const targetId = stringField(entry, 'targetId') ?? ''
+    const replacement = entry.replacement
+    facts.push({
+      ...base, kind: 'event', event: 'context.edited', label: '上下文条目已编辑',
+      detail: targetId,
+      payload: {
+        targetEntryId: targetId,
+        operation: replacement === null ? 'omit' : 'replace',
+        replacementPresent: replacement !== null && replacement !== undefined,
+      },
+    })
   } else if (type === 'branch_summary') {
     const summary = stringField(entry, 'summary') ?? ''
     const fromId = stringField(entry, 'fromId')

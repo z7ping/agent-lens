@@ -13,7 +13,7 @@ import { assistantMessageProvenance, contextClassification } from './provenance'
 
 // Increment whenever a persisted Codex wire shape gains a new semantic
 // projection so existing SourceRecords are replayed through the adapter.
-export const CODEX_CURRENT_PARSER_VERSION = '22'
+export const CODEX_CURRENT_PARSER_VERSION = '23'
 
 const NON_ACTIVITY_ROLLOUT_TYPES = new Set([
   'world_state',
@@ -405,10 +405,16 @@ async function normalizeResponseCompaction(
   ctx: SourceNormalizationContext,
   payload: Record<string, unknown>,
 ): Promise<NormalizedSourceOutput> {
+  // A persisted compaction_summary may contain a source-visible summary.
+  // Do not label that readable text opaque, or leak encrypted snapshot bytes.
+  const summary = typeof payload.summary === 'string' && payload.summary.trim()
+    ? payload.summary.trim()
+    : undefined
   const canonicalPayload = {
     phase: 'snapshot',
     sourceType: `response_item.${typeof payload.type === 'string' ? payload.type : 'compaction'}`,
-    opaque: true,
+    opaque: !summary,
+    ...(summary ? { summary } : {}),
   }
   const output = await normalizeCodexRecord(record, ctx)
   return {
