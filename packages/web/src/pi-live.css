@@ -156,16 +156,6 @@
 }
 .pi-live-interrupt-notice b { color: var(--al-success); font-weight: 700; }
 .pi-live-interrupt-notice span { color: var(--al-ink-2); }
-.pi-live-blocking { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--al-warning) 24%, var(--al-line)); border-radius: 9px; background: var(--al-warning-soft); box-shadow: var(--al-shadow); }
-.pi-live-blocking > div:first-child { min-width: 0; }
-.pi-live-blocking b { display: block; color: var(--al-warning); font-size: 12px; font-weight: 700; }
-.pi-live-blocking span { display: block; margin-top: 3px; color: var(--al-ink-2); font-size: 12px; line-height: 1.45; }
-.pi-live-blocking-actions,
-.pi-live-blocking-options { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.pi-live-blocking-input { grid-template-columns: 1fr; }
-.pi-live-blocking-field { width: 100%; }
-textarea.pi-live-blocking-field { min-height: 74px; }
-
 .pi-live-startup-queue {
   display: grid;
   min-height: 38px;
@@ -331,9 +321,6 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   .pi-live-send { order: 3; margin-left: auto; }
   .pi-live-mode-action { padding-inline: 6px; }
   .pi-live-compose-hint { display: none; }
-  .pi-live-blocking { grid-template-columns: 1fr; }
-  .pi-live-blocking-actions,
-  .pi-live-blocking-options { justify-content: flex-end; }
   .pi-live-diagnostics { display: none; }
   .pi-live-startup-queue { grid-template-columns: 1fr auto; }
   .pi-live-startup-queue > span { grid-column: 1; }
@@ -693,3 +680,7 @@ textarea.pi-live-blocking-field { min-height: 74px; }
   height: 1px;
   pointer-events: none;
 }
+
+/* Live 扩展的选择弹窗共用 Dialog，选项仅保留领域布局。 */
+.live-extension-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.live-extension-input { width: 100%; }

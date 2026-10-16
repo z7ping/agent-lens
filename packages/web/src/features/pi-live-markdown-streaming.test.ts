@@ -7,7 +7,6 @@ const composer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', 
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const genericLive = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 const taskDetailCss = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
-const piLive = readFileSync(new URL('./PiLivePage.tsx', import.meta.url), 'utf8')
 const taskRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
 
@@ -67,7 +66,7 @@ test('工具/思考正在执行时固定布局与图标，Token 速度不用字�
   assert.match(taskDetailCss, /grid-template-columns:\s*72px minmax\(0, 1fr\) 18px 14px/)
   assert.match(taskDetailCss, /\.task-tool-status-mark/)
   assert.match(taskDetailCss, /\.task-thinking-running-mark/)
-  assert.match(piLive, /normalizePiUsage\(rawUsage\)/)
-  assert.match(piLive, /observedOutputTokenSpeed\(usage\.outputTokens/)
-  assert.match(piLive, /observedOutputSpeed === null \? '—'/)
+  assert.match(genericLive, /runtimeDisclosures/)
+  assert.match(genericLive, /<TaskThinking/)
+  assert.doesNotMatch(genericLive, /observedOutputTokenSpeed|charsPerSecond/)
 })

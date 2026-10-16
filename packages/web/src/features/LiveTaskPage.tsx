@@ -37,7 +37,8 @@ import {
   writeLiveComposerDraft,
 } from '../components/live-composer-session-state'
 import { OperationProgress } from '../components/StateViews'
-import { Button, IconButton, Input, Textarea } from '../components/ui'
+import { Button, IconButton } from '../components/ui'
+import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import {
@@ -386,50 +387,6 @@ async function loadBoundedRecoverySnapshot(
     pages += 1
   }
   return { ...snapshot, entries }
-}
-
-function LiveExtensionPrompt({
-  request,
-  pending,
-  onAnswer,
-}: {
-  request: LiveUiRequest
-  pending: boolean
-  onAnswer(value: unknown): void
-}) {
-  const { t } = useTranslation('task')
-  const [value, setValue] = useState(request.prefill ?? '')
-  useEffect(() => setValue(request.prefill ?? ''), [request.requestId, request.prefill])
-
-  const title = request.title || t('live.extension.title')
-  if (request.method === 'confirm') {
-    return <div className="pi-live-blocking" role="dialog" aria-label={title}>
-      <div><b>{title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-actions">
-        <Button size="small" disabled={pending} onClick={() => onAnswer({ confirmed: false })}>{t('live.extension.reject')}</Button>
-        <Button size="small" variant="primary" disabled={pending} onClick={() => onAnswer({ confirmed: true })}>{t('live.extension.allow')}</Button>
-      </div>
-    </div>
-  }
-  if (request.method === 'select') {
-    return <div className="pi-live-blocking" role="dialog" aria-label={title}>
-      <div><b>{title}</b>{request.message && <span>{request.message}</span>}</div>
-      <div className="pi-live-blocking-options">
-        {(request.options ?? []).map(option => <Button size="small" disabled={pending} key={option} onClick={() => onAnswer({ value: option })}>{option}</Button>)}
-        <Button size="small" disabled={pending} onClick={() => onAnswer({ cancelled: true })}>{t('live.extension.cancel')}</Button>
-      </div>
-    </div>
-  }
-  return <div className="pi-live-blocking pi-live-blocking-input" role="dialog" aria-label={title}>
-    <div><b>{title}</b>{request.message && <span>{request.message}</span>}</div>
-    {request.method === 'editor'
-      ? <Textarea className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>
-      : <Input className="pi-live-blocking-field" value={value} onChange={event => setValue(event.target.value)} placeholder={request.placeholder}/>}
-    <div className="pi-live-blocking-actions">
-      <Button size="small" disabled={pending} onClick={() => onAnswer({ cancelled: true })}>{t('live.extension.cancel')}</Button>
-      <Button size="small" variant="primary" disabled={pending} onClick={() => onAnswer({ value })}>{t('live.extension.submit')}</Button>
-    </div>
-  </div>
 }
 
 function GenericLiveItem({

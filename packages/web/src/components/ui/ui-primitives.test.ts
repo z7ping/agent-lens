@@ -14,7 +14,7 @@ const piStartupCss = readFileSync(new URL('../pi-startup-disclosure.css', import
 const taskViewCss = readFileSync(new URL('../../task-view-options.css', import.meta.url), 'utf8')
 const composerPill = readFileSync(new URL('../ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const stateViews = readFileSync(new URL('../StateViews.tsx', import.meta.url), 'utf8')
-const piLivePage = readFileSync(new URL('../../features/PiLivePage.tsx', import.meta.url), 'utf8')
+const liveExtensionPrompt = readFileSync(new URL('../../features/LiveExtensionPrompt.tsx', import.meta.url), 'utf8')
 const piLiveCss = readFileSync(new URL('../../pi-live.css', import.meta.url), 'utf8')
 const liveRuntimeDisclosures = readFileSync(new URL('../LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
 const liveTaskPage = readFileSync(new URL('../../features/LiveTaskPage.tsx', import.meta.url), 'utf8')
@@ -141,10 +141,10 @@ test('shared composites and Pi surfaces reuse UI primitives', () => {
   assert.match(composerPill, /import \{ SelectMenu, type SelectMenuOption \} from '\.\/ui'/)
   assert.match(stateViews, /import \{ Button \} from '\.\/ui'/)
   assert.match(piStartup, /import \{ Button, UiIcon \} from '\.\/ui'/)
-  assert.match(piLivePage, /import \{ Button, Disclosure, IconButton, Input, Textarea \} from '\.\.\/components\/ui'/)
-  assert.match(piLivePage, /<Textarea className="pi-live-blocking-field"/)
-  assert.match(piLivePage, /<Input className="pi-live-blocking-field"/)
-  assert.match(piLivePage, /<IconButton variant="primary" className="pi-live-send"/)
+  assert.match(liveExtensionPrompt, /import \{ Button, Dialog, Input, Textarea \} from '\.\.\/components\/ui'/)
+  assert.match(liveExtensionPrompt, /<Textarea className="live-extension-input"/)
+  assert.match(liveExtensionPrompt, /<Input className="live-extension-input"/)
+  assert.match(liveTaskPage, /className="pi-live-send"/)
   for (const obsolete of [
     /\.pi-live-blocking button\s*\{/,
     /\.pi-live-startup-queue button\s*\{/,

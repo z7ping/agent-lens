@@ -916,38 +916,7 @@
   color: var(--al-ink);
 }
 
-.workspace-sidebar-context > .task-center-rail .task-center-search-field {
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-search-field > svg {
-  position: absolute;
-  left: 9px;
-  z-index: 1;
-  color: var(--al-muted-2);
-  pointer-events: none;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field {
-  width: 100%;
-  height: 32px;
-  padding: 0 9px 0 29px;
-  border-color: var(--al-line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
-  color: var(--al-ink);
-  font-size: 13px;
-}
-
-.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field:hover,
-.workspace-sidebar-context > .task-center-rail .task-center-search-input.ui-field:focus {
-  border-color: var(--al-line-strong);
-  background: var(--al-surface);
-}
+/* Task Center 搜索框样式统一由 task-center.css 持有。 */
 
 /* 高频筛选常驻；智能体继续复用现有多选 Disclosure，时间 / 状态保留在低频筛选中。 */
 .workspace-sidebar-context > .task-center-rail .task-center-quick-filters {

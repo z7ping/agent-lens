@@ -1,23 +1,15 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const action = readFileSync(new URL('./PiRuntimeMenu.tsx', import.meta.url), 'utf8')
-const page = readFileSync(new URL('../features/PiLivePage.tsx', import.meta.url), 'utf8')
-const icons = readFileSync(new URL('./UiIcon.tsx', import.meta.url), 'utf8')
+const page = readFileSync(new URL('../features/LiveTaskPage.tsx', import.meta.url), 'utf8')
+const shell = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
+const taskCenter = readFileSync(new URL('../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
 
-test('Pi Live 用标准 30px IconButton + 16px 电源图标承载 Runtime 结束操作，并保留二次确认', () => {
-  assert.match(page, /<PiRuntimeMenu busy=\{busy\}/)
-  assert.match(action, /variant="danger"/)
-  assert.doesNotMatch(action, /size="small"/)
-  assert.match(action, /title=\{t\('runtimeMenu\.terminateTitle'\)\}/)
-  assert.match(action, /aria-label=\{t\('runtimeMenu\.terminateTitle'\)\}/)
-  assert.match(action, /<UiIcon name="power" size=\{16\}\/>/)
-  assert.doesNotMatch(action, /<Popover/)
-  assert.doesNotMatch(action, /role="menu"/)
-  assert.match(action, /<Dialog[\s\S]*?title=\{t\('runtimeMenu\.dialogTitle'\)\}/)
-  assert.match(action, /variant="danger"[\s\S]*?>\{t\('runtimeMenu\.terminate'\)\}<\/Button>/)
-  assert.match(action, /t\('runtimeMenu\.hint'\)/)
-  assert.match(icons, /\bPower\b/)
-  assert.match(icons, /power: Power/)
+test('结束任务入口只属于统一 Live 页面，不再路由旧 Pi 页面', () => {
+  assert.match(page, /onClick=\{\(\) => void terminate\(\)\}/)
+  assert.match(page, /variant="danger"/)
+  assert.match(shell, /path="\/review\/live\/:liveId\/:runtimeSessionId"/)
+  assert.match(taskCenter, /mode === 'live' && <LiveTaskPage embedded\/>/)
+  assert.equal(existsSync(new URL('../features/PiLivePage.tsx', import.meta.url)), false)
 })

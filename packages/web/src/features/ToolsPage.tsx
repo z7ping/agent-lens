@@ -177,11 +177,6 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const sortIcon = (key: SortKey) => sort.key === key
     ? <UiIcon name={sort.direction === 'descending' ? 'sort-down' : 'sort-up'} size={12}/>
     : null
-  const sortKeyDown = (event: React.KeyboardEvent<HTMLTableCellElement>, key: SortKey) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    event.preventDefault()
-    toggleSort(key)
-  }
   const relaxFilters = () => model.setUsageFilters({ sourceIds: null, projectId: '', range: 'all' })
   const openReviewSession = (logicalSessionId: string) => {
     const params = new URLSearchParams()
@@ -236,12 +231,12 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
             <div className="table-scroll">
               {tools.length ? <table className="tool-table">
                 <thead><tr>
-                  <th>{t('page.tool')}</th>
-                  <th tabIndex={0} role="button" aria-sort={ariaSort('callCount')} onClick={() => toggleSort('callCount')} onKeyDown={event => sortKeyDown(event, 'callCount')} style={{ cursor: 'pointer' }}>{t('page.calls')} {sortIcon('callCount')}</th>
-                  <th tabIndex={0} role="button" aria-sort={ariaSort('sessionCount')} onClick={() => toggleSort('sessionCount')} onKeyDown={event => sortKeyDown(event, 'sessionCount')} style={{ cursor: 'pointer' }}>{t('page.sessions')} {sortIcon('sessionCount')}</th>
-                  <th tabIndex={0} role="button" aria-sort={ariaSort('successRate')} onClick={() => toggleSort('successRate')} onKeyDown={event => sortKeyDown(event, 'successRate')} style={{ cursor: 'pointer' }}>{t('page.successRate')} {sortIcon('successRate')}</th>
-                  <th tabIndex={0} role="button" aria-sort={ariaSort('errorCount')} onClick={() => toggleSort('errorCount')} onKeyDown={event => sortKeyDown(event, 'errorCount')} style={{ cursor: 'pointer' }}>{t('page.failure')} {sortIcon('errorCount')}</th>
-                  <th tabIndex={0} role="button" aria-sort={ariaSort('averageDurationMs')} onClick={() => toggleSort('averageDurationMs')} onKeyDown={event => sortKeyDown(event, 'averageDurationMs')} style={{ cursor: 'pointer' }}>{t('page.averageDuration')} {sortIcon('averageDurationMs')}</th>
+                  <th scope="col">{t('page.tool')}</th>
+                  <th scope="col" aria-sort={ariaSort('callCount')}><button type="button" className="tool-table-sort" onClick={() => toggleSort('callCount')}>{t('page.calls')} {sortIcon('callCount')}</button></th>
+                  <th scope="col" aria-sort={ariaSort('sessionCount')}><button type="button" className="tool-table-sort" onClick={() => toggleSort('sessionCount')}>{t('page.sessions')} {sortIcon('sessionCount')}</button></th>
+                  <th scope="col" aria-sort={ariaSort('successRate')}><button type="button" className="tool-table-sort" onClick={() => toggleSort('successRate')}>{t('page.successRate')} {sortIcon('successRate')}</button></th>
+                  <th scope="col" aria-sort={ariaSort('errorCount')}><button type="button" className="tool-table-sort" onClick={() => toggleSort('errorCount')}>{t('page.failure')} {sortIcon('errorCount')}</button></th>
+                  <th scope="col" aria-sort={ariaSort('averageDurationMs')}><button type="button" className="tool-table-sort" onClick={() => toggleSort('averageDurationMs')}>{t('page.averageDuration')} {sortIcon('averageDurationMs')}</button></th>
                 </tr></thead>
                 <tbody>{sortedTools.map(tool => {
                   const successRate = rateValue(tool.successCount, tool.errorCount)
