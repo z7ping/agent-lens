@@ -139,13 +139,12 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   return <>
     <header ref={headerRef} className={`task-header ${className}`.trim()}>
       <div className="task-header-copy">
+        <h1 className="task-header-title">{title}</h1>
         <div className="task-header-meta">
           {marker && <span className="task-header-marker">{marker}</span>}
           <b>{agent}</b>
-          {resolvedContext && <span className="task-header-context">{resolvedContext}</span>}
           {showStatus && <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>}
         </div>
-        <h1 className="task-header-title">{title}</h1>
         {submeta && <div className="task-header-submeta">{submeta}</div>}
       </div>
       {(metrics.length > 0 || hasHeaderActions) && <div className="task-header-side">

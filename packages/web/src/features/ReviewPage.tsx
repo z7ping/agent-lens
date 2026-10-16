@@ -132,7 +132,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           agent={taskDetailModel?.agentLabel ?? ''}
           context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? t('local.session.unlinkedProject')}
           showStatus={false}
-          title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title, 15)}</span>}
+          title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title)}</span>}
           metrics={[]}
           viewActions={<Button role="menuitem" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</Button>}
           readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
