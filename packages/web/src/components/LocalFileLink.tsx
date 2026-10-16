@@ -95,6 +95,10 @@ function fileName(path: string): string {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 }
 
+function isMarkdownFileName(name: string): boolean {
+  return /\.(?:md|markdown|mdown|mkd)$/i.test(name)
+}
+
 export type LocalLinkResourceKind = 'file' | 'directory' | 'path'
 export type LocalLinkPresentation = 'markdown' | 'code' | 'file' | 'directory' | 'path' | 'web' | 'other'
 
@@ -107,7 +111,7 @@ export function classifyLocalLink(href: string | undefined, kind?: LocalLinkReso
   if (!kind && /[\\/]$/.test(target.path)) return 'directory'
   const name = fileName(target.path)
   if (kind !== 'file' && !/\.[a-z0-9][a-z0-9_-]*$/i.test(name)) return 'path'
-  if (/\.(?:md|markdown|mdown|mkd)$/i.test(name)) return 'markdown'
+  if (isMarkdownFileName(name)) return 'markdown'
   if (/\.(?:[cm]?js|[cm]?ts|jsx|tsx|css|scss|html|xml|jsonc?|ya?ml|toml|py|java|go|rs|cpp|cc|c|h|hpp|sql|sh|ps1|vue|svelte|kt|swift|rb|php)$/i.test(name)) return 'code'
   return 'file'
 }
@@ -175,7 +179,7 @@ export function LocalFileLink({
     try {
       const result = await clientModel.previewHostFile(target.path)
       setPreview(result)
-      setView(/\.(?:md|markdown|mdown|mkd)$/i.test(result.name) ? 'rendered' : 'source')
+      setView(isMarkdownFileName(result.name) ? 'rendered' : 'source')
     } catch (reason) {
       if (reason instanceof AgentLensRequestError && reason.status === 409) {
         await openDirectory()
@@ -193,7 +197,7 @@ export function LocalFileLink({
       : t('localFilePreview.line', { line: target.line })
     : ''
 
-  const isMarkdown = Boolean(preview?.content !== undefined && /\.(?:md|markdown|mdown|mkd)$/i.test(preview.name))
+  const isMarkdown = Boolean(preview?.content !== undefined && isMarkdownFileName(preview.name))
 
   const icon = presentation === 'markdown' ? 'tool-read'
     : presentation === 'code' ? 'file-code'
