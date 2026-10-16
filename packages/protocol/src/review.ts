@@ -6,7 +6,18 @@ export type ReviewEventCategory = 'permission' | 'subagent' | 'context' | 'model
 export type ReviewDetailFilter = 'all' | 'errors' | 'latency' | 'latest'
 export type ReviewDetailDirection = 'forward' | 'backward'
 export type ReviewProcessMode = 'full' | 'summary'
-export type ReviewProcessAvailability = 'available' | 'partial'
+/** "available" is retained for older runtimes; new producers emit "complete". */
+export type ReviewProcessAvailability = 'available' | 'complete' | 'partial' | 'unavailable' | 'truncated'
+/** Stable machine-readable cause. Absence means the source has not established a cause. */
+export type ReviewProcessReasonCode =
+  | 'node-limit'
+  | 'summary-limit'
+  | 'hub-omitted'
+  | 'hub-redacted'
+  | 'cold-storage'
+  | 'evidence-unrecoverable'
+  | 'source-drift'
+  | 'runtime-unsupported'
 export type ReviewSessionActivity = 'user-task' | 'branch-task' | 'subagent' | 'internal-review' | 'system-activity'
 
 export type ReviewMessageAttachmentType = 'image' | 'file'
@@ -239,6 +250,8 @@ export interface ReviewProcessSummaryDto {
   errorCount: number
   durationMs: number
   availability: ReviewProcessAvailability
+  /** Only set from observed source/storage/transport facts, never message text. */
+  reasonCode?: ReviewProcessReasonCode
   totalFactCount: number
   omittedFactCount?: number
 }
