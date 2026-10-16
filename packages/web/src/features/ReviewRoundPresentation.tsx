@@ -287,6 +287,7 @@ function ReviewProcessGroup({
           <MarkdownSurface text={item.node.text}/>
         </TaskThinking>
         return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
+          <span className="task-process-message-label">{t('local.process.output')}</span>
           <MarkdownSurface text={item.node.text}/>
         </div>
       })}
