@@ -8,7 +8,7 @@ import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
 import { TaskThinking } from './TaskThinking'
-import { taskRoundPreview, type TaskRoundModel, type TaskToolGroupModel } from './task-detail-model'
+import { readableTaskHeaderTitle, taskRoundPreview, type TaskRoundModel, type TaskToolGroupModel } from './task-detail-model'
 
 const toolGroup: TaskToolGroupModel = {
   id: 'tools:test', label: '工具执行', itemCount: 4, errorCount: 0, kindCounts: [],
@@ -47,6 +47,14 @@ test('Round 保持轻量摘要结构并默认展开', () => {
   assert.match(html, /task-round-preview/)
   assert.match(html, /task-round-meta/)
   assert.match(html, /4 调用/)
+})
+
+test('任务页头清理 Markdown 强调语法，不修改存储的原始标题', () => {
+  const title = '我准备发布**v1.0.0-alpha.6**版本，现在具备条件吗？'
+  assert.equal(readableTaskHeaderTitle(title), '我准备发布v1.0.0-alpha.6版本，现在具备条件吗？')
+  assert.equal(readableTaskHeaderTitle('## 检查 `npm test` 和 **文件变更**'), '检查 npm test 和 文件变更')
+  assert.equal(readableTaskHeaderTitle(undefined), '')
+  assert.equal(title, '我准备发布**v1.0.0-alpha.6**版本，现在具备条件吗？')
 })
 
 test('Round 预览将 Codex 文件上下文改为语义摘要且不改变原始消息', () => {
