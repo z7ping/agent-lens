@@ -162,14 +162,17 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${displayTitle}${presentation.activityLabel ? ` · ${presentation.activityLabel}` : ''} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
       <div className="session-item-title" title={displayTitle}>{displayTitle}</div>
-      {presentation.activityLabel && <StatusBadge className="session-activity-badge" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>}
     </div>
     <div className="session-item-meta">
       <AgentLogo sourceId={sourceId} size="compact"/>
       <span className="session-item-source" title={fullSourceNames}>{compactSourceNames}</span>
+      <span className="session-item-meta-separator" aria-hidden="true">·</span>
       <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
       <time dateTime={moment?.at} title={timeTooltip || undefined}>{updatedLabel}</time>
     </div>
+    {presentation.activityLabel && <div className="session-item-activity">
+      <StatusBadge className="session-activity-badge" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>
+    </div>}
   </button>
 }
 
