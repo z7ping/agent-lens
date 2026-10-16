@@ -40,10 +40,10 @@ test('核心视图保留未识别事件可达性，不用无依据的全量计�
   assert.match(review, /entry\.type === 'raw-event-group'/)
 })
 
-test('Review 与 Live 的用户消息在正文范围内右对齐，窄屏仍使用原有全宽布局', () => {
-  assert.match(taskDetailCss, /\.task-surface \.task-message-user \{ justify-content: flex-end; max-width: 88%; \}/)
-  assert.match(taskDetailCss, /\.task-surface \.task-message-bubble-user \{[^}]*max-width: min\(78%, 760px\);/)
-  assert.match(taskDetailCss, /@media \(max-width: 991\.98px\) \{[\s\S]*?\.task-surface \.task-message-user \{ max-width: 100%; \}/)
+test('Review / Live 用户气泡保持原有右对齐与断点宽度，不约束消息行', () => {
+  assert.match(taskDetailCss, /\.task-surface \.task-message-user \{ justify-content: flex-end; \}/)
+  assert.match(taskDetailCss, /\.task-surface \.task-message-bubble-user \{[^}]*max-width: min\(64%, 760px\);/)
+  assert.doesNotMatch(taskDetailCss, /\.task-surface \.task-message-user \{[^}]*max-width:/)
+  assert.match(taskDetailCss, /@media \(max-width: 991\.98px\) \{[\s\S]*?\.task-surface \.task-message-bubble-user \{ max-width: 88%; \}/)
   assert.match(taskMessageSource, /const roleClass = user \? 'task-message-user' : 'task-message-assistant'/)
-  assert.match(taskDetailCss, /\.task-surface \.task-message-assistant \{ display: block;/)
 })
