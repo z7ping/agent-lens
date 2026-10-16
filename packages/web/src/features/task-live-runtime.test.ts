@@ -107,7 +107,7 @@ test('标准 Live SSE 事件只修改必要状态，并正确处理流式与结�
   const terminal = runtimeStateFromEvent(running, event({ type: 'status', status: 'terminated' }))
   assert.equal(terminal?.status, 'terminated')
   assert.equal(terminal?.isStreaming, false)
-  const completed = runtimeStateFromEvent(running, event({ type: 'completed' }))
+  const completed = runtimeStateFromEvent(running, event({ type: 'completed', status: 'completed' }))
   assert.equal(completed?.pendingMessageCount, 0)
   assert.equal(completed?.isStreaming, false)
 })
