@@ -81,11 +81,11 @@ test('macOS and Linux builders use the installed lockfile Electron version', () 
   const pkg = JSON.parse(read('apps/desktop/package.json'))
   const build = read('scripts/build-unix-desktop.mjs')
   assert.match(build, /resolveElectronVersion\(root\)/)
-  assert.match(build, /--config\\.electronVersion=/)
+  assert.match(build, /--config\.electronVersion=/)
   assert.match(build, /--publish=never/)
   for (const script of ['dist:linux', 'dist:linux:dir', 'dist:mac:arm64', 'dist:mac:x64',
     'dist:mac:arm64:release', 'dist:mac:x64:release', 'dist:mac:arm64:dir', 'dist:mac:x64:dir']) {
-    assert.match(pkg.scripts[script], /build-unix-desktop\\.mjs/)
+    assert.match(pkg.scripts[script], /build-unix-desktop\.mjs/)
     assert.doesNotMatch(pkg.scripts[script], /electron-builder --/)
   }
   assert.match(pkg.scripts['dist:linux'], /--x64/)
