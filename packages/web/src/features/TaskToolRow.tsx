@@ -113,7 +113,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
         <ToolKindIcon kind={visualKind}/>
         <span>{t(`tool.kind.${visualKind}`)}</span>
       </span>
-      <span className="task-tool-summary-text" title={heading}>{heading}</span>
+      <span className="task-tool-summary-text" title={commandTarget ? model.name : heading}>{commandTarget ? model.name : heading}</span>
       <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
         <span className="task-tool-status-mark" aria-hidden="true">
           {model.status === 'running' ? <UiIcon name="loading" size={14}/>
@@ -121,8 +121,10 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
               : model.status === 'error' ? <UiIcon name="close" size={16}/>
                 : <UiIcon name="clock" size={14}/>}
         </span>
+        <span className="task-tool-status-label">{status}</span>
       </span>
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
+      {commandTarget && <code className="task-tool-command-preview" title={target}>{target}</code>}
     </summary>
     <div className="task-tool-sections">
       <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
