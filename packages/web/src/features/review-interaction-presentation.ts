@@ -1,5 +1,5 @@
 import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
-import { isSessionTitleUpdate } from './review-event-presentation'
+import { isFailedLifecycleEvent, isSessionTitleUpdate } from './review-event-presentation'
 
 export type ReviewProcessPresentationItem =
   | { type: 'message'; node: ReviewMessageNodeDto }
@@ -25,6 +25,7 @@ export type ReviewInteractionPresentationEntry =
   | { type: 'process'; id: string; items: ReviewProcessPresentationItem[] }
   | { type: 'event'; node: ReviewEventNodeDto }
   | { type: 'raw-event-group'; items: ReviewEventNodeDto[] }
+  | { type: 'runtime-event-group'; items: ReviewEventNodeDto[] }
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -108,6 +109,13 @@ function eventAction(node: ReviewEventNodeDto): string {
   return stringField(payload, 'action', 'event', 'type', 'status').toLowerCase()
 }
 
+/** Only known benign lifecycle metadata joins the compact runtime group. */
+function isCompactRuntimeEvent(node: ReviewEventNodeDto): boolean {
+  if (node.kind !== 'session.lifecycle' || isFailedLifecycleEvent(node)) return false
+  const action = eventAction(node)
+  return ['thread.settings.applied', 'turn.context', 'turn.started', 'session.discovered'].includes(action)
+}
+
 function isTerminalEvent(node: ReviewEventNodeDto): boolean {
   if (node.kind !== 'session.lifecycle') return false
   return ['turn.completed', 'turn.stopped', 'turn.aborted', 'turn.error'].includes(eventAction(node))
@@ -149,6 +157,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   const titleUpdates: ReviewEventNodeDto[] = []
   let tools: ReviewToolNodeDto[] = []
   let rawEvents: ReviewEventNodeDto[] = []
+  let runtimeEvents: ReviewEventNodeDto[] = []
   const flushTools = () => {
     if (!tools.length) return
     // Split only at explicit parent boundaries. Original tool order and
@@ -176,6 +185,11 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
     result.push({ type: 'raw-event-group', items: rawEvents })
     rawEvents = []
   }
+  const flushRuntimeEvents = () => {
+    if (!runtimeEvents.length) return
+    result.push({ type: 'runtime-event-group', items: runtimeEvents })
+    runtimeEvents = []
+  }
 
   for (const node of nodes) {
     if (node.type === 'event' && isLegacyPiBenignAssistantStop(node)) continue
@@ -186,7 +200,14 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
 
     if (node.type === 'tool') {
       flushRawEvents()
+      flushRuntimeEvents()
       tools.push(node)
+      continue
+    }
+    if (node.type === 'event' && isCompactRuntimeEvent(node)) {
+      flushTools()
+      flushRawEvents()
+      runtimeEvents.push(node)
       continue
     }
 
@@ -194,12 +215,14 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
       const duplicateOfReasoning = [...sourceRecordIds(node)].some(id => reasoningSourceRecords.has(id))
       if (duplicateOfReasoning) continue
       flushTools()
+      flushRuntimeEvents()
       rawEvents.push(node)
       continue
     }
 
     flushTools()
     flushRawEvents()
+    flushRuntimeEvents()
     if (node.type === 'message') {
       if (node.role === 'assistant' && [...sourceRecordIds(node)].some(id => commentarySourceRecords.has(id))) continue
       if (node.role === 'reasoning') result.push({ type: 'reasoning', node, tools: [] })
@@ -210,12 +233,27 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   }
   flushTools()
   flushRawEvents()
+  flushRuntimeEvents()
 
   const prompts: ReviewInteractionPresentationEntry[] = []
   const processItems: ReviewProcessPresentationItem[] = []
   const postProcess: ReviewInteractionPresentationEntry[] = []
   const terminal: ReviewInteractionPresentationEntry[] = []
   const artifacts: ReviewInteractionPresentationEntry[] = []
+
+  // Do not blindly move an older terminal behind newer start/context events.
+  // Native sequence and timestamps are evidence: a 21:09 completion must not
+  // be rendered after a 21:11 start just to satisfy a generic "terminal last" rule.
+  const latestOtherAt = result.reduce((latest, entry) => {
+    const times = entry.type === 'runtime-event-group' ? entry.items.map(item => item.at)
+      : entry.type === 'message' || entry.type === 'event' && !isTerminalEvent(entry.node)
+        ? [entry.node.at] : []
+    for (const time of times) {
+      const parsed = Date.parse(time)
+      if (Number.isFinite(parsed)) latest = Math.max(latest, parsed)
+    }
+    return latest
+  }, Number.NEGATIVE_INFINITY)
 
   for (const entry of result) {
     if (entry.type === 'message' && entry.node.role === 'user') {
@@ -231,7 +269,9 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
       continue
     }
     if (entry.type === 'event' && isTerminalEvent(entry.node)) {
-      terminal.push(entry)
+      const eventAt = Date.parse(entry.node.at)
+      if (Number.isFinite(eventAt) && eventAt >= latestOtherAt) terminal.push(entry)
+      else postProcess.push(entry)
       continue
     }
 

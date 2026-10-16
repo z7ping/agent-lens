@@ -22,11 +22,13 @@ export function TaskEvent({
   meta,
   onInspect,
   raw,
+  error = false,
 }: {
   model: TaskEventModel
   meta?: ReactNode
   onInspect?: (() => void) | undefined
   raw?: unknown
+  error?: boolean
 }) {
   const { t } = useTranslation('task')
   const { showUsageDetails } = useTaskSurfaceView()
@@ -40,7 +42,7 @@ export function TaskEvent({
     {model.sourceLabel && <span className="task-event-source">{model.sourceLabel}</span>}
     {model.time && <time>{model.time}</time>}
   </>
-  const rowClass = `task-event-row task-event-${model.category}`
+  const rowClass = `task-event-row task-event-${model.category}${error ? ' task-event-is-error' : ''}`
   const openInspector = onInspect ?? (raw !== undefined ? () => setRawDrawerOpen(true) : undefined)
   return <>
     {openInspector

@@ -83,6 +83,16 @@ export function reviewArtifactSummary(payload: JsonValue): string {
  * behavior. Keep it isolated here until each Integration can contribute the
  * same mapping declaratively.
  */
+/** Only explicit lifecycle failures are highlighted; benign metadata may collapse. */
+export function isFailedLifecycleEvent(node: ReviewEventNodeDto): boolean {
+  if (node.kind !== 'session.lifecycle') return false
+  const payload = record(node.payload)
+  const action = stringValue(payload, 'action', 'event', 'type').toLowerCase()
+  const status = stringValue(payload, 'status', 'result').toLowerCase()
+  return ['turn.error', 'turn.aborted', 'task.failed', 'assistant.error'].includes(action)
+    || ['error', 'failed', 'failure', 'rejected'].includes(status)
+}
+
 export function isSessionTitleUpdate(node: ReviewEventNodeDto): boolean {
   return node.kind === 'session.lifecycle'
     && ['session.title', 'session.renamed'].includes(stringValue(record(node.payload), 'action', 'event', 'type', 'status').toLowerCase())
