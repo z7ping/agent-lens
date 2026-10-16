@@ -101,7 +101,7 @@ function MessageBubble({
       id: node.id,
       label,
       text: node.text,
-      preview: brief(node.text, 78),
+      preview: node.text.replace(/\s+/g, ' ').trim().slice(0, 220),
       time: formatClock(node.at),
       state: 'settled',
     }
@@ -279,7 +279,7 @@ function ReviewProcessGroup({
         if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
         if (item.node.role === 'reasoning') return <TaskThinking
           key={item.node.id}
-          model={{ id: item.node.id, label: t('local.process.thinking'), text: item.node.text, state: 'settled' }}
+          model={{ id: item.node.id, label: t('local.process.thinking'), text: item.node.text, preview: item.node.text.replace(/\s+/g, ' ').trim().slice(0, 220), state: 'settled' }}
           className="task-process-thinking-card"
           defaultExpanded={false}
           expansionStore={expansionStore}

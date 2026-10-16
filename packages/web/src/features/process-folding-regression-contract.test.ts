@@ -9,6 +9,9 @@ const review = [
 const piRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const thinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const round = readFileSync(new URL('./TaskRound.tsx', import.meta.url), 'utf8')
+const tool = readFileSync(new URL('./TaskToolRow.tsx', import.meta.url), 'utf8')
+const message = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
+const styles = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 
 test('Review summary-mode 外层统计使用 Process Summary 且重正文可被虚拟卸载', () => {
   assert.match(review, /projectReviewInteractionToolStats\(interaction\)/)
@@ -18,6 +21,26 @@ test('Review summary-mode 外层统计使用 Process Summary 且重正文可被�
 test('Review 与 Pi 在 revision 更新后会为仍展开的 Process 自动重拉', () => {
   assert.match(review, /expansionStore\.get\(summary\.id\) === true[\s\S]{0,120}startProcessLoad\(summary\)/)
   assert.match(piRound, /expansionStore\?\.get\(processId\) === true[\s\S]{0,120}startProcessLoad\(process\.revision\)/)
+})
+
+test('处理详情的 Thinking 摘要两行并将所有折叠箭头放在右侧', () => {
+  assert.match(thinking, /<span className="task-thinking-summary-meta">\{meta\}[\s\S]*?<DisclosureChevron\/>/)
+  assert.match(styles, /\.task-thinking-preview \{[^}]*-webkit-line-clamp: 2/)
+  assert.match(review, /preview: item\.node\.text\.replace/)
+})
+
+test('Shell 在折叠态显示两行命令预览，展开复用原有输入和输出区域', () => {
+  assert.match(tool, /commandTarget && <code className="task-tool-command-preview"/)
+  assert.match(tool, /data-tool-section="input"/)
+  assert.match(tool, /data-tool-section="output"/)
+  assert.match(tool, /task-tool-status-label/)
+  assert.match(styles, /\.task-tool-command-preview \{[^}]*-webkit-line-clamp: 2/)
+})
+
+test('Assistant 复制、源码和证据入口共享同一行', () => {
+  assert.match(message, /className="markdown-message-actions"[\s\S]*?className="task-message-actions">\{actions\}<\/span>/)
+  assert.match(message, /actions && \(!text \|\| awaitingFirstContent\)/)
+  assert.match(styles, /\.task-message-actions \{[^}]*flex-wrap: nowrap/)
 })
 
 test('Task disclosure 只把真实用户 toggle 写回展开意图，程序同步事件必须忽略', () => {

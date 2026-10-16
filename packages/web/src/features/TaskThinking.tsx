@@ -39,6 +39,7 @@ export function TaskThinking({
     ? t('thinking.thoughtFor', { value: taskPreciseDurationLabel(model.durationMs) })
     : model.label
   const running = model.state === 'running'
+  const preview = !expanded ? (model.preview ?? model.text.replace(/\s+/g, ' ').trim().slice(0, 220)) : ''
 
   useEffect(() => {
     // 运行中 -> 已完成时不要重新按 defaultExpanded 折叠已经打开的内容。
@@ -67,14 +68,13 @@ export function TaskThinking({
     <summary className="task-thinking-summary">
       <span className="task-thinking-summary-main">
         {kind !== 'process' && <>
-          <DisclosureChevron/>
           <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="thinking" size={14}/></span>
         </>}
         <span className="task-thinking-label">{label}</span>
         <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
-        {model.preview && !expanded && <span className="task-thinking-preview">{model.preview}</span>}
+        {preview && <span className="task-thinking-preview">{preview}</span>}
       </span>
-      <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}{kind === 'process' && <DisclosureChevron/>}</span>
+      <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}<DisclosureChevron/></span>
     </summary>
     {expanded && <div className="task-thinking-content">{children}</div>}
     {expanded && actions && <div className="task-thinking-actions">{actions}</div>}
