@@ -226,6 +226,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
       rawEvents: {
         title: 'Other runtime records',
         titleUpdates: 'Session title records',
+        runtime: 'Runtime records',
         recordCount: '{{count}} records',
         hiddenCount: '{{count}} unidentified events loaded · show all events',
         description: 'Status, usage, and other auxiliary records from the agent’s native logs; these are not conversation content',
