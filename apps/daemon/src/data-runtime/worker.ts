@@ -164,6 +164,7 @@ function storageRootAllowed(path: readonly string[]): boolean {
     'checkpoints',
     'assetInventory',
     'launchableProjects',
+    'taskFileChanges',
     'sessionSummaries',
     'sessionSummaryProjection',
     'toolUsageObservations',

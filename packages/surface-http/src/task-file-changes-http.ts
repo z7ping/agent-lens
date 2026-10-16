@@ -21,11 +21,13 @@ export async function observedInteractionFileChanges(
   interactionId: string,
   from: string,
   to: string,
+  observationIds: readonly string[] = [],
 ): Promise<{ items: TaskFileChangeRecord[]; truncated: boolean }> {
   const observations: CanonicalObservation[] = []
   let after: ObservationCursor | undefined
   let truncated = false
   let scanned = 0
+  const explicitIds = new Set(observationIds)
   while (scanned < MAX_ROUND_OBSERVATIONS) {
     const page = await storage.repositories.observations.query({
       logicalSessionIds: [logicalSessionId],
@@ -36,7 +38,9 @@ export async function observedInteractionFileChanges(
       limit: PAGE_SIZE,
     })
     scanned += page.length
-    observations.push(...page.filter(item => item.interactionId === interactionId))
+    // Review 的轮次 ID 可由投影生成；原生事件缺少 interactionId 时只用已知证据 ID 关联。
+    observations.push(...page.filter(item => item.logicalSessionId === logicalSessionId
+      && (item.interactionId === interactionId || explicitIds.has(item.id))))
     if (page.length < PAGE_SIZE) break
     if (scanned >= MAX_ROUND_OBSERVATIONS) { truncated = true; break }
     after = cursorFor(page[page.length - 1]!)

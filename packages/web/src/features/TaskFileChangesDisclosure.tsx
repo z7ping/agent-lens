@@ -72,7 +72,6 @@ export function TaskFileChangesDisclosure({
             {value?.summary.deletions !== undefined && <span className="task-file-change-deleted">-{value.summary.deletions}</span>}
           </span>}
         </span>
-        {!hasExactDelta && value && value.summary.observedCount > 0 && <span className="task-file-changes-observed">{t('local.fileChanges.observed')}</span>}
         {loading && <span className="task-file-changes-state">{t('local.fileChanges.refreshing')}</span>}
         <UiIcon className="task-file-changes-chevron" name="chevron-right" size={14}/>
       </summary>
@@ -92,7 +91,6 @@ export function TaskFileChangesDisclosure({
             </span>
             {item.additions !== undefined && <span className="task-file-change-added">+{item.additions}</span>}
             {item.deletions !== undefined && <span className="task-file-change-deleted">-{item.deletions}</span>}
-            {item.confidence !== 'exact' && <span className="task-file-change-confidence">{t('local.fileChanges.observedShort')}</span>}
             {item.confidence === 'exact' && !isObserved && <Button size="small" className="task-file-change-diff-action" onClick={() => { setDiff(null); setDiffError(false); setDiffLoading(true); setDiffPath(item.path) }}>{t('local.fileChanges.viewDiff')}</Button>}
           </div>
         })}

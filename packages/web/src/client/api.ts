@@ -369,7 +369,7 @@ export class AgentLensApi {
 
   reviewInteractionFileChanges(
     id: string,
-    interaction: { id: string; startedAt: string; endedAt: string },
+    interaction: { id: string; startedAt: string; endedAt: string; observationIds?: readonly string[] },
     signal?: AbortSignal,
   ): Promise<TaskFileChangesResponseDto> {
     const params = new URLSearchParams({
@@ -377,6 +377,7 @@ export class AgentLensApi {
       from: interaction.startedAt,
       to: interaction.endedAt,
     })
+      for (const observationId of interaction.observationIds ?? []) params.append('observationId', observationId)
     return requestJson<TaskFileChangesResponseDto>(
       `/api/v1/review/${encodeURIComponent(id)}/file-changes?${params}`,
       signal ? { signal } : {},

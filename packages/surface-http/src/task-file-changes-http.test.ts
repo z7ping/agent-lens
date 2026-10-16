@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { CanonicalObservation, StorageService, TaskFileChangeRecord } from '@agent-lens/core'
-import { backfillLegacySessionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
+import { backfillLegacySessionFileChanges, observedInteractionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
 
 test('session-level exact Git counts remain distinct from per-round observed changes', () => {
   const final = taskFileChangesResponse('session-1', [{
@@ -111,6 +111,23 @@ test('旧会话原生文件事件与工具证据共用补算，去重并保留�
   assert.equal(partial.items.length, 1)
   assert.equal(bounded.queryCount(), 10)
   assert.equal(bounded.persisted.length, 0)
+})
+
+test('历史轮次使用显式 Observation ID 归集原生文件事件，不猜测邻接事件或跨会话归属', async () => {
+  const event = historicalObservation('native-9', 'artifact.action', {
+    action: 'file.change', status: 'completed', changes: { 'round-9.ts': { type: 'update' } },
+  })
+  const unrelated = historicalObservation('native-other', 'artifact.action', {
+    action: 'file.change', status: 'completed', changes: { 'other.ts': { type: 'update' } },
+  })
+  const { storage } = fakeLegacyStorage([event, unrelated, { ...event, id: 'foreign', logicalSessionId: 'another-session' }])
+  const result = await observedInteractionFileChanges(storage, 'legacy-session', 'legacy-session:review:9',
+    '2026-09-01T09:00:00Z', '2026-09-01T11:00:00Z', ['native-9', 'foreign'])
+  assert.deepEqual(result.items.map(item => item.path), ['round-9.ts'])
+  assert.equal(result.truncated, false)
+  const missing = await observedInteractionFileChanges(storage, 'legacy-session', 'legacy-session:review:9',
+    '2026-09-01T09:00:00Z', '2026-09-01T11:00:00Z')
+  assert.deepEqual(missing.items, [])
 })
 
 test('legacy session with no writes is negatively cached to avoid repeated full reads', async () => {

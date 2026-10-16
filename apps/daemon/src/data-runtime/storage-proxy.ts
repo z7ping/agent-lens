@@ -552,6 +552,7 @@ export class DataRuntimeStorageService implements StorageService {
   readonly checkpoints: CheckpointRepository
   readonly assetInventory: AssetInventoryReader
   readonly launchableProjects: LaunchableProjectReader
+  readonly taskFileChanges: SqliteStorageService['taskFileChanges']
   readonly sessionSummaries: SessionSummaryProjectionStore
   readonly sessionSummaryProjection: SessionSummaryProjectionStore
   readonly toolUsageObservations: ToolUsageObservationReader
@@ -588,6 +589,7 @@ export class DataRuntimeStorageService implements StorageService {
     this.checkpoints = namespaceProxy(executor, ['checkpoints'])
     this.assetInventory = namespaceProxy(executor, ['assetInventory'])
     this.launchableProjects = namespaceProxy(executor, ['launchableProjects'])
+    this.taskFileChanges = namespaceProxy(executor, ['taskFileChanges'])
     const summaries = sessionSummaryProxy(executor)
     this.sessionSummaries = summaries
     this.sessionSummaryProjection = summaries

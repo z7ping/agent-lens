@@ -750,6 +750,10 @@ export async function startHttpSurface(
         if (!id) throw badRequest('logicalSessionId is required')
         const interactionId = url.searchParams.get('interactionId')
         if (interactionId) {
+          const observationIds = url.searchParams.getAll('observationId')
+          if (observationIds.length > 500 || observationIds.some(value => !value || value.length > 512)) {
+            throw badRequest('Invalid file change observation IDs')
+          }
           const from = url.searchParams.get('from') ?? ''
           const to = url.searchParams.get('to') ?? ''
           const start = Date.parse(from)
@@ -758,7 +762,7 @@ export async function startHttpSurface(
             throw badRequest('Invalid interaction file changes query')
           }
           const result = await withReadPriority(storage, 'supporting',
-            () => observedInteractionFileChanges(storage, id, interactionId, from, to))
+            () => observedInteractionFileChanges(storage, id, interactionId, from, to, observationIds))
           const capture = await storage.taskFileChanges?.getLatestBySession(id)
           writeJson(response, 200, taskFileChangesResponse(id, result.items, capture, {
             interactionId,

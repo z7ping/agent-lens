@@ -55,6 +55,29 @@ const host = (id: string) => ({
   lastSeenAt: '2026-09-06T00:00:00.000Z',
 })
 
+test('真实 Data Runtime Worker 暴露任务文件变更读写，保留空 Git 结果与原生摘要', async () => {
+  const runtime = await fixture()
+  try {
+    const changes = [{ logicalSessionId: 'legacy-session', path: 'src/native.ts', changeType: 'unknown' as const,
+      firstChangedAt: '2026-10-16T00:00:00Z', lastChangedAt: '2026-10-16T00:00:00Z',
+      evidence: ['tool' as const], confidence: 'medium' as const }]
+    assert.ok(runtime.storage.taskFileChanges)
+    await runtime.storage.taskFileChanges.replaceObservedSession('legacy-session', changes)
+    assert.deepEqual(await runtime.storage.taskFileChanges.listBySession('legacy-session'), changes)
+    assert.equal(dataRuntimeStorageInternals.isReadPath(['taskFileChanges', 'listBySession']), true)
+    assert.equal(dataRuntimeStorageInternals.isReadPath(['taskFileChanges', 'replaceObservedSession']), false)
+
+    await runtime.storage.taskFileChanges.putBaseline({ runtimeSessionId: 'runtime', logicalSessionId: 'captured-session',
+      workspacePath: '/repo', baselineCapturedAt: '2026-10-16T00:00:00Z' })
+    await runtime.storage.taskFileChanges.finalizeRuntime('runtime', { logicalSessionId: 'captured-session',
+      finalizedAt: '2026-10-16T00:01:00Z', changes: [] })
+    assert.equal((await runtime.storage.taskFileChanges.getLatestBySession('captured-session'))?.runtimeSessionId, 'runtime')
+    assert.deepEqual(await runtime.storage.taskFileChanges.listBySession('captured-session'), [])
+  } finally {
+    await runtime.dispose()
+  }
+})
+
 test('Data Runtime routes analytics reads to foreground pool and maintenance scans separately', () => {
   assert.equal(dataRuntimeStorageInternals.READ_TIMEOUT_MS, 20_000)
   assert.equal(dataRuntimeStorageInternals.isReadPath(['toolUsageObservations', 'aggregate']), true)
