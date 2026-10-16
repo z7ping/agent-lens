@@ -254,7 +254,10 @@ function ReviewProcessGroup({
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
   const tools = items.flatMap(item => item.type === 'tool-group' ? item.items : [])
   const timing = reviewProcessTiming(items)
-  const partial = summary?.availability === 'partial'
+  const degraded = summary?.availability === 'partial' || summary?.availability === 'unavailable'
+    || summary?.availability === 'truncated'
+  const unavailable = summary?.availability === 'unavailable'
+  const reasonLabel = summary?.reasonCode ? t(`local.process.reasons.${summary.reasonCode}`) : undefined
   return <TaskProcessGroup
     id={id}
     messageCount={summary?.messageCount ?? messages.length}
@@ -267,7 +270,7 @@ function ReviewProcessGroup({
     defaultExpanded={false}
     expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
-    summaryExtra={partial ? <span>{t('local.process.partial')}</span> : undefined}
+    summaryExtra={degraded ? <span>{t(`local.process.${summary?.availability}`)}{reasonLabel ? ` · ${reasonLabel}` : ''}</span> : undefined}
     className="task-review-process"
   >
     {loadState === 'idle' && <div className="task-process-loading">{t('local.process.expandToLoad')}</div>}
@@ -276,7 +279,8 @@ function ReviewProcessGroup({
       <span>{loadError || t('local.process.loadFailed')}</span>
       {onRetry && <button type="button" onClick={onRetry}>{t('local.roundNav.loadFailedRetry')}</button>}
     </div>}
-    {loadState === 'loaded' && <div className="task-process-sequence">
+    {loadState === 'loaded' && unavailable && <div className="task-process-loading" role="status">{reasonLabel ?? t('local.process.unavailable')}</div>}
+    {loadState === 'loaded' && !unavailable && <div className="task-process-sequence">
       {items.map((item, index) => {
         if (item.type === 'tool-group') return <div key={`tools-${index}`} data-reasoning-parent={item.parentReasoningId}><ReviewToolGroupAdapter items={item.items} inspect={inspect}/></div>
         if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
@@ -456,7 +460,14 @@ export function ReviewRoundAdapter({
   }
 
   const effectiveInteraction = loadedProcess ?? interaction
-  const effectiveSummary = loadedProcess?.processSummary ?? summary
+  // A successful Detail fetch cannot turn an already incomplete source into
+  // "complete" merely because a bounded response happened to be returned.
+  const fetchedSummary = loadedProcess?.processSummary
+  const sourceDegraded = summary && !['complete', 'available'].includes(summary.availability)
+  const fetchedComplete = fetchedSummary && ['complete', 'available'].includes(fetchedSummary.availability)
+  const effectiveSummary = sourceDegraded && fetchedComplete
+    ? { ...fetchedSummary, availability: summary.availability, reasonCode: summary.reasonCode }
+    : fetchedSummary ?? summary
   const groups = useMemo(() => projectReviewInteractionPresentation(effectiveInteraction.nodes), [effectiveInteraction.nodes])
   const modelLabels = useMemo(() => projectReviewMessageModelLabels(effectiveInteraction.nodes), [effectiveInteraction.nodes])
   const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
@@ -485,7 +496,7 @@ export function ReviewRoundAdapter({
     return null
   }
 
-  const processGroup = effectiveSummary?.itemCount
+  const processGroup = (effectiveSummary?.itemCount || (effectiveSummary && !['complete', 'available'].includes(effectiveSummary.availability)))
     ? <ReviewProcessGroup
         id={effectiveSummary.id}
         items={processEntry?.items ?? []}
