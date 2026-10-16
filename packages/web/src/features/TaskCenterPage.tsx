@@ -7,7 +7,7 @@ import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProject
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
@@ -196,7 +196,8 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const { t, i18n } = useTranslation('task')
   const { t: tNavigation } = useTranslation('navigation')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
-  const snapshot = useClientSnapshot(model)
+  const review = useClientSnapshotField(model, 'review')
+  const facets = useClientSnapshotField(model, 'facets')
   const location = useLocation()
   const navigate = useNavigate()
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
@@ -217,14 +218,13 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     if (historyScrollFrameRef.current !== null) window.cancelAnimationFrame(historyScrollFrameRef.current)
     document.querySelector<HTMLElement>('.review-reader-pane')?.style.removeProperty('overflow-anchor')
   }, [])
-  const review = snapshot.review
-  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
+  const agents = useOrderedAgents(facets?.agents ?? [])
   const agentSelectionSummary = review.filters.sourceIds === null
     ? t('center.history.allAgents')
     : review.filters.sourceIds.length
       ? t('center.history.selectedAgents', { count: review.filters.sourceIds.length })
       : t('center.history.noneSelected')
-  const projects = snapshot.facets?.projects ?? []
+  const projects = facets?.projects ?? []
 
   // Display-only clock: update relative labels and Today/Yesterday boundaries
   // without fetching sessions again or forcing a tab-visibility page refresh.

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -9,9 +9,10 @@ import type {
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { copyText } from '../client/clipboard'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshot } from '../client/use-client-snapshot'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
+import { AgentOrderActions, useAgentOrderDrag } from '../components/AgentOrderControls'
 import { Button, Dialog, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   agentUpgradeMethods,
@@ -429,8 +430,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
-  const { ordered, move, moveBy, reset } = useIntegrationOrder()
-  const [draggedId, setDraggedId] = useState('')
+  const { ordered, reset } = useIntegrationOrder()
+  const { draggedId, dragProps, cancelDrag } = useAgentOrderDrag()
 
   useEffect(() => {
     if (!management || acknowledgementInFlightRef.current) return
@@ -531,7 +532,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           <div className="integration-management-section-head">
             <h2>{t('page.orderTitle')}</h2>
             <span className="integration-management-order-hint">{t('scope.reorderHint')}</span>
-            <Button size="small" onClick={() => { reset(); setDraggedId('') }}>{t('scope.reset')}</Button>
+            <Button size="small" onClick={() => { reset(); cancelDrag() }}>{t('scope.reset')}</Button>
           </div>
           <div className="integration-management-order-list">
             {items.map((item, index) => {
@@ -539,32 +540,14 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
               return <div key={item.integrationId}
                 className="integration-management-order-row"
                 data-dragging={draggedId === item.integrationId ? 'true' : undefined}
-                draggable
-                onDragStart={(event: DragEvent<HTMLDivElement>) => {
-                  setDraggedId(item.integrationId)
-                  event.dataTransfer.effectAllowed = 'move'
-                }}
-                onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = 'move' }}
-                onDrop={event => {
-                  event.preventDefault()
-                  if (draggedId && draggedId !== item.integrationId) move(draggedId, item.integrationId)
-                  setDraggedId('')
-                }}
-                onDragEnd={() => setDraggedId('')}
+                {...dragProps(item.integrationId)}
               >
                 <UiIcon name="drag" size={16} className="integration-management-order-grip"/>
                 <span className="integration-management-order-number">{index + 1}</span>
                 <AgentLogo sourceId={item.integrationId} size="compact"/>
                 <span className="integration-management-order-name">{item.displayName}</span>
                 <StatusBadge tone={integrationLifecycleTone(status.className, item.isNew)}>{status.label}</StatusBadge>
-                <div className="integration-management-order-buttons">
-                  <IconButton size="small" disabled={index === 0}
-                    aria-label={t('managementPage.moveUp', { agent: item.displayName })}
-                    onClick={() => moveBy(item.integrationId, -1)}><UiIcon name="sort-up" size={14}/></IconButton>
-                  <IconButton size="small" disabled={index === items.length - 1}
-                    aria-label={t('managementPage.moveDown', { agent: item.displayName })}
-                    onClick={() => moveBy(item.integrationId, 1)}><UiIcon name="sort-down" size={14}/></IconButton>
-                </div>
+                <AgentOrderActions sourceId={item.integrationId} label={item.displayName} className="integration-management-order-buttons"/>
               </div>
             })}
           </div>

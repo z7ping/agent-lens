@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentFacetDto } from '@agent-lens/protocol'
 import { agentLabel, useOrderedAgents } from './AgentScope'
 import { AgentLogo } from './AgentLogo'
 import { useIntegrationOrder } from './IntegrationOrderProvider'
-import { Button, Disclosure, IconButton, UiIcon } from './ui'
+import { AgentOrderActions, useAgentOrderDrag } from './AgentOrderControls'
+import { Button, Disclosure, UiIcon } from './ui'
 import { nextAgentFilterSelection } from './task-agent-selection'
 
 type AgentSelection =
@@ -32,8 +33,8 @@ export function SidebarFilterDisclosure({
   const [open, setOpen] = useState(false)
   const disclosureRef = useRef<HTMLDetailsElement>(null)
   const [managingOrder, setManagingOrder] = useState(false)
-  const [draggedId, setDraggedId] = useState('')
-  const { canReorder, move, moveBy, reset } = useIntegrationOrder()
+  const { draggedId, dragProps, cancelDrag } = useAgentOrderDrag()
+  const { canReorder, reset } = useIntegrationOrder()
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: PointerEvent) => {
@@ -128,42 +129,21 @@ export function SidebarFilterDisclosure({
       {managingOrder ? <>
         <div className="workspace-agent-order-actions">
           <Button size="small" onClick={reset}>{tAgents('scope.reset')}</Button>
-          <Button size="small" variant="primary" onClick={() => { setManagingOrder(false); setDraggedId('') }}>{tAgents('page.orderDone')}</Button>
+          <Button size="small" variant="primary" onClick={() => { setManagingOrder(false); cancelDrag() }}>{tAgents('page.orderDone')}</Button>
         </div>
         <div className="workspace-agent-order-list">
           {orderedAgents.map(agent => {
             const reorderable = canReorder(agent.sourceId)
-            const reorderIndex = reorderableAgents.findIndex(item => item.sourceId === agent.sourceId)
             const label = agentLabel(agent.sourceId, agent.displayName)
             return <div
               key={agent.sourceId}
               className={`workspace-agent-order-option ${draggedId === agent.sourceId ? 'is-dragging' : ''} ${reorderable ? '' : 'is-fixed'}`}
-              draggable={reorderable}
-              onDragStart={(event: DragEvent<HTMLDivElement>) => {
-                if (!reorderable) return
-                setDraggedId(agent.sourceId)
-                event.dataTransfer.effectAllowed = 'move'
-              }}
-              onDragOver={event => {
-                if (!reorderable) return
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'move'
-              }}
-              onDrop={event => {
-                if (!reorderable) return
-                event.preventDefault()
-                if (draggedId) move(draggedId, agent.sourceId)
-                setDraggedId('')
-              }}
-              onDragEnd={() => setDraggedId('')}
+              {...dragProps(agent.sourceId)}
             >
               <UiIcon name="drag" size={16} className="workspace-agent-order-drag"/>
               <AgentLogo sourceId={agent.sourceId} size="compact"/>
               <b>{label}</b>
-              <span className="workspace-agent-order-buttons">
-                <IconButton size="small" disabled={!reorderable || reorderIndex <= 0} onClick={() => moveBy(agent.sourceId, -1)} aria-label={tAgents('scope.moveUp', { agent: label })}><UiIcon name="arrow-big-up" size={14}/></IconButton>
-                <IconButton size="small" disabled={!reorderable || reorderIndex < 0 || reorderIndex === reorderableAgents.length - 1} onClick={() => moveBy(agent.sourceId, 1)} aria-label={tAgents('scope.moveDown', { agent: label })}><UiIcon name="arrow-big-down" size={14}/></IconButton>
-              </span>
+              <AgentOrderActions sourceId={agent.sourceId} label={label} className="workspace-agent-order-buttons"/>
             </div>
           })}
         </div>

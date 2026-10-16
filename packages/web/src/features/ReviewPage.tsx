@@ -20,7 +20,7 @@ import type {
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, type LiveProductMetadata } from '../client/live'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshot } from '../client/use-client-snapshot'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalPathActions } from '../components/LocalPathActions'

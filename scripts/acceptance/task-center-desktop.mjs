@@ -21,6 +21,7 @@ const report = {
   inspectorReturn: null,
   switchStability: null,
   sidebarRailToggle: null,
+  workspaceUi: null,
   diagnostics: [],
   ok: true,
 }
@@ -539,6 +540,76 @@ async function runSwitchStability(win) {
   return { skipped: false, requiredSwitches: 100, completedSwitches: switched.completed, before: { nodes: before.nodes, documents: before.documents, jsEventListeners: before.jsEventListeners }, after: { nodes: after.nodes, documents: after.documents, jsEventListeners: after.jsEventListeners }, settled: { nodes: afterSettled.nodes, documents: afterSettled.documents, jsEventListeners: afterSettled.jsEventListeners }, listenerRoots: { before: listenerRootsBefore, after: listenerRootsAfter, settled: listenerRootsAfterSettled }, growth: { nodes: nodeGrowth, jsEventListeners: listenerGrowth, settledListeners: afterSettled.jsEventListeners - before.jsEventListeners }, errors, ok: errors.length === 0 }
 }
 
+async function inspectWorkspaceUi(win) {
+  await withTimeout(win.loadURL(`${baseUrl}/agents?agent=pi`), 8_000, '加载智能体工作区')
+  let ready = false
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    ready = await withTimeout(win.webContents.executeJavaScript(
+      "Boolean(document.querySelector('.workspace-view-tabs:not(.is-inline) a[href*=\\\"management\\\"]'))"
+    ), 1_000, '检测智能体二级导航')
+    if (ready) break
+    await delay(75)
+  }
+  if (!ready) return { ok: false, errors: ['智能体二级导航未就绪'] }
+
+  const before = await withTimeout(win.webContents.executeJavaScript(`(() => {
+    const tabs = [...document.querySelectorAll('.workspace-view-tabs:not(.is-inline) a.workspace-view-tab')]
+    const management = tabs.find(link => new URL(link.href).searchParams.get('view') === 'management')
+    const overview = tabs.find(link => new URL(link.href).searchParams.get('view') !== 'management')
+    const selectedId = overview ? new URL(overview.href).searchParams.get('agent') : ''
+    if (management) management.click()
+    return { selectedId, targetAgent: management ? new URL(management.href).searchParams.get('agent') : null }
+  })()`), 3_000, '读取并切换智能体二级导航')
+  await delay(100)
+  const after = await withTimeout(win.webContents.executeJavaScript(`(() => ({
+    view: new URLSearchParams(location.search).get('view'),
+    agent: new URLSearchParams(location.search).get('agent'),
+    active: Boolean(document.querySelector('.workspace-view-tabs:not(.is-inline) .workspace-view-tab.is-active[href*="management"]')),
+    tabsHeight: document.querySelector('.workspace-view-tabs:not(.is-inline)')?.getBoundingClientRect().height ?? 0,
+  }))()`), 3_000, '核对智能体导航历史')
+
+  const errors = []
+  if (!before.selectedId) errors.push('智能体概览未能解析可选来源')
+  if (before.selectedId !== before.targetAgent) errors.push('接入管理链接丢失选中智能体')
+  if (after.view !== 'management' || after.agent !== before.selectedId || !after.active) errors.push('点击接入管理后 URL/活动标签不一致')
+  if (Math.abs(after.tabsHeight - 40) > 1) errors.push(`二级标签高度不符合 40px 规范：${after.tabsHeight}`)
+
+  await withTimeout(win.loadURL(`${baseUrl}/tools`), 8_000, '加载工具分析工作区')
+  let toolsReady = false
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    toolsReady = await withTimeout(win.webContents.executeJavaScript(
+      "Boolean(document.querySelector('.tools-content, .tools-page, .tool-table-card'))"
+    ), 1_000, '检测工具分析')
+    if (toolsReady) break
+    await delay(75)
+  }
+  if (!toolsReady) errors.push('工具分析界面未就绪')
+  const table = toolsReady ? await withTimeout(win.webContents.executeJavaScript(`(async () => {
+    const headers = [...document.querySelectorAll('.tool-table thead th[aria-sort]')]
+    if (!headers.length) return { checked: false, reason: '当前没有工具调用表格数据' }
+    const buttons = headers.map(th => th.querySelector('button.tool-table-sort'))
+    const first = buttons[0]
+    const beforeSort = headers[0]?.getAttribute('aria-sort')
+    if (first instanceof HTMLButtonElement) {
+      first.focus({ preventScroll: true })
+      first.click()
+      await new Promise(resolve => requestAnimationFrame(resolve))
+    }
+    const afterSort = headers[0]?.getAttribute('aria-sort')
+    return {
+      checked: true,
+      count: headers.length,
+      nativeButtons: buttons.every(button => button instanceof HTMLButtonElement),
+      accessibleNames: buttons.every(button => Boolean(button?.textContent?.trim())),
+      beforeSort, afterSort,
+    }
+  })()`), 3_000, '校验工具排序表头') : { checked: false, reason: '工具分析界面未就绪' }
+  if (table.checked && (table.count !== 5 || !table.nativeButtons || !table.accessibleNames || table.beforeSort === table.afterSort)) {
+    errors.push('工具排序表头不是完整的原生按钮/aria-sort 交互')
+  }
+  return { ok: errors.length === 0, errors, agentNavigation: { before, after }, toolsSort: table }
+}
+
 function createAcceptanceWindow() {
   return new BrowserWindow({ width: 1024, height: 700, show: false, backgroundColor: '#ffffff', webPreferences: { sandbox: true, contextIsolation: true } })
 }
@@ -550,10 +621,10 @@ await persistReport()
 
 const hardTimeout = setTimeout(async () => {
   report.ok = false
-  report.error = report.error || '桌面验收超过 75 秒硬超时；报告已提前落盘以保留诊断信息'
+  report.error = report.error || '桌面验收超过 90 秒硬超时；报告已提前落盘以保留诊断信息'
   report.finishedAt = new Date().toISOString()
   try { await persistReport() } finally { app.exit(1) }
-}, 75_000)
+}, 90_000)
 
 try {
   for (const viewport of viewports) {
@@ -596,6 +667,11 @@ try {
         if (!report.inspectorReturn.ok) report.ok = false
         await persistReport()
         for (const error of report.inspectorReturn.errors ?? []) console.error(`  - ${error}`)
+        diagnostic.phase = 'workspace-ui'
+        report.workspaceUi = await withTimeout(inspectWorkspaceUi(win), 14_000, '智能体导航与工具排序实机验收')
+        if (!report.workspaceUi.ok) report.ok = false
+        await persistReport()
+        for (const error of report.workspaceUi.errors) console.error(`  - ${error}`)
       }
       diagnostic.phase = 'done'
     } finally {

@@ -6,12 +6,12 @@ import { useNavigate } from 'react-router-dom'
 import type { ToolUsageDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import type { AgentLensClientModel } from '../client/model'
-import { useClientSnapshot } from '../App'
+import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { EmptyStatePanel, ErrorStateBanner, WorkspaceSkeleton } from '../components/StateViews'
 import { ToolKindIcon, toolVisualKind } from '../components/ToolKindIcon'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
+import { Button, Drawer, IconButton, SelectMenu, UiIcon } from '../components/ui'
 
 const toolDetailApi = new AgentLensApi()
 
@@ -93,15 +93,16 @@ function sortMetric(tool: ToolUsageDto, key: SortKey): number {
 export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t, i18n } = useTranslation('tools')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
-  const snapshot = useClientSnapshot(model)
+  const usage = useClientSnapshotField(model, 'usage')
+  const facets = useClientSnapshotField(model, 'facets')
+  const review = useClientSnapshotField(model, 'review')
   const navigate = useNavigate()
-  const usage = snapshot.usage
   const data = usage.response
   const projection = data?.meta.projection
   const projectionPartial = projection?.state === 'partial'
   const projectionPercent = projection ? Math.max(0, Math.min(100, Math.round(projection.coverageRatio * 100))) : 0
-  const agents = useOrderedAgents(snapshot.facets?.agents ?? [])
-  const projects = snapshot.facets?.projects ?? []
+  const agents = useOrderedAgents(facets?.agents ?? [])
+  const projects = facets?.projects ?? []
   const agentSelectionSummary = usage.filters.sourceIds === null
     ? t('filters.allAgents')
     : usage.filters.sourceIds.length
@@ -129,7 +130,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'callCount', direction: 'descending' })
   const selectedSummaryTool = useMemo(() => tools.find(tool => toolKey(tool.sourceIds, tool.nativeToolName) === selectedToolKey), [selectedToolKey, tools])
   const selectedTool = selectedToolKey ? detailTools.get(selectedToolKey) ?? selectedSummaryTool : undefined
-  const sessionSummaries = useMemo(() => new Map((snapshot.review.response?.items ?? []).map(item => [item.id, item])), [snapshot.review.response?.items])
+  const sessionSummaries = useMemo(() => new Map((review.response?.items ?? []).map(item => [item.id, item])), [review.response?.items])
   const selectedSessions = useMemo(() => selectedTool
     ? [...selectedTool.sessions].sort((a, b) => (b.errorCount ?? 0) - (a.errorCount ?? 0) || b.callCount - a.callCount || a.logicalSessionId.localeCompare(b.logicalSessionId))
     : [], [selectedTool])
@@ -203,7 +204,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
       ]}/>
     </div>
     <div className="workspace-view-filter-actions">
-      {canRelaxFilters && <button type="button" className="workspace-view-clear-filter" onClick={relaxFilters}>{t('filters.clear')}</button>}
+      {canRelaxFilters && <Button className="workspace-view-clear-filter" onClick={relaxFilters}>{t('filters.clear')}</Button>}
       <IconButton size="small" onClick={() => void model.refreshUsage()} title={t('filters.refresh')} aria-label={t('filters.refresh')}><UiIcon name="refresh" size={14}/></IconButton>
     </div>
   </div>

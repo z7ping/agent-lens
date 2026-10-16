@@ -43,8 +43,8 @@ test('legacy integration links retain query targets and redirect to the merged w
   assert.match(app, /new URLSearchParams\(location\.search\)\.get\('agent'\)/)
 })
 
-test('normal integration tab opens at the top; explicit manage-entry links keep target agent', () => {
-  assert.match(app, /to: '\/agents\?view=management'/)
+test('normal integration tab retains selected agent; explicit manage-entry links keep target agent', () => {
+  assert.match(app, /to: `\/agents\?view=management\$\{resolvedAgentOverviewSourceId/)
   assert.doesNotMatch(app, /agentManagementId/)
   assert.match(agentsPage, /navigate\(`\/agents\?view=management&agent=/)
 })
