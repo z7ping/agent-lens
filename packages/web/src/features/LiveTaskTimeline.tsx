@@ -74,7 +74,7 @@ function GenericLiveItem({
         label: t('thinking.thinkingProcess'),
         ...(item.durationMs !== undefined ? { durationMs: item.durationMs } : {}),
         text: item.text,
-        preview: item.text.replace(/\s+/g, ' ').trim().slice(0, 96),
+        preview: item.text.replace(/\s+/g, ' ').trim().slice(0, 220),
         state: item.streaming ? 'running' : 'settled',
       }}
       defaultExpanded={item.streaming}
