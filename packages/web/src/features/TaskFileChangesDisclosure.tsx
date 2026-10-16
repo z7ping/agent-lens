@@ -46,9 +46,6 @@ export function TaskFileChangesDisclosure({
   useEffect(() => {
     if (!diffPath || !sessionId || isInteraction) return
     const controller = new AbortController()
-    setDiff(null)
-    setDiffError(false)
-    setDiffLoading(true)
     void api.reviewFileDiff(sessionId, diffPath, controller.signal)
       .then(result => { if (!controller.signal.aborted) setDiff(result) })
       .catch(() => { if (!controller.signal.aborted) setDiffError(true) })
@@ -96,7 +93,7 @@ export function TaskFileChangesDisclosure({
             {item.additions !== undefined && <span className="task-file-change-added">+{item.additions}</span>}
             {item.deletions !== undefined && <span className="task-file-change-deleted">-{item.deletions}</span>}
             {item.confidence !== 'exact' && <span className="task-file-change-confidence">{t('local.fileChanges.observedShort')}</span>}
-            {item.confidence === 'exact' && !isObserved && <Button size="small" className="task-file-change-diff-action" onClick={() => setDiffPath(item.path)}>{t('local.fileChanges.viewDiff')}</Button>}
+            {item.confidence === 'exact' && !isObserved && <Button size="small" className="task-file-change-diff-action" onClick={() => { setDiff(null); setDiffError(false); setDiffLoading(true); setDiffPath(item.path) }}>{t('local.fileChanges.viewDiff')}</Button>}
           </div>
         })}
         {value?.meta.truncated && <div className="task-file-changes-error">{t('local.fileChanges.truncated')}</div>}
