@@ -123,6 +123,10 @@ test('Review 筛选与智能体处于任务头部次行，页头只有一条底�
   assert.match(reviewPage, /<Toolbar className="round-nav"/)
   const navCss = readFileSync(new URL('../review-long-session.css', import.meta.url), 'utf8')
   assert.match(navCss, /\.review-page \.round-nav \{[\s\S]*?min-height: 28px;/)
+  // The nested shared Toolbar supplies a border by default; Review clears it
+  // so only the surrounding TaskHeader's full-width divider remains.
+  assert.match(navCss, /\.review-page \.round-nav \{[^}]*border-bottom: 0;/)
+  assert.match(taskDetailCss, /\.task-surface \.task-header \{[^}]*border-bottom: 1px solid var\(--al-line\);/)
   assert.doesNotMatch(navCss, /min-height: 48px;/)
 })
 
