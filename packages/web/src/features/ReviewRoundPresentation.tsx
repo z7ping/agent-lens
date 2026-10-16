@@ -9,7 +9,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { type ToolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
-import { isConsolidatedFileChangeEvent, isSessionTitleUpdate, reviewEventLabel } from './review-event-presentation'
+import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, isSessionTitleUpdate, reviewEventLabel } from './review-event-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskProcessGroup } from './TaskProcessGroup'
@@ -317,13 +317,14 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
     }}
     meta={<EvidenceBadges evidence={event.evidence} compact/>}
     onInspect={() => inspect(event)}
+    error={isFailedLifecycleEvent(event)}
   />
 }
 
-function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+function RawEventGroup({ items, inspect, runtime = false }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void; runtime?: boolean }) {
   const { t } = useTranslation('review')
   return <TaskThinking
-    model={{ id: `runtime-records:${items[0]?.id}`, label: t(items.every(isSessionTitleUpdate) ? 'local.rawEvents.titleUpdates' : 'local.rawEvents.title'), text: '', state: 'settled' }}
+    model={{ id: `runtime-records:${items[0]?.id}`, label: t(runtime ? 'local.rawEvents.runtime' : items.every(isSessionTitleUpdate) ? 'local.rawEvents.titleUpdates' : 'local.rawEvents.title'), text: '', state: 'settled' }}
     kind="process"
     className="task-process-group"
     defaultExpanded={false}
@@ -484,6 +485,7 @@ export function ReviewRoundAdapter({
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
     if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
+    if (entry.type === 'runtime-event-group') return <RawEventGroup key={`runtime-${index}`} items={entry.items} inspect={inspect} runtime/>
     if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
     if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
