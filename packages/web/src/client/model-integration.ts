@@ -1,7 +1,7 @@
 import type { IntegrationAuthorizationCapabilityDto, IntegrationAuthorizationResponseDto, IntegrationEnabledUpdateResponseDto, IntegrationManagementResponseDto, IntegrationPackageOperationResponseDto, IntegrationPreferenceUpdateRequestDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
 import { AgentLensModelBase } from './model-base'
-import { INTEGRATION_DISCOVERY_POLL_MS, INTEGRATION_DISCOVERY_MAX_POLLS } from './model-base'
+import { INTEGRATION_DISCOVERY_POLL_MS, INTEGRATION_DISCOVERY_MAX_POLLS, discoveryFromManagement } from './model-base'
 import type { ClientSnapshot } from './model-base'
 
 function applyManagementPreferences(
