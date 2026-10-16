@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type {
@@ -24,13 +24,11 @@ import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
-import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import {
   LiveMarkdownComposer,
   type LiveMarkdownComposerDraft,
   type LiveMarkdownComposerHandle,
 } from '../components/LiveMarkdownComposer'
-import { MarkdownContent } from '../components/MarkdownContent'
 import {
   liveComposerDraftKey,
   readLiveComposerDraft,
@@ -39,6 +37,21 @@ import {
 import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
+import {
+  LIVE_TASK_SNAPSHOT_PAGE_LIMIT,
+  LiveHistoryPageBlock,
+  historyPageBlock,
+  aggregateHistoryPage,
+  compactHistoryBlocks,
+  refreshLatestHistoryBlock,
+  captureLiveReaderAnchor,
+  restoreLiveReaderAnchor,
+  splitLiveProjectionItems,
+  prependUniqueLiveProjectionItems,
+  appendUniqueLiveProjectionItems,
+  loadBoundedRecoverySnapshot,
+} from './live-task-history-window'
+import { GenericLiveRound, StableLiveRounds } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import {
@@ -47,26 +60,17 @@ import {
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   LiveTaskRoundProjector,
-  liveTaskStableRoundPrefixLength,
-  liveTaskRoundEstimate,
   liveEventChangesTaskTranscript,
   mergeLiveActiveProjectionItems,
   reduceLiveTaskEvent,
   settleLiveTaskProjectionItems,
   type LiveTaskProjectionAttachment,
   type LiveTaskProjectionItem,
-  type LiveTaskRoundProjection,
 } from './live-task-projection'
 import { LiveFollowController } from './live-follow-controller'
-import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, sameLiveRuntimeState } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
-import { TaskMessage } from './TaskMessage'
-import { TaskRound } from './TaskRound'
-import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
-import { TaskThinking } from './TaskThinking'
-import { TaskToolRow } from './TaskToolRow'
 import { ToolOutputContent } from './ToolOutputContent'
 import { workspaceDisplayName } from './task-detail-model'
 
@@ -190,16 +194,6 @@ function emptyLiveQueue(): LiveQueueStateDto {
   return { steering: [], followUp: [] }
 }
 
-function contributionText(
-  value: LiveMessageActionContributionDto['label'],
-  language: string,
-): string {
-  const normalized = language.replace(/_/g, '-').toLowerCase()
-  const localized = Object.entries(value.localizations ?? {})
-    .find(([locale]) => locale.toLowerCase() === normalized)?.[1]
-  return localized || value.default
-}
-
 function restoredQueueDrafts(queue: LiveQueueStateDto): RestoredQueueDraft[] {
   const stamp = Date.now()
   return [
@@ -218,362 +212,6 @@ function firstUserEntryCursor(items: readonly LiveTaskProjectionItem[]): string 
       item.kind === 'message' && item.role === 'user' && Boolean(item.entryId),
   )?.entryId
 }
-
-const LIVE_TASK_SNAPSHOT_PAGE_LIMIT = 120
-const LIVE_TASK_HISTORY_WINDOW_MAX_PAGES = 5
-
-interface LiveHistoryPageBlock {
-  page: NonNullable<LiveSnapshotDto['page']>
-  itemIds: string[]
-}
-
-interface LiveReaderAnchor {
-  interactionId: string
-  offset: number
-  scrollTop: number
-}
-
-function snapshotPage(snapshot: LiveSnapshotDto): NonNullable<LiveSnapshotDto['page']> {
-  return snapshot.page ?? { hasEarlier: false }
-}
-
-function historyPageBlock(
-  snapshot: LiveSnapshotDto,
-  items: readonly LiveTaskProjectionItem[],
-): LiveHistoryPageBlock {
-  return {
-    page: snapshotPage(snapshot),
-    itemIds: items.map(item => item.id),
-  }
-}
-
-function aggregateHistoryPage(blocks: readonly LiveHistoryPageBlock[]): NonNullable<LiveSnapshotDto['page']> {
-  const first = blocks[0]?.page
-  const last = blocks.at(-1)?.page
-  if (!first || !last) return { hasEarlier: false }
-  return {
-    hasEarlier: first.hasEarlier,
-    ...(first.before ? { before: first.before } : {}),
-    ...(first.first ? { first: first.first } : {}),
-    ...(last.last ? { last: last.last } : {}),
-    ...((first.rounds || last.rounds) ? {
-      rounds: {
-        total: Math.max(first.rounds?.total ?? 0, last.rounds?.total ?? 0),
-        ...(first.rounds?.firstOrdinal ? { firstOrdinal: first.rounds.firstOrdinal } : {}),
-        ...(last.rounds?.lastOrdinal ? { lastOrdinal: last.rounds.lastOrdinal } : {}),
-      },
-    } : {}),
-    ...(last.hasLater ? { hasLater: true } : {}),
-    ...(last.after ? { after: last.after } : {}),
-  }
-}
-
-function compactHistoryBlocks(
-  blocks: LiveHistoryPageBlock[],
-  direction: 'older' | 'newer',
-): { blocks: LiveHistoryPageBlock[]; removedIds: Set<string> } {
-  const next = [...blocks]
-  const removedIds = new Set<string>()
-  while (next.length > LIVE_TASK_HISTORY_WINDOW_MAX_PAGES) {
-    const removed = direction === 'older' ? next.pop() : next.shift()
-    for (const id of removed?.itemIds ?? []) removedIds.add(id)
-  }
-  const retainedIds = new Set(next.flatMap(block => block.itemIds))
-  for (const id of retainedIds) removedIds.delete(id)
-  return { blocks: next, removedIds }
-}
-
-function refreshLatestHistoryBlock(
-  blocks: readonly LiveHistoryPageBlock[],
-  projection: { stable: readonly LiveTaskProjectionItem[]; active: readonly LiveTaskProjectionItem[] },
-): LiveHistoryPageBlock[] {
-  if (!blocks.length) return []
-  const next = [...blocks]
-  const fixedIds = new Set(next.slice(0, -1).flatMap(block => block.itemIds))
-  const itemIds = [...projection.stable, ...projection.active]
-    .map(item => item.id)
-    .filter(id => !fixedIds.has(id))
-  next[next.length - 1] = { ...next[next.length - 1]!, itemIds }
-  return next
-}
-
-function captureLiveReaderAnchor(reader: HTMLElement): LiveReaderAnchor {
-  const readerTop = reader.getBoundingClientRect().top
-  const anchorY = readerTop + Math.min(Math.max(reader.clientHeight * .3, 72), 190)
-  const elements = reader.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')
-  let anchor: HTMLElement | null = null
-  for (const element of elements) {
-    if (element.closest('.task-session-reader') !== reader) continue
-    const top = element.getBoundingClientRect().top
-    if (top <= anchorY) anchor = element
-    else if (!anchor) {
-      anchor = element
-      break
-    } else break
-  }
-  return {
-    interactionId: anchor?.dataset.interactionId ?? '',
-    offset: anchor ? anchor.getBoundingClientRect().top - readerTop : 0,
-    scrollTop: reader.scrollTop,
-  }
-}
-
-function restoreLiveReaderAnchor(reader: HTMLElement, saved: LiveReaderAnchor): void {
-  if (!saved.interactionId) {
-    reader.scrollTop = saved.scrollTop
-    return
-  }
-  const anchor = [...reader.querySelectorAll<HTMLElement>('.virtual-round-shell[data-interaction-id], .task-round[data-interaction-id]')]
-    .find(element => element.dataset.interactionId === saved.interactionId)
-  if (!anchor) {
-    reader.scrollTop = saved.scrollTop
-    return
-  }
-  const readerTop = reader.getBoundingClientRect().top
-  reader.scrollTop += anchor.getBoundingClientRect().top - readerTop - saved.offset
-}
-
-function splitLiveProjectionItems(
-  items: LiveTaskProjectionItem[],
-  isStreaming: boolean,
-): { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] } {
-  const stableCount = liveTaskStableRoundPrefixLength(items, isStreaming)
-  return {
-    stable: items.slice(0, stableCount),
-    active: items.slice(stableCount),
-  }
-}
-
-function prependUniqueLiveProjectionItems(
-  older: readonly LiveTaskProjectionItem[],
-  current: readonly LiveTaskProjectionItem[],
-): LiveTaskProjectionItem[] {
-  const currentIds = new Set(current.map(item => item.id))
-  return [...older.filter(item => !currentIds.has(item.id)), ...current]
-}
-
-function appendUniqueLiveProjectionItems(
-  current: readonly LiveTaskProjectionItem[],
-  newer: readonly LiveTaskProjectionItem[],
-): LiveTaskProjectionItem[] {
-  const currentIds = new Set(current.map(item => item.id))
-  return [...current, ...newer.filter(item => !currentIds.has(item.id))]
-}
-
-async function loadBoundedRecoverySnapshot(
-  liveId: string,
-  runtimeSessionId: string,
-  since: string | undefined,
-): Promise<LiveSnapshotDto> {
-  let snapshot = await liveApi.snapshot(
-    liveId,
-    runtimeSessionId,
-    since,
-    { limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
-  )
-  if (!since) return snapshot
-
-  const entries = [...snapshot.entries]
-  let pages = 1
-  while (snapshot.page?.hasLater && snapshot.page.after) {
-    if (pages >= 1_000) throw new Error('Live snapshot recovery exceeded the bounded page safety limit')
-    snapshot = await liveApi.snapshot(
-      liveId,
-      runtimeSessionId,
-      snapshot.page.after,
-      { limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT },
-    )
-    entries.push(...snapshot.entries)
-    pages += 1
-  }
-  return { ...snapshot, entries }
-}
-
-function GenericLiveItem({
-  item,
-  agentLabel,
-  messageActions,
-  actionPending,
-  runtimeStreaming,
-  onMessageAction,
-}: {
-  item: LiveTaskProjectionItem
-  agentLabel: string
-  messageActions: readonly LiveMessageActionContributionDto[]
-  actionPending: string | null
-  runtimeStreaming: boolean
-  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
-}) {
-  const { t, i18n } = useTranslation('task')
-  if (item.kind === 'message') {
-    const actions = item.entryId
-      ? messageActions.filter(action => action.roles.includes(item.role))
-      : []
-    return <TaskMessage
-      role={item.role}
-      text={item.text}
-      attachments={item.attachments}
-      author={item.role === 'assistant' ? agentLabel : undefined}
-      streaming={item.streaming}
-      actions={actions.length
-        ? actions.map(action => {
-            const key = `${action.actionId}:${item.entryId}`
-            const disabled = actionPending !== null || (action.requiresIdle === true && runtimeStreaming)
-            const description = action.description ? contributionText(action.description, i18n.language) : undefined
-            return <Button
-              key={action.actionId}
-              size="small"
-              disabled={disabled}
-              title={description}
-              onClick={() => onMessageAction(action, item)}
-            >
-              {actionPending === key ? t('live.messageActionPending') : contributionText(action.label, i18n.language)}
-            </Button>
-          })
-        : undefined}
-    />
-  }
-  if (item.kind === 'thinking') {
-    return <TaskThinking
-      model={{
-        id: item.id,
-        label: t('thinking.thinkingProcess'),
-        ...(item.durationMs !== undefined ? { durationMs: item.durationMs } : {}),
-        text: item.text,
-        preview: item.text.replace(/\s+/g, ' ').trim().slice(0, 96),
-        state: item.streaming ? 'running' : 'settled',
-      }}
-      defaultExpanded={item.streaming}
-      className="task-process-thinking-card"
-    >
-      <MarkdownContent text={item.text} streaming={item.streaming}/>
-    </TaskThinking>
-  }
-  return <TaskToolRow
-    model={{
-      id: item.id,
-      name: item.name,
-      kind: 'tool',
-      kindLabel: t('tool.kind.tool'),
-      ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}),
-      ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}),
-      status: item.status,
-      primary: item.inputPreview,
-      output: item.output,
-      durationMs: item.durationMs,
-    }}
-  />
-}
-
-const GenericLiveRound = memo(function GenericLiveRound({
-  projection,
-  agentLabel,
-  eager,
-  messageActions,
-  actionPending,
-  runtimeStreaming,
-  showResponsePending = false,
-  onMessageAction,
-}: {
-  projection: LiveTaskRoundProjection
-  agentLabel: string
-  eager: boolean
-  showResponsePending?: boolean
-  messageActions: readonly LiveMessageActionContributionDto[]
-  actionPending: string | null
-  runtimeStreaming: boolean
-  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
-}) {
-  const awaitingResponse = showResponsePending
-    && projection.items.some(item => item.kind === 'message' && item.role === 'user')
-    && !projection.items.some(item => item.kind === 'thinking'
-      || item.kind === 'tool'
-      || (item.kind === 'message' && item.role === 'assistant'))
-  const content: ReactNode[] = []
-  let process: LiveTaskProjectionItem[] = []
-  const renderItem = (item: LiveTaskProjectionItem) => <GenericLiveItem
-    key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
-    actionPending={actionPending} runtimeStreaming={runtimeStreaming} onMessageAction={onMessageAction}
-  />
-  const flushProcess = () => {
-    if (!process.length) return
-    const items = process
-    process = []
-    const lastIndex = projection.items.indexOf(items[items.length - 1]!)
-    const hasFollowingAnswer = projection.items.slice(lastIndex + 1).some(item =>
-      item.kind === 'message' && item.role === 'assistant' && item.phase !== 'commentary')
-    const processState = hasFollowingAnswer ? 'settled' : projection.model.state
-    // 只有来源携带时间戳时才计算执行范围，不将整个轮次耗时冒充处理耗时。
-    const times = items.flatMap(item => {
-      const time = Date.parse(item.at ?? '')
-      return Number.isFinite(time) ? [time] : []
-    })
-    const startedAtMs = times.length ? Math.min(...times) : undefined
-    const endedAtMs = times.length && processState !== 'running' ? Math.max(...times) : undefined
-    content.push(<TaskProcessGroup
-      key={`process:${items[0]!.id}`} id={`process:${items[0]!.id}`}
-      messageCount={items.filter(item => item.kind === 'thinking' || item.kind === 'message').length}
-      toolCount={items.filter(item => item.kind === 'tool').length}
-      errorCount={items.filter(item => item.kind === 'tool' && item.status === 'error').length}
-      startedAtMs={startedAtMs} endedAtMs={endedAtMs}
-      thinkingDurationMs={items.reduce((sum, item) => sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
-      state={processState} defaultExpanded={processState === 'running'}
-    >
-      <div className="task-process-sequence">
-        {items.map(item => item.kind === 'message' && item.phase === 'commentary'
-          ? <div key={item.id} className="task-process-message" data-message-role="commentary"><MarkdownContent text={item.text} streaming={item.streaming}/></div>
-          : renderItem(item))}
-      </div>
-    </TaskProcessGroup>)
-  }
-  for (const item of projection.items) {
-    if (item.kind === 'thinking' || item.kind === 'tool' || (item.kind === 'message' && item.phase === 'commentary')) process.push(item)
-    else { flushProcess(); content.push(renderItem(item)) }
-  }
-  flushProcess()
-  return <VirtualRoundMount
-    rootSelector=".pi-live-reader"
-    flowRoot
-    eager={eager}
-    estimate={liveTaskRoundEstimate(projection)}
-  >
-    <TaskRound model={awaitingResponse ? { ...projection.model, state: 'running' } : projection.model} className="live-task-round">
-      {content}
-      {awaitingResponse && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
-    </TaskRound>
-  </VirtualRoundMount>
-}, sameStableLiveTaskRoundProps)
-
-const StableLiveRounds = memo(function StableLiveRounds({
-  rounds,
-  agentLabel,
-  eagerTailCount,
-  messageActions,
-  actionPending,
-  runtimeStreaming,
-  onMessageAction,
-}: {
-  rounds: readonly LiveTaskRoundProjection[]
-  agentLabel: string
-  eagerTailCount: number
-  messageActions: readonly LiveMessageActionContributionDto[]
-  actionPending: string | null
-  runtimeStreaming: boolean
-  onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
-}) {
-  return <>
-    {rounds.map((round, index) => <GenericLiveRound
-      key={round.model.id}
-      projection={round}
-      agentLabel={agentLabel}
-      eager={index >= rounds.length - eagerTailCount}
-      messageActions={messageActions}
-      actionPending={actionPending}
-      runtimeStreaming={runtimeStreaming}
-      onMessageAction={onMessageAction}
-    />)}
-  </>
-})
 
 export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const { t, i18n } = useTranslation('task')
