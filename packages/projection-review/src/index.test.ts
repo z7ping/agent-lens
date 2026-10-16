@@ -5,6 +5,7 @@ import {
   DefaultObservationService,
 } from '@agent-lens/core-services'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
+import type { ReviewInteractionDto } from '@agent-lens/protocol'
 import { ReviewProjection, reviewProjectionInternals } from './index'
 
 test('ReviewProjection builds task summaries and interaction tool status from canonical facts', async () => {
@@ -598,4 +599,35 @@ test('Canonical 注册事实经过存储和 Review 分页可归因工具，不�
   } finally {
     storage.close()
   }
+})
+
+test('Process Detail retains an upstream unavailable reason instead of treating empty nodes as complete', () => {
+  const interaction: ReviewInteractionDto = {
+    id: 'hub:review:1',
+    ordinal: 1,
+    trigger: 'user',
+    startedAt: '2026-09-01T00:00:00Z',
+    endedAt: '2026-09-01T00:01:00Z',
+    nodes: [],
+    processSummary: {
+      id: 'process:hub:review:1',
+      revision: 'upstream',
+      itemCount: 0,
+      messageCount: 0,
+      toolCount: 0,
+      errorCount: 0,
+      durationMs: 0,
+      availability: 'unavailable',
+      reasonCode: 'hub-redacted',
+      totalFactCount: 0,
+    },
+  }
+  const result = reviewProjectionInternals.processSummary(interaction)
+  assert.equal(result.availability, 'unavailable')
+  assert.equal(result.reasonCode, 'hub-redacted')
+  assert.equal(result.itemCount, 0)
+
+  const knownEmpty = reviewProjectionInternals.processSummary({ ...interaction, processSummary: undefined })
+  assert.equal(knownEmpty.availability, 'complete')
+  assert.equal(knownEmpty.reasonCode, undefined)
 })
