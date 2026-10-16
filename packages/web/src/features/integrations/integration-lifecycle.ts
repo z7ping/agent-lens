@@ -36,7 +36,7 @@ export function integrationPackageReady(
 export function integrationPackageUpdateAvailable(
   state: IntegrationPackageStateDto | null | undefined,
 ): boolean {
-  if (!integrationPackageReady(state) || state?.restartRequired) return false
+  if (!state || !integrationPackageReady(state) || state.restartRequired) return false
   const installed = state.installedVersion
   const bundled = state.availableVersion
   return Boolean(installed && bundled && semver.valid(installed) && semver.valid(bundled) && semver.gt(bundled, installed))

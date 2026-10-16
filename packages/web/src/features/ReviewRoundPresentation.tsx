@@ -370,6 +370,7 @@ export function ReviewRoundAdapter({
   showAllEvents: boolean
   onShowAllEvents: () => void
 }) {
+  const { t } = useTranslation('review')
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
   const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)
