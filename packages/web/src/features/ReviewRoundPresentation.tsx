@@ -366,7 +366,6 @@ export function ReviewRoundAdapter({
   showAllEvents,
   onShowAllEvents,
   fileChangesEnabled,
-  sessionFileChanges,
 }: {
   sessionId: string
   interaction: ReviewInteractionDto
@@ -381,7 +380,6 @@ export function ReviewRoundAdapter({
   showAllEvents: boolean
   onShowAllEvents: () => void
   fileChangesEnabled?: boolean
-  sessionFileChanges?: TaskFileChangesResponseDto | null
 }) {
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
@@ -480,8 +478,10 @@ export function ReviewRoundAdapter({
       ? entry.items.reduce((total, item) => total + (item.type === 'raw-event-group' ? item.items.length : 0), 0)
       : 0), 0)
   const resolvedProcessState = hasFinalAnswer ? 'settled' : round.state
-  const isConsolidatedEvent = (event: ReviewEventNodeDto) => isConsolidatedFileChangeEvent(event, sessionFileChanges)
-    || isConsolidatedFileChangeEvent(event, roundFileChanges?.interactionId === interaction.id ? roundFileChanges : null)
+  // 仅收起当前轮次卡片确实涵盖的文件事件；不能因为会话级汇总覆盖就隐藏原始证据。
+  const isConsolidatedEvent = (event: ReviewEventNodeDto) => isConsolidatedFileChangeEvent(
+    event, roundFileChanges?.interactionId === interaction.id ? roundFileChanges : null,
+  )
   const consolidatedEvents = afterProcessEntries.flatMap(entry => entry.type === 'event' && isConsolidatedEvent(entry.node) ? [entry.node] : [])
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
@@ -524,7 +524,7 @@ export function ReviewRoundAdapter({
     {promptEntries.map(renderEntry)}
     {processGroup}
     {afterProcessEntries.map(renderEntry)}
-    {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && roundFileChanges.summary.count > 0 && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+    {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
     {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
     {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
       <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
