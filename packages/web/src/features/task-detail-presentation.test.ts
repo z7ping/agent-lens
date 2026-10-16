@@ -8,7 +8,7 @@ import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
 import { TaskThinking } from './TaskThinking'
-import type { TaskRoundModel, TaskToolGroupModel } from './task-detail-model'
+import { taskRoundPreview, type TaskRoundModel, type TaskToolGroupModel } from './task-detail-model'
 
 const toolGroup: TaskToolGroupModel = {
   id: 'tools:test', label: '工具执行', itemCount: 4, errorCount: 0, kindCounts: [],
@@ -47,6 +47,18 @@ test('Round 保持轻量摘要结构并默认展开', () => {
   assert.match(html, /task-round-preview/)
   assert.match(html, /task-round-meta/)
   assert.match(html, /4 调用/)
+})
+
+test('Round 预览将 Codex 文件上下文改为语义摘要且不改变原始消息', () => {
+  const raw = '# Files mentioned by the user:\n## 患者服务平台部署指导手册.md:\nS:/hbs_tools/患者服务平台部署指导手册.md'
+  assert.equal(taskRoundPreview(raw, '用户提及文件'), '用户提及文件')
+  assert.equal(taskRoundPreview('## 修复 **Markdown** [预览](docs/README.md)', '用户提及文件'), '修复 Markdown 预览')
+  assert.equal(taskRoundPreview('', '用户提及文件'), undefined)
+  const html = renderToStaticMarkup(createElement(TaskRound, { model: { ...round, preview: raw }, children: 'content' }))
+  assert.match(html, /data-round-preview="用户提及文件"/)
+  assert.doesNotMatch(html, /Files mentioned by the user/)
+  const message = renderToStaticMarkup(createElement(TaskMessage, { role: 'user', text: raw, collapsible: false }))
+  assert.match(message, /Files mentioned by the user/)
 })
 
 test('Round 折叠时不挂载轮次正文', () => {
