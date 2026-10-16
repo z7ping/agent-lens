@@ -482,11 +482,20 @@ export function ReviewRoundAdapter({
     event, roundFileChanges?.interactionId === interaction.id ? roundFileChanges : null,
   )
   const consolidatedEvents = afterProcessEntries.flatMap(entry => entry.type === 'event' && isConsolidatedEvent(entry.node) ? [entry.node] : [])
+  // Single collapsed auxiliary group per round. Keep actual event nodes, IDs,
+  // timestamps and Evidence links; do not mix unknown or failed events into it.
+  const runtimeRecords = afterProcessEntries.flatMap(entry =>
+    entry.type === 'runtime-event-group'
+      || entry.type === 'raw-event-group' && entry.items.every(isSessionTitleUpdate)
+      ? entry.items : [])
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
     if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
-    if (entry.type === 'runtime-event-group') return <RawEventGroup key={`runtime-${index}`} items={entry.items} inspect={inspect} runtime/>
-    if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
+    if (entry.type === 'runtime-event-group') return null
+    if (entry.type === 'raw-event-group') {
+      if (entry.items.every(isSessionTitleUpdate)) return null
+      return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
+    }
     if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
     if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
     if (entry.type === 'event') {
@@ -525,6 +534,7 @@ export function ReviewRoundAdapter({
     {processGroup}
     {afterProcessEntries.map(renderEntry)}
     {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+    {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}
     {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
     {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
       <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
