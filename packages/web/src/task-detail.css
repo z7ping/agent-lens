@@ -482,7 +482,6 @@
 .task-surface .task-tool-summary-text { min-width: 0; overflow: hidden; color: var(--al-ink-2); text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-call[data-command='true'] .task-tool-summary-text { color: var(--al-muted-2); font-size: 12px; }
 .task-surface .task-tool-command-preview { grid-column: 1 / -1; display: -webkit-box; min-width: 0; padding: 6px 8px; overflow: hidden; border-radius: 6px; background: var(--al-soft-2); color: var(--al-ink-2); font: 12px/1.5 var(--font-mono); overflow-wrap: anywhere; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.task-surface .task-tool-call[open] .task-tool-command-preview { display: none; }
 .task-surface .task-tool-status { display: inline-flex; align-items: center; gap: 3px; color: var(--al-muted-2); white-space: nowrap; font-size: 12px; }
 .task-surface .task-tool-status-mark { display: inline-flex; flex: 0 0 14px; align-items: center; }
 .task-surface .task-tool-status-run .task-tool-status-mark svg { animation: task-activity-spin 1.4s linear infinite; }
