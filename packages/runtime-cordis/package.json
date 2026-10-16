@@ -1,6 +1,6 @@
 {
   "name": "@agent-lens/runtime-cordis",
-  "version": "1.0.0-alpha.6",
+  "version": "1.0.0-alpha.7",
   "private": true,
   "type": "module",
   "exports": {
@@ -11,11 +11,11 @@
     "test": "tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@agent-lens/core": "1.0.0-alpha.6",
-    "@agent-lens/core-services": "1.0.0-alpha.6",
-    "@agent-lens/integration-catalog": "1.0.0-alpha.6",
-    "@agent-lens/integration-packages": "1.0.0-alpha.6",
-    "@agent-lens/live-support": "1.0.0-alpha.6",
+    "@agent-lens/core": "1.0.0-alpha.7",
+    "@agent-lens/core-services": "1.0.0-alpha.7",
+    "@agent-lens/integration-catalog": "1.0.0-alpha.7",
+    "@agent-lens/integration-packages": "1.0.0-alpha.7",
+    "@agent-lens/live-support": "1.0.0-alpha.7",
     "@deepseek-ai/cordis": "4.0.1",
     "electron": "43.7.9",
     "smol-toml": "1.9.1"

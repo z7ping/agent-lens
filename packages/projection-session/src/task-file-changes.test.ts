@@ -27,6 +27,22 @@ function observation(
   }
 }
 
+test('历史原生文件变更归入集中摘要，去重且不补造 Git 精确行数', () => {
+  const result = summarizeObservedTaskFileChanges(observedTaskFileChanges([
+    observation('artifact-1', 'artifact.action', { action: 'file.change', status: 'completed', changes: {
+      'src/a.ts': { type: 'update', unified_diff: '+hello' },
+      'src/old.ts': { type: 'update', move_path: 'src/new.ts' },
+    } }),
+    observation('artifact-2', 'artifact.action', { action: 'file.change', status: 'completed', changes: { 'src/a.ts': { type: 'update' } } }),
+    observation('failed', 'artifact.action', { action: 'file.change', status: 'failed', changes: { 'failed.ts': { type: 'update' } } }),
+    observation('image', 'artifact.action', { action: 'image.view', status: 'completed', changes: { 'image.png': { type: 'update' } } }),
+  ]))
+  assert.equal(result.length, 2)
+  assert.equal(result.find(item => item.path === 'src/new.ts')?.oldPath, 'src/old.ts')
+  assert.equal(result.find(item => item.path === 'src/a.ts')?.changeType, 'unknown')
+  assert.ok(result.every(item => item.additions === undefined && item.confidence !== 'exact'))
+})
+
 test('does not count read or shell tools as modified files', () => {
   assert.equal(toolMutationIntent(observation('read', 'tool.call', {
     nativeToolName: 'read',

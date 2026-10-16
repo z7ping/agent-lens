@@ -1,10 +1,19 @@
-import type { JsonValue, ReviewEventNodeDto } from '@agent-lens/protocol'
+import type { JsonValue, ReviewEventNodeDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { agentLensI18n } from '../i18n/runtime'
 
 function record(value: unknown): Record<string, JsonValue> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, JsonValue>
     : {}
+}
+
+/** 仅折叠已被集中卡片完整覆盖的成功文件事件，失败或其他产物继续原样展示。 */
+export function isConsolidatedFileChangeEvent(event: ReviewEventNodeDto, changes: TaskFileChangesResponseDto | null | undefined): boolean {
+  const payload = record(event.payload)
+  if (event.kind !== 'artifact.action' || payload.action !== 'file.change' || !changes
+    || !['completed', 'success', 'ok'].includes(String(payload.status))) return false
+  const paths = Object.keys(record(payload.changes))
+  return paths.length > 0 && paths.every(path => changes.items.some(item => item.path === path || item.oldPath === path))
 }
 
 function stringValue(value: Record<string, JsonValue>, ...keys: string[]): string {

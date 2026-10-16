@@ -216,6 +216,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                 <ReviewRoundAdapter
                   sessionId={detail.id}
                   fileChangesEnabled={Boolean(review.fileChanges?.summary.count) && detail.interactionCount > 1}
+                  sessionFileChanges={review.fileChanges}
                   interaction={item.interaction}
                   round={item.round}
                   defaultExpanded={expandAllRounds}

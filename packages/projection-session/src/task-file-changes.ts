@@ -245,6 +245,21 @@ export function observedTaskFileChanges(
   }
 
   for (const observation of observations) {
+    // 历史来源可直接记录已完成的文件变更，不一定存在工具调用配对。
+    if (observation.kind === 'artifact.action') {
+      const payload = record(observation.payload)
+      if (payload.action === 'file.change' && ['completed', 'success', 'ok'].includes(String(payload.status))) {
+        const paths: MutationIntent['paths'] = Object.entries(record(payload.changes)).flatMap(([path, value]) => {
+          const change = record(value)
+          const destination = text(change.move_path)
+          if (!path.trim() || !['add', 'create', 'update', 'delete'].includes(String(change.type))) return []
+          return [{ path: destination ?? path, ...(destination ? { oldPath: path } : {}),
+            operation: destination ? 'rename' : change.type === 'delete' ? 'delete' : 'write' }]
+        })
+        emit(observation, { paths })
+      }
+      continue
+    }
     const intent = toolMutationIntent(observation)
     if (intent) {
       if (intent.callId) pendingByCall.set(intent.callId, { observation, intent })

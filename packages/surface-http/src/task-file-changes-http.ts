@@ -44,6 +44,17 @@ export async function observedInteractionFileChanges(
   return { items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations)), truncated }
 }
 
+/** 从既有 Canonical 文件事件恢复旧历史摘要，查询有界，不读取当前工作区。 */
+export async function observedSessionFileChanges(storage: StorageService, logicalSessionId: string) {
+  const observations = await storage.repositories.observations.query({
+    logicalSessionIds: [logicalSessionId], kind: 'artifact.action', order: 'desc', limit: MAX_ROUND_OBSERVATIONS + 1,
+  })
+  return {
+    items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations.slice(0, MAX_ROUND_OBSERVATIONS).reverse())),
+    truncated: observations.length > MAX_ROUND_OBSERVATIONS,
+  }
+}
+
 export function taskFileChangesResponse(
   logicalSessionId: string,
   items: readonly TaskFileChangeRecord[],

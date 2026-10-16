@@ -15,7 +15,7 @@ import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
 import { ReviewProjection, type HubReviewProjection } from '@agent-lens/projection-review'
 import { SessionProjection, readGitWorkspaceFileDiff } from '@agent-lens/projection-session'
-import { observedInteractionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
+import { observedInteractionFileChanges, observedSessionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
@@ -772,7 +772,13 @@ export async function startHttpSurface(
               storage.taskFileChanges!.getLatestBySession(id),
             ]))
           : [[], null] as const
-        writeJson(response, 200, taskFileChangesResponse(id, items, capture))
+        // 已有 Git 捕获（包括空 Diff）是权威结果，不能用历史工具痕迹覆盖。
+        const fallback = !capture && !items.length
+          ? await withReadPriority(storage, 'supporting', () => observedSessionFileChanges(storage, id))
+          : null
+        writeJson(response, 200, taskFileChangesResponse(id, fallback?.items ?? items, capture, {
+          ...(fallback?.truncated ? { truncated: true } : {}),
+        }))
         return
       }
 

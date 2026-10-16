@@ -12,6 +12,7 @@ const shellCss = read('../shell.css')
 const responsiveCss = read('../agent-insights-responsive.css')
 const backupPage = read('./BackupPage.tsx')
 const preview = read('../components/AgentManagedFilesDialog.tsx')
+const previewCss = read('../components/local-file-preview.css')
 
 test('Pi ecosystem links live within agent card instead of a fourth full-width workspace row', () => {
   assert.doesNotMatch(overview, /<WorkspaceViewTabs/)
@@ -38,8 +39,8 @@ test('installation selector has actual dedup and one-line directory label', () =
 })
 
 test('markdown preview keeps rendered/source labels on one line', () => {
-  assert.match(preview, /managed-file-view-toggle/)
-  assert.match(css, /\.managed-file-view-toggle button \{[^}]*white-space: nowrap/)
+  assert.match(preview, /file-preview-view-toggle/)
+  assert.match(previewCss, /\.file-preview-view-toggle button \{[^}]*white-space: nowrap/)
   assert.match(css, /\.agent-managed-files-dialog \.ui-overlay-header-actions \{[^}]*white-space: nowrap/)
   assert.match(css, /\.agent-managed-files-dialog \.ui-overlay-header-actions > \* \{ flex-shrink: 0; \}/)
 })

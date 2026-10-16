@@ -9,7 +9,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { type ToolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
-import { reviewEventLabel } from './review-event-presentation'
+import { isConsolidatedFileChangeEvent, reviewEventLabel } from './review-event-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskProcessGroup } from './TaskProcessGroup'
@@ -362,6 +362,7 @@ export function ReviewRoundAdapter({
   showAllEvents,
   onShowAllEvents,
   fileChangesEnabled,
+  sessionFileChanges,
 }: {
   sessionId: string
   interaction: ReviewInteractionDto
@@ -376,6 +377,7 @@ export function ReviewRoundAdapter({
   showAllEvents: boolean
   onShowAllEvents: () => void
   fileChangesEnabled?: boolean
+  sessionFileChanges?: TaskFileChangesResponseDto | null
 }) {
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
@@ -464,13 +466,19 @@ export function ReviewRoundAdapter({
       ? entry.items.reduce((total, item) => total + (item.type === 'raw-event-group' ? item.items.length : 0), 0)
       : 0), 0)
   const resolvedProcessState = hasFinalAnswer ? 'settled' : round.state
+  const isConsolidatedEvent = (event: ReviewEventNodeDto) => isConsolidatedFileChangeEvent(event, sessionFileChanges)
+    || isConsolidatedFileChangeEvent(event, roundFileChanges?.interactionId === interaction.id ? roundFileChanges : null)
+  const consolidatedEvents = afterProcessEntries.flatMap(entry => entry.type === 'event' && isConsolidatedEvent(entry.node) ? [entry.node] : [])
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
     if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
     if (entry.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
     if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
-    if (entry.type === 'event') return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
+    if (entry.type === 'event') {
+      if (isConsolidatedEvent(entry.node)) return null
+      return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
+    }
     return null
   }
 
@@ -503,6 +511,7 @@ export function ReviewRoundAdapter({
     {processGroup}
     {afterProcessEntries.map(renderEntry)}
     {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && roundFileChanges.summary.count > 0 && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+    {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
     {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
       <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
     </button>}

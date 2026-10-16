@@ -75,7 +75,7 @@ async function discoverToolSessionIds(
     })
     if (!page.length) break
     for (const observation of page) {
-      if (observation.kind === 'tool.call' || observation.kind === 'tool.result') {
+      if (observation.kind === 'tool.call' || observation.kind === 'tool.result' || observation.kind === 'artifact.action') {
         ids.add(observation.logicalSessionId)
       }
     }
@@ -140,7 +140,7 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
   const handleCommittedObservation = async (
     event: { observationId: string; logicalSessionId: string; kind: CanonicalObservation['kind'] },
   ) => {
-    if (disposed || (event.kind !== 'tool.call' && event.kind !== 'tool.result')) return
+    if (disposed || (event.kind !== 'tool.call' && event.kind !== 'tool.result' && event.kind !== 'artifact.action')) return
     if (parserReplayDepth > 0) {
       replaySessions.add(event.logicalSessionId)
       return
@@ -148,6 +148,11 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
 
     const observation = await ctx.storage.repositories.observations.get(event.observationId)
     if (!observation) return
+
+    if (observation.kind === 'artifact.action') {
+      await mergeObserved(observation.logicalSessionId, [observation])
+      return
+    }
 
     if (observation.kind === 'tool.call') {
       const intent = toolMutationIntent(observation)
@@ -344,7 +349,7 @@ const applyTaskFileChangeProjection: Plugin.Function<void> = (ctx: AgentLensCont
   })
 
   ctx.on('observation/committed', event => {
-    if (event.kind !== 'tool.call' && event.kind !== 'tool.result') return
+    if (event.kind !== 'tool.call' && event.kind !== 'tool.result' && event.kind !== 'artifact.action') return
     enqueueObservation(event)
   })
 

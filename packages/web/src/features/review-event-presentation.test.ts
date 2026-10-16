@@ -1,7 +1,22 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { reviewArtifactLabel, reviewArtifactSummary, reviewEventLabel } from './review-event-presentation'
-import type { ReviewEventNodeDto } from '@agent-lens/protocol'
+import { isConsolidatedFileChangeEvent, reviewArtifactLabel, reviewArtifactSummary, reviewEventLabel } from './review-event-presentation'
+import type { ReviewEventNodeDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
+
+test('仅将完整覆盖的成功文件事件收入集中卡片的原始记录组', () => {
+  const event: ReviewEventNodeDto = { type: 'event', id: 'event', at: '2026-10-16T00:00:00Z',
+    capturedAt: '2026-10-16T00:00:00Z', sourceId: 'codex', kind: 'artifact.action', category: 'artifact',
+    label: '文件变更', evidence: [], observationIds: [],
+    payload: { action: 'file.change', status: 'completed', changes: { 'a.ts': { type: 'update' } } } }
+  const changes: TaskFileChangesResponseDto = { logicalSessionId: 'session',
+    items: [{ path: 'a.ts', changeType: 'unknown', firstChangedAt: event.at, lastChangedAt: event.at, evidence: ['tool'], confidence: 'medium' }],
+    summary: { count: 1, exactCount: 0, observedCount: 1 }, meta: { protocolVersion: '1.0', generatedAt: event.at } }
+  assert.equal(isConsolidatedFileChangeEvent(event, changes), true)
+  assert.equal(isConsolidatedFileChangeEvent(event, null), false)
+  assert.equal(isConsolidatedFileChangeEvent(event, { ...changes, items: [] }), false)
+  assert.equal(isConsolidatedFileChangeEvent({ ...event, payload: { action: 'file.change', status: 'failed', changes: { 'a.ts': {} } } }, changes), false)
+  assert.equal(isConsolidatedFileChangeEvent({ ...event, payload: { action: 'image.view', status: 'completed', changes: { 'a.ts': {} } } }, changes), false)
+})
 
 test('产物事件展示具体文件动作和目标，而不是笼统的产物操作', () => {
   const payload = {
