@@ -288,21 +288,33 @@ function toolLocalResource(node: ReviewToolNodeDto): { value: string; kind: 'fil
   return undefined
 }
 
+/** Prefer original Markdown body when native JSON carries a text field. */
+function originalMarkdownBody(value: JsonValue | undefined): string | undefined {
+  if (typeof value === 'string') return value
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  for (const record of [value, payloadRecord(value.payload)]) {
+    for (const key of ['text', 'content', 'message', 'body']) {
+      if (typeof record[key] === 'string') return record[key]
+    }
+  }
+  return undefined
+}
+
 /** Full source content; only timeline row summaries may use brief(). */
 function OriginalEvidenceValue({ value }: { value: JsonValue | undefined }) {
   const { t } = useTranslation('review')
   const [showSource, setShowSource] = useState(false)
   if (value === undefined) return <div className="muted-empty compact">{t('local.tool.noData')}</div>
-  const isText = typeof value === 'string'
-  const content = isText ? value : JSON.stringify(value, null, 2)
+  const markdownBody = originalMarkdownBody(value)
+  const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
   return <div className="inspector-original-value">
-    {isText && <div className="inspector-original-actions">
+    {markdownBody !== undefined && <div className="inspector-original-actions">
       <Button size="small" aria-pressed={!showSource} onClick={() => setShowSource(false)}>{t('local.markdown.rendered')}</Button>
       <Button size="small" aria-pressed={showSource} onClick={() => setShowSource(true)}>{t('local.markdown.source')}</Button>
     </div>}
-    {isText && !showSource
-      ? <MarkdownContent className="inspector-original-markdown" text={content}/>
-      : <CopyableCodeBlock className="raw-json" copyValue={content} language={isText ? undefined : 'json'}>{content}</CopyableCodeBlock>}
+    {markdownBody !== undefined && !showSource
+      ? <MarkdownContent className="inspector-original-markdown" text={markdownBody}/>
+      : <CopyableCodeBlock className="raw-json" copyValue={content} language={typeof value === 'string' ? undefined : 'json'}>{content}</CopyableCodeBlock>}
   </div>
 }
 
@@ -396,7 +408,6 @@ export function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNo
   const [rawError, setRawError] = useState('')
 
   useEffect(() => {
-    if (tab !== 'detail' && tab !== 'raw') return
     let active = true
     setRawRecords([])
     setRawError('')
@@ -407,9 +418,10 @@ export function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNo
       reason => { if (active) { setRawError(reason instanceof Error ? reason.message : String(reason)); setRawLoading(false) } },
     )
     return () => { active = false }
-  }, [loadSourceRecords, node.id, sourceRecordIds, tab])
+  }, [loadSourceRecords, node.id, sourceRecordIds])
 
   const title = node.type === 'tool' ? node.name : node.type === 'event' ? reviewEventLabel(node) : roleLabel(node.role)
+  const resource = node.type === 'tool' ? toolLocalResource(node) : undefined
   return <Drawer
     open
     className="review-inspector-overlay"
@@ -441,10 +453,13 @@ export function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNo
       {rawLoading && <div className="muted-empty compact">{t('local.event.rawLoading')}</div>}
       {rawError && <div className="evidence-missing">{rawError}</div>}
       {!rawLoading && rawRecords.length > 0
-        ? rawRecords.map(record => <div className="inspector-source-entry" key={record.id}>
+        ? <>
+          {resource && <div className="tool-detail-section"><LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/></div>}
+          {rawRecords.map(record => <div className="inspector-source-entry" key={record.id}>
             <div className="evidence-meta"><b>{record.nativeType}</b><span>{record.id}</span></div>
             <OriginalEvidenceValue value={record.payload}/>
-          </div>)
+          </div>)}
+        </>
         : !rawLoading && (node.type === 'tool'
           ? <StructuredToolDetail node={node}/>
           : <OriginalEvidenceValue value={node.type === 'message' ? node.text : node.payload}/>)}
