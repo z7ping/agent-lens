@@ -3,6 +3,7 @@ import test from 'node:test'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import Database from 'better-sqlite3'
 import type { SourceRecord } from '@agent-lens/core'
 import { codexHistoryInternals } from './history'
 import { normalizeCodexRecord } from './normalize'
@@ -80,4 +81,56 @@ test('Codex native title becomes sessionTitle identity metadata', async () => {
   const normalized = await normalizeCodexRecord(record, codexTestContext)
   assert.equal(normalized.observations[0]?.identityHints.sessionTitle, 'Codex 原生线程摘要')
   assert.equal(normalized.observations[0]?.kind, 'session.lifecycle')
+})
+
+test('Codex native SQLite generated title is read when the index is absent', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-sqlite-'))
+  try {
+    const db = new Database(join(root, 'state_5.sqlite'))
+    try {
+      db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, updated_at INTEGER)')
+      db.prepare('INSERT INTO threads VALUES (?, ?, ?)').run('sqlite-only', 'Codex 自动生成的任务标题', 1780000000)
+    } finally { db.close() }
+    const titles = await codexHistoryInternals.readThreadNames(root)
+    assert.equal(titles.get('sqlite-only')?.title, 'Codex 自动生成的任务标题')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Codex title precedence chooses the newer native timestamp, not the last index line', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-title-priority-'))
+  try {
+    await writeFile(join(root, 'session_index.jsonl'), [
+      JSON.stringify({ id: 'sqlite-wins', thread_name: '初始用户输入', updated_at: '2026-08-01T00:00:00Z' }),
+      JSON.stringify({ id: 'index-wins', thread_name: '最新重命名标题', updated_at: '2026-09-01T00:00:00Z' }),
+      JSON.stringify({ id: 'sqlite-wins', thread_name: '过期索引尾部', updated_at: '2026-07-01T00:00:00Z' }),
+    ].join('\n'))
+    const db = new Database(join(root, 'state_5.sqlite'))
+    try {
+      db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, updated_at INTEGER)')
+      db.prepare('INSERT INTO threads VALUES (?, ?, ?)').run('sqlite-wins', '原生生成的摘要标题', Date.parse('2026-08-15T00:00:00Z') / 1000)
+      db.prepare('INSERT INTO threads VALUES (?, ?, ?)').run('index-wins', '较早数据库标题', Date.parse('2026-08-15T00:00:00Z') / 1000)
+    } finally { db.close() }
+    const titles = await codexHistoryInternals.readThreadNames(root)
+    assert.equal(titles.get('sqlite-wins')?.title, '原生生成的摘要标题')
+    assert.equal(titles.get('index-wins')?.title, '最新重命名标题')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('Codex title index remains usable when native SQLite schema differs', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-legacy-sqlite-'))
+  try {
+    await writeFile(join(root, 'session_index.jsonl'), JSON.stringify({
+      id: 'legacy', thread_name: '索引回退标题', updated_at: '2026-08-01T00:00:00Z',
+    }))
+    const db = new Database(join(root, 'state_5.sqlite'))
+    try { db.exec('CREATE TABLE something_else (id TEXT)') } finally { db.close() }
+    const titles = await codexHistoryInternals.readThreadNames(root)
+    assert.equal(titles.get('legacy')?.title, '索引回退标题')
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
