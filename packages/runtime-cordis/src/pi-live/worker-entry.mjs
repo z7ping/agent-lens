@@ -1022,15 +1022,22 @@ async function loadSdk(discovery) {
 // Names alone do not establish MCP ownership, especially after server removal.
 function registeredPiToolOrigin(toolName) {
   if (!toolName || typeof session?.getAllTools !== 'function') return {}
-  const registered = session.getAllTools().find(tool => tool?.name === toolName)
-  if (!registered) return {}
+  // A name collision or a transient registry failure cannot authorize ownership.
+  // Only the unique definition registered by this exact running session counts.
+  let registered
+  try {
+    const matches = session.getAllTools().filter(tool => tool?.name === toolName)
+    if (matches.length !== 1) return {}
+    registered = matches[0]
+  } catch {
+    return {}
+  }
   const source = record(registered.sourceInfo)
   const namespace = record(registered.namespace)
   const namespaceName = typeof namespace.name === 'string' ? namespace.name : ''
   if (source.path === 'builtin:mcp' && namespaceName.startsWith('mcp__')) {
-    const aliases = Array.isArray(namespace.aliases) ? namespace.aliases : []
-    const server = aliases.find(alias => typeof alias === 'string' && alias.trim())
-      ?? namespaceName.slice('mcp__'.length)
+    // Namespace identity is the registered server; an alias is not a server ID.
+    const server = namespaceName.slice('mcp__'.length).trim()
     if (!server) return {}
     return {
       toolSourceType: 'mcp',
