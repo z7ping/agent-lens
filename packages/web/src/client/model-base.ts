@@ -1,7 +1,21 @@
 import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentResponseDto, AgentOverviewResponseDto, AgentRescanResponseDto, AgentSummaryResponseDto, CapturePolicyResponseDto, FacetResponseDto, HealthResponseDto, HostFilePreviewResponseDto, IntegrationManagementResponseDto, IntegrationPreferencesResponseDto, IntegrationToolDiscoveryResponseDto, ManagedAssetDirectoryResponseDto, ManagedAssetFilePreviewResponseDto, ManagedAssetRoot, LiveUpdateEventDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewResponseDto, ReviewSessionDetailDto, SessionRelationshipResponseDto, SourceRecordResponseDto, TaskFileChangesResponseDto, ToolAssetUsageResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { translateProduct } from '../i18n/runtime'
-import { discoveryFromManagement } from './model-integration'
+
+import type { IntegrationManagementResponseDto, IntegrationToolDiscoveryResponseDto } from '@agent-lens/protocol'
+
+function discoveryFromManagement(
+  management: IntegrationManagementResponseDto,
+): IntegrationToolDiscoveryResponseDto {
+  return {
+    status: management.discovery.status,
+    items: management.items.flatMap(item => item.tool ? [{ ...item.tool }] : []),
+    ...(management.discovery.startedAt ? { startedAt: management.discovery.startedAt } : {}),
+    ...(management.discovery.completedAt ? { completedAt: management.discovery.completedAt } : {}),
+    generatedAt: management.discovery.generatedAt,
+    meta: { protocolVersion: management.meta.protocolVersion },
+  }
+}
 
 export interface ClientSnapshot {
   health: HealthResponseDto | null
@@ -60,9 +74,9 @@ export interface ClientSnapshot {
 type Listener = () => void
 type LiveEventListener = (event: LiveUpdateEventDto) => void
 const initialQuery: QueryFilters = { sourceIds: null, projectId: '', range: '7d' }
-const INITIAL_REVIEW_LIMIT = 20
-const INTEGRATION_DISCOVERY_POLL_MS = 500
-const INTEGRATION_DISCOVERY_MAX_POLLS = 20
+export const INITIAL_REVIEW_LIMIT = 20
+export const INTEGRATION_DISCOVERY_POLL_MS = 500
+export const INTEGRATION_DISCOVERY_MAX_POLLS = 20
 function summariesFromOverview(response: AgentOverviewResponseDto): AgentSummaryResponseDto {
   return {
     items: response.items.map(item => ({

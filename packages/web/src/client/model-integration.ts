@@ -4,19 +4,6 @@ import { AgentLensModelBase } from './model-base'
 import { INTEGRATION_DISCOVERY_POLL_MS, INTEGRATION_DISCOVERY_MAX_POLLS } from './model-base'
 import type { ClientSnapshot } from './model-base'
 
-function discoveryFromManagement(
-  management: IntegrationManagementResponseDto,
-): IntegrationToolDiscoveryResponseDto {
-  return {
-    status: management.discovery.status,
-    items: management.items.flatMap(item => item.tool ? [{ ...item.tool }] : []),
-    ...(management.discovery.startedAt ? { startedAt: management.discovery.startedAt } : {}),
-    ...(management.discovery.completedAt ? { completedAt: management.discovery.completedAt } : {}),
-    generatedAt: management.discovery.generatedAt,
-    meta: { protocolVersion: management.meta.protocolVersion },
-  }
-}
-
 function applyManagementPreferences(
   management: IntegrationManagementResponseDto,
   preferences: IntegrationManagementResponseDto['preferences'],
