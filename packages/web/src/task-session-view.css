@@ -90,6 +90,7 @@
   .task-session-view .task-header { padding-inline: 20px; }
 
   .task-session-view .task-header { grid-template-columns: minmax(0, 1fr) auto; }
+  .task-session-view .task-header-secondary { grid-column: 1; }
   .task-session-view .task-header-submeta,
   .task-session-view .task-header-metrics { display: none; }
   .task-session-view .task-header-actions { grid-column: 2; }
