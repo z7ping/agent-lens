@@ -8,7 +8,11 @@ const round = readFileSync('packages/web/src/features/TaskRound.tsx', 'utf8')
 const message = readFileSync('packages/web/src/features/TaskMessage.tsx', 'utf8')
 const thinking = readFileSync('packages/web/src/features/TaskThinking.tsx', 'utf8')
 const processGroup = readFileSync('packages/web/src/features/TaskProcessGroup.tsx', 'utf8')
-const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
+const reviewPage = [ readFileSync('packages/web/src/features/review-session-format.ts', 'utf8'),
+  readFileSync('packages/web/src/features/ReviewEvidenceInspector.tsx', 'utf8'),
+  readFileSync('packages/web/src/features/ReviewRoundPresentation.tsx', 'utf8'),
+  readFileSync('packages/web/src/features/review-reader-position.ts', 'utf8'),
+  readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8') ].join('\n')
 const toolGroup = readFileSync('packages/web/src/features/TaskToolGroup.tsx', 'utf8')
 const toolRow = readFileSync('packages/web/src/features/TaskToolRow.tsx', 'utf8')
 const toolModel = readFileSync('packages/web/src/features/task-detail-model.ts', 'utf8')
