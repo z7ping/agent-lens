@@ -94,7 +94,11 @@ function processSummary(interaction: ReviewInteractionDto): ReviewProcessSummary
     toolCount: tools.length,
     errorCount: tools.filter(tool => tool.status === 'error').length,
     durationMs: startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : 0,
-    availability: interaction.nodesTruncated || returnedNodeCount > MAX_REVIEW_INTERACTION_NODES || omittedFactCount > 0 ? 'partial' : 'available',
+    availability: interaction.nodesTruncated || returnedNodeCount > MAX_REVIEW_INTERACTION_NODES || omittedFactCount > 0
+      ? 'truncated' : interaction.processSummary?.availability ?? 'complete',
+    ...((interaction.nodesTruncated || returnedNodeCount > MAX_REVIEW_INTERACTION_NODES || omittedFactCount > 0)
+      ? { reasonCode: 'node-limit' as const }
+      : interaction.processSummary?.reasonCode ? { reasonCode: interaction.processSummary.reasonCode } : {}),
     totalFactCount,
     ...(omittedFactCount > 0 ? { omittedFactCount } : {}),
   }
