@@ -200,7 +200,7 @@ requireText(liveTask, /normalizedEvent\?\.type === ['"]runtime-disclosure\.chang
 requireText(liveClient, /event\.type === ['"]runtime-disclosure\.changed['"][\s\S]{0,120}return ['"]runtime-disclosure\.changed['"]/, 'Runtime Disclosure 失效通知必须在调度器中合并')
 
 requireText(liveTask, /setActivityStatus\(envelope\.normalizedEvent\.status\)/, 'LiveTaskPage 必须消费 compacting 等通用活动状态')
-requireText(liveTask, /event\.status === ['"]failed['"] \|\| event\.status === ['"]terminating['"] \|\| event\.status === ['"]terminated['"]/, 'Live 终止/失败状态必须清理 isStreaming，不能继续显示可中断')
+requireText(taskLiveRuntime, /event\.status === ['"]failed['"] \|\| event\.status === ['"]terminating['"] \|\| event\.status === ['"]terminated['"]/, 'Live 终止/失败状态必须清理 isStreaming，不能继续显示可中断')
 requireText(liveTask, /normalizedEvent\.status === ['"]failed['"] && envelope\.normalizedEvent\.message[\s\S]{0,120}setError/, 'Live failed status 必须把 Runtime 原因反馈给用户')
 requireText(liveTask, /normalizedEvent\?\.type === ['"]completed['"][\s\S]{0,260}normalizedEvent\.status === ['"]failed['"][\s\S]{0,120}setError/, 'Live completed failed 必须把 Run 失败原因反馈给用户')
 
