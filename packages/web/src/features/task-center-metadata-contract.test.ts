@@ -40,6 +40,18 @@ test('会话标题负责自适应省略', () => {
   assert.doesNotMatch(taskCss, /max-width:\s*74px/)
 })
 
+test('任务中心单条会话标题可展示两行，审查状态位于辅助信息层', () => {
+  const history = page.slice(page.indexOf('function HistoryTaskItem('), page.indexOf('function RemoteTaskItem('))
+  const titleRow = history.slice(history.indexOf('<div className="session-item-title-row">'), history.indexOf('<div className="session-item-meta">'))
+  assert.doesNotMatch(titleRow, /StatusBadge/)
+  assert.match(history, /<div className="session-item-activity">[\s\S]*?<StatusBadge className="session-activity-badge"/)
+  assert.match(history, /<span className="session-item-meta-separator" aria-hidden="true">·<\/span>/)
+  assert.match(history, /<time dateTime=\{moment\?\.at\} title=\{timeTooltip \|\| undefined\}/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-title \{[^}]*-webkit-line-clamp: 2;/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-activity \{[^}]*order: 3;/)
+  assert.match(taskCss, /\.task-center-rail \.session-item-active::before \{/)
+})
+
 test('Guardian 徽标保留来源原生事实并解释为内部审查，而不是 AgentLens 检查结论', () => {
   assert.match(page, /item\.sessionActivity === 'internal-review' \? t\('center\.presentation\.internalReviewHint'\)/)
   assert.match(zhTask, /internalReviewHint: '由来源智能体标记的内部审查会话，不代表 AgentLens 审查发现了问题。'/)
