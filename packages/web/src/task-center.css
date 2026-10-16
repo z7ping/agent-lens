@@ -198,7 +198,7 @@
   min-height: 0;
   flex-direction: column;
   margin: 0;
-  padding: 8px 8px 8px 10px;
+  padding: 9px 8px 9px 10px;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--al-line) 55%, transparent);
   border-radius: 0;
@@ -211,7 +211,7 @@
 }
 .task-center-rail .session-item-active,
 .task-center-rail .session-item-active:hover {
-  background: color-mix(in srgb, var(--al-accent-soft) 43%, var(--al-surface));
+  background: color-mix(in srgb, var(--al-accent-soft) 30%, var(--al-surface));
 }
 .task-center-rail .session-item-active::before {
   content: "";
@@ -233,7 +233,7 @@
 .task-center-rail .session-item-title-row .session-item-title { min-width: 0; flex: 1 1 auto; }
 .task-center-rail .session-item-title {
   display: -webkit-box;
-  max-height: 1.45em;
+  max-height: 2.84em;
   margin: 0;
   overflow: hidden;
   color: var(--al-ink);
@@ -242,15 +242,18 @@
   line-height: 1.42;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
 }
-.task-center-rail .session-item-title-row .ui-status-badge {
-  /* Keep source-provided review labels readable without sacrificing the title
-   * row: long arbitrary labels may still ellipsize, but do not flex-shrink. */
-  max-width: min(56%, 148px);
-  flex: 0 0 auto;
+.task-center-rail .session-item-activity {
+  display: flex;
+  min-width: 0;
+  order: 3;
+  margin-top: 5px;
+}
+.task-center-rail .session-item-activity .session-activity-badge {
+  max-width: 100%;
   gap: 3px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -270,11 +273,15 @@
   max-width: 42%;
   flex: 0 1 auto;
 }
+.task-center-rail .session-item-meta .session-item-meta-separator {
+  flex: 0 0 auto;
+  color: var(--al-muted-2);
+}
 .task-center-rail .session-item-meta .session-item-project {
   min-width: 0;
   flex: 1 1 0;
 }
-.task-center-rail .session-item-meta > span:not(.source-dot):not(.agent-logo):not(.pi-live-pulse):not(.pi-live-idle-dot) {
+.task-center-rail .session-item-meta > span:not(.source-dot):not(.agent-logo):not(.pi-live-pulse):not(.pi-live-idle-dot):not(.session-item-meta-separator) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
