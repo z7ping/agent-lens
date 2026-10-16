@@ -292,7 +292,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         titleCount: '{{count}} changed files in this session',
         viewDiff: 'View diff',
         showMore: 'Show {{count}} more files',
-        showLess: 'Show fewer files',
+        showLess: 'Show first 3 files',
         truncated: 'Some observations were omitted due to the round limit',
         diffUnavailable: 'Diff unavailable: no recoverable Git snapshot or only tool-observed changes',
         diffTruncated: 'Diff was truncated due to size',
