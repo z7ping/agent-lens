@@ -3,7 +3,27 @@ import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import { resolveExecutable, resolveManagedExecutableTarget } from './executable-discovery'
+import { resolveExecutable, resolveManagedExecutableTarget, resolveWindowsNpmShimTarget } from './executable-discovery'
+
+test('Windows npm 启动脚本支持原生入口，并优先识别 JavaScript 入口而不是 Node 解释器', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agent-lens-npm-target-'))
+  try {
+    const native = join(root, 'tool.exe')
+    const script = join(root, 'cli.js')
+    const shim = join(root, 'tool.cmd')
+    await writeFile(native, '')
+    await writeFile(script, '')
+    await writeFile(join(root, 'node.exe'), '')
+    await writeFile(shim, '@ECHO off\n"%dp0%\\tool.exe" %*\n')
+    assert.equal(await resolveWindowsNpmShimTarget(shim), native)
+    await writeFile(shim, '@ECHO off\n"%~dp0node.exe" "%dp0%\\cli.js" %*\n')
+    assert.equal(await resolveWindowsNpmShimTarget(shim), script)
+    await writeFile(shim, '@ECHO off\n"%dp0%\\missing.exe" %*\n')
+    assert.equal(await resolveWindowsNpmShimTarget(shim), undefined)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 test('POSIX 后台 PATH 缺少工具时可从登录 Shell PATH 找到可执行文件', { skip: process.platform === 'win32' }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-executable-discovery-'))

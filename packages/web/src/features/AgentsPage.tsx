@@ -31,7 +31,7 @@ import {
   integrationToolPresencePath,
 } from './integrations/integration-lifecycle'
 import { PiEcosystemPanel } from './PiEcosystemPanel'
-import { installationChoiceKey, installationChoices } from './agent-installation-choices'
+import { assetBindingChoices, installationChoiceKey, installationChoices } from './agent-installation-choices'
 
 const capabilityLabelKey: Record<string, string> = {
   session: 'capability.session',
@@ -222,7 +222,7 @@ function AssetCard({
 }) {
   const { t } = useTranslation('agents')
   const usage = assetUsageCount(agent, asset)
-  const pathBindings = asset.bindings.filter(
+  const pathBindings = assetBindingChoices(asset.bindings).filter(
     (item): item is AgentAssetBindingDto & { path: string } => Boolean(item.path),
   )
   const [selectedBindingId, setSelectedBindingId] = useState(pathBindings[0]?.id ?? '')
@@ -374,67 +374,6 @@ function isPiPackageResource(asset: AgentAssetInventoryDto): boolean {
   return asset.bindings.some(binding => typeof binding.source === 'string' && binding.source.includes(':package:'))
 }
 
-function PiUsageGuidance({ agent }: { agent: AgentOverviewDto }) {
-  const { t } = useTranslation('agents')
-  const projectRules = agent.assetInventory.filter(asset =>
-    isPiProjectRuleAsset(asset)
-    && asset.bindings.some(binding => binding.scope === 'project')
-  )
-  const skills = agent.assetInventory.filter(asset => asset.type === 'skill')
-  const discoverableSkills = skills.filter(asset => stateValue(asset, 'discoverable') === true)
-  const models = agent.assetInventory.filter(asset => asset.type === 'model')
-  const defaultModels = models.filter(asset => asset.bindings.some(binding => binding.source?.startsWith('pi:model:default:')))
-  const extensions = agent.assetInventory.filter(asset => asset.type === 'extension')
-  const uncertainExtensions = extensions.filter(asset => stateValue(asset, 'discoverable') === 'unknown')
-  const packageResources = agent.assetInventory.filter(isPiPackageResource)
-
-  return <section className="agent-primary-section pi-guidance">
-    <div className="section-heading-row"><div>
-      <h3>{t('piGuidance.title')}</h3>
-    </div></div>
-    <div className="pi-guidance-list">
-      {projectRules.length
-        ? <div className="pi-guidance-item" data-tone="success">
-            <UiIcon name="check" size={16}/>
-            <span><b>{t('piGuidance.projectRulesReadyTitle', { count: projectRules.length })}</b></span>
-          </div>
-        : <div className="pi-guidance-item" data-tone="warning">
-            <UiIcon name="alert" size={16}/>
-            <span><b>{t('piGuidance.noProjectRulesTitle')}</b><small>{t('piGuidance.noProjectRulesDescription')}</small></span>
-          </div>}
-      {defaultModels.length
-        ? <div className="pi-guidance-item" data-tone="success">
-            <UiIcon name="check" size={16}/>
-            <span><b>{t('piGuidance.defaultModelReadyTitle')}</b><small>{defaultModels.map(asset => asset.canonicalName).slice(0, 3).join(' · ')}</small></span>
-          </div>
-        : <div className="pi-guidance-item" data-tone="neutral">
-            <UiIcon name="exclamation" size={16}/>
-            <span><b>{t('piGuidance.noDefaultModelTitle')}</b><small>{t('piGuidance.noDefaultModelDescription')}</small></span>
-          </div>}
-      {skills.length
-        ? <div className="pi-guidance-item" data-tone={discoverableSkills.length ? 'success' : 'neutral'}>
-            <UiIcon name={discoverableSkills.length ? 'check' : 'exclamation'} size={16}/>
-            <span><b>{t('piGuidance.skillsReadyTitle', { count: skills.length })}</b><small>{t('piGuidance.skillsDiscoverable', { count: discoverableSkills.length })}</small></span>
-          </div>
-        : <div className="pi-guidance-item" data-tone="neutral">
-            <UiIcon name="exclamation" size={16}/>
-            <span><b>{t('piGuidance.noSkillsTitle')}</b></span>
-          </div>}
-      {uncertainExtensions.length > 0
-        ? <div className="pi-guidance-item" data-tone="neutral">
-            <UiIcon name="exclamation" size={16}/>
-            <span><b>{t('piGuidance.extensionsUnverifiedTitle', { count: uncertainExtensions.length })}</b></span>
-          </div>
-        : packageResources.length > 0
-          ? <div className="pi-guidance-item" data-tone="success">
-              <UiIcon name="check" size={16}/>
-              <span><b>{t('piGuidance.packageResourcesTitle', { count: packageResources.length })}</b></span>
-            </div>
-          : null}
-    </div>
-  </section>
-}
-
 function PiConfigurationSummary({ agent, rules }: { agent: AgentOverviewDto; rules: AgentAssetInventoryDto[] }) {
   const { t } = useTranslation('agents')
   const models = agent.assetInventory.filter(asset => asset.type === 'model')
@@ -500,9 +439,9 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
   const skillAssets = grouped.find(([type]) => type === 'skill')?.[1] ?? []
   const isPi = agent.sourceId === 'pi'
   const piProjectRuleAssets = isPi
-    ? agent.assetInventory.filter(asset =>
-        isPiProjectRuleAsset(asset)
-        && asset.bindings.some(binding => binding.scope === 'project')
+    ? agent.assetInventory.filter(isPiProjectRuleAsset).sort((left, right) =>
+        Number(right.bindings.some(binding => binding.scope === 'user'))
+        - Number(left.bindings.some(binding => binding.scope === 'user'))
       )
     : []
   const piProjectRuleIds = new Set(piProjectRuleAssets.map(asset => asset.id))
@@ -518,7 +457,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
     .slice(0, 6)
     .map(item => item.asset), [agent])
 
-  const allBindings = agent.assetInventory.flatMap(asset => asset.bindings.map(binding => ({ asset, binding })))
+  const allBindings = agent.assetInventory.flatMap(asset => assetBindingChoices(asset.bindings).map(binding => ({ asset, binding })))
   const backingInstallationIds = new Set(agent.installations
     .filter(item => installation && installationChoiceKey(item) === installationChoiceKey(installation))
     .map(item => item.id))
@@ -611,7 +550,6 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
 
     {isPi && piView === 'ecosystem' ? <PiEcosystemPanel agent={agent}/> : <>
     {isPi ? <>
-      <PiUsageGuidance agent={agent}/>
       <PiConfigurationSummary agent={agent} rules={piProjectRuleAssets}/>
     </> : <section className="agent-primary-section">
       <div className="section-heading-row"><div><h3>{t('sections.myAssets')}</h3></div><span className="section-total">{userAssetCount}</span></div>

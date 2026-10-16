@@ -252,3 +252,17 @@ test('CLI version probe reads --version from the executable without a shell', as
   const version = await probeAgentCliVersion(process.execPath)
   assert.match(version ?? '', /^\d+\.\d+\.\d+/)
 })
+
+test('版本探测超时仍保留已找到的安装与目录', async () => {
+  const items = await discoverOfficialTools({
+    env: { PATH: '' },
+    homeDir: join(tmpdir(), 'agent-lens-version-timeout-home'),
+    timeoutMs: 1000,
+    versionTimeoutMs: 20,
+    executableResolver: async name => name === 'pi' ? '/opt/bin/pi' : undefined,
+    versionResolver: async () => new Promise(resolve => setTimeout(() => resolve('1.2.0'), 80)),
+  }, 'pi')
+  assert.equal(items[0]?.presence, 'present')
+  assert.equal(items[0]?.executable, '/opt/bin/pi')
+  assert.equal(items[0]?.version, undefined)
+})

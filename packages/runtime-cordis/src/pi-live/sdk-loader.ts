@@ -1,7 +1,7 @@
 import { access, readFile, realpath } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { resolveExecutable, resolveManagedExecutableTarget } from '../executable-discovery'
+import { resolveExecutable, resolveManagedExecutableTarget, resolveWindowsNpmShimTarget } from '../executable-discovery'
 import {
   PI_SDK_PACKAGE_NAME,
   assertPiSdkModule,
@@ -57,24 +57,8 @@ export async function findPiExecutable(explicit?: string): Promise<string | unde
 }
 
 export async function resolveWindowsNpmShimNodeEntry(executable: string): Promise<string | undefined> {
-  let source: string
-  try {
-    source = await readFile(executable, 'utf8')
-  } catch {
-    return undefined
-  }
-
-  const pattern = /%(?:~dp0|dp0%)([^"\r\n]*?\.(?:mjs|cjs|js))/ig
-  for (const match of source.matchAll(pattern)) {
-    const suffix = match[1]
-    if (!suffix) continue
-    const normalized = suffix
-      .replace(/^[\\/]+/, '')
-      .replace(/[\\/]/g, process.platform === 'win32' ? '\\' : '/')
-    const candidate = resolve(dirname(executable), normalized)
-    if (await exists(candidate)) return candidate
-  }
-  return undefined
+  const target = await resolveWindowsNpmShimTarget(executable)
+  return target && /\.(?:mjs|cjs|js)$/i.test(target) ? target : undefined
 }
 
 async function packageFromEntry(entry: string): Promise<{

@@ -1,6 +1,5 @@
 import { access } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
-import { resolveWindowsNpmShimNodeEntry } from './pi-live/sdk-loader'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -12,6 +11,7 @@ import {
 import {
   resolveExecutable,
   resolveLoginShellPath,
+  resolveWindowsNpmShimTarget,
   type ExecutableDiscoveryOptions,
 } from './executable-discovery'
 
@@ -23,18 +23,22 @@ export async function probeAgentCliVersion(
   options: { platform?: NodeJS.Platform; timeoutMs?: number; env?: Readonly<Record<string, string | undefined>> } = {},
 ): Promise<string | undefined> {
   const platform = options.platform ?? process.platform
-  const timeoutMs = Math.min(options.timeoutMs ?? 1500, 2500)
+  const timeoutMs = Math.min(options.timeoutMs ?? 10_000, 15_000)
   let command = executable
   let args = ['--version']
   if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable)) {
     // Do not use shell:true for paths that could contain cmd metacharacters.
     // An npm shim resolves to a JS entry and can run safely using Node directly.
-    const entry = await resolveWindowsNpmShimNodeEntry(executable)
+    const entry = await resolveWindowsNpmShimTarget(executable)
     if (!entry) return undefined
-    const node = await resolveExecutable('node', { platform, pathValue: options.env?.PATH })
-    if (!node) return undefined
-    command = node
-    args = [entry, '--version']
+    if (/\.exe$/i.test(entry)) {
+      command = entry
+    } else {
+      const node = await resolveExecutable('node', { platform, pathValue: options.env?.PATH })
+      if (!node) return undefined
+      command = node
+      args = [entry, '--version']
+    }
   }
   try {
     const result = await execFileAsync(command, args, {
@@ -80,6 +84,7 @@ export interface OfficialToolDiscoveryOptions {
   platform?: NodeJS.Platform | undefined
   homeDir?: string | undefined
   timeoutMs?: number | undefined
+  versionTimeoutMs?: number | undefined
   shellPathResolver?: (() => Promise<string | undefined>) | undefined
   versionResolver?: ((executable: string) => Promise<string | undefined>) | undefined
   executableResolver?: ((
@@ -157,6 +162,7 @@ function timeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Prom
 async function discoverEntry(
   entry: OfficialIntegrationCatalogEntry,
   options: Required<Pick<OfficialToolDiscoveryOptions, 'platform' | 'homeDir' | 'timeoutMs'>> & {
+    versionTimeoutMs: number
     env: Readonly<Record<string, string | undefined>>
     shellPathResolver: () => Promise<string | undefined>
     executableResolver: NonNullable<OfficialToolDiscoveryOptions['executableResolver']>
@@ -197,7 +203,7 @@ async function discoverEntry(
     ])
     const executable = executableResult.executable
     const version = executable
-      ? await options.versionResolver(executable).catch(() => undefined)
+      ? await timeout(options.versionResolver(executable), options.versionTimeoutMs, 'CLI version').catch(() => undefined)
       : undefined
     const configRoot = probes.find(item => item.role === 'config' && item.exists)?.path
     const dataRoot = probes.find(item => item.role === 'data' && item.exists)?.path
@@ -244,8 +250,9 @@ export async function discoverOfficialTools(
   const platform = options.platform ?? process.platform
   const homeDir = options.homeDir ?? homedir()
   const timeoutMs = options.timeoutMs ?? DEFAULT_TOOL_DISCOVERY_TIMEOUT_MS
+  const versionTimeoutMs = options.versionTimeoutMs ?? 10_000
   const executableResolver = options.executableResolver ?? resolveExecutable
-  const versionResolver = options.versionResolver ?? (executable => probeAgentCliVersion(executable, { platform, timeoutMs, env }))
+  const versionResolver = options.versionResolver ?? (executable => probeAgentCliVersion(executable, { platform, timeoutMs: versionTimeoutMs, env }))
   let shellPathPromise: Promise<string | undefined> | undefined
   const sourceShellPathResolver = options.shellPathResolver ?? (() => resolveLoginShellPath(platform))
   const shellPathResolver = () => {
@@ -259,8 +266,8 @@ export async function discoverOfficialTools(
 
   return Promise.all(entries.map(entry =>
     timeout(
-      discoverEntry(entry, { env, platform, homeDir, timeoutMs, shellPathResolver, executableResolver, versionResolver }),
-      timeoutMs + 3_000,
+      discoverEntry(entry, { env, platform, homeDir, timeoutMs, versionTimeoutMs, shellPathResolver, executableResolver, versionResolver }),
+      timeoutMs + versionTimeoutMs + 3_000,
       `Tool discovery for ${entry.integrationId}`,
     ).catch(error => ({
       integrationId: entry.integrationId,

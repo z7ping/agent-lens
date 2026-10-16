@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { access, open, realpath } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
-import { dirname, extname, join } from 'node:path'
+import { dirname, extname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
@@ -95,6 +95,22 @@ async function readPrefix(path: string): Promise<string | undefined> {
   } finally {
     await handle?.close().catch(() => undefined)
   }
+}
+
+/** 解析 npm 的 Windows 启动脚本，支持 JavaScript 入口和原生可执行文件。 */
+export async function resolveWindowsNpmShimTarget(executable: string): Promise<string | undefined> {
+  const source = await readPrefix(executable)
+  if (!source) return undefined
+  const candidates = [...source.matchAll(/%(?:~dp0|dp0%)([^"\r\n]*?\.(?:mjs|cjs|js|exe))/ig)]
+    .map(match => resolve(dirname(executable), match[1]!.replace(/^[\\/]+/, '').replace(/[\\/]/g, '/')))
+  // npm 的 node.exe 是解释器；先取脚本入口，避免把 Node 的版本当成工具版本。
+  for (const candidate of candidates.filter(path => /\.(?:mjs|cjs|js)$/i.test(path))) {
+    if (await pathExists(candidate)) return candidate
+  }
+  for (const candidate of candidates.filter(path => /\.exe$/i.test(path) && !/[\\/]node\.exe$/i.test(path))) {
+    if (await pathExists(candidate)) return candidate
+  }
+  return undefined
 }
 
 async function findInPath(name: string, pathValue: string | undefined, platform: NodeJS.Platform): Promise<string | undefined> {
