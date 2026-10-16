@@ -40,6 +40,7 @@ import {
   type ReviewSessionSummaryDto,
   type SessionRelationshipResponseDto,
   type TaskFileChangesResponseDto,
+  type TaskFileDiffResponseDto,
   type SourceRecordResponseDto,
   type SourceRecordsResponseDto,
   type ToolAssetUsageResponseDto,
@@ -385,6 +386,14 @@ export class AgentLensApi {
   runtimeFileChanges(runtimeSessionId: string, signal?: AbortSignal): Promise<TaskFileChangesResponseDto | null> {
     return requestJson<TaskFileChangesResponseDto | null>(
       `/api/v1/task-file-changes/runtime/${encodeURIComponent(runtimeSessionId)}`,
+      signal ? { signal } : {},
+    )
+  }
+
+  reviewFileDiff(id: string, path: string, signal?: AbortSignal): Promise<TaskFileDiffResponseDto> {
+    const query = new URLSearchParams({ path })
+    return requestJson<TaskFileDiffResponseDto>(
+      `/api/v1/review/${encodeURIComponent(id)}/file-diff?${query}`,
       signal ? { signal } : {},
     )
   }
