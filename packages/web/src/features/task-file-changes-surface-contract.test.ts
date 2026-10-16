@@ -24,7 +24,7 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /INITIAL_VISIBLE_FILES = 3/)
   assert.match(component, /confidence !== 'exact'/)
   assert.match(component, /confidence === 'exact' && !isObserved/)
-  assert.match(component, /reviewFileDiff\(value\.logicalSessionId, diffPath/)
+  assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
   assert.match(component, /<Drawer open/)
   assert.match(component, /<CopyableCodeBlock copyValue=\{diff\.diff\} language="diff"/)
 })
