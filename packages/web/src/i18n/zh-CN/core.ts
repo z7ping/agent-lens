@@ -10,6 +10,9 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     copied: '已复制',
     localFilePreview: {
       loading: '正在读取本地文件…',
+      viewMode: '文件预览方式',
+      rendered: '预览',
+      source: '源码',
       failed: '无法预览本地文件',
       metadataOnly: '此文件不能直接预览',
       unavailable: '预览不可用',
