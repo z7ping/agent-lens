@@ -277,7 +277,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
       },
       fileChanges: {
         roundTitle: '{{count}} file changes observed in this turn',
-        titleCount: '{{count}} changed files',
+        titleCount: '{{count}} changed files in this session',
         viewDiff: 'View diff',
         showMore: 'Show {{count}} more files',
         showLess: 'Show fewer files',
