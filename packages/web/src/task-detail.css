@@ -231,11 +231,11 @@
 
 /* ── Message / Markdown ── */
 .task-surface .task-message-row { position: relative; z-index: 2; display: flex; width: 100%; min-width: 0; align-items: flex-start; margin: 4px 0; }
-.task-surface .task-message-user { justify-content: flex-end; }
+.task-surface .task-message-user { justify-content: flex-end; max-width: 88%; }
 .task-surface .task-message-assistant { display: block; margin: 4px 0; }
 .task-surface .task-message-bubble { position: relative; min-width: 0; font-size: 14px; line-height: 1.62; }
 .task-surface .task-message-bubble-user {
-  max-width: min(64%, 760px);
+  max-width: min(78%, 760px);
   padding: 6px 10px 7px;
   border: 1px solid var(--al-line);
   border-radius: 12px;
@@ -659,6 +659,7 @@
   .task-surface .task-message-bubble-user { max-width: min(76%, 760px); }
 }
 @media (max-width: 991.98px) {
+  .task-surface .task-message-user { max-width: 100%; }
   .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 68px minmax(0, 1fr) auto 14px; }
   .task-surface .task-header-metric:nth-child(n+5) { display: none; }
   .task-surface .task-message-bubble-user { max-width: 88%; }

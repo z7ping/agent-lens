@@ -39,3 +39,11 @@ test('核心视图保留未识别事件可达性，不用无依据的全量计�
   assert.match(review, /onClick=\{onShowAllEvents\}/)
   assert.match(review, /entry\.type === 'raw-event-group'/)
 })
+
+test('Review 与 Live 的用户消息在正文范围内右对齐，窄屏仍使用原有全宽布局', () => {
+  assert.match(taskDetailCss, /\.task-surface \.task-message-user \{ justify-content: flex-end; max-width: 88%; \}/)
+  assert.match(taskDetailCss, /\.task-surface \.task-message-bubble-user \{[^}]*max-width: min\(78%, 760px\);/)
+  assert.match(taskDetailCss, /@media \(max-width: 991\.98px\) \{[\s\S]*?\.task-surface \.task-message-user \{ max-width: 100%; \}/)
+  assert.match(taskMessageSource, /const roleClass = user \? 'task-message-user' : 'task-message-assistant'/)
+  assert.match(taskDetailCss, /\.task-surface \.task-message-assistant \{ display: block;/)
+})

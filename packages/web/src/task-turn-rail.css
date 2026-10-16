@@ -2,7 +2,7 @@
  * Task Surface 共享轮次导轨。
  * Review / Pi Live / Hub 只提供语义 TaskRound；导轨的发现、定位与交互统一由 TaskSurface 持有。
  * 基础 tick 固定为 6×2；hover 只横向展开，running 只通过强调色与光晕表达状态。
- * 24×9 命中区与轮次间距始终保持一致，任何状态都不改变刻度几何。
+ * 24×9 命中区与轮次间距始终保持一致，当前轮次只用语义颜色和光晕强调。
  */
 .task-turn-rail {
   position: fixed;
@@ -16,7 +16,7 @@
   gap: 0;
   padding: 6px 0;
   transform: translateY(-50%);
-  opacity: .62;
+  opacity: .82;
   pointer-events: none;
   transition: opacity .16s ease;
 }
@@ -51,13 +51,20 @@
 .task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick i { width: 13px; }
 .task-turn-rail .turn-tick:has(+ .turn-tick + .turn-tick + .turn-tick:hover) i,
 .task-turn-rail .turn-tick:hover + .turn-tick + .turn-tick + .turn-tick i { width: 9px; }
-.task-turn-rail .turn-tick.active i { background: var(--al-ink); }
+.task-turn-rail .turn-tick.active i {
+  background: var(--al-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 28%, transparent);
+}
+.task-turn-rail .turn-tick:focus-visible { outline: 2px solid var(--al-accent); outline-offset: -2px; }
 .task-turn-rail .turn-tick.running i {
   background: var(--al-accent);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-accent) 10%, transparent);
 }
 .task-turn-rail .turn-tick.err i { background: color-mix(in srgb, var(--al-danger) 55%, var(--al-line)); }
-.task-turn-rail .turn-tick.err.active i { background: var(--al-danger); }
+.task-turn-rail .turn-tick.err.active i {
+  background: var(--al-danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--al-danger) 28%, transparent);
+}
 .task-turn-rail .turn-tick::after {
   content: attr(data-tip);
   position: absolute;
