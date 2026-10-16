@@ -165,7 +165,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             onClick={() => setCompactInfoOpen(true)}
             title={t('header.taskInfo')}
             aria-label={t('header.taskInfo')}
-          ><UiIcon name="info" size={16}/></Button>
+          ><UiIcon name="info" size={16}/></Button>}
           {(auditToggle || viewActions) && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
               <Button
