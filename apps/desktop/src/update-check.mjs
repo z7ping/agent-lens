@@ -85,7 +85,7 @@ function releaseDownloadUrl(release, options = {}) {
     }
   }
 
-  return selected?.browser_download_url ?? release?.html_url ?? null
+  return selected?.browser_download_url ?? null
 }
 
 function releaseNotes(release) {
@@ -105,26 +105,30 @@ export function selectUpdateRelease(releases, currentVersion, options = {}) {
 
   let selected = null
   let selectedVersion = null
+  let selectedDownloadUrl = null
   for (const release of releases) {
     if (!release || release.draft === true) continue
     const version = releaseVersion(release)
     if (!version) continue
     if (!acceptPrereleases && (release.prerelease === true || version.prerelease.length > 0)) continue
     if (compareSemver(version, current) <= 0) continue
+    const downloadUrl = releaseDownloadUrl(release, { ...options, arch })
+    // A published Release without this platform's installer isn't an update.
+    // Never hand the Release HTML page to the desktop downloader as an artifact.
+    if (!downloadUrl) continue
     if (!selectedVersion || compareSemver(version, selectedVersion) > 0) {
       selected = release
       selectedVersion = version
+      selectedDownloadUrl = downloadUrl
     }
   }
 
   if (!selected || !selectedVersion) return null
-  const downloadUrl = releaseDownloadUrl(selected, { ...options, arch })
-  if (!downloadUrl) return null
   return {
     version: `${selectedVersion.major}.${selectedVersion.minor}.${selectedVersion.patch}${selectedVersion.prerelease.length ? `-${selectedVersion.prerelease.join('.')}` : ''}`,
     prerelease: selectedVersion.prerelease.length > 0 || selected.prerelease === true,
-    releasePageUrl: selected.html_url ?? downloadUrl,
-    downloadUrl,
+    releasePageUrl: selected.html_url ?? selectedDownloadUrl,
+    downloadUrl: selectedDownloadUrl,
     publishedAt: selected.published_at ?? null,
     releaseNotes: releaseNotes(selected),
   }
