@@ -2,7 +2,18 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const page = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const page = [
+  readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-history.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-actions.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-state.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-queue.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-input.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
+].join('\n')
 const runtime = readFileSync(new URL('../components/LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../components/pi-startup-disclosure.css', import.meta.url), 'utf8')
 
