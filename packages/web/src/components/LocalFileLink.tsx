@@ -1,4 +1,4 @@
-import { useState, type ComponentPropsWithoutRef, type MouseEvent } from 'react'
+import { useEffect, useState, type ComponentPropsWithoutRef, type MouseEvent } from 'react'
 import type { HostFilePreviewResponseDto } from '@agent-lens/protocol'
 import { AgentLensRequestError } from '../client/api'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { MarkdownContent } from './MarkdownContent'
 import { LocalPathActions } from './LocalPathActions'
 import { Dialog, UiIcon } from './ui'
+import { ImagePreview } from './ImagePreview'
 
 export interface LocalFileTarget {
   path: string
@@ -88,7 +89,26 @@ export function parseLocalFileTarget(href: string | undefined): LocalFileTarget 
   }
 
   const filePath = fileUrlPath(raw)
-  return stripLocation(filePath ?? decodePath(raw))
+  return stripLocation(filePath ?? decodePath(raw).replace(/^\/([A-Za-z]:[\\/])/, '$1'))
+}
+
+/** 本地 Markdown 图片经统一宿主预览 API 加载，浏览器不直接访问磁盘路径。 */
+export function LocalFileImage({ src, alt }: ComponentPropsWithoutRef<'img'>) {
+  const targetPath = typeof src === 'string' ? parseLocalFileTarget(src)?.path : undefined
+  const [image, setImage] = useState<{ path: string; dataUrl: string } | null>(null)
+  useEffect(() => {
+    if (!targetPath) return
+    let active = true
+    void clientModel.previewHostFile(targetPath).then(preview => {
+      if (active && preview.dataUrl) setImage({ path: targetPath, dataUrl: preview.dataUrl })
+    }, () => undefined)
+    return () => { active = false }
+  }, [targetPath])
+  if (!src) return null
+  if (!targetPath) return <ImagePreview src={src} alt={alt}/>
+  return image?.path === targetPath
+    ? <ImagePreview src={image.dataUrl} alt={alt}/>
+    : <LocalFileLink href={src}>{alt || fileName(targetPath)}</LocalFileLink>
 }
 
 function fileName(path: string): string {
@@ -239,6 +259,8 @@ export function LocalFileLink({
                 <span>{openingDirectory ? t('localPath.openFailed') : t('localFilePreview.failed')}</span>
                 <small>{error}</small>
               </div>
+            : preview?.dataUrl
+              ? <img className="local-file-preview-image" src={preview.dataUrl} alt={preview.name}/>
             : preview?.content !== undefined
               ? isMarkdown && view === 'rendered'
                 ? <div className="local-file-preview-markdown"><MarkdownContent text={preview.content} frontmatter/></div>

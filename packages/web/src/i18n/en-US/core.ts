@@ -8,6 +8,7 @@ export const englishCoreMessages: LocaleMessagesDto = {
     newData: 'New data available',
     copy: 'Copy',
     copied: 'Copied',
+    imagePreview: { image: 'Image', open: 'Enlarge image: {{name}}' },
     localFilePreview: {
       loading: 'Loading local file…',
       viewMode: 'File preview mode',

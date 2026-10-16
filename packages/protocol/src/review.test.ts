@@ -2,6 +2,22 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { reviewMessageAttachmentsFromPayload } from './review'
 
+test('Codex local_image 附件保留图片语义，但不把原生路径作为图片 URL', () => {
+  const attachments = reviewMessageAttachmentsFromPayload({
+    attachments: [{ kind: 'attachments', value: { type: 'local_image', path: 'C:\\tmp\\screenshot.png' } }],
+  })
+  assert.deepEqual(attachments, [{ type: 'image', name: 'screenshot.png' }])
+})
+
+test('Codex 原生内联图片只接受 data image，不提升任意远程 URL', () => {
+  assert.equal(reviewMessageAttachmentsFromPayload({
+    attachments: [{ type: 'input_image', image_url: 'data:image/png;base64,aGVsbG8=' }],
+  })[0]?.dataUrl, 'data:image/png;base64,aGVsbG8=')
+  assert.equal(reviewMessageAttachmentsFromPayload({
+    attachments: [{ type: 'input_image', image_url: 'https://example.com/private.png' }],
+  })[0]?.dataUrl, undefined)
+})
+
 test('Review historical attachments project canonical Pi image data without exposing native paths', () => {
   const attachments = reviewMessageAttachmentsFromPayload({
     attachments: [{

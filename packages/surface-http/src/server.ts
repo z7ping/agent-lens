@@ -20,7 +20,6 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
-  reviewMessageAttachmentSourcesFromPayload,
   type AgentRescanResponseDto,
   type AgentRescanSummaryDto,
   type HealthResponseDto,
@@ -59,6 +58,7 @@ import { parseDataRuntimeHealth } from './data-runtime-health'
 import type { HttpEventHub } from './events'
 import { badRequest, statusCodeForError, writeJson } from './http-utils'
 import { handleLiveAttachmentRequest } from './live-attachments-http'
+import { reviewAttachmentSources } from './review-attachments'
 import { handleLiveRequest } from './live-http'
 import { handleManagedAssetFilesRequest } from './managed-asset-files'
 import { readLaunchableProjects } from './launchable-projects'
@@ -723,10 +723,12 @@ export async function startHttpSurface(
         }
         const body: ReviewMessageAttachmentsResponseDto = {
           observationId,
-          items: await Promise.all(reviewMessageAttachmentSourcesFromPayload(observation.payload).map(async source => {
+          items: await Promise.all((observation.kind === 'message.user' && options.capturePolicy?.isEnabled('prompt') === false
+            ? [] : await reviewAttachmentSources(observation, storage, options.sources)).map(async (source, index) => {
             if (source.attachment.type !== 'image' || source.attachment.dataUrl || !source.localPath || !options.previewHostFile) {
               return source.attachment
             }
+            if (index >= 8) return source.attachment
             try {
               const preview = await options.previewHostFile(source.localPath)
               return preview.dataUrl ? {

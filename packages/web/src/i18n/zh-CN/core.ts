@@ -8,6 +8,7 @@ export const chineseCoreMessages: LocaleMessagesDto = {
     newData: '有新数据',
     copy: '复制',
     copied: '已复制',
+    imagePreview: { image: '图片', open: '放大预览：{{name}}' },
     localFilePreview: {
       loading: '正在读取本地文件…',
       viewMode: '文件预览方式',

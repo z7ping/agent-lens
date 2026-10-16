@@ -1,7 +1,7 @@
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
-import { LocalFileLink, parseLocalFileTarget } from './LocalFileLink'
+import { LocalFileImage, LocalFileLink, parseLocalFileTarget } from './LocalFileLink'
 import { splitMarkdownFrontmatter, type MarkdownFrontmatter } from './markdown-frontmatter'
 import { DEFAULT_MARKDOWN_THEME, type CustomMarkdownThemeId, type MarkdownThemeId } from './markdown-theme'
 import { scopedCustomMarkdownCss, useCustomMarkdownThemes } from './markdown-theme-registry'
@@ -28,6 +28,7 @@ export interface StreamingMarkdownSegments {
 }
 
 const markdownComponents: Components = {
+  img: ({ node: _node, ...props }) => <LocalFileImage {...props}/>,
   a: ({ node: _node, ...props }) => <LocalFileLink
     {...props}
     {...(/^https?:\/\//i.test(props.href ?? '') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}

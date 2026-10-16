@@ -5,6 +5,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { copyText } from '../client/clipboard'
 import { IconButton, UiIcon } from '../components/ui'
+import { ImagePreview } from '../components/ImagePreview'
 
 export type TaskMessageRole = 'user' | 'assistant'
 
@@ -151,13 +152,10 @@ export function TaskMessage({
             }
             const source = attachment.previewUrl || attachment.dataUrl
             return source
-              ? <img
+              ? <ImagePreview
                   key={key}
-                  className="task-message-attachment-image"
                   src={source}
                   alt={attachment.name ?? t('message.imageAttachment')}
-                  loading="lazy"
-                  decoding="async"
                 />
               : <span
                   key={key}
