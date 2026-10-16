@@ -39,7 +39,7 @@ import { Button, IconButton } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import {
   LIVE_TASK_SNAPSHOT_PAGE_LIMIT,
-  LiveHistoryPageBlock,
+  type LiveHistoryPageBlock,
   historyPageBlock,
   aggregateHistoryPage,
   compactHistoryBlocks,
