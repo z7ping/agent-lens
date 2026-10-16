@@ -146,7 +146,8 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             <b>{agent}</b>
             {showStatus && <span className="task-header-status" data-tone={status === undefined ? 'success' : ''}>{resolvedStatus}</span>}
           </div>
-              {submeta && <div className="task-header-submeta">{submeta}</div>}
+          {readingControls && <div className="task-header-reading-controls">{readingControls}</div>}
+          {submeta && <div className="task-header-submeta">{submeta}</div>}
         </div>
       </div>
       {(metrics.length > 0 || hasHeaderActions) && <div className="task-header-side">
@@ -193,7 +194,6 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
           {inlineActions}
         </div>}
       </div>}
-      {readingControls && <div className="task-header-reading-controls">{readingControls}</div>}
     </header>
     {tailActions}
     <Drawer
