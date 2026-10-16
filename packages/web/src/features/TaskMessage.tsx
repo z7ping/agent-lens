@@ -174,7 +174,7 @@ export function TaskMessage({
             {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
-          {(canCollapse || !user) && <div className="markdown-message-actions">
+          {(canCollapse || !user || Boolean(actions)) && <div className="markdown-message-actions">
             {!user && streaming && <span className="task-message-output-state" data-active="true" role="status" aria-label={t('message.generating')}>
               <UiIcon name="loading" size={14}/>
             </span>}
@@ -190,10 +190,11 @@ export function TaskMessage({
             {!user && <button type="button" className="task-message-source-action" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
               {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
             </button>}
+            {actions && <span className="task-message-actions">{actions}</span>}
           </div>}
         </div>}
       </>}
-      {actions && <div className="task-message-actions">{actions}</div>}
+      {actions && (!text || awaitingFirstContent) && <div className="task-message-actions">{actions}</div>}
     </div>
   </div>
 }
