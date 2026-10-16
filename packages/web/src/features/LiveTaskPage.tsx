@@ -378,7 +378,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
             onMessageAction={runMessageAction}
           />)}
-          {historyPage?.hasLater !== true && <TaskFileChangesDisclosure key={fileChangeRuntimeId} value={fileChanges?.runtimeId === fileChangeRuntimeId ? fileChanges.result : null}/>}
+          {historyPage?.hasLater !== true && <TaskFileChangesDisclosure key={fileChangeRuntimeId} value={fileChanges && fileChanges.runtimeId === fileChangeRuntimeId ? fileChanges.result : null}/>}
           {historyPage?.hasLater && <div
             ref={historyNewerSentinelRef}
             className={`live-task-history-sentinel live-task-history-sentinel-newer ${historyLoading ? 'is-loading' : ''}`}
