@@ -11,7 +11,7 @@ import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { Button, IconButton, Input, Popover, SelectMenu, StatusBadge } from '../components/ui'
+import { Button, IconButton, Input, Popover, SelectMenu } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
@@ -159,20 +159,19 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
   const displayTitle = sessionListTitle(presentation.title, fallback, sourceIds)
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} aria-label={`${displayTitle}${presentation.activityLabel ? ` · ${presentation.activityLabel}` : ''} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} title={displayTitle} aria-label={`${displayTitle}${presentation.activityLabel ? ` · ${presentation.activityLabel}` : ''}${item.hasErrors ? ` · ${t('center.history.withErrors')}` : ''} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
-      <div className="session-item-title" title={displayTitle}>{displayTitle}</div>
+      <div className="session-item-title">{displayTitle}</div>
+      {item.hasErrors && <span className="session-item-error" title={t('center.history.withErrors')} aria-hidden="true"><UiIcon name="exclamation" size={14}/></span>}
     </div>
     <div className="session-item-meta">
       <AgentLogo sourceId={sourceId} size="compact"/>
       <span className="session-item-source" title={fullSourceNames}>{compactSourceNames}</span>
       <span className="session-item-meta-separator" aria-hidden="true">·</span>
       <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
+      {presentation.activityLabel && <span className="session-item-activity-label" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</span>}
       <time dateTime={moment?.at} title={timeTooltip || undefined}>{updatedLabel}</time>
     </div>
-    {presentation.activityLabel && <div className="session-item-activity">
-      <StatusBadge className="session-activity-badge" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</StatusBadge>
-    </div>}
   </button>
 }
 
@@ -189,9 +188,11 @@ function RemoteTaskItem({ item, active, nowMs, onClick }: { item: HubReviewSessi
     ...(createdLabel ? [t('center.time.startedAt', { time: createdLabel })] : []),
     ...(recentLabel ? [t(moment?.source === 'last-activity' ? 'center.time.lastActivityAt' : 'center.time.onlyStartedAt', { time: recentLabel })] : []),
   ].join(' · ')
-  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick}>
-    <div className="session-item-title-row"><div className="session-item-title" title={title}>{title}</div></div>
-    <div className="session-item-meta"><span className="hub-session-source remote">{t('center.remote.source', { node: item.origin.nodeId })}</span><time dateTime={moment?.at} title={timeTooltip || undefined}>{time ? formatTime(time, t, locale, nowMs) : t('center.remote.timeNotSynced')}</time></div>
+  const remoteSource = t('center.remote.source', { node: item.origin.nodeId })
+  const remoteTimeLabel = time ? formatTime(time, t, locale, nowMs) : t('center.remote.timeNotSynced')
+  return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} title={title} aria-label={`${title} · ${remoteSource} · ${remoteTimeLabel}`}>
+    <div className="session-item-title-row"><div className="session-item-title">{title}</div></div>
+    <div className="session-item-meta"><span className="session-item-source hub-session-source remote" title={remoteSource}>{remoteSource}</span><time dateTime={moment?.at} title={timeTooltip || undefined}>{remoteTimeLabel}</time></div>
   </button>
 }
 
