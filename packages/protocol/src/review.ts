@@ -68,7 +68,8 @@ function safeAttachmentName(value: string | undefined): string | undefined {
 }
 
 function inlineImageDataUrl(record: Readonly<Record<string, unknown>>, mimeType?: string): string | undefined {
-  const dataUrl = attachmentString(record, 'dataUrl', 'data_url')
+  const dataUrl = attachmentString(record, 'dataUrl', 'data_url', 'url', 'image_url')
+    ?? attachmentString(attachmentRecord(record.image_url), 'url')
   if (dataUrl && /^data:image\/[a-z0-9.+-]+;base64,/i.test(dataUrl)) return dataUrl
 
   const data = attachmentString(record, 'data', 'base64')
@@ -94,9 +95,10 @@ function attachmentFromValue(value: unknown, wrapperKind: string | undefined, in
 
   const record = attachmentRecord(value)
   if (!Object.keys(record).length) return null
-  const explicitType = attachmentString(record, 'type', 'kind')
+  const explicitType = attachmentString(record, 'type', 'kind')?.replace(/[_-]/g, '').toLowerCase()
   const mimeType = attachmentString(record, 'mimeType', 'mime_type', 'mediaType', 'media_type')?.toLowerCase()
   const image = explicitType === 'image'
+    || explicitType === 'localimage' || explicitType === 'inputimage'
     || Boolean(mimeType?.startsWith('image/'))
     || wrapperKind === 'images'
     || wrapperKind === 'local_images'
@@ -121,10 +123,10 @@ function attachmentFromValue(value: unknown, wrapperKind: string | undefined, in
  * field plus the legacy `nonTextContent` compatibility field so existing
  * databases do not require a destructive replay just to render attachments.
  */
-export function reviewMessageAttachmentsFromPayload(
+export function reviewMessageAttachmentSourcesFromPayload(
   value: JsonValue | unknown,
   options: { includeDataUrl?: boolean } = {},
-): ReviewMessageAttachmentDto[] {
+): Array<{ attachment: ReviewMessageAttachmentDto; localPath?: string }> {
   const payload = attachmentRecord(value)
   const candidates: Array<{ value: unknown; wrapperKind?: string }> = []
 
@@ -146,9 +148,23 @@ export function reviewMessageAttachmentsFromPayload(
     for (const raw of legacy) candidates.push({ value: raw })
   }
 
-  return candidates
-    .map(candidate => attachmentFromValue(candidate.value, candidate.wrapperKind, options.includeDataUrl !== false))
-    .filter((attachment): attachment is ReviewMessageAttachmentDto => attachment !== null)
+  return candidates.flatMap(candidate => {
+    const attachment = attachmentFromValue(candidate.value, candidate.wrapperKind, options.includeDataUrl !== false)
+    if (!attachment) return []
+    const native = attachmentRecord(candidate.value)
+    const localPath = typeof candidate.value === 'string' && candidate.wrapperKind === 'local_images'
+      ? candidate.value
+      : attachmentString(native, 'path', 'localPath', 'local_path')
+    // 宿主解析使用的原生路径不能序列化到公开附件 DTO。
+    return [{ attachment, ...(localPath ? { localPath } : {}) }]
+  })
+}
+
+export function reviewMessageAttachmentsFromPayload(
+  value: JsonValue | unknown,
+  options: { includeDataUrl?: boolean } = {},
+): ReviewMessageAttachmentDto[] {
+  return reviewMessageAttachmentSourcesFromPayload(value, options).map(item => item.attachment)
 }
 
 export interface ReviewNodeSourceDto {

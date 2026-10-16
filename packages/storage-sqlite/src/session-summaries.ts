@@ -518,9 +518,45 @@ function whereClause(conditions: string[]): string {
   return conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 }
 
+/** 历史版本按 CLI 路径分裂过安装身份；列表保留同一原生会话最新、最完整的一份。
+ * 不删除事实，旧会话详情仍可按 ID 访问。去重先于筛选和分页，避免跨页重复。
+ */
+function sharedStoreSessionVisibilitySql(): string {
+  const pathIdentity = (column: string) => {
+    const normalized = `rtrim(replace(COALESCE(${column}, ''), char(92), '/'), '/')`
+    return `(CASE WHEN ${normalized} GLOB '[A-Za-z]:/*' THEN lower(${normalized}) ELSE ${normalized} END)`
+  }
+  return `NOT EXISTS (
+    SELECT 1
+    FROM source_sessions AS current_source
+    JOIN agent_installations AS current_installation ON current_installation.id = current_source.installation_id
+    JOIN agent_installations AS peer_installation
+      ON peer_installation.host_id = current_installation.host_id
+      AND peer_installation.product_id = current_installation.product_id
+      AND peer_installation.id <> current_installation.id
+      AND ${pathIdentity('peer_installation.data_root')} = ${pathIdentity('current_installation.data_root')}
+      AND ${pathIdentity('peer_installation.config_root')} = ${pathIdentity('current_installation.config_root')}
+    JOIN source_sessions AS peer_source
+      ON peer_source.installation_id = peer_installation.id
+      AND peer_source.source_id = current_source.source_id
+      AND peer_source.native_session_id = current_source.native_session_id
+      AND peer_source.runtime_profile_id IS current_source.runtime_profile_id
+    JOIN session_summary_projection AS peer_summary ON peer_summary.logical_session_id = peer_source.logical_session_id
+    WHERE current_source.logical_session_id = summary.logical_session_id
+      AND ${pathIdentity('current_installation.data_root')} <> ''
+      AND (
+        peer_summary.ended_at > summary.ended_at
+        OR (peer_summary.ended_at = summary.ended_at AND peer_summary.observation_count > summary.observation_count)
+        OR (peer_summary.ended_at = summary.ended_at AND peer_summary.observation_count = summary.observation_count
+          AND peer_summary.logical_session_id < summary.logical_session_id)
+      )
+  )`
+}
+
 function summaryQueryWhere(input: SessionSummaryQuery): { sql: string; params: unknown[] } {
   const conditions: string[] = []
   const params: unknown[] = []
+  if (!input.logicalSessionId && !input.installationId) conditions.push(sharedStoreSessionVisibilitySql())
   if (input.logicalSessionId) {
     conditions.push('summary.logical_session_id = ?')
     params.push(input.logicalSessionId)

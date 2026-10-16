@@ -17,7 +17,7 @@ import { TaskRound } from './TaskRound'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
 import { agentLensI18n } from '../i18n/runtime'
-import { type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
+import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
 import { brief, EvidenceBadges, sourceEventSummary, toolKindLabel, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
 
@@ -122,7 +122,7 @@ function MessageBubble({
 
   return <TaskMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
-    text={node.text}
+    text={node.role === 'user' && node.sourceId === 'codex' ? taskUserRequestText(node.text) : node.text}
     attachments={attachments}
     author={node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId)}
     modelLabel={node.role === 'assistant' ? modelLabel : undefined}
@@ -348,7 +348,7 @@ export function interactionStats(interaction: ReviewInteractionDto): Interaction
   return {
     ...toolStats,
     durationMs: elapsed(interaction.startedAt, interaction.endedAt),
-    preview: brief(user?.text ?? '', 86),
+    preview: brief(user?.sourceId === 'codex' ? taskUserRequestText(user.text) : user?.text ?? '', 86),
   }
 }
 

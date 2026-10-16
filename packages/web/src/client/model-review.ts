@@ -150,6 +150,14 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
     const latest = this.snapshot.review
     if (!latest.response) return
     const items = new Map(latest.response.items.map(item => [item.id, item]))
+    // 单条摘要可用于已加载会话的更新，但不具备列表的身份去重与可见性语义。
+    // 未加载的 ID 必须由列表查询确认，避免历史安装副本经实时补丁重新插入。
+    if (results.some((result, index) => result.status === 'fulfilled'
+      && result.value && !items.has(ids[index]!)
+      && reviewSummaryMatchesFilters(result.value, filters))) {
+      this.scheduleReviewRefresh(0)
+      return
+    }
     let changed = false
     for (let index = 0; index < ids.length; index += 1) {
       const id = ids[index]!

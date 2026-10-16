@@ -327,11 +327,11 @@ export async function inspectManagedFile(
   }
 }
 
-export async function previewManagedTextFile(
+async function readManagedPreviewBytes(
   root: string,
   relativePath: string,
   maxBytes = DEFAULT_MANAGED_FILE_PREVIEW_BYTES,
-): Promise<ManagedTextPreview> {
+) {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
     throw new TypeError('maxBytes must be a positive safe integer')
   }
@@ -368,6 +368,36 @@ export async function previewManagedTextFile(
     throw new ManagedFileError('outside-root', 'Managed file changed location during preview')
   }
 
+  return { target, bytes }
+}
+
+/** 图片与文本复用相同的路径、文件名、大小和读取后位置校验。 */
+export async function previewManagedImageFile(root: string, relativePath: string) {
+  const { target, bytes } = await readManagedPreviewBytes(root, relativePath, 10 * 1024 * 1024)
+  const mimeType = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    ? 'image/png'
+    : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+      ? 'image/jpeg'
+      : /^(GIF87a|GIF89a)$/.test(bytes.subarray(0, 6).toString('ascii'))
+        ? 'image/gif'
+        : bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+          ? 'image/webp' : undefined
+  if (!mimeType) throw new ManagedFileError('binary', 'Managed file is not a supported raster image')
+  return {
+    name: basename(target.logicalPath),
+    size: bytes.byteLength,
+    modifiedAt: target.modifiedAt,
+    mimeType,
+    dataUrl: `data:${mimeType};base64,${bytes.toString('base64')}`,
+  }
+}
+
+export async function previewManagedTextFile(
+  root: string,
+  relativePath: string,
+  maxBytes = DEFAULT_MANAGED_FILE_PREVIEW_BYTES,
+): Promise<ManagedTextPreview> {
+  const { target, bytes } = await readManagedPreviewBytes(root, relativePath, maxBytes)
   const content = decodeUtf8(bytes)
   if (content === null) throw new ManagedFileError('binary', 'Managed file is not valid UTF-8 text')
 

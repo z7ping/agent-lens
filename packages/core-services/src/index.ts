@@ -300,7 +300,17 @@ export class DefaultIdentityService implements IdentityService {
       await repository.putProduct({ id: hint.productId, name: hint.productId })
     }
 
-    const id = stableId('installation', [
+    // 同一主机、产品和持久化目录可由多个 CLI/shim 访问；可执行文件是安装元信息，
+    // 不能让同一份历史在全局安装与项目安装之间切换时产生第二套会话身份。
+    const sharedStore = hint.dataRoot
+      ? (await repository.listByProduct(hint.productId))
+        .filter(candidate => candidate.hostId === hint.hostId
+          && candidate.dataRoot !== undefined
+          && normalizedPathIdentity(candidate.dataRoot) === normalizedPathIdentity(hint.dataRoot!)
+          && normalizedPathIdentity(candidate.configRoot ?? '') === normalizedPathIdentity(hint.configRoot ?? ''))
+        .sort((left, right) => left.firstSeenAt.localeCompare(right.firstSeenAt) || left.id.localeCompare(right.id))[0]
+      : undefined
+    const id = sharedStore?.id ?? stableId('installation', [
       hint.hostId,
       hint.productId,
       hint.executable ?? '',

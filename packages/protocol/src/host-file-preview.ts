@@ -13,6 +13,9 @@ export interface HostFilePreviewResponseDto {
   previewStatus: ManagedAssetPreviewStatus
   blockedReason?: ManagedAssetPreviewBlockedReason
   content?: string
+  /** 仅由宿主校验并读取的受限图片内容，不返回 file:// 或任意远程地址。 */
+  dataUrl?: string
+  mimeType?: string
   redacted?: boolean
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION

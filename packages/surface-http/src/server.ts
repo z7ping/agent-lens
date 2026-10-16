@@ -20,7 +20,7 @@ import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
   AGENT_LENS_PROTOCOL_VERSION,
-  reviewMessageAttachmentsFromPayload,
+  reviewMessageAttachmentSourcesFromPayload,
   type AgentRescanResponseDto,
   type AgentRescanSummaryDto,
   type HealthResponseDto,
@@ -723,7 +723,21 @@ export async function startHttpSurface(
         }
         const body: ReviewMessageAttachmentsResponseDto = {
           observationId,
-          items: reviewMessageAttachmentsFromPayload(observation.payload),
+          items: await Promise.all(reviewMessageAttachmentSourcesFromPayload(observation.payload).map(async source => {
+            if (source.attachment.type !== 'image' || source.attachment.dataUrl || !source.localPath || !options.previewHostFile) {
+              return source.attachment
+            }
+            try {
+              const preview = await options.previewHostFile(source.localPath)
+              return preview.dataUrl ? {
+                ...source.attachment, name: preview.name, dataUrl: preview.dataUrl,
+                ...(preview.mimeType ? { mimeType: preview.mimeType } : {}), sizeBytes: preview.size,
+              } : source.attachment
+            } catch {
+              // 临时文件已清理或宿主不可读时保留来源元信息，不使整条消息失败。
+              return source.attachment
+            }
+          })),
         }
         writeJson(response, 200, body)
         return

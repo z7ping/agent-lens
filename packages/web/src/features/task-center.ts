@@ -1,5 +1,6 @@
 import type { LaunchableProjectDto, ProjectFacetDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
 import { translateProduct } from '../i18n/runtime'
+import { taskUserRequestText } from './task-detail-model'
 
 /** All-project history filter: sort using the complete facet activity, never only the paginated visible sessions. */
 export function sortProjectFacetsByActivity(projects: readonly ProjectFacetDto[]): ProjectFacetDto[] {
@@ -103,7 +104,7 @@ function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
   // Codex 的 legacy session_index.thread_name 是来源原生会话标签，但当前格式无法证明
   // 它一定来自显式 /rename；它也可能由应用注入上下文派生。真实 event_msg.user_message
   // 已由 Source Adapter 归一为 preview，因此 Codex 用户任务优先使用该结构化用户请求。
-  if (item.sourceIds.includes('codex') && item.preview?.trim()) return item.preview
+  if (item.sourceIds.includes('codex') && item.preview?.trim()) return taskUserRequestText(item.preview)
   const title = cleanSessionTitle(item.title, '')
   const visibleTitle = sessionListTitle(title, '', item.sourceIds)
   const projectName = cleanSessionTitle(item.projectName, '')

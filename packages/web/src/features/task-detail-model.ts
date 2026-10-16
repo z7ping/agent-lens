@@ -125,6 +125,20 @@ export function taskPreciseDurationLabel(ms: number): string {
   return translateProduct('task:duration.preciseHoursMinutesSeconds', { hours, minutes, seconds })
 }
 
+/** 仅拆解 Codex Desktop 明确的附件包头；普通正文、引用和不完整模板保持原样。
+ * 这是展示用文本，原始消息、附件及 Evidence 仍由协议数据保留。
+ */
+export function taskUserRequestText(value: string): string {
+  const normalized = value.replace(/\r\n/g, '\n')
+  if (!/^\s*# Files mentioned by the user:[ \t]*\n/.test(normalized)) return value
+  const request = /^## My request:[ \t]*\n/gm.exec(normalized)
+  if (!request) return value
+  const context = normalized.slice(0, request.index)
+  if (!/^## [^\n]+/m.test(context) || /^\s*```/m.test(context)) return value
+  const text = normalized.slice(request.index + request[0].length).trim()
+  return text || value
+}
+
 /** 页头标题只处理明确的行内 Markdown 语法，不修改原始 Session title。 */
 export function readableTaskHeaderTitle(value: string | undefined): string {
   if (!value) return ''

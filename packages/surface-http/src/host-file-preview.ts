@@ -8,6 +8,7 @@ import {
   ManagedFileError,
   inspectManagedFile,
   previewManagedTextFile,
+  previewManagedImageFile,
 } from '@agent-lens/source-support'
 import { badRequest, httpError } from './http-utils'
 
@@ -56,6 +57,13 @@ export async function previewLocalHostTextFile(path: string): Promise<HostFilePr
   }
 
   try {
+    if (/\.(?:png|jpe?g|gif|webp)$/i.test(relativePath)) {
+      const preview = await previewManagedImageFile(rootPath, relativePath)
+      return {
+        path: targetPath, kind: 'file', ...preview, previewStatus: 'readable',
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION },
+      }
+    }
     const preview = await previewManagedTextFile(rootPath, relativePath)
     return {
       path: targetPath,
