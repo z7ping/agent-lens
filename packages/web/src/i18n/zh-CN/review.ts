@@ -292,7 +292,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         titleCount: '本次会话修改 {{count}} 个文件',
         viewDiff: '查看差异',
         showMore: '再显示 {{count}} 个文件',
-        showLess: '收起文件',
+        showLess: '仅显示前 3 个',
         truncated: '本轮记录较多，仅显示部分文件',
         diffUnavailable: '这条记录没有保存修改内容，无法查看差异',
         diffTruncated: '差异过长，已截断显示',
