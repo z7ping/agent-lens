@@ -17,12 +17,17 @@ function absoluteFilePath(rootPath: string | undefined, path: string): string | 
   return `${root}/${relative}`
 }
 
+/** Observation is not equivalent to a verified Git change classification. */
+function isObservedOnly(change: TaskFileChangeDto): boolean {
+  return change.confidence !== 'exact' || change.changeType === 'unknown'
+}
+
 function statusCode(change: TaskFileChangeDto): string {
   if (change.changeType === 'added') return 'A'
   if (change.changeType === 'modified') return 'M'
   if (change.changeType === 'deleted') return 'D'
   if (change.changeType === 'renamed') return 'R'
-  return '?'
+  return ''
 }
 
 export function TaskFileChangesDisclosure({
@@ -40,6 +45,7 @@ export function TaskFileChangesDisclosure({
   const [diff, setDiff] = useState<TaskFileDiffResponseDto | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffError, setDiffError] = useState(false)
+  const [evidenceItem, setEvidenceItem] = useState<TaskFileChangeDto | null>(null)
   const sessionId = value?.logicalSessionId
   const isInteraction = Boolean(value?.interactionId)
 
@@ -81,8 +87,9 @@ export function TaskFileChangesDisclosure({
           const target = item.changeType === 'deleted'
             ? undefined
             : absoluteFilePath(value?.rootPath ?? value?.workspacePath, item.path)
+          const observedOnly = isObservedOnly(item) || isObserved
           return <div className="task-file-change-row" key={`${item.changeType}:${item.oldPath ?? ''}:${item.path}`}>
-            <span className={`task-file-change-status is-${item.changeType}`} title={t(`local.fileChanges.status.${item.changeType}`)}>{statusCode(item)}</span>
+            <span className={`task-file-change-status ${observedOnly ? 'is-observed' : `is-${item.changeType}`}`} title={t(observedOnly ? 'local.fileChanges.observed' : `local.fileChanges.status.${item.changeType}`)}>{observedOnly ? t('local.fileChanges.observed') : statusCode(item)}</span>
             <span className="task-file-change-path">
               {item.changeType === 'renamed' && item.oldPath && <><code title={item.oldPath}>{item.oldPath}</code><UiIcon name="arrow-right" size={14}/></>}
               {target
@@ -91,7 +98,8 @@ export function TaskFileChangesDisclosure({
             </span>
             {item.additions !== undefined && <span className="task-file-change-added">+{item.additions}</span>}
             {item.deletions !== undefined && <span className="task-file-change-deleted">-{item.deletions}</span>}
-            {item.confidence === 'exact' && !isObserved && <Button size="small" className="task-file-change-diff-action" onClick={() => { setDiff(null); setDiffError(false); setDiffLoading(true); setDiffPath(item.path) }}>{t('local.fileChanges.viewDiff')}</Button>}
+            {!observedOnly && <Button size="small" className="task-file-change-diff-action" onClick={() => { setDiff(null); setDiffError(false); setDiffLoading(true); setDiffPath(item.path) }}>{t('local.fileChanges.viewDiff')}</Button>}
+            {observedOnly && <Button size="small" className="task-file-change-evidence-action" onClick={() => setEvidenceItem(item)}>{t('local.fileChanges.viewEvidence')}</Button>}
           </div>
         })}
         {value?.meta.truncated && <div className="task-file-changes-error">{t('local.fileChanges.truncated')}</div>}
@@ -103,6 +111,21 @@ export function TaskFileChangesDisclosure({
         </Button>}
       </div>
     </section>
+    {evidenceItem && <Drawer open title={evidenceItem.path} onClose={() => setEvidenceItem(null)}>
+      <div className="task-file-change-evidence">
+        <p>{t('local.fileChanges.observationDisclaimer')}</p>
+        <dl>
+          <dt>{t('local.fileChanges.evidenceType')}</dt>
+          <dd>{evidenceItem.evidence.map(kind => t(`local.fileChanges.evidenceKinds.${kind}`)).join(' · ') || t('local.fileChanges.notRecorded')}</dd>
+          <dt>{t('local.fileChanges.firstObserved')}</dt>
+          <dd>{evidenceItem.firstChangedAt}</dd>
+          <dt>{t('local.fileChanges.lastObserved')}</dt>
+          <dd>{evidenceItem.lastChangedAt}</dd>
+          <dt>{t('local.fileChanges.observedAction')}</dt>
+          <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
+        </dl>
+      </div>
+    </Drawer>}
     {diffPath && <Drawer open title={diffPath} onClose={() => setDiffPath(null)}>
       {diffLoading && <p>{t('local.fileChanges.refreshing')}</p>}
       {diffError && <p role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
