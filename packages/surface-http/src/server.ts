@@ -15,7 +15,7 @@ import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
 import { ReviewProjection, type HubReviewProjection } from '@agent-lens/projection-review'
 import { SessionProjection, readGitWorkspaceFileDiff } from '@agent-lens/projection-session'
-import { observedInteractionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
+import { backfillLegacySessionFileChanges, observedInteractionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
 import {
@@ -772,7 +772,16 @@ export async function startHttpSurface(
               storage.taskFileChanges!.getLatestBySession(id),
             ]))
           : [[], null] as const
-        writeJson(response, 200, taskFileChangesResponse(id, items, capture))
+        // Old sessions may have persisted tool observations but no file-change
+        // projection. Only the requested uncaptured session gets bounded replay.
+        const recovered = !items.length && !capture && storage.taskFileChanges
+          ? await withReadPriority(storage, 'supporting',
+              () => backfillLegacySessionFileChanges(storage, id))
+          : null
+        writeJson(response, 200, taskFileChangesResponse(
+          id, recovered?.items ?? items, capture,
+          { truncated: recovered?.truncated },
+        ))
         return
       }
 
