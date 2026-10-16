@@ -10,6 +10,9 @@ export const englishCoreMessages: LocaleMessagesDto = {
     copied: 'Copied',
     localFilePreview: {
       loading: 'Loading local file…',
+      viewMode: 'File preview mode',
+      rendered: 'Preview',
+      source: 'Source',
       failed: 'Unable to preview local file',
       metadataOnly: 'This file cannot be previewed directly',
       unavailable: 'Preview unavailable',
