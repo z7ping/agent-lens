@@ -9,11 +9,16 @@ const live = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8'
 const styles = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const reviewStyles = readFileSync(new URL('../review.css', import.meta.url), 'utf8')
 
-test('Review and Live reuse one changed-file card after the conversation', () => {
+test('Review renders file changes per round only; Live keeps its session-scoped card', () => {
   assert.match(review, /reviewInteractionFileChanges\(sessionId, \{[\s\S]*?id: interaction\.id,[\s\S]*?controller\.signal\)/)
   assert.match(review, /afterProcessEntries\.map\(renderEntry\)[\s\S]*?TaskFileChangesDisclosure/)
-  assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count\) && detail\.interactionCount > 1\}/)
-  assert.match(reviewPage, /annotatedInteractions\.map[\s\S]*?TaskFileChangesDisclosure/)
+  assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count \|\| review\.fileChanges\?\.meta\.truncated\)\}/)
+  assert.doesNotMatch(reviewPage, /detail\.interactionCount > 1/)
+  assert.doesNotMatch(reviewPage, /TaskFileChangesDisclosure/)
+  assert.match(review, /fileChangesEnabled && roundFileChanges\?\.interactionId === interaction\.id/)
+  assert.match(review, /roundFileChanges\.summary\.count > 0 \|\| roundFileChanges\.meta\.truncated/)
+  assert.doesNotMatch(review, /sessionFileChanges/)
+  assert.match(review, /isConsolidatedFileChangeEvent\([\s\S]*?roundFileChanges\?\.interactionId === interaction\.id \? roundFileChanges : null/)
   assert.match(live, /runtimeFileChanges\(fileChangeRuntimeId/)
   assert.match(live, /<TaskFileChangesDisclosure key=\{fileChangeRuntimeId\}[\s\S]*?result : null\}/)
   assert.match(styles, /\.task-surface \.task-file-changes/)
