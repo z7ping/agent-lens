@@ -9,7 +9,7 @@ import { MarkdownContent } from '../components/MarkdownContent'
 import { type ToolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
-import { isConsolidatedFileChangeEvent, reviewEventLabel } from './review-event-presentation'
+import { isConsolidatedFileChangeEvent, isSessionTitleUpdate, reviewEventLabel } from './review-event-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskProcessGroup } from './TaskProcessGroup'
@@ -322,17 +322,15 @@ function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node:
 
 function RawEventGroup({ items, inspect }: { items: ReviewEventNodeDto[]; inspect(node: ReviewNodeDto): void }) {
   const { t } = useTranslation('review')
-  const [expanded, setExpanded] = useState(false)
-  return <details className="raw-event-group" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
-    <summary>
-      <UiIcon className="raw-event-group-chevron" name="chevron-right" size={14}/>
-      <span className="raw-event-summary-copy">
-        <span className="raw-event-summary-title">{t('local.rawEvents.title')} <span className="raw-event-summary-count">{items.length}</span></span>
-      </span>
-      <time>{formatClock(items[items.length - 1]?.at ?? '')}</time>
-    </summary>
-    {expanded && <div>{items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}</div>}
-  </details>
+  return <TaskThinking
+    model={{ id: `runtime-records:${items[0]?.id}`, label: t(items.every(isSessionTitleUpdate) ? 'local.rawEvents.titleUpdates' : 'local.rawEvents.title'), text: '', state: 'settled' }}
+    kind="process"
+    className="task-process-group"
+    defaultExpanded={false}
+    meta={<span className="task-process-summary"><span>{t('local.rawEvents.recordCount', { count: items.length })}</span></span>}
+  >
+    {items.map(item => <EventRow key={item.id} event={item} inspect={inspect}/>)}
+  </TaskThinking>
 }
 
 interface InteractionStats {
@@ -474,8 +472,8 @@ export function ReviewRoundAdapter({
   const hasFinalAnswer = afterProcessEntries.some(entry => entry.type === 'message' && entry.node.role === 'assistant')
   // 只统计当前已经加载的原始事件，避免把未展开的惰性过程误报为 0。
   const unknownCount = groups.reduce((sum, entry) => sum + (entry.type === 'raw-event-group'
-    ? entry.items.length : entry.type === 'process'
-      ? entry.items.reduce((total, item) => total + (item.type === 'raw-event-group' ? item.items.length : 0), 0)
+    ? entry.items.filter(item => item.category === 'unknown').length : entry.type === 'process'
+      ? entry.items.reduce((total, item) => total + (item.type === 'raw-event-group' ? item.items.filter(event => event.category === 'unknown').length : 0), 0)
       : 0), 0)
   const resolvedProcessState = hasFinalAnswer ? 'settled' : round.state
   // 仅收起当前轮次卡片确实涵盖的文件事件；不能因为会话级汇总覆盖就隐藏原始证据。

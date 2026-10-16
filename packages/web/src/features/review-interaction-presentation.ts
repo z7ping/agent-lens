@@ -1,4 +1,5 @@
 import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewToolNodeDto } from '@agent-lens/protocol'
+import { isSessionTitleUpdate } from './review-event-presentation'
 
 export type ReviewProcessPresentationItem =
   | { type: 'message'; node: ReviewMessageNodeDto }
@@ -145,6 +146,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   }
 
   const result: ReviewInteractionPresentationEntry[] = []
+  const titleUpdates: ReviewEventNodeDto[] = []
   let tools: ReviewToolNodeDto[] = []
   let rawEvents: ReviewEventNodeDto[] = []
   const flushTools = () => {
@@ -177,6 +179,10 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
 
   for (const node of nodes) {
     if (node.type === 'event' && isLegacyPiBenignAssistantStop(node)) continue
+    if (node.type === 'event' && isSessionTitleUpdate(node)) {
+      titleUpdates.push(node)
+      continue
+    }
 
     if (node.type === 'tool') {
       flushRawEvents()
@@ -247,6 +253,9 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
         : first.items[0]?.id ?? 'process'
     grouped.push({ type: 'process', id: `process:${id}`, items: processItems })
   }
-  grouped.push(...postProcess, ...terminal, ...artifacts)
+  grouped.push(...postProcess)
+  // 标题元信息可跨工具记录汇总；不改变对话、工具及关键生命周期事件之间的顺序。
+  if (titleUpdates.length) grouped.push({ type: 'raw-event-group', items: titleUpdates })
+  grouped.push(...terminal, ...artifacts)
   return grouped
 }

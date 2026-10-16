@@ -225,6 +225,8 @@ export const chineseReviewMessages: LocaleMessagesDto = {
       },
       rawEvents: {
         title: '其他运行记录',
+        titleUpdates: '会话标题记录',
+        recordCount: '{{count}} 条记录',
         hiddenCount: '当前已加载 {{count}} 条未识别事件，查看全部事件',
         description: 'Agent 原始日志中的状态、用量等辅助记录，不属于对话正文',
       },

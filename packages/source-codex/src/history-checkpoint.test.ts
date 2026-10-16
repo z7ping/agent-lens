@@ -246,6 +246,24 @@ test('Codex title-only SQLite update refreshes an already checkpointed rollout w
     const third = []
     for await (const record of ingestCodexHistory(ctx)) third.push(record)
     assert.equal(third.length, 0)
+
+    const activityDb = new DatabaseSync(join(input.root, 'state_5.sqlite'))
+    try {
+      activityDb.prepare('UPDATE threads SET updated_at = updated_at + 10 WHERE id = ?').run('rollout-checkpoint')
+    } finally { activityDb.close() }
+    const activityOnly = []
+    for await (const record of ingestCodexHistory(ctx)) activityOnly.push(record)
+    assert.equal(activityOnly.length, 0, '线程活动时间变化不能产生标题更新')
+
+    const renameDb = new DatabaseSync(join(input.root, 'state_5.sqlite'))
+    try {
+      renameDb.prepare('UPDATE threads SET title = ?, updated_at = updated_at + 10 WHERE id = ?')
+        .run('用户实际修改的标题', 'rollout-checkpoint')
+    } finally { renameDb.close() }
+    const renamed = []
+    for await (const record of ingestCodexHistory(ctx)) renamed.push(record)
+    assert.equal(renamed.length, 1)
+    assert.equal((renamed[0]?.payload as { entry: { payload: { title: string } } }).entry.payload.title, '用户实际修改的标题')
   } finally {
     await rm(input.root, { recursive: true, force: true })
   }

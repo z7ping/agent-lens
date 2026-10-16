@@ -83,7 +83,13 @@ export function reviewArtifactSummary(payload: JsonValue): string {
  * behavior. Keep it isolated here until each Integration can contribute the
  * same mapping declaratively.
  */
+export function isSessionTitleUpdate(node: ReviewEventNodeDto): boolean {
+  return node.kind === 'session.lifecycle'
+    && ['session.title', 'session.renamed'].includes(stringValue(record(node.payload), 'action', 'event', 'type', 'status').toLowerCase())
+}
+
 export function reviewEventLabel(node: ReviewEventNodeDto): string {
+  if (isSessionTitleUpdate(node)) return agentLensI18n.t('review:local.rawEvents.titleUpdates')
   if (node.kind === 'runtime.startup') return agentLensI18n.t('review:local.event.runtimeStartupInfo')
   if (node.kind === 'thinking.level.changed') return agentLensI18n.t('review:local.event.thinkingLevelChanged')
   const payload = record(node.payload)

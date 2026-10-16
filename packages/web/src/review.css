@@ -134,18 +134,6 @@
 .evidence-link { min-height: 0; height: auto; padding: 1px 5px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); font-size: 12px; font-weight: 620; line-height: 1.45; }
 .evidence-link:hover { background: var(--al-soft); color: var(--al-ink-2); }
 
-.raw-event-group { margin: 4px 0; overflow: hidden; border: 0; border-radius: 6px; background: var(--al-soft-2); color: var(--al-muted); }
-.raw-event-group > summary { display: grid; min-height: 30px; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 8px; cursor: pointer; list-style: none; font-size: 12px; }
-.raw-event-group > summary::marker { content: ''; }
-.raw-event-group > summary::-webkit-details-marker { display: none; }
-.raw-event-group-chevron { flex: 0 0 14px; color: var(--al-muted-2); transition: transform .16s ease; }
-.raw-event-group[open] > summary > .raw-event-group-chevron { transform: rotate(90deg); }
-.raw-event-summary-copy { display: grid; min-width: 0; gap: 2px; }
-.raw-event-summary-title { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--al-ink-2); font-weight: 650; }
-.raw-event-summary-count { display: inline-flex; min-width: 20px; height: 18px; align-items: center; justify-content: center; padding: 0 5px; border: 1px solid var(--al-line); border-radius: 999px; color: var(--al-muted); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 550; }
-.raw-event-summary-copy small { overflow: hidden; color: var(--al-muted-2); font-size: 12px; font-weight: 400; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
-.raw-event-group > summary time { flex: 0 0 auto; color: var(--al-muted-2); font-variant-numeric: tabular-nums; }
-.raw-event-group > div { padding: 0 2px 2px; }
 .review-unknown-count { display: inline-flex; align-items: center; gap: 6px; margin: 3px 0; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); cursor: pointer; font: 12px/1.5 var(--font-ui); }
 .review-unknown-count:hover, .review-unknown-count:focus-visible { background: var(--al-soft-2); color: var(--al-ink-2); }
 .review-unknown-count svg { flex: 0 0 14px; color: var(--al-muted-2); }
@@ -204,6 +192,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .session-relationship-tree-chevron,
-  .raw-event-group-chevron { transition: none; }
+  .session-relationship-tree-chevron { transition: none; }
 }

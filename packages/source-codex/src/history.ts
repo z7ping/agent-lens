@@ -24,6 +24,7 @@ interface HistoryCheckpoint {
 interface MetadataCheckpoint {
   startFingerprint?: string
   titleFingerprint?: string
+  titleContentFingerprint?: string
 }
 
 
@@ -364,9 +365,13 @@ async function* ingestCodexFileWithThreadNames(
   }
   const titleRecord = metadataRecord(ctx, filePath, session, 'session_title', indexedTitle)
   const titleFingerprint = titleRecord?.fingerprint
-  if (titleRecord && titleFingerprint && previousMetadata.titleFingerprint !== titleFingerprint) {
+  // threads.updated_at 是线程活动时间，不是标题修改时间；只比较标题内容。
+  const titleContentFingerprint = session.title?.trim() ? sha256(session.title.trim()) : undefined
+  if (titleRecord && titleFingerprint && titleContentFingerprint
+    && previousMetadata.titleContentFingerprint !== titleContentFingerprint) {
     yield titleRecord
     previousMetadata.titleFingerprint = titleFingerprint
+    previousMetadata.titleContentFingerprint = titleContentFingerprint
     await ctx.checkpoint.set(metadataKey, previousMetadata)
   }
 

@@ -39,10 +39,10 @@ test('Task Review 将 commentary、reasoning 与工具统一放入处理详情',
 })
 
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
-  assert.match(reviewPage, /function RawEventGroup[\s\S]*?const \[expanded, setExpanded\] = useState\(false\)[\s\S]*?className="raw-event-group"/)
-  assert.match(reviewPage, /t\('local\.rawEvents\.title'\)/)
+  assert.match(reviewPage, /function RawEventGroup[\s\S]*?return <TaskThinking[\s\S]*?kind="process"[\s\S]*?defaultExpanded=\{false\}/)
+  assert.match(reviewPage, /local\.rawEvents\.title/)
   assert.doesNotMatch(reviewPage, /local\.rawEvents\.description/)
-  assert.match(reviewPage, /\{expanded && <div>\{items\.map\(item => <EventRow/)
+  assert.doesNotMatch(reviewPage, /className="raw-event-group"/)
 })
 
 test('Task Review 展示注入上下文正文，不再使用隐藏占位文案', () => {
