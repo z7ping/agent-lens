@@ -144,7 +144,7 @@ export function appendUniqueLiveProjectionItems(
   return [...current, ...newer.filter(item => !currentIds.has(item.id))]
 }
 
-async export function loadBoundedRecoverySnapshot(
+export async function loadBoundedRecoverySnapshot(
   liveId: string,
   runtimeSessionId: string,
   since: string | undefined,
