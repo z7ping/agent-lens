@@ -1,4 +1,4 @@
-import type { LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
+import type { LiveRuntimeEventDto, LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
 
 /** A long hidden gap can lose SSE events even without an observed connection error. */
 export const LIVE_VISIBILITY_RECONCILE_WINDOW_MS = 30_000
@@ -29,6 +29,50 @@ export function sameLiveRuntimeState(previous: LiveRuntimeStateDto | null, next:
     && previous.title === next.title
     && previous.nativeSessionId === next.nativeSessionId
     && previous.workspacePath === next.workspacePath
+}
+
+/** 将 SSE 标准事件映射到运行时快照，不依赖 React 或具体 Agent。 */
+export function runtimeStateFromEvent(
+  current: LiveRuntimeStateDto | null,
+  envelope: LiveRuntimeEventDto,
+): LiveRuntimeStateDto | null {
+  if (!current || !envelope.normalizedEvent) return current
+  const event = envelope.normalizedEvent
+  if (event.type === 'title.update') {
+    return current.title === event.title ? current : { ...current, title: event.title }
+  }
+  if (event.type === 'status') {
+    if (event.status === 'initializing' || event.status === 'ready' || event.status === 'failed'
+      || event.status === 'terminating' || event.status === 'terminated') {
+      const terminal = event.status === 'failed' || event.status === 'terminating' || event.status === 'terminated'
+      const nextStreaming = terminal ? false : current.isStreaming
+      if (current.status === event.status && current.isStreaming === nextStreaming) return current
+      return {
+        ...current,
+        status: event.status,
+        ...(terminal ? { isStreaming: false } : {}),
+      }
+    }
+    if (event.status === 'running') return current.isStreaming ? current : { ...current, isStreaming: true }
+    if (event.status === 'idle') return current.isStreaming ? { ...current, isStreaming: false } : current
+  }
+  if (event.type === 'text.start' || event.type === 'text.delta'
+    || event.type === 'reasoning.start' || event.type === 'reasoning.delta'
+    || event.type === 'tool.start') {
+    return current.isStreaming ? current : { ...current, isStreaming: true }
+  }
+  if (event.type === 'queue.update') {
+    const pendingMessageCount = event.steering.length + event.followUp.length
+    return current.pendingMessageCount === pendingMessageCount
+      ? current
+      : { ...current, pendingMessageCount }
+  }
+  if (event.type === 'completed') {
+    return !current.isStreaming && current.pendingMessageCount === 0
+      ? current
+      : { ...current, isStreaming: false, pendingMessageCount: 0 }
+  }
+  return current
 }
 
 export function sameTaskRuntimeList(

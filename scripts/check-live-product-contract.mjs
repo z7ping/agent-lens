@@ -194,7 +194,7 @@ requireText(liveTask, /settleLiveTaskProjectionItems\(previous\.active\)/, '手�
 requireText(liveTaskProjection, /liveTaskStableRoundPrefixLength/, 'Live 必须区分稳定历史与当前流式语义轮次')
 requireText(liveTaskProjection, /liveEventChangesTaskTranscript/, 'Live 必须区分正文事件与控制事件，避免无意义正文重算')
 requireText(liveTask, /if \(liveEventChangesTaskTranscript\(envelope\.normalizedEvent\)\)/, 'Live SSE 控制事件不得触发正文 setItems')
-requireText(liveTask, /event\.type === ['"]title\.update['"]/, 'LiveTaskPage 必须实时消费通用 title.update')
+requireText(taskLiveRuntime, /event\.type === ['"]title\.update['"]/, 'LiveTaskPage 必须实时消费通用 title.update')
 requireText(liveTask, /normalizedEvent\?\.type === ['"]control\.changed['"]/, 'LiveTaskPage 必须通过通用 control.changed 即时刷新 Runtime controls')
 requireText(liveTask, /normalizedEvent\?\.type === ['"]runtime-disclosure\.changed['"]/, 'LiveTaskPage 必须通过通用失效事件刷新 Runtime Disclosure')
 requireText(liveClient, /event\.type === ['"]runtime-disclosure\.changed['"][\s\S]{0,120}return ['"]runtime-disclosure\.changed['"]/, 'Runtime Disclosure 失效通知必须在调度器中合并')

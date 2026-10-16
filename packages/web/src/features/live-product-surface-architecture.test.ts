@@ -62,7 +62,7 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /onSubmit=\{\(message, mode\) => \{ void send\(message, mode === 'followUp' \? 'follow-up' : undefined\) \}\}/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
-  assert.match(liveTask, /event\.type === 'title\.update'/)
+  assert.match(readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8'), /event\.type === 'title\.update'/)
   assert.match(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })

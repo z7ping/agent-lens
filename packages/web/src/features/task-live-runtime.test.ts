@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
-import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, shouldRefreshRuntimeListOnVisible, sameLiveRuntimeState, sameTaskRuntimeList, LIVE_VISIBILITY_RECONCILE_WINDOW_MS } from './task-live-runtime'
+import type { LiveRuntimeEventDto, LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
+import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, shouldRefreshRuntimeListOnVisible, sameLiveRuntimeState, sameTaskRuntimeList, runtimeStateFromEvent, LIVE_VISIBILITY_RECONCILE_WINDOW_MS } from './task-live-runtime'
 
 function state(overrides: Partial<LiveRuntimeStateDto> = {}): LiveRuntimeStateDto {
   return {
@@ -90,4 +90,24 @@ test('unchanged runtime state and list reuse React state', () => {
   assert.equal(sameTaskRuntimeList(runtimes, [{ ...runtimes[0]!, state: { ...first } }]), true)
   assert.equal(sameTaskRuntimeList(runtimes, [{ ...runtimes[0]!, state: { ...first, title: 'B' } }]), false)
   assert.equal(sameTaskRuntimeList(runtimes, []), false)
+})
+
+test('标准 Live SSE 事件只修改必要状态，并正确处理流式与结束边界', () => {
+  const initial = state({ title: 'Initial', pendingMessageCount: 2 })
+  const event = (normalizedEvent: LiveRuntimeEventDto['normalizedEvent']): LiveRuntimeEventDto =>
+    ({ normalizedEvent } as LiveRuntimeEventDto)
+  assert.equal(runtimeStateFromEvent(null, event({ type: 'title.update', title: 'New' })), null)
+  const titled = runtimeStateFromEvent(initial, event({ type: 'title.update', title: 'New' }))
+  assert.equal(titled?.title, 'New')
+  assert.equal(runtimeStateFromEvent(titled, event({ type: 'title.update', title: 'New' })), titled)
+  const running = runtimeStateFromEvent(initial, event({ type: 'status', status: 'running' }))
+  assert.equal(running?.isStreaming, true)
+  const idle = runtimeStateFromEvent(running, event({ type: 'status', status: 'idle' }))
+  assert.equal(idle?.isStreaming, false)
+  const terminal = runtimeStateFromEvent(running, event({ type: 'status', status: 'terminated' }))
+  assert.equal(terminal?.status, 'terminated')
+  assert.equal(terminal?.isStreaming, false)
+  const completed = runtimeStateFromEvent(running, event({ type: 'completed' }))
+  assert.equal(completed?.pendingMessageCount, 0)
+  assert.equal(completed?.isStreaming, false)
 })
