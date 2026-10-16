@@ -24,6 +24,7 @@ const reviewPage = [ readFileSync(new URL('../../features/review-session-format.
   readFileSync(new URL('../../features/ReviewEvidenceInspector.tsx', import.meta.url), 'utf8'),
   readFileSync(new URL('../../features/ReviewRoundPresentation.tsx', import.meta.url), 'utf8'),
   readFileSync(new URL('../../features/review-reader-position.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../features/use-review-session.ts', import.meta.url), 'utf8'),
   readFileSync(new URL('../../features/ReviewPage.tsx', import.meta.url), 'utf8') ].join('\n')
 const reviewCss = readFileSync(new URL('../../review.css', import.meta.url), 'utf8')
 const backupPage = readFileSync(new URL('../../features/BackupPage.tsx', import.meta.url), 'utf8')

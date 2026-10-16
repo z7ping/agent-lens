@@ -16,7 +16,6 @@ import { interactionStats } from './ReviewRoundPresentation'
 import { captureReviewReaderPosition, restoreReviewReaderPosition, highLatencyThreshold } from './review-reader-position'
 import type { ReviewReaderPosition } from './review-reader-position'
 import type { AgentLensClientModel } from '../client/model'
-import { useClientSnapshot } from '../client/use-client-snapshot'
 import type { ReviewDetailFilter } from '@agent-lens/protocol'
 
 type RoundFilter = ReviewDetailFilter

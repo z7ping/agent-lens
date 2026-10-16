@@ -6,6 +6,7 @@ const reviewPage = [ readFileSync(new URL('./review-session-format.ts', import.m
   readFileSync(new URL('./ReviewEvidenceInspector.tsx', import.meta.url), 'utf8'),
   readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8'),
   readFileSync(new URL('./review-reader-position.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-review-session.ts', import.meta.url), 'utf8'),
   readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8') ].join('\n')
 const liveTaskPage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 const taskThinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
