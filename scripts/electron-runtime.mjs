@@ -9,7 +9,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
  * Resolve the concrete Electron installed by npm ci. Neither package.json's
  * semver range nor a hardcoded release number is a downloadable artifact.
  */
-export function resolveWindowsElectronRuntime(root = projectRoot) {
+export function resolveElectronVersion(root = projectRoot) {
   const desktopPackage = JSON.parse(readFileSync(resolve(root, 'apps/desktop/package.json'), 'utf8'))
   const lock = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'))
   const requestedRange = desktopPackage.devDependencies?.electron
@@ -34,6 +34,11 @@ export function resolveWindowsElectronRuntime(root = projectRoot) {
     throw new Error(`Installed Electron ${installedVersion} differs from lockfile ${version}; run npm ci`)
   }
 
+  return version
+}
+
+export function resolveWindowsElectronRuntime(root = projectRoot) {
+  const version = resolveElectronVersion(root)
   return {
     version,
     distPath: resolve(root, 'apps/desktop/.electron-dist', `electron-v${version}-win32-x64`),

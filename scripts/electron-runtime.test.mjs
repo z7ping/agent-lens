@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
-import { resolveWindowsElectronRuntime } from './electron-runtime.mjs'
+import { resolveElectronVersion, resolveWindowsElectronRuntime } from './electron-runtime.mjs'
 
 function withFixture({ requested = '^43.7.9', locked = '^43.7.9', resolved = '43.7.9', installed = '43.7.9' }, verify) {
   const root = mkdtempSync(join(tmpdir(), 'agentlens-electron-'))
@@ -70,4 +70,25 @@ test('prepare, package and Windows smoke all use one version resolver', () => {
   for (const source of [prepare, build, smoke, pkg.scripts['dist:win'], pkg.scripts['dist:win:dir']]) {
     assert.doesNotMatch(source, /electron-v43\.4\.0-win32-x64|devDependencies\.electron}-win32-x64/)
   }
+})
+
+test('macOS and Linux builders use the installed lockfile Electron version', () => {
+  withFixture({}, root => {
+    assert.equal(resolveElectronVersion(root), '43.7.9')
+  })
+
+  const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
+  const pkg = JSON.parse(read('apps/desktop/package.json'))
+  const build = read('scripts/build-unix-desktop.mjs')
+  assert.match(build, /resolveElectronVersion\(root\)/)
+  assert.match(build, /--config\.electronVersion=/)
+  assert.match(build, /--publish=never/)
+  for (const script of ['dist:linux', 'dist:linux:dir', 'dist:mac:arm64', 'dist:mac:x64',
+    'dist:mac:arm64:release', 'dist:mac:x64:release', 'dist:mac:arm64:dir', 'dist:mac:x64:dir']) {
+    assert.match(pkg.scripts[script], /build-unix-desktop\.mjs/)
+    assert.doesNotMatch(pkg.scripts[script], /electron-builder --/)
+  }
+  assert.match(pkg.scripts['dist:linux'], /--x64/)
+  assert.match(pkg.scripts['dist:mac:arm64:release'], /--arm64 signed/)
+  assert.match(pkg.scripts['dist:mac:x64:release'], /--x64 signed/)
 })
