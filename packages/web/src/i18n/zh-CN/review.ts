@@ -277,7 +277,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
       },
       fileChanges: {
         roundTitle: '本轮观察到 {{count}} 个文件修改',
-        titleCount: '已修改 {{count}} 个文件',
+        titleCount: '本次会话修改 {{count}} 个文件',
         viewDiff: '查看差异',
         showMore: '再显示 {{count}} 个文件',
         showLess: '收起文件',
