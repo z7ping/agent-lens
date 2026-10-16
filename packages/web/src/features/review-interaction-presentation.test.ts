@@ -513,3 +513,45 @@ test('Claude Code 不能把普通 assistant 文本仅凭 Tool 相邻关系归入
   assert.equal(process.items.filter(item => item.type === 'tool-group').length, 1)
   assert.deepEqual(entries.filter(entry => entry.type === 'message').map(entry => entry.type === 'message' ? entry.node.id : ''), ['claude:intermediate', 'claude:final'])
 })
+
+test('正常生命周期元事件默认合并，失败事件保留单独显示且不丢失原文', () => {
+  const life = (action: string, time: string, status = ''): ReviewEventNodeDto => ({
+    type: 'event', id: action, at: time, capturedAt: time, sourceId: 'codex',
+    kind: 'session.lifecycle', category: 'lifecycle', label: action,
+    payload: { event: action, ...(status ? { status } : {}) },
+    evidence: [], observationIds: [`obs:${action}`],
+  })
+  const entries = projectReviewInteractionPresentation([
+    life('thread.settings.applied', '2026-10-16T21:11:28Z'),
+    life('turn.started', '2026-10-16T21:11:29Z'),
+    life('turn.context', '2026-10-16T21:11:30Z'),
+    life('turn.error', '2026-10-16T21:11:31Z'),
+  ])
+  assert.deepEqual(entries.map(entry => entry.type), ['runtime-event-group', 'event'])
+  if (entries[0]?.type === 'runtime-event-group') {
+    assert.deepEqual(entries[0].items.map(item => item.id),
+      ['thread.settings.applied', 'turn.started', 'turn.context'])
+  }
+  if (entries[1]?.type === 'event') assert.equal(entries[1].node.id, 'turn.error')
+  const failed = projectReviewInteractionPresentation([life('turn.context', '2026-10-16T21:11:32Z', 'failed')])
+  assert.equal(failed[0]?.type, 'event')
+})
+
+test('旧轮次完成时间早于新轮次开始时不再被强制后移；合法终态仍在最终回答后', () => {
+  const life = (action: string, time: string): ReviewEventNodeDto => ({
+    type: 'event', id: action, at: time, capturedAt: time, sourceId: 'codex',
+    kind: 'session.lifecycle', category: 'lifecycle', label: action,
+    payload: { event: action }, evidence: [], observationIds: [`obs:${action}`],
+  })
+  const entries = projectReviewInteractionPresentation([
+    life('turn.completed', '2026-10-16T21:09:22Z'),
+    life('turn.started', '2026-10-16T21:11:29Z'),
+  ])
+  assert.deepEqual(entries.map(entry => entry.type), ['event', 'runtime-event-group'])
+  if (entries[0]?.type === 'event') assert.equal(entries[0].node.id, 'turn.completed')
+  const late = projectReviewInteractionPresentation([
+    life('turn.started', '2026-10-16T21:11:29Z'),
+    life('turn.completed', '2026-10-16T21:11:32Z'),
+  ])
+  assert.deepEqual(late.map(entry => entry.type), ['runtime-event-group', 'event'])
+})
