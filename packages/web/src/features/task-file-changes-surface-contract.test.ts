@@ -35,7 +35,10 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /const hidden = items\.length - displayed\.length/)
   assert.match(component, /\{hidden > 0 && <Button/)
   assert.match(component, /\{showAll && items\.length > INITIAL_VISIBLE_FILES && <Button/)
-  assert.match(component, /confidence === 'exact' && !isObserved/)
+  assert.match(component, /isObservedOnly\(item\) \|\| isObserved/)
+  assert.match(component, /!observedOnly && <Button/)
+  assert.match(component, /observedOnly && <Button/)
+  assert.match(component, /<Drawer open title=\{evidenceItem\.path\}/)
   assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
   assert.match(component, /<Drawer open/)
   assert.match(component, /<CopyableCodeBlock copyValue=\{diff\.diff\} language="diff"/)
@@ -44,4 +47,16 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
 test('legacy session with truncated evidence never disappears as an empty card', () => {
   assert.match(component, /value\.summary\.count === 0 && !value\.meta\.truncated/)
   assert.match(component, /value\?\.meta\.truncated && <div className="task-file-changes-error">/)
+})
+
+test('仅精确 Session 事实允许查看 Git Diff；逐轮观测只展示来源，不假冒 Diff', () => {
+  assert.match(component, /change\.confidence !== 'exact' \|\| change\.changeType === 'unknown'/)
+  assert.match(component, /observedOnly = isObservedOnly\(item\) \|\| isObserved/)
+  assert.match(component, /observedOnly \? t\('local\.fileChanges\.observed'\) : statusCode\(item\)/)
+  assert.match(component, /const \[evidenceItem, setEvidenceItem\]/)
+  assert.match(component, /evidenceItem\.firstChangedAt/)
+  assert.match(component, /evidenceItem\.lastChangedAt/)
+  assert.match(component, /evidenceItem\.evidence\.map/)
+  assert.match(component, /if \(!diffPath \|\| !sessionId \|\| isInteraction\) return/)
+  assert.doesNotMatch(component, /return '\?'/)
 })
