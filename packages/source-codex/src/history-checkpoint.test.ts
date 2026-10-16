@@ -3,7 +3,7 @@ import { appendFile, mkdir, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import type { SourceExecutionContext } from '@agent-lens/core'
 import { CODEX_PARSER_VERSION, codexHistoryInternals, ingestCodexHistory } from './history'
 
@@ -231,7 +231,7 @@ test('Codex title-only SQLite update refreshes an already checkpointed rollout w
     for await (const record of ingestCodexHistory(ctx)) first.push(record)
     assert.equal(first.length, 1)
 
-    const db = new Database(join(input.root, 'state_5.sqlite'))
+    const db = new DatabaseSync(join(input.root, 'state_5.sqlite'))
     try {
       db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT, updated_at INTEGER)')
       db.prepare('INSERT INTO threads VALUES (?, ?, ?)').run('rollout-checkpoint', 'Codex 后来生成的摘要', 1780000000)
