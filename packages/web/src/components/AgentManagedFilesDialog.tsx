@@ -311,7 +311,7 @@ export function AgentManagedFilesDialog({
         ...customMarkdownThemes.map(theme => ({ value: theme.id, label: theme.name, description: t('managedFiles.themeCustomDescription') })),
       ]}
     />}
-    {previewMarkdown && preview?.content !== undefined && <div className="managed-file-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
+    {previewMarkdown && preview?.content !== undefined && <div className="file-preview-view-toggle" role="group" aria-label={t('managedFiles.viewMode')}>
       <button type="button" aria-pressed={previewView === 'rendered'} onClick={() => setPreviewView('rendered')}>{t('managedFiles.rendered')}</button>
       <button type="button" aria-pressed={previewView === 'source'} onClick={() => setPreviewView('source')}>{t('managedFiles.source')}</button>
     </div>}
