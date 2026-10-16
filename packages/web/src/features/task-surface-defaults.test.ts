@@ -148,3 +148,18 @@ test('legacy Task Surface MutationObserver compatibility layer is removed', () =
   assert.equal(existsSync(new URL('../client/task-surface-defaults.ts', import.meta.url)), false)
   assert.doesNotMatch(mainEntry, /installTaskSurfaceDefaults|task-surface-defaults/)
 })
+
+test('Review 同轮辅助运行元事件和标题记录只显示一个默认收起的共享区域', () => {
+  const review = readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8')
+  const projection = readFileSync(new URL('./review-interaction-presentation.ts', import.meta.url), 'utf8')
+  assert.match(review, /const runtimeRecords = afterProcessEntries\.flatMap/)
+  assert.match(review, /entry\.type === 'runtime-event-group'/)
+  assert.match(review, /entry\.items\.every\(isSessionTitleUpdate\)/)
+  assert.match(review, /if \(entry\.type === 'runtime-event-group'\) return null/)
+  assert.match(review, /runtimeRecords\.length > 0 && <RawEventGroup items=\{runtimeRecords\} inspect=\{inspect\} runtime\/>/)
+  assert.match(review, /function RawEventGroup[\s\S]*?defaultExpanded=\{false\}/)
+  assert.match(review, /items\.map\(item => <EventRow key=\{item\.id\} event=\{item\} inspect=\{inspect\}\/>\)/)
+  assert.match(projection, /if \(node\.type === 'event' && isCompactRuntimeEvent\(node\)\)/)
+  assert.match(projection, /isFailedLifecycleEvent\(node\)/)
+  assert.match(review, /!showAllEvents && unknownCount > 0/)
+})
