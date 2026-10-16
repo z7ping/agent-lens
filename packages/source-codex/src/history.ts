@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve } from 'node:path'
-import Database from 'better-sqlite3'
+import { DatabaseSync } from 'node:sqlite'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
@@ -109,9 +109,9 @@ function chooseThreadName(
 /** Codex Desktop's local thread metadata can be newer than session_index.jsonl. */
 function readSqliteThreadNames(codexHome: string): Map<string, CodexThreadName> {
   const result = new Map<string, CodexThreadName>()
-  let db: Database.Database | undefined
+  let db: DatabaseSync | undefined
   try {
-    db = new Database(join(codexHome, 'state_5.sqlite'), { readonly: true, fileMustExist: true, timeout: 1000 })
+    db = new DatabaseSync(join(codexHome, 'state_5.sqlite'), { readOnly: true, timeout: 1000 })
     const rows = db.prepare('SELECT id, title, updated_at FROM threads').iterate() as Iterable<{
       id: unknown
       title: unknown
