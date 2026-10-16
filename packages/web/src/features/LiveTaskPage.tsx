@@ -45,7 +45,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const location = useLocation()
   const navigate = useNavigate()
   const hostApi = useMemo(() => new AgentLensApi(), [])
-  const [fileChanges, setFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
+  const [fileChanges, setFileChanges] = useState<{ runtimeId: string; result: TaskFileChangesResponseDto | null } | null>(null)
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
@@ -184,13 +184,12 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const fileChangeRuntimeId = current?.runtimeSessionId
   // File change projection commits independently from Live transcript SSE.
   // Coalesce rapid events; never refetch on every streamed token.
-  useEffect(() => { setFileChanges(null) }, [fileChangeRuntimeId])
   useEffect(() => {
     if (!fileChangeRuntimeId) return
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
       void hostApi.runtimeFileChanges(fileChangeRuntimeId, controller.signal)
-        .then(value => { if (!controller.signal.aborted) setFileChanges(value) })
+        .then(value => { if (!controller.signal.aborted) setFileChanges({ runtimeId: fileChangeRuntimeId, result: value }) })
         .catch(() => undefined)
     }, 280)
     return () => { window.clearTimeout(timer); controller.abort() }
@@ -203,7 +202,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     let active = true
     const timer = window.setInterval(() => {
       void hostApi.runtimeFileChanges(fileChangeRuntimeId)
-        .then(result => { if (active) setFileChanges(result) })
+        .then(result => { if (active) setFileChanges({ runtimeId: fileChangeRuntimeId, result }) })
         .catch(() => undefined)
     }, 4_000)
     return () => { active = false; window.clearInterval(timer) }
@@ -379,7 +378,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
             onMessageAction={runMessageAction}
           />)}
-          {historyPage?.hasLater !== true && <TaskFileChangesDisclosure value={fileChanges}/>}
+          {historyPage?.hasLater !== true && <TaskFileChangesDisclosure key={fileChangeRuntimeId} value={fileChanges?.runtimeId === fileChangeRuntimeId ? fileChanges.result : null}/>}
           {historyPage?.hasLater && <div
             ref={historyNewerSentinelRef}
             className={`live-task-history-sentinel live-task-history-sentinel-newer ${historyLoading ? 'is-loading' : ''}`}
