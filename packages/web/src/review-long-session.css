@@ -39,18 +39,20 @@
 }
 .review-page .session-group-block:first-child .session-group { margin-top: 0; }
 
-/* 轮次筛选由 TaskHeader 的固定阅读控件槽承载，边线和背景归会话壳层。 */
+/* 轮次筛选直接融入任务头部次行，不再拥有独立工具栏高度。 */
 .review-page .round-nav {
   display: flex;
+  width: 100%;
   min-width: 0;
+  min-height: 28px;
   align-items: center;
-  min-height: 48px;
-  align-self: stretch;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
-  padding: 8px 0;
+  padding: 0;
   overflow-x: auto;
+  scrollbar-width: none;
 }
+.review-page .round-nav::-webkit-scrollbar { display: none; }
 .review-page .round-nav-filters,
 .review-page .round-nav-actions {
   display: flex;
@@ -61,6 +63,17 @@
 }
 .review-page .round-nav-actions { margin-left: auto; }
 .review-page .round-nav button { white-space: nowrap; }
+.review-page .round-nav .round-nav-filters .btn {
+  height: 26px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted);
+}
+.review-page .round-nav .round-nav-filters .btn:hover:not(:disabled) {
+  border-color: var(--al-line);
+  background: var(--al-soft-2);
+}
 .review-page .round-nav .btn.active {
   background: color-mix(in srgb, var(--al-accent-soft) 62%, var(--al-soft-2));
   color: var(--al-accent);
