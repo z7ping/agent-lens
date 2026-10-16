@@ -248,6 +248,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         </div>
       </TaskSurface>
     </div>
-    {inspect && <Inspector node={inspect} loadSourceRecords={model.sourceRecords} onClose={() => setInspect(null)}/>} 
+    {inspect && <Inspector key={inspect.id} node={inspect} loadSourceRecords={model.sourceRecords} onClose={() => setInspect(null)}/>} 
   </main>
 }

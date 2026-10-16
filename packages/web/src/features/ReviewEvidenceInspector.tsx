@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { JsonValue, ReviewEventNodeDto, ReviewMessageNodeDto, ReviewNodeDto, SourceRecordResponseDto, ReviewToolNodeDto, TimelineEvidenceDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
+import { MarkdownContent } from '../components/MarkdownContent'
 import { LocalResourceReference } from '../components/LocalResourceReference'
 import { ToolKindIcon, toolVisualKind, type ToolVisualKind } from '../components/ToolKindIcon'
-import { Drawer } from '../components/ui'
+import { Button, Drawer } from '../components/ui'
 import { reviewArtifactSummary, reviewEventLabel } from './review-event-presentation'
 import { reviewToolCommand } from './review-tool-command'
 import { agentLensI18n } from '../i18n/runtime'
@@ -78,18 +79,6 @@ function runtimeStartupSummary(value: JsonValue): string {
     parts.push(agentLensI18n.t('review:local.event.runtimePackageUpdatesFailed'))
   }
   return parts.join(' · ')
-}
-
-function runtimeStartupJson(value: JsonValue): string {
-  const payload = payloadRecord(value)
-  const resources = payload.resources
-  if (resources === undefined) return ''
-  const detail: Record<string, JsonValue> = { resources }
-  for (const key of ['packageUpdateCheck', 'packageUpdates', 'packageUpdatesCheckedAt']) {
-    const item = payload[key]
-    if (item !== undefined) detail[key] = item
-  }
-  return JSON.stringify(detail, null, 2)
 }
 
 const evidenceCaptureKey: Record<TimelineEvidenceDto['captureMethod'], string> = {
@@ -299,11 +288,35 @@ function toolLocalResource(node: ReviewToolNodeDto): { value: string; kind: 'fil
   return undefined
 }
 
-function PrettyJson({ value }: { value: unknown }) {
-  if (value === undefined) return <div className="muted-empty compact">{agentLensI18n.t('review:local.tool.noData')}</div>
-  if (typeof value === 'string') return <CopyableCodeBlock className="tool-detail-code" copyValue={value}>{value}</CopyableCodeBlock>
-  const text = JSON.stringify(value, null, 2)
-  return <CopyableCodeBlock className="tool-detail-code" copyValue={text}>{text}</CopyableCodeBlock>
+/** Prefer original Markdown body when native JSON carries a text field. */
+function originalMarkdownBody(value: JsonValue | undefined): string | undefined {
+  if (typeof value === 'string') return value
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  for (const record of [value, payloadRecord(value.payload)]) {
+    for (const key of ['text', 'content', 'message', 'body']) {
+      const text = record[key]
+      if (typeof text === 'string') return text
+    }
+  }
+  return undefined
+}
+
+/** Full source content; only timeline row summaries may use brief(). */
+function OriginalEvidenceValue({ value }: { value: JsonValue | undefined }) {
+  const { t } = useTranslation('review')
+  const [showSource, setShowSource] = useState(false)
+  if (value === undefined) return <div className="muted-empty compact">{t('local.tool.noData')}</div>
+  const markdownBody = originalMarkdownBody(value)
+  const content = typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+  return <div className="inspector-original-value">
+    {markdownBody !== undefined && <div className="inspector-original-actions">
+      <Button size="small" aria-pressed={!showSource} onClick={() => setShowSource(false)}>{t('local.markdown.rendered')}</Button>
+      <Button size="small" aria-pressed={showSource} onClick={() => setShowSource(true)}>{t('local.markdown.source')}</Button>
+    </div>}
+    {markdownBody !== undefined && !showSource
+      ? <MarkdownContent className="inspector-original-markdown" text={markdownBody}/>
+      : <CopyableCodeBlock className="raw-json" copyValue={content} language={typeof value === 'string' ? undefined : 'json'}>{content}</CopyableCodeBlock>}
+  </div>
 }
 
 export function toolOutputText(value: JsonValue | undefined): string {
@@ -312,40 +325,21 @@ export function toolOutputText(value: JsonValue | undefined): string {
 }
 
 function StructuredToolDetail({ node }: { node: ReviewToolNodeDto }) {
-  const info = toolPresentation(node)
-  const input = toolInputRecord(node)
+  const { t } = useTranslation('review')
+  const kind = toolVisualKind(node.name, { sourceType: node.toolSourceType, mcpServerId: node.mcpServerId })
   const resource = toolLocalResource(node)
-  const primaryLabel = info.kind === 'shell'
-    ? agentLensI18n.t('review:local.tool.command')
-    : info.kind === 'read' || info.kind === 'edit'
-      ? agentLensI18n.t('review:local.tool.path')
-      : info.kind === 'search'
-        ? agentLensI18n.t('review:local.tool.query')
-        : info.kind === 'mcp'
-          ? agentLensI18n.t('review:local.tool.target')
-          : info.kind === 'web'
-            ? agentLensI18n.t('review:local.tool.addressQuery')
-            : agentLensI18n.t('review:local.tool.inputSummary')
-  const status = node.status === 'error'
-    ? agentLensI18n.t('review:local.tool.statusError')
-    : node.status === 'success'
-      ? agentLensI18n.t('review:local.tool.statusSuccess')
-      : node.status === 'running'
-        ? agentLensI18n.t('review:local.tool.statusRunning')
-        : agentLensI18n.t('review:local.tool.statusUnknown')
+  const status = node.status === 'error' ? t('local.tool.statusError')
+    : node.status === 'success' ? t('local.tool.statusSuccess')
+    : node.status === 'running' ? t('local.tool.statusRunning')
+    : t('local.tool.statusUnknown')
   return <section className="tool-detail">
     <div className="tool-detail-summary">
-      <span className={`tool-detail-icon tool-kind-${info.kind}`}><ToolKindIcon kind={info.kind}/></span>
-      <div><b>{node.name}</b><span>{info.label} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
+      <span className={`tool-detail-icon tool-kind-${kind}`}><ToolKindIcon kind={kind}/></span>
+      <div><b>{node.name}</b><span>{toolKindLabel(kind)} · {status}{node.durationMs !== undefined && node.durationMs > 0 ? ` · ${duration(node.durationMs)}` : ''}</span></div>
     </div>
-    {info.primary && <div className="tool-detail-section"><h4>{primaryLabel}</h4>{
-      resource?.placement === 'primary' && resource.value === info.primary
-        ? <LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/>
-        : <CopyableCodeBlock className="tool-detail-code" copyValue={info.primary}>{info.primary}</CopyableCodeBlock>
-    }</div>}
-    {resource?.placement === 'secondary' && <div className="tool-detail-section"><h4>{agentLensI18n.t('review:local.tool.path')}</h4><LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/></div>}
-    {Object.keys(input).length > 0 && <div className="tool-detail-section"><h4>{agentLensI18n.t('review:local.tool.structuredInput')}</h4><PrettyJson value={node.input}/></div>}
-    {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? agentLensI18n.t('review:local.tool.errorOutput') : agentLensI18n.t('review:local.tool.output')}</h4><PrettyJson value={node.output}/></div>}
+    {resource && <div className="tool-detail-section"><h4>{t('local.tool.path')}</h4><LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/></div>}
+    {node.input !== undefined && <div className="tool-detail-section"><h4>{t('local.tool.structuredInput')}</h4><OriginalEvidenceValue value={node.input}/></div>}
+    {node.output !== undefined && <div className={`tool-detail-section ${node.status === 'error' ? 'is-error' : ''}`}><h4>{node.status === 'error' ? t('local.tool.errorOutput') : t('local.tool.output')}</h4><OriginalEvidenceValue value={node.output}/></div>}
   </section>
 }
 
@@ -396,12 +390,12 @@ function RawInspectorContent({
           presentation="inline"
         /></div>}
         <div className="evidence-path">{agentLensI18n.t('review:local.event.locator')}：{JSON.stringify(record.locator)}</div>
-        <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(record.payload, null, 2)}>{JSON.stringify(record.payload, null, 2)}</CopyableCodeBlock>
+        <OriginalEvidenceValue key={record.id} value={record.payload}/>
       </div>
     })}
     {!loading && !error && records.length === 0 && <>
       <div className="evidence-empty-detail">{agentLensI18n.t('review:local.event.rawMissing')}</div>
-      <CopyableCodeBlock className="raw-json" copyValue={JSON.stringify(node.payload, null, 2)}>{JSON.stringify(node.payload, null, 2)}</CopyableCodeBlock>
+      <OriginalEvidenceValue value={node.payload}/>
     </>}
   </section>
 }
@@ -415,7 +409,6 @@ export function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNo
   const [rawError, setRawError] = useState('')
 
   useEffect(() => {
-    if (tab !== 'raw') return
     let active = true
     setRawRecords([])
     setRawError('')
@@ -426,18 +419,10 @@ export function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNo
       reason => { if (active) { setRawError(reason instanceof Error ? reason.message : String(reason)); setRawLoading(false) } },
     )
     return () => { active = false }
-  }, [loadSourceRecords, node.id, sourceRecordIds, tab])
+  }, [loadSourceRecords, node.id, sourceRecordIds])
 
   const title = node.type === 'tool' ? node.name : node.type === 'event' ? reviewEventLabel(node) : roleLabel(node.role)
-  const detailSummary = node.type === 'event'
-    ? sourceEventSummary(node)
-    : node.type === 'message'
-      ? brief(node.text, 280)
-      : ''
-  const runtimeResources = node.type === 'event' && node.kind === 'runtime.startup'
-    ? runtimeStartupJson(node.payload)
-    : ''
-
+  const resource = node.type === 'tool' ? toolLocalResource(node) : undefined
   return <Drawer
     open
     className="review-inspector-overlay"
@@ -464,16 +449,22 @@ export function Inspector({ node, onClose, loadSourceRecords }: { node: ReviewNo
       <button className={`scope-chip ${tab === 'evidence' ? 'scope-chip-active' : ''}`} role="tab" tabIndex={tab === 'evidence' ? 0 : -1} aria-selected={tab === 'evidence'} onClick={() => setTab('evidence')}>{t('local.event.evidence', { count: node.evidence.length })}</button>
       <button className={`scope-chip ${tab === 'raw' ? 'scope-chip-active' : ''}`} role="tab" tabIndex={tab === 'raw' ? 0 : -1} aria-selected={tab === 'raw'} onClick={() => setTab('raw')}>{t('local.event.raw')}</button>
     </div>
-    {tab === 'detail' && <>
-      {node.type === 'tool' ? <StructuredToolDetail node={node}/> : <section className="inspector-section">
-        <h3 className="section-label">{t('local.event.summary')}</h3>
-        {runtimeResources
-          ? <CopyableCodeBlock className="raw-json" copyValue={runtimeResources}>{runtimeResources}</CopyableCodeBlock>
-          : node.type === 'event' && node.kind === 'context.injected' && stringValue(payloadRecord(node.payload), 'text')
-            ? <CopyableCodeBlock className="injected-context-content" copyValue={stringValue(payloadRecord(node.payload), 'text')}>{stringValue(payloadRecord(node.payload), 'text')}</CopyableCodeBlock>
-            : <div className="evidence-empty-detail">{detailSummary || t('local.event.noStructuredDetail')}</div>}
-      </section>}
-    </>}
+    {tab === 'detail' && <section className="inspector-section">
+      <h3 className="section-label">{t('local.event.originalContent')}</h3>
+      {rawLoading && <div className="muted-empty compact">{t('local.event.rawLoading')}</div>}
+      {rawError && <div className="evidence-missing">{rawError}</div>}
+      {!rawLoading && rawRecords.length > 0
+        ? <>
+          {resource && <div className="tool-detail-section"><LocalResourceReference value={resource.value} kind={resource.kind} className="tool-detail-local-resource"/></div>}
+          {rawRecords.map(record => <div className="inspector-source-entry" key={record.id}>
+            <div className="evidence-meta"><b>{record.nativeType}</b><span>{record.id}</span></div>
+            <OriginalEvidenceValue value={record.payload}/>
+          </div>)}
+        </>
+        : !rawLoading && (node.type === 'tool'
+          ? <StructuredToolDetail node={node}/>
+          : <OriginalEvidenceValue value={node.type === 'message' ? node.text : node.payload}/>)}
+    </section>}
     {tab === 'evidence' && <section className="inspector-section">
       <h3 className="section-label">{t('local.event.evidence', { count: node.evidence.length })}</h3>
       {node.evidence.length ? node.evidence.map(item => <div key={item.id} className="evidence-card">

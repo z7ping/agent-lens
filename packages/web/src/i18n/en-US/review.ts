@@ -148,6 +148,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         evidence: 'Evidence · {{count}}',
         raw: 'Raw data',
         summary: 'Summary',
+        originalContent: 'Original content',
         noStructuredDetail: 'This event has no additional structured details. You can still inspect its evidence or raw source record.',
         rawLoading: 'Loading raw source record…',
         rawMissing: 'This Observation has no readable SourceRecord linked to it. The normalized Payload is shown below.',
