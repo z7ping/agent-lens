@@ -38,3 +38,51 @@
   overflow-wrap: anywhere;
   color: var(--muted);
 }
+
+/* Shared Markdown preview mode used by host links and managed file previews. */
+.file-preview-view-toggle {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--al-line);
+  border-radius: 7px;
+  background: var(--al-surface);
+}
+.file-preview-view-toggle button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 620;
+}
+.file-preview-view-toggle button:hover { background: var(--al-soft-2); color: var(--al-ink-2); }
+.file-preview-view-toggle button[aria-pressed='true'] {
+  background: var(--al-accent-soft);
+  color: var(--al-accent);
+}
+
+.markdown-link-type-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-block;
+  vertical-align: -2px;
+  margin-right: 5px;
+  color: var(--al-muted);
+}
+.markdown-external-link .markdown-link-type-icon { margin: 0 0 0 5px; }
+.markdown-local-file-link.is-directory .markdown-link-type-icon { color: var(--al-accent); }
+.local-file-preview-markdown {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 68vh;
+  overflow: auto;
+  padding: 24px 30px 34px;
+  background: var(--al-surface);
+}
