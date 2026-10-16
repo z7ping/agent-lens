@@ -57,24 +57,24 @@ export function TaskFileChangesDisclosure({
   if (value && value.summary.count === 0 && !value.meta.truncated && !loading && !error) return null
 
   const count = value?.summary.count ?? 0
-  const displayed = showAll ? value?.items ?? [] : (value?.items ?? []).slice(0, INITIAL_VISIBLE_FILES)
-  const hidden = count - displayed.length
+  const items = value?.items ?? []
+  const displayed = showAll ? items : items.slice(0, INITIAL_VISIBLE_FILES)
+  const hidden = items.length - displayed.length
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
   const isObserved = Boolean(value?.interactionId)
   return <>
-    <details className="task-file-changes">
-      <summary>
+    <section className="task-file-changes">
+      <div className="task-file-changes-header">
         <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="tool-edit" size={16}/></span>
-        <span className="task-file-changes-heading">
+        <h3 className="task-file-changes-heading">
           {t(isObserved ? 'local.fileChanges.roundTitle' : 'local.fileChanges.titleCount', { count })}
           {hasExactDelta && <span className="task-file-changes-delta">
             {value?.summary.additions !== undefined && <span className="task-file-change-added">+{value.summary.additions}</span>}
             {value?.summary.deletions !== undefined && <span className="task-file-change-deleted">-{value.summary.deletions}</span>}
           </span>}
-        </span>
+        </h3>
         {loading && <span className="task-file-changes-state">{t('local.fileChanges.refreshing')}</span>}
-        <UiIcon className="task-file-changes-chevron" name="chevron-right" size={14}/>
-      </summary>
+      </div>
       <div className="task-file-changes-list">
         {error && <div className="task-file-changes-error" role="alert">{t('local.fileChanges.loadFailed')}</div>}
         {displayed.map(item => {
@@ -98,11 +98,11 @@ export function TaskFileChangesDisclosure({
         {hidden > 0 && <Button size="small" className="task-file-changes-more" onClick={() => setShowAll(true)}>
           {t('local.fileChanges.showMore', { count: hidden })}<UiIcon name="chevron-down" size={14}/>
         </Button>}
-        {showAll && count > INITIAL_VISIBLE_FILES && <Button size="small" className="task-file-changes-more" onClick={() => setShowAll(false)}>
+        {showAll && items.length > INITIAL_VISIBLE_FILES && <Button size="small" className="task-file-changes-more" onClick={() => setShowAll(false)}>
           {t('local.fileChanges.showLess')}<UiIcon name="arrow-up" size={14}/>
         </Button>}
       </div>
-    </details>
+    </section>
     {diffPath && <Drawer open title={diffPath} onClose={() => setDiffPath(null)}>
       {diffLoading && <p>{t('local.fileChanges.refreshing')}</p>}
       {diffError && <p role="alert">{t('local.fileChanges.diffUnavailable')}</p>}

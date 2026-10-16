@@ -22,8 +22,14 @@ test('Review and Live reuse one changed-file card after the conversation', () =>
 
 test('Changed-file card keeps compact list, evidence, and real on-demand diff preview', () => {
   assert.match(component, /INITIAL_VISIBLE_FILES = 3/)
-  assert.match(component, /<details className="task-file-changes">/)
-  assert.doesNotMatch(component, /<details className="task-file-changes" open>/)
+  assert.match(component, /<section className="task-file-changes">/)
+  assert.match(component, /<div className="task-file-changes-header">/)
+  assert.doesNotMatch(component, /<details\b/)
+  assert.match(styles, /\.task-surface \.task-file-changes-header \{/)
+  assert.match(component, /const displayed = showAll \? items : items\.slice\(0, INITIAL_VISIBLE_FILES\)/)
+  assert.match(component, /const hidden = items\.length - displayed\.length/)
+  assert.match(component, /\{hidden > 0 && <Button/)
+  assert.match(component, /\{showAll && items\.length > INITIAL_VISIBLE_FILES && <Button/)
   assert.match(component, /confidence === 'exact' && !isObserved/)
   assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
   assert.match(component, /<Drawer open/)
