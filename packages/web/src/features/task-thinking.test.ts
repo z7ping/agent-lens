@@ -79,10 +79,11 @@ test('思考片段与共享处理详情都使用统一大脑图标与折叠摘�
     defaultExpanded: false,
     children: '历史处理详情',
   }))
-  assert.match(process, /task-thinking-kind-mark/)
+  assert.doesNotMatch(process, /task-thinking-kind-mark/)
+  assert.match(process, /task-thinking-chevron/)
   assert.match(process, /data-task-thinking-kind="process"/)
   assert.match(process, /task-thinking-running-mark/)
   // 同一个 disclosure 承担摘要与展开；BrainCircuit 是现有 UiIcon.thinking。
-  assert.match(process, /lucide-brain-circuit|lucide-brain|brain-circuit/i)
+  assert.match(running, /lucide-brain-circuit|lucide-brain|brain-circuit/i)
 })
 

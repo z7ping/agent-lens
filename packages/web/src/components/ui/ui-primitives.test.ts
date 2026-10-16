@@ -252,7 +252,7 @@ test('Task Center context owns search, controlled filters and task list', () => 
 
 test('Tools and Insights share view toolbar filters and keep the detail Drawer', () => {
   assert.match(toolsPage, /import \{ SidebarFilterDisclosure \} from '\.\.\/components\/SidebarFilterDisclosure'/)
-  assert.match(toolsPage, /import \{ Drawer, IconButton, SelectMenu, UiIcon \} from '\.\.\/components\/ui'/)
+  assert.match(toolsPage, /import \{ Button, Drawer, IconButton, SelectMenu, UiIcon \} from '\.\.\/components\/ui'/)
   assert.match(toolsPage, /createPortal\(toolbarFilters, toolbarHost\)/)
   assert.match(toolsPage, /<SidebarFilterDisclosure\s+summary=\{agentSelectionSummary\}/)
   assert.match(toolsPage, /agentSelection=\{\{ mode: 'multiple', value: usage\.filters\.sourceIds/)
@@ -281,7 +281,7 @@ test('Review, Backup and Agent Overview retain their valid local primitives', ()
   assert.doesNotMatch(reviewPage, /document\.addEventListener\('keydown'/)
   assert.doesNotMatch(reviewCss, /@media \(max-width: (?:1180|900|640)px\)/)
 
-  assert.match(backupPage, /import \{[^}]*\bButton\b[^}]*\bDialog\b[^}]*\bDrawer\b[^}]*\bToolbarGroup\b[^}]*\} from '\.\.\/components\/ui'/)
+  assert.match(backupPage, /import \{[^}]*\bButton\b[^}]*\bDialog\b[^}]*\bDrawer\b[^}]*\} from '\.\.\/components\/ui'/)
   assert.match(backupPage, /<Drawer[\s\S]*?className="backup-(?:physical-path|preview)-drawer"/)
   assert.match(backupPage, /<Dialog[\s\S]*?className="backup-confirm-overlay"/)
   assert.doesNotMatch(backupCss, /@media \(max-width: (?:1180|820|640)px\)/)

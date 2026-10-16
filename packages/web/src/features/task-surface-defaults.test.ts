@@ -34,7 +34,7 @@ test('Task Review 将 commentary、reasoning 与工具统一放入处理详情',
   assert.match(reviewPage, /entry\.type === 'process'/)
   assert.match(reviewPage, /function ReviewProcessGroup/)
   assert.match(reviewPage, /return <TaskProcessGroup/)
-  assert.match(reviewPage, /review:local\.process\.output/)
+  assert.match(reviewPage, /t\('local\.process\.output'\)/)
 })
 
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
