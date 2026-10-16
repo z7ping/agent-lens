@@ -16,7 +16,10 @@ const liveTask = [
   readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
 ].join('\n')
 const liveHistoryWindow = readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8')
-const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+const review = [
+  'review-session-format.ts', 'ReviewEvidenceInspector.tsx', 'ReviewRoundPresentation.tsx',
+  'review-reader-position.ts', 'use-review-session.ts', 'ReviewPage.tsx',
+].map(file => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).join('\n')
 const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 'utf8')
 
 test('轮次导轨保持旧版共享阅读锚点与 Rail Frame 位置', () => {

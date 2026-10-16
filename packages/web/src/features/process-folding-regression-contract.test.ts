@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+const review = [
+  'review-session-format.ts', 'ReviewEvidenceInspector.tsx', 'ReviewRoundPresentation.tsx',
+  'review-reader-position.ts', 'use-review-session.ts', 'ReviewPage.tsx',
+].map(file => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).join('\n')
 const piRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
 const thinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const round = readFileSync(new URL('./TaskRound.tsx', import.meta.url), 'utf8')
