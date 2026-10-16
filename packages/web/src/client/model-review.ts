@@ -741,4 +741,5 @@ export abstract class AgentLensReviewModel extends AgentLensIntegrationModel {
       this.agentsInvalidation += 1
       this.patch({ agentCoverage: null, agentsHasNewData: true })
     }
-  }}
+  }
+}
