@@ -126,11 +126,11 @@ for (const marker of [
 
 // Command summaries inherit the shared 13px Tool Row typography in Review and Live.
 // A 12px command-only override failed the real 1280/1366 desktop readability gate.
-const commandSummary = detailOwner.match(/\\.task-surface \\.task-tool-call\\[data-command='true'\\] \\.task-tool-summary-text\\s*\\{([^}]*)\\}/s)?.[1]
-if (!commandSummary || /font(?:-size)?\\s*:/.test(commandSummary)) {
+const commandSummary = detailOwner.match(/\.task-surface \.task-tool-call\[data-command='true'\] \.task-tool-summary-text\s*\{([^}]*)\}/s)?.[1]
+if (!commandSummary || /font(?:-size)?\s*:/.test(commandSummary)) {
   throw new Error('命令型 Tool 摘要必须继承共享 Tool Row 的 13px 字号，不得私自覆写')
 }
-if (!/\\.task-tool-call > summary\\.task-tool-row\\s*\\{[^}]*font:\\s*13px\\/1\\.45 var\\(--font-ui\\);/s.test(detailOwner)) {
+if (!/\.task-tool-call > summary\.task-tool-row\s*\{[^}]*font:\s*13px\/1\.45 var\(--font-ui\);/s.test(detailOwner)) {
   throw new Error('共享 Tool Row 必须保持 13px 正文字号')
 }
 
