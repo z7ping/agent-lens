@@ -1,37 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type {
-  LiveCommandDto,
-  LiveEventDto,
-  LiveHistoryIndexDto,
-  LiveInputCapabilitiesDto,
-  LiveMessageActionContributionDto,
-  LiveMessageDto,
-  LiveModelControlDto,
-  LiveQueueStateDto,
-  LiveRuntimeActionContributionDto,
-  LiveRuntimeDisclosureContributionDto,
-  LiveRuntimeStateDto,
-  LiveSnapshotDto,
-  LiveThinkingControlDto,
-} from '@agent-lens/protocol'
+import type { LiveRuntimeStateDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
-import { liveApi, type LiveProductMetadata } from '../client/live'
+import { liveApi } from '../client/live'
 import { ComposerPillSelect } from '../components/ComposerPillSelect'
-import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
-import {
-  LiveMarkdownComposer,
-  type LiveMarkdownComposerDraft,
-  type LiveMarkdownComposerHandle,
-} from '../components/LiveMarkdownComposer'
-import {
-  liveComposerDraftKey,
-  readLiveComposerDraft,
-  writeLiveComposerDraft,
-} from '../components/live-composer-session-state'
+import { LiveMarkdownComposer } from '../components/LiveMarkdownComposer'
+import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
@@ -39,43 +16,16 @@ import { useLiveTaskState } from './live-task-state'
 import { useLiveTaskRuntime } from './use-live-task-runtime'
 import { useLiveTaskHistory } from './use-live-task-history'
 import { useLiveTaskActions } from './use-live-task-actions'
-import { emptyLiveQueue, restoredQueueDrafts, queueTextMessage, firstUserEntryCursor, type LiveQueueMode, type PendingQueueSubmission, type RestoredQueueDraft, type LiveQueueListItem } from './live-task-queue'
-import { messageText, messageHasAttachments, optimisticMessageAttachments, unsupportedInput } from './live-task-input'
-import {
-  LIVE_TASK_SNAPSHOT_PAGE_LIMIT,
-  type LiveHistoryPageBlock,
-  historyPageBlock,
-  aggregateHistoryPage,
-  compactHistoryBlocks,
-  refreshLatestHistoryBlock,
-  captureLiveReaderAnchor,
-  restoreLiveReaderAnchor,
-  splitLiveProjectionItems,
-  prependUniqueLiveProjectionItems,
-  appendUniqueLiveProjectionItems,
-  loadBoundedRecoverySnapshot,
-} from './live-task-history-window'
+import { type LiveQueueListItem } from './live-task-queue'
+import { messageText } from './live-task-input'
+import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
 import { GenericLiveRound, StableLiveRounds } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
-import {
-  appendLiveInputHistory,
-  appendOptimisticLiveUserMessage,
-  projectLiveInputHistory,
-  projectLiveSnapshotEntries,
-  LiveTaskRoundProjector,
-  liveEventChangesTaskTranscript,
-  mergeLiveActiveProjectionItems,
-  reduceLiveTaskEvent,
-  settleLiveTaskProjectionItems,
-  type LiveTaskProjectionAttachment,
-  type LiveTaskProjectionItem,
-} from './live-task-projection'
-import { LiveFollowController } from './live-follow-controller'
-import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
+import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
+import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
-import { ToolOutputContent } from './ToolOutputContent'
 import { workspaceDisplayName } from './task-detail-model'
 
 function statusLabel(
