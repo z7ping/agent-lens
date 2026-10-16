@@ -12,7 +12,9 @@ function delay(ms: number): Promise<void> {
 async function waitFor(
   predicate: () => boolean,
   message: string,
-  timeoutMs = 5_000,
+  // Windows uses a 1s Chokidar polling interval, so a busy shared CI runner
+  // may need several scan cycles before a new file is observed.
+  timeoutMs = process.platform === 'win32' ? 12_000 : 5_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
