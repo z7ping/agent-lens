@@ -4,7 +4,6 @@ import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentD
 import { agentLabel } from '../components/AgentScope'
 import { AgentLensApi } from '../client/api'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
-import type { TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { type ToolVisualKind } from '../components/ToolKindIcon'
