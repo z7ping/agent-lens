@@ -7,7 +7,7 @@ import { projectReviewLiveInteraction } from './review-live-interaction'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
-import { workspaceDisplayName } from './task-detail-model'
+import { readableTaskHeaderTitle, workspaceDisplayName } from './task-detail-model'
 import { formatTime, formatDateTime, sessionRelativeTime, duration, compactTitle, hubSessionTime, hubSessionTitle } from './review-session-format'
 import { Inspector } from './ReviewEvidenceInspector'
 import { ReviewRoundAdapter } from './ReviewRoundPresentation'
@@ -132,7 +132,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           agent={taskDetailModel?.agentLabel ?? ''}
           context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? t('local.session.unlinkedProject')}
           showStatus={false}
-          title={<span title={taskDetailModel?.title}>{compactTitle(taskDetailModel?.title)}</span>}
+          title={<span title={readableTaskHeaderTitle(taskDetailModel?.title)}>{compactTitle(readableTaskHeaderTitle(taskDetailModel?.title))}</span>}
           metrics={[]}
           viewActions={<Button role="menuitem" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</Button>}
           readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
