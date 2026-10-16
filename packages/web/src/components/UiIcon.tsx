@@ -33,6 +33,7 @@ import {
   Globe,
   GitFork,
   GripVertical,
+  Info,
   Layers,
   Shield,
   ListTodo,
@@ -50,6 +51,7 @@ import {
   Search,
   Send,
   Settings,
+  SlidersHorizontal,
   Sun,
   SquareTerminal,
   TrendingUp,
@@ -94,6 +96,7 @@ export type UiIconName =
   | 'file-code'
   | 'link'
   | 'folder-open'
+  | 'info'
   | 'language'
   | 'menu'
   | 'moon'
@@ -105,6 +108,7 @@ export type UiIconName =
   | 'search'
   | 'send'
   | 'settings'
+  | 'sliders-horizontal'
   | 'sort-down'
   | 'sort-up'
   | 'sun'
@@ -155,6 +159,7 @@ const icons = {
   'file-code': FileCode2,
   link: Link2,
   'folder-open': FolderOpen,
+  info: Info,
   language: Globe,
   menu: Menu,
   moon: Moon,
@@ -166,6 +171,7 @@ const icons = {
   search: Search,
   send: Send,
   settings: Settings,
+  'sliders-horizontal': SlidersHorizontal,
   'sort-down': ChevronDown,
   'sort-up': ChevronUp,
   sun: Sun,
