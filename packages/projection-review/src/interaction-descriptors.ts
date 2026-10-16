@@ -593,7 +593,8 @@ export class InteractionDescriptorStore {
         durationMs: processStartedAt !== undefined && processEndedAt !== undefined
           ? Math.max(0, processEndedAt - processStartedAt)
           : 0,
-        availability: omittedFactCount > 0 ? 'partial' : 'available',
+        availability: omittedFactCount > 0 ? 'truncated' : 'complete',
+        ...(omittedFactCount > 0 ? { reasonCode: 'summary-limit' as const } : {}),
         totalFactCount,
         ...(omittedFactCount > 0 ? { omittedFactCount } : {}),
       })
