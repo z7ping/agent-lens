@@ -34,8 +34,8 @@ export function LocalResourceReference({
   }
 
   const classes = `local-resource-reference is-${presentation} is-${kind} ${className}`.trim()
-  const content = kind === 'file'
-    ? <LocalFileLink href={value} className="local-resource-link"><code title={value}>{label}</code></LocalFileLink>
+  const content = kind === 'file' || kind === 'directory'
+    ? <LocalFileLink href={value} resourceKind={kind} className="local-resource-link"><code title={value}>{label}</code></LocalFileLink>
     : <code title={value}>{label}</code>
 
   return <span className={classes} data-local-resource-kind={kind}>
