@@ -25,7 +25,8 @@ export async function observedInteractionFileChanges(
   const observations: CanonicalObservation[] = []
   let after: ObservationCursor | undefined
   let truncated = false
-  while (observations.length < MAX_ROUND_OBSERVATIONS) {
+  let scanned = 0
+  while (scanned < MAX_ROUND_OBSERVATIONS) {
     const page = await storage.repositories.observations.query({
       logicalSessionIds: [logicalSessionId],
       from,
@@ -34,9 +35,10 @@ export async function observedInteractionFileChanges(
       order: 'asc',
       limit: PAGE_SIZE,
     })
+    scanned += page.length
     observations.push(...page.filter(item => item.interactionId === interactionId))
     if (page.length < PAGE_SIZE) break
-    if (observations.length >= MAX_ROUND_OBSERVATIONS) { truncated = true; break }
+    if (scanned >= MAX_ROUND_OBSERVATIONS) { truncated = true; break }
     after = cursorFor(page[page.length - 1]!)
   }
   return { items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations)), truncated }
