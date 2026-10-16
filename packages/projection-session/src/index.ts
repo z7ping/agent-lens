@@ -1,4 +1,5 @@
 export * from './task-file-change-plugin'
+export { readGitWorkspaceFileDiff } from './git-workspace-snapshot'
 export * from './summary-plugin'
 
 import type {

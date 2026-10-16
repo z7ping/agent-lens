@@ -17,6 +17,8 @@ export interface TaskFileChangeDto {
 
 export interface TaskFileChangesResponseDto {
   logicalSessionId: string
+  /** Present only for evidence-scoped turn results; never exact Git session delta. */
+  interactionId?: string
   workspacePath?: string
   rootPath?: string
   items: TaskFileChangeDto[]
@@ -30,5 +32,14 @@ export interface TaskFileChangesResponseDto {
   meta: {
     protocolVersion: typeof AGENT_LENS_PROTOCOL_VERSION
     generatedAt: string
+    truncated?: boolean
   }
+}
+
+export interface TaskFileDiffResponseDto {
+  path: string
+  available: boolean
+  diff?: string
+  truncated?: boolean
+  reason?: 'no-baseline' | 'not-exact' | 'git-unavailable'
 }

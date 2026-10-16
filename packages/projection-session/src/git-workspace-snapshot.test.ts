@@ -8,6 +8,7 @@ import test from 'node:test'
 import {
   captureGitWorkspaceSnapshot,
   diffGitWorkspaceSnapshot,
+  readGitWorkspaceFileDiff,
 } from './git-workspace-snapshot'
 
 const execFileAsync = promisify(execFile)
@@ -118,5 +119,27 @@ test('Git workspace baseline detects rename and delete against the task-start tr
         deletions: 0,
       },
     ])
+  })
+})
+
+test('Git diff preview reads the recorded final tree, not later worktree edits', async () => {
+  await withRepo(async root => {
+    await writeFile(join(root, 'a.txt'), 'before\n', 'utf8')
+    await git(root, 'add', 'a.txt')
+    await git(root, 'commit', '-m', 'initial')
+    const baseline = await captureGitWorkspaceSnapshot(root)
+    assert.ok(baseline)
+    await writeFile(join(root, 'a.txt'), 'after\n', 'utf8')
+    const after = await captureGitWorkspaceSnapshot(root)
+    assert.ok(after)
+    await writeFile(join(root, 'a.txt'), 'unrelated later change\n', 'utf8')
+    const result = await readGitWorkspaceFileDiff(root, baseline!.treeSha, after!.treeSha, 'a.txt')
+    assert.match(result.diff, /\+after/)
+    assert.doesNotMatch(result.diff, /unrelated later change/)
+    assert.equal(result.truncated, false)
+    await assert.rejects(
+      () => readGitWorkspaceFileDiff(root, baseline!.treeSha, after!.treeSha, '../outside.txt'),
+      /Unsafe Git diff path/,
+    )
   })
 })

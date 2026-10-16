@@ -535,6 +535,40 @@
 .task-surface .task-tool-inspect { padding: 3px 6px; border: 1px solid var(--al-line); border-radius: 5px; background: transparent; color: var(--al-accent); cursor: pointer; }
 .task-surface .task-tool-inspect:hover { background: var(--al-soft-2); }
 
+
+/* Shared Task file-change card: Review and Live use one domain style owner. */
+.task-surface .task-file-changes { margin: 8px 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: var(--radius-md); background: var(--al-surface); }
+.task-surface .task-file-changes > summary { display: flex; min-height: 48px; align-items: center; gap: 9px; padding: 8px 12px; color: var(--al-ink-2); cursor: pointer; list-style: none; font-size: 13px; }
+.task-surface .task-file-changes > summary::marker { content: ''; }
+.task-surface .task-file-changes > summary::-webkit-details-marker { display: none; }
+.task-surface .task-file-changes-mark { display: inline-flex; width: 30px; height: 30px; flex: 0 0 30px; align-items: center; justify-content: center; border-radius: var(--radius-sm); background: var(--al-soft-2); color: var(--al-muted); }
+.task-surface .task-file-changes-heading { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 650; }
+.task-surface .task-file-changes-delta { display: inline-flex; align-items: center; gap: 8px; font: 12px/1.3 var(--font-mono); }
+.task-surface .task-file-change-added { color: var(--al-success); font: 12px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.task-surface .task-file-change-deleted { color: var(--al-danger); font: 12px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.task-surface .task-file-changes-state,
+.task-surface .task-file-changes-observed { flex: 0 0 auto; color: var(--al-muted-2); font-size: 12px; }
+.task-surface .task-file-changes-chevron { flex: 0 0 14px; margin-left: auto; color: var(--al-muted-2); transform: rotate(90deg); transition: transform .16s ease; }
+.task-surface .task-file-changes:not([open]) > summary .task-file-changes-chevron { transform: rotate(0); }
+.task-surface .task-file-changes-list { border-top: 1px solid var(--al-line); }
+.task-surface .task-file-change-row { display: flex; min-height: 34px; min-width: 0; align-items: center; gap: 8px; padding: 6px 11px; color: var(--al-ink-2); font-size: 12px; }
+.task-surface .task-file-change-row + .task-file-change-row { border-top: 1px solid color-mix(in srgb, var(--al-line) 65%, transparent); }
+.task-surface .task-file-change-status { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; border-radius: var(--radius-sm); background: var(--al-soft-2); color: var(--al-muted); font: 700 12px/1 var(--font-mono); }
+.task-surface .task-file-change-status.is-added { color: var(--al-success); }
+.task-surface .task-file-change-status.is-deleted { color: var(--al-danger); }
+.task-surface .task-file-change-status.is-modified,
+.task-surface .task-file-change-status.is-renamed { color: var(--al-accent); }
+.task-surface .task-file-change-path { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 6px; overflow: hidden; }
+.task-surface .task-file-change-path > code,
+.task-surface .task-file-change-path .local-resource-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-surface .task-file-change-path code { font: 12px/1.45 var(--font-mono); }
+.task-surface .task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
+.task-surface .task-file-change-diff-action { flex: 0 0 auto; }
+.task-surface .task-file-changes-more { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--al-line); border-radius: 0; background: transparent; color: var(--al-muted); }
+.task-surface .task-file-changes-error,
+.task-surface .task-file-changes-empty { padding: 9px 11px; color: var(--al-muted); font-size: 12px; }
+.task-surface .task-file-changes-error { color: var(--al-danger); }
+
 /* ── Event ── */
 .task-surface .task-event-row {
   display: grid;

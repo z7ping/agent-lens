@@ -195,12 +195,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
             {historyInteractionError && <div className="page-error" role="alert">{historyInteractionError}</div>}
 
-            <TaskFileChangesDisclosure
-              value={review.fileChanges}
-              loading={review.fileChangesLoading}
-              error={review.fileChangesError}
-            />
-
             {review.relationships?.items.length ? <details className="session-relationship-tree">
               <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
               <div>{review.relationships.items.map(item => <div key={item.id}>{item.fromNativeSessionId ?? item.fromSessionId} <span><UiIcon name="arrow-right" size={14}/></span> {item.toNativeSessionId ?? item.toSessionId}</div>)}</div>
@@ -221,6 +215,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               >
                 <ReviewRoundAdapter
                   sessionId={detail.id}
+                  fileChangesEnabled={Boolean(review.fileChanges?.summary.count) && detail.interactionCount > 1}
                   interaction={item.interaction}
                   round={item.round}
                   defaultExpanded={expandAllRounds}
@@ -234,6 +229,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   loadProcess={model.reviewProcessDetail}
                 />
               </VirtualRoundMount>)}
+              <TaskFileChangesDisclosure value={review.fileChanges} loading={review.fileChangesLoading} error={review.fileChangesError}/>
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
               {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
                 {review.detailLoadingMore
