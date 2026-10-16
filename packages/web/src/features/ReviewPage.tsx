@@ -4,7 +4,6 @@ import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
 import { historyTaskPresentation, sessionListTitle } from './task-center'
 import { projectReviewLiveInteraction } from './review-live-interaction'
-import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { TaskHeader } from './TaskHeader'
 import { TaskSurface } from './TaskSurface'
 import { readableTaskHeaderTitle, workspaceDisplayName } from './task-detail-model'
@@ -215,8 +214,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               >
                 <ReviewRoundAdapter
                   sessionId={detail.id}
-                  fileChangesEnabled={Boolean(review.fileChanges?.summary.count) && detail.interactionCount > 1}
-                  sessionFileChanges={review.fileChanges}
+                  fileChangesEnabled={Boolean(review.fileChanges?.summary.count || review.fileChanges?.meta.truncated)}
                   interaction={item.interaction}
                   round={item.round}
                   defaultExpanded={expandAllRounds}
@@ -230,7 +228,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   loadProcess={model.reviewProcessDetail}
                 />
               </VirtualRoundMount>)}
-              <TaskFileChangesDisclosure value={review.fileChanges} loading={review.fileChangesLoading} error={review.fileChangesError}/>
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
               {!isBackward && roundFilter !== 'latest' && <div ref={detailLoadSentinelRef} className="detail-load-sentinel" aria-live="polite">
                 {review.detailLoadingMore
