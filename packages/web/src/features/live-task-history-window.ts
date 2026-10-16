@@ -4,7 +4,7 @@ import { liveTaskStableRoundPrefixLength, type LiveTaskProjectionItem } from './
 
 /** 限定实时会话的历史快照窗口，滚动锚点只记录可恢复的轮次定位。 */
 export const LIVE_TASK_SNAPSHOT_PAGE_LIMIT = 120
-const LIVE_TASK_HISTORY_WINDOW_MAX_PAGES = 5
+export const LIVE_TASK_HISTORY_WINDOW_MAX_PAGES = 5
 
 export interface LiveHistoryPageBlock {
   page: NonNullable<LiveSnapshotDto['page']>

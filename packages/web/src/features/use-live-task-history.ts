@@ -2,7 +2,7 @@ import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
 import { useCallback, useEffect } from 'react'
 import { liveApi } from '../client/live'
-import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, compactHistoryBlocks, refreshLatestHistoryBlock, captureLiveReaderAnchor, restoreLiveReaderAnchor, splitLiveProjectionItems, prependUniqueLiveProjectionItems, appendUniqueLiveProjectionItems } from './live-task-history-window'
+import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, LIVE_TASK_HISTORY_WINDOW_MAX_PAGES, historyPageBlock, aggregateHistoryPage, compactHistoryBlocks, refreshLatestHistoryBlock, captureLiveReaderAnchor, restoreLiveReaderAnchor, splitLiveProjectionItems, prependUniqueLiveProjectionItems, appendUniqueLiveProjectionItems } from './live-task-history-window'
 import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
 
 /** 只拥有 Reader 用户意图、双向历史分页与滚动位置保护。 */
