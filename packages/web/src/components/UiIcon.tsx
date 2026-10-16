@@ -24,6 +24,9 @@ import {
   Copy,
   Dot,
   FileText,
+  File,
+  FileCode2,
+  Link2,
   Filter,
   FolderOpen,
   FlaskConical,
@@ -87,6 +90,9 @@ export type UiIconName =
   | 'event-context'
   | 'expand'
   | 'filter'
+  | 'file'
+  | 'file-code'
+  | 'link'
   | 'folder-open'
   | 'language'
   | 'menu'
@@ -145,6 +151,9 @@ const icons = {
   'event-context': Layers,
   expand: Maximize2,
   filter: Filter,
+  file: File,
+  'file-code': FileCode2,
+  link: Link2,
   'folder-open': FolderOpen,
   language: Globe,
   menu: Menu,
