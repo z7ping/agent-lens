@@ -14,7 +14,7 @@ import {
 import { UsageInsightsProjection } from '@agent-lens/projection-insights'
 import { AgentOverviewProjection, FacetProjection, SessionRelationshipProjection } from '@agent-lens/projection-overview'
 import { ReviewProjection, type HubReviewProjection } from '@agent-lens/projection-review'
-import { SessionProjection } from '@agent-lens/projection-session'
+import { SessionProjection, readGitWorkspaceFileDiff } from '@agent-lens/projection-session'
 import { observedInteractionFileChanges, taskFileChangesResponse } from './task-file-changes-http'
 import { TimelineProjection } from '@agent-lens/projection-timeline'
 import { ToolAssetUsageProjection } from '@agent-lens/projection-usage'
@@ -773,6 +773,46 @@ export async function startHttpSurface(
             ]))
           : [[], null] as const
         writeJson(response, 200, taskFileChangesResponse(id, items, capture))
+        return
+      }
+
+      const reviewFileDiffMatch = url.pathname.match(/^\/api\/v1\/review\/([^/]+)\/file-diff$/)
+      if (reviewFileDiffMatch) {
+        const id = decodeURIComponent(reviewFileDiffMatch[1] ?? '')
+        const path = url.searchParams.get('path') ?? ''
+        if (!id || !path || path.length > 4096) throw badRequest('Invalid file diff request')
+        const [items, capture] = storage.taskFileChanges
+          ? await withReadPriority(storage, 'supporting', () => Promise.all([
+              storage.taskFileChanges!.listBySession(id),
+              storage.taskFileChanges!.getLatestBySession(id),
+            ]))
+          : [[], null] as const
+        const item = items.find(change => change.path === path)
+        if (!item) {
+          writeJson(response, 404, { error: 'task_file_change_not_found' })
+          return
+        }
+        if (item.confidence !== 'exact') {
+          writeJson(response, 200, { path, available: false, reason: 'not-exact' })
+          return
+        }
+        if (!capture?.gitRootPath || !capture.baselineTreeSha || !capture.finalTreeSha) {
+          writeJson(response, 200, { path, available: false, reason: 'no-baseline' })
+          return
+        }
+        try {
+          const fileDiff = await readGitWorkspaceFileDiff(
+            capture.gitRootPath,
+            capture.baselineTreeSha,
+            capture.finalTreeSha,
+            path,
+            item.oldPath,
+          )
+          writeJson(response, 200, { path, available: true, ...fileDiff })
+        } catch {
+          // Missing/pruned anonymous Git tree or unavailable local repository.
+          writeJson(response, 200, { path, available: false, reason: 'git-unavailable' })
+        }
         return
       }
 
