@@ -366,6 +366,29 @@ export class AgentLensApi {
     )
   }
 
+  reviewInteractionFileChanges(
+    id: string,
+    interaction: { id: string; startedAt: string; endedAt: string },
+    signal?: AbortSignal,
+  ): Promise<TaskFileChangesResponseDto> {
+    const params = new URLSearchParams({
+      interactionId: interaction.id,
+      from: interaction.startedAt,
+      to: interaction.endedAt,
+    })
+    return requestJson<TaskFileChangesResponseDto>(
+      `/api/v1/review/${encodeURIComponent(id)}/file-changes?${params}`,
+      signal ? { signal } : {},
+    )
+  }
+
+  runtimeFileChanges(runtimeSessionId: string, signal?: AbortSignal): Promise<TaskFileChangesResponseDto | null> {
+    return requestJson<TaskFileChangesResponseDto | null>(
+      `/api/v1/task-file-changes/runtime/${encodeURIComponent(runtimeSessionId)}`,
+      signal ? { signal } : {},
+    )
+  }
+
   reviewSummary(id: string): Promise<ReviewSessionSummaryDto | null> {
     return requestJson<ReviewSessionSummaryDto>(`/api/v1/review/${encodeURIComponent(id)}/summary`)
       .catch(error => error instanceof AgentLensRequestError && error.status === 404 ? null : Promise.reject(error))
