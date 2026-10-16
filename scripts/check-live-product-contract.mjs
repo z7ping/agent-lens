@@ -74,6 +74,8 @@ const liveTaskImplementation = [
   liveTask, liveTaskRuntimeHook, liveTaskHistoryHook, liveTaskActionsHook,
   liveTaskStateHook, liveTaskQueue, liveTaskInput, liveTaskTimeline, liveTaskHistoryWindow,
 ].join('\n')
+// 能力和历史操作已迁移至专属 Hook，门禁覆盖实际所有者。
+const reviewImplementation = [reviewPage, await readFile(new URL('../packages/web/src/features/use-review-session.ts', import.meta.url), 'utf8')].join('\n')
 
 const failures = []
 const requireText = (source, pattern, label) => {
@@ -129,7 +131,7 @@ forbidText(liveNewTask, /\bpiLiveApi\b|\bliveId\s*===\s*['"]pi['"]|\bproductId\s
 requireText(liveTaskRuntimeHook, /liveApi\.metadata\(current\.liveId\)/, 'LiveTaskPage 必须按当前 liveId 读取通用 Live Product metadata')
 requireText(liveTaskRuntimeHook, /const metadataRequest = liveApi\.metadata\(current\.liveId\)/, 'LiveTaskPage 不得为了单个 Live 任务先拉取完整 Product catalog')
 for (const capability of ['stream', 'recovery', 'extension-ui', 'command-discovery', 'workspace-file-reference', 'model-switching', 'thinking-control', 'send', 'steer', 'queue', 'interrupt']) {
-  requireText(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), `LiveTaskPage 缺少 capability 驱动：${capability}`)
+  requireText(liveTaskImplementation, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), `LiveTaskPage 缺少 capability 驱动：${capability}`)
 }
 requireText(liveTaskActionsHook, /unsupportedInput\(message, product\.inputCapabilities\)/, 'Live 输入必须由 inputCapabilities 拒绝不支持的输入类型')
 requireText(liveTaskActionsHook, /liveApi\.send\(current\.liveId, current\.runtimeSessionId, message, behavior\)/, 'Live send 必须携带 liveId/runtimeSessionId')
@@ -328,10 +330,10 @@ requireText(liveTask, /onAttachmentPendingChange=\{setComposerAttachmentPending\
 requireText(liveTask, /disabled=\{!canSubmit \|\| !composerHasContent\}/, '发送按钮必须受 capability/pending/content 联合约束')
 
 /* Historical Review actions are also product/capability projections, never source-id checks. */
-requireText(reviewPage, /projectReviewLiveInteraction\(detail, liveProducts\)/, 'Review 必须通过通用 Live Product 投影恢复/分叉能力')
-requireText(reviewPage, /liveApi\.resume\(detailLiveInteraction\.liveId, detail\.id\)/, 'Review resume 必须走通用 liveId')
-requireText(reviewPage, /liveApi\.fork\(detailLiveInteraction\.liveId, detail\.id\)/, 'Review fork 必须走通用 liveId')
-forbidText(reviewPage, /sourceIds\.includes\(['"]pi['"]\)[\s\S]{0,500}(?:continueSession|forkContinue)/, 'Review 不得再通过 Pi sourceId 决定历史继续能力')
+requireText(reviewImplementation, /projectReviewLiveInteraction\(detail, liveProducts\)/, 'Review 必须通过通用 Live Product 投影恢复/分叉能力')
+requireText(reviewImplementation, /liveApi\.resume\(detailLiveInteraction\.liveId, detail\.id\)/, 'Review resume 必须走通用 liveId')
+requireText(reviewImplementation, /liveApi\.fork\(detailLiveInteraction\.liveId, detail\.id\)/, 'Review fork 必须走通用 liveId')
+forbidText(reviewImplementation, /sourceIds\.includes\(['"]pi['"]\)[\s\S]{0,500}(?:continueSession|forkContinue)/, 'Review 不得再通过 Pi sourceId 决定历史继续能力')
 requireText(reviewLiveInteraction, /product\.productId === session\.productId/, 'Review Live 能力必须按 productId 匹配')
 requireText(reviewLiveInteraction, /product\.capabilities\.includes\('resume'\)/, 'Review resume 必须来自 capability')
 requireText(reviewLiveInteraction, /product\.capabilities\.includes\('fork'\)/, 'Review fork 必须来自 capability')

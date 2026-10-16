@@ -26,7 +26,7 @@ test('社区语言请求未完成时内置语言仍可启动，随后恢复已�
   let release!: (response: Response) => void
   t.mock.method(globalThis, 'fetch', () => new Promise<Response>(resolve => { release = resolve }))
   await initializeI18n()
-  assert.equal(agentLensI18n.language, 'en-US')
+  assert.equal(agentLensI18n.language, systemProductLocale(typeof navigator === 'undefined' ? undefined : navigator.language))
   assert.equal(localePack('fr-FR'), null)
   release(Response.json({ items: [frenchPack] }))
   await new Promise(resolve => setImmediate(resolve))
@@ -67,11 +67,13 @@ test('语言发现超时中止请求，页面继续使用内置语言', async t 
     })
   })
   await initializeI18n()
+  const initialLanguage = agentLensI18n.language
+  assert.ok(['zh-CN', 'en-US'].includes(initialLanguage))
   assert.equal(signal?.aborted, false)
   t.mock.timers.tick(5_000)
   await Promise.resolve()
   assert.equal(signal?.aborted, true)
-  assert.equal(agentLensI18n.language, 'en-US')
+  assert.equal(agentLensI18n.language, initialLanguage)
 })
 
 test('首次启动按系统语言选择；C/POSIX/未知回退英文', () => {

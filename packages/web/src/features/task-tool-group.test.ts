@@ -38,11 +38,12 @@ test('每次 Tool Call 独立默认收起，Group 不额外折叠，原生顺序
   assert.ok(html.indexOf('代码搜索') < html.indexOf('pnpm test'))
 })
 
-test('默认摘要只有单行：工具图标、类型、简短目标、状态图标及展开箭头', () => {
+test('工具摘要保留类型、状态与箭头，Shell 命令通过独立预览保持可见', () => {
   const html = render()
   assert.match(html, /<summary class="task-tool-row"/)
   assert.match(html, /class="task-tool-kind task-tool-kind-shell"/)
-  assert.match(html, /class="task-tool-summary-text" title="pnpm test">pnpm test<\/span>/)
+  assert.match(html, /class="task-tool-summary-text" title="执行命令">执行命令<\/span>/)
+  assert.match(html, /<code class="task-tool-command-preview" title="pnpm test">pnpm test<\/code>/)
   assert.match(html, /task-tool-row-chevron/)
   assert.doesNotMatch(html, /class="task-tool-command"/)
   assert.doesNotMatch(html, /class="task-tool-target"/)

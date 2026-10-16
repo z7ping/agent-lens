@@ -60,7 +60,7 @@
 .agent-installation > span { display: flex; min-width: 0; align-items: center; gap: 5px; }
 .agent-installation .agent-config { flex: 0 1 auto; max-width: 100%; }
 .agent-installation .agent-config > small { flex: 0 0 auto; white-space: nowrap; }
-.agent-installation .agent-config > .select-menu-trigger { flex: 1 1 320px; width: min(320px, 100%); min-width: 0; }
+.agent-installation .agent-config > .agent-config-selector { flex: 1 1 320px; width: min(320px, 100%); min-width: 0; }
 .agent-installation .agent-config > .local-path-actions { flex: 0 0 auto; }
 .agent-installation small { font-size: 12px; }
 .agent-installation b { color: var(--al-ink-2); font-weight: 620; }

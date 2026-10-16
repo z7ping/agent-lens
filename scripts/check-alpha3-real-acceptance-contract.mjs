@@ -144,7 +144,7 @@ requireText(message, /task-message-assistant/, '消息必须表达 Agent 文档�
 if (/task-message-agent-mark|chat-avatar-agent|chat-row/.test(message)) failures.push('TaskMessage 不得恢复旧 Review 头像/方向类')
 
 requireText(taskDetailCss, /Task Surface 共享详情组件的唯一样式所有者/, 'task-detail.css 必须声明共享详情唯一所有权')
-requireText(taskDetailCss, /grid-template-columns:\s*72px minmax\(0, 1fr\) 18px 14px/, 'Tool 摘要必须单行四列')
+requireText(taskDetailCss, /\.task-surface \.task-tool-call > summary\.task-tool-row\s*\{[^}]*grid-template-columns:\s*72px minmax\(0, 1fr\) auto 14px/s, 'Tool 摘要必须保留类型、正文、可容纳状态与耗时的元信息、展开图标四列')
 requireText(taskDetailCss, /task-tool-summary-text[^}]*text-overflow:\s*ellipsis/s, 'Tool 摘要必须省略溢出')
 requireText(taskDetailCss, /task-tool-section \+ \.task-tool-section/, 'Tool 入出参需视觉分隔')
 requireText(taskDetailCss, /task-message-content[^}]*font-size:\s*14px/s, '对话正文必须保持 14px')

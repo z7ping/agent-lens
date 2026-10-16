@@ -148,8 +148,9 @@ test('Generic Live completion can only originate from Pi agent_settled', () => {
   assert.doesNotMatch(normalize, /type === 'agent_end'[^\n]*completed/)
 })
 
-test('LiveTaskPage final reconciliation stays bound to normalized completed', () => {
-  assert.match(liveTaskPage, /normalizedEvent\?\.type === 'completed'/)
-  assert.doesNotMatch(liveTaskPage, /agent_end/)
-  assert.doesNotMatch(liveTaskPage, /agent_settled/)
+test('Live 结算 Hook 仅依据通用 completed 事件执行最终对账', async () => {
+  const runtimeHook = await readFile(new URL('../../../web/src/features/use-live-task-runtime.ts', import.meta.url), 'utf8')
+  assert.match(runtimeHook, /normalizedEvent\?\.type === 'completed'/)
+  assert.doesNotMatch(liveTaskPage + runtimeHook, /agent_end/)
+  assert.doesNotMatch(liveTaskPage + runtimeHook, /agent_settled/)
 })

@@ -60,7 +60,7 @@ test('Pi 真实生命周期事件获得友好标签，同时原始事件保持�
 })
 
 test('新原生事件保留一致的人类可读标签，且不因跨 Agent 丢失语义', () => {
-  const cases: Array<[string, string, string, string]> = [
+  const cases: Array<[string, ReviewEventNodeDto['kind'], string, string]> = [
     ['pi', 'session.lifecycle', 'context.edited', '上下文条目已编辑'],
     ['claude-code', 'session.lifecycle', 'task.completed', '任务已完成'],
     ['claude-code', 'session.lifecycle', 'turn.error', '轮次执行失败'],
@@ -72,7 +72,19 @@ test('新原生事件保留一致的人类可读标签，且不因跨 Agent 丢�
     ['dsh', 'context.compaction', '', '上下文压缩'],
   ]
   for (const [sourceId, kind, event, expected] of cases) {
-    const node = { sourceId, kind, label: '通用事件', payload: { event } } as ReviewEventNodeDto
+    const node: ReviewEventNodeDto = {
+      type: 'event',
+      id: `${sourceId}:${kind}:${event}`,
+      at: '2026-10-16T00:00:00.000Z',
+      capturedAt: '2026-10-16T00:00:00.000Z',
+      sourceId,
+      kind,
+      category: 'lifecycle',
+      label: '通用事件',
+      payload: { event },
+      evidence: [],
+      observationIds: [],
+    }
     assert.equal(reviewEventLabel(node), expected, `${sourceId}/${event}`)
   }
   assert.equal(reviewArtifactLabel({ action: 'file.patch', files: ['a.ts'] }), '应用文件补丁')

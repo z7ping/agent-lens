@@ -573,7 +573,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
       <span><small>{t('installation.version')}</small><b>{installation?.version ?? (agent.detected ? t('installation.versionUnavailable') : t('installation.notDetected'))}</b></span>
       {management?.packageState && <span><small>{t('installation.integrationVersion')}</small><b>{management.packageState.installedVersion ?? management.packageState.availableVersion ?? t('installation.notAdded')}</b></span>}
       <span className="agent-config"><small>{t('installation.configDirectory')}</small>{choices.length > 1
-        ? <SelectMenu
+        ? <span className="agent-config-selector"><SelectMenu
             ariaLabel={t('installation.configDirectory')}
             value={installation?.id ?? ''}
             options={choices.map(item => {
@@ -594,7 +594,7 @@ function AgentCard({ model, agent, management, discovery, discoveryScanning, dis
               setPreviewAsset(null)
               setShowAllBindings(false)
             }}
-          />
+          /></span>
         : <code title={configPath}>{configPath ? shortPath(configPath, 52) : agent.detected ? t('installation.pathUnavailable') : t('installation.notDetected')}</code>}
         {configPath && <LocalPathActions path={configPath} onOpen={openPath} onError={reportPathError}/>}
       </span>

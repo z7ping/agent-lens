@@ -420,7 +420,7 @@
 .task-surface .task-thinking-content .task-tool-group { margin-left: 12px; }
 .task-surface .task-process-sequence { display: grid; gap: 5px; }
 .task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }
-.task-surface .task-process-message-label { display: block; margin-bottom: 3px; color: var(--al-muted); font-size: 11px; font-weight: 600; }
+.task-surface .task-process-message-label { display: block; margin-bottom: 3px; color: var(--al-muted); font-size: 12px; font-weight: 600; }
 .task-surface .task-process-sequence > .task-event-row { padding-inline-start: 8px; }
 .task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
 .task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }

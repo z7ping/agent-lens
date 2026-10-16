@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 const mainSource = readFileSync('packages/web/src/main.tsx', 'utf8')
-const clientModel = readFileSync('packages/web/src/client/model.ts', 'utf8')
+const clientModel = readFileSync('packages/web/src/client/model-review.ts', 'utf8')
 const reviewPage = [ readFileSync('packages/web/src/features/review-session-format.ts', 'utf8'),
   readFileSync('packages/web/src/features/ReviewEvidenceInspector.tsx', 'utf8'),
   readFileSync('packages/web/src/features/ReviewRoundPresentation.tsx', 'utf8'),
@@ -59,7 +59,7 @@ for (const retiredClass of ['round-nav-from-start', 'round-nav-latest']) {
   if (reviewPage.includes(retiredClass)) throw new Error(`Review 不得恢复已迁移到 TaskSurface 的私有边界按钮：${retiredClass}`)
 }
 
-const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  async refreshUsage/)?.[1] ?? ''
+const selectSessionBody = clientModel.match(/async selectReviewSession\(id: string\): Promise<void> \{([\s\S]*?)\r?\n  \}/)?.[1] ?? ''
 if (!/this\.api\.reviewDetail\(id, \{\s*direction: 'backward',\s*limit: REVIEW_DETAIL_PAGE_SIZE,\s*process: 'summary'(?:,\s*signal: controller\.signal)?\s*\}\)/.test(selectSessionBody)) throw new Error('默认选择会话必须请求 backward 最新窗口，并只读取 Process Summary')
 if (!selectSessionBody.includes('this.reviewSelectionAbort?.abort()') || !selectSessionBody.includes('signal: controller.signal')) throw new Error('切换会话必须中止旧会话详情请求')
 const fromStartBody = clientModel.match(/async showReviewFromStart\(\): Promise<void> \{([\s\S]*?)\r?\n  \}\r?\n\r?\n  acknowledgeReviewNewData/)?.[1] ?? ''

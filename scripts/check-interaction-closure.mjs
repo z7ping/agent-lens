@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 
 const backup = readFileSync('packages/web/src/features/BackupPage.tsx', 'utf8')
-const review = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
+const review = ['ReviewPage.tsx', 'use-review-session.ts', 'review-reader-position.ts']
+  .map(file => readFileSync(`packages/web/src/features/${file}`, 'utf8')).join('\n')
 const virtualRound = readFileSync('packages/web/src/components/VirtualRoundMount.tsx', 'utf8')
 const diagnostics = readFileSync('packages/web/src/components/AgentInsightsRail.tsx', 'utf8')
 const responsive = readFileSync('packages/web/src/agent-insights-responsive.css', 'utf8')

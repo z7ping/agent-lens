@@ -22,9 +22,10 @@ test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 A
 })
 
 test('Native 消息操作不能因样式隐藏，扩展动作保留可见入口', () => {
-  assert.match(taskDetailCss, /\.task-message-actions \{ display: flex;/)
+  assert.match(taskDetailCss, /\.task-message-actions \{ display: inline-flex;/)
   assert.doesNotMatch(taskDetailCss, /\.task-message-actions \{ display: none;/)
-  assert.match(taskMessageSource, /\{actions && <div className="task-message-actions">\{actions\}<\/div>\}/)
+  assert.match(taskMessageSource, /\{actions && <span className="task-message-actions">\{actions\}<\/span>\}/)
+  assert.match(taskMessageSource, /actions && \(!text \|\| awaitingFirstContent\) && <div className="task-message-actions"/)
 })
 
 test('核心视图保留未识别事件可达性，不用无依据的全量计数', () => {
