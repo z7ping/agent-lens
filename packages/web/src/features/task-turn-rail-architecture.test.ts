@@ -4,6 +4,7 @@ import test from 'node:test'
 
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
 const liveTask = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const liveHistoryWindow = readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8')
 const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
 const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 'utf8')
 
@@ -55,9 +56,9 @@ test('Live 历史导航使用直接边界窗口与滚轮双向分页', () => {
 
 
 test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
-  assert.match(liveTask, /LIVE_TASK_HISTORY_WINDOW_MAX_PAGES\s*=\s*5/)
-  assert.match(liveTask, /compactHistoryBlocks/)
-  assert.match(liveTask, /removedIds/)
+  assert.match(liveHistoryWindow, /LIVE_TASK_HISTORY_WINDOW_MAX_PAGES\s*=\s*5/)
+  assert.match(liveHistoryWindow, /export function compactHistoryBlocks/)
+  assert.match(liveHistoryWindow, /removedIds/)
   assert.match(liveTask, /historyBlocksRef/)
 })
 

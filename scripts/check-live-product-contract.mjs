@@ -7,6 +7,8 @@ const [
   legacyRedirect,
   liveNewTask,
   liveTask,
+  liveTaskTimeline,
+  liveTaskHistoryWindow,
   liveTaskProjection,
   liveStyles,
   liveClient,
@@ -31,6 +33,8 @@ const [
   readFile(new URL('../packages/web/src/features/LegacyLiveTaskRedirect.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/LiveNewTaskPanel.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/LiveTaskPage.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/LiveTaskTimeline.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/features/live-task-history-window.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/live-task-projection.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live.ts', import.meta.url), 'utf8'),
@@ -136,8 +140,10 @@ requireText(liveTask, /liveApi\.executeRuntimeAction\(/, 'LiveTaskPage 必须通
 requireText(liveTask, /<LiveRuntimeDisclosures/, 'LiveTaskPage 必须使用 AgentLens-owned Runtime Disclosure renderer')
 requireText(liveTask, /<div className="pi-live-document live-task-document">[\s\S]{0,500}<LiveRuntimeDisclosures/, 'Runtime Disclosure 必须位于 Session Document 内，不得创建 TaskSurface 第四结构槽')
 requireText(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/, 'Live 流式投影必须分别输出稳定历史与当前活动轮')
-requireText(liveTask, /const GenericLiveRound = memo\(/, 'Live 单轮必须 memo，不能在当前流式 delta 时重绘稳定轮次')
-requireText(liveTask, /const StableLiveRounds = memo\(/, 'Live 稳定历史容器必须 memo，流式 delta 时不能再次遍历全部历史')
+requireText(liveTaskTimeline, /export const GenericLiveRound = memo\(/, 'Live 单轮必须 memo，不能在当前流式 delta 时重绘稳定轮次')
+requireText(liveTaskTimeline, /export const StableLiveRounds = memo\(/, 'Live 稳定历史容器必须 memo，流式 delta 时不能再次遍历全部历史')
+requireText(liveTask, /from '.\/LiveTaskTimeline'/, 'LiveTaskPage 必须消费唯一通用 Live 轮次渲染组件')
+requireText(liveTask, /from '.\/live-task-history-window'/, 'LiveTaskPage 必须复用唯一历史窗口策略')
 requireText(liveTask, /rounds=\{roundSegments\.stable\}/, 'Live 稳定历史必须作为独立 Round 段交给 memo 容器')
 requireText(liveTask, /roundSegments\.active\.map\(/, 'Live 高频渲染只能直接遍历当前活动 Round')
 requireText(liveTask, /snapshotBaseActiveCountRef/, 'Live 完成态必须保留 Snapshot 内活动轮基线，确保增量对账不复制稳定历史')
@@ -156,8 +162,8 @@ requireText(liveTask, /while \(recoveryActive && nextMode\)[\s\S]{0,220}await re
 
 requireText(liveTask, /if \(product\.capabilities\.includes\(['"]recovery['"]\)\)[\s\S]{0,180}recover\(['"]settle['"]\)[\s\S]{0,260}else[\s\S]{0,220}stable:[\s\S]{0,120}previous\.active/, '没有 recovery capability 的 Live 产品完成后必须直接稳定活动轮')
 requireText(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/, 'Live 完成/重连对账必须通过有界恢复 helper 使用稳定 leaf')
-requireText(liveTask, /async function loadBoundedRecoverySnapshot[\s\S]{0,700}liveApi\.snapshot\([\s\S]{0,180}\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/, 'Live 恢复每次 Snapshot 必须保持固定有界窗口')
-requireText(liveTask, /while \(snapshot\.page\?\.hasLater && snapshot\.page\.after\)/, 'Live 恢复存在后续页时必须按 after 有界追平')
+requireText(liveTaskHistoryWindow, /export async function loadBoundedRecoverySnapshot[\s\S]{0,700}liveApi\.snapshot\([\s\S]{0,180}\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/, 'Live 恢复每次 Snapshot 必须保持固定有界窗口')
+requireText(liveTaskHistoryWindow, /while \(snapshot\.page\?\.hasLater && snapshot\.page\.after\)/, 'Live 恢复存在后续页时必须按 after 有界追平')
 forbidText(liveTask, /<TaskHeader[\s\S]{0,1800}<LiveRuntimeDisclosures[\s\S]{0,300}<div[\s\S]{0,120}className="pi-live-reader/, 'Runtime Disclosure 不得作为 Header 与 Reader 之间的 TaskSurface 顶层兄弟节点')
 forbidText(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/, 'LiveTaskPage 不得解释 Pi 私有 Runtime 诊断字段')
 requireText(liveRuntimeDisclosures, /LiveRuntimeDisclosureContributionDto/, 'Runtime Disclosure renderer 必须消费通用 Protocol DTO')
@@ -169,13 +175,13 @@ forbidText(liveStyles, /max-width:\s*720px/, 'Live 样式不得引入脱离统�
 requireText(liveStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.pi-live-compose-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
 forbidText(liveTask, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/, 'LiveTaskPage 不得再次持有独立实时会话导航或重复拉取 runtime list')
 requireText(liveTask, /LiveTaskRoundProjector/, 'LiveTaskPage 必须通过通用增量 Projector 构造语义 Round')
-requireText(liveTask, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
+requireText(liveTaskTimeline, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
 requireText(liveTask, /new LiveFollowController\(\)/, 'LiveTaskPage 必须恢复流式阅读自动跟随控制')
 requireText(liveTask, /pi-live-new-records/, 'LiveTaskPage 必须在用户脱离底部后提供新内容提示')
 requireText(liveTask, /composerExpanded/, 'LiveTaskPage 必须保留通用输入区展开/收起能力')
 requireText(liveTask, /startupQueued/, 'LiveTaskPage 必须保留 Runtime 初始化期首条消息暂存')
 requireText(liveTask, /interruptNotice/, 'LiveTaskPage 必须保留中断成功反馈')
-requireText(liveTask, /attachments=\{item\.attachments\}/, 'LiveTaskPage 必须把 Snapshot 附件交给共享 TaskMessage')
+requireText(liveTaskTimeline, /attachments=\{item\.attachments\}/, 'LiveTaskPage 必须把 Snapshot 附件交给共享 TaskMessage')
 requireText(liveTaskProjection, /projectLiveTaskRounds/, 'Live Product 投影必须提供语义 Round')
 requireText(liveTaskProjection, /LIVE_TASK_ROUND_FACT_LIMIT\s*=\s*8/, 'Live 长单轮必须保持有界事实分块，不能一次挂载整轮')
 requireText(liveTaskProjection, /class LiveTaskRoundProjector/, 'Live 投影必须缓存稳定历史，不能每个流式批次重算全部会话')
