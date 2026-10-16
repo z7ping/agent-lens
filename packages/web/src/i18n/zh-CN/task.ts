@@ -73,6 +73,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       running: '处理中',
     },
     round: {
+      filesMentioned: '用户提及文件',
       running: '进行中',
       stopped: '已停止',
       calls: '{{count}} 调用',

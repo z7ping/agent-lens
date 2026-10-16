@@ -73,6 +73,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       running: 'Processing',
     },
     round: {
+      filesMentioned: 'Files mentioned',
       running: 'Running',
       stopped: 'Stopped',
       calls: '{{count}} calls',
