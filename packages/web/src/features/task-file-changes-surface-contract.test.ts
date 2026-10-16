@@ -15,7 +15,7 @@ test('Review and Live reuse one changed-file card after the conversation', () =>
   assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count\)\}/)
   assert.match(reviewPage, /annotatedInteractions\.map[\s\S]*?TaskFileChangesDisclosure/)
   assert.match(live, /runtimeFileChanges\(current\.runtimeSessionId/)
-  assert.match(live, /<TaskFileChangesDisclosure value=\{fileChanges\}/)
+  assert.match(live, /<TaskFileChangesDisclosure key=\{fileChangeRuntimeId\}[\s\S]*?result : null\}/)
   assert.match(styles, /\.task-surface \.task-file-changes/)
   assert.doesNotMatch(reviewStyles, /\.task-file-changes\s*\{/)
 })
