@@ -2,9 +2,7 @@ import type { AgentCoverageResponseDto, AgentDetailResponseDto, AgentEnrichmentR
 import { AgentLensApi, type QueryFilters, type ReviewFilters } from './api'
 import { translateProduct } from '../i18n/runtime'
 
-import type { IntegrationManagementResponseDto, IntegrationToolDiscoveryResponseDto } from '@agent-lens/protocol'
-
-function discoveryFromManagement(
+export function discoveryFromManagement(
   management: IntegrationManagementResponseDto,
 ): IntegrationToolDiscoveryResponseDto {
   return {
