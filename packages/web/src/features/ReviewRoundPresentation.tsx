@@ -383,7 +383,11 @@ export function ReviewRoundAdapter({
   useEffect(() => {
     if (!fileChangesEnabled) { setRoundFileChanges(null); return }
     const controller = new AbortController()
-    void taskFileApi.reviewInteractionFileChanges(sessionId, interaction, controller.signal)
+    void taskFileApi.reviewInteractionFileChanges(sessionId, {
+      id: interaction.id,
+      startedAt: interaction.startedAt,
+      endedAt: interaction.endedAt,
+    }, controller.signal)
       .then(value => { if (!controller.signal.aborted) setRoundFileChanges(value) })
       .catch(() => { if (!controller.signal.aborted) setRoundFileChanges(null) })
     return () => controller.abort()
