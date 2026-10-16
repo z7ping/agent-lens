@@ -381,7 +381,7 @@ export function ReviewRoundAdapter({
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
   useEffect(() => {
-    if (!fileChangesEnabled) { setRoundFileChanges(null); return }
+    if (!fileChangesEnabled) return
     const controller = new AbortController()
     void taskFileApi.reviewInteractionFileChanges(sessionId, {
       id: interaction.id,
@@ -503,7 +503,7 @@ export function ReviewRoundAdapter({
     {promptEntries.map(renderEntry)}
     {processGroup}
     {afterProcessEntries.map(renderEntry)}
-    {roundFileChanges && roundFileChanges.summary.count > 0 && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+    {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && roundFileChanges.summary.count > 0 && <TaskFileChangesDisclosure value={roundFileChanges}/>}
     {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
       <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
     </button>}
