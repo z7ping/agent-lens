@@ -44,6 +44,66 @@ export async function observedInteractionFileChanges(
   return { items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations)), truncated }
 }
 
+
+// Historical sessions may predate the file-change projection. Reconstruct only
+// the requested session from existing canonical tool evidence; do not guess
+// shell side-effects, scan the entire database or fabricate a Git baseline.
+const MAX_LEGACY_OBSERVATIONS = 5_000
+const LEGACY_EMPTY_CACHE_MS = 60_000
+const LEGACY_CACHE_LIMIT = 128
+type LegacyResult = { items: TaskFileChangeRecord[]; truncated: boolean }
+const legacyCache = new WeakMap<StorageService, Map<string, {
+  expiresAt: number
+  pending: Promise<LegacyResult>
+}>>()
+
+export async function backfillLegacySessionFileChanges(
+  storage: StorageService,
+  logicalSessionId: string,
+): Promise<LegacyResult> {
+  const existing = legacyCache.get(storage) ?? new Map<string, {
+    expiresAt: number
+    pending: Promise<LegacyResult>
+  }>()
+  legacyCache.set(storage, existing)
+  const cached = existing.get(logicalSessionId)
+  if (cached && cached.expiresAt > Date.now()) return cached.pending
+
+  const pending = (async (): Promise<LegacyResult> => {
+    const observations: CanonicalObservation[] = []
+    let after: ObservationCursor | undefined
+    let truncated = false
+    while (observations.length < MAX_LEGACY_OBSERVATIONS) {
+      const page = await storage.repositories.observations.query({
+        logicalSessionIds: [logicalSessionId],
+        ...(after ? { after } : {}),
+        order: 'asc',
+        limit: PAGE_SIZE,
+      })
+      observations.push(...page)
+      if (page.length < PAGE_SIZE) break
+      if (observations.length >= MAX_LEGACY_OBSERVATIONS) { truncated = true; break }
+      after = cursorFor(page[page.length - 1]!)
+    }
+    const items = summarizeObservedTaskFileChanges(observedTaskFileChanges(observations))
+    // Partial scans must not be persisted as authoritative full-session facts.
+    // Existing finalized captures must remain untouched (caller skips them).
+    if (!truncated && items.length && storage.taskFileChanges) {
+      await storage.taskFileChanges.replaceObservedSession(logicalSessionId, items)
+    }
+    return { items, truncated }
+  })()
+
+  if (existing.size >= LEGACY_CACHE_LIMIT) existing.delete(existing.keys().next().value!)
+  existing.set(logicalSessionId, { expiresAt: Date.now() + LEGACY_EMPTY_CACHE_MS, pending })
+  try {
+    return await pending
+  } catch (error) {
+    existing.delete(logicalSessionId)
+    throw error
+  }
+}
+
 export function taskFileChangesResponse(
   logicalSessionId: string,
   items: readonly TaskFileChangeRecord[],

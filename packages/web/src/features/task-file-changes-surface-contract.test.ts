@@ -28,3 +28,8 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /<Drawer open/)
   assert.match(component, /<CopyableCodeBlock copyValue=\{diff\.diff\} language="diff"/)
 })
+
+test('legacy session with truncated evidence never disappears as an empty card', () => {
+  assert.match(component, /value\.summary\.count === 0 && !value\.meta\.truncated/)
+  assert.match(component, /value\?\.meta\.truncated && <div className="task-file-changes-error">/)
+})
