@@ -12,7 +12,7 @@ const reviewStyles = readFileSync(new URL('../review.css', import.meta.url), 'ut
 test('Review and Live reuse one changed-file card after the conversation', () => {
   assert.match(review, /reviewInteractionFileChanges\(sessionId, interaction, controller\.signal\)/)
   assert.match(review, /afterProcessEntries\.map\(renderEntry\)[\s\S]*?TaskFileChangesDisclosure/)
-  assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count\)\}/)
+  assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count\) && detail\.interactionCount > 1\}/)
   assert.match(reviewPage, /annotatedInteractions\.map[\s\S]*?TaskFileChangesDisclosure/)
   assert.match(live, /runtimeFileChanges\(current\.runtimeSessionId/)
   assert.match(live, /<TaskFileChangesDisclosure key=\{fileChangeRuntimeId\}[\s\S]*?result : null\}/)
