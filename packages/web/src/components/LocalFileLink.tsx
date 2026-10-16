@@ -142,6 +142,7 @@ export function LocalFileLink({
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<'rendered' | 'source'>('source')
   const [loading, setLoading] = useState(false)
+  const [openingDirectory, setOpeningDirectory] = useState(false)
   const [preview, setPreview] = useState<HostFilePreviewResponseDto | null>(null)
   const [error, setError] = useState('')
 
@@ -152,6 +153,7 @@ export function LocalFileLink({
   >{children}{presentation === 'web' && <UiIcon className="markdown-link-type-icon" name="tool-web" size={14}/>}</a>
 
   const openDirectory = async () => {
+    setOpeningDirectory(true)
     try {
       await clientModel.openHostPath(target.path)
       setOpen(false)
@@ -173,6 +175,7 @@ export function LocalFileLink({
       return
     }
     setOpen(true)
+    setOpeningDirectory(false)
     setLoading(true)
     setPreview(null)
     setError('')
@@ -233,7 +236,7 @@ export function LocalFileLink({
           : error
             ? <div className="local-file-preview-state is-error" role="alert">
                 <UiIcon name="exclamation" size={20}/>
-                <span>{t('localFilePreview.failed')}</span>
+                <span>{openingDirectory ? t('localPath.openFailed') : t('localFilePreview.failed')}</span>
                 <small>{error}</small>
               </div>
             : preview?.content !== undefined
