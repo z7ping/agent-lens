@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewProcessSummaryDto, ReviewToolNodeDto } from '@agent-lens/protocol'
+import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewProcessSummaryDto, ReviewToolNodeDto, type TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { agentLabel } from '../components/AgentScope'
 import { AgentLensApi } from '../client/api'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
