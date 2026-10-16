@@ -148,6 +148,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         evidence: '证据 · {{count}}',
         raw: '原始数据',
         summary: '摘要',
+        originalContent: '原文',
         noStructuredDetail: '当前事件没有额外的结构化详情；可继续查看证据或来源原始记录。',
         rawLoading: '正在读取来源原始记录…',
         rawMissing: '当前 Observation 没有关联可读取的 SourceRecord；以下为标准化 Payload。',
