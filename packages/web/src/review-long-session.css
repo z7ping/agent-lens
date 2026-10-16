@@ -49,6 +49,8 @@
   gap: 8px;
   margin: 0;
   padding: 0;
+  /* Only the shared TaskHeader owns the bottom divider; ui-toolbar has one by default. */
+  border-bottom: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
