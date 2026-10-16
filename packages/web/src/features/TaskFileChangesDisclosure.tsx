@@ -40,19 +40,21 @@ export function TaskFileChangesDisclosure({
   const [diff, setDiff] = useState<TaskFileDiffResponseDto | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffError, setDiffError] = useState(false)
+  const sessionId = value?.logicalSessionId
+  const isInteraction = Boolean(value?.interactionId)
 
   useEffect(() => {
-    if (!diffPath || !value || value.interactionId) return
+    if (!diffPath || !sessionId || isInteraction) return
     const controller = new AbortController()
     setDiff(null)
     setDiffError(false)
     setDiffLoading(true)
-    void api.reviewFileDiff(value.logicalSessionId, diffPath, controller.signal)
+    void api.reviewFileDiff(sessionId, diffPath, controller.signal)
       .then(result => { if (!controller.signal.aborted) setDiff(result) })
       .catch(() => { if (!controller.signal.aborted) setDiffError(true) })
       .finally(() => { if (!controller.signal.aborted) setDiffLoading(false) })
     return () => controller.abort()
-  }, [diffPath, value?.logicalSessionId, value?.interactionId])
+  }, [diffPath, sessionId, isInteraction])
 
   if (!value && !loading && !error) return null
   if (value && value.summary.count === 0 && !loading && !error) return null
