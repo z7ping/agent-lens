@@ -545,10 +545,17 @@ function sharedStoreSessionVisibilitySql(): string {
     WHERE current_source.logical_session_id = summary.logical_session_id
       AND ${pathIdentity('current_installation.data_root')} <> ''
       AND (
+        (EXISTS (SELECT 1 FROM observations WHERE logical_session_id = peer_source.logical_session_id AND kind = 'message.user')
+          AND NOT EXISTS (SELECT 1 FROM observations WHERE logical_session_id = current_source.logical_session_id AND kind = 'message.user'))
+        OR (
+        EXISTS (SELECT 1 FROM observations WHERE logical_session_id = peer_source.logical_session_id AND kind = 'message.user')
+          = EXISTS (SELECT 1 FROM observations WHERE logical_session_id = current_source.logical_session_id AND kind = 'message.user')
+        AND (
         peer_summary.ended_at > summary.ended_at
         OR (peer_summary.ended_at = summary.ended_at AND peer_summary.observation_count > summary.observation_count)
         OR (peer_summary.ended_at = summary.ended_at AND peer_summary.observation_count = summary.observation_count
           AND peer_summary.logical_session_id < summary.logical_session_id)
+        ))
       )
   )`
 }

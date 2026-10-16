@@ -253,7 +253,40 @@ export class ReviewProjection {
     return Promise.all(raw.entries.map(item => this.summary(item)))
   }
 
+  private async resolveReadableSession(logicalSessionId: string): Promise<string> {
+    const repositories = this.storage.repositories
+    const sessions = repositories.sessions
+    if (!sessions.listSourceSessionsByLogicalSession) return logicalSessionId
+    const sources = await sessions.listSourceSessionsByLogicalSession(logicalSessionId)
+    if (!sources.length) return logicalSessionId
+    const hasUserMessage = async (id: string): Promise<boolean> => (
+      await repositories.observations.query({ logicalSessionId: id, kind: 'message.user', limit: 1 })
+    ).length > 0
+    if (await hasUserMessage(logicalSessionId)) return logicalSessionId
+    const pathIdentity = (value: string): string => {
+      const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
+      return /^[a-z]:\//i.test(normalized) ? normalized.toLowerCase() : normalized
+    }
+    // 解析器重放可能将共享历史的正文归入另一安装身份。只按原生身份与存储目录
+    // 恢复旧链接，不按标题猜测，也不把独立子会话合并。
+    for (const source of sources) {
+      const installation = await repositories.installations.get(source.installationId)
+      if (!installation?.dataRoot) continue
+      const peers = await repositories.installations.listByProduct(installation.productId)
+      for (const peer of peers) {
+        if (peer.id === installation.id || peer.hostId !== installation.hostId || !peer.dataRoot
+          || pathIdentity(peer.dataRoot) !== pathIdentity(installation.dataRoot)
+          || pathIdentity(peer.configRoot ?? '') !== pathIdentity(installation.configRoot ?? '')) continue
+        const candidate = await sessions.findSourceSession(source.sourceId, peer.id, source.nativeSessionId)
+        if (!candidate?.logicalSessionId || candidate.runtimeProfileId !== source.runtimeProfileId) continue
+        if (await hasUserMessage(candidate.logicalSessionId)) return candidate.logicalSessionId
+      }
+    }
+    return logicalSessionId
+  }
+
   async getSummary(logicalSessionId: string): Promise<ReviewSessionSummaryDto | null> {
+    logicalSessionId = await this.resolveReadableSession(logicalSessionId)
     if (this.storage.sessionSummaries) {
       const result = await this.storage.sessionSummaries.query({
         logicalSessionId,
@@ -269,6 +302,7 @@ export class ReviewProjection {
   }
 
   async get(logicalSessionId: string, query: ReviewDetailQueryDto = {}): Promise<ReviewSessionDetailDto | null> {
+    logicalSessionId = await this.resolveReadableSession(logicalSessionId)
     const startedAt = performance.now()
     let summary: ReviewSessionSummaryDto | null = null
     if (this.storage.sessionSummaries) {
