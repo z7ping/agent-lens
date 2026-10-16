@@ -27,7 +27,7 @@ test('desktop release architecture is x64 only', () => {
 test('stable builds ignore prereleases', () => {
   const update = selectUpdateRelease([
     { tag_name: 'v1.1.0-beta.0', prerelease: true, draft: false, html_url: 'https://example.test/beta', assets: [] },
-    { tag_name: 'v1.0.1', prerelease: false, draft: false, html_url: 'https://example.test/stable', assets: [] },
+    { tag_name: 'v1.0.1', prerelease: false, draft: false, html_url: 'https://example.test/stable', assets: [{ name: 'AgentLens-1.0.1-Setup-x64.exe', browser_download_url: 'https://example.test/stable.exe' }] },
   ], '1.0.0')
   assert.equal(update?.version, '1.0.1')
 })
@@ -92,7 +92,7 @@ test('ARM64 desktop builds do not receive release updates', () => {
   assert.equal(selectUpdateRelease([release], '1.0.0-alpha.0', { platform: 'darwin', arch: 'arm64' }), null)
 })
 
-test('missing platform asset falls back to the release page for supported x64', () => {
+test('missing platform asset does not advertise an unavailable desktop update', () => {
   const update = selectUpdateRelease([
     {
       tag_name: 'v1.0.0-alpha.1',
@@ -102,7 +102,31 @@ test('missing platform asset falls back to the release page for supported x64', 
       assets: [{ name: 'AgentLens-1.0.0-alpha.1-Setup-x64.exe', browser_download_url: 'https://example.test/windows.exe' }],
     },
   ], '1.0.0-alpha.0', { platform: 'darwin', arch: 'x64' })
-  assert.equal(update?.downloadUrl, 'https://example.test/release')
+  assert.equal(update, null)
+})
+
+test('an incomplete newest Release is skipped in favor of the latest installable version', () => {
+  const releases = [
+    {
+      tag_name: 'v1.0.0-alpha.6', prerelease: true, draft: false,
+      html_url: 'https://example.test/alpha6',
+      assets: [{ name: 'z7ping-agent-lens-1.0.0-alpha.6.tgz', browser_download_url: 'https://example.test/alpha6.tgz' }],
+    },
+    {
+      tag_name: 'v1.0.0-alpha.5', prerelease: true, draft: false,
+      html_url: 'https://example.test/alpha5',
+      assets: [
+        { name: 'AgentLens-1.0.0-alpha.5-Setup-x64.exe', browser_download_url: 'https://example.test/alpha5.exe' },
+        { name: 'AgentLens-1.0.0-alpha.5-macOS-x64.dmg', browser_download_url: 'https://example.test/alpha5.dmg' },
+      ],
+    },
+  ]
+  const windows = selectUpdateRelease(releases, '1.0.0-alpha.1', { platform: 'win32', arch: 'x64' })
+  assert.equal(windows?.version, '1.0.0-alpha.5')
+  assert.equal(windows?.downloadUrl, 'https://example.test/alpha5.exe')
+  assert.equal(windows?.releasePageUrl, 'https://example.test/alpha5')
+  assert.equal(selectUpdateRelease(releases, '1.0.0-alpha.1', { platform: 'darwin', arch: 'x64' })?.downloadUrl, 'https://example.test/alpha5.dmg')
+  assert.equal(selectUpdateRelease(releases, '1.0.0-alpha.5', { platform: 'win32', arch: 'x64' }), null)
 })
 
 test('drafts, malformed tags and older releases are ignored', () => {
