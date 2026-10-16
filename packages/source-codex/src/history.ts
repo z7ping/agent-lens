@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve } from 'node:path'
+import Database from 'better-sqlite3'
 import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
@@ -83,9 +84,54 @@ function sessionIdFromFilename(filePath: string): string {
 }
 
 function normalizeTimestamp(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const ms = value < 10_000_000_000 ? value * 1000 : value
+    return Number.isFinite(ms) ? new Date(ms).toISOString() : undefined
+  }
   if (typeof value !== 'string' || !value.trim()) return undefined
   const parsed = Date.parse(value)
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined
+}
+
+function chooseThreadName(
+  previous: CodexThreadName | undefined,
+  current: CodexThreadName,
+): CodexThreadName {
+  if (!previous) return current
+  // Where both timestamps exist, use the newest known title. Without a comparable
+  // timestamp, the later source is preferred (SQLite follows the legacy index).
+  if (previous.updatedAt && current.updatedAt && previous.updatedAt > current.updatedAt) return previous
+  return current
+}
+
+/** Codex Desktop's local thread metadata can be newer than session_index.jsonl. */
+function readSqliteThreadNames(codexHome: string): Map<string, CodexThreadName> {
+  const result = new Map<string, CodexThreadName>()
+  let db: Database.Database | undefined
+  try {
+    db = new Database(join(codexHome, 'state_5.sqlite'), { readonly: true, fileMustExist: true, timeout: 1000 })
+    const rows = db.prepare('SELECT id, title, updated_at FROM threads').iterate() as Iterable<{
+      id: unknown
+      title: unknown
+      updated_at: unknown
+    }>
+    for (const row of rows) {
+      const id = typeof row.id === 'string' ? row.id.trim() : ''
+      const title = typeof row.title === 'string' ? row.title.trim() : ''
+      if (!id || !title) continue
+      const updatedAt = normalizeTimestamp(row.updated_at)
+      result.set(id, chooseThreadName(result.get(id), {
+        title,
+        ...(updatedAt ? { updatedAt } : {}),
+      }))
+    }
+  } catch {
+    // CLI-only installs, older schema and locked/corrupt databases fall back to
+    // the append-only index; never mutate Codex's native data.
+  } finally {
+    db?.close()
+  }
+  return result
 }
 
 async function readThreadNames(codexHome: string | undefined): Promise<Map<string, CodexThreadName>> {
@@ -101,7 +147,7 @@ async function readThreadNames(codexHome: string | undefined): Promise<Map<strin
         const title = typeof entry.thread_name === 'string' ? entry.thread_name.trim() : ''
         if (!id || !title) continue
         const updatedAt = normalizeTimestamp(entry.updated_at)
-        result.set(id, { title, ...(updatedAt ? { updatedAt } : {}) })
+        result.set(id, chooseThreadName(result.get(id), { title, ...(updatedAt ? { updatedAt } : {}) }))
       } catch {
         // session_index.jsonl 是 append-only；坏行不应阻断其他会话标题读取。
       }
@@ -109,6 +155,9 @@ async function readThreadNames(codexHome: string | undefined): Promise<Map<strin
   } catch (error) {
     if (!isMissingPathError(error)) throw error
     // 旧版 Codex 可能不存在 session_index.jsonl，保持首条用户消息兜底。
+  }
+  for (const [id, native] of readSqliteThreadNames(codexHome)) {
+    result.set(id, chooseThreadName(result.get(id), native))
   }
   return result
 }
@@ -456,5 +505,6 @@ export const codexHistoryInternals = {
   checkpointKey,
   listJsonlFiles,
   readThreadNames,
+  readSqliteThreadNames,
   readSessionMetadata,
 }
