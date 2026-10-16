@@ -294,7 +294,8 @@ function originalMarkdownBody(value: JsonValue | undefined): string | undefined 
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   for (const record of [value, payloadRecord(value.payload)]) {
     for (const key of ['text', 'content', 'message', 'body']) {
-      if (typeof record[key] === 'string') return record[key]
+      const text = record[key]
+      if (typeof text === 'string') return text
     }
   }
   return undefined
