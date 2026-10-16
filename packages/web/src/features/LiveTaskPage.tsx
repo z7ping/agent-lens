@@ -309,6 +309,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         title={title}
         metrics={[]}
         infoItems={[
+          { label: t('header.context'), value: workspace || t('header.unlinkedProject') },
           { label: t('live.runtimeId'), value: current.runtimeSessionId },
           ...(state?.workspacePath ? [{
             label: t('header.workspace'),
