@@ -149,8 +149,6 @@
 .review-unknown-count { display: inline-flex; align-items: center; gap: 6px; margin: 3px 0; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--al-muted); cursor: pointer; font: 12px/1.5 var(--font-ui); }
 .review-unknown-count:hover, .review-unknown-count:focus-visible { background: var(--al-soft-2); color: var(--al-ink-2); }
 .review-unknown-count svg { flex: 0 0 14px; color: var(--al-muted-2); }
-.injected-context-content { margin: 0; padding: 10px 12px; overflow: auto; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-ink-2); font-family: var(--font-mono); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
-
 /* Inspector 只保留业务内容，遮罩、抽屉几何、滚动与键盘行为由统一 Drawer 持有。 */
 .review-inspector-overlay .agent-scope { width: max-content; max-width: 100%; margin: 0 0 14px; padding: 3px; gap: 2px; border: 1px solid var(--al-line); border-radius: 9px; background: var(--al-soft-2); }
 .review-inspector-overlay .agent-scope .scope-chip { height: 27px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--al-muted); font-size: 12px; font-weight: 620; }
@@ -185,6 +183,15 @@
 .tool-detail-code,
 .raw-json { max-height: 320px; margin: 0; padding: 9px; overflow: auto; border: 1px solid var(--al-line); border-radius: 8px; background: var(--al-soft-2); color: var(--al-ink-2); font: 12px/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tool-detail-section.is-error .tool-detail-code { border-color: color-mix(in srgb, var(--al-danger) 28%, var(--al-line)); background: var(--al-danger-soft); color: var(--al-danger); }
+/* Review Inspector: complete Markdown or structured source, no text clamping. */
+.review-inspector-overlay .inspector-source-entry + .inspector-source-entry { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--al-line); }
+.review-inspector-overlay .inspector-source-entry > .evidence-meta { margin-bottom: 8px; }
+.review-inspector-overlay .inspector-original-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.review-inspector-overlay .inspector-original-actions [aria-pressed='true'] { color: var(--al-accent); background: var(--al-soft); }
+.review-inspector-overlay .inspector-original-markdown { min-width: 0; color: var(--al-ink-2); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.review-inspector-overlay .inspector-original-markdown :is(h1, h2, h3, h4, h5, h6) { font-size: 14px; line-height: 1.5; }
+.review-inspector-overlay .inspector-original-value .raw-json { max-height: none; overflow-x: auto; }
+
 
 @media (max-width: 991.98px) {
   .review-page:not(.review-page-embedded) { height: auto; min-height: calc(100vh - 52px); overflow: visible; }
