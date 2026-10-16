@@ -9,10 +9,25 @@ const productSurfaceFiles = [
   './ReviewPage.tsx',
 ].map(path => ({ path, source: readFileSync(new URL(path, import.meta.url), 'utf8') }))
 
+const liveTaskImplementation = [
+  readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-history.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-actions.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-state.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-queue.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-input.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
+].join('\n')
+
 const liveComposer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', import.meta.url), 'utf8')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const runtimeDisclosures = readFileSync(new URL('../components/LiveRuntimeDisclosures.tsx', import.meta.url), 'utf8')
 const liveTaskProjection = readFileSync(new URL('./live-task-projection.ts', import.meta.url), 'utf8')
+const liveTaskTimeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
+const liveHistoryWindow = readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8')
 const liveTaskRenderBoundary = readFileSync(new URL('./live-task-render-boundary.ts', import.meta.url), 'utf8')
 const appShell = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 
@@ -49,7 +64,7 @@ test('具体 Agent 的 Review 事件解释只能留在 Product Presentation 投�
 
 
 test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi 原生字段', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   for (const capability of ['model-switching', 'thinking-control', 'extension-ui', 'command-discovery', 'recovery', 'steer', 'queue']) {
     assert.match(liveTask, new RegExp(`capabilities\\.includes\\(['"]${capability}['"]\\)`), capability)
   }
@@ -60,14 +75,14 @@ test('LiveTask 高级交互只消费通用 capability 与 control，不解析 Pi
   assert.match(liveTask, /onSubmit=\{\(message, mode\) => \{ void send\(message, mode === 'followUp' \? 'follow-up' : undefined\) \}\}/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'queue\.update'/)
   assert.match(liveTask, /normalizedEvent\?\.type === 'control\.changed'/)
-  assert.match(liveTask, /event\.type === 'title\.update'/)
+  assert.match(readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8'), /event\.type === 'title\.update'/)
   assert.match(liveTask, /loadBoundedRecoverySnapshot\(current\.liveId, current\.runtimeSessionId, recoveryLeafId\)/)
   assert.doesNotMatch(liveTask, /queue_update|extension_ui_request|modelId|provider/)
 })
 
 
 test('@文件补全保持 Runtime-bound 通用 Live Product 边界', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTask, /capabilities\.includes\('workspace-file-reference'\)/)
   assert.match(liveTask, /liveApi\.workspaceFileReferences\(current\.liveId, current\.runtimeSessionId, query, 20\)/)
   assert.match(liveTask, /workspaceReferenceSearch=/)
@@ -83,7 +98,7 @@ test('@文件补全保持 Runtime-bound 通用 Live Product 边界', () => {
 })
 
 test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污染任务正文', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTask, /liveApi\.runtimeDisclosures\(current\.liveId, current\.runtimeSessionId\)/)
   assert.match(liveTask, /liveApi\.executeRuntimeAction\(/)
   assert.match(liveTask, /<LiveRuntimeDisclosures/)
@@ -106,9 +121,9 @@ test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污�
 })
 
 test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTaskProjection, /messageAttachments\(item, nested\)/)
-  assert.match(liveTask, /attachments=\{item\.attachments\}/)
+  assert.match(liveTaskTimeline, /attachments=\{item\.attachments\}/)
   assert.match(liveTask, /optimisticMessageAttachments\(message\)/)
   assert.match(liveTask, /part is Extract<LiveMessageDto\['parts'\]\[number\], \{ type: 'image' \| 'file' \}>/)
   assert.match(liveTask, /URL\.createObjectURL\(await response\.blob\(\)\)/)
@@ -119,9 +134,9 @@ test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
 })
 
 test('Live 工具输出统一使用可复制原文和显式格式化切换，不会自动误解析日志', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
-  assert.match(liveTask, /<TaskToolRow/)
-  assert.match(liveTask, /output: item\.output/)
+  const liveTask = liveTaskImplementation
+  assert.match(liveTaskTimeline, /<TaskToolRow/)
+  assert.match(liveTaskTimeline, /output: item\.output/)
   assert.doesNotMatch(liveTask, /details=\{item\.output\s*\?\s*<div[^>]*><ToolOutputContent/, 'Live output must not be rendered twice')
   const output = readFileSync(new URL('./ToolOutputContent.tsx', import.meta.url), 'utf8')
   assert.match(output, /detectToolOutputFormat\(text\)/)
@@ -130,18 +145,18 @@ test('Live 工具输出统一使用可复制原文和显式格式化切换，不
 })
 
 test('消息级私有动作通过受控 Contribution 暴露，不提升为 Pi 专属 Product 分支', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTask, /liveApi\.messageActions\(current\.liveId, current\.runtimeSessionId\)/)
   assert.match(liveTask, /liveApi\.executeMessageAction\(/)
   assert.match(liveTask, /action\.actionId/)
-  assert.match(liveTask, /action\.roles\.includes\(item\.role\)/)
-  assert.match(liveTask, /action\.requiresIdle/)
+  assert.match(liveTaskTimeline, /action\.roles\.includes\(item\.role\)/)
+  assert.match(liveTaskTimeline, /action\.requiresIdle/)
   assert.match(liveTask, /item\.entryId/)
   assert.doesNotMatch(liveTask, /pi\.edit-from-here|pi\.new-session-from-here|navigateTree|createBranchedSession/)
 })
 
 test('Slash 命令发现保持通用 Live Product 边界', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTask, /capabilities\.includes\('command-discovery'\)/)
   assert.match(liveTask, /liveApi\.commands\(current\.liveId, current\.runtimeSessionId\)/)
   assert.match(liveTask, /commands=\{commands\}/)
@@ -155,7 +170,7 @@ test('Slash 命令发现保持通用 Live Product 边界', () => {
 })
 
 test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTask, /liveComposerDraftKey\(current\.liveId, current\.runtimeSessionId\)/)
   assert.match(liveTask, /readLiveComposerDraft\(composerDraftKey\)/)
   assert.match(liveTask, /draftKey=\{composerDraftKey \|\| undefined\}/)
@@ -176,7 +191,7 @@ test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
 
 test('Task Center owns the only Live task navigation while LiveTask keeps the session detail shell', () => {
   const taskCenter = productSurfaceFiles.find(file => file.path === './TaskCenterPage.tsx')!.source
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   const styles = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 
   assert.match(appShell, /<Route path="\/review\/live\/:liveId\/:runtimeSessionId" element=\{<TaskCenterPage model=\{model\} mode="live" sidebarHost=\{sidebarHost\}\/>\} \/>/)
@@ -188,19 +203,19 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.match(taskCenter, /task-center-list-skeleton/)
   assert.doesNotMatch(liveTask, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/)
   assert.match(styles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
-  assert.match(liveTask, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
+  assert.match(liveHistoryWindow, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
   assert.match(liveTask, /LiveTaskRoundProjector/)
   assert.match(liveTask, /roundProjectorRef\.current\.projectSegmented\(projection\.stable, projection\.active\)/)
   assert.match(liveTaskProjection, /liveTaskStableRoundPrefixLength/)
   assert.match(liveTaskProjection, /liveEventChangesTaskTranscript/)
   assert.match(liveTaskRenderBoundary, /sameStableLiveTaskRoundProps/)
-  assert.match(liveTask, /const StableLiveRounds = memo/)
+  assert.match(liveTaskTimeline, /export const StableLiveRounds = memo/)
   assert.match(liveTask, /rounds=\{roundSegments\.stable\}/)
   assert.match(liveTask, /roundSegments\.active\.map/)
   assert.doesNotMatch(liveTask, /const rounds = useMemo/)
   assert.match(liveTask, /<GenericLiveRound/)
-  assert.match(liveTask, /<VirtualRoundMount/)
-  assert.match(liveTask, /<TaskRound/)
+  assert.match(liveTaskTimeline, /<VirtualRoundMount/)
+  assert.match(liveTaskTimeline, /<TaskRound/)
   assert.match(liveTask, /new LiveFollowController\(\)/)
   assert.match(liveTask, /ref=\{readerRef\}/)
   assert.match(liveTask, /onScroll=\{onReaderScroll\}/)
@@ -209,22 +224,22 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
 })
 
 test('Live 详情优先展示通用任务标题', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.match(liveTask, /state\?\.title\?\.trim\(\) \|\| workspace/)
 })
 
 test('Live task navigation stays agent-neutral and outside LiveTaskPage', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   assert.doesNotMatch(liveTask, /pi-live-sessions|liveApi\.list\(current\.liveId\)/)
 })
 
 
 test('Live 首屏与旧历史只能通过有界 Snapshot 窗口读取', () => {
-  const liveTask = productSurfaceFiles.find(file => file.path === './LiveTaskPage.tsx')!.source
+  const liveTask = liveTaskImplementation
   const liveClient = readFileSync(new URL('../client/live.ts', import.meta.url), 'utf8')
 
-  assert.match(liveTask, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
-  assert.match(liveTask, /\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/)
+  assert.match(liveHistoryWindow, /LIVE_TASK_SNAPSHOT_PAGE_LIMIT\s*=\s*120/)
+  assert.match(liveHistoryWindow, /\{ limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT \}/)
   assert.match(liveTask, /before: historyPage\.before, limit: LIVE_TASK_SNAPSHOT_PAGE_LIMIT/)
   assert.match(liveTask, /historyLoadSentinelRef/)
   assert.match(liveTask, /historyPagingArmed/)

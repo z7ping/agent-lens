@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+const review = [
+  'review-session-format.ts', 'ReviewEvidenceInspector.tsx', 'ReviewRoundPresentation.tsx',
+  'review-reader-position.ts', 'use-review-session.ts', 'ReviewPage.tsx',
+].map(file => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).join('\n')
 const resource = readFileSync(new URL('../components/LocalResourceReference.tsx', import.meta.url), 'utf8')
 const toolRow = readFileSync(new URL('./TaskToolRow.tsx', import.meta.url), 'utf8')
 

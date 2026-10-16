@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-const page = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const page = readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8')
+const livePage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
 
 test('Live task shell and SSE bootstrap do not wait for Worker-backed Snapshot', () => {
   const reset = page.indexOf("setBootstrapTarget(null)")
@@ -31,11 +32,13 @@ test('initialization diagnostics are requested before ready-only controls', () =
 
 test('Live task keeps a prominent initialization progress while background hydration runs', () => {
   assert.match(
-    page,
+    livePage,
     /\(!state \|\| state\.status === 'initializing'\)[\s\S]{0,260}<OperationProgress/,
   )
-  assert.match(page, /statusLabel=\{runtimeStatus\}/)
-  assert.match(page, /<LiveRuntimeDisclosures/)
+  assert.match(
+    livePage, /statusLabel=\{runtimeStatus\}/)
+  assert.match(
+    livePage, /<LiveRuntimeDisclosures/)
 })
 
 

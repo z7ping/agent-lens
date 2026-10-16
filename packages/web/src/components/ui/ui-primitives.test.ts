@@ -20,7 +20,12 @@ const liveRuntimeDisclosures = readFileSync(new URL('../LiveRuntimeDisclosures.t
 const liveTaskPage = readFileSync(new URL('../../features/LiveTaskPage.tsx', import.meta.url), 'utf8')
 const taskCenterPage = readFileSync(new URL('../../features/TaskCenterPage.tsx', import.meta.url), 'utf8')
 const taskCenterCss = readFileSync(new URL('../../task-center.css', import.meta.url), 'utf8')
-const reviewPage = readFileSync(new URL('../../features/ReviewPage.tsx', import.meta.url), 'utf8')
+const reviewPage = [ readFileSync(new URL('../../features/review-session-format.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../features/ReviewEvidenceInspector.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../features/ReviewRoundPresentation.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../features/review-reader-position.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../features/use-review-session.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../features/ReviewPage.tsx', import.meta.url), 'utf8') ].join('\n')
 const reviewCss = readFileSync(new URL('../../review.css', import.meta.url), 'utf8')
 const backupPage = readFileSync(new URL('../../features/BackupPage.tsx', import.meta.url), 'utf8')
 const backupCss = readFileSync(new URL('../../backup.css', import.meta.url), 'utf8')

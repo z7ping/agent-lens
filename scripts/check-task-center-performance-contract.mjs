@@ -1,8 +1,12 @@
 import fs from 'node:fs'
 
-const model = fs.readFileSync('packages/web/src/client/model.ts', 'utf8')
+const model = [
+  'model-base.ts', 'model-integration.ts', 'model-review.ts', 'model-usage.ts',
+].map(file => fs.readFileSync(`packages/web/src/client/${file}`, 'utf8')).join('\n')
 const api = fs.readFileSync('packages/web/src/client/api.ts', 'utf8')
-const reviewPage = fs.readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
+const reviewPage = [
+  'use-review-session.ts', 'ReviewPage.tsx',
+].map(file => fs.readFileSync(`packages/web/src/features/${file}`, 'utf8')).join('\n')
 const hubReview = fs.readFileSync('packages/web/src/client/hub-review.ts', 'utf8')
 const app = fs.readFileSync('packages/web/src/App.tsx', 'utf8')
 const workspaceSidebar = fs.readFileSync('packages/web/src/components/WorkspaceSidebar.tsx', 'utf8')

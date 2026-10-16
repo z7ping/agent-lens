@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs'
 
 const mainSource = readFileSync('packages/web/src/main.tsx', 'utf8')
 const clientModel = readFileSync('packages/web/src/client/model.ts', 'utf8')
-const reviewPage = readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8')
+const reviewPage = [ readFileSync('packages/web/src/features/review-session-format.ts', 'utf8'),
+  readFileSync('packages/web/src/features/ReviewEvidenceInspector.tsx', 'utf8'),
+  readFileSync('packages/web/src/features/ReviewRoundPresentation.tsx', 'utf8'),
+  readFileSync('packages/web/src/features/review-reader-position.ts', 'utf8'),
+  readFileSync('packages/web/src/features/use-review-session.ts', 'utf8'),
+  readFileSync('packages/web/src/features/ReviewPage.tsx', 'utf8') ].join('\n')
 const taskSurface = readFileSync('packages/web/src/features/TaskSurface.tsx', 'utf8')
 const taskHeader = readFileSync('packages/web/src/features/TaskHeader.tsx', 'utf8')
 const taskMessage = readFileSync('packages/web/src/features/TaskMessage.tsx', 'utf8')

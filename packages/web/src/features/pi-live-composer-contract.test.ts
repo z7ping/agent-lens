@@ -4,7 +4,18 @@ import test from 'node:test'
 
 const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
 const taskCenter = readFileSync(new URL('./TaskCenterPage.tsx', import.meta.url), 'utf8')
-const page = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const page = [
+  readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-history.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-actions.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-state.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-queue.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-input.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
+].join('\n')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const sessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')

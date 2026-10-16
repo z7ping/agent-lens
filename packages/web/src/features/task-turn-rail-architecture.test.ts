@@ -3,8 +3,23 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
-const liveTask = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
-const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+const liveTask = [
+  readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-history.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./use-live-task-actions.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-state.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-queue.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-input.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8'),
+  readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
+].join('\n')
+const liveHistoryWindow = readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8')
+const review = [
+  'review-session-format.ts', 'ReviewEvidenceInspector.tsx', 'ReviewRoundPresentation.tsx',
+  'review-reader-position.ts', 'use-review-session.ts', 'ReviewPage.tsx',
+].map(file => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).join('\n')
 const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 'utf8')
 
 test('轮次导轨保持旧版共享阅读锚点与 Rail Frame 位置', () => {
@@ -55,9 +70,9 @@ test('Live 历史导航使用直接边界窗口与滚轮双向分页', () => {
 
 
 test('Live 正文内存窗口最多保留五个 Snapshot 页块', () => {
-  assert.match(liveTask, /LIVE_TASK_HISTORY_WINDOW_MAX_PAGES\s*=\s*5/)
-  assert.match(liveTask, /compactHistoryBlocks/)
-  assert.match(liveTask, /removedIds/)
+  assert.match(liveHistoryWindow, /LIVE_TASK_HISTORY_WINDOW_MAX_PAGES\s*=\s*5/)
+  assert.match(liveHistoryWindow, /export function compactHistoryBlocks/)
+  assert.match(liveHistoryWindow, /removedIds/)
   assert.match(liveTask, /historyBlocksRef/)
 })
 
