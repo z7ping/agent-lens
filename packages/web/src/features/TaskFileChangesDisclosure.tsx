@@ -65,7 +65,7 @@ export function TaskFileChangesDisclosure({
   return <>
     <details className="task-file-changes" open>
       <summary>
-        <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="file-diff" size={16}/></span>
+        <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="tool-edit" size={16}/></span>
         <span className="task-file-changes-heading">
           {t(isObserved ? 'local.fileChanges.roundTitle' : 'local.fileChanges.titleCount', { count })}
           {hasExactDelta && <span className="task-file-changes-delta">
@@ -102,7 +102,7 @@ export function TaskFileChangesDisclosure({
           {t('local.fileChanges.showMore', { count: hidden })}<UiIcon name="chevron-down" size={14}/>
         </Button>}
         {showAll && count > INITIAL_VISIBLE_FILES && <Button size="small" className="task-file-changes-more" onClick={() => setShowAll(false)}>
-          {t('local.fileChanges.showLess')}<UiIcon name="chevron-up" size={14}/>
+          {t('local.fileChanges.showLess')}<UiIcon name="arrow-up" size={14}/>
         </Button>}
       </div>
     </details>
