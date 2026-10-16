@@ -100,7 +100,7 @@ test('Review / Live 任务页头以任务标题为主，智能体与状态归入
   assert.match(taskSessionCss, /\.task-session-view \.task-header-secondary \{ grid-column: 1 \/ 3; grid-row: 2; \}/)
   assert.match(taskSessionCss, /\.task-session-view \.task-header-actions \{ grid-column: 3; grid-row: 1 \/ 3; \}/)
   assert.match(taskSessionCss, /\.task-session-view \.task-header-reading-controls \{[\s\S]*?flex: 1 1 auto;/)
-  assert.doesNotMatch(taskSessionCss, /grid-row: 3;/)
+  assert.doesNotMatch(taskSessionCss, /grid-template-rows: 26px 20px auto;/)
   assert.match(taskSessionCss, /@media \(max-width: 767\.98px\) \{[\s\S]*?\.task-session-view \.task-header-secondary \{ grid-column: 1; grid-row: 2; \}/)
   assert.match(taskDetailCss, /\.task-surface \.task-header-status::before \{/)
 
