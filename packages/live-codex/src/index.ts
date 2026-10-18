@@ -29,7 +29,7 @@ interface Session {
   title?: string
   status: LiveRuntimeState['status']
   streaming: boolean
-  activeTurn?: string
+  activeTurn?: string | undefined
   channel: LiveEventChannel
   approvals: Map<string, number | string>
 }
