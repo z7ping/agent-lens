@@ -19,7 +19,7 @@ class MemoryCheckpoints {
 }
 
 class FakeRpc {
-  listener?: (message: RpcMessage) => void
+  listener: ((message: RpcMessage) => void) | undefined = undefined
   requests: string[] = []
   async available() { return true }
   subscribe(listener: (message: RpcMessage) => void) {
