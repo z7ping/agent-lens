@@ -52,7 +52,7 @@ export class CodexRpc {
     if (!exe) throw new Error('Codex executable not found')
     const child = spawn(exe, ['app-server'], {
       windowsHide: true,
-      shell: process.platform === 'win32' && /\\.(cmd|bat)$/i.test(exe),
+      shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(exe),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     this.child = child
