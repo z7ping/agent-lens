@@ -81,7 +81,11 @@ export class CodexLiveAdapter implements LiveAdapter {
           channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(),
         })
       }
-    })()
+    })().catch(error => {
+      // A transient checkpoint failure must not poison every subsequent retry.
+      this.restored = undefined
+      throw error
+    })
     await this.restored
   }
 
@@ -105,6 +109,16 @@ export class CodexLiveAdapter implements LiveAdapter {
         session.status = 'ready'
         if (codexText(response.model)) session.model = codexText(response.model)
         if (codexText(response.reasoningEffort)) session.effort = codexText(response.reasoningEffort)
+        const thread = codexRecord(response.thread)
+        if (codexText(codexRecord(thread.status).type) === 'active') {
+          // Reattach an in-flight native turn instead of allowing a conflicting prompt.
+          session.streaming = true
+          const latest = await this.rpc.request('thread/turns/list', {
+            threadId: session.id, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded',
+          }).catch(() => ({}))
+          const turns = Array.isArray(latest.data) ? latest.data : []
+          session.activeTurn = codexText(codexRecord(turns[0]).id) || undefined
+        }
       }).catch(error => {
         session.status = 'failed'
         throw error
@@ -340,7 +354,9 @@ export class CodexLiveAdapter implements LiveAdapter {
         ...(session.model ? { model: session.model } : {}),
         ...(session.effort ? { effort: session.effort } : {}),
       })
-      session.activeTurn = codexText(codexRecord(response.turn).id) || undefined
+      if (session.streaming) {
+        session.activeTurn = codexText(codexRecord(response.turn).id) || session.activeTurn
+      }
     } catch (error) {
       session.streaming = false
       throw error
