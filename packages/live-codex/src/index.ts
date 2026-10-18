@@ -194,7 +194,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     const saved = this.sessions.get(nativeId)
     if (!saved && !workspace?.path) throw new Error('Codex history has no verified working directory')
     const session = saved ?? {
-      id: nativeId, cwd: workspace!.path,
+      id: nativeId, cwd: workspace?.path ?? '',
       status: 'ready' as const, streaming: false, attached: false,
       channel: new LiveEventChannel(nativeId), approvals: new Map(),
     }
@@ -205,6 +205,7 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async snapshot(id: string, _since?: string, window?: LiveSnapshotWindow) {
+    await this.hydrate()
     const session = this.session(id)
     await this.attach(session)
     const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
@@ -344,6 +345,7 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async interrupt(id: string) {
+    await this.hydrate()
     const session = this.session(id)
     if (session.streaming) await this.rpc.request('turn/interrupt', { threadId: session.id })
     return {}
@@ -359,6 +361,7 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async terminate(id: string): Promise<void> {
+    await this.hydrate()
     const session = this.session(id)
     if (session.streaming) await this.interrupt(id).catch(() => undefined)
     for (const nativeId of session.approvals.values()) {
