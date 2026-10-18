@@ -1,7 +1,7 @@
 import type {
   LiveAdapter, LiveAdapterManifest, LiveCapabilityName, LiveMessageInput,
   LiveRuntimeState, LiveRuntimeEvent, LiveSendOptions, LiveSnapshotWindow,
-  LiveModelControl, LiveThinkingControl,
+  LiveModelControl, LiveThinkingControl, StorageService,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet, createLiveInputCapabilities,
@@ -11,9 +11,10 @@ import {
   defineAgentLensPlugin, type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
 import { CodexRpc, type RpcMessage } from './transport.js'
+import { CheckpointCodexRecoveryStore, type CodexRecoveryStore } from './recovery.js'
 import { normalizeCodexEvent, codexRecord, codexText, codexSnapshotEntries } from './events.js'
 
-const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui', 'model-switching', 'thinking-control'] as const satisfies readonly LiveCapabilityName[]
+const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui', 'model-switching', 'thinking-control', 'resume', 'recovery'] as const satisfies readonly LiveCapabilityName[]
 export const codexLiveManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/live-codex',
   pluginVersion: '1.0.0-alpha.7',
@@ -34,7 +35,10 @@ interface Session {
   model?: string
   effort?: string | undefined
   channel: LiveEventChannel
+  attached: boolean
+  attaching?: Promise<void> | undefined
   approvals: Map<string, number | string>
+  approvalEvents: Map<string, LiveRuntimeEvent>
 }
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
@@ -50,10 +54,63 @@ export class CodexLiveAdapter implements LiveAdapter {
   })
   readonly startCapabilities = { workspace: 'required', title: 'optional' } as const
   private sessions = new Map<string, Session>()
+  private restored: Promise<void> | undefined
   private unsubscribe: () => void
 
-  constructor(readonly rpc = new CodexRpc()) {
+  constructor(
+    readonly rpc = new CodexRpc(),
+    private readonly recovery?: CodexRecoveryStore,
+    private readonly storage?: StorageService,
+  ) {
     this.unsubscribe = rpc.subscribe(message => this.receive(message))
+  }
+
+
+  private async hydrate(): Promise<void> {
+    if (!this.recovery) return
+    if (!this.restored) this.restored = (async () => {
+      const records = await this.recovery!.list()
+      for (const saved of records) {
+        if (this.sessions.has(saved.id)) continue
+        this.sessions.set(saved.id, {
+          id: saved.id, cwd: saved.cwd,
+          ...(saved.title ? { title: saved.title } : {}),
+          ...(saved.model ? { model: saved.model } : {}),
+          ...(saved.effort ? { effort: saved.effort } : {}),
+          status: 'ready', streaming: false, attached: false,
+          channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(),
+        })
+      }
+    })()
+    await this.restored
+  }
+
+  private async persist(session: Session): Promise<void> {
+    await this.recovery?.put({
+      id: session.id, cwd: session.cwd,
+      ...(session.title ? { title: session.title } : {}),
+      ...(session.model ? { model: session.model } : {}),
+      ...(session.effort ? { effort: session.effort } : {}),
+      updatedAt: new Date().toISOString(),
+    })
+  }
+
+  private async attach(session: Session): Promise<void> {
+    if (session.attached) return
+    if (!session.attaching) {
+      session.attaching = this.rpc.request('thread/resume', {
+        threadId: session.id, excludeTurns: true, approvalPolicy: 'on-request',
+      }).then(response => {
+        session.attached = true
+        session.status = 'ready'
+        if (codexText(response.model)) session.model = codexText(response.model)
+        if (codexText(response.reasoningEffort)) session.effort = codexText(response.reasoningEffort)
+      }).catch(error => {
+        session.status = 'failed'
+        throw error
+      }).finally(() => { session.attaching = undefined })
+    }
+    await session.attaching
   }
 
   async availability() {
@@ -63,10 +120,12 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async list(): Promise<LiveRuntimeState[]> {
+    await this.hydrate()
     return [...this.sessions.values()].map(session => this.view(session))
   }
 
   async start(value: unknown): Promise<LiveRuntimeState> {
+    await this.hydrate()
     const input = codexRecord(value)
     const cwd = codexText(input.workspacePath).trim()
     if (!cwd) throw new TypeError('Codex Live requires workspacePath')
@@ -82,10 +141,11 @@ export class CodexLiveAdapter implements LiveAdapter {
       ...(codexText(response.model) ? { model: codexText(response.model) } : {}),
       ...(codexText(response.reasoningEffort) ? { effort: codexText(response.reasoningEffort) } : {}),
       status: 'ready',
-      streaming: false, channel: new LiveEventChannel(id),
-      approvals: new Map(),
+      streaming: false, attached: true, channel: new LiveEventChannel(id),
+      approvals: new Map(), approvalEvents: new Map(),
     }
     this.sessions.set(id, session)
+    await this.persist(session)
     if (title) {
       await this.rpc.request('thread/name/set', { threadId: id, name: title }).catch(() => undefined)
     }
@@ -111,19 +171,59 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async state(id: string): Promise<LiveRuntimeState> {
-    return this.view(this.session(id))
+    await this.hydrate()
+    const session = this.session(id)
+    await this.attach(session)
+    return this.view(session)
+  }
+
+  async resume(logicalSessionId: string): Promise<LiveRuntimeState> {
+    if (!this.storage) throw new Error('Codex history continuation requires canonical storage')
+    await this.hydrate()
+    const sourceSessions = this.storage.repositories.sessions.listSourceSessionsByLogicalSession
+    if (!sourceSessions) throw new Error('Codex historical session lookup is unavailable')
+    const [logical, sources] = await Promise.all([
+      this.storage.repositories.sessions.getLogicalSession(logicalSessionId),
+      sourceSessions(logicalSessionId, { sourceId: 'codex', limit: 8 }),
+    ])
+    if (!logical || !sources.length) throw new Error('No local Codex source session for this history')
+    const nativeIds = [...new Set(sources.map(source => source.nativeSessionId))]
+    if (nativeIds.length !== 1) throw new Error('Ambiguous Codex native history; refusing to select a thread')
+    const nativeId = nativeIds[0]!
+    const workspace = logical.workspaceId
+      ? await this.storage.repositories.sessions.getWorkspace(logical.workspaceId) : null
+    const saved = this.sessions.get(nativeId)
+    if (!saved && !workspace?.path) throw new Error('Codex history has no verified working directory')
+    const session = saved ?? {
+      id: nativeId, cwd: workspace?.path ?? '',
+      status: 'ready' as const, streaming: false, attached: false,
+      channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(),
+    }
+    if (!saved) this.sessions.set(nativeId, session)
+    await this.attach(session)
+    await this.persist(session)
+    return this.view(session)
   }
 
   async snapshot(id: string, _since?: string, window?: LiveSnapshotWindow) {
+    await this.hydrate()
     const session = this.session(id)
-    const response = await this.rpc.request('thread/read', {
-      threadId: session.id, includeTurns: true,
+    await this.attach(session)
+    const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
+    const response = await this.rpc.request('thread/turns/list', {
+      threadId: session.id,
+      limit: Math.min(limit, 40),
+      sortDirection: 'desc',
+      itemsView: 'full',
+      ...(window?.before ? { cursor: window.before } : {}),
     })
-    const thread = codexRecord(response.thread)
-    const turns = Array.isArray(thread.turns) ? thread.turns : []
-    const limit = window?.limit ?? 120
+    const turns = Array.isArray(response.data) ? [...response.data].reverse() : []
     const { entries } = codexSnapshotEntries(turns, limit)
-    return { state: this.view(session), entries }
+    const before = codexText(response.nextCursor)
+    return {
+      state: this.view(session), entries,
+      page: { hasEarlier: Boolean(before), ...(before ? { before } : {}) },
+    }
   }
 
 
@@ -156,6 +256,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     if (!selected) throw new Error('Model not available in Codex model/list')
     session.model = value
     session.effort = codexText(selected.defaultReasoningEffort) || undefined
+    await this.persist(session)
     session.channel.publish({
       method: 'control.changed', params: { control: 'model' },
       normalizedEvent: { type: 'control.changed', control: 'model' },
@@ -193,6 +294,7 @@ export class CodexLiveAdapter implements LiveAdapter {
       throw new Error('Reasoning effort not offered by Codex')
     }
     session.effort = value
+    await this.persist(session)
     session.channel.publish({
       method: 'control.changed', params: { control: 'thinking' },
       normalizedEvent: { type: 'control.changed', control: 'thinking' },
@@ -201,7 +303,9 @@ export class CodexLiveAdapter implements LiveAdapter {
   }
 
   async send(id: string, message: LiveMessageInput, options: LiveSendOptions = {}): Promise<void> {
+    await this.hydrate()
     const session = this.session(id)
+    await this.attach(session)
     if (session.status !== 'ready') throw new Error('Codex runtime is not ready')
     if (session.streaming) throw new Error('Codex turn is already running')
     if (options.behavior && options.behavior !== 'normal') {
@@ -238,10 +342,15 @@ export class CodexLiveAdapter implements LiveAdapter {
         listener(normalized ? { ...value, normalizedEvent: normalized } : value)
       }
     })
+    for (const pending of session.approvalEvents.values()) {
+      const normalizedEvent = pending.event.normalizedEvent as LiveRuntimeEvent['normalizedEvent']
+      listener(normalizedEvent ? { ...pending, normalizedEvent } : pending)
+    }
     return unsubscribe
   }
 
   async interrupt(id: string) {
+    await this.hydrate()
     const session = this.session(id)
     if (session.streaming) await this.rpc.request('turn/interrupt', { threadId: session.id })
     return {}
@@ -254,30 +363,36 @@ export class CodexLiveAdapter implements LiveAdapter {
     const accepted = codexRecord(response).confirmed === true
     this.rpc.respond(nativeId, { decision: accepted ? 'accept' : 'decline' })
     session.approvals.delete(requestId)
+    session.approvalEvents.delete(requestId)
   }
 
   async terminate(id: string): Promise<void> {
+    await this.hydrate()
     const session = this.session(id)
     if (session.streaming) await this.interrupt(id).catch(() => undefined)
     for (const nativeId of session.approvals.values()) {
       this.rpc.respond(nativeId, { decision: 'decline' })
     }
     session.approvals.clear()
+    session.approvalEvents.clear()
     session.status = 'terminated'
     session.channel.publish({ method: 'runtime/status', params: { status: 'terminated' },
       normalizedEvent: { type: 'status', status: 'terminated' } })
     session.channel.clear()
     this.sessions.delete(id)
+    await this.recovery?.remove(id)
   }
 
   private receive(message: RpcMessage): void {
     if (message.method === 'transport/disconnected') {
       for (const session of this.sessions.values()) {
         session.status = 'failed'
+        session.attached = false
         session.streaming = false
         session.channel.publish({ method: message.method, params: message.params,
           normalizedEvent: { type: 'status', status: 'failed', message: 'Codex App Server disconnected' } })
         session.approvals.clear()
+        session.approvalEvents.clear()
       }
       return
     }
@@ -301,13 +416,14 @@ export class CodexLiveAdapter implements LiveAdapter {
             ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
             ...(codexText(message.params.grantRoot) ? ['Requested write root: ' + codexText(message.params.grantRoot)] : []),
           ].join('\n')
-      session.channel.publish({ method: message.method, params: message.params,
+      const approvalEvent = session.channel.publish({ method: message.method, params: message.params,
         normalizedEvent: {
           type: 'ui.request', requestId, method: 'confirm',
           title: 'Codex execution approval',
           message: detail.slice(0, 4000),
         },
       })
+      session.approvalEvents.set(requestId, approvalEvent)
       return
     }
     if (!session) return
@@ -335,15 +451,18 @@ export class CodexLiveAdapter implements LiveAdapter {
 
 const activate = Object.assign(
   (ctx: AgentLensContext) => {
-    const adapter = new CodexLiveAdapter()
+    const adapter = new CodexLiveAdapter(
+      new CodexRpc(), new CheckpointCodexRecoveryStore(ctx.storage.checkpoints), ctx.storage,
+    )
     const registration = ctx.lives.register(adapter)
     return async () => {
       await registration.dispose()
       await adapter.dispose()
     }
   },
-  { inject: ['lives'] },
+  { inject: ['lives', 'storage'] },
 )
 export const codexLivePlugin = defineAgentLensPlugin(codexLiveManifest, activate)
 export * from './events.js'
 export * from './transport.js'
+export * from './recovery.js'
