@@ -82,3 +82,20 @@ test('Native history resolution rejects ambiguity and resumes only canonical Cod
   assert.ok(rpc.requests.includes('thread/resume'))
   await adapter.dispose()
 })
+
+test('Pending Codex approval remains visible after Live SSE reconnection', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const state = await adapter.start({ workspacePath: '/repo' })
+  rpc.listener?.({
+    id: 11, method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'native-1', command: 'git status' },
+  })
+  const received: string[] = []
+  const unsubscribe = adapter.subscribe(state.runtimeSessionId, event => {
+    if (event.normalizedEvent?.type === 'ui.request') received.push(event.normalizedEvent.requestId)
+  })
+  assert.deepEqual(received, ['11'])
+  unsubscribe()
+  await adapter.dispose()
+})
