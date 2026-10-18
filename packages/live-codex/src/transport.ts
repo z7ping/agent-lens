@@ -53,9 +53,10 @@ export class CodexRpc {
     // Reuse the existing npm shim resolver. Node entrypoints run without cmd.exe.
     const windowsShim = process.platform === 'win32' && /\.(cmd|bat)$/i.test(exe)
     const shimTarget = windowsShim ? await resolveWindowsNpmShimTarget(exe) : undefined
-    const nodeScript = Boolean(shimTarget && /\.(?:mjs|cjs|js)$/i.test(shimTarget))
-    const program = nodeScript ? process.execPath : shimTarget ?? exe
-    const args = nodeScript ? [shimTarget!, 'app-server'] : ['app-server']
+    const target = shimTarget ?? exe
+    const nodeScript = /\.(?:mjs|cjs|js)$/i.test(target)
+    const program = nodeScript ? process.execPath : target
+    const args = nodeScript ? [target, 'app-server'] : ['app-server']
     const child = spawn(program, args, {
       windowsHide: true,
       shell: windowsShim && !shimTarget,

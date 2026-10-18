@@ -531,6 +531,8 @@ export function useLiveTaskRuntime({
           }, () => undefined)
         }
         if (envelope.normalizedEvent?.type === 'completed') {
+          // Terminal turns cannot retain a stale native approval dialog.
+          setExtension(null)
           runtimeCompacting = false
           runtimeActive = false
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
