@@ -19,8 +19,8 @@ function record(value: unknown): Record<string, unknown> {
 
 /** One local App Server per adapter. Thread ownership stays with Codex. */
 export class CodexRpc {
-  private child?: ChildProcessWithoutNullStreams
-  private opening?: Promise<void>
+  private child: ChildProcessWithoutNullStreams | undefined
+  private opening: Promise<void> | undefined
   private seq = 0
   private pending = new Map<number, Pending>()
   private listeners = new Set<Listener>()
