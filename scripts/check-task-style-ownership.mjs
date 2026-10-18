@@ -176,8 +176,8 @@ if (!hoverRule || /height\s*:/.test(hoverRule)) {
   throw new Error('Turn Rail hover 只允许横向展开，不得改变固定 2px 线条粗细')
 }
 const activeRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick\.active i\s*\{([^}]*)\}/s)?.[1] ?? ''
-if (!activeRule || !activeRule.includes('var(--al-ink)')) {
-  throw new Error('Turn Rail active 必须只通过共享状态颜色强调当前轮次')
+if (!activeRule || !activeRule.includes('var(--al-accent)')) {
+  throw new Error('Turn Rail active 必须使用共享强调色，且不得改变固定几何')
 }
 const runningRule = turnRailOwner.match(/\.task-turn-rail \.turn-tick\.running i\s*\{([^}]*)\}/s)?.[1] ?? ''
 if (!runningRule || !runningRule.includes('var(--al-accent)') || !runningRule.includes('box-shadow')) {
