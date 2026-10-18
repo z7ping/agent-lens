@@ -45,6 +45,12 @@ export function normalizeCodexEvent(method: string, params: Record<string, unkno
   if (method === 'item/commandExecution/outputDelta') {
     return { type: 'tool.output', callId: id, name: 'shell', output: codexText(params.delta) }
   }
+  if (method === 'item/started' && item.type === 'agentMessage') {
+    return { type: 'message.start', role: 'assistant', ...common }
+  }
+  if (method === 'item/started' && item.type === 'reasoning') {
+    return { type: 'reasoning.start', ...common }
+  }
   if (method === 'item/started' && isTool(item)) {
     return {
       type: 'tool.start', callId: id, name: toolName(item),
@@ -63,6 +69,7 @@ export function normalizeCodexEvent(method: string, params: Record<string, unkno
       }
     }
     if (item.type === 'agentMessage') return { type: 'text.end', text: codexText(item.text), ...common }
+    if (item.type === 'reasoning') return { type: 'reasoning.end', ...common }
   }
   if (method === 'error') {
     return { type: 'error', message: codexText(params.message) || codexText(codexRecord(params.error).message) || 'Codex error' }
@@ -89,7 +96,7 @@ export function codexSnapshotEntries(turns: unknown[], limit: number): { entries
         entries.push({ type: 'message', id, role: 'assistant', text: codexText(item.text) })
       } else if (item.type === 'reasoning') {
         const summary = Array.isArray(item.summary)
-          ? item.summary.map(v => codexText(v)).filter(Boolean).join('\n') : codexText(item.summary)
+          ? item.summary.map(v => codexText(v) || codexText(codexRecord(v).text)).filter(Boolean).join('\n') : codexText(item.summary)
         if (summary) entries.push({
           id, role: 'assistant', content: [{ type: 'reasoning', text: summary }],
         })
