@@ -230,15 +230,16 @@ export class CodexLiveAdapter implements LiveAdapter {
     return {
       state: this.view(session), entries,
       page: {
-        // An ascending page may still have older items reachable in the reverse direction.
-        hasEarlier: ascending ? Boolean(backwardsCursor) : Boolean(nextCursor),
+        // The reverse-direction cursor is an anchor, not proof of more history.
+        // In particular, the initial latest page must NOT report hasLater.
+        hasEarlier: ascending ? Boolean(window?.after) : Boolean(nextCursor),
         ...(ascending
-          ? (backwardsCursor ? { before: backwardsCursor } : {})
+          ? (window?.after && backwardsCursor ? { before: backwardsCursor } : {})
           : (nextCursor ? { before: nextCursor } : {})),
-        hasLater: ascending ? Boolean(nextCursor) : Boolean(backwardsCursor),
+        hasLater: ascending ? Boolean(nextCursor) : Boolean(window?.before),
         ...(ascending
           ? (nextCursor ? { after: nextCursor } : {})
-          : (backwardsCursor ? { after: backwardsCursor } : {})),
+          : (window?.before && backwardsCursor ? { after: backwardsCursor } : {})),
       },
     }
   }
