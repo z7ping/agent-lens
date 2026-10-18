@@ -5,6 +5,6 @@ export const integrationManifest: AgentIntegrationManifest = {
   productId: 'codex',
   displayName: 'Codex',
   apiVersion: '1.0',
-  capabilities: ['source', 'hook', 'assets'],
-  componentPluginIds: ['@agent-lens/source-codex'],
+  capabilities: ['source', 'hook', 'live', 'assets'],
+  componentPluginIds: ['@agent-lens/source-codex', '@agent-lens/live-codex'],
 }
