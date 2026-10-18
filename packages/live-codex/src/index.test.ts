@@ -119,3 +119,24 @@ test('Models and reasoning levels are discovered from Codex instead of hard-code
   assert.equal(rpc.calls.at(-1)?.params.effort, 'low')
   await adapter.dispose()
 })
+
+test('Snapshot emits a finished file-change tool even when Codex has no output', () => {
+  const result = codexSnapshotEntries([{ items: [
+    { id: 'patch-1', type: 'fileChange', changes: [{ path: 'a.ts' }], status: 'completed' },
+  ] }], 10)
+  assert.equal(result.entries.length, 2)
+  const terminal = result.entries[1] as Record<string, unknown>
+  assert.equal(terminal.role, 'toolResult')
+  assert.equal(terminal.toolCallId, 'patch-1')
+  assert.equal(terminal.isError, false)
+})
+
+test('Missing active Codex turn id does not send malformed interrupt requests', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  rpc.emit({ method: 'turn/started', params: { threadId: 'thread-1', turn: {} } })
+  await assert.rejects(() => adapter.interrupt(session.runtimeSessionId), /turn ID is unavailable/)
+  assert.equal(rpc.calls.some(call => call.method === 'turn/interrupt'), false)
+  await adapter.dispose()
+})
