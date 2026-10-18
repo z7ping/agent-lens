@@ -43,6 +43,13 @@ class FakeRpc {
     if (method === 'thread/start') return { thread: { id: 'thread-1' } }
     if (method === 'turn/start') return { turn: { id: 'turn-1' } }
     if (method === 'thread/read') return { thread: { turns: [] } }
+    if (method === 'model/list') return { data: [
+      { id: 'codex-one', model: 'codex-one', displayName: 'Codex One', hidden: false,
+        defaultReasoningEffort: 'medium', supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Fast' },
+          { reasoningEffort: 'medium', description: 'Balanced' },
+        ] },
+    ] }
     return {}
   }
   respond(id: number | string, value: Record<string, unknown>) {
@@ -92,5 +99,21 @@ test('Unknown approval methods fail closed', async () => {
   rpc.emit({ method: 'item/permissions/requestApproval', id: 8,
     params: { threadId: 'thread-1' } })
   assert.deepEqual(rpc.responses, [{ id: 8, value: { rejected: true } }])
+  await adapter.dispose()
+})
+
+test('Models and reasoning levels are discovered from Codex instead of hard-coded', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  const models = await adapter.modelControl(session.runtimeSessionId)
+  assert.deepEqual(models?.options.map(option => option.value), ['codex-one'])
+  await adapter.setModelControl(session.runtimeSessionId, 'codex-one')
+  const thinking = await adapter.thinkingControl(session.runtimeSessionId)
+  assert.deepEqual(thinking?.options.map(option => option.value), ['low', 'medium'])
+  await adapter.setThinkingControl(session.runtimeSessionId, 'low')
+  await adapter.send(session.runtimeSessionId, 'Hi')
+  assert.equal(rpc.calls.at(-1)?.params.model, 'codex-one')
+  assert.equal(rpc.calls.at(-1)?.params.effort, 'low')
   await adapter.dispose()
 })
