@@ -34,7 +34,7 @@ export class CodexRpc {
   }
 
   async available(): Promise<boolean> {
-    return Boolean(await resolveExecutable('codex', { envVar: 'AGENT_LENS_CODEX_EXECUTABLE' }))
+    return Boolean(await resolveExecutable('codex', { envVar: 'CODEX_BIN' }))
   }
 
   async connect(): Promise<void> {
@@ -48,7 +48,7 @@ export class CodexRpc {
   }
 
   private async open(): Promise<void> {
-    const exe = await resolveExecutable('codex', { envVar: 'AGENT_LENS_CODEX_EXECUTABLE' })
+    const exe = await resolveExecutable('codex', { envVar: 'CODEX_BIN' })
     if (!exe) throw new Error('Codex executable not found')
     const child = spawn(exe, ['app-server'], {
       windowsHide: true,
