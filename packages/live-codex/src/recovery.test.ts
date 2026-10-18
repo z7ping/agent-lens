@@ -30,8 +30,8 @@ class FakeRpc {
     this.requests.push(method)
     if (method === 'thread/start') return { thread: { id: 'native-1' }, model: 'model-a' }
     if (method === 'thread/resume') return { thread: { id: 'native-1' }, model: 'model-a' }
-    if (method === 'thread/turns/list') return {
-      data: [{ items: [{ id: 'msg-1', type: 'agentMessage', text: 'restored reply' }] }],
+    if (method === 'thread/items/list') return {
+      data: [{ turnId: 'turn-1', item: { id: 'msg-1', type: 'agentMessage', text: 'restored reply' } }],
       nextCursor: 'older',
     }
     if (method === 'turn/start') return { turn: { id: 'turn-1' } }
@@ -65,7 +65,8 @@ test('Restart reattaches native Thread and reads bounded App Server history', as
   assert.ok(rpc.requests.includes('thread/resume'))
   const snapshot = await second.snapshot('native-1', undefined, { limit: 10 })
   assert.equal(snapshot.entries.length, 1)
-  assert.deepEqual(snapshot.page, { hasEarlier: true, before: 'older' })
+  assert.equal(snapshot.page?.hasEarlier, true)
+  assert.equal(snapshot.page?.before, 'older')
   await second.dispose()
 })
 
