@@ -127,3 +127,17 @@ test('Oldest Codex page does not claim older data merely because reverse cursor 
   assert.equal(result.page.hasLater, true)
   await adapter.dispose()
 })
+
+test('Completed native turn does not replay an expired approval on reconnect', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const state = await adapter.start({ workspacePath: '/repo' })
+  rpc.listener?.({ id: 21, method: 'item/fileChange/requestApproval', params: { threadId: 'native-1' } })
+  rpc.listener?.({ method: 'turn/completed', params: { threadId: 'native-1', turn: { status: 'completed' } } })
+  const replayed: string[] = []
+  adapter.subscribe(state.runtimeSessionId, event => {
+    if (event.normalizedEvent?.type === 'ui.request') replayed.push(event.normalizedEvent.requestId)
+  })()
+  assert.deepEqual(replayed, [])
+  await adapter.dispose()
+})
