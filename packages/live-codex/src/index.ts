@@ -295,12 +295,12 @@ export class CodexLiveAdapter implements LiveAdapter {
             'Command: ' + (codexText(message.params.command) || '[not provided]'),
             ...(codexText(message.params.cwd) ? ['Working directory: ' + codexText(message.params.cwd)] : []),
             ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
-          ].join('\\n')
+          ].join('\n')
         : [
             'File modification requested',
             ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
             ...(codexText(message.params.grantRoot) ? ['Requested write root: ' + codexText(message.params.grantRoot)] : []),
-          ].join('\\n')
+          ].join('\n')
       session.channel.publish({ method: message.method, params: message.params,
         normalizedEvent: {
           type: 'ui.request', requestId, method: 'confirm',
