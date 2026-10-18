@@ -30,7 +30,7 @@ test('Codex history conversion is bounded and preserves native entry identity', 
 })
 
 class FakeRpc {
-  listener?: (message: RpcMessage) => void
+  listener: ((message: RpcMessage) => void) | undefined = undefined
   calls: { method: string, params: Record<string, unknown> }[] = []
   responses: { id: number | string, value: Record<string, unknown> }[] = []
   async available() { return true }
