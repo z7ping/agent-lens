@@ -38,6 +38,7 @@ interface Session {
   attached: boolean
   attaching?: Promise<void> | undefined
   approvals: Map<string, number | string>
+  approvalEvents: Map<string, LiveRuntimeEvent>
 }
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
@@ -77,7 +78,7 @@ export class CodexLiveAdapter implements LiveAdapter {
           ...(saved.model ? { model: saved.model } : {}),
           ...(saved.effort ? { effort: saved.effort } : {}),
           status: 'ready', streaming: false, attached: false,
-          channel: new LiveEventChannel(saved.id), approvals: new Map(),
+          channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(),
         })
       }
     })()
@@ -141,7 +142,7 @@ export class CodexLiveAdapter implements LiveAdapter {
       ...(codexText(response.reasoningEffort) ? { effort: codexText(response.reasoningEffort) } : {}),
       status: 'ready',
       streaming: false, attached: true, channel: new LiveEventChannel(id),
-      approvals: new Map(),
+      approvals: new Map(), approvalEvents: new Map(),
     }
     this.sessions.set(id, session)
     await this.persist(session)
@@ -196,7 +197,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     const session = saved ?? {
       id: nativeId, cwd: workspace?.path ?? '',
       status: 'ready' as const, streaming: false, attached: false,
-      channel: new LiveEventChannel(nativeId), approvals: new Map(),
+      channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(),
     }
     if (!saved) this.sessions.set(nativeId, session)
     await this.attach(session)
@@ -341,6 +342,10 @@ export class CodexLiveAdapter implements LiveAdapter {
         listener(normalized ? { ...value, normalizedEvent: normalized } : value)
       }
     })
+    for (const pending of session.approvalEvents.values()) {
+      const normalizedEvent = pending.event.normalizedEvent as LiveRuntimeEvent['normalizedEvent']
+      listener(normalizedEvent ? { ...pending, normalizedEvent } : pending)
+    }
     return unsubscribe
   }
 
@@ -358,6 +363,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     const accepted = codexRecord(response).confirmed === true
     this.rpc.respond(nativeId, { decision: accepted ? 'accept' : 'decline' })
     session.approvals.delete(requestId)
+    session.approvalEvents.delete(requestId)
   }
 
   async terminate(id: string): Promise<void> {
@@ -368,6 +374,7 @@ export class CodexLiveAdapter implements LiveAdapter {
       this.rpc.respond(nativeId, { decision: 'decline' })
     }
     session.approvals.clear()
+    session.approvalEvents.clear()
     session.status = 'terminated'
     session.channel.publish({ method: 'runtime/status', params: { status: 'terminated' },
       normalizedEvent: { type: 'status', status: 'terminated' } })
@@ -385,6 +392,7 @@ export class CodexLiveAdapter implements LiveAdapter {
         session.channel.publish({ method: message.method, params: message.params,
           normalizedEvent: { type: 'status', status: 'failed', message: 'Codex App Server disconnected' } })
         session.approvals.clear()
+        session.approvalEvents.clear()
       }
       return
     }
@@ -400,13 +408,14 @@ export class CodexLiveAdapter implements LiveAdapter {
       const detail = message.method === 'item/commandExecution/requestApproval'
         ? codexText(message.params.command) || JSON.stringify(message.params.command) || ''
         : codexText(message.params.reason) || 'Codex requests permission to edit files'
-      session.channel.publish({ method: message.method, params: message.params,
+      const approvalEvent = session.channel.publish({ method: message.method, params: message.params,
         normalizedEvent: {
           type: 'ui.request', requestId, method: 'confirm',
           title: 'Codex execution approval',
           message: detail.slice(0, 4000),
         },
       })
+      session.approvalEvents.set(requestId, approvalEvent)
       return
     }
     if (!session) return
