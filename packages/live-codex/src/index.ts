@@ -1,6 +1,7 @@
 import type {
   LiveAdapter, LiveAdapterManifest, LiveCapabilityName, LiveMessageInput,
   LiveRuntimeState, LiveRuntimeEvent, LiveSendOptions, LiveSnapshotWindow,
+  LiveModelControl, LiveThinkingControl,
 } from '@agent-lens/core'
 import {
   createLiveCapabilitySet, createLiveInputCapabilities,
@@ -12,7 +13,7 @@ import {
 import { CodexRpc, type RpcMessage } from './transport.js'
 import { normalizeCodexEvent, codexRecord, codexText, codexSnapshotEntries } from './events.js'
 
-const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui'] as const satisfies readonly LiveCapabilityName[]
+const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui', 'model-switching', 'thinking-control'] as const satisfies readonly LiveCapabilityName[]
 export const codexLiveManifest: LiveAdapterManifest = {
   pluginId: '@agent-lens/live-codex',
   pluginVersion: '1.0.0-alpha.7',
@@ -30,6 +31,8 @@ interface Session {
   status: LiveRuntimeState['status']
   streaming: boolean
   activeTurn?: string
+  model?: string
+  effort?: string
   channel: LiveEventChannel
   approvals: Map<string, number | string>
 }
@@ -75,7 +78,10 @@ export class CodexLiveAdapter implements LiveAdapter {
     if (!id) throw new Error('Codex thread/start returned no thread id')
     const title = codexText(input.title).trim() || undefined
     const session: Session = {
-      id, cwd, ...(title ? { title } : {}), status: 'ready',
+      id, cwd, ...(title ? { title } : {}),
+      ...(codexText(response.model) ? { model: codexText(response.model) } : {}),
+      ...(codexText(response.reasoningEffort) ? { effort: codexText(response.reasoningEffort) } : {}),
+      status: 'ready',
       streaming: false, channel: new LiveEventChannel(id),
       approvals: new Map(),
     }
@@ -120,6 +126,80 @@ export class CodexLiveAdapter implements LiveAdapter {
     return { state: this.view(session), entries }
   }
 
+
+  private async nativeModels(): Promise<Record<string, unknown>[]> {
+    const response = await this.rpc.request('model/list', {})
+    return Array.isArray(response.data) ? response.data.map(codexRecord) : []
+  }
+
+  async modelControl(id: string): Promise<LiveModelControl | null> {
+    const session = this.session(id)
+    const models = (await this.nativeModels()).filter(model => !model.hidden && codexText(model.model || model.id))
+    if (!models.length) return null
+    const options = models.map(model => ({
+      value: codexText(model.model || model.id),
+      label: codexText(model.displayName) || codexText(model.model || model.id),
+      ...(codexText(model.description) ? { description: codexText(model.description) } : {}),
+    }))
+    return {
+      capability: 'model-switching', label: 'Model',
+      ...(session.model && options.some(option => option.value === session.model) ? { value: session.model } : {}),
+      options,
+    }
+  }
+
+  async setModelControl(id: string, value: string): Promise<LiveRuntimeState> {
+    const session = this.session(id)
+    if (session.streaming) throw new Error('Cannot change model while Codex is running')
+    const models = await this.nativeModels()
+    const selected = models.find(model => !model.hidden && codexText(model.model || model.id) === value)
+    if (!selected) throw new Error('Model not available in Codex model/list')
+    session.model = value
+    session.effort = codexText(selected.defaultReasoningEffort) || undefined
+    session.channel.publish({
+      method: 'control.changed', params: { control: 'model' },
+      normalizedEvent: { type: 'control.changed', control: 'model' },
+    })
+    session.channel.publish({
+      method: 'control.changed', params: { control: 'thinking' },
+      normalizedEvent: { type: 'control.changed', control: 'thinking' },
+    })
+    return this.view(session)
+  }
+
+  async thinkingControl(id: string): Promise<LiveThinkingControl | null> {
+    const session = this.session(id)
+    const models = await this.nativeModels()
+    const model = models.find(candidate => !candidate.hidden
+      && codexText(candidate.model || candidate.id) === session.model)
+    if (!model || !Array.isArray(model.supportedReasoningEfforts)) return null
+    const options = model.supportedReasoningEfforts.map(codexRecord)
+      .filter(option => codexText(option.reasoningEffort))
+      .map(option => ({
+        value: codexText(option.reasoningEffort),
+        ...(codexText(option.description) ? { description: codexText(option.description) } : {}),
+      }))
+    if (!options.length) return null
+    const effective = session.effort || codexText(model.defaultReasoningEffort)
+    if (!options.some(option => option.value === effective)) return null
+    return { capability: 'thinking-control', value: effective, options, label: 'Reasoning effort' }
+  }
+
+  async setThinkingControl(id: string, value: string): Promise<LiveRuntimeState> {
+    const session = this.session(id)
+    if (session.streaming) throw new Error('Cannot change reasoning effort while Codex is running')
+    const control = await this.thinkingControl(id)
+    if (!control || !control.options.some(option => option.value === value)) {
+      throw new Error('Reasoning effort not offered by Codex')
+    }
+    session.effort = value
+    session.channel.publish({
+      method: 'control.changed', params: { control: 'thinking' },
+      normalizedEvent: { type: 'control.changed', control: 'thinking' },
+    })
+    return this.view(session)
+  }
+
   async send(id: string, message: LiveMessageInput, options: LiveSendOptions = {}): Promise<void> {
     const session = this.session(id)
     if (session.status !== 'ready') throw new Error('Codex runtime is not ready')
@@ -135,6 +215,8 @@ export class CodexLiveAdapter implements LiveAdapter {
     try {
       const response = await this.rpc.request('turn/start', {
         threadId: session.id, input: [{ type: 'text', text }],
+        ...(session.model ? { model: session.model } : {}),
+        ...(session.effort ? { effort: session.effort } : {}),
       })
       session.activeTurn = codexText(codexRecord(response.turn).id) || undefined
     } catch (error) {
