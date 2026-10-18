@@ -291,8 +291,16 @@ export class CodexLiveAdapter implements LiveAdapter {
       const requestId = String(message.id)
       session.approvals.set(requestId, message.id)
       const detail = message.method === 'item/commandExecution/requestApproval'
-        ? codexText(message.params.command) || JSON.stringify(message.params.command) || ''
-        : codexText(message.params.reason) || 'Codex requests permission to edit files'
+        ? [
+            'Command: ' + (codexText(message.params.command) || '[not provided]'),
+            ...(codexText(message.params.cwd) ? ['Working directory: ' + codexText(message.params.cwd)] : []),
+            ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
+          ].join('\\n')
+        : [
+            'File modification requested',
+            ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
+            ...(codexText(message.params.grantRoot) ? ['Requested write root: ' + codexText(message.params.grantRoot)] : []),
+          ].join('\\n')
       session.channel.publish({ method: message.method, params: message.params,
         normalizedEvent: {
           type: 'ui.request', requestId, method: 'confirm',
