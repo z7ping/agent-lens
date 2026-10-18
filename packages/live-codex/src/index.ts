@@ -471,6 +471,8 @@ export class CodexLiveAdapter implements LiveAdapter {
     if (message.method === 'turn/completed') {
       session.streaming = false
       session.activeTurn = undefined
+      session.approvals.clear()
+      session.approvalEvents.clear()
     }
     if (message.method === 'thread/name/updated' && codexText(message.params.threadName)) {
       session.title = codexText(message.params.threadName)
