@@ -72,7 +72,7 @@ test('Codex integration uses native thread and turn ids, explicit approval, and 
   await adapter.send(session.runtimeSessionId, 'Implement feature')
   assert.deepEqual(rpc.calls.at(-1), {
     method: 'turn/start',
-    params: { threadId: 'thread-1', input: [{ type: 'text', text: 'Implement feature' }] },
+    params: { threadId: 'thread-1', input: [{ type: 'text', text: 'Implement feature', text_elements: [] }] },
   })
   rpc.emit({
     method: 'item/commandExecution/requestApproval', id: 5,
@@ -83,7 +83,9 @@ test('Codex integration uses native thread and turn ids, explicit approval, and 
   await adapter.respondToExtension(session.runtimeSessionId, '5', { confirmed: false })
   assert.deepEqual(rpc.responses, [{ id: 5, value: { decision: 'decline' } }])
   await adapter.interrupt(session.runtimeSessionId)
-  assert.equal(rpc.calls.at(-1)?.method, 'turn/interrupt')
+  assert.deepEqual(rpc.calls.at(-1), {
+    method: 'turn/interrupt', params: { threadId: 'thread-1', turnId: 'turn-1' },
+  })
   rpc.emit({ method: 'turn/completed', params: {
     threadId: 'thread-1', turn: { status: 'interrupted' },
   } })
@@ -115,5 +117,26 @@ test('Models and reasoning levels are discovered from Codex instead of hard-code
   await adapter.send(session.runtimeSessionId, 'Hi')
   assert.equal(rpc.calls.at(-1)?.params.model, 'codex-one')
   assert.equal(rpc.calls.at(-1)?.params.effort, 'low')
+  await adapter.dispose()
+})
+
+test('Snapshot emits a finished file-change tool even when Codex has no output', () => {
+  const result = codexSnapshotEntries([{ items: [
+    { id: 'patch-1', type: 'fileChange', changes: [{ path: 'a.ts' }], status: 'completed' },
+  ] }], 10)
+  assert.equal(result.entries.length, 2)
+  const terminal = result.entries[1] as Record<string, unknown>
+  assert.equal(terminal.role, 'toolResult')
+  assert.equal(terminal.toolCallId, 'patch-1')
+  assert.equal(terminal.isError, false)
+})
+
+test('Missing active Codex turn id does not send malformed interrupt requests', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  rpc.emit({ method: 'turn/started', params: { threadId: 'thread-1', turn: {} } })
+  await assert.rejects(() => adapter.interrupt(session.runtimeSessionId), /turn ID is unavailable/)
+  assert.equal(rpc.calls.some(call => call.method === 'turn/interrupt'), false)
   await adapter.dispose()
 })

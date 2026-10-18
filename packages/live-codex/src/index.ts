@@ -81,7 +81,11 @@ export class CodexLiveAdapter implements LiveAdapter {
           channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(),
         })
       }
-    })()
+    })().catch(error => {
+      // A transient checkpoint failure must not poison every subsequent retry.
+      this.restored = undefined
+      throw error
+    })
     await this.restored
   }
 
@@ -99,12 +103,22 @@ export class CodexLiveAdapter implements LiveAdapter {
     if (session.attached) return
     if (!session.attaching) {
       session.attaching = this.rpc.request('thread/resume', {
-        threadId: session.id, excludeTurns: true, approvalPolicy: 'on-request',
+        threadId: session.id, excludeTurns: true, approvalPolicy: 'on-request', approvalsReviewer: 'user',
       }).then(response => {
         session.attached = true
         session.status = 'ready'
         if (codexText(response.model)) session.model = codexText(response.model)
         if (codexText(response.reasoningEffort)) session.effort = codexText(response.reasoningEffort)
+        const thread = codexRecord(response.thread)
+        if (codexText(codexRecord(thread.status).type) === 'active') {
+          // Reattach an in-flight native turn instead of allowing a conflicting prompt.
+          session.streaming = true
+          const latest = await this.rpc.request('thread/turns/list', {
+            threadId: session.id, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded',
+          }).catch(() => ({}))
+          const turns = Array.isArray(latest.data) ? latest.data : []
+          session.activeTurn = codexText(codexRecord(turns[0]).id) || undefined
+        }
       }).catch(error => {
         session.status = 'failed'
         throw error
@@ -130,7 +144,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     const cwd = codexText(input.workspacePath).trim()
     if (!cwd) throw new TypeError('Codex Live requires workspacePath')
     const response = await this.rpc.request('thread/start', {
-      cwd, approvalPolicy: 'on-request',
+      cwd, approvalPolicy: 'on-request', approvalsReviewer: 'user',
     })
     const thread = codexRecord(response.thread)
     const id = codexText(thread.id)
@@ -210,19 +224,37 @@ export class CodexLiveAdapter implements LiveAdapter {
     const session = this.session(id)
     await this.attach(session)
     const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
-    const response = await this.rpc.request('thread/turns/list', {
+    // Native item cursor prevents skipped tools/messages when a turn has many items.
+    // Each source item yields at most two transcript entries (tool call + result).
+    const ascending = window?.edge === 'earliest' || Boolean(window?.after)
+    const cursor = ascending ? window?.after : window?.before
+    const response = await this.rpc.request('thread/items/list', {
       threadId: session.id,
-      limit: Math.min(limit, 40),
-      sortDirection: 'desc',
-      itemsView: 'full',
-      ...(window?.before ? { cursor: window.before } : {}),
+      limit: Math.max(1, Math.floor(limit / 2)),
+      sortDirection: ascending ? 'asc' : 'desc',
+      ...(cursor ? { cursor } : {}),
     })
-    const turns = Array.isArray(response.data) ? [...response.data].reverse() : []
-    const { entries } = codexSnapshotEntries(turns, limit)
-    const before = codexText(response.nextCursor)
+    const items = Array.isArray(response.data) ? response.data : []
+    const chronological = ascending ? items : [...items].reverse()
+    const { entries } = codexSnapshotEntries(
+      chronological.map(raw => ({ items: [codexRecord(raw).item] })), limit,
+    )
+    const nextCursor = codexText(response.nextCursor)
+    const backwardsCursor = codexText(response.backwardsCursor)
     return {
       state: this.view(session), entries,
-      page: { hasEarlier: Boolean(before), ...(before ? { before } : {}) },
+      page: {
+        // The reverse-direction cursor is an anchor, not proof of more history.
+        // In particular, the initial latest page must NOT report hasLater.
+        hasEarlier: ascending ? Boolean(window?.after) : Boolean(nextCursor),
+        ...(ascending
+          ? (window?.after && backwardsCursor ? { before: backwardsCursor } : {})
+          : (nextCursor ? { before: nextCursor } : {})),
+        hasLater: ascending ? Boolean(nextCursor) : Boolean(window?.before),
+        ...(ascending
+          ? (nextCursor ? { after: nextCursor } : {})
+          : (window?.before && backwardsCursor ? { after: backwardsCursor } : {})),
+      },
     }
   }
 
@@ -318,11 +350,13 @@ export class CodexLiveAdapter implements LiveAdapter {
     session.streaming = true
     try {
       const response = await this.rpc.request('turn/start', {
-        threadId: session.id, input: [{ type: 'text', text }],
+        threadId: session.id, input: [{ type: 'text', text, text_elements: [] }],
         ...(session.model ? { model: session.model } : {}),
         ...(session.effort ? { effort: session.effort } : {}),
       })
-      session.activeTurn = codexText(codexRecord(response.turn).id) || undefined
+      if (session.streaming) {
+        session.activeTurn = codexText(codexRecord(response.turn).id) || session.activeTurn
+      }
     } catch (error) {
       session.streaming = false
       throw error
@@ -352,7 +386,10 @@ export class CodexLiveAdapter implements LiveAdapter {
   async interrupt(id: string) {
     await this.hydrate()
     const session = this.session(id)
-    if (session.streaming) await this.rpc.request('turn/interrupt', { threadId: session.id })
+    if (session.streaming) {
+      if (!session.activeTurn) throw new Error('Codex active turn ID is unavailable for interruption')
+      await this.rpc.request('turn/interrupt', { threadId: session.id, turnId: session.activeTurn })
+    }
     return {}
   }
 
@@ -435,8 +472,8 @@ export class CodexLiveAdapter implements LiveAdapter {
       session.streaming = false
       session.activeTurn = undefined
     }
-    if (message.method === 'thread/name/updated' && codexText(message.params.name)) {
-      session.title = codexText(message.params.name)
+    if (message.method === 'thread/name/updated' && codexText(message.params.threadName)) {
+      session.title = codexText(message.params.threadName)
     }
     session.channel.publish({ method: message.method, params: message.params })
   }

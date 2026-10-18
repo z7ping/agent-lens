@@ -21,6 +21,7 @@ class MemoryCheckpoints {
 class FakeRpc {
   listener: ((message: RpcMessage) => void) | undefined = undefined
   requests: string[] = []
+  active = false
   async available() { return true }
   subscribe(listener: (message: RpcMessage) => void) {
     this.listener = listener
@@ -29,10 +30,11 @@ class FakeRpc {
   async request(method: string) {
     this.requests.push(method)
     if (method === 'thread/start') return { thread: { id: 'native-1' }, model: 'model-a' }
-    if (method === 'thread/resume') return { thread: { id: 'native-1' }, model: 'model-a' }
-    if (method === 'thread/turns/list') return {
-      data: [{ items: [{ id: 'msg-1', type: 'agentMessage', text: 'restored reply' }] }],
-      nextCursor: 'older',
+    if (method === 'thread/resume') return { thread: { id: 'native-1', status: { type: this.active ? 'active' : 'idle' } }, model: 'model-a' }
+    if (method === 'thread/turns/list') return { data: [{ id: 'turn-active', status: 'inProgress' }] }
+    if (method === 'thread/items/list') return {
+      data: [{ turnId: 'turn-1', item: { id: 'msg-1', type: 'agentMessage', text: 'restored reply' } }],
+      nextCursor: 'older', backwardsCursor: 'newest',
     }
     if (method === 'turn/start') return { turn: { id: 'turn-1' } }
     return {}
@@ -65,7 +67,9 @@ test('Restart reattaches native Thread and reads bounded App Server history', as
   assert.ok(rpc.requests.includes('thread/resume'))
   const snapshot = await second.snapshot('native-1', undefined, { limit: 10 })
   assert.equal(snapshot.entries.length, 1)
-  assert.deepEqual(snapshot.page, { hasEarlier: true, before: 'older' })
+  assert.equal(snapshot.page?.hasEarlier, true)
+  assert.equal(snapshot.page?.before, 'older')
+  assert.equal(snapshot.page?.hasLater, false, 'the initial latest page is not an older-history window')
   await second.dispose()
 })
 
@@ -97,5 +101,29 @@ test('Pending Codex approval remains visible after Live SSE reconnection', async
   })
   assert.deepEqual(received, ['11'])
   unsubscribe()
+  await adapter.dispose()
+})
+
+test('A recovered active native turn remains streaming and can be interrupted by its real ID', async () => {
+  const repo = new MemoryCheckpoints()
+  const recovery = new CheckpointCodexRecoveryStore(repo as unknown as CheckpointRepository)
+  await recovery.put({ id: 'native-1', cwd: '/repo', updatedAt: new Date().toISOString() })
+  const rpc = new FakeRpc()
+  rpc.active = true
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc, recovery)
+  const state = await adapter.state('native-1')
+  assert.equal(state.isStreaming, true)
+  await adapter.interrupt('native-1')
+  assert.equal(rpc.requests.at(-1), 'turn/interrupt')
+  await adapter.dispose()
+})
+
+test('Oldest Codex page does not claim older data merely because reverse cursor is present', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  await adapter.start({ workspacePath: '/repo' })
+  const result = await adapter.snapshot('native-1', undefined, { edge: 'earliest', limit: 10 })
+  assert.equal(result.page.hasEarlier, false)
+  assert.equal(result.page.hasLater, true)
   await adapter.dispose()
 })

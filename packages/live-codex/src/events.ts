@@ -63,7 +63,7 @@ export function normalizeCodexEvent(method: string, params: Record<string, unkno
     if (isTool(item)) {
       return {
         type: 'tool.end', callId: id, name: toolName(item),
-        status: ['failed', 'error', 'declined'].includes(codexText(item.status)) ? 'error' : 'success',
+        status: ['failed', 'error', 'declined', 'interrupted'].includes(codexText(item.status)) ? 'error' : 'success',
         ...(item.aggregatedOutput || item.result
           ? { output: preview(item.aggregatedOutput || item.result) } : {}),
       }
@@ -105,10 +105,12 @@ export function codexSnapshotEntries(turns: unknown[], limit: number): { entries
           type: 'toolCall', id, name: toolName(item),
           arguments: item.command || item.changes || item.arguments || '',
         }] })
-        if (item.aggregatedOutput || item.result) entries.push({
+        // Persisted file edits and agent-tool calls may have no textual output.
+        // Emit a terminal result anyway, otherwise the shared UI leaves the tool running.
+        if (codexText(item.status) !== 'inProgress') entries.push({
           role: 'toolResult', toolCallId: id, toolName: toolName(item),
-          content: preview(item.aggregatedOutput || item.result),
-          isError: ['failed', 'error'].includes(codexText(item.status)),
+          content: preview(item.aggregatedOutput || item.result || ''),
+          isError: ['failed', 'error', 'declined', 'interrupted'].includes(codexText(item.status)),
         })
       }
     }
