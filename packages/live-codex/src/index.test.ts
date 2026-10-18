@@ -72,7 +72,7 @@ test('Codex integration uses native thread and turn ids, explicit approval, and 
   await adapter.send(session.runtimeSessionId, 'Implement feature')
   assert.deepEqual(rpc.calls.at(-1), {
     method: 'turn/start',
-    params: { threadId: 'thread-1', input: [{ type: 'text', text: 'Implement feature' }] },
+    params: { threadId: 'thread-1', input: [{ type: 'text', text: 'Implement feature', text_elements: [] }] },
   })
   rpc.emit({
     method: 'item/commandExecution/requestApproval', id: 5,
@@ -83,7 +83,9 @@ test('Codex integration uses native thread and turn ids, explicit approval, and 
   await adapter.respondToExtension(session.runtimeSessionId, '5', { confirmed: false })
   assert.deepEqual(rpc.responses, [{ id: 5, value: { decision: 'decline' } }])
   await adapter.interrupt(session.runtimeSessionId)
-  assert.equal(rpc.calls.at(-1)?.method, 'turn/interrupt')
+  assert.deepEqual(rpc.calls.at(-1), {
+    method: 'turn/interrupt', params: { threadId: 'thread-1', turnId: 'turn-1' },
+  })
   rpc.emit({ method: 'turn/completed', params: {
     threadId: 'thread-1', turn: { status: 'interrupted' },
   } })
