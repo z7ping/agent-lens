@@ -32,7 +32,7 @@ class FakeRpc {
     if (method === 'thread/resume') return { thread: { id: 'native-1' }, model: 'model-a' }
     if (method === 'thread/items/list') return {
       data: [{ turnId: 'turn-1', item: { id: 'msg-1', type: 'agentMessage', text: 'restored reply' } }],
-      nextCursor: 'older',
+      nextCursor: 'older', backwardsCursor: 'newest',
     }
     if (method === 'turn/start') return { turn: { id: 'turn-1' } }
     return {}
@@ -67,6 +67,7 @@ test('Restart reattaches native Thread and reads bounded App Server history', as
   assert.equal(snapshot.entries.length, 1)
   assert.equal(snapshot.page?.hasEarlier, true)
   assert.equal(snapshot.page?.before, 'older')
+  assert.equal(snapshot.page?.hasLater, false, 'the initial latest page is not an older-history window')
   await second.dispose()
 })
 
