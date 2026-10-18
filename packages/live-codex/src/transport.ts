@@ -62,6 +62,8 @@ export class CodexRpc {
     child.stdout.on('data', (chunk: string) => this.consume(chunk))
     // Never include stderr (may contain sensitive details) in UI or persisted logs.
     child.stderr.resume()
+    child.stdin.on('error', error => this.close(error))
+    child.stdout.on('error', error => this.close(error))
     child.on('error', error => this.close(error))
     child.on('exit', code => this.close(new Error('Codex App Server exited: ' + String(code))))
     await this.send('initialize', {
@@ -157,7 +159,9 @@ export class CodexRpc {
     for (const listener of this.listeners) listener({
       method: 'transport/disconnected', params: { message: error.message },
     })
+    const child = this.child
     this.child = undefined
+    child?.kill()
   }
 
   dispose(): void {
