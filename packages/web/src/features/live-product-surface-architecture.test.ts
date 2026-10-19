@@ -140,7 +140,7 @@ test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
 
 test('Live 工具输出统一使用可复制原文和显式格式化切换，不会自动误解析日志', () => {
   const liveTask = liveTaskImplementation
-  assert.match(liveTaskTimeline, /<TaskToolRow/)
+  assert.match(liveTaskTimeline, /<TaskSessionTool/)
   assert.match(liveTaskTimeline, /output: item\.output/)
   assert.doesNotMatch(liveTask, /details=\{item\.output\s*\?\s*<div[^>]*><ToolOutputContent/, 'Live output must not be rendered twice')
   const output = readFileSync(new URL('./ToolOutputContent.tsx', import.meta.url), 'utf8')
