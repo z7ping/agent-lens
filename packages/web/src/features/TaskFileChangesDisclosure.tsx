@@ -242,7 +242,7 @@ export function TaskFileChangesDisclosure({
     {!inlineDetails && selected && <Drawer
       open
       className="task-file-detail-drawer"
-      title={inspectedFile.name || inspectedFilePath}
+      title={t(diffPath ? 'local.fileChanges.viewDiff' : 'local.fileChanges.viewEvidence')}
       onClose={() => { setEvidenceItem(null); setDiffPath(null) }}
     >{detailContent}</Drawer>}
   </>
