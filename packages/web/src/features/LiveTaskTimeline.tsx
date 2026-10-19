@@ -196,7 +196,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
   const answer = visibleItems.filter(item => item.kind === 'message' && item.role === 'assistant').map(renderItem)
   return <VirtualRoundMount
-    rootSelector=".pi-live-reader"
+    rootSelector=".task-session-reader"
     flowRoot
     eager={eager}
     estimate={liveTaskRoundEstimate(projection)}
