@@ -27,6 +27,8 @@ export interface TaskMessageProps {
   actions?: ReactNode | undefined
   collapsible?: boolean | undefined
   streaming?: boolean | undefined
+  /** Hide copy/source controls for process and non-final assistant chunks. */
+  showContentActions?: boolean | undefined
   pending?: boolean | undefined
   pendingLabel?: string | undefined
   className?: string | undefined
@@ -44,6 +46,7 @@ export function TaskMessage({
   actions,
   collapsible = true,
   streaming = false,
+  showContentActions = true,
   pending = false,
   pendingLabel,
   className = '',
@@ -172,11 +175,11 @@ export function TaskMessage({
             {view === 'rendered' ? <MarkdownContent text={text} streaming={streaming}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
             {canCollapse && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
           </div>
-          {(canCollapse || !user || Boolean(actions)) && <div className="markdown-message-actions">
+          {(canCollapse || Boolean(actions) || (!user && (showContentActions || streaming))) && <div className="markdown-message-actions">
             {!user && streaming && <span className="task-message-output-state" data-active="true" role="status" aria-label={t('message.generating')}>
               <UiIcon name="loading" size={14}/>
             </span>}
-            {!user && <IconButton
+            {!user && showContentActions && <IconButton
               size="small"
               className="task-message-copy-action"
               data-copy-state={copyState}
@@ -185,7 +188,7 @@ export function TaskMessage({
               onClick={() => void copyMessage()}
             ><UiIcon name={copyState === 'copied' ? 'check' : 'copy'} size={14}/></IconButton>}
             {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
-            {!user && <button type="button" className="task-message-source-action" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
+            {!user && showContentActions && <button type="button" className="task-message-source-action" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
               {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
             </button>}
             {actions && <span className="task-message-actions">{actions}</span>}
