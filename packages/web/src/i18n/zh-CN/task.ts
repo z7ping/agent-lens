@@ -91,6 +91,12 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       preciseHoursMinutesSeconds: '{{hours}}小时{{minutes}}分{{seconds}}秒',
     },
     live: {
+      toolGroup: '工具调用',
+      toolGroupCount: '{{count}} 项',
+      toolGroupRunning: '{{count}} 运行中',
+      toolGroupFailed: '{{count}} 失败',
+      toolGroupMore: '展开其余 {{count}} 项',
+      toolGroupLess: '收起其他工具',
       invalidRuntime: '实时任务地址无效。',
       productUnavailable: '当前实时智能体不可用。',
       runtimeId: '运行时 ID',

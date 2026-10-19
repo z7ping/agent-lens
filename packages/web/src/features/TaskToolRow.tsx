@@ -16,6 +16,8 @@ export interface TaskToolRowProps {
   /** Keep the original Inspector action available *inside* the disclosure. */
   onClick?: (() => void) | undefined
   className?: string
+  /** Live renders every invocation as one line until the user opens its details. */
+  compact?: boolean
 }
 
 function statusLabel(status: TaskToolModel['status'], t: TFunction): string {
@@ -62,7 +64,7 @@ export function taskToolTargetText(model: TaskToolModel, visualKind: ReturnType<
 
 /** One native Tool call = one folded row. Arguments and results are not
  * additional disclosures; they are separate named sections inside that row. */
-export function TaskToolRow({ model, meta, details, onClick, className = '' }: TaskToolRowProps) {
+export function TaskToolRow({ model, meta, details, onClick, className = '', compact = false }: TaskToolRowProps) {
   const { t } = useTranslation('task')
   const [now, setNow] = useState(() => Date.now())
   // Avoid Prism tokenization across every collapsed tool in long Review/Live sessions.
@@ -107,14 +109,14 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
     onToggle={event => setExpanded(event.currentTarget.open)}
     data-status={model.status}
     data-kind={visualKind}
-    data-command={commandTarget}
+    data-command={commandTarget && !compact}
   >
     <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading} · ${status}`}>
       <span className={`task-tool-kind task-tool-kind-${visualKind}`}>
         <ToolKindIcon kind={visualKind}/>
         <span>{t(`tool.kind.${visualKind}`)}</span>
       </span>
-      <span className="task-tool-summary-text" title={commandTarget ? model.name : heading}>{commandTarget ? model.name : heading}</span>
+      <span className="task-tool-summary-text" title={commandTarget ? model.name : heading}>{compact ? heading : commandTarget ? model.name : heading}</span>
       <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
         <span className="task-tool-status-mark" aria-hidden="true">
           {model.status === 'running' ? <UiIcon name="loading" size={14}/>
@@ -125,9 +127,9 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
         {model.status !== 'unknown' && <span className="task-tool-status-label">{status}</span>}
       </span>
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
-      {commandTarget && <code className="task-tool-command-preview" title={target}>{target}</code>}
+      {commandTarget && !compact && <code className="task-tool-command-preview" title={target}>{target}</code>}
     </summary>
-    <div className="task-tool-sections">
+    {(!compact || expanded) && <div className="task-tool-sections">
       {showInputSection && <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
@@ -147,6 +149,6 @@ export function TaskToolRow({ model, meta, details, onClick, className = '' }: T
         {onClick && <button type="button" className="task-tool-inspect" onClick={onClick}>{t('tool.inspect')}</button>}
         {details}
       </div>}
-    </div>
+    </div>}
   </details>
 }
