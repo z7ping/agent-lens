@@ -8,7 +8,9 @@ export function liveFollowTextRevision(
   for (const items of [active, stable]) {
     for (let index = items.length - 1; index >= 0; index -= 1) {
       const item = items[index]!
-      if (item.kind !== 'message') continue
+      // Native commentary is part of the collapsed processing details, not
+      // user-facing answer text. Its deltas must never pull the reader down.
+      if (item.kind !== 'message' || (item.role === 'assistant' && item.phase === 'commentary')) continue
       return `${item.id}:${item.role}:${item.text.length}:${item.text.slice(-64)}:${item.streaming ? 'running' : 'settled'}`
     }
   }
