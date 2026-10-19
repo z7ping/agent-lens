@@ -46,7 +46,7 @@ test('工具摘要保留类型、状态与箭头，Shell 命令通过独立预�
   assert.match(html, /<code class="task-tool-command-preview" title="pnpm test">pnpm test<\/code>/)
   assert.match(html, /task-tool-row-chevron/)
   assert.doesNotMatch(html, /class="task-tool-command"/)
-  assert.doesNotMatch(html, /class="task-tool-target"/)
+  assert.match(html, /class="task-tool-target"/)
   assert.doesNotMatch(html, /class="task-tool-action"/)
   assert.match(html, /class="task-tool-status-mark"/)
 })
