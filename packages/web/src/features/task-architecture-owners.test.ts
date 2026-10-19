@@ -19,7 +19,7 @@ test('Live 组件、异步生命周期、双向分页、动作、状态与输入
   assert.match(page, /useLiveTaskState\(\)/)
   assert.match(page, /useLiveTaskRuntime\(\{ current, t, session \}\)/)
   assert.match(page, /useLiveTaskHistory\(\{ current, session \}\)/)
-  assert.match(page, /useLiveTaskActions\(\{ current, t, navigate, setComposerValue, clearComposer, session \}\)/)
+  assert.match(page, /useLiveTaskActions\(\{ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered \}\)/)
   assert.match(page, /<TaskSurface\s+mode="live"/)
   assert.doesNotMatch(page, /const \[product, setProduct\] = useState/)
   assert.doesNotMatch(page, /const unsubscribe = liveApi\.subscribe\(/)
