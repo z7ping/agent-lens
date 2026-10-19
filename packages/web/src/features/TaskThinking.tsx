@@ -13,6 +13,8 @@ export interface TaskThinkingProps {
   onExpandedChange?: ((expanded: boolean) => void) | undefined
   className?: string | undefined
   kind?: 'thinking' | 'process' | undefined
+  /** Live process auto-collapses on run completion, unless explicitly toggled. */
+  autoCollapseOnSettle?: boolean
 }
 
 function DisclosureChevron() {
@@ -31,10 +33,13 @@ export function TaskThinking({
   onExpandedChange,
   className = '',
   kind = 'thinking',
+  autoCollapseOnSettle = false,
 }: TaskThinkingProps) {
   const { t } = useTranslation('task')
   const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
   const identityRef = useRef(model.id)
+  const previouslyRunningRef = useRef(model.state === 'running')
+  const manuallyToggledRef = useRef(false)
   const label = kind === 'thinking' && model.state !== 'running' && model.durationMs !== undefined && model.durationMs > 0
     ? t('thinking.thoughtFor', { value: taskPreciseDurationLabel(model.durationMs) })
     : model.label
@@ -45,11 +50,23 @@ export function TaskThinking({
     // 运行中 -> 已完成时不要重新按 defaultExpanded 折叠已经打开的内容。
     if (identityRef.current === model.id) return
     identityRef.current = model.id
+    manuallyToggledRef.current = false
+    previouslyRunningRef.current = model.state === 'running'
     const stored = expansionStore?.get(model.id)
     const next = stored ?? defaultExpanded
     setExpanded(next)
     if (stored === undefined && defaultExpanded) expansionStore?.set(model.id, true)
   }, [defaultExpanded, expansionStore, model.id])
+
+  useEffect(() => {
+    const wasRunning = previouslyRunningRef.current
+    previouslyRunningRef.current = model.state === 'running'
+    if (!autoCollapseOnSettle || kind !== 'process' || !wasRunning
+      || model.state === 'running' || manuallyToggledRef.current) return
+    setExpanded(false)
+    expansionStore?.set(model.id, false)
+    onExpandedChange?.(false)
+  }, [autoCollapseOnSettle, expansionStore, kind, model.id, model.state, onExpandedChange])
 
   return <details
     className={`task-thinking ${className}`.trim()}
@@ -65,7 +82,7 @@ export function TaskThinking({
       onExpandedChange?.(next)
     }}
   >
-    <summary className="task-thinking-summary">
+    <summary className="task-thinking-summary" onClick={() => { if (autoCollapseOnSettle) manuallyToggledRef.current = true }}>
       <span className="task-thinking-summary-main">
         {kind !== 'process' && <>
           <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="thinking" size={14}/></span>
