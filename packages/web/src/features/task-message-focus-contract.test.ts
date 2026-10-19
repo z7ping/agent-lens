@@ -18,7 +18,9 @@ test('TaskMessage 通过统一附件字段渲染历史图片而不识别具体 A
   assert.match(taskMessageSource, /attachments\?: readonly TaskMessageAttachment\[\]/)
   assert.match(taskMessageSource, /attachment\.previewUrl \|\| attachment\.dataUrl/)
   assert.doesNotMatch(taskMessageSource, /sourceId\s*===\s*['"]pi['"]/)
-  assert.match(taskDetailCss, /\.task-message-attachment-image \{[\s\S]*?object-fit: contain;/)
+  const mediaCss = readFileSync(new URL('../components/image-preview.css', import.meta.url), 'utf8')
+  assert.match(taskMessageSource, /<ImagePreview/)
+  assert.match(mediaCss, /\.image-preview-expanded \{[\s\S]*?object-fit: contain;/)
 })
 
 test('Native 消息操作不能因样式隐藏，扩展动作保留可见入口', () => {
