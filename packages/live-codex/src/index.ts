@@ -13,6 +13,7 @@ import {
 import { CodexRpc, type RpcMessage } from './transport.js'
 import { CheckpointCodexRecoveryStore, type CodexRecoveryStore } from './recovery.js'
 import { normalizeCodexEvent, codexRecord, codexText, codexSnapshotEntries } from './events.js'
+import { decodeCodexHistoryCursor, encodeCodexItemAnchor, encodeCodexPageCursor } from './history-cursor.js'
 
 const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui', 'model-switching', 'thinking-control', 'resume', 'recovery'] as const satisfies readonly LiveCapabilityName[]
 export const codexLiveManifest: LiveAdapterManifest = {
@@ -219,20 +220,29 @@ export class CodexLiveAdapter implements LiveAdapter {
     return this.view(session)
   }
 
-  async snapshot(id: string, _since?: string, window?: LiveSnapshotWindow) {
+  async snapshot(id: string, since?: string, window?: LiveSnapshotWindow) {
     await this.hydrate()
     const session = this.session(id)
     await this.attach(session)
+    if (window?.around) throw new Error('Codex Live does not support centered history snapshots')
     const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
-    // Native item cursor prevents skipped tools/messages when a turn has many items.
-    // Each source item yields at most two transcript entries (tool call + result).
-    const ascending = window?.edge === 'earliest' || Boolean(window?.after)
-    const cursor = ascending ? window?.after : window?.before
+    // A stable Item anchor is essential: the Web recovery loop passes leafId as 'since',
+    // and later passes the continuation page.after back as 'since'.
+    const selector = since
+      ? decodeCodexHistoryCursor(since)
+      : window?.after ? decodeCodexHistoryCursor(window.after) : undefined
+    const ascending = Boolean(selector) || window?.edge === 'earliest'
+    const cursor = selector?.kind === 'page'
+      ? selector.cursor
+      : window?.before
     const response = await this.rpc.request('thread/items/list', {
       threadId: session.id,
       limit: Math.max(1, Math.floor(limit / 2)),
       sortDirection: ascending ? 'asc' : 'desc',
       ...(cursor ? { cursor } : {}),
+      ...(selector?.kind === 'item'
+        ? { turnId: selector.anchor.turnId, cursor: { type: 'item', itemId: selector.anchor.itemId } }
+        : {}),
     })
     const items = Array.isArray(response.data) ? response.data : []
     const chronological = ascending ? items : [...items].reverse()
@@ -241,23 +251,28 @@ export class CodexLiveAdapter implements LiveAdapter {
     )
     const nextCursor = codexText(response.nextCursor)
     const backwardsCursor = codexText(response.backwardsCursor)
+    const last = codexRecord(chronological.at(-1))
+    const lastItemId = codexText(codexRecord(last.item).id)
+    const lastTurnId = codexText(last.turnId)
+    const leafId = lastItemId && lastTurnId
+      ? encodeCodexItemAnchor({ turnId: lastTurnId, itemId: lastItemId })
+      : (since?.startsWith('codex-item:') ? since : undefined)
     return {
       state: this.view(session), entries,
+      ...(leafId ? { leafId } : {}),
       page: {
-        // The reverse-direction cursor is an anchor, not proof of more history.
-        // In particular, the initial latest page must NOT report hasLater.
-        hasEarlier: ascending ? Boolean(window?.after) : Boolean(nextCursor),
+        hasEarlier: ascending ? Boolean(selector || window?.after) : Boolean(nextCursor),
         ...(ascending
-          ? (window?.after && backwardsCursor ? { before: backwardsCursor } : {})
+          ? (selector && backwardsCursor ? { before: backwardsCursor } : {})
           : (nextCursor ? { before: nextCursor } : {})),
         hasLater: ascending ? Boolean(nextCursor) : Boolean(window?.before),
         ...(ascending
-          ? (nextCursor ? { after: nextCursor } : {})
-          : (window?.before && backwardsCursor ? { after: backwardsCursor } : {})),
+          ? (nextCursor ? { after: encodeCodexPageCursor(nextCursor) } : {})
+          : (window?.before && backwardsCursor
+            ? { after: encodeCodexPageCursor(backwardsCursor) } : {})),
       },
     }
   }
-
 
   private async nativeModels(): Promise<Record<string, unknown>[]> {
     const response = await this.rpc.request('model/list', {})
