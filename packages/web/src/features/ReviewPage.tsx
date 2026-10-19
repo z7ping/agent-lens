@@ -1,4 +1,5 @@
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
+import { AgentLogo } from '../components/AgentLogo'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
@@ -125,7 +126,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
         turnRailItems={detail ? turnRailItems : undefined}
       >
         {detail && <TaskHeader
-          marker={<span className={`source-dot ${sourceDot(detail.sourceIds[0] ?? '')}`}/>}
+          marker={<AgentLogo sourceId={detail.productId || detail.sourceIds[0] || ''} size="normal"/>}
           agent={taskDetailModel?.agentLabel ?? ''}
           context={taskDetailModel?.projectLabel ?? workspaceDisplayName(taskDetailModel?.workspacePath) ?? t('local.session.unlinkedProject')}
           showStatus={false}
