@@ -77,7 +77,7 @@ function GenericLiveItem({
         preview: item.text.replace(/\s+/g, ' ').trim().slice(0, 220),
         state: item.streaming ? 'running' : 'settled',
       }}
-      defaultExpanded={item.streaming}
+      defaultExpanded={false}
       className="task-process-thinking-card"
     >
       <MarkdownContent text={item.text} streaming={item.streaming}/>
@@ -159,22 +159,20 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     const endedAtMs = times.length && processState !== 'running' ? Math.max(...times) : undefined
     content.push(<TaskProcessGroup
       key={`process:${items[0]!.id}`} id={`process:${items[0]!.id}`}
-      messageCount={items.filter(item => item.kind === 'thinking' || item.kind === 'message').length}
+      messageCount={items.filter(item => item.kind === 'thinking').length}
       toolCount={items.filter(item => item.kind === 'tool').length}
       errorCount={items.filter(item => item.kind === 'tool' && item.status === 'error').length}
       startedAtMs={startedAtMs} endedAtMs={endedAtMs}
       thinkingDurationMs={items.reduce((sum, item) => sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
-      state={processState} defaultExpanded={processState === 'running'}
+      state={processState} defaultExpanded={false}
     >
       <div className="task-process-sequence">
-        {items.map(item => item.kind === 'message' && item.phase === 'commentary'
-          ? <div key={item.id} className="task-process-message" data-message-role="commentary"><MarkdownContent text={item.text} streaming={item.streaming}/></div>
-          : renderItem(item))}
+        {items.map(renderItem)}
       </div>
     </TaskProcessGroup>)
   }
   for (const item of projection.items) {
-    if (item.kind === 'thinking' || item.kind === 'tool' || (item.kind === 'message' && item.phase === 'commentary')) process.push(item)
+    if (item.kind === 'thinking' || item.kind === 'tool') process.push(item)
     else { flushProcess(); content.push(renderItem(item)) }
   }
   flushProcess()
