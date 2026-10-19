@@ -7,7 +7,7 @@ import { Button } from '../components/ui'
 import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskMessage } from './TaskMessage'
-import type { TaskRoundModel } from './task-detail-model'
+import { TaskReadingRound } from './TaskReadingRound'
 import { LiveToolGroup } from './LiveToolGroup'
 import { TaskProcessGroup } from './TaskProcessGroup'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
@@ -121,19 +121,6 @@ export function liveRoundOwnsAnswerActions(
     (candidate.model.semanticId ?? candidate.model.id) === semanticId && hasAnswer(candidate))
 }
 
-/** Live uses semantic rounds only for navigation/virtualization; never a visible disclosure. */
-export function LiveTranscriptRound({ model, children }: { model: TaskRoundModel; children: ReactNode }) {
-  return <div
-    className="live-task-transcript-round interaction-block"
-    data-interaction-id={model.id}
-    data-round-semantic-id={model.semanticId ?? model.id}
-    data-round-label={model.label}
-    data-round-preview={model.preview || undefined}
-    data-round-error={model.errorCount > 0 ? 'true' : undefined}
-    data-round-state={model.state}
-  >{children}</div>
-}
-
 export const GenericLiveRound = memo(function GenericLiveRound({
   projection,
   agentLabel,
@@ -233,26 +220,23 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     className="live-task-process"
   ><div className="task-process-sequence">{processContent}</div></TaskProcessGroup>
 
-  const content: ReactNode[] = []
-  let placedProcess = false
-  for (const item of visibleItems) {
-    if (!placedProcess && item.kind === 'message' && item.role !== 'user' && process) {
-      content.push(process)
-      placedProcess = true
-    }
-    content.push(renderItem(item))
-  }
-  if (!placedProcess && process) content.push(process)
+  const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
+  const answer = visibleItems.filter(item => item.kind === 'message' && item.role === 'assistant').map(renderItem)
   return <VirtualRoundMount
     rootSelector=".pi-live-reader"
     flowRoot
     eager={eager}
     estimate={liveTaskRoundEstimate(projection)}
   >
-    <LiveTranscriptRound model={awaitingResponse ? { ...projection.model, state: 'running' } : projection.model}>
-      {content}
-      {awaitingResponse && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
-    </LiveTranscriptRound>
+    <TaskReadingRound
+      model={awaitingResponse ? { ...projection.model, state: 'running' } : projection.model}
+      prompt={prompt}
+      process={process}
+      answer={<>
+        {answer}
+        {awaitingResponse && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
+      </>}
+    />
   </VirtualRoundMount>
 }, sameStableLiveTaskRoundProps)
 
