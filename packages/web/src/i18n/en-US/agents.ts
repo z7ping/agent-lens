@@ -249,6 +249,9 @@ export const englishAgentsMessages: LocaleMessagesDto = {
     },
     managementPage: {
       title: 'Agent Integration',
+      agentListAria: 'Agent list',
+      agentListTitle: 'Local agents',
+      backToAgents: 'Back to agents',
       loading: 'Loading integration state…',
       summaryAria: 'Agent integration summary',
       statusFilterAria: 'Filter integration status',
