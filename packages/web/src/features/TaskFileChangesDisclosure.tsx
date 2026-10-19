@@ -67,7 +67,7 @@ export function TaskFileChangesDisclosure({
 
   const count = value?.summary.count ?? 0
   const items = value?.items ?? []
-  const displayed = showAll ? items : items.slice(0, INITIAL_VISIBLE_FILES)
+  const displayed = inlineDetails || showAll ? items : items.slice(0, INITIAL_VISIBLE_FILES)
   const hidden = items.length - displayed.length
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
   const isObserved = Boolean(value?.interactionId)
