@@ -584,13 +584,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     ) : null}
     <div className="page-content integration-management-content">
       <div className="integration-management-surface">
-        {!ordering && <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
-          <span className="workspace-metric-card"><strong>{items.length}</strong><small>{t('managementPage.supported')}</small></span>
-          <span className="workspace-metric-card"><strong>{discoveryFailed ? '—' : detectedCount}</strong><small>{t('managementPage.detected')}</small></span>
-          <span className="workspace-metric-card"><strong>{installedCount}</strong><small>{t('managementPage.added')}</small></span>
-          <span className="workspace-metric-card"><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
-        </div>}
-
         {ordering ? <section className="integration-management-section" aria-label={t('page.orderTitle')}>
           <div className="integration-management-section-head">
             <h2>{t('page.orderTitle')}</h2>
@@ -614,42 +607,11 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
               </div>
             })}
           </div>
-        </section> : <>
-        <section className="integration-management-section">
-          <div className="integration-management-section-head">
-            <h2>{t('managementPage.localAndAdded')}</h2>
-            <span className="integration-management-section-count">{primaryItems.length}</span>
-          </div>
-          <div className="integration-management-list">
-          {primaryItems.map(item => <IntegrationManagementRow
-            key={item.integrationId}
-            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-            model={model}
-            discoveryScanning={Boolean(discoveryScanning)}
-            discoveryError={snapshot.integrationDiscoveryError}
-            highlighted={item.integrationId === targetIntegrationId}
-          />)}
-          {!primaryItems.length && <div className="integration-management-empty">{supportedItems.length === 0 && statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
-          </div>
-        </section>
-
-        {supportedItems.length > 0 && <section className="integration-management-section integration-management-section-secondary">
-          <div className="integration-management-section-head">
-            <h2>{t('managementPage.otherSupported')}</h2>
-            <span className="integration-management-section-count">{supportedItems.length}</span>
-          </div>
-          <div className="integration-management-list">
-            {supportedItems.map(item => <IntegrationManagementRow
-              key={item.integrationId}
-              item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-              model={model}
-              discoveryScanning={Boolean(discoveryScanning)}
-              discoveryError={snapshot.integrationDiscoveryError}
-              highlighted={item.integrationId === targetIntegrationId}
-            />)}
-          </div>
-        </section>}
-        </>}
+        </section> : <div className="integration-management-workspace" data-mobile-detail={mobileDetailOpen ? 'true' : 'false'}>
+          {/* Agent navigator and selected detail are separate scrolling panes. */}
+          <aside className="integration-management-navigator" aria-label={t('managementPage.agentListAria')}/>
+          <section className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}/>
+        </div>}
       </div>
     </div>
   </main>
