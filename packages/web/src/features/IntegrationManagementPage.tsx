@@ -13,7 +13,7 @@ import { useClientSnapshot } from '../client/use-client-snapshot'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentOrderActions, useAgentOrderDrag } from '../components/AgentOrderControls'
-import { Button, Dialog, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   agentUpgradeMethods,
   integrationCanInstall,
@@ -49,18 +49,16 @@ function isPrimaryRow(item: IntegrationManagementItemDto): boolean {
     || item.tool?.presence === 'error'
 }
 
-function IntegrationManagementRow({
+function IntegrationManagementDetail({
   item,
   model,
   discoveryScanning,
   discoveryError,
-  highlighted,
 }: {
   item: IntegrationManagementItemDto
   model: AgentLensClientModel
   discoveryScanning: boolean
   discoveryError: string
-  highlighted: boolean
 }) {
   const { t } = useTranslation('agents')
   const [saving, setSaving] = useState(false)
@@ -73,12 +71,6 @@ function IntegrationManagementRow({
   const [copiedCommand, setCopiedCommand] = useState<'install' | 'update' | null>(null)
   const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
   const [versionChecking, setVersionChecking] = useState(false)
-  const [expanded, setExpanded] = useState(highlighted)
-
-  useEffect(() => {
-    if (highlighted) setExpanded(true)
-  }, [highlighted])
-
   const packageState = item.packageState
   const packageReady = integrationPackageReady(packageState)
   const canUpdatePackage = integrationPackageUpdateAvailable(packageState)
@@ -248,36 +240,30 @@ function IntegrationManagementRow({
           {item.enabled.configured ? t('managementPage.disableIntegration') : t('managementPage.enableIntegration')}
         </Button>
 
-  return <article
-    className="integration-management-row"
-    data-integration={item.integrationId}
-    data-new={item.isNew ? 'true' : undefined}
-    data-target={highlighted ? 'true' : undefined}
-  >
-    <Disclosure
-      className="integration-management-disclosure"
-      open={expanded}
-      onToggle={event => setExpanded(event.currentTarget.open)}
-      summary={<span className="integration-management-identity">
+  return <section className="integration-management-detail-card" data-integration={item.integrationId}>
+    <header className="integration-management-detail-head">
+      <div className="integration-management-identity">
         <AgentLogo sourceId={item.integrationId} size="large"/>
         <span className="integration-management-identity-text">
-          <b>{item.displayName}</b>
+          <h2>{item.displayName}</h2>
           <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
         </span>
-      </span>}
-      summaryMeta={<span className="integration-management-summary-states">
-        <span className="integration-management-version-summary" role="status">
-          <span title={t('managementPage.localAgentVersion')}>{t('managementPage.versionInstalledShort')} <b>{localAgentVersion}</b></span>
-          <span title={latestVersion?.status === 'ready' ? t('managementPage.remoteAgentVersion', { source: latestVersion.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel }) : onlineVersionLabel}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
-        </span>
+      </div>
+      <div className="integration-management-detail-head-meta">
         {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
         <StatusBadge
           className="integration-management-status"
           tone={integrationLifecycleTone(status.className, item.isNew)}
           title={status.title}
         >{statusLabel}</StatusBadge>
-      </span>}
-    >
+      </div>
+    </header>
+    <div className="integration-management-version-strip" role="status">
+      <span title={t('managementPage.localAgentVersion')}>{t('managementPage.versionInstalledShort')} <b>{localAgentVersion}</b></span>
+      <span title={latestVersion?.status === 'ready'
+        ? t('managementPage.remoteAgentVersion', { source: latestVersion.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel })
+        : onlineVersionLabel}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
+    </div>
       <div className="integration-management-details">
         <div className="integration-management-facts" aria-label={t('managementPage.detailsLabel')}>
           <div className="integration-management-fact">
@@ -406,8 +392,6 @@ function IntegrationManagementRow({
         {updateNotice && <p className="integration-management-note" role="status">{updateNotice}</p>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
       </div>
-    </Disclosure>
-
     <Dialog
       open={updateOpen}
       title={t('managementPage.updateDialogTitle', { agent: item.displayName })}
@@ -442,7 +426,55 @@ function IntegrationManagementRow({
       {removeMessage && <p className="integration-management-note">{removeMessage}</p>}
       <p className="integration-management-note">{t('integration.uninstallKeepsHistory')}</p>
     </Dialog>
-  </article>
+  </section>
+}
+
+/** Compact, selectable navigator; lifecycle commands live exclusively in the detail pane. */
+function IntegrationManagementListItem({
+  item,
+  selected,
+  discoveryScanning,
+  discoveryError,
+  onSelect,
+}: {
+  item: IntegrationManagementItemDto
+  selected: boolean
+  discoveryScanning: boolean
+  discoveryError: string
+  onSelect(): void
+}) {
+  const { t } = useTranslation('agents')
+  const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
+  useEffect(() => {
+    let active = true
+    void checkAgentLatestVersion(item.productId).then(result => {
+      if (active) setLatestVersion(result)
+    })
+    return () => { active = false }
+  }, [item.productId])
+  const status = integrationManagementLifecycleState(item, t)
+  const versions = item.tool?.presence === 'present' && item.tool.version ? [item.tool.version] : []
+  const hasUpgrade = agentVersionComparison(versions, latestVersion) === 'newer'
+  return <button
+    type="button"
+    className="integration-management-list-item"
+    data-selected={selected ? 'true' : undefined}
+    aria-current={selected ? 'true' : undefined}
+    onClick={onSelect}
+  >
+    <AgentLogo sourceId={item.integrationId} size="compact"/>
+    <span className="integration-management-list-item-main">
+      <strong>{item.displayName}</strong>
+      <small>{versions.length ? t('managementPage.versionInstalledShort') + ' ' + versions.join(' / ')
+        : integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
+    </span>
+    <span className="integration-management-list-item-status">
+      {hasUpgrade && <UiIcon name="exclamation" size={14} className="integration-management-update-icon" aria-label={t('managementPage.versionUpdateAvailable')}/>}
+      <StatusBadge tone={integrationLifecycleTone(status.className, item.isNew)}
+        title={status.title}>{status.label}</StatusBadge>
+    </span>
+    <UiIcon name="chevron-right" size={14} className="integration-management-list-chevron"/>
+  </button>
 }
 
 export function IntegrationManagementPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
