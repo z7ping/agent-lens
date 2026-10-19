@@ -11,7 +11,7 @@ import { TaskMessage } from './TaskMessage'
 import { TaskRound } from './TaskRound'
 import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskThinking } from './TaskThinking'
-import { TaskToolGroup } from './TaskToolGroup'
+import { TaskToolGroup, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import type { TaskEventCategory, TaskRoundModel, TaskToolGroupModel, TaskToolKind, TaskToolModel } from './task-detail-model'
 import { omitPiLivePromptMessages, type PiLiveHistoryItem } from './pi-live-history'
 import { projectPiLiveTurnItems, type PiLiveTaskRoundProjection } from './pi-live-task-projection'
@@ -133,22 +133,6 @@ function ThinkingMarkdown({ text, streaming = false }: { text: string; streaming
   return <MarkdownContent text={text} streaming={streaming}/>
 }
 
-function HistoryToolGroup({ id, items, settled = false }: { id: string; items: HistoryTool[]; settled?: boolean }) {
-  const { t } = useTranslation(['piLive', 'task'])
-  const model = toolGroup(id, items.map(item => taskTool(
-    item.name,
-    item.id,
-    settled && item.status === 'running' ? 'unknown' : item.status,
-    item.summary,
-    item.output,
-    item.rawInput,
-    { durationMs: item.durationMs, startedAtMs: item.startedAtMs },
-    { ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}), ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}) },
-    t,
-  )), t)
-  return <TaskToolGroup model={model}/>
-}
-
 function HistoryUsageEvent({ entry }: { entry: Extract<PiLiveHistoryItem, { kind: 'usage' }> }) {
   const { t, i18n } = useTranslation('piLive')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
@@ -221,6 +205,59 @@ function measuredThinkingDuration(items: HistoryProcessItem[]): number | undefin
   return thinking.reduce((total, item) => total + item.durationMs!, 0)
 }
 
+/** One progressive tool visibility boundary for each Pi process, even when
+ * native thinking/commentary splits the underlying tool segments. */
+function HistoryProcessSequence({
+  id, items, settled = false, showAllEvents = false, expansionStore,
+}: {
+  id: string
+  items: HistoryProcessItem[]
+  settled?: boolean
+  showAllEvents?: boolean
+  expansionStore?: Map<string, boolean> | undefined
+}) {
+  const { t } = useTranslation(['piLive', 'task'])
+  const sequence: TaskToolGroupSequenceEntry[] = items.flatMap(item => {
+    if (item.kind === 'tool-group') return item.items.map(tool => ({
+      type: 'tool' as const,
+      key: tool.id,
+      tool: taskTool(
+        tool.name, tool.id,
+        settled && tool.status === 'running' ? 'unknown' : tool.status,
+        tool.summary, tool.output, tool.rawInput,
+        { durationMs: tool.durationMs, startedAtMs: tool.startedAtMs },
+        { ...(tool.toolSourceType ? { toolSourceType: tool.toolSourceType } : {}),
+          ...(tool.mcpServerId ? { mcpServerId: tool.mcpServerId } : {}) }, t,
+      ),
+    }))
+    if (item.kind === 'thinking') return [{
+      type: 'content' as const, key: item.id,
+      content: <TaskThinking
+        model={{ id: item.id, label: t('task:thinking.thinkingProcess'), text: item.text,
+          state: !settled && item.state === 'running' ? 'running' : 'settled' }}
+        className="task-process-thinking-card" defaultExpanded={false} expansionStore={expansionStore}
+      ><ThinkingMarkdown text={item.text} streaming={!settled && item.state === 'running'}/></TaskThinking>,
+    }]
+    if (item.kind === 'message') return [{
+      type: 'content' as const, key: item.id,
+      content: <div className="task-process-message" data-message-role="commentary">
+        <div className="task-process-message-kind">{t('piLive:history.commentary')}</div>
+        <ThinkingMarkdown text={item.text} streaming={!settled && item.state === 'running'}/>
+      </div>,
+    }]
+    if (item.kind === 'usage') return [{
+      type: 'content' as const, key: item.id, content: <HistoryUsageEvent entry={item}/>,
+    }]
+    if (item.kind === 'lifecycle') return [{
+      type: 'content' as const, key: item.id,
+      content: <HistoryLifecycleEvent entry={item} showAllEvents={showAllEvents}/>,
+    }]
+    return []
+  })
+  const models = sequence.flatMap(entry => entry.type === 'tool' ? [entry.tool] : [])
+  return <TaskToolGroup compact sequence={sequence} model={toolGroup(id, models, t)}/>
+}
+
 function HistoryProcessGroup({
   id,
   items,
@@ -251,23 +288,7 @@ function HistoryProcessGroup({
     state={state}
   >
     <div className="task-process-sequence">
-      {items.map(item => {
-        if (item.kind === 'tool-group') return <HistoryToolGroup key={item.id} id={item.id} items={item.items} settled={state !== 'running'}/>
-        if (item.kind === 'thinking') return <TaskThinking
-          key={item.id}
-          model={{ id: item.id, label: t('task:thinking.thinkingProcess'), text: item.text, state: state === 'running' && item.state === 'running' ? 'running' : 'settled' }}
-          className="task-process-thinking-card" defaultExpanded={false}
-        >
-          <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
-        </TaskThinking>
-        if (item.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={item.id}>
-          <div className="task-process-message-kind">{t('history.commentary')}</div>
-          <ThinkingMarkdown text={item.text} streaming={state === 'running' && item.state === 'running'}/>
-        </div>
-        if (item.kind === 'usage') return <HistoryUsageEvent key={item.id} entry={item}/>
-        if (item.kind === 'lifecycle') return <HistoryLifecycleEvent key={item.id} entry={item} showAllEvents={showAllEvents}/>
-        return null
-      })}
+      <HistoryProcessSequence id={id} items={items} settled={state !== 'running'} showAllEvents={showAllEvents}/>
     </div>
   </TaskProcessGroup>
 }
@@ -468,23 +489,13 @@ export function PiLiveIndexedTaskRound({
         <button type="button" onClick={requestProcess}>{t('history.retry')}</button>
       </div>}
       {loadState === 'loaded' && processEntry && <div className="task-process-sequence">
-        {processEntry.items.map(processItem => {
-          if (processItem.kind === 'tool-group') return <HistoryToolGroup key={processItem.id} id={processItem.id} items={processItem.items}/>
-          if (processItem.kind === 'thinking') return <TaskThinking
-            key={processItem.id}
-            model={{ id: processItem.id, label: t('task:thinking.thinkingProcess'), text: processItem.text, state: 'settled' }}
-            className="task-process-thinking-card" defaultExpanded={false} expansionStore={expansionStore}
-          >
-            <ThinkingMarkdown text={processItem.text}/>
-          </TaskThinking>
-          if (processItem.kind === 'message') return <div className="task-process-message" data-message-role="commentary" key={processItem.id}>
-            <div className="task-process-message-kind">{t('history.commentary')}</div>
-            <ThinkingMarkdown text={processItem.text}/>
-          </div>
-          if (processItem.kind === 'usage') return <HistoryUsageEvent key={processItem.id} entry={processItem}/>
-          if (processItem.kind === 'lifecycle') return <HistoryLifecycleEvent key={processItem.id} entry={processItem} showAllEvents={showAllEvents}/>
-          return null
-        })}
+        <HistoryProcessSequence
+          id={processId}
+          items={processEntry.items}
+          settled
+          showAllEvents={showAllEvents}
+          expansionStore={expansionStore}
+        />
       </div>}
     </TaskProcessGroup>}
     {beforeFinalEvents.map(renderIndexedEvent)}

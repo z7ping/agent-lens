@@ -171,7 +171,7 @@ function reviewProcessTiming(items: ReviewProcessPresentationItem[]): { startedA
   }
 }
 
-function ReviewProcessGroup({
+export function ReviewProcessGroup({
   id,
   items,
   summary,
