@@ -6,6 +6,7 @@ import { UiIcon } from '../components/UiIcon'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { codeLanguageFromContent } from '../components/code-language'
 import { ToolOutputContent } from './ToolOutputContent'
+import { reviewToolCommand } from './review-tool-command'
 import type { TaskToolModel } from './task-detail-model'
 
 export interface TaskToolRowProps {
@@ -45,21 +46,87 @@ function durationLabel(ms: number): string {
   return `${minutes < 10 ? minutes.toFixed(1) : Math.round(minutes)}m`
 }
 
-export function taskToolTargetText(model: TaskToolModel, visualKind: ReturnType<typeof toolVisualKind>): string {
-  const target = model.primary ?? model.secondary ?? '—'
-  if (visualKind !== 'shell' || !model.primary || !target.trim().startsWith('{')) return target
-  try {
-    const input = JSON.parse(target) as unknown
-    if (!input || typeof input !== 'object' || Array.isArray(input)) return target
-    const record = input as Record<string, unknown>
-    for (const key of ['command', 'cmd', 'script', 'raw']) {
-      const command = record[key]
-      if (typeof command === 'string' && command.trim()) return command.trim()
+/** Only known native input fields become a compact target; never invent one
+ * from the tool name, output or opaque JSON. Review/Live/Pi share this rule. */
+function parseToolInput(value: string | undefined): unknown {
+  const input = value?.trim()
+  if (!input) return undefined
+  if (!['{', '[', '"'].includes(input[0]!)) return input
+  try { return JSON.parse(input) as unknown } catch { return undefined }
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined
+}
+
+const targetKeys: Record<ReturnType<typeof toolVisualKind>, readonly string[]> = {
+  shell: ['command', 'cmd', 'script', 'raw'],
+  read: ['path', 'file_path', 'filePath', 'filename', 'file', 'uri'],
+  edit: ['path', 'file_path', 'filePath', 'filename', 'new_path', 'old_path'],
+  search: ['query', 'pattern', 'search', 'glob', 'keyword', 'keywords', 'regex', 'path'],
+  web: ['url', 'href', 'query', 'path'],
+  mcp: ['tool', 'server', 'mcp_server', 'method', 'query', 'path'],
+  test: ['command', 'cmd', 'script', 'path', 'pattern'],
+  tool: ['target', 'resource', 'path', 'query', 'command'],
+}
+
+function typedTarget(value: unknown, kind: ReturnType<typeof toolVisualKind>): string {
+  const outer = record(value)
+  if (!outer) return ''
+  const candidates = [outer, record(outer.arguments), record(outer.args), record(outer.input), record(outer.parameters)]
+  for (const input of candidates) {
+    if (!input) continue
+    for (const key of targetKeys[kind]) {
+      const candidate = input[key]
+      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
     }
-  } catch {
-    return target
   }
-  return target
+  return ''
+}
+
+export function taskToolTargetText(model: TaskToolModel, visualKind: ReturnType<typeof toolVisualKind>): string {
+  const payloads = [parseToolInput(model.rawInput), parseToolInput(model.primary)]
+  if (visualKind === 'shell') {
+    for (const payload of payloads) {
+      const command = reviewToolCommand(payload)
+      if (command && command.trim().toLowerCase() !== model.name.trim().toLowerCase()) return command
+    }
+  } else {
+    for (const payload of payloads) {
+      const target = typedTarget(payload, visualKind)
+      if (target && target.toLowerCase() !== model.name.trim().toLowerCase()) return target
+    }
+  }
+  // A plain string preview is useful only when it is distinct from the
+  // native name/category. Opaque structured input without a known field is not.
+  const preview = model.primary?.trim() ?? ''
+  const normalized = preview.toLowerCase()
+  if (!preview || preview === '—' || preview === '{}' || preview === '[]'
+    || normalized === model.name.trim().toLowerCase()
+    || normalized === model.kindLabel.trim().toLowerCase()
+    || normalized === visualKind
+    || typeof parseToolInput(preview) !== 'string') return ''
+  return preview
+}
+
+/** Dim only an initial `cd path &&` chain, preserving every original
+ * character and leaving quoted paths (including spaces) untouched. */
+export function taskShellCommandParts(value: string): { prefix: string; command: string } {
+  const start = /^\s*cd(?:\s+\/d)?\s+/i.exec(value)
+  if (!start) return { prefix: '', command: value }
+  let quote: '"' | "'" | null = null
+  for (let i = start[0].length; i < value.length - 1; i += 1) {
+    const char = value[i]
+    if (char === '"' || char === "'") {
+      if (!quote) quote = char
+      else if (quote === char) quote = null
+    }
+    if (!quote && char === '&' && value[i + 1] === '&' && value.slice(i + 2).trim()) {
+      return { prefix: value.slice(0, i + 2), command: value.slice(i + 2) }
+    }
+  }
+  return { prefix: '', command: value }
 }
 
 /** One native Tool call = one folded row. Arguments and results are not
@@ -73,7 +140,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     ? toolVisualKind(model.name, { sourceType: model.toolSourceType, mcpServerId: model.mcpServerId })
     : model.kind
   const target = taskToolTargetText(model, visualKind)
-  const hasTarget = target !== '—' && Boolean(target.trim())
+  const hasTarget = Boolean(target)
+  const commandParts = visualKind === 'shell' ? taskShellCommandParts(target) : undefined
   const mcpPrefix = model.toolSourceType === 'mcp' && model.mcpServerId
     ? `mcp__${model.mcpServerId}__`
     : undefined
@@ -81,14 +149,13 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     ? model.name.slice(mcpPrefix.length)
     : model.name
   const heading = model.toolSourceType === 'mcp' && model.mcpServerId
-      ? `${model.mcpServerId} · ${mcpToolName}`
-      : model.name
+    ? `${model.mcpServerId} · ${mcpToolName}`
+    : model.name
   // A preview is not necessarily the original invocation. Show it as a
   // summary rather than silently relabeling it as complete input parameters.
   const input = model.rawInput
   const preview = !input && hasTarget ? target : undefined
   const commandTarget = visualKind === 'shell' && hasTarget
-  // A truncated command preview always has its copyable source under Input.
 
   useEffect(() => {
     if (model.status !== 'running' || model.startedAtMs === undefined) return
@@ -110,13 +177,19 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     data-kind={visualKind}
     data-command={commandTarget}
   >
-    <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading} · ${status}`}>
+    <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading}${hasTarget ? ` · ${target}` : ''} · ${status}`}>
       <span className={`task-tool-kind task-tool-kind-${visualKind}`}>
         <ToolKindIcon kind={visualKind}/>
-        {visualKind !== 'shell' && <span>{t(`tool.kind.${visualKind}`)}</span>}
       </span>
-      <span className="task-tool-summary-text" title={commandTarget ? model.name : heading}>{heading}</span>
-      {commandTarget && <code className="task-tool-command-preview" title={target}>{target}</code>}
+      <span className="task-tool-summary-text" title={heading}>{heading}</span>
+      <span className="task-tool-preview-slot">
+        {commandTarget
+          ? <code className="task-tool-command-preview" title={target}>
+              {commandParts?.prefix && <span className="task-tool-command-context">{commandParts.prefix}</span>}
+              {commandParts?.command ?? target}
+            </code>
+          : hasTarget ? <span className="task-tool-target" title={target}>{target}</span> : null}
+      </span>
       <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
         <span className="task-tool-status-mark" aria-hidden="true">
           {model.status === 'running' ? <UiIcon name="loading" size={14}/>
