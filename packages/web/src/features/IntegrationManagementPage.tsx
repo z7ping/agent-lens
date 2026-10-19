@@ -465,8 +465,11 @@ function IntegrationManagementListItem({
     <AgentLogo sourceId={item.integrationId} size="compact"/>
     <span className="integration-management-list-item-main">
       <strong>{item.displayName}</strong>
-      <small>{versions.length ? t('managementPage.versionInstalledShort') + ' ' + versions.join(' / ')
-        : integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
+      <small title={hasUpgrade ? t('managementPage.versionUpdateAvailable') : undefined}>
+        {versions.length ? t('managementPage.versionInstalledShort') + ' ' + versions.join(' / ')
+          : integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}
+        {hasUpgrade && <span className="integration-management-update-text"> · {t('managementPage.versionUpdateAvailable')}</span>}
+      </small>
     </span>
     <span className="integration-management-list-item-status">
       {hasUpgrade && <UiIcon name="exclamation" size={14} className="integration-management-update-icon" aria-label={t('managementPage.versionUpdateAvailable')}/>}
