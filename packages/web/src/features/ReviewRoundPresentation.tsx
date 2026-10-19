@@ -4,29 +4,20 @@ import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentD
 import { agentLabel } from '../components/AgentScope'
 import { AgentLensApi } from '../client/api'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
-import { MarkdownContent } from '../components/MarkdownContent'
-import { type ToolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, isSessionTitleUpdate, reviewEventLabel } from './review-event-presentation'
 import { TaskEvent } from './TaskEvent'
-import { TaskMessage } from './TaskMessage'
-import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskReadingRound } from './TaskReadingRound'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
-import { TaskToolGroup } from './TaskToolGroup'
+import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess } from './TaskSessionContent'
 import { agentLensI18n } from '../i18n/runtime'
-import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolGroupModel, type TaskToolModel } from './task-detail-model'
+import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
-import { brief, EvidenceBadges, sourceEventSummary, toolKindLabel, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
+import { brief, EvidenceBadges, sourceEventSummary, toolPresentation, toolOutputText } from './ReviewEvidenceInspector'
 
 const taskFileApi = new AgentLensApi()
-
-/** Process-only Markdown remains readable; copy/source controls belong to the answer. */
-function MarkdownSurface({ text }: { text: string }) {
-  return <div className="markdown-message"><MarkdownContent text={text}/></div>
-}
 
 function MessageBubble({
   node,
@@ -68,18 +59,15 @@ function MessageBubble({
       time: formatClock(node.at),
       state: 'settled',
     }
-    return <TaskThinking
+    return <TaskSessionThinking
       model={thinking}
-      defaultExpanded={false}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
       actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>{t('local.evidence.allEvidence', { count: node.evidence.length })}</button> : undefined}
-    >
-      <MarkdownSurface text={node.text}/>
-      {nestedTools.length > 0 && <ReviewToolGroupAdapter items={nestedTools} inspect={inspect}/>} 
-    </TaskThinking>
+      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter items={nestedTools} inspect={inspect}/> : undefined}
+    />
   }
 
-  return <TaskMessage
+  return <TaskSessionMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.role === 'user' && node.sourceId === 'codex' ? taskUserRequestText(node.text) : node.text}
     attachments={attachments}
@@ -113,36 +101,12 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
 }
 
 function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
-  const { i18n } = useTranslation('review')
-  const localeRevision = i18n.resolvedLanguage ?? i18n.language
-  const model = useMemo<TaskToolGroupModel>(() => {
-    const tools = items.map(reviewToolModel)
-    const errorCount = tools.filter(tool => tool.status === 'error').length
-    const totalDuration = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0)
-    const counts = new Map<ToolVisualKind, number>()
-    for (const tool of tools) counts.set(tool.kind, (counts.get(tool.kind) ?? 0) + 1)
-    return {
-      id: `tools:${items.map(item => item.id).join(':')}`,
-      label: agentLensI18n.t('review:local.tool.execution'),
-      itemCount: tools.length,
-      errorCount,
-      totalDurationLabel: totalDuration > 0 ? duration(totalDuration) : undefined,
-      kindCounts: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([kind, count]) => ({ kind, label: toolKindLabel(kind), count })),
-      tools,
-    }
-  }, [items, localeRevision])
-  const nodes = useMemo(() => new Map(items.map(node => [node.id, node] as const)), [items])
-  return <TaskToolGroup
-    model={model}
-    renderMeta={tool => {
-      const node = nodes.get(tool.id)
-      return node ? <EvidenceBadges evidence={node.evidence} compact/> : null
-    }}
-    onToolClick={tool => {
-      const node = nodes.get(tool.id)
-      if (node) inspect(node)
-    }}
-  />
+  return <>{items.map(node => <TaskSessionTool
+    key={node.id}
+    model={reviewToolModel(node)}
+    meta={<EvidenceBadges evidence={node.evidence} compact/>}
+    onInspect={() => inspect(node)}
+  />)}</>
 }
 
 function processTimestamp(value: string | undefined): number | undefined {
@@ -220,7 +184,8 @@ function ReviewProcessGroup({
     || summary?.availability === 'truncated'
   const unavailable = summary?.availability === 'unavailable'
   const reasonLabel = summary?.reasonCode ? t(`local.process.reasons.${summary.reasonCode}`) : undefined
-  return <TaskProcessGroup
+  return <TaskSessionProcess
+    mode="review"
     id={id}
     messageCount={items.length ? commentaryCount : 0}
     thinkingCount={items.length ? thinkingCount : undefined}
@@ -230,11 +195,9 @@ function ReviewProcessGroup({
     startedAtMs={summary ? undefined : timing.startedAtMs}
     endedAtMs={summary ? undefined : state === 'running' ? undefined : timing.endedAtMs}
     state={state}
-    defaultExpanded={false}
     expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
     summaryExtra={degraded ? <span>{t(`local.process.${summary?.availability}`)}{reasonLabel ? ` · ${reasonLabel}` : ''}</span> : undefined}
-    className="task-review-process"
   >
     {loadState === 'idle' && <div className="task-process-loading">{t('local.process.expandToLoad')}</div>}
     {loadState === 'loading' && <div className="task-process-loading">{t('local.process.loading')}</div>}
@@ -245,21 +208,21 @@ function ReviewProcessGroup({
     {loadState === 'loaded' && unavailable && <div className="task-process-loading" role="status">{reasonLabel ?? t('local.process.unavailable')}</div>}
     {loadState === 'loaded' && !unavailable && <div className="task-process-sequence">
       {items.map((item, index) => {
-        if (item.type === 'tool-group') return <div key={`tools-${index}`} data-reasoning-parent={item.parentReasoningId}><ReviewToolGroupAdapter items={item.items} inspect={inspect}/></div>
+        if (item.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
         if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
         if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
-        if (item.node.role === 'reasoning') return <TaskThinking
+        if (item.node.role === 'reasoning') return <TaskSessionThinking
           key={item.node.id}
-          model={{ id: item.node.id, label: t('local.process.thinking'), text: item.node.text, preview: item.node.text.replace(/\s+/g, ' ').trim().slice(0, 220), state: 'settled' }}
-          className="task-process-thinking-card"
-          defaultExpanded={false}
+          model={{
+            id: item.node.id,
+            label: t('local.process.thinking'),
+            text: item.node.text,
+            preview: item.node.text.replace(/\\s+/g, ' ').trim().slice(0, 220),
+            state: 'settled',
+          }}
           expansionStore={expansionStore}
-        >
-          <MarkdownSurface text={item.node.text}/>
-        </TaskThinking>
-        return <div className="task-process-message" data-message-role={item.node.role} key={item.node.id}>
-          <MarkdownSurface text={item.node.text}/>
-        </div>
+        />
+        return <TaskSessionProcessText key={item.node.id} text={item.node.text}/>
       })}
     </div>}
   </TaskProcessGroup>
