@@ -114,7 +114,8 @@ export function TaskFileChangesDisclosure({
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
   const hasUnverifiedFiles = Boolean(value?.interactionId || value?.summary.observedCount || items.some(isObservedOnly))
   const isObserved = Boolean(value?.interactionId)
-  const inspectingInline = inlineDetails && Boolean(evidenceItem || diffPath)
+  const selected = Boolean(evidenceItem || diffPath)
+  const inspectingInline = inlineDetails && selected
   const inspectedFilePath = evidenceItem?.path ?? diffPath ?? ''
   const inspectedFile = fileNameAndDirectory(inspectedFilePath)
   const evidenceContent = evidenceItem && <div className="task-file-change-evidence">
@@ -184,8 +185,7 @@ export function TaskFileChangesDisclosure({
       </>}
     {diff?.truncated && <p className="task-file-diff-notice">{t('local.fileChanges.diffTruncated')}</p>}
   </div>
-  return <>
-    {inspectingInline ? <section className="task-file-changes task-file-changes-detail">
+  const detailContent = selected && <section className="task-file-changes task-file-changes-detail">
       <Button size="small" className="task-file-detail-back" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.backToFiles')}</Button>
       <div className="task-file-detail-heading">
         <span className="task-file-detail-icon" aria-hidden="true"><UiIcon name="file-code" size={20}/></span>
@@ -195,7 +195,9 @@ export function TaskFileChangesDisclosure({
         </div>
       </div>
       {evidenceContent}{diffContent}
-    </section> : <section className="task-file-changes">
+    </section>
+  return <>
+    {inspectingInline ? detailContent : <section className="task-file-changes">
       <div className="task-file-changes-header">
         <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="tool-edit" size={16}/></span>
         <h3 className="task-file-changes-heading">
@@ -237,7 +239,11 @@ export function TaskFileChangesDisclosure({
         </Button>}
       </div>
     </section>}
-    {!inlineDetails && evidenceItem && <Drawer open title={evidenceItem.path} onClose={() => setEvidenceItem(null)}>{evidenceContent}</Drawer>}
-    {!inlineDetails && diffPath && <Drawer open title={diffPath} onClose={() => setDiffPath(null)}>{diffContent}</Drawer>}
+    {!inlineDetails && selected && <Drawer
+      open
+      className="task-file-detail-drawer"
+      title={inspectedFile.name || inspectedFilePath}
+      onClose={() => { setEvidenceItem(null); setDiffPath(null) }}
+    >{detailContent}</Drawer>}
   </>
 }
