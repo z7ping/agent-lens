@@ -1,3 +1,20 @@
+import type { LiveTaskProjectionItem } from './live-task-projection'
+
+/** Only visible conversation text, never tool output or hidden thinking, drives follow. */
+export function liveFollowTextRevision(
+  stable: readonly LiveTaskProjectionItem[],
+  active: readonly LiveTaskProjectionItem[],
+): string {
+  for (const items of [active, stable]) {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index]!
+      if (item.kind !== 'message') continue
+      return `${item.id}:${item.role}:${item.text.length}:${item.text.slice(-64)}:${item.streaming ? 'running' : 'settled'}`
+    }
+  }
+  return 'empty'
+}
+
 export interface LiveFollowDiagnostics {
   scrollWrites: number
   detachCount: number
