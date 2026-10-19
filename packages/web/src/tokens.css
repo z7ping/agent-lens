@@ -53,8 +53,8 @@
 
   /* #89：Review / Pi Live 共用 Task Surface 的几何语义。 */
   --al-space-page-x:28px;
-  --al-content-task-reading:1120px;
-  --al-content-task-composer:1120px;
+  --al-content-task-reading:820px;
+  --al-content-task-composer:var(--al-content-task-reading);
   --al-radius-product-special:28px;
   --al-safe-task-boundary-inline:32px;
   --al-safe-task-boundary-block:32px;
