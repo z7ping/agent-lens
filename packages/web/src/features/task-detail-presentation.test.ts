@@ -287,6 +287,8 @@ test('目标提取仅来自可信输入字段，Shell cd 前缀只调整显示�
   assert.equal(taskToolTargetText({ ...base, rawInput: '{"file_path":"lib/a.ts"}' }, 'read'), 'lib/a.ts')
   assert.equal(taskToolTargetText({ ...base, name: 'memory_search', kind: 'search', kindLabel: '搜索',
     rawInput: '{"arguments":{"query":"agent lens"}}' }, 'search'), 'agent lens')
+  assert.equal(taskToolTargetText({ ...base, name: 'memory_search', kind: 'search', kindLabel: '搜索',
+    rawInput: JSON.stringify({ arguments: JSON.stringify({ query: '已有记录' }) }) }, 'search'), '已有记录')
   for (const input of [
     'cd E:/workspace && rg -n "menu" src',
     'cd "E:/my && projects" && npm test',
