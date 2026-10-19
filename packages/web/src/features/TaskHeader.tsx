@@ -32,7 +32,7 @@ export interface TaskHeaderProps {
   submeta?: ReactNode
   metrics?: TaskHeaderMetric[]
   infoItems?: TaskHeaderInfoItem[]
-  infoPanel?: TaskHeaderInfoPanel
+  infoPanel?: TaskHeaderInfoPanel | undefined
   actions?: ReactNode
   /** 领域阅读操作复用共享视图菜单，不占用常驻工具栏。 */
   viewActions?: ReactNode
