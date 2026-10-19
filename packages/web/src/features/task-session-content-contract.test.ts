@@ -14,7 +14,6 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
   for (const [component, pattern] of [
     ['TaskSessionMessage', /<TaskSessionMessage/],
     ['TaskSessionThinking', /<TaskSessionThinking/],
-    ['TaskSessionTool', /<TaskSessionTool/],
     ['TaskSessionProcessText', /<TaskSessionProcessText/],
     ['TaskSessionProcess', /<TaskSessionProcess/],
   ] as const) {
@@ -22,14 +21,28 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
     assert.match(review, pattern, 'Review must use the common ' + component)
   }
   assert.doesNotMatch(live, /<TaskMessage|<TaskThinking|<TaskToolRow|<TaskProcessGroup|<MarkdownContent/)
-  assert.doesNotMatch(review, /<TaskToolGroup|<TaskMessage|<TaskProcessGroup|<MarkdownContent/)
+  assert.doesNotMatch(review, /<TaskToolRow|<TaskMessage|<TaskProcessGroup|<MarkdownContent/)
   assert.match(live, /<TaskSessionProcess\s+mode="live"/)
   assert.match(review, /<TaskSessionProcess\s+mode="review"/)
-  assert.match(review, /<TaskSessionTool[\s\S]*?model=\{reviewToolModel\(node\)\}/)
+  // Groups of consecutive calls are progressively disclosed by one shared ToolGroup
+  // in both modes; Review adds evidence/inspect callbacks, never a second renderer.
+  const group = read('./TaskToolGroup.tsx')
+  assert.match(live, /<TaskToolGroup/)
+  assert.match(review, /<TaskToolGroup/)
+  assert.match(live, /compact[\s\S]*?model=\{\{/)
+  assert.match(review, /compact[\s\S]*?model=\{\{/)
+  assert.match(review, /renderMeta=\{tool =>/)
+  assert.match(review, /onToolClick=\{tool =>/)
+  assert.match(group, /visibleTaskToolIds\(tools, expanded\)/)
+  assert.match(group, /index < TASK_TOOL_PREVIEW_LIMIT \|\| tool\.status === 'running' \|\| tool\.status === 'error'/)
   assert.match(read('./TaskSessionContent.tsx'), /return <TaskToolRow model=\{model\} compact/)
+  assert.match(live, /<TaskSessionTool/)
   const css = read('../task-detail.css')
-  assert.doesNotMatch(css, /\.task-surface \.task-tool-group \{/)
-  assert.doesNotMatch(css, /\.task-surface \.task-tool-list \{/)
+  assert.match(css, /\.task-surface \.task-tool-group \{/)
+  assert.match(css, /\.task-surface \.task-tool-group-toggle \{/)
+  assert.match(css, /\.task-surface \.task-tool-group \.task-tool-list \{/)
+  assert.doesNotMatch(read('../pi-live.css'), /\.task-tool-group(?:\b|[.#:{])/)
+  assert.doesNotMatch(read('../review.css'), /\.task-tool-group(?:\b|[.#:{])/)
   assert.doesNotMatch(read('../pi-live.css'), /\.pi-live-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
   assert.doesNotMatch(read('../review.css'), /\.review-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
 })
@@ -111,6 +124,18 @@ test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺�
   assert.match(read('../task-detail.css'), /\.task-surface \.task-message-context-evidence/)
   assert.doesNotMatch(read('../review.css'), /\.task-message-model-meta/)
   assert.doesNotMatch(read('../pi-live.css'), /\.task-message-model-meta/)
+})
+
+test('真实桌面验收使用唯一的 Session Process 选择器，避免重构后假超时', () => {
+  const acceptance = read('../../../../scripts/acceptance/task-center-desktop.mjs')
+  const process = read('./TaskProcessGroup.tsx')
+  const session = read('./TaskSessionContent.tsx')
+  assert.match(session, /return <TaskProcessGroup/)
+  assert.match(process, /className=\{`task-process-group/)
+  assert.match(acceptance, /pane\?\.querySelector\('\.task-process-group'\)/)
+  assert.doesNotMatch(acceptance, /querySelector\('\.task-review-process'\)/)
+  assert.match(acceptance, /processExpanded: process instanceof HTMLDetailsElement && process\.open/)
+  assert.match(acceptance, /JSON\.stringify\(lastState\)/)
 })
 
 test('只有可信 reasoning 区间才显示思考时长，不能借用过程或轮次耗时', () => {

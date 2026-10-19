@@ -8,6 +8,7 @@ const round = readFileSync('packages/web/src/features/TaskRound.tsx', 'utf8')
 const message = readFileSync('packages/web/src/features/TaskMessage.tsx', 'utf8')
 const thinking = readFileSync('packages/web/src/features/TaskThinking.tsx', 'utf8')
 const processGroup = readFileSync('packages/web/src/features/TaskProcessGroup.tsx', 'utf8')
+const sessionContent = readFileSync('packages/web/src/features/TaskSessionContent.tsx', 'utf8')
 const reviewPage = [ readFileSync('packages/web/src/features/review-session-format.ts', 'utf8'),
   readFileSync('packages/web/src/features/ReviewEvidenceInspector.tsx', 'utf8'),
   readFileSync('packages/web/src/features/ReviewRoundPresentation.tsx', 'utf8'),
@@ -96,7 +97,8 @@ requireText(soak, /percentCPUUsage/, '长时验收必须采集 Renderer CPU')
 /* Thinking 的独立展开策略不等于 Process 默认值；历史与运行中处理详情应默认折叠。 */
 requireText(processGroup, /defaultExpanded\s*=\s*false/, '共享 Process 必须默认折叠')
 requireText(processGroup, /kind="process"[\s\S]*?defaultExpanded=\{defaultExpanded\}/, 'Process 必须将折叠策略传递给共享 TaskThinking')
-requireText(reviewPage, /<TaskProcessGroup[\s\S]*?defaultExpanded=\{false\}/, 'Review Process 必须默认折叠')
+requireText(reviewPage, /<TaskSessionProcess[\s\S]*?mode="review"/, 'Review Process 必须使用共享 SessionProcess 的只读模式')
+requireText(sessionContent, /defaultExpanded=\{mode === 'live' && props\.state === 'running'\}/, 'Review 默认折叠，Live 仅在运行中自动展开')
 requireText(thinking, /useState\(\(\) => expansionStore\?\.get\(model\.id\) \?\? defaultExpanded\)/, 'Thinking 必须按语义 ID 初始化可保存的折叠状态')
 requireText(thinking, /expansionStore\?\.set\(model\.id, next\)/, 'Thinking 用户切换必须写回展开意图')
 requireText(thinking, /className={`task-thinking/, 'Thinking 必须使用共享 Task Surface 语义类')
@@ -106,7 +108,8 @@ requireText(thinking, /task-disclosure-chevron task-thinking-chevron/, 'Thinking
 
 /* Tool：Group 不产生第二折叠层；每次 Tool Call 都是直接事实行。 */
 requireText(toolGroup, /data-task-tool-group="true"/, 'Tool Group 必须保留稳定语义边界')
-requireText(toolGroup, /model\.tools\.map/, 'Tool Group 必须逐条渲染 Tool Call')
+requireText(toolGroup, /tools\.map\(\(tool, index\) => visibleIds\.has\(tool\.id\) && <TaskToolRow/, 'Tool Group 必须逐条按可见 ID 渲染原生 Tool Row')
+requireText(toolGroup, /index < TASK_TOOL_PREVIEW_LIMIT \|\| tool\.status === 'running' \|\| tool\.status === 'error'/, 'Tool Group 必须展示前 3 条及全部运行/失败项')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(toolGroup)) failures.push('Tool Group 不得恢复独立 details 层')
 if (/errorsOnly|execution-group-toolbar/.test(toolGroup)) failures.push('Tool Group 不得恢复只看错误/汇总工具栏替代主执行轨')
 requireText(toolRow, /data-tool-fact="true"/, '每条 Tool Row 必须标记 Tool Call 事实')
@@ -144,7 +147,7 @@ requireText(message, /task-message-assistant/, '消息必须表达 Agent 文档�
 if (/task-message-agent-mark|chat-avatar-agent|chat-row/.test(message)) failures.push('TaskMessage 不得恢复旧 Review 头像/方向类')
 
 requireText(taskDetailCss, /Task Surface 共享详情组件的唯一样式所有者/, 'task-detail.css 必须声明共享详情唯一所有权')
-requireText(taskDetailCss, /\.task-surface \.task-tool-call > summary\.task-tool-row\s*\{[^}]*grid-template-columns:\s*72px minmax\(0, 1fr\) auto 14px/s, 'Tool 摘要必须保留类型、正文、可容纳状态与耗时的元信息、展开图标四列')
+requireText(taskDetailCss, /\.task-surface \.task-tool-call > summary\.task-tool-row\s*\{[^}]*grid-template-columns:\s*14px auto minmax\(0, 1fr\) auto 14px/s, 'Tool 摘要必须保留图标、标题、命令预览、状态耗时与展开图标五列')
 requireText(taskDetailCss, /task-tool-summary-text[^}]*text-overflow:\s*ellipsis/s, 'Tool 摘要必须省略溢出')
 requireText(taskDetailCss, /task-tool-section \+ \.task-tool-section/, 'Tool 入出参需视觉分隔')
 requireText(taskDetailCss, /task-message-content[^}]*font-size:\s*14px/s, '对话正文必须保持 14px')
