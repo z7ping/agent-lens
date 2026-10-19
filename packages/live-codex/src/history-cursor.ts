@@ -36,7 +36,8 @@ export function decodeCodexHistoryCursor(value: string): CodexHistoryCursor {
       if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
         const row = raw as Record<string, unknown>
         if (typeof row.turnId === 'string' && row.turnId
-          && typeof row.itemId === 'string' && row.itemId) {
+          && typeof row.itemId === 'string' && row.itemId
+          && typeof row.backwardsCursor === 'string' && row.backwardsCursor) {
           return { kind: 'item', anchor: { turnId: row.turnId, itemId: row.itemId, backwardsCursor: row.backwardsCursor } }
         }
       }
