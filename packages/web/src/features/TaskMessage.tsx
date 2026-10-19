@@ -83,7 +83,7 @@ export function TaskMessage({
 
   const measure = useCallback(() => {
     const element = surfaceRef.current
-    if (!element || !collapsible) {
+    if (!element || !collapsible || !user) {
       setCanCollapse(false)
       return
     }
@@ -93,7 +93,7 @@ export function TaskMessage({
     const limit = Math.ceil(lineHeight * 5 + 2)
     setCollapsedHeight(limit)
     setCanCollapse(element.scrollHeight > limit + 2)
-  }, [collapsible])
+  }, [collapsible, user])
 
   useEffect(() => {
     // 只在消息角色切换时重设；切换源码/渲染视图不得覆盖用户的折叠选择。
@@ -101,8 +101,8 @@ export function TaskMessage({
   }, [user])
 
   useLayoutEffect(() => {
-    // Agent 正文默认完整展开；流式阶段不做五行折叠测量，也不重建 ResizeObserver。
-    if (streaming && !user && view === 'rendered') {
+    // Agent 正文始终完整展示；只有用户长消息参与折叠测量。
+    if (!user || !collapsible) {
       setCanCollapse(false)
       setCollapsedHeight(undefined)
       return
@@ -116,11 +116,12 @@ export function TaskMessage({
       window.cancelAnimationFrame(frame)
       observer?.disconnect()
     }
-  }, [measure, streaming, user, view])
+  }, [collapsible, measure, user, view])
 
   const awaitingFirstContent = !user && (pending || (streaming && !text && attachments.length === 0))
   const roleClass = user ? 'task-message-user' : 'task-message-assistant'
   const bubbleClass = user ? 'task-message-bubble-user' : 'task-message-bubble-assistant'
+  const sourceActionLabel = view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')
 
   return <div
     className={`task-message-row ${roleClass} ${className}`.trim()}
@@ -187,10 +188,15 @@ export function TaskMessage({
               title={copyState === 'copied' ? t('message.copied') : copyState === 'error' ? t('message.copyFailed') : t('message.copy')}
               onClick={() => void copyMessage()}
             ><UiIcon name={copyState === 'copied' ? 'check' : 'copy'} size={14}/></IconButton>}
-            {canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapseFiveLines') : t('message.expand')}</button>}
-            {!user && showContentActions && <button type="button" className="task-message-source-action" title={view === 'rendered' ? t('message.viewMarkdownSource') : t('message.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>
-              {view === 'rendered' ? <span>{t('message.source')}</span> : <span>{t('message.rendered')}</span>}
-            </button>}
+            {user && canCollapse && <button type="button" onClick={() => setExpanded(value => !value)}>{expanded ? t('message.collapse') : t('message.expand')}</button>}
+            {!user && showContentActions && <IconButton
+              size="small"
+              className="task-message-source-action"
+              aria-label={sourceActionLabel}
+              title={sourceActionLabel}
+              aria-pressed={view === 'source'}
+              onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}
+            ><UiIcon name={view === 'rendered' ? 'file-code' : 'preview'} size={14}/></IconButton>}
             {actions && <span className="task-message-actions">{actions}</span>}
           </div>}
         </div>}
