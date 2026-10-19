@@ -108,9 +108,14 @@ test('轮次导轨视觉锁定 #283 前经典样式，不允许恢复绝对比�
 
 test('Live 正文不再使用轮次 details，但导轨仍使用独立语义锚点', () => {
   const timeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
-  assert.match(timeline, /<LiveTranscriptRound model=/)
+  assert.match(timeline, /<TaskReadingRound/)
+  assert.doesNotMatch(timeline, /<LiveTranscriptRound/)
   assert.doesNotMatch(timeline, /<TaskRound\b/)
-  assert.match(timeline, /data-round-semantic-id=\{model\.semanticId \?\? model\.id\}/)
+  const shell = readFileSync(new URL('./TaskReadingRound.tsx', import.meta.url), 'utf8')
+  assert.match(shell, /data-round-semantic-id=\{model\.semanticId \?\? model\.id\}/)
+  const reviewPresentation = readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8')
+  assert.match(reviewPresentation, /return <TaskReadingRound/)
+  assert.doesNotMatch(reviewPresentation, /return <TaskRound/)
   assert.match(timeline, /rootSelector="\.pi-live-reader"/)
   assert.match(taskSurface, /\.virtual-round-shell\[data-interaction-id\]/)
   assert.match(liveTask, /turnRailItems=\{turnRailItems\}/)
