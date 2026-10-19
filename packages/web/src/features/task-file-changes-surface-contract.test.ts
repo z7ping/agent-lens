@@ -42,7 +42,17 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /<Drawer open title=\{evidenceItem\.path\}/)
   assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
   assert.match(component, /<Drawer open/)
-  assert.match(component, /<CopyableCodeBlock copyValue=\{diff\.diff\} language="diff"/)
+  assert.match(component, /<CopyableCodeBlock copyValue=\{diff\.diff\} language="diff" containerClassName="task-file-diff-block"/)
+})
+
+test('查看差异使用专属代码审阅布局，不再把原始 Diff 当普通日志块', () => {
+  assert.match(component, /className="task-file-diff-view"/)
+  assert.match(component, /className="task-file-diff-code"/)
+  assert.match(component, /className="task-file-diff-path"/)
+  assert.match(styles, /\.task-file-diff-block > pre \{/)
+  assert.match(styles, /\.task-file-diff-code \{[^}]*overflow-x: auto;/)
+  assert.match(styles, /\.task-file-diff-block \.token-inserted/)
+  assert.match(styles, /\.task-file-diff-block \.token-deleted/)
 })
 
 test('legacy session with truncated evidence never disappears as an empty card', () => {
