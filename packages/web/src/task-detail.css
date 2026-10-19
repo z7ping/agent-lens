@@ -587,36 +587,36 @@
 
 
 /* Shared Task file-change card: Review and Live use one domain style owner. */
-:is(.task-surface, .task-header-info-drawer) .task-file-changes { margin: 6px 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--al-line) 60%, transparent); border-radius: var(--radius-md); background: var(--al-surface); }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-header { display: flex; min-height: 40px; align-items: center; gap: 8px; padding: 6px 10px; color: var(--al-ink-2); font-size: 13px; }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-mark { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; color: var(--al-muted); }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-heading { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 2px; margin: 0; font-size: 13px; font-weight: 650; }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-delta { display: inline-flex; align-items: center; gap: 8px; font: 12px/1.3 var(--font-mono); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-added { color: var(--al-success); font: 12px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-deleted { color: var(--al-danger); font: 12px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-state,
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-observed { flex: 0 0 auto; color: var(--al-muted-2); font-size: 12px; }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-list { border-top: 1px solid color-mix(in srgb, var(--al-line) 50%, transparent); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-row { display: flex; min-height: 34px; min-width: 0; align-items: center; gap: 8px; padding: 6px 11px; color: var(--al-ink-2); font-size: 12px; }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-row + .task-file-change-row { border-top: 1px solid color-mix(in srgb, var(--al-line) 38%, transparent); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-status { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; color: var(--al-muted); font: 650 12px/1 var(--font-mono); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-status.is-observed { width: auto; min-width: 34px; flex-basis: auto; font-size: 12px; line-height: 1.4; font-weight: 500; color: var(--al-muted-2); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-status.is-added { color: var(--al-success); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-status.is-deleted { color: var(--al-danger); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-status.is-modified,
-:is(.task-surface, .task-header-info-drawer) .task-file-change-status.is-renamed { color: var(--al-accent); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-path { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 6px; overflow: hidden; }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-path > code,
-:is(.task-surface, .task-header-info-drawer) .task-file-change-path .local-resource-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-path code { font: 12px/1.45 var(--font-mono); }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
-:is(.task-surface, .task-header-info-drawer) .task-file-change-diff-action,
-:is(.task-surface, .task-header-info-drawer) .task-file-change-evidence-action { flex: 0 0 auto; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes { margin: 6px 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--al-line) 60%, transparent); border-radius: var(--radius-md); background: var(--al-surface); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-header { display: flex; min-height: 40px; align-items: center; gap: 8px; padding: 6px 10px; color: var(--al-ink-2); font-size: 13px; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-mark { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; color: var(--al-muted); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-heading { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 2px; margin: 0; font-size: 13px; font-weight: 650; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-delta { display: inline-flex; align-items: center; gap: 8px; font: 12px/1.3 var(--font-mono); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-added { color: var(--al-success); font: 12px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-deleted { color: var(--al-danger); font: 12px/1.35 var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-state,
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-observed { flex: 0 0 auto; color: var(--al-muted-2); font-size: 12px; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-list { border-top: 1px solid color-mix(in srgb, var(--al-line) 50%, transparent); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-row { display: flex; min-height: 34px; min-width: 0; align-items: center; gap: 8px; padding: 6px 11px; color: var(--al-ink-2); font-size: 12px; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-row + .task-file-change-row { border-top: 1px solid color-mix(in srgb, var(--al-line) 38%, transparent); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status { display: inline-flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; color: var(--al-muted); font: 650 12px/1 var(--font-mono); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-observed { width: auto; min-width: 34px; flex-basis: auto; font-size: 12px; line-height: 1.4; font-weight: 500; color: var(--al-muted-2); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-added { color: var(--al-success); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-deleted { color: var(--al-danger); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-modified,
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-renamed { color: var(--al-accent); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 6px; overflow: hidden; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path > code,
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path .local-resource-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path code { font: 12px/1.45 var(--font-mono); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-diff-action,
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-evidence-action { flex: 0 0 auto; }
 /* Diff content uses Pierre's renderer and themes; host CSS owns only the shell. */
-.ui-overlay-drawer.task-header-info-drawer:has(.task-file-diff-view) .ui-overlay-panel {
+.ui-overlay-drawer:has(.task-file-diff-view) .ui-overlay-panel {
   width: min(96vw, 1100px);
 }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes.task-file-changes-detail {
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes.task-file-changes-detail {
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -744,10 +744,10 @@
   line-height: 1.55;
 }
 .task-file-change-raw dd { font-family: var(--font-mono); }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-more { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--al-line); border-radius: 0; background: transparent; color: var(--al-muted); }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-error,
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-empty { padding: 9px 11px; color: var(--al-muted); font-size: 12px; }
-:is(.task-surface, .task-header-info-drawer) .task-file-changes-error { color: var(--al-danger); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-more { display: flex; width: 100%; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid var(--al-line); border-radius: 0; background: transparent; color: var(--al-muted); }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-error,
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-empty { padding: 9px 11px; color: var(--al-muted); font-size: 12px; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-changes-error { color: var(--al-danger); }
 
 /* ── Event ── */
 .task-surface .task-event-row {
