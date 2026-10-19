@@ -325,10 +325,7 @@
   width: max-content;
   max-width: 100%;
   min-width: 0;
-  height: 34px;
-  min-height: 34px;
   justify-self: start;
-  gap: 14px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
