@@ -15,10 +15,10 @@ export type TaskSessionMode = 'review' | 'live'
 
 /** Shared message context. Source adapters provide facts, not layout slots. */
 export interface TaskSessionMessagePresentation {
-  author?: string
-  modelLabel?: string
-  time?: string
-  evidence?: ReactNode
+  author?: string | undefined
+  modelLabel?: string | undefined
+  time?: string | undefined
+  evidence?: ReactNode | undefined
 }
 
 export function taskSessionMessageTime(value: string | undefined): string | undefined {
@@ -62,7 +62,7 @@ export function TaskSessionThinking({
   meta?: ReactNode
   actions?: ReactNode
   nested?: ReactNode
-  expansionStore?: Map<string, boolean>
+  expansionStore?: Map<string, boolean> | undefined
 }) {
   // durationMs is only a measured reasoning interval. Do not derive it from
   // the enclosing round or process, or from a lone historic message timestamp.
