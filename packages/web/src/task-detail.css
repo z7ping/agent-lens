@@ -724,13 +724,20 @@
 .task-file-change-facts dd,
 .task-file-change-raw dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .task-file-change-facts time { font-variant-numeric: tabular-nums; }
-.task-file-change-raw {
+.task-file-change-raw.ui-disclosure {
   margin-top: 1px;
+  border: 0;
   border-top: 1px solid var(--al-line);
+  border-radius: 0;
+  background: transparent;
 }
-.task-file-change-raw > summary {
+.task-file-change-raw.ui-disclosure > summary {
+  padding: 3px 0;
   font-size: 13px;
   font-weight: 600;
+}
+.task-file-change-raw.ui-disclosure > .ui-disclosure-body {
+  padding: 10px 0;
 }
 .task-file-change-raw dl {
   display: grid;
