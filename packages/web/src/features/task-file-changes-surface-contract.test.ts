@@ -32,7 +32,7 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /<div className="task-file-changes-header">/)
   assert.doesNotMatch(component, /<details\b/)
   assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-changes-header \{/)
-  assert.match(component, /const displayed = showAll \? items : items\.slice\(0, INITIAL_VISIBLE_FILES\)/)
+  assert.match(component, /const displayed = inlineDetails \|\| showAll \? items : items\.slice\(0, INITIAL_VISIBLE_FILES\)/)
   assert.match(component, /const hidden = items\.length - displayed\.length/)
   assert.match(component, /\{hidden > 0 && <Button/)
   assert.match(component, /\{showAll && items\.length > INITIAL_VISIBLE_FILES && <Button/)
@@ -62,11 +62,15 @@ test('仅精确 Session 事实允许查看 Git Diff；逐轮观测只展示来�
   assert.doesNotMatch(component, /return '\?'/)
 })
 
-test('任务信息只切换同一个 Drawer 内子视图，Diff 和证据不再套 Drawer', () => {
+test('会话文件列表在任务信息抽屉第一层，Diff 和证据在同一抽屉切换', () => {
   const header = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
-  assert.match(header, /infoPanelOpen && infoPanel \?/)
-  assert.match(header, /infoPanel\.content/)
+  assert.match(header, /<section className="task-header-compact-info-list"/)
+  assert.match(header, /\{infoPanel && <div className="task-header-info-panel-content" aria-label=\{infoPanel\.label\}>/)
+  assert.match(header, /\{infoPanel\.content\}/)
+  assert.doesNotMatch(header, /infoPanelOpen|setInfoPanelOpen|task-header-info-panel-trigger/)
+  assert.match(styles, /\.task-header-info-panel-content \{/)
   assert.match(component, /inlineDetails = false/)
+  assert.match(component, /const displayed = inlineDetails \|\| showAll \?/)
   assert.match(component, /inspectingInline \? <section/)
   assert.match(component, /!inlineDetails && evidenceItem && <Drawer/)
   assert.match(component, /!inlineDetails && diffPath && <Drawer/)
