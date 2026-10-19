@@ -466,6 +466,18 @@
 .task-surface .task-thinking-actions > .evidence-link { display: none; }
 .task-surface .task-thinking-actions:has(> .evidence-link:only-child) { display: none; }
 
+/* Shared progressive Tool Group; no second disclosure or nested cards. */
+.task-surface .task-tool-group { min-width: 0; }
+.task-surface .task-tool-group[data-collapsible='true'] { border-inline-start: 1px solid var(--al-line); padding-inline-start: 6px; }
+.task-surface .task-tool-group-toggle { display: flex; width: 100%; justify-content: flex-start; align-items: center; gap: 6px; margin-bottom: 3px; }
+.task-surface .task-tool-group-title { font-weight: 650; white-space: nowrap; }
+.task-surface .task-tool-group-running { color: var(--al-accent); white-space: nowrap; }
+.task-surface .task-tool-group-failed { color: var(--al-danger); white-space: nowrap; }
+.task-surface .task-tool-group-more { margin-inline-start: auto; color: var(--al-muted); font-weight: 400; white-space: nowrap; }
+.task-surface .task-tool-group-chevron { transition: transform .18s ease; }
+.task-surface .task-tool-group-toggle[aria-expanded='true'] .task-tool-group-chevron { transform: rotate(180deg); }
+.task-surface .task-tool-group .task-tool-list { display: grid; min-width: 0; gap: 2px; }
+
 /* ── Tool: one compact default-closed call, with separate input and output ── */
 .task-surface .task-process-sequence { display: grid; gap: 5px; }
 .task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }

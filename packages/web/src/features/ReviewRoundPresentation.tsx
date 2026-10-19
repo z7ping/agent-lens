@@ -11,7 +11,8 @@ import { TaskEvent } from './TaskEvent'
 import { TaskReadingRound } from './TaskReadingRound'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
-import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
+import { TaskToolGroup } from './TaskToolGroup'
+import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
@@ -106,12 +107,28 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
 }
 
 function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
-  return <>{items.map(node => <TaskSessionTool
-    key={node.id}
-    model={reviewToolModel(node)}
-    meta={<EvidenceBadges evidence={node.evidence} compact/>}
-    onInspect={() => inspect(node)}
-  />)}</>
+  const { t } = useTranslation('task')
+  const tools = items.map(reviewToolModel)
+  const byId = new Map(items.map(node => [node.id, node] as const))
+  return <TaskToolGroup
+    compact
+    model={{
+      id: `tools:${items[0]?.id ?? 'empty'}`,
+      label: t('live.toolGroup'),
+      itemCount: tools.length,
+      errorCount: tools.filter(tool => tool.status === 'error').length,
+      kindCounts: [],
+      tools,
+    }}
+    renderMeta={tool => {
+      const node = byId.get(tool.id)
+      return node ? <EvidenceBadges evidence={node.evidence} compact/> : undefined
+    }}
+    onToolClick={tool => {
+      const node = byId.get(tool.id)
+      if (node) inspect(node)
+    }}
+  />
 }
 
 function processTimestamp(value: string | undefined): number | undefined {

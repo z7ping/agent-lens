@@ -1,15 +1,23 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button, UiIcon } from '../components/ui'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
 import { TaskToolRow } from './TaskToolRow'
 
+export const TASK_TOOL_PREVIEW_LIMIT = 3
+
+/** Share the same progressive visibility rule across Live and Review. */
+export function visibleTaskToolIds(tools: readonly TaskToolModel[], expanded: boolean): Set<string> {
+  return new Set(tools.filter((tool, index) =>
+    expanded || index < TASK_TOOL_PREVIEW_LIMIT || tool.status === 'running' || tool.status === 'error',
+  ).map(tool => tool.id))
+}
+
 export interface TaskToolGroupProps {
   model: TaskToolGroupModel
-  /**
-   * 保留旧调用签名用于渐进迁移。高保真原型不再给 Tool Group 单独的折叠层；
-   * 若该组真实位于 Thinking 内，会自然跟随 Thinking 一起折叠。
-   */
   defaultExpanded?: boolean
+  /** Defer expensive payload rendering until a tool row is opened. */
+  compact?: boolean
   renderMeta?: ((tool: TaskToolModel) => ReactNode) | undefined
   renderDetails?: ((tool: TaskToolModel) => ReactNode) | undefined
   onToolClick?: ((tool: TaskToolModel) => void) | undefined
@@ -18,24 +26,54 @@ export interface TaskToolGroupProps {
 
 export function TaskToolGroup({
   model,
+  defaultExpanded = false,
+  compact = false,
   renderMeta,
   renderDetails,
   onToolClick,
   className = '',
 }: TaskToolGroupProps) {
   const { t } = useTranslation('task')
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  useEffect(() => setExpanded(defaultExpanded), [defaultExpanded, model.id])
+
+  const tools = model.tools
+  const collapsible = tools.some((tool, index) =>
+    index >= TASK_TOOL_PREVIEW_LIMIT && tool.status !== 'running' && tool.status !== 'error')
+  const visibleIds = visibleTaskToolIds(tools, expanded)
+  const hiddenCount = tools.length - visibleIds.size
+  const running = tools.filter(tool => tool.status === 'running').length
+  const failed = tools.filter(tool => tool.status === 'error').length
+
   return <div
-    className={`task-tool-group ${model.errorCount ? 'task-tool-group-error' : ''} ${className}`.trim()}
-    data-error-count={model.errorCount}
+    className={`task-tool-group ${failed ? 'task-tool-group-error' : ''} ${className}`.trim()}
+    data-error-count={failed}
     data-task-tool-group="true"
-    aria-label={t('tool.calls', { count: model.itemCount })}
+    data-collapsible={collapsible || undefined}
+    aria-label={t('tool.calls', { count: tools.length })}
   >
-    <div className="task-tool-list">{model.tools.map((tool, index) => <TaskToolRow
+    {collapsible && <Button
+      size="small"
+      className="task-tool-group-toggle"
+      aria-expanded={expanded}
+      onClick={() => setExpanded(value => !value)}
+    >
+      <UiIcon name="tool-shell" size={14}/>
+      <span className="task-tool-group-title">{t('live.toolGroup')} · {t('live.toolGroupCount', { count: tools.length })}</span>
+      {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
+      {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
+      <span className="task-tool-group-more">{expanded
+        ? t('live.toolGroupLess')
+        : t('live.toolGroupMore', { count: hiddenCount })}</span>
+      <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
+    </Button>}
+    <div className="task-tool-list">{tools.map((tool, index) => visibleIds.has(tool.id) && <TaskToolRow
       key={tool.id}
       model={tool}
+      compact={compact}
       meta={renderMeta?.(tool)}
       details={renderDetails?.(tool)}
-      last={index === model.tools.length - 1}
+      last={index === tools.length - 1}
       onClick={onToolClick ? () => onToolClick(tool) : undefined}
     />)}</div>
   </div>

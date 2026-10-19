@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TaskToolGroup } from './TaskToolGroup'
+import { TaskToolGroup, visibleTaskToolIds } from './TaskToolGroup'
 import { taskToolTargetText } from './TaskToolRow'
 import type { TaskToolGroupModel } from './task-detail-model'
 
@@ -119,4 +119,51 @@ test('成功绿色、失败红色且状态标记无额外圆框', () => {
   assert.doesNotMatch(failed, /data-code-language="json"/)
   assert.match(failed, /data-tool-section="input"/)
   assert.match(failed, /data-tool-section="output"/)
+})
+
+test('连续大量工具仅展示前三项及所有失败、运行中工具，保持原生顺序', () => {
+  const tools = Array.from({ length: 9 }, (_, index) => ({
+    ...model.tools[0]!,
+    id: `tool-${index + 1}`,
+    name: `native-${index + 1}`,
+    status: index === 5 || index === 8 ? 'running' as const
+      : index === 7 ? 'error' as const : 'success' as const,
+  }))
+  assert.deepEqual([...visibleTaskToolIds(tools, false)], [
+    'tool-1', 'tool-2', 'tool-3', 'tool-6', 'tool-8', 'tool-9',
+  ])
+  const group = { ...model, id: 'batch:9', tools, itemCount: tools.length, errorCount: 1 }
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group, compact: true }))
+  assert.match(html, /aria-expanded="false"/)
+  assert.match(html, /工具调用 · 9 项/)
+  assert.match(html, /展开其余 3 项/)
+  assert.match(html, /1 失败/)
+  assert.match(html, /2 运行中/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 6)
+  assert.doesNotMatch(html, /native-4|native-5|native-7/)
+  assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
+  let previous = -1
+  for (const name of ['native-1', 'native-2', 'native-3', 'native-6', 'native-8', 'native-9']) {
+    const position = html.indexOf(name, previous + 1)
+    assert.ok(position > previous, `tool out of order: ${name}`)
+    previous = position
+  }
+  const all = renderToStaticMarkup(createElement(TaskToolGroup, { model: group, defaultExpanded: true, compact: true }))
+  assert.match(all, /aria-expanded="true"/)
+  assert.equal((all.match(/data-tool-fact="true"/g) ?? []).length, 9)
+  assert.ok(all.indexOf('native-4') < all.indexOf('native-5'))
+  assert.ok(all.indexOf('native-7') < all.indexOf('native-8'))
+})
+
+test('三条以下不出现批次折叠；全部异常时不产生空操作', () => {
+  assert.doesNotMatch(render(), /task-tool-group-toggle/)
+  const tools = Array.from({ length: 5 }, (_, index) => ({
+    ...model.tools[0]!, id: `error-${index}`, status: 'error' as const,
+  }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, {
+    model: { ...model, id: 'all-errors', tools, itemCount: tools.length },
+    compact: true,
+  }))
+  assert.doesNotMatch(html, /task-tool-group-toggle/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
 })
