@@ -6,7 +6,7 @@ import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot } from './live-task-history-window'
 import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reduceLiveTaskEvent } from './live-task-projection'
-import { LiveFollowController } from './live-follow-controller'
+import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
 import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
 
 /** 会话初始化、SSE 对账与可见性恢复；不负责输入交互和页面渲染。 */
@@ -593,6 +593,8 @@ export function useLiveTaskRuntime({
   }, [interruptNotice])
 
 
+  const followTextRevision = liveFollowTextRevision(projection.stable, projection.active)
+
   useEffect(() => {
     const controller = followControllerRef.current
     if (!controller.isFollowing || followFrameRef.current !== null) return
@@ -601,7 +603,7 @@ export function useLiveTaskRuntime({
       const reader = readerRef.current
       if (!reader || !controller.isFollowing) return
       const target = Math.max(0, reader.scrollHeight - reader.clientHeight)
-      if (Math.abs(reader.scrollTop - target) <= 1) return
+      if (Math.abs(reader.scrollTop - target) <= 6) return
       controller.beginProgrammaticScroll()
       controller.recordScrollWrite()
       reader.scrollTop = target
@@ -611,7 +613,7 @@ export function useLiveTaskRuntime({
         controller.endProgrammaticScroll()
       })
     })
-  }, [projection.stable, projection.active])
+  }, [followTextRevision])
 
   useEffect(() => () => {
     if (followFrameRef.current !== null) window.cancelAnimationFrame(followFrameRef.current)
