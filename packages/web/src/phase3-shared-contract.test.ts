@@ -21,7 +21,7 @@ test('P1-04 / P1-05：Review 与 Pi Live 共用 1120px Task Surface 几何语义
 
 test('P1-07：关键前景/背景和来源色同时覆盖 Light / Dark', () => {
   assert.match(tokens, /--al-on-accent:#FFFFFF;/)
-  assert.match(tokens, /--al-user-bubble-link:#C8C7FF;/)
+  assert.match(tokens, /--al-user-bubble-link:var\(--al-accent\);/)
   assert.match(tokens, /--src-hermes:#8B5CF6;/)
   assert.match(tokens, /--src-opencode:#0E7490;/)
   assert.match(tokens, /--src-dsh:#B66E1A;/)
