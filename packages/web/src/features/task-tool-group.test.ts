@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TaskToolGroup, visibleTaskToolIds } from './TaskToolGroup'
+import { TaskToolGroup, visibleTaskToolIds, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { taskToolTargetText } from './TaskToolRow'
 import type { TaskToolGroupModel } from './task-detail-model'
 
@@ -166,4 +166,42 @@ test('三条以下不出现批次折叠；全部异常时不产生空操作', ()
   }))
   assert.doesNotMatch(html, /task-tool-group-toggle/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
+})
+
+test('一轮内思考/消息穿插不重置前三项预算，失败与执行中继续可见', () => {
+  const tools = Array.from({ length: 8 }, (_, index) => ({
+    ...model.tools[0]!,
+    id: `interleaved-${index + 1}`,
+    name: `native_${index + 1}`,
+    status: index === 5 ? 'error' as const
+      : index === 7 ? 'running' as const : 'success' as const,
+  }))
+  const sequence: TaskToolGroupSequenceEntry[] = tools.flatMap((tool, index) => [
+    { type: 'tool' as const, key: tool.id, tool },
+    ...(index === 1 ? [{ type: 'content' as const, key: 'thought', content: '思考分隔事件' }] : []),
+    ...(index === 4 ? [{ type: 'content' as const, key: 'commentary', content: '执行说明内容' }] : []),
+  ])
+  const props = {
+    model: { ...model, id: 'round-with-messages', tools, itemCount: 8, errorCount: 1 },
+    sequence,
+    compact: true,
+  }
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, props))
+  assert.match(html, /工具调用 · 8 项/)
+  assert.match(html, /展开其余 3 项/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
+  assert.match(html, /思考分隔事件/)
+  assert.match(html, /执行说明内容/)
+  assert.doesNotMatch(html, /native_4|native_5|native_7/)
+  const expected = ['native_1', 'native_2', '思考分隔事件', 'native_3', '执行说明内容', 'native_6', 'native_8']
+  // Hidden ordinary calls leave gaps, but retained items never change order.
+  let last = -1
+  for (const token of expected) {
+    const next = html.indexOf(token, last + 1)
+    assert.ok(next > last, `unexpected order or missing: ${token}`)
+    last = next
+  }
+  const expanded = renderToStaticMarkup(createElement(TaskToolGroup, { ...props, defaultExpanded: true }))
+  assert.equal((expanded.match(/data-tool-fact="true"/g) ?? []).length, 8)
+  assert.ok(expanded.indexOf('native_4') < expanded.indexOf('执行说明内容'))
 })

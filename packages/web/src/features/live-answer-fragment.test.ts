@@ -73,13 +73,14 @@ test('Live 连续工具批次渐进折叠，保留思考边界与失败状态', 
     agentLabel: 'Pi', eager: true, messageActions: [], actionPending: null,
     runtimeStreaming: true, onMessageAction: () => undefined,
   }))
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
-  assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 5)
-  assert.match(html, /展开其余 1 项/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
+  assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 3)
+  assert.match(html, /工具调用 · 6 项/)
+  assert.match(html, /展开其余 3 项/)
   assert.doesNotMatch(html, /live-tool-group|live-tool-group-more/)
-  assert.doesNotMatch(html, /git status/)
+  assert.doesNotMatch(html, /pwd|git status/)
   assert.equal((html.match(/class="task-thinking task-process-group"/g) ?? []).length, 1)
-  const renderedOrder = ['title="src/one.ts"', 'title="src/two.ts"', '继续检查', 'exit 1', 'pwd', 'ls']
+  const renderedOrder = ['title="src/one.ts"', 'title="src/two.ts"', '继续检查', 'exit 1']
   let last = -1
   for (const entry of renderedOrder) {
     const next = html.indexOf(entry, last + 1)

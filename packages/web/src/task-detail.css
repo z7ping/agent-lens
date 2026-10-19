@@ -477,6 +477,7 @@
 .task-surface .task-tool-group-chevron { transition: transform .18s ease; }
 .task-surface .task-tool-group-toggle[aria-expanded='true'] .task-tool-group-chevron { transform: rotate(180deg); }
 .task-surface .task-tool-group .task-tool-list { display: grid; min-width: 0; gap: 2px; }
+.task-surface .task-tool-group[data-interleaved='true'] .task-tool-list { gap: 5px; }
 
 /* ── Tool: one compact default-closed call, with separate input and output ── */
 .task-surface .task-process-sequence { display: grid; gap: 5px; }

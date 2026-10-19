@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, UiIcon } from '../components/ui'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
@@ -13,7 +13,13 @@ export function visibleTaskToolIds(tools: readonly TaskToolModel[], expanded: bo
   ).map(tool => tool.id))
 }
 
+/** Preserve interleaved thinking, commentary and events while collapsing tools across the whole round. */
+export type TaskToolGroupSequenceEntry =
+  | { type: 'tool'; key: string; tool: TaskToolModel; meta?: ReactNode; details?: ReactNode; onToolClick?: () => void }
+  | { type: 'content'; key: string; content: ReactNode }
+
 export interface TaskToolGroupProps {
+  sequence?: readonly TaskToolGroupSequenceEntry[]
   model: TaskToolGroupModel
   defaultExpanded?: boolean
   /** Defer expensive payload rendering until a tool row is opened. */
@@ -26,6 +32,7 @@ export interface TaskToolGroupProps {
 
 export function TaskToolGroup({
   model,
+  sequence,
   defaultExpanded = false,
   compact = false,
   renderMeta,
@@ -37,7 +44,7 @@ export function TaskToolGroup({
   const [expanded, setExpanded] = useState(defaultExpanded)
   useEffect(() => setExpanded(defaultExpanded), [defaultExpanded, model.id])
 
-  const tools = model.tools
+  const tools = sequence ? sequence.flatMap(entry => entry.type === 'tool' ? [entry.tool] : []) : model.tools
   const collapsible = tools.some((tool, index) =>
     index >= TASK_TOOL_PREVIEW_LIMIT && tool.status !== 'running' && tool.status !== 'error')
   const visibleIds = visibleTaskToolIds(tools, expanded)
@@ -50,6 +57,7 @@ export function TaskToolGroup({
     data-error-count={failed}
     data-task-tool-group="true"
     data-collapsible={collapsible || undefined}
+    data-interleaved={sequence ? 'true' : undefined}
     aria-label={t('tool.calls', { count: tools.length })}
   >
     {collapsible && <Button
@@ -67,14 +75,18 @@ export function TaskToolGroup({
         : t('live.toolGroupMore', { count: hiddenCount })}</span>
       <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
     </Button>}
-    <div className="task-tool-list">{tools.map((tool, index) => visibleIds.has(tool.id) && <TaskToolRow
-      key={tool.id}
-      model={tool}
-      compact={compact}
-      meta={renderMeta?.(tool)}
-      details={renderDetails?.(tool)}
-      last={index === tools.length - 1}
-      onClick={onToolClick ? () => onToolClick(tool) : undefined}
-    />)}</div>
+    <div className="task-tool-list">{(sequence ?? tools.map(tool => ({
+      type: 'tool' as const, key: tool.id, tool,
+    }))).map((entry, index) => entry.type === 'content'
+      ? <Fragment key={entry.key}>{entry.content}</Fragment>
+      : visibleIds.has(entry.tool.id) && <TaskToolRow
+        key={entry.key}
+        model={entry.tool}
+        compact={compact}
+        meta={entry.meta ?? renderMeta?.(entry.tool)}
+        details={entry.details ?? renderDetails?.(entry.tool)}
+        last={index === (sequence?.length ?? tools.length) - 1}
+        onClick={entry.onToolClick ?? (onToolClick ? () => onToolClick(entry.tool) : undefined)}
+      />)}</div>
   </div>
 }
