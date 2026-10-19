@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react'
+import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiveMessageActionContributionDto } from '@agent-lens/protocol'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -8,7 +8,6 @@ import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundP
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskMessage } from './TaskMessage'
 import { TaskReadingRound } from './TaskReadingRound'
-import { LiveToolGroup } from './LiveToolGroup'
 import { TaskProcessGroup } from './TaskProcessGroup'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
@@ -174,23 +173,10 @@ export const GenericLiveRound = memo(function GenericLiveRound({
           <MarkdownContent text={item.text} streaming={item.streaming}/>
         </div>
       : renderItem(item)
-  const processContent: ReactNode[] = []
-  let tools: LiveTaskProjectionItem[] = []
-  const flushTools = () => {
-    if (!tools.length) return
-    const segment = tools
-    tools = []
-    processContent.push(<LiveToolGroup
-      key={`tools:${segment[0]!.id}`}
-      items={segment}
-      renderItem={renderProcessItem}
-    />)
-  }
-  for (const item of processItems) {
-    if (item.kind === 'tool') tools.push(item)
-    else { flushTools(); processContent.push(renderProcessItem(item)) }
-  }
-  flushTools()
+  // Every native event keeps its position in the single Process disclosure.
+  // TaskToolRow already owns each tool's input/output toggle; grouping adds
+  // an unnecessary second disclosure and hides successful calls.
+  const processContent = processItems.map(renderProcessItem)
 
   const processCount = reading.processCounts.commentary
   const thinkingCount = reading.processCounts.thinking
