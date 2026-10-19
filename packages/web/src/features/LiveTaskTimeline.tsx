@@ -191,7 +191,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     thinkingDurationMs={processItems.reduce((sum, item) =>
       sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
     state={processState}
-  ><div className="task-process-sequence">{processContent}</div></TaskProcessGroup>
+  ><div className="task-process-sequence">{processContent}</div></TaskSessionProcess>
 
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
   const answer = visibleItems.filter(item => item.kind === 'message' && item.role === 'assistant').map(renderItem)
