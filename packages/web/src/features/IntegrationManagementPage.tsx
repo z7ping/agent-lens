@@ -480,10 +480,11 @@ function IntegrationManagementListItem({
 export function IntegrationManagementPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const targetIntegrationId = searchParams.get('agent') ?? ''
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(Boolean(targetIntegrationId))
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
@@ -513,14 +514,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   }, [management, model])
 
   useEffect(() => {
-    if (!targetIntegrationId || !management) return
-    const timer = window.setTimeout(() => {
-      const target = [...document.querySelectorAll<HTMLElement>('[data-integration]')]
-        .find(node => node.dataset.integration === targetIntegrationId)
-      target?.scrollIntoView({ block: 'nearest', behavior: 'auto' })
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [management, targetIntegrationId])
+    if (targetIntegrationId) setMobileDetailOpen(true)
+  }, [targetIntegrationId])
 
   const items = useMemo(() => {
     const rows = [...(management?.items ?? [])]
