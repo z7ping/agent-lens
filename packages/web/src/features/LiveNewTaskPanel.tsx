@@ -182,11 +182,15 @@ export function LiveNewTaskPanel({
   })), [products, t])
 
   const available = Boolean(selectedProduct?.availability.available)
+  const missingCodexEntry = selectedProduct?.liveId === 'codex'
+    && !registeredProducts.some(item => item.liveId === 'codex')
   const readiness = productsLoading
     ? { state: 'checking', label: t('center.newTask.checkingAgents') }
     : available
       ? { state: 'ready', label: t('center.newTask.agentReady', { agent: selectedProduct?.displayName ?? '' }) }
-      : { state: 'unavailable', label: selectedProduct?.availability.reason
+      : missingCodexEntry
+        ? { state: 'unavailable', label: t('center.newTask.agentUnavailable', { agent: selectedProduct?.displayName ?? '' }) }
+        : { state: 'unavailable', label: selectedProduct?.availability.reason
           ? t('center.newTask.agentUnavailableReason', { agent: selectedProduct.displayName, reason: selectedProduct.availability.reason })
           : t('center.newTask.agentUnavailable', { agent: selectedProduct?.displayName ?? '' }) }
 
@@ -280,9 +284,7 @@ export function LiveNewTaskPanel({
           />
         </label>
 
-        {selectedProduct?.liveId === 'codex'
-          && !registeredProducts.some(item => item.liveId === 'codex')
-          && <div className="task-center-project-hint" role="status">
+        {missingCodexEntry && <div className="task-center-project-hint" role="status">
             {selectedProduct.availability.reason}
             <Button size="small" onClick={() => navigate('/agents?view=management&agent=codex')}>
               {t('center.newTask.openIntegrationManagement')}
