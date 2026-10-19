@@ -113,6 +113,18 @@ test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺�
   assert.doesNotMatch(read('../pi-live.css'), /\.task-message-model-meta/)
 })
 
+test('真实桌面验收使用唯一的 Session Process 选择器，避免重构后假超时', () => {
+  const acceptance = read('../../../../scripts/acceptance/task-center-desktop.mjs')
+  const process = read('./TaskProcessGroup.tsx')
+  const session = read('./TaskSessionContent.tsx')
+  assert.match(session, /return <TaskProcessGroup/)
+  assert.match(process, /className=\{`task-process-group/)
+  assert.match(acceptance, /pane\?\.querySelector\('\.task-process-group'\)/)
+  assert.doesNotMatch(acceptance, /querySelector\('\.task-review-process'\)/)
+  assert.match(acceptance, /processExpanded: process instanceof HTMLDetailsElement && process\.open/)
+  assert.match(acceptance, /JSON\.stringify\(lastState\)/)
+})
+
 test('只有可信 reasoning 区间才显示思考时长，不能借用过程或轮次耗时', () => {
   const base: TaskThinkingModel = {
     id: 'thought-one', label: '思考过程', text: '分析任务', state: 'settled',
