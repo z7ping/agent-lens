@@ -310,7 +310,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         status={runtimeStatus}
         title={readableTaskHeaderTitle(title)}
         metrics={[]}
-        infoPanel={fileChanges?.runtimeId === fileChangeRuntimeId
+        infoPanel={fileChanges !== null && fileChanges.runtimeId === fileChangeRuntimeId
           && fileChanges.result
           && (fileChanges.result.summary.count > 0 || fileChanges.result.meta.truncated)
           ? {

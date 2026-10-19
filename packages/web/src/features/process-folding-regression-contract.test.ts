@@ -30,7 +30,7 @@ test('处理详情的 Thinking 摘要两行并将所有折叠箭头放在右侧'
 })
 
 test('Shell 在折叠态显示两行命令预览，展开复用原有输入和输出区域', () => {
-  assert.match(tool, /commandTarget && <code className="task-tool-command-preview"/)
+  assert.match(tool, /commandTarget && !compact && <code className="task-tool-command-preview"/)
   assert.match(tool, /data-tool-section="input"/)
   assert.match(tool, /data-tool-section="output"/)
   assert.match(tool, /task-tool-status-label/)
@@ -53,7 +53,7 @@ test('Task disclosure 只把真实用户 toggle 写回展开意图，程序同�
 
 
 test('Review / Pi 一旦 Final 已出现，上方 Process 必须按 settled 展示', () => {
-  assert.match(review, /const hasFinalAnswer = afterProcessEntries\.some\([\s\S]*?const resolvedProcessState = hasFinalAnswer \? 'settled' : round\.state/)
+  assert.match(review, /const hasFinalAnswer = Boolean\(lastAssistantId\)[\s\S]*?const resolvedProcessState = hasFinalAnswer \? 'settled' : round\.state/)
   assert.match(review, /state=\{resolvedProcessState\}/)
   assert.match(piRound, /const hasFinal = entries\.some\([\s\S]*?const resolvedProcessState = hasFinal \? 'settled' : processState/)
 })

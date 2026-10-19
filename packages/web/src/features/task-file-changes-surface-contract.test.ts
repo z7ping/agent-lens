@@ -20,7 +20,7 @@ test('会话级文件归入任务信息，Review 逐轮文件仍留在轮次末�
   assert.doesNotMatch(review, /sessionFileChanges/)
   assert.match(review, /isConsolidatedFileChangeEvent\([\s\S]*?roundFileChanges\?\.interactionId === interaction\.id \? roundFileChanges : null/)
   assert.match(live, /runtimeFileChanges\(fileChangeRuntimeId/)
-  assert.match(live, /infoPanel=\{fileChanges\?[\s\S]*?<TaskFileChangesDisclosure value=\{fileChanges\.result\} inlineDetails\/>/)
+  assert.match(live, /infoPanel=\{fileChanges !== null &&[\s\S]*?<TaskFileChangesDisclosure value=\{fileChanges\.result\} inlineDetails\/>/)
   assert.doesNotMatch(live, /<TaskFileChangesDisclosure key=/)
   assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-changes/)
   assert.doesNotMatch(reviewStyles, /\.task-file-changes\s*\{/)

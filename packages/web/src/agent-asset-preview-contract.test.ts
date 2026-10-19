@@ -88,7 +88,7 @@ test('绑定目标判定不再把任意 400 当成目录', () => {
 })
 
 test('多绑定资产必须显式选择当前位置，路径动作与预览共享同一 binding', () => {
-  assert.match(agents, /const pathBindings = asset\.bindings\.filter/)
+  assert.match(agents, /const pathBindings = assetBindingChoices\(asset\.bindings\)\.filter/)
   assert.match(agents, /selectedBindingId/)
   assert.match(agents, /<SelectMenu/)
   assert.match(agents, /value=\{binding\.id\}/)
