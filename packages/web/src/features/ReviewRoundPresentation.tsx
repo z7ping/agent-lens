@@ -67,6 +67,7 @@ function MessageBubble({
     />
   }
 
+  const messageTime = taskSessionMessageTime(node.at)
   return <TaskSessionMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.role === 'user' && node.sourceId === 'codex' ? taskUserRequestText(node.text) : node.text}
@@ -74,7 +75,7 @@ function MessageBubble({
     presentation={{
       author: node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId),
       ...(node.role === 'assistant' && modelLabel ? { modelLabel } : {}),
-      ...(taskSessionMessageTime(node.at) ? { time: taskSessionMessageTime(node.at) } : {}),
+      ...(messageTime ? { time: messageTime } : {}),
       ...(node.evidence.length > 0 ? { evidence: <EvidenceBadges evidence={node.evidence}/> } : {}),
     }}
     showContentActions={node.role === 'assistant' && showContentActions}
