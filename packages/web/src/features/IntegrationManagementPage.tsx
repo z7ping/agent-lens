@@ -13,7 +13,7 @@ import { useClientSnapshot } from '../client/use-client-snapshot'
 import { AgentLogo } from '../components/AgentLogo'
 import { useIntegrationOrder } from '../components/IntegrationOrderProvider'
 import { AgentOrderActions, useAgentOrderDrag } from '../components/AgentOrderControls'
-import { Button, Dialog, Disclosure, IconButton, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
+import { Button, Dialog, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   agentUpgradeMethods,
   integrationCanInstall,
@@ -49,18 +49,16 @@ function isPrimaryRow(item: IntegrationManagementItemDto): boolean {
     || item.tool?.presence === 'error'
 }
 
-function IntegrationManagementRow({
+function IntegrationManagementDetail({
   item,
   model,
   discoveryScanning,
   discoveryError,
-  highlighted,
 }: {
   item: IntegrationManagementItemDto
   model: AgentLensClientModel
   discoveryScanning: boolean
   discoveryError: string
-  highlighted: boolean
 }) {
   const { t } = useTranslation('agents')
   const [saving, setSaving] = useState(false)
@@ -73,12 +71,6 @@ function IntegrationManagementRow({
   const [copiedCommand, setCopiedCommand] = useState<'install' | 'update' | null>(null)
   const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
   const [versionChecking, setVersionChecking] = useState(false)
-  const [expanded, setExpanded] = useState(highlighted)
-
-  useEffect(() => {
-    if (highlighted) setExpanded(true)
-  }, [highlighted])
-
   const packageState = item.packageState
   const packageReady = integrationPackageReady(packageState)
   const canUpdatePackage = integrationPackageUpdateAvailable(packageState)
@@ -248,36 +240,30 @@ function IntegrationManagementRow({
           {item.enabled.configured ? t('managementPage.disableIntegration') : t('managementPage.enableIntegration')}
         </Button>
 
-  return <article
-    className="integration-management-row"
-    data-integration={item.integrationId}
-    data-new={item.isNew ? 'true' : undefined}
-    data-target={highlighted ? 'true' : undefined}
-  >
-    <Disclosure
-      className="integration-management-disclosure"
-      open={expanded}
-      onToggle={event => setExpanded(event.currentTarget.open)}
-      summary={<span className="integration-management-identity">
+  return <section className="integration-management-detail-card" data-integration={item.integrationId}>
+    <header className="integration-management-detail-head">
+      <div className="integration-management-identity">
         <AgentLogo sourceId={item.integrationId} size="large"/>
         <span className="integration-management-identity-text">
-          <b>{item.displayName}</b>
+          <h2>{item.displayName}</h2>
           <small>{integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}</small>
         </span>
-      </span>}
-      summaryMeta={<span className="integration-management-summary-states">
-        <span className="integration-management-version-summary" role="status">
-          <span title={t('managementPage.localAgentVersion')}>{t('managementPage.versionInstalledShort')} <b>{localAgentVersion}</b></span>
-          <span title={latestVersion?.status === 'ready' ? t('managementPage.remoteAgentVersion', { source: latestVersion.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel }) : onlineVersionLabel}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
-        </span>
+      </div>
+      <div className="integration-management-detail-head-meta">
         {versionComparison === 'newer' && <StatusBadge tone="warning">{t('managementPage.versionUpdateAvailable')}</StatusBadge>}
         <StatusBadge
           className="integration-management-status"
           tone={integrationLifecycleTone(status.className, item.isNew)}
           title={status.title}
         >{statusLabel}</StatusBadge>
-      </span>}
-    >
+      </div>
+    </header>
+    <div className="integration-management-version-strip" role="status">
+      <span title={t('managementPage.localAgentVersion')}>{t('managementPage.versionInstalledShort')} <b>{localAgentVersion}</b></span>
+      <span title={latestVersion?.status === 'ready'
+        ? t('managementPage.remoteAgentVersion', { source: latestVersion.source === 'github' ? 'GitHub' : 'npm', version: onlineVersionLabel })
+        : onlineVersionLabel}>{t('managementPage.versionLatestShort')} <b>{onlineVersionLabel}</b></span>
+    </div>
       <div className="integration-management-details">
         <div className="integration-management-facts" aria-label={t('managementPage.detailsLabel')}>
           <div className="integration-management-fact">
@@ -406,8 +392,6 @@ function IntegrationManagementRow({
         {updateNotice && <p className="integration-management-note" role="status">{updateNotice}</p>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
       </div>
-    </Disclosure>
-
     <Dialog
       open={updateOpen}
       title={t('managementPage.updateDialogTitle', { agent: item.displayName })}
@@ -442,19 +426,72 @@ function IntegrationManagementRow({
       {removeMessage && <p className="integration-management-note">{removeMessage}</p>}
       <p className="integration-management-note">{t('integration.uninstallKeepsHistory')}</p>
     </Dialog>
-  </article>
+  </section>
+}
+
+/** Compact, selectable navigator; lifecycle commands live exclusively in the detail pane. */
+function IntegrationManagementListItem({
+  item,
+  selected,
+  discoveryScanning,
+  discoveryError,
+  onSelect,
+}: {
+  item: IntegrationManagementItemDto
+  selected: boolean
+  discoveryScanning: boolean
+  discoveryError: string
+  onSelect(): void
+}) {
+  const { t } = useTranslation('agents')
+  const [latestVersion, setLatestVersion] = useState<AgentLatestVersion | null>(null)
+  useEffect(() => {
+    let active = true
+    void checkAgentLatestVersion(item.productId).then(result => {
+      if (active) setLatestVersion(result)
+    })
+    return () => { active = false }
+  }, [item.productId])
+  const status = integrationManagementLifecycleState(item, t)
+  const versions = item.tool?.presence === 'present' && item.tool.version ? [item.tool.version] : []
+  const hasUpgrade = agentVersionComparison(versions, latestVersion) === 'newer'
+  return <button
+    type="button"
+    className="integration-management-list-item"
+    data-selected={selected ? 'true' : undefined}
+    aria-current={selected ? 'true' : undefined}
+    onClick={onSelect}
+  >
+    <AgentLogo sourceId={item.integrationId} size="compact"/>
+    <span className="integration-management-list-item-main">
+      <strong>{item.displayName}</strong>
+      <small title={hasUpgrade ? t('managementPage.versionUpdateAvailable') : undefined}>
+        {versions.length ? t('managementPage.versionInstalledShort') + ' ' + versions.join(' / ')
+          : integrationToolPresenceLabel(item.tool, discoveryScanning, discoveryError, t)}
+        {hasUpgrade && <span className="integration-management-update-text"> · {t('managementPage.versionUpdateAvailable')}</span>}
+      </small>
+    </span>
+    <span className="integration-management-list-item-status">
+      {hasUpgrade && <UiIcon name="exclamation" size={14} className="integration-management-update-icon" aria-label={t('managementPage.versionUpdateAvailable')}/>}
+      <StatusBadge tone={integrationLifecycleTone(status.className, item.isNew)}
+        title={status.title}>{status.label}</StatusBadge>
+    </span>
+    <UiIcon name="chevron-right" size={14} className="integration-management-list-chevron"/>
+  </button>
 }
 
 export function IntegrationManagementPage({ model, toolbarHost }: { model: AgentLensClientModel; toolbarHost?: HTMLDivElement | null }) {
   const { t } = useTranslation('agents')
   const snapshot = useClientSnapshot(model)
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const targetIntegrationId = searchParams.get('agent') ?? ''
   const management = snapshot.integrationManagement
   const [ordering, setOrdering] = useState(false)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(Boolean(targetIntegrationId))
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
+  const detailPaneRef = useRef<HTMLElement | null>(null)
   const { ordered, reset } = useIntegrationOrder()
   const { draggedId, dragProps, cancelDrag } = useAgentOrderDrag()
 
@@ -481,14 +518,8 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   }, [management, model])
 
   useEffect(() => {
-    if (!targetIntegrationId || !management) return
-    const timer = window.setTimeout(() => {
-      const target = [...document.querySelectorAll<HTMLElement>('[data-integration]')]
-        .find(node => node.dataset.integration === targetIntegrationId)
-      target?.scrollIntoView({ block: 'nearest', behavior: 'auto' })
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [management, targetIntegrationId])
+    if (targetIntegrationId) setMobileDetailOpen(true)
+  }, [targetIntegrationId])
 
   const items = useMemo(() => {
     const rows = [...(management?.items ?? [])]
@@ -516,6 +547,21 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
+  const selectedItem = filteredItems.find(item =>
+    item.integrationId === targetIntegrationId || item.productId === targetIntegrationId
+  ) ?? primaryItems[0] ?? supportedItems[0]
+
+  const selectItem = (integrationId: string) => {
+    setMobileDetailOpen(true)
+    if (integrationId === targetIntegrationId) return
+    const next = new URLSearchParams(searchParams)
+    next.set('agent', integrationId)
+    setSearchParams(next)
+  }
+
+  useEffect(() => {
+    if (detailPaneRef.current) detailPaneRef.current.scrollTop = 0
+  }, [selectedItem?.integrationId])
 
   if (!management) {
     return <main className="workspace-page">
@@ -546,13 +592,6 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     ) : null}
     <div className="page-content integration-management-content">
       <div className="integration-management-surface">
-        {!ordering && <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
-          <span className="workspace-metric-card"><strong>{items.length}</strong><small>{t('managementPage.supported')}</small></span>
-          <span className="workspace-metric-card"><strong>{discoveryFailed ? '—' : detectedCount}</strong><small>{t('managementPage.detected')}</small></span>
-          <span className="workspace-metric-card"><strong>{installedCount}</strong><small>{t('managementPage.added')}</small></span>
-          <span className="workspace-metric-card"><strong>{enabledCount}</strong><small>{t('managementPage.enabled')}</small></span>
-        </div>}
-
         {ordering ? <section className="integration-management-section" aria-label={t('page.orderTitle')}>
           <div className="integration-management-section-head">
             <h2>{t('page.orderTitle')}</h2>
@@ -576,42 +615,61 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
               </div>
             })}
           </div>
-        </section> : <>
-        <section className="integration-management-section">
-          <div className="integration-management-section-head">
-            <h2>{t('managementPage.localAndAdded')}</h2>
-            <span className="integration-management-section-count">{primaryItems.length}</span>
-          </div>
-          <div className="integration-management-list">
-          {primaryItems.map(item => <IntegrationManagementRow
-            key={item.integrationId}
-            item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
-            model={model}
-            discoveryScanning={Boolean(discoveryScanning)}
-            discoveryError={snapshot.integrationDiscoveryError}
-            highlighted={item.integrationId === targetIntegrationId}
-          />)}
-          {!primaryItems.length && <div className="integration-management-empty">{supportedItems.length === 0 && statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}</div>}
-          </div>
-        </section>
-
-        {supportedItems.length > 0 && <section className="integration-management-section integration-management-section-secondary">
-          <div className="integration-management-section-head">
-            <h2>{t('managementPage.otherSupported')}</h2>
-            <span className="integration-management-section-count">{supportedItems.length}</span>
-          </div>
-          <div className="integration-management-list">
-            {supportedItems.map(item => <IntegrationManagementRow
-              key={item.integrationId}
-              item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+        </section> : <div className="integration-management-workspace" data-mobile-detail={mobileDetailOpen ? 'true' : 'false'}>
+          {/* Agent navigator and selected detail are separate scrolling panes. */}
+          <aside className="integration-management-navigator" aria-label={t('managementPage.agentListAria')}>
+            <div className="integration-management-navigator-head">
+              <strong>{t('managementPage.agentListTitle')}</strong>
+              <span>{items.length}</span>
+            </div>
+            <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
+              <span><strong>{discoveryFailed ? '—' : detectedCount}</strong> {t('managementPage.detected')}</span>
+              <span><strong>{installedCount}</strong> {t('managementPage.added')}</span>
+              <span><strong>{enabledCount}</strong> {t('managementPage.enabled')}</span>
+            </div>
+            <nav className="integration-management-navigator-list" aria-label={t('managementPage.agentListAria')}>
+              {primaryItems.length > 0 && <div className="integration-management-list-group">
+                <h3>{t('managementPage.localAndAdded')} <small>{primaryItems.length}</small></h3>
+                {primaryItems.map(item => <IntegrationManagementListItem
+                  key={item.integrationId}
+                  item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+                  selected={selectedItem?.integrationId === item.integrationId}
+                  discoveryScanning={Boolean(discoveryScanning)}
+                  discoveryError={snapshot.integrationDiscoveryError}
+                  onSelect={() => selectItem(item.integrationId)}
+                />)}
+              </div>}
+              {supportedItems.length > 0 && <div className="integration-management-list-group">
+                <h3>{t('managementPage.otherSupported')} <small>{supportedItems.length}</small></h3>
+                {supportedItems.map(item => <IntegrationManagementListItem
+                  key={item.integrationId}
+                  item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+                  selected={selectedItem?.integrationId === item.integrationId}
+                  discoveryScanning={Boolean(discoveryScanning)}
+                  discoveryError={snapshot.integrationDiscoveryError}
+                  onSelect={() => selectItem(item.integrationId)}
+                />)}
+              </div>}
+              {!primaryItems.length && !supportedItems.length && <div className="integration-management-empty">
+                {statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}
+              </div>}
+            </nav>
+          </aside>
+          <section ref={detailPaneRef} className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}>
+            <div className="integration-management-mobile-back">
+              <Button size="small" onClick={() => setMobileDetailOpen(false)}>
+                <UiIcon name="arrow-left" size={14}/>{t('managementPage.backToAgents')}
+              </Button>
+            </div>
+            {selectedItem ? <IntegrationManagementDetail
+              key={selectedItem.integrationId}
+              item={{ ...selectedItem, isNew: selectedItem.isNew || visibleNewIds.has(selectedItem.integrationId) }}
               model={model}
               discoveryScanning={Boolean(discoveryScanning)}
               discoveryError={snapshot.integrationDiscoveryError}
-              highlighted={item.integrationId === targetIntegrationId}
-            />)}
-          </div>
-        </section>}
-        </>}
+            /> : <div className="integration-management-empty">{t('managementPage.noMatches')}</div>}
+          </section>
+        </div>}
       </div>
     </div>
   </main>

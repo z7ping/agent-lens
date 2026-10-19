@@ -249,6 +249,9 @@ export const chineseAgentsMessages: LocaleMessagesDto = {
     },
     managementPage: {
       title: '智能体接入',
+      agentListAria: '智能体列表',
+      agentListTitle: '本机智能体',
+      backToAgents: '返回智能体列表',
       loading: '正在读取智能体接入状态…',
       summaryAria: '智能体接入概览',
       statusFilterAria: '筛选接入状态',
