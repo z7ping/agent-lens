@@ -40,11 +40,17 @@ export function TaskThinking({
   const identityRef = useRef(model.id)
   const previouslyRunningRef = useRef(model.state === 'running')
   const manuallyToggledRef = useRef(false)
-  const label = kind === 'thinking' && model.state !== 'running' && model.durationMs !== undefined && model.durationMs > 0
+  const measuredThinkingLabel = kind === 'thinking' && model.state !== 'running'
+    && model.durationMs !== undefined && model.durationMs > 0
     ? t('thinking.thoughtFor', { value: taskPreciseDurationLabel(model.durationMs) })
-    : model.label
+    : ''
+  const label = measuredThinkingLabel || model.label
   const running = model.state === 'running'
-  const preview = !expanded ? (model.preview ?? model.text.replace(/\s+/g, ' ').trim().slice(0, 220)) : ''
+  // Thinking always keeps a two-line text excerpt next to the icon, including
+  // while expanded; only its full Markdown body is controlled by disclosure.
+  const preview = kind === 'thinking' || !expanded
+    ? (model.preview?.trim() || model.text.replace(/\s+/g, ' ').trim().slice(0, 220))
+    : ''
 
   useEffect(() => {
     // 运行中 -> 已完成时不要重新按 defaultExpanded 折叠已经打开的内容。
@@ -82,16 +88,21 @@ export function TaskThinking({
       onExpandedChange?.(next)
     }}
   >
-    <summary className="task-thinking-summary" onClick={() => { if (autoCollapseOnSettle) manuallyToggledRef.current = true }}>
+    <summary className="task-thinking-summary"
+      aria-label={kind === 'thinking' && preview ? `${model.label}：${preview}${measuredThinkingLabel ? ` · ${measuredThinkingLabel}` : ''}` : undefined}
+      onClick={() => { if (autoCollapseOnSettle) manuallyToggledRef.current = true }}>
       <span className="task-thinking-summary-main">
         {kind !== 'process' && <>
           <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="thinking" size={14}/></span>
         </>}
-        <span className="task-thinking-label">{label}</span>
+        {(kind !== 'thinking' || !preview) && <span className="task-thinking-label">{label}</span>}
         <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
         {preview && <span className="task-thinking-preview">{preview}</span>}
       </span>
-      <span className="task-thinking-summary-meta">{meta}{model.time && <time>{model.time}</time>}<DisclosureChevron/></span>
+      <span className="task-thinking-summary-meta">
+        {kind === 'thinking' && preview && measuredThinkingLabel && <span className="task-thinking-duration">{measuredThinkingLabel}</span>}
+        {meta}{model.time && <time>{model.time}</time>}<DisclosureChevron/>
+      </span>
     </summary>
     {expanded && <div className="task-thinking-content">{children}</div>}
     {expanded && actions && <div className="task-thinking-actions">{actions}</div>}
