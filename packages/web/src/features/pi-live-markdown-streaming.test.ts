@@ -64,10 +64,10 @@ test('Pi 与通用 Live 共享等待首响应占位，动画只作用于状态�
 })
 
 test('工具/思考正在执行时固定布局与图标，Token 速度不用字符数估算', () => {
-  assert.match(taskDetailCss, /grid-template-columns:\s*72px minmax\(0, 1fr\) auto 14px/)
+  assert.match(taskDetailCss, /grid-template-columns:\s*14px auto minmax\(0, 1fr\) auto 14px/)
   assert.match(taskDetailCss, /\.task-tool-status-mark/)
   assert.match(taskDetailCss, /\.task-thinking-running-mark/)
   assert.match(genericLive, /runtimeDisclosures/)
-  assert.match(liveTaskTimeline, /<TaskThinking/)
+  assert.match(liveTaskTimeline, /<TaskSessionThinking/)
   assert.doesNotMatch(genericLive, /observedOutputTokenSpeed|charsPerSecond/)
 })
