@@ -11,7 +11,7 @@ import { TaskEvent } from './TaskEvent'
 import { TaskReadingRound } from './TaskReadingRound'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
-import { TaskToolGroup } from './TaskToolGroup'
+import { TaskToolGroup, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
@@ -206,6 +206,41 @@ export function ReviewProcessGroup({
     || summary?.availability === 'truncated'
   const unavailable = summary?.availability === 'unavailable'
   const reasonLabel = summary?.reasonCode ? t(`local.process.reasons.${summary.reasonCode}`) : undefined
+
+  // The projection intentionally splits native tool parents; aggregate only
+  // visibility at the round boundary, without changing evidence ancestry/order.
+  const processSequence: TaskToolGroupSequenceEntry[] = items.flatMap((item, index): TaskToolGroupSequenceEntry[] => {
+    if (item.type === 'tool-group') return item.items.map(node => ({
+      type: 'tool' as const,
+      key: node.id,
+      tool: reviewToolModel(node),
+      meta: <EvidenceBadges evidence={node.evidence} compact/>,
+      onToolClick: () => inspect(node),
+    }))
+    if (item.type === 'event') return [{
+      type: 'content' as const, key: item.node.id,
+      content: <EventRow event={item.node} inspect={inspect}/>,
+    }]
+    if (item.type === 'raw-event-group') return showAllEvents ? [{
+      type: 'content' as const, key: `raw:${index}`,
+      content: <RawEventGroup items={item.items} inspect={inspect}/>,
+    }] : []
+    if (item.node.role === 'reasoning') return [{
+      type: 'content' as const, key: item.node.id,
+      content: <TaskSessionThinking model={{
+        id: item.node.id,
+        label: t('local.process.thinking'),
+        text: item.node.text,
+        preview: item.node.text.replace(/\\s+/g, ' ').trim().slice(0, 220),
+        state: 'settled',
+      }} {...(expansionStore ? { expansionStore } : {})}/>,
+    }]
+    return [{
+      type: 'content' as const, key: item.node.id,
+      content: <TaskSessionProcessText text={item.node.text}/>,
+    }]
+  })
+  const processToolModels = processSequence.flatMap(entry => entry.type === 'tool' ? [entry.tool] : [])
   return <TaskSessionProcess
     mode="review"
     id={id}
@@ -229,23 +264,12 @@ export function ReviewProcessGroup({
     </div>}
     {loadState === 'loaded' && unavailable && <div className="task-process-loading" role="status">{reasonLabel ?? t('local.process.unavailable')}</div>}
     {loadState === 'loaded' && !unavailable && <div className="task-process-sequence">
-      {items.map((item, index) => {
-        if (item.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={item.items} inspect={inspect}/>
-        if (item.type === 'event') return <EventRow key={item.node.id} event={item.node} inspect={inspect}/>
-        if (item.type === 'raw-event-group') return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={item.items} inspect={inspect}/> : null
-        if (item.node.role === 'reasoning') return <TaskSessionThinking
-          key={item.node.id}
-          model={{
-            id: item.node.id,
-            label: t('local.process.thinking'),
-            text: item.node.text,
-            preview: item.node.text.replace(/\s+/g, ' ').trim().slice(0, 220),
-            state: 'settled',
-          }}
-          {...(expansionStore ? { expansionStore } : {})}
-        />
-        return <TaskSessionProcessText key={item.node.id} text={item.node.text}/>
-      })}
+      <TaskToolGroup compact sequence={processSequence} model={{
+        id: `tools:${id}`, label: t('task:live.toolGroup'),
+        itemCount: processToolModels.length,
+        errorCount: processToolModels.filter(tool => tool.status === 'error').length,
+        kindCounts: [], tools: processToolModels,
+      }}/>
     </div>}
   </TaskSessionProcess>
 }

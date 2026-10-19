@@ -217,7 +217,7 @@ function HistoryProcessSequence({
   expansionStore?: Map<string, boolean> | undefined
 }) {
   const { t } = useTranslation(['piLive', 'task'])
-  const sequence: TaskToolGroupSequenceEntry[] = items.flatMap(item => {
+  const sequence: TaskToolGroupSequenceEntry[] = items.flatMap((item): TaskToolGroupSequenceEntry[] => {
     if (item.kind === 'tool-group') return item.items.map(tool => ({
       type: 'tool' as const,
       key: tool.id,
