@@ -158,6 +158,13 @@
 .task-header-compact-info-list > div[data-tone='danger'] > b { color: var(--al-danger); }
 .task-header-compact-info-list > div[data-tone='accent'] > b { color: var(--al-accent); }
 
+.task-header-info-panel-trigger { display: inline-flex; min-width: 0; width: 100%; padding: 0; border: 0; background: transparent; color: var(--al-ink-2); text-align: left; cursor: pointer; align-items: center; gap: 6px; }
+.task-header-info-panel-trigger b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.task-header-info-panel-trigger svg { flex: 0 0 auto; color: var(--al-muted); }
+.task-header-info-back { margin-bottom: 10px; }
+.task-header-info-drawer .task-file-changes { margin-top: 6px; }
+
+
 /* ── Disclosure ── */
 .task-surface .task-disclosure-chevron {
   display: inline-grid;
