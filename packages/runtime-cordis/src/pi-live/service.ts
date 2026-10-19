@@ -1981,7 +1981,9 @@ export class DefaultPiLiveService implements PiLiveService {
     if (type === 'compaction_start') runtime.isCompacting = true
     if (type === 'compaction_end') runtime.isCompacting = false
     if (type === 'message_start' && messageRole === 'assistant') {
-      runtime.activeAssistantMessageId = messageId || undefined
+      // Pi 的 AssistantMessage 不保证有 id；每次回复仍需独立的实时展示身份。
+      // 此身份仅用于事件关联，不作为持久化会话条目的事实 ID。
+      runtime.activeAssistantMessageId = messageId || `live-assistant:${randomUUID()}`
       runtime.isStreaming = true
     }
     if (type === 'extension_ui_request') {
@@ -1993,7 +1995,10 @@ export class DefaultPiLiveService implements PiLiveService {
       if (requestId) runtime.pendingExtensionRequestIds.add(requestId)
     }
 
-    const publishedEvent = type === 'message_update' && runtime.activeAssistantMessageId
+    const publishedEvent = (type === 'message_start' || type === 'message_end')
+      && messageRole === 'assistant' && runtime.activeAssistantMessageId
+      ? { ...event, message: { ...message, id: messageId || runtime.activeAssistantMessageId } }
+      : type === 'message_update' && runtime.activeAssistantMessageId
       ? { ...event, messageId: runtime.activeAssistantMessageId }
       : event
 

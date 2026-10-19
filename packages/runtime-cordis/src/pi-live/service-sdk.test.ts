@@ -4,6 +4,7 @@ import test from 'node:test'
 import { inspectPiSdkCompatibility } from './pi-sdk-adapter'
 import { resolvePiLiveRuntimeSessionDir } from './in-process-host'
 import { DefaultPiLiveService } from './service'
+import { normalizePiLiveEvent } from './adapter'
 import type { PiLiveStartupAuditSnapshot } from './startup-audit'
 import type {
   InstalledPiSdk,
@@ -276,6 +277,30 @@ test('Pi Live 通过官方 AgentSession SDK 驱动并保持现有事件/Extensio
   assert.ok(calls.includes('abort-bash'))
   assert.deepEqual(queue, { steering: ['queued-steer'], followUp: ['queued-follow'] })
   assert.deepEqual(await service.queueState(state.runtimeSessionId), { steering: [], followUp: [] })
+
+  // 真实 SDK 的 assistant 消息没有 id，工具前后的 thinking 不能复用 content:0。
+  const replyIds: string[] = []
+  for (const delta of ['工具前的思考', '工具后的思考']) {
+    const firstEvent = events.length
+    emit(agentListener, { type: 'message_start', message: { role: 'assistant' } })
+    emit(agentListener, {
+      type: 'message_update',
+      message: { role: 'assistant' },
+      assistantMessageEvent: { type: 'thinking_delta', contentIndex: 0, delta },
+    })
+    emit(agentListener, { type: 'message_end', message: { role: 'assistant', stopReason: 'toolUse' } })
+    const reply = events.slice(firstEvent)
+    const startId = (reply[0]!.message as Record<string, unknown>).id
+    assert.equal(typeof startId, 'string')
+    assert.equal(reply[1]!.messageId, startId)
+    assert.equal((reply[2]!.message as Record<string, unknown>).id, startId)
+    assert.deepEqual(normalizePiLiveEvent(reply[1]!), {
+      type: 'reasoning.delta', contentIndex: 0, delta, messageId: startId,
+    })
+    replyIds.push(startId as string)
+    emit(agentListener, { type: 'tool_execution_start', toolCallId: delta, toolName: 'read' })
+  }
+  assert.notEqual(replyIds[0], replyIds[1], '每次模型回复必须拥有独立的实时身份')
 
   unsubscribe()
   await service.terminate(state.runtimeSessionId)
