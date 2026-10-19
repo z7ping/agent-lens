@@ -10,27 +10,27 @@ const sidebar = readFileSync(new URL('../../components/WorkspaceSidebar.tsx', im
 const zhAgents = readFileSync(new URL('../../i18n/zh-CN/agents.ts', import.meta.url), 'utf8')
 const integrationCss = readFileSync(new URL('../../integrations.css', import.meta.url), 'utf8')
 
-test('智能体接入管理保留连续分组列表，改为紧凑折叠行而非逐项卡片', () => {
-  assert.match(page, /className="integration-management-surface"/)
-  assert.match(page, /className="integration-management-row"/)
-  assert.match(page, /className="integration-management-disclosure"/)
-  assert.match(page, /className="integration-management-section integration-management-section-secondary"/)
-  assert.doesNotMatch(page, /className="integration-management-table-head"/)
+test('接入管理是左侧 304px 导航与右侧详情的双栏结构，而非纵向折叠清单', () => {
+  assert.match(page, /className="integration-management-workspace"/)
+  assert.match(page, /className="integration-management-navigator"/)
+  assert.match(page, /className="integration-management-detail-pane"/)
+  assert.match(page, /className="integration-management-list-item"/)
+  assert.match(page, /className="integration-management-section"/)
+  assert.doesNotMatch(page, /<Disclosure|integration-management-disclosure/)
   assert.doesNotMatch(page, /<h1/)
-  assert.match(integrationCss, /\.integration-management-summary\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/)
-  assert.match(integrationCss, /\.integration-management-section\s*\{[\s\S]*?border:\s*1px solid var\(--al-line\);/)
-  assert.match(integrationCss, /\.integration-management-row \+ \.integration-management-row\s*\{[\s\S]*?border-top:\s*1px solid var\(--al-line\);/)
+  assert.match(integrationCss, /\.integration-management-workspace\s*\{[\s\S]*?grid-template-columns:\s*304px minmax\(0, 1fr\)/)
+  assert.match(integrationCss, /\.integration-management-navigator-list\s*\{[\s\S]*?overflow-y:\s*auto;/)
+  assert.match(integrationCss, /\.integration-management-detail-pane\s*\{[\s\S]*?overflow-y:\s*auto;/)
   assert.match(integrationCss, /@media \(max-width: 1199\.98px\)/)
   assert.match(integrationCss, /@media \(max-width: 991\.98px\)/)
   assert.match(integrationCss, /@media \(max-width: 767\.98px\)/)
   assert.doesNotMatch(integrationCss, /!important/)
 })
 
-test('展开明细复用 Disclosure 并沿用真实本机路径、接入包版本与原有操作', () => {
-  assert.match(page, /<Disclosure/)
-  assert.match(page, /open=\{expanded\}/)
-  assert.match(page, /onToggle=\{event => setExpanded\(event\.currentTarget\.open\)\}/)
-  assert.match(page, /if \(highlighted\) setExpanded\(true\)/)
+test('独立详情沿用真实本机路径、接入包版本与原有操作', () => {
+  assert.match(page, /function IntegrationManagementDetail\(/)
+  assert.match(page, /className="integration-management-detail-card"/)
+  assert.match(page, /<IntegrationManagementDetail/)
   assert.match(page, /integrationToolPresencePath\(item\.tool\)/)
   assert.match(page, /packageState\.installedVersion/)
   assert.match(page, /packageState\?\.availableVersion/)
@@ -72,14 +72,18 @@ test('安装方式使用共享下划线 Tab，操作栏醒目但保留原有接�
   assert.doesNotMatch(integrationCss, /!important/)
 })
 
-test('两组始终可见，只有智能体自身一级 Disclosure，深链自动展开目标行', () => {
-  assert.match(page, /className="integration-management-section-head"/)
-  assert.match(page, /className="integration-management-list"/)
-  assert.match(page, /className="integration-management-section integration-management-section-secondary"/)
-  assert.match(page, /open={expanded}/)
-  assert.match(page, /if \(highlighted\) setExpanded\(true\)/)
-  assert.match(page, /target\?\.scrollIntoView\(\{ block: 'nearest'/)
-  assert.doesNotMatch(page, /supportedExpanded|integration-management-supported-disclosure/)
+test('分组筛选与深链选中、窄屏返回列表保持独立状态', () => {
+  assert.match(page, /className="integration-management-list-group"/)
+  assert.match(page, /primaryItems\.map\(item => <IntegrationManagementListItem/)
+  assert.match(page, /supportedItems\.map\(item => <IntegrationManagementListItem/)
+  assert.match(page, /const selectedItem = filteredItems\.find\(item =>/)
+  assert.match(page, /next\.set\('agent', integrationId\)/)
+  assert.match(page, /setSearchParams\(next\)/)
+  assert.match(page, /data-mobile-detail=\{mobileDetailOpen \? 'true' : 'false'\}/)
+  assert.match(page, /setMobileDetailOpen\(false\)/)
+  assert.match(integrationCss, /\.integration-management-workspace\[data-mobile-detail='false'\] \.integration-management-detail-pane/)
+  assert.match(integrationCss, /\.integration-management-workspace\[data-mobile-detail='true'\] \.integration-management-navigator/)
+  assert.doesNotMatch(page, /scrollIntoView|setExpanded/)
 })
 
 test('智能体接入页面以 Integration Management 为管理清单，不读取 Source Facet', () => {
@@ -222,7 +226,8 @@ test('没有更新或本机工具未被发现时，安装/更新两条命令及�
 })
 
 test('全部智能体接入主行直接显示本机及线上版本，不再要求先展开或先进入概览', () => {
-  assert.match(page, /className="integration-management-version-summary" role="status"/)
+  assert.match(page, /className="integration-management-version-strip" role="status"/)
+  assert.match(page, /hasUpgrade && <UiIcon name="exclamation"/)
   assert.match(page, /managementPage\.versionInstalledShort/)
   assert.match(page, /managementPage\.versionLatestShort/)
   assert.match(page, /onlineVersionLabel/)
