@@ -58,9 +58,12 @@ test('agent-logo styles own compact sizes, avoid frames and support dark theme',
   assert.doesNotMatch(read('../shell.css'), /\.agent-icon\s*\{/)
 })
 
-test('management groups stay visible and rows alone expand, preserving upgrades', () => {
-  assert.match(integrationManagement, /className="integration-management-section integration-management-section-secondary"/)
-  assert.match(integrationManagement, /open=\{expanded\}/)
+test('management navigator keeps primary/supported groups visible and upgrades in selected detail', () => {
+  assert.match(integrationManagement, /className="integration-management-navigator"/)
+  assert.match(integrationManagement, /className="integration-management-list-group"/)
+  assert.match(integrationManagement, /primaryItems\.map\(item => <IntegrationManagementListItem/)
+  assert.match(integrationManagement, /supportedItems\.map\(item => <IntegrationManagementListItem/)
+  assert.match(integrationManagement, /className="integration-management-detail-pane"/)
   assert.doesNotMatch(integrationManagement, /supportedExpanded|integration-management-supported-disclosure/)
   assert.doesNotMatch(integrationCss, /integration-management-supported-disclosure/)
   assert.match(integrationManagement, /selectedMethod\.installCommand/)
