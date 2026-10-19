@@ -108,7 +108,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     if (!session.attaching) {
       session.attaching = this.rpc.request('thread/resume', {
         threadId: session.id, excludeTurns: true, approvalPolicy: 'on-request', approvalsReviewer: 'user',
-      }).then(response => {
+      }).then(async response => {
         session.attached = true
         session.status = 'ready'
         if (codexText(response.model)) session.model = codexText(response.model)
