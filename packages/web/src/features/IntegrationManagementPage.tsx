@@ -488,6 +488,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const [statusFilter, setStatusFilter] = useState<'all' | 'detected' | 'installed' | 'enabled'>('all')
   const [visibleNewIds, setVisibleNewIds] = useState<Set<string>>(() => new Set())
   const acknowledgementInFlightRef = useRef(false)
+  const detailPaneRef = useRef<HTMLElement | null>(null)
   const { ordered, reset } = useIntegrationOrder()
   const { draggedId, dragProps, cancelDrag } = useAgentOrderDrag()
 
@@ -554,6 +555,10 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
     next.set('agent', integrationId)
     setSearchParams(next)
   }
+
+  useEffect(() => {
+    if (detailPaneRef.current) detailPaneRef.current.scrollTop = 0
+  }, [selectedItem?.integrationId])
 
   if (!management) {
     return <main className="workspace-page">
@@ -647,7 +652,7 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
               </div>}
             </nav>
           </aside>
-          <section className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}>
+          <section ref={detailPaneRef} className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}>
             <div className="integration-management-mobile-back">
               <Button size="small" onClick={() => setMobileDetailOpen(false)}>
                 <UiIcon name="arrow-left" size={14}/>{t('managementPage.backToAgents')}
