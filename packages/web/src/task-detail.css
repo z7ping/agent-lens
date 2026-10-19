@@ -543,7 +543,9 @@
 .task-surface .task-tool-summary-text { min-width: 0; max-width: 156px; overflow: hidden; color: var(--al-muted); font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-preview-slot { display: block; min-width: 0; overflow: hidden; }
 .task-surface .task-tool-target,
-.task-surface .task-tool-command-preview { display: block; min-width: 0; overflow: hidden; color: var(--al-ink-2); font: 12px/1.5 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.task-surface .task-tool-command-preview { display: block; min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 12px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.task-surface .task-tool-target { font-family: var(--font-ui); }
+.task-surface .task-tool-command-preview { font-family: var(--font-mono); }
 .task-surface .task-tool-command-context { color: var(--al-muted-2); }
 .task-surface .task-tool-status { display: inline-flex; align-items: center; gap: 3px; color: var(--al-muted-2); white-space: nowrap; font-size: 12px; }
 .task-surface .task-tool-status-mark { display: inline-flex; flex: 0 0 14px; align-items: center; }
@@ -692,11 +694,9 @@
 }
 
 @media (max-width: 1199.98px) {
-  .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 14px auto minmax(0, 1fr) auto 14px; }
   .task-surface .task-message-bubble-user { max-width: min(76%, 760px); }
 }
 @media (max-width: 991.98px) {
-  .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 14px auto minmax(0, 1fr) auto 14px; }
   .task-surface .task-header-metric:nth-child(n+5) { display: none; }
   .task-surface .task-message-bubble-user { max-width: 88%; }
 }
@@ -711,7 +711,6 @@
   .task-surface .task-round-preview { max-width: 48%; }
   .task-surface .task-round-meta { display: none; }
   .task-surface .task-message-bubble-user { max-width: 94%; }
-  .task-surface .task-tool-call > summary.task-tool-row { grid-template-columns: 14px auto minmax(0, 1fr) auto 14px; }
   .task-surface .task-event-row { display: flex; flex-wrap: wrap; }
   .task-surface .task-event-copy { flex: 1 1 calc(100% - 34px); }
   .task-surface .task-event-row > .evidence-inline-list { margin-left: 26px; }
