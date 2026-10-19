@@ -232,7 +232,7 @@
 .integration-management-agent-upgrade {
   display: grid;
   min-width: 0;
-  gap: 10px;
+  gap: 8px;
   padding: 12px 14px;
   border: 1px solid var(--al-line);
   border-radius: var(--radius-md);
@@ -308,7 +308,7 @@
 .integration-management-command-pair {
   display: grid;
   min-width: 0;
-  gap: 10px;
+  gap: 8px;
 }
 
 .integration-management-command-pair > a {
@@ -320,9 +320,25 @@
   text-underline-offset: 3px;
 }
 
-.integration-management-upgrade-method {
-  width: min(280px, 100%);
+/* Use the existing workspace underline-tab visual language for local method switching. */
+.workspace-view-tabs.is-inline.integration-management-upgrade-method {
+  width: max-content;
+  max-width: 100%;
   min-width: 0;
+  justify-self: start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.integration-management-upgrade-method > .workspace-view-tab {
+  flex: 0 0 auto;
+  padding-inline: 4px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 .integration-management-command {
   display: grid;
@@ -332,7 +348,7 @@
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 6px 10px;
 }
 .integration-management-command > .integration-management-detail-label {
   grid-column: 1 / -1;
@@ -410,9 +426,27 @@
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
-  padding-top: 12px;
-  border-top: 1px solid var(--al-line);
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-sm);
+  background: var(--al-surface);
+}
+
+.integration-management-actions-label {
+  color: var(--al-muted);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.integration-management-action-buttons {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .integration-management-error {
@@ -501,7 +535,14 @@
   }
 
   .integration-management-actions {
-    gap: 6px;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .integration-management-action-buttons {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
   }
 }
 

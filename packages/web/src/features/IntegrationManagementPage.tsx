@@ -231,7 +231,6 @@ function IntegrationManagementRow({
     : !packageReady
       ? packageState.installed || canInstall
         ? <Button
-            size="small"
             variant="primary"
             loading={saving}
             onClick={() => void installOrRepair()}
@@ -240,12 +239,13 @@ function IntegrationManagementRow({
           </Button>
         : null
       : <Button
-          size="small"
+          variant={item.enabled.configured ? 'danger' : 'primary'}
           loading={saving}
           disabled={!item.enabled.editable}
           onClick={() => void setEnabled(!item.enabled.configured)}
         >
-          {item.enabled.configured ? t('managementPage.disable') : t('managementPage.enable')}
+          <UiIcon name="power" size={14}/>
+          {item.enabled.configured ? t('managementPage.disableIntegration') : t('managementPage.enableIntegration')}
         </Button>
 
   return <article
@@ -315,15 +315,39 @@ function IntegrationManagementRow({
           <p>{t('managementPage.agentUpgradeWarning')}</p>
           {methods.length > 0
             ? <>
-              <div className="integration-management-upgrade-method">
-                <SelectMenu
-                  value={selectedMethod?.value ?? ''}
-                  ariaLabel={t('managementPage.agentUpgradeMethod')}
-                  onChange={value => { setUpgradeMethod(value); setCopiedCommand(null) }}
-                  options={methods.map(method => ({ value: method.value, label: t(`managementPage.method.${method.labelKey}`) }))}
-                />
+              <div className="workspace-view-tabs is-inline integration-management-upgrade-method" role="tablist"
+                aria-label={t('managementPage.agentUpgradeMethod')}
+                onKeyDown={event => {
+                  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+                  event.preventDefault()
+                  const currentIndex = Math.max(0, methods.findIndex(method => method.value === selectedMethod?.value))
+                  const nextIndex = event.key === 'Home' ? 0
+                    : event.key === 'End' ? methods.length - 1
+                      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + methods.length) % methods.length
+                  const nextMethod = methods[nextIndex]
+                  setUpgradeMethod(nextMethod.value)
+                  setCopiedCommand(null)
+                  event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus()
+                }}
+              >
+                {methods.map(method => <button
+                  key={method.value}
+                  type="button"
+                  role="tab"
+                  id={`integration-upgrade-tab-${item.integrationId}-${method.value}`}
+                  aria-controls={`integration-upgrade-panel-${item.integrationId}`}
+                  aria-selected={selectedMethod?.value === method.value}
+                  tabIndex={selectedMethod?.value === method.value ? 0 : -1}
+                  className={`workspace-view-tab ${selectedMethod?.value === method.value ? 'is-active' : ''}`}
+                  onClick={() => { setUpgradeMethod(method.value); setCopiedCommand(null) }}
+                >{t(`managementPage.method.${method.labelKey}`)}</button>)}
               </div>
-              {selectedMethod && <div className="integration-management-command-pair">
+              {selectedMethod && <div
+                className="integration-management-command-pair"
+                role="tabpanel"
+                id={`integration-upgrade-panel-${item.integrationId}`}
+                aria-labelledby={`integration-upgrade-tab-${item.integrationId}-${selectedMethod.value}`}
+              >
                 <div className="integration-management-command">
                   <span className="integration-management-detail-label">{t('managementPage.installCommand')}</span>
                   <code>{selectedMethod.installCommand}</code>
@@ -355,28 +379,29 @@ function IntegrationManagementRow({
           </div>
         </div>
 
-        {(primaryAction || canUpdatePackage || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured)) && <div className="integration-management-actions">
-          {pendingAuthorization.length > 0 && item.enabled.configured && <Button
-            size="small"
-            disabled={saving}
-            onClick={() => void authorize()}
-          >{t('managementPage.authorize')}</Button>}
-          {primaryAction}
-          {canUpdatePackage && <Button
-            size="small"
-            disabled={saving}
-            onClick={() => { setError(''); setUpdateOpen(true) }}
-          >{t('managementPage.updateIntegration')}</Button>}
-          {packageState?.installed && !item.enabled.configured && <Button
-            size="small"
-            variant="danger"
-            disabled={saving}
-            onClick={() => {
-              setRemoveMessage('')
-              setError('')
-              setRemoveOpen(true)
-            }}
-          >{t('managementPage.uninstall')}</Button>}
+        {(primaryAction || canUpdatePackage || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured)) && <div className="integration-management-actions" aria-label={t('managementPage.actionsLabel')}>
+          <span className="integration-management-actions-label">{t('managementPage.actionsLabel')}</span>
+          <div className="integration-management-action-buttons">
+            {pendingAuthorization.length > 0 && item.enabled.configured && <Button
+              variant="primary"
+              disabled={saving}
+              onClick={() => void authorize()}
+            ><UiIcon name="settings" size={14}/>{t('managementPage.authorizeIntegration')}</Button>}
+            {canUpdatePackage && <Button
+              disabled={saving}
+              onClick={() => { setError(''); setUpdateOpen(true) }}
+            >{t('managementPage.updateIntegration')}</Button>}
+            {primaryAction}
+            {packageState?.installed && !item.enabled.configured && <Button
+              variant="danger"
+              disabled={saving}
+              onClick={() => {
+                setRemoveMessage('')
+                setError('')
+                setRemoveOpen(true)
+              }}
+            >{t('managementPage.uninstall')}</Button>}
+          </div>
         </div>}
         {updateNotice && <p className="integration-management-note" role="status">{updateNotice}</p>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
