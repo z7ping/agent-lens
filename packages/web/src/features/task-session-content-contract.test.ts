@@ -14,7 +14,6 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
   for (const [component, pattern] of [
     ['TaskSessionMessage', /<TaskSessionMessage/],
     ['TaskSessionThinking', /<TaskSessionThinking/],
-    ['TaskSessionTool', /<TaskSessionTool/],
     ['TaskSessionProcessText', /<TaskSessionProcessText/],
     ['TaskSessionProcess', /<TaskSessionProcess/],
   ] as const) {
@@ -22,11 +21,22 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
     assert.match(review, pattern, 'Review must use the common ' + component)
   }
   assert.doesNotMatch(live, /<TaskMessage|<TaskThinking|<TaskToolRow|<TaskProcessGroup|<MarkdownContent/)
-  assert.doesNotMatch(review, /<TaskToolGroup|<TaskMessage|<TaskProcessGroup|<MarkdownContent/)
+  assert.doesNotMatch(review, /<TaskToolRow|<TaskMessage|<TaskProcessGroup|<MarkdownContent/)
   assert.match(live, /<TaskSessionProcess\s+mode="live"/)
   assert.match(review, /<TaskSessionProcess\s+mode="review"/)
-  assert.match(review, /<TaskSessionTool[\s\S]*?model=\{reviewToolModel\(node\)\}/)
+  // Groups of consecutive calls are progressively disclosed by one shared ToolGroup
+  // in both modes; Review adds evidence/inspect callbacks, never a second renderer.
+  const group = read('./TaskToolGroup.tsx')
+  assert.match(live, /<TaskToolGroup/)
+  assert.match(review, /<TaskToolGroup/)
+  assert.match(live, /compact[\s\S]*?model=\{\{/)
+  assert.match(review, /compact[\s\S]*?model=\{\{/)
+  assert.match(review, /renderMeta=\{tool =>/)
+  assert.match(review, /onToolClick=\{tool =>/)
+  assert.match(group, /visibleTaskToolIds\(tools, expanded\)/)
+  assert.match(group, /index < TASK_TOOL_PREVIEW_LIMIT \|\| tool\.status === 'running' \|\| tool\.status === 'error'/)
   assert.match(read('./TaskSessionContent.tsx'), /return <TaskToolRow model=\{model\} compact/)
+  assert.match(live, /<TaskSessionTool/)
   const css = read('../task-detail.css')
   assert.doesNotMatch(css, /\.task-surface \.task-tool-group \{/)
   assert.doesNotMatch(css, /\.task-surface \.task-tool-list \{/)
