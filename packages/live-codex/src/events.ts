@@ -74,8 +74,8 @@ export function normalizeCodexEvent(method: string, params: Record<string, unkno
   if (method === 'error') {
     return { type: 'error', message: codexText(params.message) || codexText(codexRecord(params.error).message) || 'Codex error' }
   }
-  if (method === 'thread/name/updated' && codexText(params.name)) {
-    return { type: 'title.update', title: codexText(params.name) }
+  if (method === 'thread/name/updated' && codexText(params.threadName)) {
+    return { type: 'title.update', title: codexText(params.threadName) }
   }
   return undefined
 }
