@@ -236,13 +236,14 @@
 .task-surface .task-round-latency { color: var(--al-warning); font-weight: 650; }
 .task-surface .task-round-flow { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 2px 8px 8px; }
 
-/* Live transcript: semantic rounds remain navigation anchors, not disclosures. */
-.task-surface .live-task-transcript-round {
+/* Shared Live / Review reading shell: semantic rounds are navigation anchors, not disclosure cards. */
+.task-surface .task-reading-round {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 4px;
-  padding: 2px 8px 8px;
+  padding: 6px 8px 12px;
+  margin-bottom: 8px;
   scroll-margin-top: 18px;
 }
 
