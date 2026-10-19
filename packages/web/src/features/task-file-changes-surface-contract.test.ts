@@ -40,7 +40,7 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /!observedOnly && <Button/)
   assert.match(component, /observedOnly && <Button/)
   assert.match(component, /className="task-file-detail-drawer"/)
-  assert.match(component, /title=\{inspectedFile\.name \|\| inspectedFilePath\}/)
+  assert.match(component, /title=\{t\(diffPath \? 'local\.fileChanges\.viewDiff' : 'local\.fileChanges\.viewEvidence'\)\}/)
   assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
   assert.match(component, /!inlineDetails && selected && <Drawer/)
   assert.match(component, /<PatchDiff patch=\{diff\.diff\} options=\{\{/)
