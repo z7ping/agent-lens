@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { LiveProductDto, LiveRuntimeStateDto, LiveStartInputDto } from '@agent-lens/protocol'
+import type { IntegrationManagementItemDto, LiveProductDto, LiveRuntimeStateDto, LiveStartInputDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { liveApi } from '../client/live'
+import { AgentLensApi } from '../client/api'
 import { selectHostProjectDirectory, validateHostProjectDirectory } from '../client/host-directory'
 import { Button, Input, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { HostDirectoryBrowser } from './HostDirectoryBrowser'
 import { pickTaskProject, type TaskProjectOption } from './task-center'
+import { missingCodexLiveReason, withMissingCodexLive } from './live-new-task-candidates'
 
 export interface LiveNewTaskPanelProps {
   options: TaskProjectOption[]
@@ -38,6 +41,8 @@ function isAbsoluteWorkspacePath(value: string): boolean {
   return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\/]+[\\/][^\\/]+/.test(path)
 }
 
+const integrationApi = new AgentLensApi()
+
 export function LiveNewTaskPanel({
   options,
   preferredProjectId,
@@ -52,7 +57,9 @@ export function LiveNewTaskPanel({
   onStarted,
 }: LiveNewTaskPanelProps) {
   const { t } = useTranslation('task')
-  const [products, setProducts] = useState<LiveProductDto[]>([])
+  const navigate = useNavigate()
+  const [registeredProducts, setRegisteredProducts] = useState<LiveProductDto[]>([])
+  const [codexManagement, setCodexManagement] = useState<IntegrationManagementItemDto>()
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState('')
   const [selectedLiveId, setSelectedLiveId] = useState('')
@@ -73,15 +80,10 @@ export function LiveNewTaskPanel({
     setProductsError('')
     void liveApi.products().then(items => {
       if (cancelled) return
-      const next = createProducts(items)
-      setProducts(next)
-      setSelectedLiveId(current => {
-        if (current && next.some(item => item.liveId === current)) return current
-        return next.find(item => item.availability.available)?.liveId ?? next[0]?.liveId ?? ''
-      })
+      setRegisteredProducts(createProducts(items))
     }, reason => {
       if (!cancelled) {
-        setProducts([])
+        setRegisteredProducts([])
         setProductsError(reason instanceof Error ? reason.message : String(reason))
       }
     }).finally(() => {
@@ -89,6 +91,31 @@ export function LiveNewTaskPanel({
     })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    // Integration management retains the reason even when no Live adapter was registered.
+    void integrationApi.integrations().then(result => {
+      if (!cancelled) setCodexManagement(result.items.find(item => item.integrationId === 'codex'))
+    }).catch(() => {
+      // Keep the registered products usable if the management service is unavailable.
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  const products = useMemo(() => withMissingCodexLive(
+    registeredProducts,
+    codexManagement,
+    codexManagement
+      ? t(`center.newTask.codexUnregistered.${missingCodexLiveReason(codexManagement)}`)
+      : '',
+  ), [registeredProducts, codexManagement, t])
+  useEffect(() => {
+    setSelectedLiveId(current => {
+      if (current && products.some(item => item.liveId === current)) return current
+      return products.find(item => item.availability.available)?.liveId ?? products[0]?.liveId ?? ''
+    })
+  }, [products])
 
   useEffect(() => {
     // 仅初次默认选择；搜索/分页刷新不能悄悄把已选工作目录换成其他项目。
@@ -155,11 +182,15 @@ export function LiveNewTaskPanel({
   })), [products, t])
 
   const available = Boolean(selectedProduct?.availability.available)
+  const missingCodexEntry = selectedProduct?.liveId === 'codex'
+    && !registeredProducts.some(item => item.liveId === 'codex')
   const readiness = productsLoading
     ? { state: 'checking', label: t('center.newTask.checkingAgents') }
     : available
       ? { state: 'ready', label: t('center.newTask.agentReady', { agent: selectedProduct?.displayName ?? '' }) }
-      : { state: 'unavailable', label: selectedProduct?.availability.reason
+      : missingCodexEntry
+        ? { state: 'unavailable', label: t('center.newTask.agentUnavailable', { agent: selectedProduct?.displayName ?? '' }) }
+        : { state: 'unavailable', label: selectedProduct?.availability.reason
           ? t('center.newTask.agentUnavailableReason', { agent: selectedProduct.displayName, reason: selectedProduct.availability.reason })
           : t('center.newTask.agentUnavailable', { agent: selectedProduct?.displayName ?? '' }) }
 
@@ -252,6 +283,13 @@ export function LiveNewTaskPanel({
             disabled={productsLoading || products.length === 0}
           />
         </label>
+
+        {missingCodexEntry && <div className="task-center-project-hint" role="status">
+            {selectedProduct.availability.reason}
+            <Button size="small" onClick={() => navigate('/agents?view=management&agent=codex')}>
+              {t('center.newTask.openIntegrationManagement')}
+            </Button>
+          </div>}
 
         {titleSupported && <label className="task-center-new-task-title">
           <span>{t('center.newTask.taskTitle')}</span>
