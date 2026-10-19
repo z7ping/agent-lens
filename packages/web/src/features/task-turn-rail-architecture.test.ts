@@ -115,3 +115,12 @@ test('Live 正文不再使用轮次 details，但导轨仍使用独立语义锚�
   assert.match(taskSurface, /\.virtual-round-shell\[data-interaction-id\]/)
   assert.match(liveTask, /turnRailItems=\{turnRailItems\}/)
 })
+
+test('Live 思考与工具默认收起，正文消息不能被执行折叠吞掉', () => {
+  const timeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
+  assert.match(timeline, /state=\{processState\} defaultExpanded=\{false\}/)
+  assert.match(timeline, /defaultExpanded=\{false\}/)
+  assert.match(timeline, /if \(item\.kind === 'thinking' \|\| item\.kind === 'tool'\) process\.push\(item\)/)
+  assert.match(timeline, /else \{ flushProcess\(\); content\.push\(renderItem\(item\)\) \}/)
+  assert.doesNotMatch(timeline, /item\.phase === 'commentary'\) process\.push/)
+})
