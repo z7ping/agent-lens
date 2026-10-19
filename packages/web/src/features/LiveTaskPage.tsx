@@ -23,6 +23,7 @@ import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from '
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
+import { coalesceLiveSemanticSegments } from './live-semantic-rounds'
 import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
@@ -178,7 +179,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [current, historyLoading])
 
   const roundSegments = useMemo(
-    () => roundProjectorRef.current.projectSegmented(projection.stable, projection.active),
+    () => coalesceLiveSemanticSegments(roundProjectorRef.current.projectSegmented(projection.stable, projection.active)),
     [projection.stable, projection.active],
   )
   const fileChangeRuntimeId = current?.runtimeSessionId
