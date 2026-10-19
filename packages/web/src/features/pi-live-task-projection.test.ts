@@ -14,20 +14,23 @@ function lifecycle(id: string): PiLiveHistoryItem {
   }
 }
 
-test('Pi Live 渲染分片共享同一个语义轮次身份', () => {
+test('Pi 历史长轮次不按 8 条事实拆分处理详情', () => {
   const history: PiLiveHistoryItem[] = [
     { id: 'user-1', kind: 'message', role: 'user', text: '第一轮', at: '2026-09-09T00:00:00.000Z' },
-    ...Array.from({ length: 9 }, (_, index) => lifecycle(`event-${index}`)),
+    ...Array.from({ length: 20 }, (_, index) => index % 2 === 0
+      ? { id: `thinking-${index}`, kind: 'thinking' as const, text: `思考 ${index}`, at: '2026-09-09T00:00:01.000Z' }
+      : { id: `tool-${index}`, kind: 'tool' as const, callId: `call-${index}`, name: 'shell', summary: '', output: '', status: 'success' as const, at: '2026-09-09T00:00:02.000Z' }),
   ]
 
   const projections = projectPiLiveTaskRounds(history)
-  assert.equal(projections.length, 2)
-  assert.notEqual(projections[0]?.model.id, projections[1]?.model.id)
+  assert.equal(projections.length, 1)
+  assert.equal(projections[0]?.model.id, 'pi-round-1')
   assert.equal(projections[0]?.model.semanticId, 'pi-round-1')
-  assert.equal(projections[1]?.model.semanticId, 'pi-round-1')
+  assert.equal(projections[0]?.model.toolCount, 10)
+  assert.equal(projections[0]?.items.filter(item => item.kind === 'thinking').length, 10)
   assert.equal(projections[0]?.continuation, false)
-  assert.equal(projections[1]?.continuation, true)
 })
+
 
 test('不同语义轮次不能因为分片策略合并', () => {
   const history: PiLiveHistoryItem[] = [
@@ -88,7 +91,7 @@ test('Pi Live 同一 Assistant entry 同时含 Text / Tool 时，Text 仍留在�
   assert.equal(all.find(item => item.id === 'tool-entry')?.turnSection, 'final')
   assert.equal(all.find(item => item.id === 'tool-entry:content:1:tool:call')?.turnSection, 'process')
   assert.equal(all.find(item => item.id === 'final-entry')?.turnSection, 'final')
-  assert.ok(projections.length > 1)
+  assert.equal(projections.length, 1)
 })
 
 

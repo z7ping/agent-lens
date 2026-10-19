@@ -3,8 +3,6 @@ import type { TaskDetailModel, TaskRoundModel } from './task-detail-model'
 import type { PiLiveHistoryItem, PiLiveTurnSection } from './pi-live-history'
 import { currentProductLocale, translateProduct } from '../i18n/runtime'
 
-export const PI_LIVE_HISTORY_ROUND_FACT_LIMIT = 8
-
 export interface PiLiveTaskRoundProjection {
   model: TaskRoundModel
   items: PiLiveHistoryItem[]
@@ -191,30 +189,27 @@ export function projectPiLiveTaskRounds(history: PiLiveHistoryItem[]): PiLiveTas
     const errorCount = presentedItems.filter(item => item.kind === 'tool' && item.status === 'error').length
     const durationMs = roundDuration(round.items)
     const preview = roundPreview(round.items)
-    const fragments = Math.max(1, Math.ceil(presentedItems.length / PI_LIVE_HISTORY_ROUND_FACT_LIMIT))
     const semanticId = round.background ? 'pi-background' : `pi-round-${round.ordinal}`
+    const label = round.background ? translateProduct('piLive:projection.background') : translateProduct('piLive:projection.round', { count: round.ordinal })
 
-    for (let index = 0; index < fragments; index += 1) {
-      const items = presentedItems.slice(index * PI_LIVE_HISTORY_ROUND_FACT_LIMIT, (index + 1) * PI_LIVE_HISTORY_ROUND_FACT_LIMIT)
-      const continuation = index > 0
-      const baseLabel = round.background ? translateProduct('piLive:projection.background') : translateProduct('piLive:projection.round', { count: round.ordinal })
-      result.push({
-        model: {
-          id: `${round.background ? 'background' : `round-${round.ordinal}`}:${index}`,
-          semanticId,
-          ordinal: round.background ? undefined : round.ordinal,
-          label: continuation ? translateProduct('piLive:projection.continuation', { label: baseLabel }) : baseLabel,
-          state: 'settled',
-          preview: continuation ? undefined : preview,
-          toolCount: continuation ? items.filter(item => item.kind === 'tool').length : toolCount,
-          errorCount: continuation ? items.filter(item => item.kind === 'tool' && item.status === 'error').length : errorCount,
-          durationMs: continuation ? roundDuration(items) : durationMs,
-          highLatency: false,
-        },
-        items,
-        continuation,
-      })
-    }
+    // Keep a complete semantic turn together; the TaskRound virtualizer owns
+    // offscreen mounting rather than manufacturing extra Process disclosures.
+    result.push({
+      model: {
+        id: semanticId,
+        semanticId,
+        ordinal: round.background ? undefined : round.ordinal,
+        label,
+        state: 'settled',
+        preview,
+        toolCount,
+        errorCount,
+        durationMs,
+        highLatency: false,
+      },
+      items: presentedItems,
+      continuation: false,
+    })
   }
 
   return result

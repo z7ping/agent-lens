@@ -4,7 +4,6 @@ import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
 import {
   appendLiveInputHistory,
   appendOptimisticLiveUserMessage,
-  LIVE_TASK_ROUND_FACT_LIMIT,
   LiveTaskRoundProjector,
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
@@ -334,26 +333,27 @@ test('generic Live stable round boundary excludes the active semantic turn', () 
   assert.equal(liveTaskStableRoundPrefixLength(items, false), 4)
 })
 
-test('generic Live projection chunks oversized semantic rounds without splitting turn identity', () => {
+test('Live 长轮次不再按 8 条记录拆出多个处理详情，思考和工具完整保留', () => {
   const items = [
-    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'large turn', streaming: false },
-    ...Array.from({ length: LIVE_TASK_ROUND_FACT_LIMIT * 2 + 1 }, (_, index) => ({
-      id: `tool-${index}`,
-      kind: 'tool' as const,
-      callId: `call-${index}`,
-      name: 'read',
-      status: 'success' as const,
-    })),
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: '配置三台虚拟机开机自启', streaming: false },
+    ...Array.from({ length: 26 }, (_, index) => index % 4 === 0
+      ? { id: `thought-${index}`, kind: 'thinking' as const, text: `思考 ${index}`, streaming: false }
+      : { id: `tool-${index}`, kind: 'tool' as const, callId: `call-${index}`, name: 'shell', status: 'success' as const }),
+    { id: 'answer', kind: 'message' as const, role: 'assistant' as const, text: '执行完毕', streaming: false },
+    { id: 'u2', kind: 'message' as const, role: 'user' as const, text: '检查状态', streaming: false },
+    { id: 'thought-2', kind: 'thinking' as const, text: '检查中', streaming: false },
   ]
 
   const rounds = projectLiveTaskRounds(items)
-  assert.equal(rounds.length, 3)
-  assert.ok(rounds.every(round => round.items.length <= LIVE_TASK_ROUND_FACT_LIMIT))
-  assert.ok(rounds.every(round => round.model.semanticId === 'live-round:u1'))
-  assert.notEqual(rounds[0]?.model.id, rounds[1]?.model.id)
-  assert.equal(rounds[0]?.model.ordinal, 1)
-  assert.equal(rounds[0]?.model.toolCount, LIVE_TASK_ROUND_FACT_LIMIT * 2 + 1)
+  assert.equal(rounds.length, 2, '真实两轮只展示两组，禁止按事实数拆出额外处理详情')
+  assert.deepEqual(rounds.map(round => round.model.semanticId), ['live-round:u1', 'live-round:u2'])
+  assert.deepEqual(rounds.map(round => round.model.id), ['live-round:u1', 'live-round:u2'])
+  assert.equal(rounds[0]?.items.length, 28)
+  assert.equal(rounds[0]?.items.filter(item => item.kind === 'thinking').length, 7)
+  assert.equal(rounds[0]?.model.toolCount, 19)
+  assert.equal(rounds[1]?.items.length, 2)
 })
+
 
 test('generic Live projection preserves pre-user activity as a background round', () => {
   const rounds = projectLiveTaskRounds([
