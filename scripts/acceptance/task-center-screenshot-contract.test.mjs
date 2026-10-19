@@ -34,7 +34,9 @@ test('viewport geometry accepts only the new Task Center context lane widths, in
 })
 
 test('real Review acceptance expands the single Process disclosure before checking tool facts', () => {
-  assert.match(source, /document\.querySelector\('\.task-review-process'\)/)
+  assert.match(source, /pane\?\.querySelector\('\.task-process-group'\)/)
+  assert.doesNotMatch(source, /querySelector\('\.task-review-process'\)/)
+  assert.match(source, /JSON\.stringify\(lastState\)/)
   assert.match(source, /process\.querySelector\(':scope > summary'\)\?\.click\(\)/)
   assert.match(source, /state\.processExpanded/)
   assert.match(source, /state\.toolCount >= 1/)
