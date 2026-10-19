@@ -21,13 +21,15 @@ export function ComposerPillSelect({
   control: 'model' | 'thinking'
   onChange(value: string): void
 }) {
-  return <span className={`pi-live-compose-control pi-live-compose-control--${control}`}><SelectMenu
-    value={value}
-    placeholder={placeholder}
-    options={options}
-    disabled={disabled}
-    title={title}
-    ariaLabel={ariaLabel}
-    onChange={onChange}
-  /></span>
+  return <span className={`pi-live-compose-control pi-live-compose-control--${control}`}>
+    <SelectMenu
+      value={value}
+      placeholder={placeholder}
+      options={options}
+      disabled={disabled}
+      title={title}
+      ariaLabel={ariaLabel}
+      onChange={onChange}
+    />
+  </span>
 }
