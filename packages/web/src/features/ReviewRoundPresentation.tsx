@@ -11,7 +11,7 @@ import { TaskEvent } from './TaskEvent'
 import { TaskReadingRound } from './TaskReadingRound'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
-import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess } from './TaskSessionContent'
+import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
 import { formatClock, duration, elapsed } from './review-session-format'
@@ -71,11 +71,13 @@ function MessageBubble({
     role={node.role === 'user' ? 'user' : 'assistant'}
     text={node.role === 'user' && node.sourceId === 'codex' ? taskUserRequestText(node.text) : node.text}
     attachments={attachments}
-    author={node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId)}
-    modelLabel={node.role === 'assistant' ? modelLabel : undefined}
+    presentation={{
+      author: node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId),
+      ...(node.role === 'assistant' && modelLabel ? { modelLabel } : {}),
+      ...(taskSessionMessageTime(node.at) ? { time: taskSessionMessageTime(node.at) } : {}),
+      ...(node.evidence.length > 0 ? { evidence: <EvidenceBadges evidence={node.evidence}/> } : {}),
+    }}
     showContentActions={node.role === 'assistant' && showContentActions}
-    time={formatClock(node.at)}
-    meta={<EvidenceBadges evidence={node.evidence}/>}
     actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button> : undefined}
   />
 }
