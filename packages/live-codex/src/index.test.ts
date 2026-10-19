@@ -33,6 +33,7 @@ class FakeRpc {
   listener: ((message: RpcMessage) => void) | undefined = undefined
   calls: { method: string, params: Record<string, unknown> }[] = []
   responses: { id: number | string, value: Record<string, unknown> }[] = []
+  itemPages: Record<string, unknown>[] = []
   async available() { return true }
   subscribe(listener: (message: RpcMessage) => void) {
     this.listener = listener
@@ -43,6 +44,7 @@ class FakeRpc {
     if (method === 'thread/start') return { thread: { id: 'thread-1' } }
     if (method === 'turn/start') return { turn: { id: 'turn-1' } }
     if (method === 'thread/read') return { thread: { turns: [] } }
+    if (method === 'thread/items/list') return this.itemPages.shift() ?? { data: [], nextCursor: null, backwardsCursor: null }
     if (method === 'model/list') return { data: [
       { id: 'codex-one', model: 'codex-one', displayName: 'Codex One', hidden: false,
         defaultReasoningEffort: 'medium', supportedReasoningEfforts: [
@@ -138,5 +140,103 @@ test('Missing active Codex turn id does not send malformed interrupt requests', 
   rpc.emit({ method: 'turn/started', params: { threadId: 'thread-1', turn: {} } })
   await assert.rejects(() => adapter.interrupt(session.runtimeSessionId), /turn ID is unavailable/)
   assert.equal(rpc.calls.some(call => call.method === 'turn/interrupt'), false)
+  await adapter.dispose()
+})
+
+test('Codex command output deltas are accumulated per item and reset on completion', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  const outputs: string[] = []
+  const completed: string[] = []
+  const unsubscribe = adapter.subscribe(session.runtimeSessionId, event => {
+    if (event.normalizedEvent?.type === 'tool.output') outputs.push(event.normalizedEvent.output)
+    if (event.normalizedEvent?.type === 'tool.end') completed.push(event.normalizedEvent.output ?? '')
+  })
+  rpc.emit({ method: 'item/commandExecution/outputDelta',
+    params: { threadId: 'thread-1', itemId: 'cmd-1', delta: 'hello' } })
+  rpc.emit({ method: 'item/commandExecution/outputDelta',
+    params: { threadId: 'thread-1', itemId: 'cmd-1', delta: ' world' } })
+  assert.deepEqual(outputs, ['hello', 'hello world'])
+  rpc.emit({ method: 'item/completed',
+    params: { threadId: 'thread-1', item: { id: 'cmd-1', type: 'commandExecution', status: 'completed' } } })
+  assert.equal(completed.at(-1), 'hello world')
+  rpc.emit({ method: 'item/commandExecution/outputDelta',
+    params: { threadId: 'thread-1', itemId: 'cmd-1', delta: 'later' } })
+  assert.equal(outputs.at(-1), 'later')
+  unsubscribe()
+  await adapter.dispose()
+})
+
+test('Concurrent native approvals are shown one at a time without auto-confirmation', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  const requests: string[] = []
+  const unsubscribe = adapter.subscribe(session.runtimeSessionId, event => {
+    if (event.normalizedEvent?.type === 'ui.request') requests.push(event.normalizedEvent.requestId)
+  })
+  rpc.emit({ id: 40, method: 'item/commandExecution/requestApproval',
+    params: { threadId: 'thread-1', command: 'git status' } })
+  rpc.emit({ id: 41, method: 'item/fileChange/requestApproval',
+    params: { threadId: 'thread-1', reason: 'edit code' } })
+  assert.deepEqual(requests, ['40'])
+  assert.equal(rpc.responses.length, 0)
+  await assert.rejects(() => adapter.respondToExtension(session.runtimeSessionId, '41', { confirmed: true }), /not active/)
+  await adapter.respondToExtension(session.runtimeSessionId, '40', { confirmed: false })
+  assert.deepEqual(requests, ['40', '41'])
+  await adapter.respondToExtension(session.runtimeSessionId, '41', { confirmed: false })
+  assert.deepEqual(rpc.responses.map(x => x.value.decision), ['decline', 'decline'])
+  unsubscribe()
+  await adapter.dispose()
+})
+
+test('Stale turn completion cannot terminate a newer Codex turn', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  await adapter.send(session.runtimeSessionId, 'run')
+  rpc.emit({ method: 'turn/completed',
+    params: { threadId: 'thread-1', turn: { id: 'old-turn', status: 'completed' } } })
+  assert.equal((await adapter.state(session.runtimeSessionId)).isStreaming, true)
+  rpc.emit({ method: 'turn/completed',
+    params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'completed' } } })
+  assert.equal((await adapter.state(session.runtimeSessionId)).isStreaming, false)
+  await adapter.dispose()
+})
+
+test('Codex recovery uses a cross-turn native cursor and excludes the repeated anchor', async () => {
+  const rpc = new FakeRpc()
+  rpc.itemPages.push(
+    {
+      data: [
+        { turnId: 'turn-2', item: { type: 'agentMessage', id: 'assistant-2', text: 'previous' } },
+        { turnId: 'turn-1', item: { type: 'userMessage', id: 'user-1', content: [{ type: 'text', text: 'old' }] } },
+      ],
+      nextCursor: 'older', backwardsCursor: 'native-reverse-anchor',
+    },
+    {
+      data: [
+        { turnId: 'turn-2', item: { type: 'agentMessage', id: 'assistant-2', text: 'previous' } },
+        { turnId: 'turn-3', item: { type: 'userMessage', id: 'user-3', content: [{ type: 'text', text: 'new' }] } },
+      ],
+      nextCursor: null, backwardsCursor: 'other-way',
+    },
+    {
+      data: [{ turnId: 'turn-3', item: { type: 'userMessage', id: 'user-3', content: [{ type: 'text', text: 'new' }] } }],
+      nextCursor: 'older', backwardsCursor: 'new-reverse-anchor',
+    },
+  )
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const session = await adapter.start({ workspacePath: '/project' })
+  const first = await adapter.snapshot(session.runtimeSessionId)
+  assert.ok(first.leafId?.startsWith('codex-item:'))
+  const newer = await adapter.snapshot(session.runtimeSessionId, first.leafId ?? undefined)
+  assert.equal(newer.entries.length, 1)
+  assert.ok(newer.leafId && newer.leafId !== first.leafId)
+  const calls = rpc.calls.filter(call => call.method === 'thread/items/list')
+  assert.equal(calls[1]?.params.sortDirection, 'asc')
+  assert.equal(calls[1]?.params.cursor, 'native-reverse-anchor')
+  assert.equal(Object.hasOwn(calls[1]!.params, 'turnId'), false, 'must not restrict continuation to the old turn')
   await adapter.dispose()
 })

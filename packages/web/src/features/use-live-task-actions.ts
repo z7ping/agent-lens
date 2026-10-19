@@ -325,7 +325,8 @@ export function useLiveTaskActions({
     setError('')
     try {
       await liveApi.respondToExtension(current.liveId, current.runtimeSessionId, extension.requestId, value)
-      setExtension(null)
+      // A queued approval may arrive over SSE before this HTTP request completes.
+      setExtension(previous => previous?.requestId === extension.requestId ? null : previous)
       composerRef.current?.focus({ preventScroll: true })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))

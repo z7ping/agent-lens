@@ -13,6 +13,7 @@ import {
 import { CodexRpc, type RpcMessage } from './transport.js'
 import { CheckpointCodexRecoveryStore, type CodexRecoveryStore } from './recovery.js'
 import { normalizeCodexEvent, codexRecord, codexText, codexSnapshotEntries } from './events.js'
+import { decodeCodexHistoryCursor, encodeCodexItemAnchor, encodeCodexPageCursor } from './history-cursor.js'
 
 const CAPABILITIES = ['create', 'send', 'stream', 'interrupt', 'extension-ui', 'model-switching', 'thinking-control', 'resume', 'recovery'] as const satisfies readonly LiveCapabilityName[]
 export const codexLiveManifest: LiveAdapterManifest = {
@@ -32,6 +33,7 @@ interface Session {
   status: LiveRuntimeState['status']
   streaming: boolean
   activeTurn?: string | undefined
+  lastCompletedTurn?: string | undefined
   model?: string
   effort?: string | undefined
   channel: LiveEventChannel
@@ -39,6 +41,8 @@ interface Session {
   attaching?: Promise<void> | undefined
   approvals: Map<string, number | string>
   approvalEvents: Map<string, LiveRuntimeEvent>
+  queuedApprovals: Map<string, RpcMessage>
+  toolOutput: Map<string, string>
 }
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
@@ -78,7 +82,7 @@ export class CodexLiveAdapter implements LiveAdapter {
           ...(saved.model ? { model: saved.model } : {}),
           ...(saved.effort ? { effort: saved.effort } : {}),
           status: 'ready', streaming: false, attached: false,
-          channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(),
+          channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
         })
       }
     })().catch(error => {
@@ -156,7 +160,7 @@ export class CodexLiveAdapter implements LiveAdapter {
       ...(codexText(response.reasoningEffort) ? { effort: codexText(response.reasoningEffort) } : {}),
       status: 'ready',
       streaming: false, attached: true, channel: new LiveEventChannel(id),
-      approvals: new Map(), approvalEvents: new Map(),
+      approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
     }
     this.sessions.set(id, session)
     await this.persist(session)
@@ -211,7 +215,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     const session = saved ?? {
       id: nativeId, cwd: workspace?.path ?? '',
       status: 'ready' as const, streaming: false, attached: false,
-      channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(),
+      channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
     }
     if (!saved) this.sessions.set(nativeId, session)
     await this.attach(session)
@@ -219,45 +223,79 @@ export class CodexLiveAdapter implements LiveAdapter {
     return this.view(session)
   }
 
-  async snapshot(id: string, _since?: string, window?: LiveSnapshotWindow) {
+  async snapshot(id: string, since?: string, window?: LiveSnapshotWindow) {
     await this.hydrate()
     const session = this.session(id)
     await this.attach(session)
+    if (window?.around) throw new Error('Codex Live does not support centered history snapshots')
     const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
-    // Native item cursor prevents skipped tools/messages when a turn has many items.
-    // Each source item yields at most two transcript entries (tool call + result).
-    const ascending = window?.edge === 'earliest' || Boolean(window?.after)
-    const cursor = ascending ? window?.after : window?.before
+    // Reverse-direction native cursors traverse the whole Thread, not only one Turn.
+    // The first ascending page may repeat its inclusive anchor; drop that exact item.
+    const selector = since
+      ? decodeCodexHistoryCursor(since)
+      : window?.after ? decodeCodexHistoryCursor(window.after) : undefined
+    const ascending = Boolean(selector) || window?.edge === 'earliest'
+    const cursor = selector?.kind === 'item' ? selector.anchor.backwardsCursor
+      : selector?.kind === 'page' ? selector.cursor : window?.before
     const response = await this.rpc.request('thread/items/list', {
       threadId: session.id,
       limit: Math.max(1, Math.floor(limit / 2)),
       sortDirection: ascending ? 'asc' : 'desc',
       ...(cursor ? { cursor } : {}),
     })
-    const items = Array.isArray(response.data) ? response.data : []
+    const nativeItems = Array.isArray(response.data) ? response.data : []
+    const anchor = selector?.kind === 'item' ? selector.anchor : undefined
+    const items = anchor && nativeItems.length > 0
+      && codexText(codexRecord(codexRecord(nativeItems[0]).item).id) === anchor.itemId
+      && codexText(codexRecord(nativeItems[0]).turnId) === anchor.turnId
+      ? nativeItems.slice(1) : nativeItems
     const chronological = ascending ? items : [...items].reverse()
     const { entries } = codexSnapshotEntries(
       chronological.map(raw => ({ items: [codexRecord(raw).item] })), limit,
     )
     const nextCursor = codexText(response.nextCursor)
     const backwardsCursor = codexText(response.backwardsCursor)
+    const last = codexRecord(chronological.at(-1))
+    const lastItemId = codexText(codexRecord(last.item).id)
+    const lastTurnId = codexText(last.turnId)
+
+    let leafId: string | undefined
+    if (!ascending && lastItemId && lastTurnId && backwardsCursor) {
+      leafId = encodeCodexItemAnchor({ turnId: lastTurnId, itemId: lastItemId, backwardsCursor })
+    } else if (ascending && lastItemId && lastTurnId && !nextCursor) {
+      // At the ascending end we can request a stable reverse cursor for the latest item.
+      // Do not advance the checkpoint if a concurrent new item makes the two reads diverge.
+      const latest = await this.rpc.request('thread/items/list', {
+        threadId: session.id, limit: 1, sortDirection: 'desc',
+      }).catch(() => ({}))
+      const latestItem = codexRecord(Array.isArray(latest.data) ? latest.data[0] : null)
+      const sameItem = codexText(latestItem.turnId) === lastTurnId
+        && codexText(codexRecord(latestItem.item).id) === lastItemId
+      if (sameItem && codexText(latest.backwardsCursor)) {
+        leafId = encodeCodexItemAnchor({
+          turnId: lastTurnId, itemId: lastItemId,
+          backwardsCursor: codexText(latest.backwardsCursor),
+        })
+      }
+    }
+    if (!leafId && selector?.kind === 'item') leafId = since
+
     return {
       state: this.view(session), entries,
+      ...(leafId ? { leafId } : {}),
       page: {
-        // The reverse-direction cursor is an anchor, not proof of more history.
-        // In particular, the initial latest page must NOT report hasLater.
-        hasEarlier: ascending ? Boolean(window?.after) : Boolean(nextCursor),
+        hasEarlier: ascending ? Boolean(selector) : Boolean(nextCursor),
         ...(ascending
-          ? (window?.after && backwardsCursor ? { before: backwardsCursor } : {})
+          ? (selector && backwardsCursor ? { before: backwardsCursor } : {})
           : (nextCursor ? { before: nextCursor } : {})),
         hasLater: ascending ? Boolean(nextCursor) : Boolean(window?.before),
         ...(ascending
-          ? (nextCursor ? { after: nextCursor } : {})
-          : (window?.before && backwardsCursor ? { after: backwardsCursor } : {})),
+          ? (nextCursor ? { after: encodeCodexPageCursor(nextCursor) } : {})
+          : (window?.before && backwardsCursor
+            ? { after: encodeCodexPageCursor(backwardsCursor) } : {})),
       },
     }
   }
-
 
   private async nativeModels(): Promise<Record<string, unknown>[]> {
     const response = await this.rpc.request('model/list', {})
@@ -396,11 +434,14 @@ export class CodexLiveAdapter implements LiveAdapter {
   async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> {
     const session = this.session(id)
     const nativeId = session.approvals.get(requestId)
-    if (nativeId === undefined) throw new Error('Codex approval request no longer pending')
+    if (nativeId === undefined || !session.approvalEvents.has(requestId)) {
+      throw new Error('Codex approval request is not active')
+    }
     const accepted = codexRecord(response).confirmed === true
     this.rpc.respond(nativeId, { decision: accepted ? 'accept' : 'decline' })
     session.approvals.delete(requestId)
     session.approvalEvents.delete(requestId)
+    this.publishNextApproval(session)
   }
 
   async terminate(id: string): Promise<void> {
@@ -412,12 +453,42 @@ export class CodexLiveAdapter implements LiveAdapter {
     }
     session.approvals.clear()
     session.approvalEvents.clear()
+    session.queuedApprovals.clear()
+    session.toolOutput.clear()
     session.status = 'terminated'
     session.channel.publish({ method: 'runtime/status', params: { status: 'terminated' },
       normalizedEvent: { type: 'status', status: 'terminated' } })
     session.channel.clear()
     this.sessions.delete(id)
     await this.recovery?.remove(id)
+  }
+
+  /** The shared Live prompt supports one dialog; serialize native approval requests. */
+  private publishNextApproval(session: Session): void {
+    if (session.approvalEvents.size) return
+    const next = session.queuedApprovals.entries().next().value
+    if (!next) return
+    const [requestId, request] = next
+    session.queuedApprovals.delete(requestId)
+    const detail = request.method === 'item/commandExecution/requestApproval'
+      ? [
+          'Command: ' + (codexText(request.params.command) || '[not provided]'),
+          ...(codexText(request.params.cwd) ? ['Working directory: ' + codexText(request.params.cwd)] : []),
+          ...(codexText(request.params.reason) ? ['Reason: ' + codexText(request.params.reason)] : []),
+        ].join('\n')
+      : [
+          'File modification requested',
+          ...(codexText(request.params.reason) ? ['Reason: ' + codexText(request.params.reason)] : []),
+          ...(codexText(request.params.grantRoot) ? ['Requested write root: ' + codexText(request.params.grantRoot)] : []),
+        ].join('\n')
+    const event = session.channel.publish({
+      method: request.method, params: request.params,
+      normalizedEvent: {
+        type: 'ui.request', requestId, method: 'confirm',
+        title: 'Codex execution approval', message: detail.slice(0, 4000),
+      },
+    })
+    session.approvalEvents.set(requestId, event)
   }
 
   private receive(message: RpcMessage): void {
@@ -430,6 +501,9 @@ export class CodexLiveAdapter implements LiveAdapter {
           normalizedEvent: { type: 'status', status: 'failed', message: 'Codex App Server disconnected' } })
         session.approvals.clear()
         session.approvalEvents.clear()
+        session.queuedApprovals.clear()
+        session.toolOutput.clear()
+        session.activeTurn = undefined
       }
       return
     }
@@ -442,37 +516,62 @@ export class CodexLiveAdapter implements LiveAdapter {
       }
       const requestId = String(message.id)
       session.approvals.set(requestId, message.id)
-      const detail = message.method === 'item/commandExecution/requestApproval'
-        ? [
-            'Command: ' + (codexText(message.params.command) || '[not provided]'),
-            ...(codexText(message.params.cwd) ? ['Working directory: ' + codexText(message.params.cwd)] : []),
-            ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
-          ].join('\n')
-        : [
-            'File modification requested',
-            ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
-            ...(codexText(message.params.grantRoot) ? ['Requested write root: ' + codexText(message.params.grantRoot)] : []),
-          ].join('\n')
-      const approvalEvent = session.channel.publish({ method: message.method, params: message.params,
-        normalizedEvent: {
-          type: 'ui.request', requestId, method: 'confirm',
-          title: 'Codex execution approval',
-          message: detail.slice(0, 4000),
-        },
-      })
-      session.approvalEvents.set(requestId, approvalEvent)
+      session.queuedApprovals.set(requestId, message)
+      this.publishNextApproval(session)
       return
     }
     if (!session) return
+    if (message.method === 'item/commandExecution/outputDelta') {
+      const callId = codexText(message.params.itemId)
+      if (callId) {
+        const previous = session.toolOutput.get(callId) ?? ''
+        const suffix = '\n… [live tool output preview truncated]'
+        const maxLength = 64 * 1024
+        const delta = codexText(message.params.delta)
+        const preview = previous.endsWith(suffix)
+          ? previous
+          : previous.length + delta.length > maxLength
+            ? (previous + delta).slice(0, maxLength) + suffix
+            : previous + delta
+        if (preview === previous) return
+        session.toolOutput.set(callId, preview)
+        session.channel.publish({
+          method: message.method, params: message.params,
+          normalizedEvent: { type: 'tool.output', callId, name: 'shell', output: preview },
+        })
+        return
+      }
+    }
+    if (message.method === 'item/completed') {
+      const toolId = codexText(codexRecord(message.params.item).id)
+      const streamedOutput = toolId ? session.toolOutput.get(toolId) : undefined
+      if (toolId) session.toolOutput.delete(toolId)
+      const completed = normalizeCodexEvent(message.method, message.params)
+      if (streamedOutput && completed?.type === 'tool.end') {
+        // Terminal events must not overwrite accumulated output with a shorter
+        // completion preview (the raw item remains available through Codex history).
+        session.channel.publish({
+          method: message.method, params: message.params,
+          normalizedEvent: { ...completed, output: streamedOutput },
+        })
+        return
+      }
+    }
     if (message.method === 'turn/started') {
       session.streaming = true
       session.activeTurn = codexText(codexRecord(message.params.turn).id) || session.activeTurn
     }
     if (message.method === 'turn/completed') {
+      const completedTurn = codexText(codexRecord(message.params.turn).id)
+      if (completedTurn && completedTurn === session.lastCompletedTurn) return
+      if (session.activeTurn && completedTurn && completedTurn !== session.activeTurn) return
+      if (completedTurn) session.lastCompletedTurn = completedTurn
       session.streaming = false
       session.activeTurn = undefined
       session.approvals.clear()
       session.approvalEvents.clear()
+      session.queuedApprovals.clear()
+      session.toolOutput.clear()
     }
     if (message.method === 'thread/name/updated' && codexText(message.params.threadName)) {
       session.title = codexText(message.params.threadName)
