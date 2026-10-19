@@ -6,6 +6,7 @@ import { taskPreciseDurationLabel, type TaskRoundState, type TaskThinkingModel }
 export interface TaskProcessGroupProps {
   id: string
   messageCount: number
+  thinkingCount?: number | undefined
   toolCount: number
   errorCount?: number | undefined
   /** 兼容已知的直接耗时；优先使用 startedAtMs / endedAtMs 的真实过程边界。 */
@@ -16,6 +17,7 @@ export interface TaskProcessGroupProps {
   endedAtMs?: number | undefined
   state?: TaskRoundState | undefined
   defaultExpanded?: boolean | undefined
+  autoCollapseOnSettle?: boolean | undefined
   expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: ((expanded: boolean) => void) | undefined
   summaryExtra?: ReactNode | undefined
@@ -26,6 +28,7 @@ export interface TaskProcessGroupProps {
 export function TaskProcessGroup({
   id,
   messageCount,
+  thinkingCount,
   toolCount,
   errorCount = 0,
   durationMs = 0,
@@ -34,6 +37,7 @@ export function TaskProcessGroup({
   endedAtMs,
   state = 'settled',
   defaultExpanded = false,
+  autoCollapseOnSettle = false,
   expansionStore,
   onExpandedChange,
   summaryExtra,
@@ -69,11 +73,13 @@ export function TaskProcessGroup({
     model={model}
     kind="process"
     defaultExpanded={defaultExpanded}
+    autoCollapseOnSettle={autoCollapseOnSettle}
     expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
     className={`task-process-group ${className}`.trim()}
     meta={<span className="task-process-summary">
       {messageCount > 0 && <span>{t('process.messages', { count: messageCount })}</span>}
+      {thinkingCount !== undefined && thinkingCount > 0 && <span>{t('process.thinking', { count: thinkingCount })}</span>}
       {toolCount > 0 && <span>{t('process.tools', { count: toolCount })}</span>}
       {(resolvedDurationMs > 0 || (state === 'running' && hasTimingBoundary)) && <span className="task-process-duration">{t('process.duration', { value: taskPreciseDurationLabel(resolvedDurationMs) })}</span>}
       {errorCount > 0 && <span className="task-process-summary-error">{t('process.errors', { count: errorCount })}</span>}
