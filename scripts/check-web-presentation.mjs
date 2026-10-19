@@ -449,6 +449,16 @@ function block(source, selector) {
   return source.slice(body, source.indexOf('}', body))
 }
 const vars = source => new Map([...source.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(match => [match[1], match[2].trim()]))
+function resolveColorToken(value, palette, visited = new Set()) {
+  const alias = /^var\((--[\w-]+)\)$/.exec(value)
+  if (!alias) return value
+  const key = alias[1]
+  if (visited.has(key)) throw new Error(`循环引用的颜色 Token：${key}`)
+  const next = palette.get(key)
+  if (!next) throw new Error(`未定义的颜色 Token：${key}`)
+  visited.add(key)
+  return resolveColorToken(next, palette, visited)
+}
 function rgb(hex) {
   if (!/^#[0-9a-f]{6}$/i.test(hex)) throw new Error(`对比度只接受 6 位 HEX：${hex}`)
   return [1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16) / 255)
@@ -466,7 +476,8 @@ for (const [label, fg, bg] of [
   ['暗色次要文字/软底', dark.get('--al-muted'), dark.get('--al-soft')], ['暗色用户气泡', dark.get('--al-user-bubble-text'), dark.get('--al-user-bubble')],
 ]) {
   if (!fg || !bg) throw new Error(`${label} 缺少 Token`)
-  const ratio = contrast(fg, bg)
+  const palette = label.startsWith('暗色') ? dark : light
+  const ratio = contrast(resolveColorToken(fg, palette), resolveColorToken(bg, palette))
   if (ratio < 4.5) throw new Error(`${label} 对比度不足：${ratio.toFixed(2)}`)
 }
 

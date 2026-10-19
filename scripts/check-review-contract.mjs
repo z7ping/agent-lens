@@ -107,7 +107,7 @@ if (!longCss.includes('.round-nav-filters') || !longCss.includes('.round-nav-act
 if (!mainSource.includes("import './task-detail.css'") || !mainSource.includes("import './task-session-view.css'")) throw new Error('Task Surface 共享组件与 Session 样式必须在 Web 入口加载')
 if (mainSource.includes("task-detail-prototype.css") || mainSource.includes("task-detail-polish.css") || mainSource.includes("task-feedback-polish.css")) throw new Error('正式入口不得恢复 Task Surface 临时覆盖层')
 if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('chat-avatar-agent')) throw new Error('Agent 输出不得恢复头像节点')
-if (!taskMessage.includes('{!user && <button') || !taskMessage.includes("t('message.source')")) throw new Error('源码切换只属于 Agent Markdown，且必须走国际化文案')
+if (!/\{!user && (?:showContentActions && )?<button/.test(taskMessage) || !taskMessage.includes("t('message.source')")) throw new Error('源码切换只属于正式 Agent Markdown，且必须走国际化文案')
 if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) throw new Error('Agent 源码切换必须悬浮在正文内，不得单独占行')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(taskToolGroup)) throw new Error('Tool Group 不得制造独立折叠父层')
 // The old gate compared a single tool-group push expression. It rejected a

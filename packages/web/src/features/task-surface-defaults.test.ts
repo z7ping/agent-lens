@@ -47,7 +47,9 @@ test('Task Review 的其他运行记录会解释用途，折叠时不挂载事�
 
 test('Task Review 展示注入上下文正文，不再使用隐藏占位文案', () => {
   assert.match(reviewPage, /node\.kind === 'context\.injected'[\s\S]*?stringValue\(payload, 'text'\)/)
-  assert.match(reviewPage, /className="injected-context-content"/)
+  // Full injected text is available through the evidence inspector, not an expanded log row.
+  assert.match(reviewPage, /function OriginalEvidenceValue/)
+  assert.match(reviewPage, /className="inspector-original-markdown"/)
   assert.doesNotMatch(reviewPage, /注入内容已隐藏/)
 })
 

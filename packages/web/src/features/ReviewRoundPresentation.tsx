@@ -420,7 +420,7 @@ export function ReviewRoundAdapter({
   const sourceDegraded = summary && !['complete', 'available'].includes(summary.availability)
   const fetchedComplete = fetchedSummary && ['complete', 'available'].includes(fetchedSummary.availability)
   const effectiveSummary = sourceDegraded && fetchedComplete
-    ? { ...fetchedSummary, availability: summary.availability, reasonCode: summary.reasonCode }
+    ? { ...fetchedSummary, availability: summary.availability, ...(summary.reasonCode ? { reasonCode: summary.reasonCode } : {}) }
     : fetchedSummary ?? summary
   const groups = useMemo(() => projectReviewInteractionPresentation(effectiveInteraction.nodes), [effectiveInteraction.nodes])
   const modelLabels = useMemo(() => projectReviewMessageModelLabels(effectiveInteraction.nodes), [effectiveInteraction.nodes])

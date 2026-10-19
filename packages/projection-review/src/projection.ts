@@ -262,7 +262,7 @@ export class ReviewProjection {
     const hasUserMessage = async (id: string): Promise<boolean> => (
       await repositories.observations.query({ logicalSessionId: id, kind: 'message.user', limit: 1 })
     ).length > 0
-    if (await hasUserMessage(logicalSessionId)) return logicalSessionId
+    const candidates: string[] = []
     const pathIdentity = (value: string): string => {
       const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
       return /^[a-z]:\//i.test(normalized) ? normalized.toLowerCase() : normalized
@@ -279,8 +279,14 @@ export class ReviewProjection {
           || pathIdentity(peer.configRoot ?? '') !== pathIdentity(installation.configRoot ?? '')) continue
         const candidate = await sessions.findSourceSession(source.sourceId, peer.id, source.nativeSessionId)
         if (!candidate?.logicalSessionId || candidate.runtimeProfileId !== source.runtimeProfileId) continue
-        if (await hasUserMessage(candidate.logicalSessionId)) return candidate.logicalSessionId
+        candidates.push(candidate.logicalSessionId)
       }
+    }
+    // Most sessions have no alternate installation pointing at the same native
+    // data root. Avoid an extra observation query on every normal Review page.
+    if (candidates.length === 0 || await hasUserMessage(logicalSessionId)) return logicalSessionId
+    for (const candidateId of new Set(candidates)) {
+      if (await hasUserMessage(candidateId)) return candidateId
     }
     return logicalSessionId
   }

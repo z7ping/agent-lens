@@ -119,7 +119,7 @@ export class CodexLiveAdapter implements LiveAdapter {
           session.streaming = true
           const latest = await this.rpc.request('thread/turns/list', {
             threadId: session.id, limit: 1, sortDirection: 'desc', itemsView: 'notLoaded',
-          }).catch(() => ({}))
+          }).then(codexRecord).catch((): Record<string, unknown> => ({}))
           const turns = Array.isArray(latest.data) ? latest.data : []
           session.activeTurn = codexText(codexRecord(turns[0]).id) || undefined
         }
@@ -267,7 +267,7 @@ export class CodexLiveAdapter implements LiveAdapter {
       // Do not advance the checkpoint if a concurrent new item makes the two reads diverge.
       const latest = await this.rpc.request('thread/items/list', {
         threadId: session.id, limit: 1, sortDirection: 'desc',
-      }).catch(() => ({}))
+      }).then(codexRecord).catch((): Record<string, unknown> => ({}))
       const latestItem = codexRecord(Array.isArray(latest.data) ? latest.data[0] : null)
       const sameItem = codexText(latestItem.turnId) === lastTurnId
         && codexText(codexRecord(latestItem.item).id) === lastItemId

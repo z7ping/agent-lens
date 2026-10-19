@@ -202,7 +202,7 @@ test('normalized Live events drive shared message reasoning and tool projections
   assert.deepEqual(items, [
     { id: 'user:1', kind: 'message', role: 'user', text: 'fix it', streaming: false },
     { id: 'message:a1:0', kind: 'message', role: 'assistant', text: 'working done', streaming: false, at: '2026-09-17T12:00:01.000Z' },
-    { id: 'thinking:content:1', kind: 'thinking', text: 'inspect repo', streaming: true, at: '2026-09-17T12:00:03.000Z' },
+    { id: 'thinking:content:1', kind: 'thinking', text: 'inspect repo', streaming: false, at: '2026-09-17T12:00:03.000Z' },
     { id: 'tool:tool-1', kind: 'tool', callId: 'tool-1', name: 'read', inputPreview: 'src/index.ts', output: 'ok', status: 'success', durationMs: 12, at: '2026-09-17T12:00:04.000Z' },
   ])
 })
