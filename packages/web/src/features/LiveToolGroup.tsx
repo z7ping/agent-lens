@@ -39,7 +39,7 @@ export function LiveToolGroup({
       onClick={() => setOpen(value => !value)}
     >
       <UiIcon name={open ? 'chevron-down' : 'chevron-right'} size={14}/>
-      <UiIcon name="terminal" size={14}/>
+      <UiIcon name="tool-shell" size={14}/>
       <span className="live-tool-group-title">{t('live.toolGroup')}</span>
       <span className="live-tool-group-stats">{t('live.toolGroupCount', { count: tools.length })}{running > 0 ? ` · ${t('live.toolGroupRunning', { count: running })}` : ''}{failed > 0 ? ` · ${t('live.toolGroupFailed', { count: failed })}` : ''}</span>
     </button>
@@ -51,7 +51,7 @@ export function LiveToolGroup({
         {t('live.toolGroupMore', { count: hidden })}<UiIcon name="chevron-down" size={14}/>
       </Button>}
       {showAll && tools.length > 5 && <Button size="small" className="live-tool-group-more" onClick={() => setShowAll(false)}>
-        {t('live.toolGroupLess')}<UiIcon name="chevron-up" size={14}/>
+        {t('live.toolGroupLess')}<UiIcon name="arrow-up" size={14}/>
       </Button>}
     </div>}
   </section>
