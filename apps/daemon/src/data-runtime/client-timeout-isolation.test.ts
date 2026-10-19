@@ -66,6 +66,33 @@ test('request that expires while queued is skipped before worker execution', asy
   }
 })
 
+test('writer heartbeat does not kill a busy but healthy serialized write', async () => {
+  const client = new DataRuntimeClient({
+    allowDiagnostics: true,
+    role: 'writer',
+    heartbeatIntervalMs: 50,
+    heartbeatTimeoutMs: 50,
+    requestTimeoutMs: 2_000,
+  })
+  await client.start()
+  try {
+    // A ping queued behind this synchronous operation would time out and
+    // previously terminate the writer (exit code 1) even though it is healthy.
+    const write = client.request<{ blockedMs: number }>(
+      'diagnostic.block', { durationMs: 250 }, 1_000,
+    )
+    await new Promise(resolve => setTimeout(resolve, 130))
+    assert.equal(client.state(), 'ready')
+    assert.equal(client.snapshot().livenessFailures, 0)
+    assert.equal((await write).blockedMs, 250)
+    await client.request('ping', undefined, 1_000)
+    assert.equal(client.state(), 'ready')
+    assert.equal(client.snapshot().livenessFailures, 0)
+  } finally {
+    await client.shutdown()
+  }
+})
+
 test('heartbeat timeout recycles a genuinely unresponsive Worker', async () => {
   const client = new DataRuntimeClient({
     allowDiagnostics: true,
@@ -80,6 +107,8 @@ test('heartbeat timeout recycles a genuinely unresponsive Worker', async () => {
     const snapshot = client.snapshot()
     assert.equal(snapshot.livenessFailures, 1)
     assert.ok(snapshot.timeouts >= 1)
+    await waitFor(() => client.snapshot().lastError?.includes('liveness timeout') === true)
+    assert.match(client.snapshot().lastError ?? '', /terminated after ping liveness timeout/)
   } finally {
     await client.shutdown()
   }
