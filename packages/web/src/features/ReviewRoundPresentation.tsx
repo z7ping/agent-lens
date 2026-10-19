@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentDto, ReviewMessageNodeDto, ReviewNodeDto, ReviewProcessSummaryDto, ReviewToolNodeDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { agentLabel } from '../components/AgentScope'
 import { AgentLensApi } from '../client/api'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
-import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { type ToolVisualKind } from '../components/ToolKindIcon'
 import { UiIcon } from '../components/ui'
@@ -23,52 +22,9 @@ import { brief, EvidenceBadges, sourceEventSummary, toolKindLabel, toolPresentat
 
 const taskFileApi = new AgentLensApi()
 
+/** Process-only Markdown remains readable; copy/source controls belong to the answer. */
 function MarkdownSurface({ text }: { text: string }) {
-  const { t } = useTranslation('review')
-  const [view, setView] = useState<'rendered' | 'source'>('rendered')
-  const [expanded, setExpanded] = useState(false)
-  const [collapsible, setCollapsible] = useState(false)
-  const [collapsedHeight, setCollapsedHeight] = useState<number | undefined>()
-  const surfaceRef = useRef<HTMLDivElement>(null)
-
-  const measure = useCallback(() => {
-    const element = surfaceRef.current
-    if (!element) return
-    const style = window.getComputedStyle(element)
-    const fontSize = Number.parseFloat(style.fontSize) || 14
-    const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.65
-    const limit = Math.ceil(lineHeight * 5 + 2)
-    setCollapsedHeight(limit)
-    setCollapsible(element.scrollHeight > limit + 2)
-  }, [])
-
-  useLayoutEffect(() => {
-    setExpanded(false)
-    const element = surfaceRef.current
-    if (!element) return
-    const frame = window.requestAnimationFrame(measure)
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
-    observer?.observe(element)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      observer?.disconnect()
-    }
-  }, [measure, text, view])
-
-  return <div className="markdown-message" data-view={view}>
-    <div
-      ref={surfaceRef}
-      className={`markdown-surface ${collapsible && !expanded ? 'is-collapsed' : ''}`}
-      style={collapsible && !expanded && collapsedHeight ? { maxHeight: `${collapsedHeight}px` } : undefined}
-    >
-      {view === 'rendered' ? <MarkdownContent text={text}/> : <CopyableCodeBlock className="markdown-source" copyValue={text}>{text}</CopyableCodeBlock>}
-      {collapsible && !expanded && <span className="markdown-fade" aria-hidden="true"/>}
-    </div>
-    <div className="markdown-message-actions">
-      {collapsible && <button onClick={() => setExpanded(value => !value)}>{expanded ? t('local.markdown.collapseFiveLines') : t('local.markdown.expand')}</button>}
-      <button title={view === 'rendered' ? t('local.markdown.viewSource') : t('local.markdown.returnRendered')} onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}>{view === 'rendered' ? t('local.markdown.source') : t('local.markdown.rendered')}</button>
-    </div>
-  </div>
+  return <div className="markdown-message"><MarkdownContent text={text}/></div>
 }
 
 function MessageBubble({
@@ -77,12 +33,14 @@ function MessageBubble({
   loadAttachments,
   nestedTools = [],
   modelLabel,
+  showContentActions = false,
 }: {
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   nestedTools?: ReviewToolNodeDto[]
   modelLabel?: string | undefined
+  showContentActions?: boolean | undefined
 }) {
   const { t } = useTranslation('review')
   const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
@@ -126,6 +84,7 @@ function MessageBubble({
     attachments={attachments}
     author={node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId)}
     modelLabel={node.role === 'assistant' ? modelLabel : undefined}
+    showContentActions={node.role === 'assistant' && showContentActions}
     time={formatClock(node.at)}
     meta={<EvidenceBadges evidence={node.evidence}/>}
     actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button> : undefined}
@@ -253,6 +212,8 @@ function ReviewProcessGroup({
   const { t } = useTranslation('review')
   const messages = items.filter((item): item is Extract<typeof item, { type: 'message' }> => item.type === 'message')
   const tools = items.flatMap(item => item.type === 'tool-group' ? item.items : [])
+  const thinkingCount = messages.filter(item => item.node.role === 'reasoning').length
+  const commentaryCount = messages.filter(item => item.node.role === 'commentary').length
   const timing = reviewProcessTiming(items)
   const degraded = summary?.availability === 'partial' || summary?.availability === 'unavailable'
     || summary?.availability === 'truncated'
@@ -260,7 +221,8 @@ function ReviewProcessGroup({
   const reasonLabel = summary?.reasonCode ? t(`local.process.reasons.${summary.reasonCode}`) : undefined
   return <TaskProcessGroup
     id={id}
-    messageCount={summary?.messageCount ?? messages.length}
+    messageCount={items.length ? commentaryCount : 0}
+    thinkingCount={items.length ? thinkingCount : undefined}
     toolCount={summary?.toolCount ?? tools.length}
     errorCount={summary?.errorCount ?? tools.filter(tool => tool.status === 'error').length}
     durationMs={summary?.durationMs}
@@ -470,7 +432,12 @@ export function ReviewRoundAdapter({
   const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
   const promptEntries = groups.filter(entry => entry.type === 'message' && entry.node.role === 'user')
   const afterProcessEntries = groups.filter(entry => !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
-  const hasFinalAnswer = afterProcessEntries.some(entry => entry.type === 'message' && entry.node.role === 'assistant')
+  const lastAssistantEntry = [...afterProcessEntries].reverse().find(
+    (entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'message' }> =>
+      entry.type === 'message' && entry.node.role === 'assistant',
+  )
+  const lastAssistantId = lastAssistantEntry?.node.id
+  const hasFinalAnswer = Boolean(lastAssistantId)
   // 只统计当前已经加载的原始事件，避免把未展开的惰性过程误报为 0。
   const unknownCount = groups.reduce((sum, entry) => sum + (entry.type === 'raw-event-group'
     ? entry.items.filter(item => item.category === 'unknown').length : entry.type === 'process'
@@ -497,7 +464,7 @@ export function ReviewRoundAdapter({
       return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     }
     if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
-    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)}/>
+    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId}/>
     if (entry.type === 'event') {
       if (isConsolidatedEvent(entry.node)) return null
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>

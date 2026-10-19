@@ -11,6 +11,7 @@ export interface StableLiveTaskRoundProps {
   agentLabel: string
   eager: boolean
   showResponsePending?: boolean
+  showAnswerActions?: boolean
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
@@ -27,6 +28,7 @@ export function sameStableLiveTaskRoundProps(
   if (previous.agentLabel !== next.agentLabel
     || previous.eager !== next.eager
     || previous.showResponsePending !== next.showResponsePending
+    || previous.showAnswerActions !== next.showAnswerActions
     || previous.messageActions !== next.messageActions
     || previous.actionPending !== next.actionPending
     || previous.runtimeStreaming !== next.runtimeStreaming

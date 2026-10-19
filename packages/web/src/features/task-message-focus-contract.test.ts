@@ -47,3 +47,14 @@ test('Review / Live 用户气泡保持原有右对齐与断点宽度，不约束
   assert.match(taskDetailCss, /@media \(max-width: 991\.98px\) \{[\s\S]*?\.task-surface \.task-message-bubble-user \{ max-width: 88%; \}/)
   assert.match(taskMessageSource, /const roleClass = user \? 'task-message-user' : 'task-message-assistant'/)
 })
+
+test('过程文本不重复出现复制/源码，正式答案仍可操作', () => {
+  assert.match(taskMessageSource, /showContentActions\?: boolean/)
+  assert.match(taskMessageSource, /showContentActions = true/)
+  assert.match(taskMessageSource, /!user && showContentActions && <IconButton/)
+  assert.match(taskMessageSource, /!user && showContentActions && <button type="button" className="task-message-source-action"/)
+  const review = readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8')
+  assert.match(review, /showContentActions=\{entry\.node\.id === lastAssistantId\}/)
+  assert.match(review, /function MarkdownSurface\(\{ text \}/)
+  assert.doesNotMatch(review, /function MarkdownSurface\([\s\S]*?markdown-message-actions/)
+})

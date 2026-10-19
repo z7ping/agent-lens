@@ -67,6 +67,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       details: 'Processing details',
       detailsWithThinking: 'Processing details ({{thinking}})',
       messages: '{{count}} messages',
+      thinking: '{{count}} thinking blocks',
       tools: '{{count}} tool calls',
       duration: '{{value}} elapsed',
       errors: '{{count}} failures',
