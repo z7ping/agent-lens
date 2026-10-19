@@ -19,7 +19,8 @@ test('120 轮 + 1200 工具：视觉每轮一个 process，导轨语义数不跟
   }
   const raw = projectLiveTaskRounds(events)
   const rounds = coalesceLiveSemanticRounds(raw)
-  assert.ok(raw.length > rounds.length)
+  assert.equal(raw.length, rounds.length)
+  assert.ok(raw.every(round => round.items.length === 12))
   assert.equal(rounds.length, 120)
   assert.equal(new Set(rounds.map(round => round.model.semanticId)).size, 120)
   assert.equal(rounds.reduce((sum, round) => sum + round.model.toolCount, 0), 1200)

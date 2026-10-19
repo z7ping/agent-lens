@@ -132,10 +132,12 @@ export function TaskMessage({
     aria-busy={streaming || awaitingFirstContent || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
-      {!user && modelLabel && <div className="task-message-model-meta">
-        <b>{resolvedAuthor}</b><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span>{time && <time>{time}</time>}
+      {(modelLabel || time || meta) && <div className="task-message-model-meta">
+        <b>{resolvedAuthor}</b>
+        {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
+        {meta && <span className="task-message-context-evidence">{meta}</span>}
+        {time && <time>{time}</time>}
       </div>}
-      <div className="task-message-meta"><b>{resolvedAuthor}</b>{meta}{time && <time>{time}</time>}</div>
       {awaitingFirstContent ? <div
         className="task-message-response-pending"
         role="status"

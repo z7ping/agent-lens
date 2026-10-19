@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveTaskProjectionItem } from './live-task-projection'
-import { LiveTaskRoundProjector, LIVE_TASK_ROUND_FACT_LIMIT, projectLiveTaskRounds } from './live-task-projection'
+import { LiveTaskRoundProjector, projectLiveTaskRounds } from './live-task-projection'
 import { liveFollowTextRevision } from './live-follow-controller'
 
 /** Deterministic long-session fixture; no timing threshold tied to CI host speed. */
@@ -23,7 +23,7 @@ function transcript(rounds = 120, toolsPerRound = 10): LiveTaskProjectionItem[] 
   return items
 }
 
-test('100+ 轮与 1000+ 工具保留有序导轨语义和有界虚拟分块', () => {
+test('100+ 轮与 1000+ 工具保留有序导轨语义和每轮唯一 Process', () => {
   const items = transcript()
   const segments = projectLiveTaskRounds(items)
   const semantic = [...new Set(segments.map(round => round.model.semanticId))]
@@ -31,7 +31,8 @@ test('100+ 轮与 1000+ 工具保留有序导轨语义和有界虚拟分块', ()
   assert.equal(items.filter(item => item.kind === 'tool').length, 1200)
   assert.equal(semantic[0], 'live-round:user:1')
   assert.equal(semantic.at(-1), 'live-round:user:120')
-  assert.ok(segments.every(round => round.items.length <= LIVE_TASK_ROUND_FACT_LIMIT))
+  assert.equal(segments.length, 120)
+  assert.ok(segments.every(round => round.items.length === 11))
   assert.ok(segments.every(round => round.model.ordinal !== undefined))
 })
 
@@ -46,7 +47,7 @@ test('100+ 轮稳定历史不因当前正文与折叠工具变化重新投影', 
     { id: 'assistant:last', kind: 'message', role: 'assistant', text: '分析中', streaming: true },
   ])
   assert.strictEqual(before.stable, during.stable)
-  assert.equal(before.stable.length, 238)
+  assert.equal(before.stable.length, 119)
   assert.equal(during.active.at(-1)?.model.ordinal, 120)
   const revision = liveFollowTextRevision(stable, during.active.flatMap(round => round.items))
   const noisy = liveFollowTextRevision(stable, [

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { TaskSessionMessage, TaskSessionProcess, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText } from './TaskSessionContent'
+import { TaskSessionMessage, TaskSessionProcess, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, taskSessionMessageTime } from './TaskSessionContent'
 import type { TaskThinkingModel, TaskToolModel } from './task-detail-model'
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -79,6 +79,38 @@ test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => 
     ...sharedProps, state: 'running', mode: 'review', children: '内容',
   }))
   assert.doesNotMatch(runningReview, /<details[^>]*open/)
+})
+
+test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺少 modelLabel 隐藏时间与证据', () => {
+  const evidence = createElement('span', {}, '证据 2 条')
+  const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant',
+    text: '已完成任务',
+    presentation: { author: 'Pi', time: '21:40:00', evidence },
+  }))
+  assert.equal((html.match(/class="task-message-model-meta"/g) ?? []).length, 1)
+  assert.match(html, /<b>Pi<\/b>/)
+  assert.match(html, /证据 2 条/)
+  assert.match(html, /<time>21:40:00<\/time>/)
+  assert.ok(html.indexOf('证据 2 条') < html.indexOf('<time>21:40:00'))
+  assert.doesNotMatch(html, /task-message-model-label/)
+  const noEvidence = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: '正文', presentation: { author: 'Codex' },
+  }))
+  assert.doesNotMatch(noEvidence, /class="task-message-model-meta"/)
+  assert.equal(taskSessionMessageTime(undefined), undefined)
+  assert.equal(taskSessionMessageTime('not-a-date'), undefined)
+  assert.match(taskSessionMessageTime('2026-10-19T12:00:00Z') ?? '', /\d{2}:\d{2}:\d{2}/)
+  for (const source of ['./LiveTaskTimeline.tsx', './ReviewRoundPresentation.tsx']) {
+    assert.match(read(source), /presentation=\{\{/)
+    assert.match(read(source), /taskSessionMessageTime/)
+  }
+  const messageSource = read('./TaskMessage.tsx')
+  assert.match(messageSource, /\(modelLabel \|\| time \|\| meta\)/)
+  assert.doesNotMatch(messageSource, /!user && modelLabel &&/)
+  assert.match(read('../task-detail.css'), /\.task-surface \.task-message-context-evidence/)
+  assert.doesNotMatch(read('../review.css'), /\.task-message-model-meta/)
+  assert.doesNotMatch(read('../pi-live.css'), /\.task-message-model-meta/)
 })
 
 test('只有可信 reasoning 区间才显示思考时长，不能借用过程或轮次耗时', () => {

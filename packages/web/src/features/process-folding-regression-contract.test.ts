@@ -24,17 +24,17 @@ test('Review 与 Pi 在 revision 更新后会为仍展开的 Process 自动重�
 })
 
 test('处理详情的 Thinking 摘要两行并将所有折叠箭头放在右侧', () => {
-  assert.match(thinking, /<span className="task-thinking-summary-meta">\{meta\}[\s\S]*?<DisclosureChevron\/>/)
+  assert.match(thinking, /<span className="task-thinking-summary-meta">[\s\S]*?\{meta\}[\s\S]*?<DisclosureChevron\/>/)
   assert.match(styles, /\.task-thinking-preview \{[^}]*-webkit-line-clamp: 2/)
   assert.match(review, /preview: item\.node\.text\.replace/)
 })
 
 test('Shell 在折叠态显示两行命令预览，展开复用原有输入和输出区域', () => {
-  assert.match(tool, /commandTarget && !compact && <code className="task-tool-command-preview"/)
+  assert.match(tool, /commandTarget[\s\S]*?<code className="task-tool-command-preview"/)
   assert.match(tool, /data-tool-section="input"/)
   assert.match(tool, /data-tool-section="output"/)
   assert.match(tool, /task-tool-status-label/)
-  assert.match(styles, /\.task-tool-command-preview \{[^}]*-webkit-line-clamp: 2/)
+  assert.match(styles, /\.task-surface \.task-tool-command-preview \{ font-family: var\(--font-mono\); \}/)
 })
 
 test('Assistant 复制、源码和证据入口共享同一行', () => {

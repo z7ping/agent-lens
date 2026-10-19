@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { coalesceLiveSemanticRounds } from './live-semantic-rounds'
-import { projectLiveTaskRounds, LIVE_TASK_ROUND_FACT_LIMIT, type LiveTaskProjectionItem } from './live-task-projection'
+import { projectLiveTaskRounds, type LiveTaskProjectionItem } from './live-task-projection'
 
 test('过程、正文、用户请求在所有 Agent 上按原生语义归类，未知 assistant 不猜 final', () => {
   const facts: TaskReadingFact<string>[] = [
@@ -32,8 +32,8 @@ test('超过 1000 工具的单个语义轮只产生一个阅读轮次与过程�
     { id: 'message:answer', kind: 'message', role: 'assistant', phase: 'final', text: '检查完成', streaming: false },
   ]
   const fragments = projectLiveTaskRounds(events)
-  assert.ok(fragments.length > 100)
-  assert.ok(fragments.every(item => item.items.length <= LIVE_TASK_ROUND_FACT_LIMIT))
+  assert.equal(fragments.length, 1)
+  assert.equal(fragments[0]?.items.length, events.length)
   const rounds = coalesceLiveSemanticRounds(fragments)
   assert.equal(rounds.length, 1)
   assert.equal(rounds[0]?.model.id, 'live-round:user:one')
