@@ -384,9 +384,9 @@
 .task-surface .task-message-assistant .task-message-content[data-view='source'] .markdown-message-actions { opacity: 1; }
 .task-surface .markdown-message-actions button:not(.ui-icon-button),
 .task-surface .task-message-actions button { min-height: 0; height: 26px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--al-accent); font-size: 12px; font-weight: 620; }
-.task-surface .task-message-copy-action.ui-icon-button { width: 26px; height: 26px; min-height: 26px; border-color: transparent; background: transparent; color: var(--al-muted); }
-.task-surface .task-message-copy-action.ui-icon-button:hover,
-.task-surface .task-message-copy-action.ui-icon-button:focus-visible { background: var(--al-soft-2); color: var(--al-ink-2); }
+.task-surface :is(.task-message-copy-action, .task-message-source-action).ui-icon-button { width: 26px; height: 26px; min-height: 26px; border-color: transparent; background: transparent; color: var(--al-muted); }
+.task-surface :is(.task-message-copy-action, .task-message-source-action).ui-icon-button:hover,
+.task-surface :is(.task-message-copy-action, .task-message-source-action).ui-icon-button:focus-visible { background: var(--al-soft-2); color: var(--al-ink-2); }
 .task-surface .task-message-copy-action[data-copy-state='copied'] { color: var(--al-accent); }
 .task-surface .markdown-message-actions button:hover,
 .task-surface .task-message-actions button:hover { background: var(--al-soft-2); color: var(--al-ink-2); }
