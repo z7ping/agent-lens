@@ -217,7 +217,7 @@ function ReviewProcessGroup({
             id: item.node.id,
             label: t('local.process.thinking'),
             text: item.node.text,
-            preview: item.node.text.replace(/\\s+/g, ' ').trim().slice(0, 220),
+            preview: item.node.text.replace(/\s+/g, ' ').trim().slice(0, 220),
             state: 'settled',
           }}
           expansionStore={expansionStore}
@@ -225,7 +225,7 @@ function ReviewProcessGroup({
         return <TaskSessionProcessText key={item.node.id} text={item.node.text}/>
       })}
     </div>}
-  </TaskProcessGroup>
+  </TaskSessionProcess>
 }
 
 function EventRow({ event, inspect }: { event: ReviewEventNodeDto; inspect(node: ReviewNodeDto): void }) {
