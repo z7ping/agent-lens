@@ -162,11 +162,19 @@ const surfaces = [
 ]
 const insightMetricPage = readFileSync(p('features/InsightsPage.tsx'), 'utf8')
 const integrationMetricPage = readFileSync(p('features/IntegrationManagementPage.tsx'), 'utf8')
+// Insights uses four full Workspace KPI cards. Integration Management is now
+// a compact three-counter navigator strip, not four full cards. Keep this
+// distinction intentional; neither feature may introduce private card styling.
+const integrationCounterStrip = integrationMetricPage.match(
+  /<div className="integration-management-summary"[^>]*>([\s\S]*?)<\/div>/,
+)?.[1] ?? ''
 if ((insightMetricPage.match(/className="workspace-metric-card insight-kpi"/g) ?? []).length !== 4
-  || (integrationMetricPage.match(/<span className="workspace-metric-card">/g) ?? []).length !== 4
+  || (integrationCounterStrip.match(/<span><strong>/g) ?? []).length !== 3
+  || !integrationMetricPage.includes('className="integration-management-navigator"')
+  || !integrationsCss.includes('.integration-management-summary {')
   || /\.insight-kpi\s*\{[^}]*border-radius\s*:/s.test(css.insights)
-  || /\.integration-management-summary > span\s*\{[^}]*border-radius\s*:/s.test(integrationsCss)) {
-  throw new Error('洞察与接入管理的统计卡片必须共享单一 Workspace 视觉 Owner')
+  || /\.integration-management-summary > span\s*\{[^}]*border(?:-radius)?\s*:/s.test(integrationsCss)) {
+  throw new Error('洞察 KPI 使用共享 Workspace 卡片；接入管理仅保留导航内三个紧凑统计，不得生成私有卡片')
 }
 for (const [source, selector] of surfaces) {
   const rule = cssRules(source).find(item => item.selector === selector)
