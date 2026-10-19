@@ -16,6 +16,12 @@ export interface TaskHeaderInfoItem {
   tone?: 'danger' | 'accent' | undefined
 }
 
+export interface TaskHeaderInfoPanel {
+  label: string
+  summary: string
+  content: ReactNode
+}
+
 export interface TaskHeaderProps {
   marker?: ReactNode
   agent: ReactNode
@@ -26,6 +32,7 @@ export interface TaskHeaderProps {
   submeta?: ReactNode
   metrics?: TaskHeaderMetric[]
   infoItems?: TaskHeaderInfoItem[]
+  infoPanel?: TaskHeaderInfoPanel
   actions?: ReactNode
   /** 领域阅读操作复用共享视图菜单，不占用常驻工具栏。 */
   viewActions?: ReactNode
@@ -87,7 +94,7 @@ function readonlySessionDocument(header: HTMLElement | null): HTMLElement | null
   return documentRoot instanceof HTMLElement ? documentRoot : null
 }
 
-export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], actions, viewActions, readingControls, continuationActions, className = '' }: TaskHeaderProps) {
+export function TaskHeader({ marker, agent, context, status, showStatus = true, title, submeta, metrics = [], infoItems = [], infoPanel, actions, viewActions, readingControls, continuationActions, className = '' }: TaskHeaderProps) {
   const { t } = useTranslation('task')
   const resolvedStatus = status ?? t('header.completed')
   const resolvedContext = context === t('header.noProject') ? t('header.unlinkedProject') : context
@@ -100,8 +107,9 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false)
   const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
-  const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0)
+  const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0 || infoPanel)
 
   useLayoutEffect(() => {
     const documentRoot = readonlySessionDocument(headerRef.current)
@@ -199,10 +207,15 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     <Drawer
       open={compactInfoOpen}
       className="task-header-info-drawer"
-      title={t('header.taskInfo')}
-      onClose={() => setCompactInfoOpen(false)}
+      title={infoPanelOpen && infoPanel ? infoPanel.label : t('header.taskInfo')}
+      onClose={() => { setCompactInfoOpen(false); setInfoPanelOpen(false) }}
     >
-      <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
+      {infoPanelOpen && infoPanel ? <>
+        <Button size="small" className="task-header-info-back" onClick={() => setInfoPanelOpen(false)}>
+          <UiIcon name="arrow-left" size={14}/>{t('header.taskInfo')}
+        </Button>
+        {infoPanel.content}
+      </> : <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
         {infoItems.length > 0
           ? infoItems.map((item, index) => <div key={`${item.label}-${index}`} data-tone={item.tone ?? ''}><span>{item.label}</span><b>{item.value}</b></div>)
           : <>
@@ -210,7 +223,13 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             {submeta && <div><span>{t('header.workspace')}</span><b>{submeta}</b></div>}
             {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
           </>}
-      </section>
+        {infoPanel && <div className="task-header-info-panel-row">
+          <span>{infoPanel.label}</span>
+          <button type="button" className="task-header-info-panel-trigger" onClick={() => setInfoPanelOpen(true)}>
+            <b>{infoPanel.summary}</b><UiIcon name="chevron-right" size={14}/>
+          </button>
+        </div>}
+      </section>}
     </Drawer>
   </>
 }
