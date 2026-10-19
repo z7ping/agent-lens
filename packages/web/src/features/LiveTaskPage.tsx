@@ -309,6 +309,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         status={runtimeStatus}
         title={readableTaskHeaderTitle(title)}
         metrics={[]}
+        infoPanel={fileChanges?.runtimeId === fileChangeRuntimeId
+          && fileChanges.result
+          && (fileChanges.result.summary.count > 0 || fileChanges.result.meta.truncated)
+          ? {
+              label: t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              summary: t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              content: <TaskFileChangesDisclosure value={fileChanges.result} inlineDetails/>,
+            } : undefined}
         infoItems={[
           { label: t('header.context'), value: workspace || t('header.unlinkedProject') },
           { label: t('live.runtimeId'), value: current.runtimeSessionId },
@@ -380,7 +388,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
             onMessageAction={runMessageAction}
           />)}
-          {historyPage?.hasLater !== true && <TaskFileChangesDisclosure key={fileChangeRuntimeId} value={fileChanges && fileChanges.runtimeId === fileChangeRuntimeId ? fileChanges.result : null}/>}
           {historyPage?.hasLater && <div
             ref={historyNewerSentinelRef}
             className={`live-task-history-sentinel live-task-history-sentinel-newer ${historyLoading ? 'is-loading' : ''}`}
