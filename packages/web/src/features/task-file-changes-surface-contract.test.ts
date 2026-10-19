@@ -22,7 +22,7 @@ test('会话级文件归入任务信息，Review 逐轮文件仍留在轮次末�
   assert.match(live, /runtimeFileChanges\(fileChangeRuntimeId/)
   assert.match(live, /infoPanel=\{fileChanges\?[\s\S]*?<TaskFileChangesDisclosure value=\{fileChanges\.result\} inlineDetails\/>/)
   assert.doesNotMatch(live, /<TaskFileChangesDisclosure key=/)
-  assert.match(styles, /\.task-surface \.task-file-changes/)
+  assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-changes/)
   assert.doesNotMatch(reviewStyles, /\.task-file-changes\s*\{/)
 })
 
@@ -70,4 +70,9 @@ test('任务信息只切换同一个 Drawer 内子视图，Diff 和证据不再�
   assert.match(component, /inspectingInline \? <section/)
   assert.match(component, /!inlineDetails && evidenceItem && <Drawer/)
   assert.match(component, /!inlineDetails && diffPath && <Drawer/)
+})
+
+test('抽屉中的会话文件列表复用正文同一份样式定义', () => {
+  assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-change-row/)
+  assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-changes-more/)
 })
