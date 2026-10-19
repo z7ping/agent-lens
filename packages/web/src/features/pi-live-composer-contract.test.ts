@@ -16,6 +16,8 @@ const page = [
   readFileSync(new URL('./live-task-history-window.ts', import.meta.url), 'utf8'),
   readFileSync(new URL('./task-live-runtime.ts', import.meta.url), 'utf8')
 ].join('\n')
+const liveTask = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+const liveActions = readFileSync(new URL('./use-live-task-actions.ts', import.meta.url), 'utf8')
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const sessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
@@ -66,6 +68,19 @@ test('通用 Live Composer 只通过共享 LiveMarkdownComposer 承载编辑状�
   assert.match(page, /mode === ['"]followUp['"] \? ['"]follow-up['"] : undefined/)
   assert.doesNotMatch(page, /<textarea[^>]*className="pi-live-input"/)
   assert.doesNotMatch(page, /onDraftChange=/)
+})
+
+test('Live 输入框回车与发送按钮在发送接受后跳最新，用户主动上翻仍能退出跟随', () => {
+  assert.match(liveActions, /onSendAccepted\?\.\(\)/)
+  assert.match(liveActions, /onSendDelivered\?\.\(\)/)
+  assert.match(liveActions, /if \(unsupported\) \{[\s\S]*?return[\s\S]*?onSendAccepted\?\.\(\)/)
+  assert.match(liveActions, /await liveApi\.send\(current\.liveId, current\.runtimeSessionId, message, behavior\)[\s\S]*?onSendDelivered\?\.\(\)/)
+  assert.match(liveTask, /followControllerRef\.current\.restore\(\)/)
+  assert.match(liveTask, /onSendAccepted, onSendDelivered \}\)/)
+  assert.match(liveTask, /onSubmit=\{\(message, mode\) => \{ void send\(message, mode === 'followUp' \? 'follow-up' : undefined\) \}\}/)
+  assert.match(liveTask, /if \(message\) void send\(message\)/)
+  assert.match(liveTask, /onSendDelivered = useCallback\(\(\) => \{[\s\S]*?followControllerRef\.current\.isFollowing\) void jumpLatest\(\)/)
+  assert.match(liveTask, /onWheel=\{event => markReaderUserIntent/)
 })
 
 test('共享 Composer 保留 Markdown、大文本、图片、Shift+Enter 与 Alt+Enter 语义', () => {
