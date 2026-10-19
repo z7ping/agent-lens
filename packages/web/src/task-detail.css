@@ -412,10 +412,11 @@
 }
 .task-surface .task-thinking-summary::-webkit-details-marker { display: none; }
 .task-surface .task-thinking-summary-main { display: flex; min-width: 0; align-items: center; gap: 6px; }
-.task-surface .task-thinking[data-task-thinking-kind='thinking'] .task-thinking-summary-main { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: 6px; row-gap: 2px; }
+.task-surface .task-thinking[data-task-thinking-kind='thinking'] .task-thinking-summary-main { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: start; column-gap: 6px; row-gap: 0; }
 .task-surface .task-thinking[data-task-thinking-kind='thinking'] .task-thinking-kind-mark { grid-column: 1; grid-row: 1; }
 .task-surface .task-thinking[data-task-thinking-kind='thinking'] .task-thinking-label { grid-column: 2; grid-row: 1; }
 .task-surface .task-thinking[data-task-thinking-kind='thinking'] .task-thinking-running-mark { grid-column: 3; grid-row: 1; }
+.task-surface .task-thinking[data-task-thinking-kind='thinking'] .task-thinking-kind-mark { margin-top: 2px; }
 .task-surface .task-thinking-kind-mark,
 .task-surface .task-thinking-running-mark {
   display: inline-flex;
@@ -430,7 +431,7 @@
 .task-surface .task-thinking[data-task-thinking-state='running'] .task-thinking-running-mark { visibility: visible; color: var(--al-accent); }
 .task-surface .task-thinking[data-task-thinking-state='running'] .task-thinking-running-mark svg { animation: task-activity-spin 1.4s linear infinite; }
 .task-surface .task-thinking-label { flex: 0 0 auto; color: var(--al-muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
-.task-surface .task-thinking-preview { grid-column: 2 / -1; grid-row: 2; display: -webkit-box; min-width: 0; overflow: hidden; color: var(--al-muted-2); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.task-surface .task-thinking-preview { grid-column: 2; grid-row: 1; display: -webkit-box; min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .task-surface .task-thinking-summary-meta { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 .task-surface .task-process-group > .task-thinking-summary { grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
 .task-surface .task-process-group > .task-thinking-summary .task-thinking-summary-meta { justify-self: start; }
@@ -481,7 +482,6 @@
 .task-surface .task-thinking-content .task-tool-group { margin-left: 12px; }
 .task-surface .task-process-sequence { display: grid; gap: 5px; }
 .task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }
-.task-surface .task-process-message-label { display: block; margin-bottom: 3px; color: var(--al-muted); font-size: 12px; font-weight: 600; }
 .task-surface .task-process-sequence > .task-event-row { padding-inline-start: 8px; }
 .task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
 .task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }
@@ -511,6 +511,7 @@
   list-style: none;
   text-align: left;
 }
+.task-surface .task-tool-call[data-command='true'] > summary.task-tool-row { grid-template-columns: 14px auto minmax(0, 1fr) auto 14px; }
 .task-surface .task-tool-call > summary::-webkit-details-marker { display: none; }
 .task-surface .task-tool-call > summary::marker { content: ''; }
 .task-surface .task-tool-call > summary:hover,
@@ -542,7 +543,7 @@
 .task-surface .task-tool-kind .tool-kind-svg > svg { width: 13px; height: 13px; }
 .task-surface .task-tool-summary-text { min-width: 0; overflow: hidden; color: var(--al-ink-2); text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-call[data-command='true'] .task-tool-summary-text { color: var(--al-muted-2); }
-.task-surface .task-tool-command-preview { grid-column: 1 / -1; display: -webkit-box; min-width: 0; padding: 6px 8px; overflow: hidden; border-radius: 6px; background: var(--al-soft-2); color: var(--al-ink-2); font: 12px/1.5 var(--font-mono); overflow-wrap: anywhere; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.task-surface .task-tool-command-preview { display: block; min-width: 0; overflow: hidden; color: var(--al-ink-2); font: 12px/1.5 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-tool-status { display: inline-flex; align-items: center; gap: 3px; color: var(--al-muted-2); white-space: nowrap; font-size: 12px; }
 .task-surface .task-tool-status-mark { display: inline-flex; flex: 0 0 14px; align-items: center; }
 .task-surface .task-tool-status-run .task-tool-status-mark svg { animation: task-activity-spin 1.4s linear infinite; }

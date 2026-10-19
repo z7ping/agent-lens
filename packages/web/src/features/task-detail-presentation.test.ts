@@ -7,6 +7,7 @@ import { TaskMessage } from './TaskMessage'
 import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
+import { TaskToolRow } from './TaskToolRow'
 import { TaskThinking } from './TaskThinking'
 import { readableTaskHeaderTitle, taskRoundPreview, type TaskRoundModel, type TaskToolGroupModel } from './task-detail-model'
 
@@ -233,4 +234,25 @@ test('TaskMessage 的额外操作与核心复制/源码操作各有可达入口'
   assert.match(html, /task-message-actions/)
   assert.match(html, /编辑消息/)
   assert.match(html, /task-message-copy-action/)
+})
+
+test('Shell 默认是一行图标 + bash + 命令，失败状态留在右侧', () => {
+  const html = renderToStaticMarkup(createElement(TaskToolRow, {
+    model: {
+      id: 'shell-failed', name: 'bash', kind: 'shell', kindLabel: 'Shell',
+      status: 'error', primary: 'cd /workspace && rg -n "feature" src | head -30',
+      output: 'command failed',
+    },
+  }))
+  const summary = html.match(/<summary class="task-tool-row"[^>]*>[\s\S]*?<\/summary>/)?.[0] ?? ''
+  assert.match(html, /data-kind="shell" data-command="true"/)
+  assert.match(summary, /task-tool-kind-shell/)
+  assert.match(summary, /class="task-tool-summary-text"[^>]*>bash<\/span>/)
+  assert.match(summary, /class="task-tool-command-preview"[^>]*>cd \/workspace &amp;&amp; rg/)
+  assert.match(summary, /task-tool-status-error/)
+  assert.ok(summary.indexOf('task-tool-command-preview') < summary.indexOf('task-tool-status-error'))
+  assert.doesNotMatch(summary, />Shell<\/span>/)
+  assert.equal((summary.match(/task-tool-command-preview/g) ?? []).length, 1)
+  assert.match(html, /data-tool-section="input"/)
+  assert.match(html, /data-tool-section="output"/)
 })

@@ -80,8 +80,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const mcpToolName = mcpPrefix && model.name.startsWith(mcpPrefix)
     ? model.name.slice(mcpPrefix.length)
     : model.name
-  const heading = visualKind === 'shell' && hasTarget ? target
-    : model.toolSourceType === 'mcp' && model.mcpServerId
+  const heading = model.toolSourceType === 'mcp' && model.mcpServerId
       ? `${model.mcpServerId} · ${mcpToolName}`
       : model.name
   // A preview is not necessarily the original invocation. Show it as a
@@ -89,7 +88,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const input = model.rawInput
   const preview = !input && hasTarget ? target : undefined
   const commandTarget = visualKind === 'shell' && hasTarget
-  const showInputSection = !commandTarget || (input !== undefined && input.trim() !== target.trim())
+  // A truncated command preview always has its copyable source under Input.
 
   useEffect(() => {
     if (model.status !== 'running' || model.startedAtMs === undefined) return
@@ -109,14 +108,15 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
     onToggle={event => setExpanded(event.currentTarget.open)}
     data-status={model.status}
     data-kind={visualKind}
-    data-command={commandTarget && !compact}
+    data-command={commandTarget}
   >
     <summary className="task-tool-row" aria-label={`${t(`tool.kind.${visualKind}`)} · ${heading} · ${status}`}>
       <span className={`task-tool-kind task-tool-kind-${visualKind}`}>
         <ToolKindIcon kind={visualKind}/>
-        <span>{t(`tool.kind.${visualKind}`)}</span>
+        {visualKind !== 'shell' && <span>{t(`tool.kind.${visualKind}`)}</span>}
       </span>
-      <span className="task-tool-summary-text" title={commandTarget ? model.name : heading}>{compact ? heading : commandTarget ? model.name : heading}</span>
+      <span className="task-tool-summary-text" title={commandTarget ? model.name : heading}>{heading}</span>
+      {commandTarget && <code className="task-tool-command-preview" title={target}>{target}</code>}
       <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
         <span className="task-tool-status-mark" aria-hidden="true">
           {model.status === 'running' ? <UiIcon name="loading" size={14}/>
@@ -127,16 +127,15 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
         {model.status !== 'unknown' && <span className="task-tool-status-label">{status}</span>}
       </span>
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
-      {commandTarget && !compact && <code className="task-tool-command-preview" title={target}>{target}</code>}
     </summary>
     {(!compact || expanded) && <div className="task-tool-sections">
-      {showInputSection && <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
+      <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
           ? <CopyableCodeBlock copyValue={input} language={expanded ? codeLanguageFromContent(input, visualKind === 'shell' ? (/powershell|pwsh/i.test(model.name) ? 'powershell' : 'bash') : undefined) : undefined}>{input}</CopyableCodeBlock>
           : preview ? <CopyableCodeBlock copyValue={preview} language={expanded ? codeLanguageFromContent(preview, visualKind === 'shell' ? 'bash' : undefined) : undefined}>{preview}</CopyableCodeBlock>
             : <span className="task-tool-section-empty">{t('tool.inputUnavailable')}</span>}
-      </section>}
+      </section>
       <section className="task-tool-section" data-tool-section="output" aria-label={t('tool.output')}>
         <div className="task-tool-section-title">{t('tool.output')}</div>
         {model.output !== undefined
