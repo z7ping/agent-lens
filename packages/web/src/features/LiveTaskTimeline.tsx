@@ -9,6 +9,7 @@ import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskMessage } from './TaskMessage'
 import type { TaskRoundModel } from './task-detail-model'
 import { LiveToolGroup } from './LiveToolGroup'
+import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
 
@@ -29,6 +30,7 @@ function GenericLiveItem({
   messageActions,
   actionPending,
   runtimeStreaming,
+  showContentActions = false,
   onMessageAction,
 }: {
   item: LiveTaskProjectionItem
@@ -36,6 +38,7 @@ function GenericLiveItem({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
+  showContentActions?: boolean
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t, i18n } = useTranslation('task')
@@ -49,6 +52,7 @@ function GenericLiveItem({
       attachments={item.attachments}
       author={item.role === 'assistant' ? agentLabel : undefined}
       streaming={item.streaming}
+      showContentActions={showContentActions}
       actions={actions.length
         ? actions.map(action => {
             const key = `${action.actionId}:${item.entryId}`
@@ -137,28 +141,83 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     && !projection.items.some(item => item.kind === 'thinking'
       || item.kind === 'tool'
       || (item.kind === 'message' && item.role === 'assistant'))
-  const content: ReactNode[] = []
-  let process: LiveTaskProjectionItem[] = []
+  // Only native commentary/reasoning/tool stages enter processing.
+  // Unknown-phase assistant text stays visible; never infer a final from prose.
+  const processItems = projection.items.filter(item =>
+    item.kind === 'thinking' || item.kind === 'tool'
+    || (item.kind === 'message' && item.role === 'assistant' && item.phase === 'commentary'))
+  const visibleItems = projection.items.filter(item => !processItems.includes(item))
+  const lastAnswerId = [...visibleItems].reverse().find(item =>
+    item.kind === 'message' && item.role === 'assistant')?.id
   const renderItem = (item: LiveTaskProjectionItem) => <GenericLiveItem
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
-    actionPending={actionPending} runtimeStreaming={runtimeStreaming} onMessageAction={onMessageAction}
+    actionPending={actionPending} runtimeStreaming={runtimeStreaming}
+    showContentActions={item.kind === 'message' && item.role === 'assistant'
+      && item.id === lastAnswerId && !runtimeStreaming}
+    onMessageAction={onMessageAction}
   />
-  const flushProcess = () => {
-    if (!process.length) return
-    const items = process
-    process = []
-    if (items.some(item => item.kind === 'tool')) {
-      content.push(<LiveToolGroup key={`tools:${items[0]!.id}`} items={items} renderItem={renderItem}/>)
-    } else {
-      // Reasoning-only stages remain one folded line, without a redundant tool header.
-      for (const item of items) content.push(renderItem(item))
+  const renderProcessItem = (item: LiveTaskProjectionItem) =>
+    item.kind === 'message'
+      ? <div className="task-process-message" data-message-role="commentary" key={item.id}>
+          <MarkdownContent text={item.text} streaming={item.streaming}/>
+        </div>
+      : renderItem(item)
+  const processContent: ReactNode[] = []
+  let tools: LiveTaskProjectionItem[] = []
+  const flushTools = () => {
+    if (!tools.length) return
+    const segment = tools
+    tools = []
+    processContent.push(<LiveToolGroup
+      key={`tools:${segment[0]!.id}`}
+      items={segment}
+      renderItem={renderProcessItem}
+    />)
+  }
+  for (const item of processItems) {
+    if (item.kind === 'tool') tools.push(item)
+    else { flushTools(); processContent.push(renderProcessItem(item)) }
+  }
+  flushTools()
+
+  const processCount = processItems.filter(item => item.kind === 'message').length
+  const thinkingCount = processItems.filter(item => item.kind === 'thinking').length
+  const toolCount = processItems.filter(item => item.kind === 'tool').length
+  const processTimes = processItems.flatMap(item => {
+    const at = Date.parse(item.at ?? '')
+    return Number.isFinite(at) ? [at] : []
+  })
+  const startedAtMs = processTimes.length ? Math.min(...processTimes) : undefined
+  const processState = projection.model.state
+  const endedAtMs = processTimes.length && processState !== 'running'
+    ? Math.max(...processTimes) : undefined
+  const process = processItems.length > 0 && <TaskProcessGroup
+    key={`process:${projection.model.semanticId ?? projection.model.id}:${processItems[0]!.id}`}
+    id={`process:${projection.model.id}`}
+    messageCount={processCount}
+    thinkingCount={thinkingCount}
+    toolCount={toolCount}
+    errorCount={processItems.filter(item => item.kind === 'tool' && item.status === 'error').length}
+    startedAtMs={startedAtMs}
+    endedAtMs={endedAtMs}
+    thinkingDurationMs={processItems.reduce((sum, item) =>
+      sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
+    state={processState}
+    defaultExpanded={processState === 'running'}
+    autoCollapseOnSettle
+    className="live-task-process"
+  ><div className="task-process-sequence">{processContent}</div></TaskProcessGroup>
+
+  const content: ReactNode[] = []
+  let placedProcess = false
+  for (const item of visibleItems) {
+    if (!placedProcess && item.kind === 'message' && item.role !== 'user' && process) {
+      content.push(process)
+      placedProcess = true
     }
+    content.push(renderItem(item))
   }
-  for (const item of projection.items) {
-    if (item.kind === 'thinking' || item.kind === 'tool') process.push(item)
-    else { flushProcess(); content.push(renderItem(item)) }
-  }
-  flushProcess()
+  if (!placedProcess && process) content.push(process)
   return <VirtualRoundMount
     rootSelector=".pi-live-reader"
     flowRoot
