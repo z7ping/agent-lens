@@ -9,6 +9,7 @@ export function ComposerPillSelect({
   disabled = false,
   title,
   ariaLabel,
+  control,
   onChange,
 }: {
   value: string
@@ -17,9 +18,10 @@ export function ComposerPillSelect({
   disabled?: boolean
   title?: string | undefined
   ariaLabel: string
+  control: 'model' | 'thinking'
   onChange(value: string): void
 }) {
-  return <SelectMenu
+  return <span className={`pi-live-compose-control pi-live-compose-control--${control}`}><SelectMenu
     value={value}
     placeholder={placeholder}
     options={options}
@@ -27,5 +29,5 @@ export function ComposerPillSelect({
     title={title}
     ariaLabel={ariaLabel}
     onChange={onChange}
-  />
+  /></span>
 }
