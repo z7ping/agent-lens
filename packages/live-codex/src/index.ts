@@ -40,6 +40,8 @@ interface Session {
   attaching?: Promise<void> | undefined
   approvals: Map<string, number | string>
   approvalEvents: Map<string, LiveRuntimeEvent>
+  queuedApprovals: Map<string, RpcMessage>
+  toolOutput: Map<string, string>
 }
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
@@ -79,7 +81,7 @@ export class CodexLiveAdapter implements LiveAdapter {
           ...(saved.model ? { model: saved.model } : {}),
           ...(saved.effort ? { effort: saved.effort } : {}),
           status: 'ready', streaming: false, attached: false,
-          channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(),
+          channel: new LiveEventChannel(saved.id), approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
         })
       }
     })().catch(error => {
@@ -157,7 +159,7 @@ export class CodexLiveAdapter implements LiveAdapter {
       ...(codexText(response.reasoningEffort) ? { effort: codexText(response.reasoningEffort) } : {}),
       status: 'ready',
       streaming: false, attached: true, channel: new LiveEventChannel(id),
-      approvals: new Map(), approvalEvents: new Map(),
+      approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
     }
     this.sessions.set(id, session)
     await this.persist(session)
@@ -212,7 +214,7 @@ export class CodexLiveAdapter implements LiveAdapter {
     const session = saved ?? {
       id: nativeId, cwd: workspace?.path ?? '',
       status: 'ready' as const, streaming: false, attached: false,
-      channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(),
+      channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
     }
     if (!saved) this.sessions.set(nativeId, session)
     await this.attach(session)
@@ -431,11 +433,14 @@ export class CodexLiveAdapter implements LiveAdapter {
   async respondToExtension(id: string, requestId: string, response: unknown): Promise<void> {
     const session = this.session(id)
     const nativeId = session.approvals.get(requestId)
-    if (nativeId === undefined) throw new Error('Codex approval request no longer pending')
+    if (nativeId === undefined || !session.approvalEvents.has(requestId)) {
+      throw new Error('Codex approval request is not active')
+    }
     const accepted = codexRecord(response).confirmed === true
     this.rpc.respond(nativeId, { decision: accepted ? 'accept' : 'decline' })
     session.approvals.delete(requestId)
     session.approvalEvents.delete(requestId)
+    this.publishNextApproval(session)
   }
 
   async terminate(id: string): Promise<void> {
@@ -447,12 +452,42 @@ export class CodexLiveAdapter implements LiveAdapter {
     }
     session.approvals.clear()
     session.approvalEvents.clear()
+    session.queuedApprovals.clear()
+    session.toolOutput.clear()
     session.status = 'terminated'
     session.channel.publish({ method: 'runtime/status', params: { status: 'terminated' },
       normalizedEvent: { type: 'status', status: 'terminated' } })
     session.channel.clear()
     this.sessions.delete(id)
     await this.recovery?.remove(id)
+  }
+
+  /** The shared Live prompt supports one dialog; serialize native approval requests. */
+  private publishNextApproval(session: Session): void {
+    if (session.approvalEvents.size) return
+    const next = session.queuedApprovals.entries().next().value
+    if (!next) return
+    const [requestId, request] = next
+    session.queuedApprovals.delete(requestId)
+    const detail = request.method === 'item/commandExecution/requestApproval'
+      ? [
+          'Command: ' + (codexText(request.params.command) || '[not provided]'),
+          ...(codexText(request.params.cwd) ? ['Working directory: ' + codexText(request.params.cwd)] : []),
+          ...(codexText(request.params.reason) ? ['Reason: ' + codexText(request.params.reason)] : []),
+        ].join('\n')
+      : [
+          'File modification requested',
+          ...(codexText(request.params.reason) ? ['Reason: ' + codexText(request.params.reason)] : []),
+          ...(codexText(request.params.grantRoot) ? ['Requested write root: ' + codexText(request.params.grantRoot)] : []),
+        ].join('\n')
+    const event = session.channel.publish({
+      method: request.method, params: request.params,
+      normalizedEvent: {
+        type: 'ui.request', requestId, method: 'confirm',
+        title: 'Codex execution approval', message: detail.slice(0, 4000),
+      },
+    })
+    session.approvalEvents.set(requestId, event)
   }
 
   private receive(message: RpcMessage): void {
@@ -465,6 +500,9 @@ export class CodexLiveAdapter implements LiveAdapter {
           normalizedEvent: { type: 'status', status: 'failed', message: 'Codex App Server disconnected' } })
         session.approvals.clear()
         session.approvalEvents.clear()
+        session.queuedApprovals.clear()
+        session.toolOutput.clear()
+        session.activeTurn = undefined
       }
       return
     }
@@ -477,37 +515,48 @@ export class CodexLiveAdapter implements LiveAdapter {
       }
       const requestId = String(message.id)
       session.approvals.set(requestId, message.id)
-      const detail = message.method === 'item/commandExecution/requestApproval'
-        ? [
-            'Command: ' + (codexText(message.params.command) || '[not provided]'),
-            ...(codexText(message.params.cwd) ? ['Working directory: ' + codexText(message.params.cwd)] : []),
-            ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
-          ].join('\n')
-        : [
-            'File modification requested',
-            ...(codexText(message.params.reason) ? ['Reason: ' + codexText(message.params.reason)] : []),
-            ...(codexText(message.params.grantRoot) ? ['Requested write root: ' + codexText(message.params.grantRoot)] : []),
-          ].join('\n')
-      const approvalEvent = session.channel.publish({ method: message.method, params: message.params,
-        normalizedEvent: {
-          type: 'ui.request', requestId, method: 'confirm',
-          title: 'Codex execution approval',
-          message: detail.slice(0, 4000),
-        },
-      })
-      session.approvalEvents.set(requestId, approvalEvent)
+      session.queuedApprovals.set(requestId, message)
+      this.publishNextApproval(session)
       return
     }
     if (!session) return
+    if (message.method === 'item/commandExecution/outputDelta') {
+      const callId = codexText(message.params.itemId)
+      if (callId) {
+        const previous = session.toolOutput.get(callId) ?? ''
+        const suffix = '\n… [live tool output preview truncated]'
+        const maxLength = 64 * 1024
+        const delta = codexText(message.params.delta)
+        const preview = previous.endsWith(suffix)
+          ? previous
+          : previous.length + delta.length > maxLength
+            ? (previous + delta).slice(0, maxLength) + suffix
+            : previous + delta
+        session.toolOutput.set(callId, preview)
+        session.channel.publish({
+          method: message.method, params: message.params,
+          normalizedEvent: { type: 'tool.output', callId, name: 'shell', output: preview },
+        })
+        return
+      }
+    }
+    if (message.method === 'item/completed') {
+      const toolId = codexText(codexRecord(message.params.item).id)
+      if (toolId) session.toolOutput.delete(toolId)
+    }
     if (message.method === 'turn/started') {
       session.streaming = true
       session.activeTurn = codexText(codexRecord(message.params.turn).id) || session.activeTurn
     }
     if (message.method === 'turn/completed') {
+      const completedTurn = codexText(codexRecord(message.params.turn).id)
+      if (session.activeTurn && completedTurn && completedTurn !== session.activeTurn) return
       session.streaming = false
       session.activeTurn = undefined
       session.approvals.clear()
       session.approvalEvents.clear()
+      session.queuedApprovals.clear()
+      session.toolOutput.clear()
     }
     if (message.method === 'thread/name/updated' && codexText(message.params.threadName)) {
       session.title = codexText(message.params.threadName)
