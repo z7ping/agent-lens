@@ -238,9 +238,9 @@ test('全部智能体接入主行直接显示本机及线上版本，不再要�
   assert.doesNotMatch(page, /installationVersions\[/)
   assert.doesNotMatch(page, /model\.ensureAgentDetail/)
   assert.match(page, /item\.tool\?\.presence === 'present'/)
-  assert.match(integrationCss, /\.integration-management-version-summary \{/)
+  assert.match(integrationCss, /\.integration-management-version-strip \{/)
   assert.match(integrationCss, /\.integration-management-version-hint \{/)
-  assert.match(integrationCss, /\.integration-management-disclosure > summary > \.ui-disclosure-meta/)
+  assert.match(integrationCss, /\.integration-management-detail-head-meta \{/)
   assert.doesNotMatch(page, /latestVersion\?\.status === 'ready' && methods\.length/)
 })
 
