@@ -265,7 +265,8 @@
 }
 .task-surface .task-message-bubble-assistant { display: block; width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--al-ink); }
 .task-surface .task-message-meta { display: none; min-width: 0; align-items: center; gap: 7px; color: var(--al-muted); font-size: 12px; }
-.task-surface .task-message-model-meta { display: flex; min-width: 0; align-items: center; gap: 6px; margin: 0 0 3px; color: var(--al-muted-2); font-size: 12px; line-height: 1.4; }
+.task-surface .task-message-model-meta { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 3px; color: var(--al-muted-2); font-size: 12px; line-height: 1.4; }
+.task-surface .task-message-context-evidence { display: inline-flex; min-width: 0; align-items: center; }
 .task-surface .task-message-model-meta b { color: var(--al-muted); font-weight: 650; }
 .task-surface .task-message-model-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-message-model-meta time { flex: 0 0 auto; margin-left: auto; }
