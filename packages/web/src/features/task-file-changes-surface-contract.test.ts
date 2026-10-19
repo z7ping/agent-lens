@@ -31,7 +31,7 @@ test('Changed-file card keeps compact list, evidence, and real on-demand diff pr
   assert.match(component, /<section className="task-file-changes">/)
   assert.match(component, /<div className="task-file-changes-header">/)
   assert.doesNotMatch(component, /<details\b/)
-  assert.match(styles, /\.task-surface \.task-file-changes-header \{/)
+  assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-changes-header \{/)
   assert.match(component, /const displayed = showAll \? items : items\.slice\(0, INITIAL_VISIBLE_FILES\)/)
   assert.match(component, /const hidden = items\.length - displayed\.length/)
   assert.match(component, /\{hidden > 0 && <Button/)
