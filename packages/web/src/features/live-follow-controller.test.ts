@@ -40,3 +40,21 @@ test('用户上滑立即解除 follow，必须明确恢复才继续', () => {
   follow.restore()
   assert.equal(follow.isFollowing, true)
 })
+
+test('过程说明的流式文本不抢正文焦点，正式答复出现才恢复跟随', () => {
+  const user: LiveTaskProjectionItem = {
+    id: 'user:a', kind: 'message', role: 'user', text: '检查配置', streaming: false,
+  }
+  const commentary: LiveTaskProjectionItem = {
+    id: 'commentary:a', kind: 'message', role: 'assistant', phase: 'commentary',
+    text: '检查中', streaming: true,
+  }
+  const first = liveFollowTextRevision([], [user, commentary])
+  const more = liveFollowTextRevision([], [user, { ...commentary, text: '检查中…读取更多文件' }])
+  assert.equal(first, more)
+  const final: LiveTaskProjectionItem = {
+    id: 'final:a', kind: 'message', role: 'assistant', phase: 'final',
+    text: '发现问题', streaming: true,
+  }
+  assert.notEqual(first, liveFollowTextRevision([], [user, commentary, final]))
+})
