@@ -42,13 +42,14 @@ function GenericLiveItem({
     const actions = item.entryId
       ? messageActions.filter(action => action.roles.includes(item.role))
       : []
+    const messageTime = taskSessionMessageTime(item.at)
     return <TaskSessionMessage
       role={item.role}
       text={item.text}
       attachments={item.attachments}
       presentation={{
         ...(item.role === 'assistant' ? { author: agentLabel } : {}),
-        ...(taskSessionMessageTime(item.at) ? { time: taskSessionMessageTime(item.at) } : {}),
+        ...(messageTime ? { time: messageTime } : {}),
       }}
       streaming={item.streaming}
       showContentActions={showContentActions}
