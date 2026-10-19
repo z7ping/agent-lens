@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { LiveRuntimeEventDto, LiveRuntimeRefDto, LiveRuntimeStateDto } from '@agent-lens/protocol'
-import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, shouldRefreshRuntimeListOnVisible, sameLiveRuntimeState, sameTaskRuntimeList, runtimeStateFromEvent, LIVE_VISIBILITY_RECONCILE_WINDOW_MS } from './task-live-runtime'
+import { mergeTaskLiveRuntimes, parseTaskLiveRuntimeLocation, taskLiveRuntimeHref, taskLiveRuntimeStatus, shouldRecoverLiveOnVisible, shouldRefreshRuntimeListOnVisible, sameLiveRuntimeState, sameTaskRuntimeList, runtimeStateFromEvent, LIVE_VISIBILITY_RECONCILE_WINDOW_MS, LIVE_NO_PROGRESS_WARNING_MS, shouldWarnLiveNoProgress } from './task-live-runtime'
 
 function state(overrides: Partial<LiveRuntimeStateDto> = {}): LiveRuntimeStateDto {
   return {
@@ -110,4 +110,14 @@ test('标准 Live SSE 事件只修改必要状态，并正确处理流式与结�
   const completed = runtimeStateFromEvent(running, event({ type: 'completed', status: 'completed' }))
   assert.equal(completed?.pendingMessageCount, 0)
   assert.equal(completed?.isStreaming, false)
+})
+
+test('Live 只有运行中连续 60 秒没有实际进展才提示检查，不误判失败', () => {
+  const started = 10_000
+  assert.equal(shouldWarnLiveNoProgress(started + LIVE_NO_PROGRESS_WARNING_MS - 1, started, true), false)
+  assert.equal(shouldWarnLiveNoProgress(started + LIVE_NO_PROGRESS_WARNING_MS, started, true), true)
+  assert.equal(shouldWarnLiveNoProgress(started + LIVE_NO_PROGRESS_WARNING_MS + 1, started, false), false)
+  assert.equal(shouldWarnLiveNoProgress(started + LIVE_NO_PROGRESS_WARNING_MS, 0, true), false)
+  assert.equal(shouldWarnLiveNoProgress(started + LIVE_NO_PROGRESS_WARNING_MS, Number.NaN, true), false)
+  assert.equal(shouldWarnLiveNoProgress(started + 1_000, started + 500, true), false)
 })

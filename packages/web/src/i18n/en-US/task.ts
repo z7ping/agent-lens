@@ -158,6 +158,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       },
       send: 'Send',
       messageActionPending: 'Working…',
+      noProgressWarning: 'No new execution activity for {{duration}}. The agent may be waiting on a tool or connection; check process details and connection status.',
       syncWarning: 'Live state sync is temporarily unavailable; the task can keep running: {{message}}',
       controlsSyncFailed: 'Model or thinking controls could not be refreshed',
       unsupportedInput: 'This agent does not support {{type}} input.',

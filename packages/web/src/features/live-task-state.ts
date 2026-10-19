@@ -61,6 +61,7 @@ export function useLiveTaskState() {
   const historyBlocksRef = useRef<LiveHistoryPageBlock[]>([])
   const projectionRef = useRef(projection)
   projectionRef.current = projection
+  const lastProgressAtRef = useRef(0)
   const runtimeStateRef = useRef<LiveRuntimeStateDto | null>(state)
   runtimeStateRef.current = state
   const followControllerRef = useRef(new LiveFollowController())
@@ -159,6 +160,7 @@ export function useLiveTaskState() {
     historyBlocksRef,
     projectionRef,
     runtimeStateRef,
+    lastProgressAtRef,
     followControllerRef,
     followFrameRef,
     followReleaseFrameRef,

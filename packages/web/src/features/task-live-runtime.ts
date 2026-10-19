@@ -3,6 +3,14 @@ import type { LiveRuntimeEventDto, LiveRuntimeRefDto, LiveRuntimeStateDto } from
 /** A long hidden gap can lose SSE events even without an observed connection error. */
 export const LIVE_VISIBILITY_RECONCILE_WINDOW_MS = 30_000
 
+/** Only warn while the runtime is actively streaming; silence is not proof of failure. */
+export const LIVE_NO_PROGRESS_WARNING_MS = 60_000
+
+export function shouldWarnLiveNoProgress(nowMs: number, lastProgressAtMs: number, streaming: boolean): boolean {
+  return streaming && Number.isFinite(nowMs) && Number.isFinite(lastProgressAtMs)
+    && lastProgressAtMs > 0 && nowMs - lastProgressAtMs >= LIVE_NO_PROGRESS_WARNING_MS
+}
+
 /** Small tab switches stay state-only; disconnections and long background gaps reconcile history. */
 export function shouldRecoverLiveOnVisible(hiddenForMs: number, disconnected: boolean): boolean {
   return disconnected || hiddenForMs >= LIVE_VISIBILITY_RECONCILE_WINDOW_MS

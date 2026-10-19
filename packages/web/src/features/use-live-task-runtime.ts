@@ -71,6 +71,7 @@ export function useLiveTaskRuntime({
     historyIndexAnchorCursorRef,
     historyBlocksRef,
     runtimeStateRef,
+    lastProgressAtRef,
     followControllerRef,
     followFrameRef,
     followReleaseFrameRef,
@@ -85,6 +86,7 @@ export function useLiveTaskRuntime({
     let cancelled = false
     setProduct(null)
     setState(null)
+    lastProgressAtRef.current = Date.now()
     setProjection({ stable: [], active: [] })
     setHistoryPage(null)
     setHistoryIndex(null)
@@ -411,6 +413,7 @@ export function useLiveTaskRuntime({
       envelope => {
         setConnected(true)
         if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
+          lastProgressAtRef.current = Date.now()
           if (historyAtLatestRef.current) {
             setProjection(previous => ({
               ...previous,
@@ -480,6 +483,7 @@ export function useLiveTaskRuntime({
             setError(envelope.normalizedEvent.message)
           }
           if (envelope.normalizedEvent.status === 'running') {
+            lastProgressAtRef.current = Date.now()
             liveTurnRevisionRef.current += 1
           }
           if (envelope.normalizedEvent.status === 'running'

@@ -158,6 +158,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       },
       send: '发送',
       messageActionPending: '操作中…',
+      noProgressWarning: '已 {{duration}} 未收到新执行内容，任务可能仍在等待工具或连接；请检查处理详情及连接状态。',
       syncWarning: '实时状态同步暂时失败，任务仍可继续使用：{{message}}',
       controlsSyncFailed: '模型或推理控制未能刷新',
       unsupportedInput: '当前智能体不支持{{type}}输入。',
