@@ -1,7 +1,7 @@
 import type { LiveTaskRoundProjection, LiveTaskRoundSegments } from './live-task-projection'
 
 /**
- * Presentation MUST be keyed by semantic round, not the 8-fact storage/render
+ * Presentation MUST be keyed by semantic round, not legacy storage/render
  * fragments. VirtualRoundMount still virtualizes completed logical rounds.
  * A long single turn has one process disclosure and one answer action owner.
  */
