@@ -6,6 +6,7 @@ export type TaskReadingFactKind =
   | 'prompt'
   | 'reasoning'
   | 'commentary'
+  | 'process-block'
   | 'tool'
   | 'answer'
   | 'unclassified-answer'
@@ -57,6 +58,9 @@ export function projectTaskReading<T>(facts: readonly TaskReadingFact<T>[]): Tas
       case 'commentary':
         process.push(fact)
         commentary += 1
+        break
+      case 'process-block':
+        process.push(fact)
         break
       case 'tool':
         process.push(fact)

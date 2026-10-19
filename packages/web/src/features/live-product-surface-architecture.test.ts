@@ -220,7 +220,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.doesNotMatch(liveTask, /const rounds = useMemo/)
   assert.match(liveTask, /<GenericLiveRound/)
   assert.match(liveTaskTimeline, /<VirtualRoundMount/)
-  assert.match(liveTaskTimeline, /<LiveTranscriptRound/)
+  assert.match(liveTaskTimeline, /<TaskReadingRound/)
   assert.match(liveTask, /new LiveFollowController\(\)/)
   assert.match(liveTask, /ref=\{readerRef\}/)
   assert.match(liveTask, /onScroll=\{onReaderScroll\}/)

@@ -12,7 +12,8 @@ import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, isSessionTitleUp
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskProcessGroup } from './TaskProcessGroup'
-import { TaskRound } from './TaskRound'
+import { TaskReadingRound } from './TaskReadingRound'
+import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
 import { agentLensI18n } from '../i18n/runtime'
@@ -320,10 +321,7 @@ export function ReviewRoundAdapter({
   inspect,
   loadAttachments,
   loadProcess,
-  defaultExpanded,
   expansionStore,
-  forceExpanded,
-  forceRevision,
   showAllEvents,
   onShowAllEvents,
   fileChangesEnabled,
@@ -334,10 +332,7 @@ export function ReviewRoundAdapter({
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   loadProcess(sessionId: string, ordinal: number, revision: string, signal?: AbortSignal): Promise<ReviewInteractionDto | null>
-  defaultExpanded: boolean
   expansionStore: Map<string, boolean>
-  forceExpanded: boolean
-  forceRevision: number
   showAllEvents: boolean
   onShowAllEvents: () => void
   fileChangesEnabled?: boolean
@@ -429,10 +424,28 @@ export function ReviewRoundAdapter({
     : fetchedSummary ?? summary
   const groups = useMemo(() => projectReviewInteractionPresentation(effectiveInteraction.nodes), [effectiveInteraction.nodes])
   const modelLabels = useMemo(() => projectReviewMessageModelLabels(effectiveInteraction.nodes), [effectiveInteraction.nodes])
-  const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
-  const promptEntries = groups.filter(entry => entry.type === 'message' && entry.node.role === 'user')
-  const afterProcessEntries = groups.filter(entry => !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
-  const lastAssistantEntry = [...afterProcessEntries].reverse().find(
+  const reading = useMemo(() => projectTaskReading(groups.map((entry, index) => {
+    const id = entry.type === 'message' || entry.type === 'reasoning' || entry.type === 'event'
+      ? entry.node.id
+      : entry.type === 'process' ? entry.id : `${entry.type}:${index}`
+    const kind: TaskReadingFact<ReviewInteractionPresentationEntry>['kind'] = entry.type === 'process'
+      ? 'process-block'
+      : entry.type === 'message'
+        ? entry.node.role === 'user' ? 'prompt'
+          : entry.node.role === 'assistant' ? 'unclassified-answer'
+            : entry.node.role === 'reasoning' ? 'reasoning' : 'commentary'
+        : entry.type === 'reasoning' ? 'reasoning'
+          : entry.type === 'tool-group' ? 'tool' : 'auxiliary'
+    return { id, kind, value: entry }
+  })), [groups])
+  const processEntry = reading.process.map(fact => fact.value).find(
+    (entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process',
+  )
+  const promptEntries = reading.prompts.map(fact => fact.value)
+  // Preserve actual post-process event order and provenance, including approvals/errors.
+  const afterProcessEntries = groups.filter(entry =>
+    !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
+  const lastAssistantEntry = [...reading.answers].reverse().map(fact => fact.value).find(
     (entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'message' }> =>
       entry.type === 'message' && entry.node.role === 'assistant',
   )
@@ -490,22 +503,19 @@ export function ReviewRoundAdapter({
       ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
       : null
 
-  return <TaskRound
+  return <TaskReadingRound
     model={round}
-    defaultExpanded={defaultExpanded}
-    expansionStore={expansionStore}
-    forceExpanded={forceExpanded}
-    forceRevision={forceRevision}
-  >
-    {promptEntries.map(renderEntry)}
-    {processGroup}
-    {afterProcessEntries.map(renderEntry)}
-    {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
-    {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}
-    {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
-    {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
-      <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
-    </button>}
-  </TaskRound>
+    prompt={promptEntries.map(renderEntry)}
+    process={processGroup}
+    answer={afterProcessEntries.map(renderEntry)}
+    footer={<>
+      {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+      {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}
+      {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
+      {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
+        <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
+      </button>}
+    </>}
+  />
 }
 

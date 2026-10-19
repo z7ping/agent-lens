@@ -23,8 +23,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     setInspect,
     roundFilter,
     roundFilterLoading,
-    expandAllRounds,
-    roundExpansionRevision,
     showAllEvents,
     liveProducts,
     historyInteractionPending,
@@ -57,7 +55,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     atStart,
     onReaderScroll,
     emptyLabel,
-    toggleRoundExpansion,
     toggleEventVisibility,
     noteReaderUserIntent,
     runHistoryInteraction
@@ -140,7 +137,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                 summary: t('local.fileChanges.titleCount', { count: review.fileChanges.summary.count }),
                 content: <TaskFileChangesDisclosure value={review.fileChanges} inlineDetails/>,
               } : undefined}
-          viewActions={<Button role="menuitem" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</Button>}
           readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
             <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>
               <Button className={roundFilter === 'all' && !isBackward ? 'active' : ''} aria-pressed={roundFilter === 'all' && !isBackward} disabled={roundFilterLoading} onClick={() => void selectRoundFilter('all')}>{t('local.roundNav.all')}{roundFilter === 'all' && !isBackward && <span>{annotatedInteractions.length}{pageIncomplete ? '+' : ''}</span>}</Button>
@@ -224,10 +220,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   fileChangesEnabled={Boolean(review.fileChanges?.summary.count || review.fileChanges?.meta.truncated)}
                   interaction={item.interaction}
                   round={item.round}
-                  defaultExpanded={expandAllRounds}
                   expansionStore={roundExpansionRef.current}
-                  forceExpanded={expandAllRounds}
-                  forceRevision={roundExpansionRevision}
                   showAllEvents={showAllEvents}
                   onShowAllEvents={toggleEventVisibility}
                   inspect={setInspect}
