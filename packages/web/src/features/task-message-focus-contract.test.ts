@@ -59,8 +59,8 @@ test('过程文本不重复出现复制/源码，正式答案仍可操作', () =
   assert.match(taskMessageSource, /!user && showContentActions && <IconButton/)
   const review = readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8')
   assert.match(review, /showContentActions=\{entry\.node\.id === lastAssistantId\}/)
-  assert.match(review, /function MarkdownSurface\(\{ text \}/)
-  assert.doesNotMatch(review, /function MarkdownSurface\([\s\S]*?markdown-message-actions/)
+  assert.match(review, /<TaskSessionProcessText/)
+  assert.doesNotMatch(review, /function MarkdownSurface\(/)
 })
 
 test('Agent 完整输出不展示五行折叠入口，用户长消息仍可展开和收起', () => {
