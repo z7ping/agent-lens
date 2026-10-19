@@ -2,13 +2,15 @@
 export interface CodexItemAnchor {
   turnId: string
   itemId: string
+  /** Native backwardsCursor points to this item when switching from desc to asc. */
+  backwardsCursor: string
 }
 const ITEM_PREFIX = 'codex-item:'
 const PAGE_PREFIX = 'codex-page:'
 const MAX_CURSOR_LENGTH = 8192
 
 export function encodeCodexItemAnchor(value: CodexItemAnchor): string {
-  if (!value.turnId || !value.itemId) throw new Error('Codex item anchor requires turn and item IDs')
+  if (!value.turnId || !value.itemId || !value.backwardsCursor) throw new Error('Codex item anchor requires turn and item IDs')
   return ITEM_PREFIX + Buffer.from(JSON.stringify(value), 'utf8').toString('base64url')
 }
 
@@ -35,7 +37,7 @@ export function decodeCodexHistoryCursor(value: string): CodexHistoryCursor {
         const row = raw as Record<string, unknown>
         if (typeof row.turnId === 'string' && row.turnId
           && typeof row.itemId === 'string' && row.itemId) {
-          return { kind: 'item', anchor: { turnId: row.turnId, itemId: row.itemId } }
+          return { kind: 'item', anchor: { turnId: row.turnId, itemId: row.itemId, backwardsCursor: row.backwardsCursor } }
         }
       }
     } catch { /* invalid anchor */ }
