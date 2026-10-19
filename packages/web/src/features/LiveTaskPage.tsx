@@ -87,6 +87,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     syncError,
     setSyncError,
     newRecords,
+    setNewRecords,
     composerExpanded,
     setComposerExpanded,
     startupQueued,

@@ -70,6 +70,16 @@ test('通用 Live Composer 只通过共享 LiveMarkdownComposer 承载编辑状�
   assert.doesNotMatch(page, /onDraftChange=/)
 })
 
+test('发送后恢复跟随使用的 setNewRecords 必须来自 LiveTaskState，防止页面 ReferenceError', () => {
+  const state = readFileSync(new URL('./live-task-state.ts', import.meta.url), 'utf8')
+  assert.match(state, /const \[newRecords, setNewRecords\] = useState\(false\)/)
+  assert.match(state, /newRecords,\s*setNewRecords,/)
+  const sessionBindings = liveTask.slice(liveTask.indexOf('const session = useLiveTaskState()'))
+    .split('} = session')[0]
+  assert.match(sessionBindings, /newRecords,\s*setNewRecords,/)
+  assert.match(liveTask, /followControllerRef\.current\.restore\(\)[\s\S]*?setNewRecords\(false\)/)
+})
+
 test('Live 输入框回车与发送按钮在发送接受后跳最新，用户主动上翻仍能退出跟随', () => {
   assert.match(liveActions, /onSendAccepted\?\.\(\)/)
   assert.match(liveActions, /onSendDelivered\?\.\(\)/)
