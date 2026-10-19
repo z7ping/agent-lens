@@ -29,13 +29,14 @@ test('Agents routes lifecycle work to the single integration management surface'
   assert.match(agentsPage, /navigate\(\x60\/agents\?view=management&agent=\$\{encodeURIComponent\(id\)\}\x60\)/)
   assert.match(integrationPage, /useSearchParams/)
   assert.match(integrationPage, /searchParams\.get\('agent'\)/)
-  assert.match(integrationPage, /data-target=\{highlighted \? 'true' : undefined\}/)
+  assert.match(integrationPage, /const selectedItem = filteredItems\.find\(item =>/)
+  assert.match(integrationPage, /next\.set\('agent', integrationId\)/)
 })
 
 test('integration observation uses flat status summary instead of a second management card', () => {
   assert.match(agentsCss, /\.integration-observation\s*\{[\s\S]*?border-top:\s*1px solid var\(--al-line\);[\s\S]*?background:\s*var\(--al-soft-2\);/)
   assert.match(agentsCss, /\.integration-placeholder-body\s*\{/)
-  assert.match(integrationCss, /\.integration-management-row\[data-target='true'\]/)
+  assert.match(integrationCss, /\.integration-management-list-item\[data-selected='true'\]/)
   assert.doesNotMatch(agentsCss, /\.integration-observation\s*\{[^}]*box-shadow\s*:/s)
   assert.doesNotMatch(agentsCss, /@media\s*\(max-width:\s*767\.98px\)[\s\S]*?integration-observation/)
   assert.match(agentResponsiveCss, /@media \(max-width: 767\.98px\)[\s\S]*?\.integration-observation/)
