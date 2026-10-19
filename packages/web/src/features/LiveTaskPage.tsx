@@ -24,11 +24,11 @@ import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
 import { coalesceLiveSemanticSegments } from './live-semantic-rounds'
-import { parseTaskLiveRuntimeLocation, taskLiveRuntimeStatus } from './task-live-runtime'
+import { parseTaskLiveRuntimeLocation, shouldWarnLiveNoProgress, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
-import { readableTaskHeaderTitle, workspaceDisplayName } from './task-detail-model'
+import { readableTaskHeaderTitle, taskPreciseDurationLabel, workspaceDisplayName } from './task-detail-model'
 
 function statusLabel(
   state: LiveRuntimeStateDto | null,
@@ -47,6 +47,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const hostApi = useMemo(() => new AgentLensApi(), [])
   const [fileChanges, setFileChanges] = useState<{ runtimeId: string; result: TaskFileChangesResponseDto | null } | null>(null)
+  const [progressClockMs, setProgressClockMs] = useState(() => Date.now())
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
@@ -112,7 +113,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     followControllerRef,
     leafIdRef,
     snapshotBaseActiveCountRef,
-    roundProjectorRef
+    roundProjectorRef,
+    lastProgressAtRef,
   } = session
 
   const setComposerValue = useCallback((value: string) => {
@@ -177,6 +179,15 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       setHistoryPagingDirection(null)
     }
   }, [current, historyLoading])
+
+  useEffect(() => {
+    if (!state?.isStreaming) return
+    setProgressClockMs(Date.now())
+    const timer = window.setInterval(() => setProgressClockMs(Date.now()), 5_000)
+    return () => window.clearInterval(timer)
+  }, [state?.isStreaming, current?.runtimeSessionId])
+
+  const noProgressWarning = shouldWarnLiveNoProgress(progressClockMs, lastProgressAtRef.current, state?.isStreaming ?? false)
 
   const roundSegments = useMemo(
     () => coalesceLiveSemanticSegments(roundProjectorRef.current.projectSegmented(projection.stable, projection.active)),
@@ -378,6 +389,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             runtimeStreaming={state?.isStreaming ?? false}
             onMessageAction={runMessageAction}
           />
+          {noProgressWarning && <div className="pi-live-sync-warning" role="status">
+            <UiIcon name="alert" size={14}/>
+            {t('live.noProgressWarning', { duration: taskPreciseDurationLabel(progressClockMs - lastProgressAtRef.current) })}
+          </div>}
           {roundSegments.active.map((round, index) => <GenericLiveRound
             key={round.model.id}
             projection={round}
