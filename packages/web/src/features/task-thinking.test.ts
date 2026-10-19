@@ -19,7 +19,9 @@ test('TaskThinking 默认展开并只暴露 Task Surface 规范类名', () => {
   assert.match(html, /<details[^>]*open=""/)
   assert.match(html, /class="task-thinking"/)
   assert.match(html, /task-thinking-summary/)
-  assert.doesNotMatch(html, /task-thinking-preview/)
+  assert.match(html, /task-thinking-preview/)
+  assert.match(html, /class="task-thinking-preview">核对原型与正式实现。/)
+  assert.doesNotMatch(html, /class="task-thinking-label"/)
   assert.match(html, /task-thinking-content">核对原型与正式实现/)
   assert.doesNotMatch(html, /thinking-block|thinking-node|agent-lane-node|node-preview/)
 })
@@ -87,3 +89,17 @@ test('思考片段与共享处理详情都使用统一大脑图标与折叠摘�
   assert.match(running, /lucide-brain-circuit|lucide-brain|brain-circuit/i)
 })
 
+
+test('思考摘要由大脑图标与两行内容构成，不额外占一行展示“思考”标签', () => {
+  const html = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { ...model, label: '思考过程', preview: '先了解项目结构，然后搜索相关接口。' },
+    kind: 'thinking',
+    defaultExpanded: false,
+    children: '原始思考 Markdown',
+  }))
+  assert.match(html, /aria-label="思考过程：先了解项目结构，然后搜索相关接口。"/)
+  assert.match(html, /task-thinking-kind-mark/)
+  assert.match(html, /class="task-thinking-preview">先了解项目结构，然后搜索相关接口。/)
+  assert.doesNotMatch(html, /class="task-thinking-label"/)
+  assert.doesNotMatch(html, /原始思考 Markdown/)
+})
