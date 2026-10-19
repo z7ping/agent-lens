@@ -615,7 +615,10 @@
 :is(.task-surface, .task-header-info-drawer) .task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 :is(.task-surface, .task-header-info-drawer) .task-file-change-diff-action,
 :is(.task-surface, .task-header-info-drawer) .task-file-change-evidence-action { flex: 0 0 auto; }
-/* File diffs are readable code reviews, not generic compact log blocks. */
+/* Diff content uses Pierre's renderer and themes; host CSS owns only the shell. */
+.ui-overlay-drawer.task-header-info-drawer:has(.task-file-diff-view) .ui-overlay-panel {
+  width: min(96vw, 1100px);
+}
 .task-file-changes-detail { min-width: 0; }
 .task-file-diff-path {
   min-width: 0;
@@ -625,27 +628,27 @@
   overflow-wrap: anywhere;
 }
 .task-file-diff-view { min-width: 0; }
-.task-file-diff-code { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--al-line); border-radius: var(--radius-md); }
-.task-file-diff-block { position: relative; min-width: 0; background: var(--al-surface); }
-.task-file-diff-block > pre {
-  box-sizing: border-box;
-  width: max-content;
-  min-width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 14px 14px 22px;
-  overflow: visible;
-  color: var(--al-ink-2);
-  background: transparent;
-  font: 12px/1.65 var(--font-mono);
-  tab-size: 4;
+.task-file-diff-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
 }
-.task-file-diff-block > pre > code { color: inherit; font: inherit; white-space: pre; }
-.task-file-diff-block .token-inserted { color: var(--al-success); background: var(--al-success-soft); }
-.task-file-diff-block .token-deleted { color: var(--al-danger); background: var(--al-danger-soft); }
-.task-file-diff-block .token-coord { color: var(--al-accent); }
-.task-file-diff-block .token-prefix { opacity: .8; }
-.task-file-diff-block .code-block-copy { position: sticky; left: 0; }
+.task-file-diff-layout-label { color: var(--al-muted); font-size: 12px; }
+.task-file-diff-layout-actions { display: inline-flex; align-items: center; gap: 4px; }
+.task-file-diff-layout-actions button[aria-pressed='true'] {
+  background: var(--al-soft-2);
+  color: var(--al-ink);
+}
+.task-file-diff-copy { margin-left: auto; }
+.task-file-diff-code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+}
 .task-file-diff-notice { margin: 10px 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
 .task-file-diff-notice[role='alert'] { color: var(--al-danger); }
 
