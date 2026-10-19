@@ -7,7 +7,7 @@ import { TaskMessage } from './TaskMessage'
 import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
-import { TaskToolRow } from './TaskToolRow'
+import { TaskToolRow, taskShellCommandParts, taskToolTargetText } from './TaskToolRow'
 import { TaskThinking } from './TaskThinking'
 import { readableTaskHeaderTitle, taskRoundPreview, type TaskRoundModel, type TaskToolGroupModel } from './task-detail-model'
 
@@ -37,7 +37,8 @@ test('测试类和未知 Tool 使用稳定语义降级', () => {
   assert.doesNotMatch(html, /data-kind="test"/)
   assert.doesNotMatch(html, /task-tool-kind-test/)
   assert.equal((html.match(/data-kind="tool"/g) ?? []).length, 2)
-  assert.match(html, />工具</)
+  assert.match(html, />run_checks</)
+  assert.match(html, />custom_native_call</)
 })
 
 test('Round 保持轻量摘要结构并默认展开', () => {
@@ -248,11 +249,56 @@ test('Shell 默认是一行图标 + bash + 命令，失败状态留在右侧', (
   assert.match(html, /data-kind="shell" data-command="true"/)
   assert.match(summary, /task-tool-kind-shell/)
   assert.match(summary, /class="task-tool-summary-text"[^>]*>bash<\/span>/)
-  assert.match(summary, /class="task-tool-command-preview"[^>]*>cd \/workspace &amp;&amp; rg/)
+  assert.match(summary, /task-tool-command-context"[^>]*>cd \/workspace &amp;&amp;<\/span>/)
+  assert.match(summary, /task-tool-command-preview/)
+  assert.match(summary, /rg -n/)
   assert.match(summary, /task-tool-status-error/)
   assert.ok(summary.indexOf('task-tool-command-preview') < summary.indexOf('task-tool-status-error'))
   assert.doesNotMatch(summary, />Shell<\/span>/)
   assert.equal((summary.match(/task-tool-command-preview/g) ?? []).length, 1)
   assert.match(html, /data-tool-section="input"/)
   assert.match(html, /data-tool-section="output"/)
+})
+
+test('Read/Search 优先使用原生入参目标，不再重复“读取 read”“搜索 memory_search”', () => {
+  const group: TaskToolGroupModel = { ...toolGroup, itemCount: 4, tools: [
+    { id: 'r-path', kind: 'read', kindLabel: '读取', name: 'read', status: 'success',
+      rawInput: JSON.stringify({ file_path: 'src/menu.ts' }), primary: 'read' },
+    { id: 's-query', kind: 'search', kindLabel: '搜索', name: 'memory_search', status: 'success',
+      primary: '{"query":"小程序权限菜单","limit":10}' },
+    { id: 'r-no-target', kind: 'read', kindLabel: '读取', name: 'read', status: 'success', primary: 'read' },
+    { id: 'r-opaque', kind: 'read', kindLabel: '读取', name: 'read', status: 'success',
+      rawInput: '{"line":40}', primary: '{"line":40}' },
+  ] }
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group }))
+  assert.equal((html.match(/class="task-tool-preview-slot"/g) ?? []).length, 4)
+  assert.match(html, /class="task-tool-target" title="src\/menu.ts">src\/menu.ts/)
+  assert.match(html, /class="task-tool-target" title="小程序权限菜单">小程序权限菜单/)
+  assert.doesNotMatch(html, />读取<\/span>|>搜索<\/span>/)
+  assert.equal((html.match(/class="task-tool-target"/g) ?? []).length, 2)
+  assert.match(html, /task-tool-summary-text" title="read">read/)
+  assert.match(html, /task-tool-summary-text" title="memory_search">memory_search/)
+})
+
+test('目标提取仅来自可信输入字段，Shell cd 前缀只调整显示明暗且原文无损', () => {
+  const base = { id: 'read', name: 'read', kind: 'read' as const, kindLabel: '读取', status: 'success' as const }
+  assert.equal(taskToolTargetText({ ...base, primary: 'read' }, 'read'), '')
+  assert.equal(taskToolTargetText({ ...base, rawInput: '{"line":5}', primary: '{"line":5}' }, 'read'), '')
+  assert.equal(taskToolTargetText({ ...base, rawInput: '{"file_path":"lib/a.ts"}' }, 'read'), 'lib/a.ts')
+  assert.equal(taskToolTargetText({ ...base, name: 'memory_search', kind: 'search', kindLabel: '搜索',
+    rawInput: '{"arguments":{"query":"agent lens"}}' }, 'search'), 'agent lens')
+  assert.equal(taskToolTargetText({ ...base, name: 'memory_search', kind: 'search', kindLabel: '搜索',
+    rawInput: JSON.stringify({ arguments: JSON.stringify({ query: '已有记录' }) }) }, 'search'), '已有记录')
+  for (const input of [
+    'cd E:/workspace && rg -n "menu" src',
+    'cd "E:/my && projects" && npm test',
+    'cd /e && python script.py',
+    'python -c "print(1)"',
+  ]) {
+    const parts = taskShellCommandParts(input)
+    assert.equal(parts.prefix + parts.command, input)
+  }
+  assert.equal(taskShellCommandParts('cd "E:/my && projects" && npm test').prefix,
+    'cd "E:/my && projects" &&')
+  assert.equal(taskShellCommandParts('python -c "print(1)"').prefix, '')
 })
