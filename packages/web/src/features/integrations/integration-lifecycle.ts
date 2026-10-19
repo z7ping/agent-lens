@@ -1,7 +1,9 @@
 import type { TFunction } from 'i18next'
 import * as semver from 'semver'
 import type {
+  AgentIntegrationCapabilityStatusDto,
   AgentOverviewDto,
+  IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
   IntegrationPackageStateDto,
   IntegrationToolDiscoveryItemDto,
@@ -40,6 +42,38 @@ export function integrationPackageUpdateAvailable(
   const installed = state.installedVersion
   const bundled = state.availableVersion
   return Boolean(installed && bundled && semver.valid(installed) && semver.valid(bundled) && semver.gt(bundled, installed))
+}
+
+export type IntegrationAuthorizationPhase = 'required' | 'granted' | 'restart-required' | 'unknown' | 'not-required'
+
+/** Authorization is distinct from Live availability: a grant can exist while the adapter is unavailable. */
+export function integrationAuthorizationSummary(capabilities: readonly AgentIntegrationCapabilityStatusDto[]): {
+  phase: IntegrationAuthorizationPhase
+  pending: IntegrationAuthorizationCapabilityDto[]
+  controlled: AgentIntegrationCapabilityStatusDto[]
+} {
+  const controlled = capabilities.filter(capability =>
+    capability.authorization === 'required' || capability.authorization === 'granted'
+  )
+  const pending = controlled
+    .filter(capability => capability.authorization === 'required')
+    .map(capability => capability.capability)
+    .filter((capability): capability is IntegrationAuthorizationCapabilityDto =>
+      capability === 'hook' || capability === 'runtime' || capability === 'live'
+    )
+
+  if (pending.length) return { phase: 'required', pending, controlled }
+  if (controlled.some(capability => capability.reasonCode === 'authorization-restart-required')) {
+    return { phase: 'restart-required', pending, controlled }
+  }
+  if (controlled.length) return { phase: 'granted', pending, controlled }
+  // An unloaded/failed runtime does not establish that it has no protected capabilities.
+  if (!capabilities.length || capabilities.some(capability => capability.availability === 'error'
+    || capability.reasonCode === 'component-start-failed'
+    || capability.reasonCode === 'dependency-start-failed')) {
+    return { phase: 'unknown', pending, controlled }
+  }
+  return { phase: 'not-required', pending, controlled }
 }
 
 export interface AgentUpgradeMethod {
