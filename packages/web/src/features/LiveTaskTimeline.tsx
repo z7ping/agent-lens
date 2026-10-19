@@ -125,12 +125,14 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   actionPending,
   runtimeStreaming,
   showResponsePending = false,
+  showAnswerActions = true,
   onMessageAction,
 }: {
   projection: LiveTaskRoundProjection
   agentLabel: string
   eager: boolean
   showResponsePending?: boolean
+  showAnswerActions?: boolean
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
@@ -153,7 +155,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
     actionPending={actionPending} runtimeStreaming={runtimeStreaming}
     showContentActions={item.kind === 'message' && item.role === 'assistant'
-      && item.id === lastAnswerId && !runtimeStreaming}
+      && item.id === lastAnswerId && !runtimeStreaming && showAnswerActions}
     onMessageAction={onMessageAction}
   />
   const renderProcessItem = (item: LiveTaskProjectionItem) =>
@@ -254,6 +256,9 @@ export const StableLiveRounds = memo(function StableLiveRounds({
       projection={round}
       agentLabel={agentLabel}
       eager={index >= rounds.length - eagerTailCount}
+      showAnswerActions={index === rounds.length - 1 ||
+        (round.model.semanticId ?? round.model.id) !==
+          (rounds[index + 1]?.model.semanticId ?? rounds[index + 1]?.model.id)}
       messageActions={messageActions}
       actionPending={actionPending}
       runtimeStreaming={runtimeStreaming}
