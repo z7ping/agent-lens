@@ -23,6 +23,7 @@ import {
   Clock,
   Copy,
   Dot,
+  Eye,
   FileText,
   File,
   FileCode2,
@@ -104,6 +105,7 @@ export type UiIconName =
   | 'panel-left-open'
   | 'plus'
   | 'power'
+  | 'preview'
   | 'refresh'
   | 'search'
   | 'send'
@@ -167,6 +169,7 @@ const icons = {
   'panel-left-open': PanelLeftOpen,
   plus: Plus,
   power: Power,
+  preview: Eye,
   refresh: RefreshCw,
   search: Search,
   send: Send,

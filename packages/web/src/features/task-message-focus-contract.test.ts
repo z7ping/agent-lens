@@ -11,6 +11,8 @@ test('Assistant 模型输出操作栏固定在正文底部并支持复制', () =
   assert.match(taskMessageSource, /await copyText\(text\)/)
   assert.match(taskMessageSource, /name=\{copyState === 'copied' \? 'check' : 'copy'\}/)
   assert.match(taskMessageSource, /className="task-message-source-action"/)
+  assert.match(taskMessageSource, /aria-label=\{sourceActionLabel\}/)
+  assert.match(taskMessageSource, /name=\{view === 'rendered' \? 'file-code' : 'preview'\}/)
   assert.match(taskMessageSource, /view === 'rendered' \? <MarkdownContent[\s\S]*: <CopyableCodeBlock/)
 })
 
@@ -54,9 +56,15 @@ test('过程文本不重复出现复制/源码，正式答案仍可操作', () =
   assert.match(taskMessageSource, /showContentActions\?: boolean/)
   assert.match(taskMessageSource, /showContentActions = true/)
   assert.match(taskMessageSource, /!user && showContentActions && <IconButton/)
-  assert.match(taskMessageSource, /!user && showContentActions && <button type="button" className="task-message-source-action"/)
+  assert.match(taskMessageSource, /!user && showContentActions && <IconButton/)
   const review = readFileSync(new URL('./ReviewRoundPresentation.tsx', import.meta.url), 'utf8')
   assert.match(review, /showContentActions=\{entry\.node\.id === lastAssistantId\}/)
   assert.match(review, /function MarkdownSurface\(\{ text \}/)
   assert.doesNotMatch(review, /function MarkdownSurface\([\s\S]*?markdown-message-actions/)
+})
+
+test('Agent 完整输出不展示五行折叠入口，用户长消息仍可展开和收起', () => {
+  assert.match(taskMessageSource, /if \(!element \|\| !collapsible \|\| !user\)/)
+  assert.match(taskMessageSource, /\{user && canCollapse && <button/)
+  assert.doesNotMatch(taskMessageSource, /message\.collapseFiveLines/)
 })
