@@ -208,7 +208,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     return () => { active = false; window.clearInterval(timer) }
   }, [fileChangeRuntimeId, state?.isStreaming, hostApi])
 
-  const stableEagerTailCount = Math.max(0, 2 - roundSegments.active.length)
+  // Keep recent settled text mounted while the active turn grows; bounded (two rounds).
+  const stableEagerTailCount = 2
   const turnRailItems = useMemo(() => {
     const segments = [...roundSegments.stable, ...roundSegments.active]
     const firstLoadedCursor = segments
