@@ -85,18 +85,20 @@ export function TaskFileChangesDisclosure({
       <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
     </dl>
   </div>
-  const diffContent = diffPath && <>
-    {diffLoading && <p>{t('local.fileChanges.refreshing')}</p>}
-    {diffError && <p role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
+  const diffContent = diffPath && <div className="task-file-diff-view">
+    {diffLoading && <p className="task-file-diff-notice" role="status">{t('local.fileChanges.refreshing')}</p>}
+    {diffError && <p className="task-file-diff-notice" role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
     {diff && (!diff.available || !diff.diff)
-      ? <p>{t('local.fileChanges.diffUnavailable')}</p>
-      : diff?.diff && <CopyableCodeBlock copyValue={diff.diff} language="diff">{diff.diff}</CopyableCodeBlock>}
-    {diff?.truncated && <p>{t('local.fileChanges.diffTruncated')}</p>}
-  </>
+      ? <p className="task-file-diff-notice">{t('local.fileChanges.diffUnavailable')}</p>
+      : diff?.diff && <div className="task-file-diff-code">
+        <CopyableCodeBlock copyValue={diff.diff} language="diff" containerClassName="task-file-diff-block">{diff.diff}</CopyableCodeBlock>
+      </div>}
+    {diff?.truncated && <p className="task-file-diff-notice">{t('local.fileChanges.diffTruncated')}</p>}
+  </div>
   return <>
     {inspectingInline ? <section className="task-file-changes task-file-changes-detail">
       <Button size="small" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.titleCount', { count })}</Button>
-      <h3>{evidenceItem?.path ?? diffPath}</h3>
+      <h3 className="task-file-diff-path" title={evidenceItem?.path ?? diffPath ?? undefined}>{evidenceItem?.path ?? diffPath}</h3>
       {evidenceContent}{diffContent}
     </section> : <section className="task-file-changes">
       <div className="task-file-changes-header">

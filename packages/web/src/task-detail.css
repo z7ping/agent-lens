@@ -615,6 +615,40 @@
 :is(.task-surface, .task-header-info-drawer) .task-file-change-confidence { color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 :is(.task-surface, .task-header-info-drawer) .task-file-change-diff-action,
 :is(.task-surface, .task-header-info-drawer) .task-file-change-evidence-action { flex: 0 0 auto; }
+/* File diffs are readable code reviews, not generic compact log blocks. */
+.task-file-changes-detail { min-width: 0; }
+.task-file-diff-path {
+  min-width: 0;
+  margin: 12px 0;
+  color: var(--al-ink);
+  font: 600 13px/1.5 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.task-file-diff-view { min-width: 0; }
+.task-file-diff-code { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--al-line); border-radius: var(--radius-md); }
+.task-file-diff-block { position: relative; min-width: 0; background: var(--al-surface); }
+.task-file-diff-block > pre {
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 14px 14px 22px;
+  overflow: visible;
+  color: var(--al-ink-2);
+  background: transparent;
+  font: 12px/1.65 var(--font-mono);
+  tab-size: 4;
+}
+.task-file-diff-block > pre > code { color: inherit; font: inherit; white-space: pre; }
+.task-file-diff-block .token-inserted { color: var(--al-success); background: var(--al-success-soft); }
+.task-file-diff-block .token-deleted { color: var(--al-danger); background: var(--al-danger-soft); }
+.task-file-diff-block .token-coord { color: var(--al-accent); }
+.task-file-diff-block .token-prefix { opacity: .8; }
+.task-file-diff-block .code-block-copy { position: sticky; left: 0; }
+.task-file-diff-notice { margin: 10px 0; color: var(--al-muted); font-size: 12px; line-height: 1.5; }
+.task-file-diff-notice[role='alert'] { color: var(--al-danger); }
+
 .task-file-change-evidence { display: grid; gap: 10px; font-size: 13px; color: var(--al-ink-2); }
 .task-file-change-evidence p { margin: 0; color: var(--al-muted); line-height: 1.6; }
 .task-file-change-evidence dl { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; margin: 0; overflow-wrap: anywhere; }
