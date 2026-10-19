@@ -88,9 +88,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const input = model.rawInput
   const preview = !input && hasTarget ? target : undefined
   const commandTarget = visualKind === 'shell' && hasTarget
-  // The full command must remain copyable after expanding even if the
-  // one-line command preview has been truncated by the viewport.
-  const showInputSection = !commandTarget || hasTarget || input !== undefined
+  // A truncated command preview always has its copyable source under Input.
 
   useEffect(() => {
     if (model.status !== 'running' || model.startedAtMs === undefined) return
@@ -131,13 +129,13 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
     </summary>
     {(!compact || expanded) && <div className="task-tool-sections">
-      {showInputSection && <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
+      <section className="task-tool-section" data-tool-section="input" aria-label={t('tool.input')}>
         <div className="task-tool-section-title">{input === undefined && preview ? t('tool.inputPreview') : t('tool.input')}</div>
         {input !== undefined
           ? <CopyableCodeBlock copyValue={input} language={expanded ? codeLanguageFromContent(input, visualKind === 'shell' ? (/powershell|pwsh/i.test(model.name) ? 'powershell' : 'bash') : undefined) : undefined}>{input}</CopyableCodeBlock>
           : preview ? <CopyableCodeBlock copyValue={preview} language={expanded ? codeLanguageFromContent(preview, visualKind === 'shell' ? 'bash' : undefined) : undefined}>{preview}</CopyableCodeBlock>
             : <span className="task-tool-section-empty">{t('tool.inputUnavailable')}</span>}
-      </section>}
+      </section>
       <section className="task-tool-section" data-tool-section="output" aria-label={t('tool.output')}>
         <div className="task-tool-section-title">{t('tool.output')}</div>
         {model.output !== undefined
