@@ -7,7 +7,7 @@ import { Button } from '../components/ui'
 import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskMessage } from './TaskMessage'
-import { TaskRound } from './TaskRound'
+import type { TaskRoundModel } from './task-detail-model'
 import { TaskProcessGroup } from './TaskProcessGroup'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
@@ -99,6 +99,19 @@ function GenericLiveItem({
   />
 }
 
+/** Live uses semantic rounds only for navigation/virtualization; never a visible disclosure. */
+export function LiveTranscriptRound({ model, children }: { model: TaskRoundModel; children: ReactNode }) {
+  return <div
+    className="live-task-transcript-round interaction-block"
+    data-interaction-id={model.id}
+    data-round-semantic-id={model.semanticId ?? model.id}
+    data-round-label={model.label}
+    data-round-preview={model.preview || undefined}
+    data-round-error={model.errorCount > 0 ? 'true' : undefined}
+    data-round-state={model.state}
+  >{children}</div>
+}
+
 export const GenericLiveRound = memo(function GenericLiveRound({
   projection,
   agentLabel,
@@ -171,10 +184,10 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     eager={eager}
     estimate={liveTaskRoundEstimate(projection)}
   >
-    <TaskRound model={awaitingResponse ? { ...projection.model, state: 'running' } : projection.model} className="live-task-round">
+    <LiveTranscriptRound model={awaitingResponse ? { ...projection.model, state: 'running' } : projection.model}>
       {content}
       {awaitingResponse && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
-    </TaskRound>
+    </LiveTranscriptRound>
   </VirtualRoundMount>
 }, sameStableLiveTaskRoundProps)
 

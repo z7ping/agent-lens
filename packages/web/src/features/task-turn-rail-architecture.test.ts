@@ -105,3 +105,13 @@ test('轮次导轨视觉锁定 #283 前经典样式，不允许恢复绝对比�
   assert.doesNotMatch(taskSurface, /jumpToRailPosition/)
   assert.doesNotMatch(taskSurface, /style=\{\{ top:/)
 })
+
+test('Live 正文不再使用轮次 details，但导轨仍使用独立语义锚点', () => {
+  const timeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
+  assert.match(timeline, /<LiveTranscriptRound model=/)
+  assert.doesNotMatch(timeline, /<TaskRound\b/)
+  assert.match(timeline, /data-round-semantic-id=\{model\.semanticId \?\? model\.id\}/)
+  assert.match(timeline, /rootSelector="\.pi-live-reader"/)
+  assert.match(taskSurface, /\.virtual-round-shell\[data-interaction-id\]/)
+  assert.match(liveTask, /turnRailItems=\{turnRailItems\}/)
+})

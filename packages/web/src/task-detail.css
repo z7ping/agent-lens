@@ -229,6 +229,16 @@
 .task-surface .task-round-latency { color: var(--al-warning); font-weight: 650; }
 .task-surface .task-round-flow { position: relative; display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 2px 8px 8px; }
 
+/* Live transcript: semantic rounds remain navigation anchors, not disclosures. */
+.task-surface .live-task-transcript-round {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 8px 8px;
+  scroll-margin-top: 18px;
+}
+
 /* ── Message / Markdown ── */
 .task-surface .task-message-row { position: relative; z-index: 2; display: flex; width: 100%; min-width: 0; align-items: flex-start; margin: 4px 0; }
 .task-surface .task-message-user { justify-content: flex-end; }
