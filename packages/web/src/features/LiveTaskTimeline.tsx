@@ -6,7 +6,7 @@ import { Button } from '../components/ui'
 import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
-import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess } from './TaskSessionContent'
+import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 
 /** 仅负责将统一 Live 投影映射到共享 TaskSurface 组件，无订阅与发送副作用。 */
@@ -46,7 +46,10 @@ function GenericLiveItem({
       role={item.role}
       text={item.text}
       attachments={item.attachments}
-      author={item.role === 'assistant' ? agentLabel : undefined}
+      presentation={{
+        ...(item.role === 'assistant' ? { author: agentLabel } : {}),
+        ...(taskSessionMessageTime(item.at) ? { time: taskSessionMessageTime(item.at) } : {}),
+      }}
       streaming={item.streaming}
       showContentActions={showContentActions}
       actions={actions.length
@@ -207,7 +210,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       process={process}
       answer={<>
         {answer}
-        {awaitingResponse && <TaskSessionMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
+        {awaitingResponse && <TaskSessionMessage role="assistant" text="" presentation={{ author: agentLabel }} pending className="live-task-response-pending"/>}
       </>}
     />
   </VirtualRoundMount>
