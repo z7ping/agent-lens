@@ -83,3 +83,34 @@ test('处理详情优先按真实过程起止计算耗时', () => {
   assert.match(html, /耗时 2秒/)
   assert.doesNotMatch(html, /16分/)
 })
+
+test('思考与工具分别统计，不把推理误算为工具', () => {
+  const html = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:separate',
+    messageCount: 1,
+    thinkingCount: 2,
+    toolCount: 3,
+    state: 'running',
+    defaultExpanded: true,
+    children: 'process details',
+  }))
+  assert.match(html, /1 条消息/)
+  assert.match(html, /2 段思考/)
+  assert.match(html, /3 次工具调用/)
+  assert.match(html, /process details/)
+})
+
+test('运行中允许打开执行详情，已完成历史任务默认只展示摘要', () => {
+  const running = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:active', messageCount: 0, thinkingCount: 1, toolCount: 2,
+    state: 'running', defaultExpanded: true, autoCollapseOnSettle: true,
+    children: '执行中',
+  }))
+  assert.match(running, /执行中/)
+  const settled = renderToStaticMarkup(createElement(TaskProcessGroup, {
+    id: 'process:settled', messageCount: 0, thinkingCount: 1, toolCount: 2,
+    state: 'settled', defaultExpanded: false, autoCollapseOnSettle: true,
+    children: '执行细节',
+  }))
+  assert.doesNotMatch(settled, /执行细节/)
+})
