@@ -274,7 +274,7 @@
   min-width: 0;
   flex: 0 1 auto;
   color: var(--al-muted-2);
-  font-size: 11px;
+  font-size: 12px;
 }
 .task-center-rail .session-item-meta > span:not(.source-dot):not(.agent-logo):not(.pi-live-pulse):not(.pi-live-idle-dot):not(.session-item-meta-separator) {
   min-width: 0;
