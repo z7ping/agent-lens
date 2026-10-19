@@ -391,3 +391,40 @@ test('未标注阶段的 Live Snapshot 不猜测 final；仅按原生 stopReason
   ])
   assert.deepEqual(items.filter(item => item.kind === 'message').map(item => item.kind === 'message' ? item.phase : undefined), [undefined, 'commentary', 'final'])
 })
+
+test('Pi Live 文本进入新阶段后旧思考/正文停止显示生成中，迟到 delta 仍保留内容', () => {
+  let items = reduceLiveTaskEvent([], event(1, { type: 'reasoning.start', messageId: 'a1', contentIndex: 0, text: '' }))
+  items = reduceLiveTaskEvent(items, event(2, { type: 'reasoning.delta', messageId: 'a1', contentIndex: 0, delta: '思考中' }))
+  items = reduceLiveTaskEvent(items, event(3, { type: 'text.start', messageId: 'a1', contentIndex: 1, text: '' }))
+  items = reduceLiveTaskEvent(items, event(4, { type: 'text.delta', messageId: 'a1', contentIndex: 1, delta: '分析结果' }))
+  const thought = items.find(item => item.kind === 'thinking')
+  assert.ok(thought?.kind === 'thinking')
+  assert.equal(thought.streaming, false)
+  items = reduceLiveTaskEvent(items, event(5, { type: 'reasoning.delta', messageId: 'a1', contentIndex: 0, delta: '补充' }))
+  const lateThought = items.find(item => item.kind === 'thinking')
+  assert.ok(lateThought?.kind === 'thinking')
+  assert.equal(lateThought.text, '思考中补充')
+  assert.equal(lateThought.streaming, false)
+  const response = items.find(item => item.kind === 'message')
+  assert.ok(response?.kind === 'message')
+  assert.equal(response.streaming, true)
+})
+
+test('工具开始时旧正文停止生成提示；并发工具仍各自运行', () => {
+  let items = reduceLiveTaskEvent([], event(1, { type: 'text.start', messageId: 'a1', contentIndex: 0, text: '准备检查' }))
+  items = reduceLiveTaskEvent(items, event(2, { type: 'tool.start', callId: 'one', name: 'read' }))
+  items = reduceLiveTaskEvent(items, event(3, { type: 'tool.start', callId: 'two', name: 'shell' }))
+  const firstMessage = items.find(item => item.kind === 'message')
+  assert.ok(firstMessage?.kind === 'message')
+  assert.equal(firstMessage.streaming, false)
+  assert.deepEqual(items.filter(item => item.kind === 'tool').map(item => item.status), ['running', 'running'])
+})
+
+test('即使原生 assistant message.end 没有 phase，也结束对应消息但不猜测 final', () => {
+  let items = reduceLiveTaskEvent([], event(1, { type: 'text.start', messageId: 'a1', contentIndex: 0, text: '回应' }))
+  items = reduceLiveTaskEvent(items, event(2, { type: 'message.end', role: 'assistant', messageId: 'a1' }))
+  const message = items[0]
+  assert.ok(message?.kind === 'message')
+  assert.equal(message.streaming, false)
+  assert.equal(message.phase, undefined)
+})
