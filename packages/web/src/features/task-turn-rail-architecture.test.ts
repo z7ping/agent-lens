@@ -133,6 +133,7 @@ test('Live 用单一处理详情容器管理过程，结论单独展示，思考
   assert.match(timeline, /autoCollapseOnSettle/)
   assert.match(timeline, /<LiveToolGroup/)
   assert.match(timeline, /showContentActions=\{item\.kind === 'message'/)
-  assert.match(timeline, /if \(!placedProcess && process\) content\.push\(process\)/)
+  assert.match(timeline, /process=\{process\}/)
+  assert.match(timeline, /answer=\{<>/)
   assert.doesNotMatch(timeline, /flushProcess\(\); content\.push\(renderItem\(item\)\)/)
 })
