@@ -8,7 +8,7 @@ import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundP
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskMessage } from './TaskMessage'
 import type { TaskRoundModel } from './task-detail-model'
-import { TaskProcessGroup } from './TaskProcessGroup'
+import { LiveToolGroup } from './LiveToolGroup'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
 
@@ -96,6 +96,7 @@ function GenericLiveItem({
       output: item.output,
       durationMs: item.durationMs,
     }}
+    compact
   />
 }
 
@@ -146,30 +147,12 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     if (!process.length) return
     const items = process
     process = []
-    const lastIndex = projection.items.indexOf(items[items.length - 1]!)
-    const hasFollowingAnswer = projection.items.slice(lastIndex + 1).some(item =>
-      item.kind === 'message' && item.role === 'assistant' && item.phase !== 'commentary')
-    const processState = hasFollowingAnswer ? 'settled' : projection.model.state
-    // 只有来源携带时间戳时才计算执行范围，不将整个轮次耗时冒充处理耗时。
-    const times = items.flatMap(item => {
-      const time = Date.parse(item.at ?? '')
-      return Number.isFinite(time) ? [time] : []
-    })
-    const startedAtMs = times.length ? Math.min(...times) : undefined
-    const endedAtMs = times.length && processState !== 'running' ? Math.max(...times) : undefined
-    content.push(<TaskProcessGroup
-      key={`process:${items[0]!.id}`} id={`process:${items[0]!.id}`}
-      messageCount={items.filter(item => item.kind === 'thinking').length}
-      toolCount={items.filter(item => item.kind === 'tool').length}
-      errorCount={items.filter(item => item.kind === 'tool' && item.status === 'error').length}
-      startedAtMs={startedAtMs} endedAtMs={endedAtMs}
-      thinkingDurationMs={items.reduce((sum, item) => sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
-      state={processState} defaultExpanded={false}
-    >
-      <div className="task-process-sequence">
-        {items.map(renderItem)}
-      </div>
-    </TaskProcessGroup>)
+    if (items.some(item => item.kind === 'tool')) {
+      content.push(<LiveToolGroup key={`tools:${items[0]!.id}`} items={items} renderItem={renderItem}/>)
+    } else {
+      // Reasoning-only stages remain one folded line, without a redundant tool header.
+      for (const item of items) content.push(renderItem(item))
+    }
   }
   for (const item of projection.items) {
     if (item.kind === 'thinking' || item.kind === 'tool') process.push(item)
