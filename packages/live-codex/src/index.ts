@@ -544,7 +544,18 @@ export class CodexLiveAdapter implements LiveAdapter {
     }
     if (message.method === 'item/completed') {
       const toolId = codexText(codexRecord(message.params.item).id)
+      const streamedOutput = toolId ? session.toolOutput.get(toolId) : undefined
       if (toolId) session.toolOutput.delete(toolId)
+      const completed = normalizeCodexEvent(message.method, message.params)
+      if (streamedOutput && completed?.type === 'tool.end') {
+        // Terminal events must not overwrite accumulated output with a shorter
+        // completion preview (the raw item remains available through Codex history).
+        session.channel.publish({
+          method: message.method, params: message.params,
+          normalizedEvent: { ...completed, output: streamedOutput },
+        })
+        return
+      }
     }
     if (message.method === 'turn/started') {
       session.streaming = true
