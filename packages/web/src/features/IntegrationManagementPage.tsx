@@ -543,6 +543,17 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
   const detectedCount = items.filter(isDetected).length
   const installedCount = items.filter(item => item.packageState?.installed).length
   const enabledCount = items.filter(item => item.enabled.configured).length
+  const selectedItem = filteredItems.find(item =>
+    item.integrationId === targetIntegrationId || item.productId === targetIntegrationId
+  ) ?? primaryItems[0] ?? supportedItems[0]
+
+  const selectItem = (integrationId: string) => {
+    setMobileDetailOpen(true)
+    if (integrationId === targetIntegrationId) return
+    const next = new URLSearchParams(searchParams)
+    next.set('agent', integrationId)
+    setSearchParams(next)
+  }
 
   if (!management) {
     return <main className="workspace-page">
