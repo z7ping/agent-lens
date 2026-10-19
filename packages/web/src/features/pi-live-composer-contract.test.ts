@@ -19,6 +19,7 @@ const page = [
 const taskMessage = readFileSync(new URL('./TaskMessage.tsx', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
 const sessionCss = readFileSync(new URL('../task-session-view.css', import.meta.url), 'utf8')
+const tokens = readFileSync(new URL('../tokens.css', import.meta.url), 'utf8')
 const globalStyles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8')
 const pill = readFileSync(new URL('../components/ComposerPillSelect.tsx', import.meta.url), 'utf8')
 const selectMenu = readFileSync(new URL('../components/SelectMenu.tsx', import.meta.url), 'utf8')
@@ -97,4 +98,16 @@ test('流式消息继续复用 TaskMessage，不恢复第二套响应气泡', ()
 
 test('Live Composer 窄窗继续收回状态文本空间', () => {
   assert.match(css, /@media \(max-width: 1199\.98px\) \{[\s\S]*?\.pi-live-compose-runtime \{ display: none; \}/)
+})
+
+test('Review/Live 头部、阅读区和 Live Composer 共用 820px 宽度上限', () => {
+  // A single token owns the desktop reading width; the composer aliases it.
+  assert.match(tokens, /--al-content-task-reading:\s*820px;/)
+  assert.match(tokens, /--al-content-task-composer:\s*var\(--al-content-task-reading\);/)
+  assert.match(sessionCss, /\.task-session-view \.task-session-document \{[^}]*max-width:\s*var\(--al-content-task-reading\);/s)
+  assert.match(sessionCss, /\.task-session-view \.task-header \{[^}]*max-width:\s*var\(--al-content-task-reading\);/s)
+  assert.match(css, /\.pi-live-composer \{[^}]*max-width:\s*var\(--al-content-task-composer\);/s)
+  assert.match(css, /\.pi-live-float-stack \{[^}]*width:\s*min\(var\(--al-content-task-composer\),/s)
+  assert.match(sessionCss, /@media \(max-width: 767\.98px\)/)
+  assert.match(css, /@media \(max-width: 767\.98px\)/)
 })
