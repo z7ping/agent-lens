@@ -116,10 +116,11 @@ test('Live 正文不再使用轮次 details，但导轨仍使用独立语义锚�
   assert.match(liveTask, /turnRailItems=\{turnRailItems\}/)
 })
 
-test('Live 思考与工具默认收起，正文消息不能被执行折叠吞掉', () => {
+test('Live 工具按组露出单行，思考默认折叠，正文消息不被执行组吞掉', () => {
   const timeline = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
-  assert.match(timeline, /state=\{processState\} defaultExpanded=\{false\}/)
+  assert.match(timeline, /<LiveToolGroup key=/)
   assert.match(timeline, /defaultExpanded=\{false\}/)
+  assert.match(timeline, /if \(items\.some\(item => item\.kind === 'tool'\)\)/)
   assert.match(timeline, /if \(item\.kind === 'thinking' \|\| item\.kind === 'tool'\) process\.push\(item\)/)
   assert.match(timeline, /else \{ flushProcess\(\); content\.push\(renderItem\(item\)\) \}/)
   assert.doesNotMatch(timeline, /item\.phase === 'commentary'\) process\.push/)
