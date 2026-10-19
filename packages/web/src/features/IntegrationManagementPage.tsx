@@ -4,7 +4,6 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import type {
-  IntegrationAuthorizationCapabilityDto,
   IntegrationManagementItemDto,
 } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
@@ -16,6 +15,7 @@ import { AgentOrderActions, useAgentOrderDrag } from '../components/AgentOrderCo
 import { Button, Dialog, SelectMenu, StatusBadge, UiIcon } from '../components/ui'
 import {
   agentUpgradeMethods,
+  integrationAuthorizationSummary,
   integrationCanInstall,
   integrationPackageUpdateAvailable,
   integrationManagementLifecycleState,
@@ -93,12 +93,7 @@ function IntegrationManagementDetail({
     ? `${t('status.new')} · ${t('status.notAdded')}`
     : status.label
   const presencePath = integrationToolPresencePath(item.tool)
-  const pendingAuthorization = item.capabilities
-    .filter(capability => capability.authorization === 'required')
-    .map(capability => capability.capability)
-    .filter((capability): capability is IntegrationAuthorizationCapabilityDto =>
-      capability === 'hook' || capability === 'runtime' || capability === 'live'
-    )
+  const authorization = integrationAuthorizationSummary(item.capabilities)
 
   const installOrRepair = async () => {
     if (!packageState || saving) return
@@ -180,11 +175,11 @@ function IntegrationManagementDetail({
   }
 
   const authorize = async () => {
-    if (!pendingAuthorization.length || saving) return
+    if (!authorization.pending.length || !item.enabled.configured || saving) return
     setSaving(true)
     setError('')
     try {
-      await model.authorizeIntegration(item.productId, pendingAuthorization)
+      await model.authorizeIntegration(item.productId, authorization.pending)
       await model.refreshIntegrationManagement().catch(() => undefined)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -365,12 +360,28 @@ function IntegrationManagementDetail({
           </div>
         </div>
 
-        {(primaryAction || canUpdatePackage || (pendingAuthorization.length > 0 && item.enabled.configured) || (packageState?.installed && !item.enabled.configured)) && <div className="integration-management-actions" aria-label={t('managementPage.actionsLabel')}>
-          <span className="integration-management-actions-label">{t('managementPage.actionsLabel')}</span>
+        <div className="integration-management-actions" aria-label={t('managementPage.actionsLabel')}>
+          <div className="integration-management-actions-info">
+            <span className="integration-management-actions-label">{t('managementPage.actionsLabel')}</span>
+            <div className="integration-management-authorization-status" role="status">
+              <span>{t('managementPage.authorizationStatus')}</span>
+              <StatusBadge tone={authorization.phase === 'granted' ? 'success'
+                : authorization.phase === 'required' || authorization.phase === 'restart-required' ? 'warning' : 'neutral'}>
+                {t(`managementPage.authorizationState.${authorization.phase}`)}
+              </StatusBadge>
+              {authorization.controlled.length > 0 && <span className="integration-management-authorization-capabilities">
+                {authorization.controlled.map(capability => capabilityLabel(capability.capability, t)).join(' / ')}
+              </span>}
+            </div>
+            {authorization.phase === 'restart-required' && <small>{t('managementPage.authorizationRestartHint')}</small>}
+            {authorization.phase === 'unknown' && <small>{t('managementPage.authorizationUnknownHint')}</small>}
+            {authorization.phase === 'granted' && <small>{t('managementPage.authorizationGrantedHint')}</small>}
+            {authorization.phase === 'required' && !item.enabled.configured && <small>{t('managementPage.authorizationEnableHint')}</small>}
+          </div>
           <div className="integration-management-action-buttons">
-            {pendingAuthorization.length > 0 && item.enabled.configured && <Button
+            {authorization.phase === 'required' && <Button
               variant="primary"
-              disabled={saving}
+              disabled={saving || !item.enabled.configured}
               onClick={() => void authorize()}
             ><UiIcon name="settings" size={14}/>{t('managementPage.authorizeIntegration')}</Button>}
             {canUpdatePackage && <Button
@@ -388,7 +399,7 @@ function IntegrationManagementDetail({
               }}
             >{t('managementPage.uninstall')}</Button>}
           </div>
-        </div>}
+        </div>
         {updateNotice && <p className="integration-management-note" role="status">{updateNotice}</p>}
         {error && <p className="integration-management-error" role="alert">{error}</p>}
       </div>

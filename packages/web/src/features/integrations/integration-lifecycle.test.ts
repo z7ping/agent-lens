@@ -6,7 +6,7 @@ import type {
   IntegrationManagementItemDto,
   IntegrationToolDiscoveryItemDto,
 } from '@agent-lens/protocol'
-import { agentObservationState, agentUpgradeMethods, integrationLifecycleState, integrationManagementLifecycleState, integrationPackageUpdateAvailable } from './integration-lifecycle'
+import { agentObservationState, agentUpgradeMethods, integrationAuthorizationSummary, integrationLifecycleState, integrationManagementLifecycleState, integrationPackageUpdateAvailable } from './integration-lifecycle'
 
 const t = ((key: string) => key) as TFunction
 
@@ -57,6 +57,54 @@ function discovery(
     presence,
   }
 }
+
+
+test('授权状态仅依据实际运行时能力区分待授权、已授权和待重启', () => {
+  const codexLive = { capability: 'live', availability: 'unavailable', authorization: 'required' } as const
+  assert.deepEqual(integrationAuthorizationSummary([
+    { capability: 'source', availability: 'available' },
+    { capability: 'assets', availability: 'available' },
+    codexLive,
+  ]), {
+    phase: 'required',
+    pending: ['live'],
+    controlled: [codexLive],
+  })
+
+  assert.equal(integrationAuthorizationSummary([
+    { ...codexLive, authorization: 'granted', availability: 'available' },
+  ]).phase, 'granted')
+  assert.equal(integrationAuthorizationSummary([
+    { ...codexLive, authorization: 'granted', reasonCode: 'authorization-restart-required' },
+  ]).phase, 'restart-required')
+  // Live adapter failure after a successful grant is NOT a revocation of the grant.
+  assert.equal(integrationAuthorizationSummary([
+    { ...codexLive, authorization: 'granted', reasonCode: 'live-adapter-missing' },
+  ]).phase, 'granted')
+})
+
+test('授权状态未取得不得伪装成已授权或无需授权', () => {
+  assert.equal(integrationAuthorizationSummary([]).phase, 'unknown')
+  assert.equal(integrationAuthorizationSummary([
+    { capability: 'live', availability: 'error', reasonCode: 'component-start-failed' },
+  ]).phase, 'unknown')
+  assert.equal(integrationAuthorizationSummary([
+    { capability: 'runtime', availability: 'available', authorization: 'granted' },
+    { capability: 'live', availability: 'error', reasonCode: 'component-start-failed' },
+  ]).phase, 'unknown')
+  assert.equal(integrationAuthorizationSummary([
+    { capability: 'source', availability: 'available' },
+    { capability: 'assets', availability: 'available' },
+  ]).phase, 'not-required')
+  assert.deepEqual(integrationAuthorizationSummary([
+    { capability: 'runtime', availability: 'unavailable', authorization: 'required' },
+    { capability: 'live', availability: 'unavailable', authorization: 'required' },
+  ]).pending, ['runtime', 'live'])
+  assert.equal(integrationAuthorizationSummary([
+    { capability: 'runtime', availability: 'available', authorization: 'granted', reasonCode: 'authorization-restart-required' },
+    { capability: 'live', availability: 'unavailable', authorization: 'required' },
+  ]).phase, 'required')
+})
 
 test('discovered Tool without physical Integration is presented as not added', () => {
   const item = management({
