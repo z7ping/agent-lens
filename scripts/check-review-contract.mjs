@@ -17,18 +17,18 @@ const taskDetailCss = readFileSync('packages/web/src/task-detail.css', 'utf8')
 const taskSessionCss = readFileSync('packages/web/src/task-session-view.css', 'utf8')
 const reviewCss = readFileSync('packages/web/src/review.css', 'utf8')
 const longCss = readFileSync('packages/web/src/review-long-session.css', 'utf8')
-const officialZhCn = `${readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')}\n${readFileSync('packages/web/src/i18n/zh-CN/review.ts', 'utf8')}`
+const officialZhCn = `${readFileSync('packages/web/src/i18n/official-zh-CN.ts', 'utf8')}\n${readFileSync('packages/web/src/i18n/zh-CN/review.ts', 'utf8')}\n${readFileSync('packages/web/src/i18n/zh-CN/task.ts', 'utf8')}`
 
 if (!reviewPage.includes("t('local.roundNav.newRecords')") || !officialZhCn.includes("newRecords: '有新记录'")) {
   throw new Error('正式任务复盘缺少国际化新记录提示')
 }
 for (const [source, locale] of [
-  [taskMessage, "t('message.source')"],
+  [taskMessage, "t('message.viewMarkdownSource')"],
   [reviewPage, "t('local.evidence.evidenceDetail'"],
 ]) {
   if (!source.includes(locale)) throw new Error(`正式任务复盘缺少国际化消息操作：${locale}`)
 }
-for (const label of ["source: '源码'", "evidenceDetail: '证据详情 · {{count}}'"]) {
+for (const label of ["viewMarkdownSource: '查看 Markdown 源码'", "returnRendered: '返回渲染结果'", "evidenceDetail: '证据详情 · {{count}}'"]) {
   if (!officialZhCn.includes(label)) throw new Error(`简体中文任务复盘缺少消息操作文案：${label}`)
 }
 if (!reviewPage.includes('className="round-nav-filters"') || !reviewPage.includes('className="round-nav-actions"')) throw new Error('任务复盘必须保留轮次筛选组和操作组')
@@ -107,8 +107,17 @@ if (!longCss.includes('.round-nav-filters') || !longCss.includes('.round-nav-act
 if (!mainSource.includes("import './task-detail.css'") || !mainSource.includes("import './task-session-view.css'")) throw new Error('Task Surface 共享组件与 Session 样式必须在 Web 入口加载')
 if (mainSource.includes("task-detail-prototype.css") || mainSource.includes("task-detail-polish.css") || mainSource.includes("task-feedback-polish.css")) throw new Error('正式入口不得恢复 Task Surface 临时覆盖层')
 if (taskMessage.includes('task-message-agent-mark') || taskMessage.includes('chat-avatar-agent')) throw new Error('Agent 输出不得恢复头像节点')
-if (!/\{!user && (?:showContentActions && )?<button/.test(taskMessage) || !taskMessage.includes("t('message.source')")) throw new Error('源码切换只属于正式 Agent Markdown，且必须走国际化文案')
-if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*absolute;/m.test(taskDetailCss)) throw new Error('Agent 源码切换必须悬浮在正文内，不得单独占行')
+if (!taskMessage.includes('!user && showContentActions && <IconButton')
+  || !taskMessage.includes("t('message.viewMarkdownSource')")
+  || !taskMessage.includes("t('message.returnRendered')")
+  || !taskMessage.includes("onClick={() => setView(value => value === 'rendered' ? 'source' : 'rendered')}")) {
+  throw new Error('源码切换必须是共享 TaskMessage 的 Agent 专属操作，保持国际化及渲染/源码双向切换')
+}
+if (!/\.task-surface \.task-message-assistant \.markdown-message-actions\s*\{[\s\S]*?position:\s*static;/m.test(taskDetailCss)
+  || !taskMessage.includes('className="task-message-copy-action"')
+  || !taskMessage.includes('className="task-message-source-action"')) {
+  throw new Error('复制/源码操作必须共用 TaskMessage 正文内同一操作栏，不得恢复独立悬浮层')
+}
 if (/<details[\s\S]*data-task-tool-group="true"/.test(taskToolGroup)) throw new Error('Tool Group 不得制造独立折叠父层')
 // The old gate compared a single tool-group push expression. It rejected a
 // behavior-preserving segmentation of consecutive tools by *explicit* native

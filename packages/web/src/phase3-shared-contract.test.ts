@@ -7,9 +7,9 @@ const typography = readFileSync(new URL('./typography.css', import.meta.url), 'u
 const taskSession = readFileSync(new URL('./task-session-view.css', import.meta.url), 'utf8')
 const mainEntry = readFileSync(new URL('./main.tsx', import.meta.url), 'utf8')
 
-test('P1-04 / P1-05：Review 与 Pi Live 共用 1120px Task Surface 几何语义', () => {
-  assert.match(tokens, /--al-content-task-reading:1120px;/)
-  assert.match(tokens, /--al-content-task-composer:1120px;/)
+test('P1-04 / P1-05：Review 与 Pi Live 共用 820px Task Surface 阅读宽度', () => {
+  assert.match(tokens, /--al-content-task-reading:820px;/)
+  assert.match(tokens, /--al-content-task-composer:var\(--al-content-task-reading\);/)
   assert.match(tokens, /--al-space-page-x:28px;/)
   assert.match(tokens, /--al-safe-composer-inline:18px;/)
   assert.match(tokens, /--al-task-turn-rail-bottom-reserve:145px;/)
