@@ -382,6 +382,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             projection={round}
             agentLabel={agentLabel}
             eager={round.model.state === 'running' || index >= roundSegments.active.length - 2}
+            showAnswerActions={index === roundSegments.active.length - 1 ||
+              (round.model.semanticId ?? round.model.id) !==
+                (roundSegments.active[index + 1]?.model.semanticId ?? roundSegments.active[index + 1]?.model.id)}
             messageActions={messageActions}
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
