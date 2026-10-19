@@ -39,7 +39,6 @@
   overflow: hidden;
   background: var(--al-canvas);
 }
-.review-flow { display: flex; flex-direction: column; gap: 0; padding-top: 6px; }
 .round-filter-empty { padding: 34px 12px; color: var(--al-muted); font-size: 13px; text-align: center; }
 .session-status-error { color: var(--al-danger); font-size: 12px; font-weight: 650; }
 

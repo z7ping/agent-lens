@@ -1,0 +1,109 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import test from 'node:test'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { TaskSessionMessage, TaskSessionProcess, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText } from './TaskSessionContent'
+import type { TaskThinkingModel, TaskToolModel } from './task-detail-model'
+
+const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入口，页面不得重建 JSX', () => {
+  const live = read('./LiveTaskTimeline.tsx')
+  const review = read('./ReviewRoundPresentation.tsx')
+  for (const [component, pattern] of [
+    ['TaskSessionMessage', /<TaskSessionMessage/],
+    ['TaskSessionThinking', /<TaskSessionThinking/],
+    ['TaskSessionTool', /<TaskSessionTool/],
+    ['TaskSessionProcessText', /<TaskSessionProcessText/],
+    ['TaskSessionProcess', /<TaskSessionProcess/],
+  ] as const) {
+    assert.match(live, pattern, 'Live must use the common ' + component)
+    assert.match(review, pattern, 'Review must use the common ' + component)
+  }
+  assert.doesNotMatch(live, /<TaskMessage|<TaskThinking|<TaskToolRow|<TaskProcessGroup|<MarkdownContent/)
+  assert.doesNotMatch(review, /<TaskToolGroup|<TaskMessage|<TaskProcessGroup|<MarkdownContent/)
+  assert.match(live, /<TaskSessionProcess\s+mode="live"/)
+  assert.match(review, /<TaskSessionProcess\s+mode="review"/)
+  assert.match(review, /<TaskSessionTool[\s\S]*?model=\{reviewToolModel\(node\)\}/)
+  assert.match(read('./TaskSessionContent.tsx'), /return <TaskToolRow model=\{model\} compact/)
+  const css = read('../task-detail.css')
+  assert.doesNotMatch(css, /\.task-surface \.task-tool-group \{/)
+  assert.doesNotMatch(css, /\.task-surface \.task-tool-list \{/)
+  assert.doesNotMatch(read('../pi-live.css'), /\.pi-live-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
+  assert.doesNotMatch(read('../review.css'), /\.review-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
+})
+
+test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => {
+  const message = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: '共同消息', collapsible: false,
+  }))
+  assert.match(message, /task-message-assistant/)
+  const processText = renderToStaticMarkup(createElement(TaskSessionProcessText, {
+    text: '处理输出',
+  }))
+  assert.match(processText, /task-process-message/)
+  assert.match(processText, /markdown-message/)
+
+  const tool: TaskToolModel = {
+    id: 'command-one',
+    name: 'shell',
+    kind: 'shell',
+    kindLabel: '命令',
+    status: 'success',
+    primary: 'echo ok',
+    output: 'ok',
+  }
+  const toolHtml = renderToStaticMarkup(createElement(TaskSessionTool, { model: tool }))
+  assert.match(toolHtml, /task-tool-call/)
+  assert.match(toolHtml, /<summary/)
+  assert.doesNotMatch(toolHtml, /task-tool-group/)
+  assert.doesNotMatch(toolHtml, /data-tool-section="input"/)
+
+  const sharedProps = {
+    id: 'process-one', messageCount: 1, thinkingCount: 1, toolCount: 1,
+    state: 'settled' as const,
+  }
+  const review = renderToStaticMarkup(createElement(TaskSessionProcess, {
+    ...sharedProps, mode: 'review', children: '内容',
+  }))
+  const live = renderToStaticMarkup(createElement(TaskSessionProcess, {
+    ...sharedProps, mode: 'live', children: '内容',
+  }))
+  assert.equal(review, live)
+  const runningLive = renderToStaticMarkup(createElement(TaskSessionProcess, {
+    ...sharedProps, state: 'running', mode: 'live', children: '内容',
+  }))
+  assert.match(runningLive, /<details[^>]*open/)
+  const runningReview = renderToStaticMarkup(createElement(TaskSessionProcess, {
+    ...sharedProps, state: 'running', mode: 'review', children: '内容',
+  }))
+  assert.doesNotMatch(runningReview, /<details[^>]*open/)
+})
+
+test('只有可信 reasoning 区间才显示思考时长，不能借用过程或轮次耗时', () => {
+  const base: TaskThinkingModel = {
+    id: 'thought-one', label: '思考过程', text: '分析任务', state: 'settled',
+  }
+  const unknown = renderToStaticMarkup(createElement(TaskSessionThinking, { model: base }))
+  assert.doesNotMatch(unknown, /task-thinking-duration/)
+  for (const invalid of [-1, 0, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const rendered = renderToStaticMarkup(createElement(TaskSessionThinking, {
+      model: { ...base, durationMs: invalid },
+    }))
+    assert.doesNotMatch(rendered, /task-thinking-duration/)
+  }
+  const measured = renderToStaticMarkup(createElement(TaskSessionThinking, {
+    model: { ...base, durationMs: 12_300 },
+  }))
+  assert.match(measured, /task-thinking-duration/)
+  assert.match(read('./live-task-projection.ts'), /event\.type === 'reasoning\.end'[\s\S]*?startedAtMs !== undefined/)
+  assert.doesNotMatch(read('./ReviewRoundPresentation.tsx'), /durationMs:\s*round\.durationMs/)
+})
+
+test('Review/Live 共享头部使用 Agent Logo；历史证据与实时输入保持模式特性', () => {
+  assert.match(read('./ReviewPage.tsx'), /marker=\{<AgentLogo sourceId=/)
+  assert.match(read('./LiveTaskPage.tsx'), /marker=\{<AgentLogo sourceId=/)
+  assert.match(read('./ReviewRoundPresentation.tsx'), /meta=\{<EvidenceBadges/)
+  assert.match(read('./LiveTaskPage.tsx'), /className="pi-live-editor"/)
+})

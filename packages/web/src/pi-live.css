@@ -80,7 +80,6 @@
 .pi-live-observed-token-speed { display: inline-block; width: 16ch; max-width: 16ch; overflow: hidden; font-variant-numeric: tabular-nums; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 
 .pi-live-startup-spotlight { margin: 18px 0 14px; }
-.pi-live-current-round { margin-top: 3px; padding-top: 1px; }
 .pi-live-empty { padding: 7px 0 5px; color: var(--al-muted); font-size: 13px; text-align: left; }
 .pi-live-initializing {
   display: grid;

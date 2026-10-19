@@ -2,16 +2,12 @@ import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiveMessageActionContributionDto } from '@agent-lens/protocol'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
-import { MarkdownContent } from '../components/MarkdownContent'
 import { Button } from '../components/ui'
 import { liveTaskRoundEstimate, type LiveTaskProjectionItem, type LiveTaskRoundProjection } from './live-task-projection'
 import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
-import { TaskMessage } from './TaskMessage'
 import { TaskReadingRound } from './TaskReadingRound'
-import { TaskProcessGroup } from './TaskProcessGroup'
+import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
-import { TaskThinking } from './TaskThinking'
-import { TaskToolRow } from './TaskToolRow'
 
 /** 仅负责将统一 Live 投影映射到共享 TaskSurface 组件，无订阅与发送副作用。 */
 function contributionText(
@@ -46,7 +42,7 @@ function GenericLiveItem({
     const actions = item.entryId
       ? messageActions.filter(action => action.roles.includes(item.role))
       : []
-    return <TaskMessage
+    return <TaskSessionMessage
       role={item.role}
       text={item.text}
       attachments={item.attachments}
@@ -72,7 +68,7 @@ function GenericLiveItem({
     />
   }
   if (item.kind === 'thinking') {
-    return <TaskThinking
+    return <TaskSessionThinking
       model={{
         id: item.id,
         label: t('thinking.thinkingProcess'),
@@ -81,27 +77,22 @@ function GenericLiveItem({
         preview: item.text.replace(/\s+/g, ' ').trim().slice(0, 220),
         state: item.streaming ? 'running' : 'settled',
       }}
-      defaultExpanded={false}
-      className="task-process-thinking-card"
-    >
-      <MarkdownContent text={item.text} streaming={item.streaming}/>
-    </TaskThinking>
+      streaming={item.streaming}
+    />
   }
-  return <TaskToolRow
-    model={{
-      id: item.id,
-      name: item.name,
-      kind: 'tool',
-      kindLabel: t('tool.kind.tool'),
-      ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}),
-      ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}),
-      status: item.status,
-      primary: item.inputPreview,
-      output: item.output,
-      durationMs: item.durationMs,
-    }}
-    compact
-  />
+  return <TaskSessionTool model={{
+    id: item.id,
+    name: item.name,
+    kind: 'tool',
+    kindLabel: t('tool.kind.tool'),
+    ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}),
+    ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}),
+    status: item.status,
+    primary: item.inputPreview,
+    output: item.output,
+    durationMs: item.durationMs,
+  }}/>
+
 }
 
 /** Exactly one answer-action owner per semantic round, even when its final
@@ -169,9 +160,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   />
   const renderProcessItem = (item: LiveTaskProjectionItem) =>
     item.kind === 'message'
-      ? <div className="task-process-message" data-message-role="commentary" key={item.id}>
-          <MarkdownContent text={item.text} streaming={item.streaming}/>
-        </div>
+      ? <TaskSessionProcessText key={item.id} text={item.text} streaming={item.streaming}/>
       : renderItem(item)
   // Every native event keeps its position in the single Process disclosure.
   // TaskToolRow already owns each tool's input/output toggle; grouping adds
@@ -189,7 +178,8 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const processState = projection.model.state
   const endedAtMs = processTimes.length && processState !== 'running'
     ? Math.max(...processTimes) : undefined
-  const process = processItems.length > 0 && <TaskProcessGroup
+  const process = processItems.length > 0 && <TaskSessionProcess
+    mode="live"
     key={`process:${projection.model.id}`}
     id={`process:${projection.model.id}`}
     messageCount={processCount}
@@ -201,15 +191,12 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     thinkingDurationMs={processItems.reduce((sum, item) =>
       sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
     state={processState}
-    defaultExpanded={processState === 'running'}
-    autoCollapseOnSettle
-    className="live-task-process"
-  ><div className="task-process-sequence">{processContent}</div></TaskProcessGroup>
+  ><div className="task-process-sequence">{processContent}</div></TaskSessionProcess>
 
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
   const answer = visibleItems.filter(item => item.kind === 'message' && item.role === 'assistant').map(renderItem)
   return <VirtualRoundMount
-    rootSelector=".pi-live-reader"
+    rootSelector=".task-session-reader"
     flowRoot
     eager={eager}
     estimate={liveTaskRoundEstimate(projection)}
@@ -220,7 +207,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       process={process}
       answer={<>
         {answer}
-        {awaitingResponse && <TaskMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
+        {awaitingResponse && <TaskSessionMessage role="assistant" text="" author={agentLabel} pending className="live-task-response-pending"/>}
       </>}
     />
   </VirtualRoundMount>

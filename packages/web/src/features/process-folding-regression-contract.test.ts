@@ -59,7 +59,7 @@ test('Review / Pi 一旦 Final 已出现，上方 Process 必须按 settled 展�
 })
 
 test('Review Process 对中间 Assistant\/Commentary 明确标识为过程输出', () => {
-  assert.match(review, /t\('local\.process\.output'\)/)
+  assert.match(review, /<TaskSessionProcessText/)
 })
 
 test('Pi Indexed 不把 process duration 写入 Round duration', () => {

@@ -24,8 +24,11 @@ test('Task Review defaults to full observable events without a DOM adapter', () 
 })
 
 test('Task Review 的 Thinking 和 Process 统一默认折叠，运行中摘要仍保持可观察', () => {
-  assert.match(reviewPage, /<TaskThinking[\s\S]*?defaultExpanded=\{false\}/)
-  assert.match(reviewPage, /<TaskProcessGroup[\s\S]*?defaultExpanded=\{false\}/)
+  const shared = readFileSync(new URL('./TaskSessionContent.tsx', import.meta.url), 'utf8')
+  assert.match(reviewPage, /<TaskSessionThinking/)
+  assert.match(reviewPage, /<TaskSessionProcess\s+mode="review"/)
+  assert.match(shared, /defaultExpanded=\{false\}/)
+  assert.match(shared, /defaultExpanded=\{mode === 'live' && props\.state === 'running'\}/)
   assert.match(taskProcessGroup, /defaultExpanded = false/)
   assert.match(taskProcessGroup, /state === 'running' && <span>\{t\('process\.running'\)\}<\/span>/)
   assert.match(taskThinking, /useState\(\(\) => expansionStore\?\.get\(model\.id\) \?\? defaultExpanded\)/)
@@ -34,8 +37,8 @@ test('Task Review 的 Thinking 和 Process 统一默认折叠，运行中摘要�
 test('Task Review 将 commentary、reasoning 与工具统一放入处理详情', () => {
   assert.match(reviewPage, /entry\.type === 'process'/)
   assert.match(reviewPage, /function ReviewProcessGroup/)
-  assert.match(reviewPage, /return <TaskProcessGroup/)
-  assert.match(reviewPage, /t\('local\.process\.output'\)/)
+  assert.match(reviewPage, /return <TaskSessionProcess/)
+  assert.match(reviewPage, /<TaskSessionProcessText/)
 })
 
 test('Task Review 的其他运行记录会解释用途，折叠时不挂载事件行', () => {
