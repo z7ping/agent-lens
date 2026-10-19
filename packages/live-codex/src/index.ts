@@ -33,6 +33,7 @@ interface Session {
   status: LiveRuntimeState['status']
   streaming: boolean
   activeTurn?: string | undefined
+  lastCompletedTurn?: string | undefined
   model?: string
   effort?: string | undefined
   channel: LiveEventChannel
@@ -532,6 +533,7 @@ export class CodexLiveAdapter implements LiveAdapter {
           : previous.length + delta.length > maxLength
             ? (previous + delta).slice(0, maxLength) + suffix
             : previous + delta
+        if (preview === previous) return
         session.toolOutput.set(callId, preview)
         session.channel.publish({
           method: message.method, params: message.params,
@@ -550,7 +552,9 @@ export class CodexLiveAdapter implements LiveAdapter {
     }
     if (message.method === 'turn/completed') {
       const completedTurn = codexText(codexRecord(message.params.turn).id)
+      if (completedTurn && completedTurn === session.lastCompletedTurn) return
       if (session.activeTurn && completedTurn && completedTurn !== session.activeTurn) return
+      if (completedTurn) session.lastCompletedTurn = completedTurn
       session.streaming = false
       session.activeTurn = undefined
       session.approvals.clear()
