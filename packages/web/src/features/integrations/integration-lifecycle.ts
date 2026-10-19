@@ -66,6 +66,17 @@ export function integrationAuthorizationSummary(capabilities: readonly AgentInte
   if (controlled.some(capability => capability.reasonCode === 'authorization-restart-required')) {
     return { phase: 'restart-required', pending, controlled }
   }
+  // A failed privileged component may override its authorization metadata; do not infer a complete grant.
+  const incompleteControl = capabilities.some(capability =>
+    (capability.capability === 'hook' || capability.capability === 'runtime' || capability.capability === 'live')
+    && !capability.authorization
+    && (capability.availability === 'error'
+      || capability.reasonCode === 'component-start-failed'
+      || capability.reasonCode === 'dependency-start-failed'
+      || capability.reasonCode === 'authorization-required'
+      || capability.reasonCode === 'authorization-restart-required')
+  )
+  if (incompleteControl) return { phase: 'unknown', pending, controlled }
   if (controlled.length) return { phase: 'granted', pending, controlled }
   // An unloaded/failed runtime does not establish that it has no protected capabilities.
   if (!capabilities.length || capabilities.some(capability => capability.availability === 'error'
