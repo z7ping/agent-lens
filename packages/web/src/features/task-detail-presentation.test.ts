@@ -86,8 +86,9 @@ test('用户保留右侧气泡，Agent 无头像且不恢复历史视觉别名',
   assert.match(assistant, /task-message-bubble-assistant/)
   assert.match(assistant, /task-message-model-meta/)
   assert.match(assistant, /test \/ model-1/)
+  assert.match(assistant, /lucide-file-code/)
   assert.match(assistant, /task-message-copy-action/)
-  assert.match(assistant, />源码</)
+  assert.match(assistant, /aria-label="查看 Markdown 源码"/)
   assert.doesNotMatch(user, /class="(?:message-row|chat-bubble)(?:\s|\")/)
   assert.doesNotMatch(assistant, /class="(?:message-row|chat-bubble)(?:\s|\")/)
 })
@@ -152,7 +153,7 @@ test('assistant controls have no invisible status spacer after streaming settles
   const html = renderToStaticMarkup(createElement(TaskMessage, { role: 'assistant', text: 'rendered answer', collapsible: false }))
   assert.doesNotMatch(html, /task-message-output-state/)
   assert.match(html, /task-message-copy-action/)
-  assert.match(html, />源码</)
+  assert.match(html, /aria-label="查看 Markdown 源码"/)
 })
 
 test('thinking title uses a measured duration only and does not masquerade as execution time', () => {
