@@ -128,6 +128,7 @@
   white-space: nowrap;
 }
 
+.integration-management-update-text { color: var(--al-warning); font-weight: 620; }
 .integration-management-list-item-status { display: flex; flex: 0 0 auto; align-items: center; gap: 5px; }
 .integration-management-list-item-status > .ui-status-badge { max-width: 74px; white-space: nowrap; }
 .integration-management-update-icon { color: var(--al-warning); }
