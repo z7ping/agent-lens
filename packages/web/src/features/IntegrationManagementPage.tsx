@@ -647,7 +647,20 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
               </div>}
             </nav>
           </aside>
-          <section className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}/>
+          <section className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}>
+            <div className="integration-management-mobile-back">
+              <Button size="small" onClick={() => setMobileDetailOpen(false)}>
+                <UiIcon name="arrow-left" size={14}/>{t('managementPage.backToAgents')}
+              </Button>
+            </div>
+            {selectedItem ? <IntegrationManagementDetail
+              key={selectedItem.integrationId}
+              item={{ ...selectedItem, isNew: selectedItem.isNew || visibleNewIds.has(selectedItem.integrationId) }}
+              model={model}
+              discoveryScanning={Boolean(discoveryScanning)}
+              discoveryError={snapshot.integrationDiscoveryError}
+            /> : <div className="integration-management-empty">{t('managementPage.noMatches')}</div>}
+          </section>
         </div>}
       </div>
     </div>
