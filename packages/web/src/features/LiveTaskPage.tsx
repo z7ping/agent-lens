@@ -475,6 +475,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             </span>
             <div className="pi-live-compose-settings">
               {modelControl && <ComposerPillSelect
+                control="model"
                 ariaLabel={t('live.model')}
                 title={t('live.model')}
                 value={modelControl.value ?? ''}
@@ -488,6 +489,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                 onChange={value => { void changeModel(value) }}
               />}
               {thinking && <ComposerPillSelect
+                control="thinking"
                 ariaLabel={t('live.thinking')}
                 title={thinking.options.length <= 1 ? t('live.thinkingNoAlternatives') : t('live.thinking')}
                 value={thinking.value}
