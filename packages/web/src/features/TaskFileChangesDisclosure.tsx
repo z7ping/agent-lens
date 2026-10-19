@@ -6,7 +6,7 @@ import { AgentLensApi } from '../client/api'
 import { copyText } from '../client/clipboard'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalResourceReference } from '../components/LocalResourceReference'
-import { Button, Drawer, UiIcon } from '../components/ui'
+import { Button, Disclosure, Drawer, UiIcon } from '../components/ui'
 
 const api = new AgentLensApi()
 const INITIAL_VISIBLE_FILES = 3
@@ -22,6 +22,19 @@ function absoluteFilePath(rootPath: string | undefined, path: string): string | 
 /** Observation is not equivalent to a verified Git change classification. */
 function isObservedOnly(change: TaskFileChangeDto): boolean {
   return change.confidence !== 'exact' || change.changeType === 'unknown'
+}
+
+function fileNameAndDirectory(path: string): { name: string; directory: string } {
+  const normalized = path.replace(/\\/g, '/')
+  const separator = normalized.lastIndexOf('/')
+  return separator === -1
+    ? { name: normalized, directory: '' }
+    : { name: normalized.slice(separator + 1), directory: normalized.slice(0, separator + 1) }
+}
+
+function localObservationTime(value: string): string {
+  const time = new Date(value)
+  return Number.isNaN(time.getTime()) ? value : time.toLocaleString(undefined, { hour12: false })
 }
 
 function statusCode(change: TaskFileChangeDto): string {
@@ -99,20 +112,43 @@ export function TaskFileChangesDisclosure({
   const displayed = inlineDetails || showAll ? items : items.slice(0, INITIAL_VISIBLE_FILES)
   const hidden = items.length - displayed.length
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
+  const hasUnverifiedFiles = Boolean(value?.interactionId || value?.summary.observedCount || items.some(isObservedOnly))
   const isObserved = Boolean(value?.interactionId)
   const inspectingInline = inlineDetails && Boolean(evidenceItem || diffPath)
+  const inspectedFilePath = evidenceItem?.path ?? diffPath ?? ''
+  const inspectedFile = fileNameAndDirectory(inspectedFilePath)
   const evidenceContent = evidenceItem && <div className="task-file-change-evidence">
-    <p>{t('local.fileChanges.observationDisclaimer')}</p>
-    <dl>
-      <dt>{t('local.fileChanges.evidenceType')}</dt>
-      <dd>{evidenceItem.evidence.map(kind => t(`local.fileChanges.evidenceKinds.${kind}`)).join(' · ') || t('local.fileChanges.notRecorded')}</dd>
-      <dt>{t('local.fileChanges.firstObserved')}</dt>
-      <dd>{evidenceItem.firstChangedAt}</dd>
-      <dt>{t('local.fileChanges.lastObserved')}</dt>
-      <dd>{evidenceItem.lastChangedAt}</dd>
-      <dt>{t('local.fileChanges.observedAction')}</dt>
-      <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
+    <div className="task-file-change-verdict" role="status">
+      <UiIcon name="info" size={16}/>
+      <strong>{t('local.fileChanges.observedVerdict')}</strong>
+    </div>
+    <p className="task-file-change-explanation">{t(isObserved ? 'local.fileChanges.observationDisclaimer' : 'local.fileChanges.sessionObservationDisclaimer')}</p>
+    <dl className="task-file-change-facts">
+      <div>
+        <dt>{t('local.fileChanges.evidenceType')}</dt>
+        <dd>{evidenceItem.evidence.map(kind => t(`local.fileChanges.evidenceKinds.${kind}`)).join(' · ') || t('local.fileChanges.notRecorded')}</dd>
+      </div>
+      <div>
+        <dt>{t('local.fileChanges.observedAction')}</dt>
+        <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
+      </div>
+      <div>
+        <dt>{evidenceItem.firstChangedAt === evidenceItem.lastChangedAt ? t('local.fileChanges.observedAt') : t('local.fileChanges.firstObserved')}</dt>
+        <dd><time dateTime={evidenceItem.firstChangedAt} title={evidenceItem.firstChangedAt}>{localObservationTime(evidenceItem.firstChangedAt)}</time></dd>
+      </div>
+      {evidenceItem.firstChangedAt !== evidenceItem.lastChangedAt && <div>
+        <dt>{t('local.fileChanges.lastObserved')}</dt>
+        <dd><time dateTime={evidenceItem.lastChangedAt} title={evidenceItem.lastChangedAt}>{localObservationTime(evidenceItem.lastChangedAt)}</time></dd>
+      </div>}
     </dl>
+    <Disclosure className="task-file-change-raw" summary={t('local.fileChanges.rawEvidence')}>
+      <dl>
+        <div><dt>{t('local.fileChanges.evidenceType')}</dt><dd>{evidenceItem.evidence.join(', ') || t('local.fileChanges.notRecorded')}</dd></div>
+        <div><dt>{t('local.fileChanges.observedAction')}</dt><dd>{evidenceItem.changeType}</dd></div>
+        <div><dt>{evidenceItem.firstChangedAt === evidenceItem.lastChangedAt ? t('local.fileChanges.observedAt') : t('local.fileChanges.firstObserved')}</dt><dd><time dateTime={evidenceItem.firstChangedAt}>{evidenceItem.firstChangedAt}</time></dd></div>
+        {evidenceItem.firstChangedAt !== evidenceItem.lastChangedAt && <div><dt>{t('local.fileChanges.lastObserved')}</dt><dd><time dateTime={evidenceItem.lastChangedAt}>{evidenceItem.lastChangedAt}</time></dd></div>}
+      </dl>
+    </Disclosure>
   </div>
   const diffContent = diffPath && <div className="task-file-diff-view">
     {diffLoading && <p className="task-file-diff-notice" role="status">{t('local.fileChanges.refreshing')}</p>}
@@ -150,14 +186,20 @@ export function TaskFileChangesDisclosure({
   </div>
   return <>
     {inspectingInline ? <section className="task-file-changes task-file-changes-detail">
-      <Button size="small" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.titleCount', { count })}</Button>
-      <h3 className="task-file-diff-path" title={evidenceItem?.path ?? diffPath ?? undefined}>{evidenceItem?.path ?? diffPath}</h3>
+      <Button size="small" className="task-file-detail-back" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.backToFiles')}</Button>
+      <div className="task-file-detail-heading">
+        <span className="task-file-detail-icon" aria-hidden="true"><UiIcon name="file-code" size={20}/></span>
+        <div className="task-file-detail-identity">
+          <h3 title={inspectedFilePath}>{inspectedFile.name}</h3>
+          {inspectedFile.directory && <p title={inspectedFile.directory}>{inspectedFile.directory}</p>}
+        </div>
+      </div>
       {evidenceContent}{diffContent}
     </section> : <section className="task-file-changes">
       <div className="task-file-changes-header">
         <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="tool-edit" size={16}/></span>
         <h3 className="task-file-changes-heading">
-          {t(isObserved ? 'local.fileChanges.roundTitle' : 'local.fileChanges.titleCount', { count })}
+          {t(isObserved ? 'local.fileChanges.roundTitle' : hasUnverifiedFiles ? 'local.fileChanges.activityCount' : 'local.fileChanges.titleCount', { count })}
           {hasExactDelta && <span className="task-file-changes-delta">
             {value?.summary.additions !== undefined && <span className="task-file-change-added">+{value.summary.additions}</span>}
             {value?.summary.deletions !== undefined && <span className="task-file-change-deleted">-{value.summary.deletions}</span>}

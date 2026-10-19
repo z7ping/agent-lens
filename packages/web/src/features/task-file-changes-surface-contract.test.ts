@@ -101,3 +101,31 @@ test('抽屉中的会话文件列表复用正文同一份样式定义', () => {
   assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-change-row/)
   assert.match(styles, /:is\(\.task-surface, \.task-header-info-drawer\) \.task-file-changes-more/)
 })
+
+test('点击文件进入同层详情：文件身份、核验结论、观测时间与原始证据分级呈现', () => {
+  assert.match(component, /const inspectedFile = fileNameAndDirectory\(inspectedFilePath\)/)
+  assert.match(component, /className="task-file-detail-heading"/)
+  assert.match(component, /className="task-file-detail-identity"/)
+  assert.match(component, /local\.fileChanges\.backToFiles/)
+  assert.match(component, /className="task-file-change-verdict" role="status"/)
+  assert.match(component, /className="task-file-change-explanation"/)
+  assert.match(component, /className="task-file-change-facts"/)
+  assert.match(component, /firstChangedAt === evidenceItem\.lastChangedAt/)
+  assert.match(component, /firstChangedAt !== evidenceItem\.lastChangedAt/)
+  assert.match(component, /<Disclosure className="task-file-change-raw"/)
+  assert.doesNotMatch(component, /<details\b/)
+  assert.match(styles, /\.task-file-change-raw\.ui-disclosure \{/)
+  assert.match(styles, /\.task-file-detail-heading \{/)
+})
+
+test('文件观测与准确变更的标题语义分离，详情文案双语覆盖', () => {
+  const zh = readFileSync(new URL('../i18n/zh-CN/review.ts', import.meta.url), 'utf8')
+  const en = readFileSync(new URL('../i18n/en-US/review.ts', import.meta.url), 'utf8')
+  assert.match(component, /hasUnverifiedFiles = Boolean\(/)
+  assert.match(component, /hasUnverifiedFiles \? 'local\.fileChanges\.activityCount' : 'local\.fileChanges\.titleCount'/)
+  for (const messages of [zh, en]) {
+    for (const key of ['activityCount', 'observedVerdict', 'backToFiles', 'rawEvidence', 'observedAt', 'sessionObservationDisclaimer']) {
+      assert.ok(messages.includes(key + ':'), `missing ${key}`)
+    }
+  }
+})
