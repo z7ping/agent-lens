@@ -104,6 +104,22 @@ function GenericLiveItem({
   />
 }
 
+/** Exactly one answer-action owner per semantic round, even when its final
+ * fragment contains only terminal/tool facts and no assistant message. */
+export function liveRoundOwnsAnswerActions(
+  rounds: readonly LiveTaskRoundProjection[],
+  index: number,
+): boolean {
+  const round = rounds[index]
+  if (!round) return false
+  const hasAnswer = (candidate: LiveTaskRoundProjection) => candidate.items.some(item =>
+    item.kind === 'message' && item.role === 'assistant' && item.phase !== 'commentary')
+  if (!hasAnswer(round)) return false
+  const semanticId = round.model.semanticId ?? round.model.id
+  return !rounds.slice(index + 1).some(candidate =>
+    (candidate.model.semanticId ?? candidate.model.id) === semanticId && hasAnswer(candidate))
+}
+
 /** Live uses semantic rounds only for navigation/virtualization; never a visible disclosure. */
 export function LiveTranscriptRound({ model, children }: { model: TaskRoundModel; children: ReactNode }) {
   return <div
@@ -194,7 +210,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   const endedAtMs = processTimes.length && processState !== 'running'
     ? Math.max(...processTimes) : undefined
   const process = processItems.length > 0 && <TaskProcessGroup
-    key={`process:${projection.model.semanticId ?? projection.model.id}:${processItems[0]!.id}`}
+    key={`process:${projection.model.id}`}
     id={`process:${projection.model.id}`}
     messageCount={processCount}
     thinkingCount={thinkingCount}
@@ -256,9 +272,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
       projection={round}
       agentLabel={agentLabel}
       eager={index >= rounds.length - eagerTailCount}
-      showAnswerActions={index === rounds.length - 1 ||
-        (round.model.semanticId ?? round.model.id) !==
-          (rounds[index + 1]?.model.semanticId ?? rounds[index + 1]?.model.id)}
+      showAnswerActions={liveRoundOwnsAnswerActions(rounds, index)}
       messageActions={messageActions}
       actionPending={actionPending}
       runtimeStreaming={runtimeStreaming}
