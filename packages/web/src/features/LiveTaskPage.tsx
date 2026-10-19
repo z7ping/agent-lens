@@ -135,7 +135,29 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
   const { markReaderUserIntent, onReaderScroll, jumpEarliest, jumpLatest } = useLiveTaskHistory({ current, session })
 
-  const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session })
+  // Explicit submission resumes follow, while subsequent manual upward scrolling still detaches it.
+  const onSendAccepted = useCallback(() => {
+    followControllerRef.current.restore()
+    setNewRecords(false)
+    if (!historyAtLatestRef.current) return
+    window.requestAnimationFrame(() => {
+      const reader = readerRef.current
+      const controller = followControllerRef.current
+      if (!reader || !controller.isFollowing) return
+      controller.beginProgrammaticScroll()
+      controller.recordScrollWrite()
+      reader.scrollTop = Math.max(0, reader.scrollHeight - reader.clientHeight)
+      window.requestAnimationFrame(() => controller.endProgrammaticScroll())
+    })
+  }, [followControllerRef, historyAtLatestRef, readerRef, setNewRecords])
+
+  // If the reader is looking at an older history window, reload latest *after* the send commits.
+  // Doing so earlier could replace the optimistic user message with a stale snapshot.
+  const onSendDelivered = useCallback(() => {
+    if (!historyAtLatestRef.current) void jumpLatest()
+  }, [historyAtLatestRef, jumpLatest])
+
+  const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
   const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
     if (!current || historyLoading) return
