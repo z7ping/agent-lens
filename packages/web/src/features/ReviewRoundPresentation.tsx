@@ -12,7 +12,7 @@ import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, isSessionTitleUp
 import { TaskEvent } from './TaskEvent'
 import { TaskMessage } from './TaskMessage'
 import { TaskProcessGroup } from './TaskProcessGroup'
-import { TaskRound } from './TaskRound'
+import { TaskReadingRound } from './TaskReadingRound'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolGroup } from './TaskToolGroup'
 import { agentLensI18n } from '../i18n/runtime'
@@ -320,10 +320,7 @@ export function ReviewRoundAdapter({
   inspect,
   loadAttachments,
   loadProcess,
-  defaultExpanded,
   expansionStore,
-  forceExpanded,
-  forceRevision,
   showAllEvents,
   onShowAllEvents,
   fileChangesEnabled,
@@ -334,10 +331,7 @@ export function ReviewRoundAdapter({
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   loadProcess(sessionId: string, ordinal: number, revision: string, signal?: AbortSignal): Promise<ReviewInteractionDto | null>
-  defaultExpanded: boolean
   expansionStore: Map<string, boolean>
-  forceExpanded: boolean
-  forceRevision: number
   showAllEvents: boolean
   onShowAllEvents: () => void
   fileChangesEnabled?: boolean
@@ -490,22 +484,19 @@ export function ReviewRoundAdapter({
       ? <ReviewProcessGroup id={processEntry.id} items={processEntry.items} inspect={inspect} state={resolvedProcessState} showAllEvents={showAllEvents} expansionStore={expansionStore}/>
       : null
 
-  return <TaskRound
+  return <TaskReadingRound
     model={round}
-    defaultExpanded={defaultExpanded}
-    expansionStore={expansionStore}
-    forceExpanded={forceExpanded}
-    forceRevision={forceRevision}
-  >
-    {promptEntries.map(renderEntry)}
-    {processGroup}
-    {afterProcessEntries.map(renderEntry)}
-    {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
-    {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}
-    {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
-    {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
-      <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
-    </button>}
-  </TaskRound>
+    prompt={promptEntries.map(renderEntry)}
+    process={processGroup}
+    answer={afterProcessEntries.map(renderEntry)}
+    footer={<>
+      {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+      {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}
+      {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
+      {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>
+        <UiIcon name="exclamation" size={14}/>{t('local.rawEvents.hiddenCount', { count: unknownCount })}
+      </button>}
+    </>}
+  />
 }
 
