@@ -13,8 +13,33 @@ import type { TaskThinkingModel, TaskToolModel } from './task-detail-model'
  */
 export type TaskSessionMode = 'review' | 'live'
 
-export function TaskSessionMessage(props: TaskMessageProps) {
-  return <TaskMessage {...props}/>
+/** Shared message context. Source adapters provide facts, not layout slots. */
+export interface TaskSessionMessagePresentation {
+  author?: string
+  modelLabel?: string
+  time?: string
+  evidence?: ReactNode
+}
+
+export function taskSessionMessageTime(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) return undefined
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(new Date(timestamp))
+}
+
+export function TaskSessionMessage({
+  presentation, ...props
+}: TaskMessageProps & { presentation?: TaskSessionMessagePresentation }) {
+  return <TaskMessage
+    {...props}
+    author={presentation?.author ?? props.author}
+    modelLabel={presentation?.modelLabel ?? props.modelLabel}
+    time={presentation?.time ?? props.time}
+    meta={presentation?.evidence ?? props.meta}
+  />
 }
 
 export function TaskSessionProcessText({
