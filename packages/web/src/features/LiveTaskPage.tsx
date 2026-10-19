@@ -19,7 +19,7 @@ import { useLiveTaskActions } from './use-live-task-actions'
 import { type LiveQueueListItem } from './live-task-queue'
 import { messageText } from './live-task-input'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
-import { GenericLiveRound, StableLiveRounds } from './LiveTaskTimeline'
+import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
@@ -382,9 +382,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             projection={round}
             agentLabel={agentLabel}
             eager={round.model.state === 'running' || index >= roundSegments.active.length - 2}
-            showAnswerActions={index === roundSegments.active.length - 1 ||
-              (round.model.semanticId ?? round.model.id) !==
-                (roundSegments.active[index + 1]?.model.semanticId ?? roundSegments.active[index + 1]?.model.id)}
+            showAnswerActions={liveRoundOwnsAnswerActions(roundSegments.active, index)}
             messageActions={messageActions}
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
