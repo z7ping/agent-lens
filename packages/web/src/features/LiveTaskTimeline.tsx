@@ -155,7 +155,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
     actionPending={actionPending} runtimeStreaming={runtimeStreaming}
     showContentActions={item.kind === 'message' && item.role === 'assistant'
-      && item.id === lastAnswerId && !runtimeStreaming && showAnswerActions}
+      && item.id === lastAnswerId && projection.model.state !== 'running' && showAnswerActions}
     onMessageAction={onMessageAction}
   />
   const renderProcessItem = (item: LiveTaskProjectionItem) =>
