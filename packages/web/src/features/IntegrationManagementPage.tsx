@@ -609,7 +609,44 @@ export function IntegrationManagementPage({ model, toolbarHost }: { model: Agent
           </div>
         </section> : <div className="integration-management-workspace" data-mobile-detail={mobileDetailOpen ? 'true' : 'false'}>
           {/* Agent navigator and selected detail are separate scrolling panes. */}
-          <aside className="integration-management-navigator" aria-label={t('managementPage.agentListAria')}/>
+          <aside className="integration-management-navigator" aria-label={t('managementPage.agentListAria')}>
+            <div className="integration-management-navigator-head">
+              <strong>{t('managementPage.agentListTitle')}</strong>
+              <span>{items.length}</span>
+            </div>
+            <div className="integration-management-summary" aria-label={t('managementPage.summaryAria')}>
+              <span><strong>{discoveryFailed ? '—' : detectedCount}</strong> {t('managementPage.detected')}</span>
+              <span><strong>{installedCount}</strong> {t('managementPage.added')}</span>
+              <span><strong>{enabledCount}</strong> {t('managementPage.enabled')}</span>
+            </div>
+            <nav className="integration-management-navigator-list" aria-label={t('managementPage.agentListAria')}>
+              {primaryItems.length > 0 && <div className="integration-management-list-group">
+                <h3>{t('managementPage.localAndAdded')} <small>{primaryItems.length}</small></h3>
+                {primaryItems.map(item => <IntegrationManagementListItem
+                  key={item.integrationId}
+                  item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+                  selected={selectedItem?.integrationId === item.integrationId}
+                  discoveryScanning={Boolean(discoveryScanning)}
+                  discoveryError={snapshot.integrationDiscoveryError}
+                  onSelect={() => selectItem(item.integrationId)}
+                />)}
+              </div>}
+              {supportedItems.length > 0 && <div className="integration-management-list-group">
+                <h3>{t('managementPage.otherSupported')} <small>{supportedItems.length}</small></h3>
+                {supportedItems.map(item => <IntegrationManagementListItem
+                  key={item.integrationId}
+                  item={{ ...item, isNew: item.isNew || visibleNewIds.has(item.integrationId) }}
+                  selected={selectedItem?.integrationId === item.integrationId}
+                  discoveryScanning={Boolean(discoveryScanning)}
+                  discoveryError={snapshot.integrationDiscoveryError}
+                  onSelect={() => selectItem(item.integrationId)}
+                />)}
+              </div>}
+              {!primaryItems.length && !supportedItems.length && <div className="integration-management-empty">
+                {statusFilter !== 'all' ? t('managementPage.noMatches') : t('managementPage.noLocalOrAdded')}
+              </div>}
+            </nav>
+          </aside>
           <section className="integration-management-detail-pane" aria-label={t('managementPage.detailsLabel')}/>
         </div>}
       </div>
