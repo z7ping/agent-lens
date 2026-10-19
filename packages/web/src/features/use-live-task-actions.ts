@@ -13,13 +13,15 @@ import { appendLiveInputHistory, appendOptimisticLiveUserMessage, projectLiveInp
 
 /** 负责发送、中断、恢复草稿、队列、模型、扩展和私有动作，不渲染页面。 */
 export function useLiveTaskActions({
-  current, t, navigate, setComposerValue, clearComposer, session,
+  current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered,
 }: {
   current: TaskLiveRuntimeLocation | null
   t: ReturnType<typeof useTranslation>['t']
   navigate: ReturnType<typeof useNavigate>
   setComposerValue(value: string): void
   clearComposer(): void
+  onSendAccepted?(): void
+  onSendDelivered?(): void
   session: LiveTaskState
 }) {
   const {
@@ -114,6 +116,7 @@ export function useLiveTaskActions({
         setError(t('live.startupAttachmentRequiresReady'))
         return
       }
+      onSendAccepted?.()
       setStartupQueued(message)
       clearComposer()
       composerRef.current?.focus({ preventScroll: true })
@@ -132,6 +135,7 @@ export function useLiveTaskActions({
       ? { id: `${behavior}-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: behavior, text: optimisticText }
       : null
 
+    onSendAccepted?.()
     setBusy(true)
     setError('')
     const optimisticAttachments = behavior === 'normal'
@@ -156,6 +160,7 @@ export function useLiveTaskActions({
     clearComposer()
     try {
       await liveApi.send(current.liveId, current.runtimeSessionId, message, behavior)
+      onSendDelivered?.()
       if (optimisticText) setInputHistory(previous => appendLiveInputHistory(previous, optimisticText))
       if (behavior === 'normal') {
         setState(previous => previous ? { ...previous, isStreaming: true } : previous)
@@ -174,7 +179,7 @@ export function useLiveTaskActions({
       if (pending) setPendingQueue(previous => previous.filter(item => item.id !== pending.id))
       setBusy(false)
     }
-  }, [canSubmit, clearComposer, current, product, state, streamingBehavior, t])
+  }, [canSubmit, clearComposer, current, product, state, streamingBehavior, t, onSendAccepted, onSendDelivered])
 
   useEffect(() => {
     if (!current || !product || state?.status !== 'ready' || !startupQueued || startupSendingRef.current) return
