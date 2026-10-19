@@ -414,8 +414,9 @@ test('工具开始时旧正文停止生成提示；并发工具仍各自运行',
   let items = reduceLiveTaskEvent([], event(1, { type: 'text.start', messageId: 'a1', contentIndex: 0, text: '准备检查' }))
   items = reduceLiveTaskEvent(items, event(2, { type: 'tool.start', callId: 'one', name: 'read' }))
   items = reduceLiveTaskEvent(items, event(3, { type: 'tool.start', callId: 'two', name: 'shell' }))
-  assert.equal(items.find(item => item.kind === 'message')?.kind === 'message'
-    ? (items.find(item => item.kind === 'message') as Extract<typeof items[number], {kind: 'message'}>).streaming : true, false)
+  const firstMessage = items.find(item => item.kind === 'message')
+  assert.ok(firstMessage?.kind === 'message')
+  assert.equal(firstMessage.streaming, false)
   assert.deepEqual(items.filter(item => item.kind === 'tool').map(item => item.status), ['running', 'running'])
 })
 
