@@ -431,7 +431,7 @@
 .task-surface .task-thinking[data-task-thinking-state='running'] .task-thinking-running-mark { visibility: visible; color: var(--al-accent); }
 .task-surface .task-thinking[data-task-thinking-state='running'] .task-thinking-running-mark svg { animation: task-activity-spin 1.4s linear infinite; }
 .task-surface .task-thinking-label { flex: 0 0 auto; color: var(--al-muted); font-size: 13px; font-weight: 650; white-space: nowrap; }
-.task-surface .task-thinking-preview { grid-column: 2; grid-row: 1; display: -webkit-box; min-width: 0; overflow: hidden; color: var(--al-muted-2); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.task-surface .task-thinking-preview { grid-column: 2; grid-row: 1; display: -webkit-box; min-width: 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .task-surface .task-thinking-summary-meta { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: var(--al-muted-2); font-size: 12px; white-space: nowrap; }
 .task-surface .task-process-group > .task-thinking-summary { grid-template-columns: auto minmax(0, 1fr); justify-content: start; }
 .task-surface .task-process-group > .task-thinking-summary .task-thinking-summary-meta { justify-self: start; }
