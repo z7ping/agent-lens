@@ -89,6 +89,10 @@ test('授权状态未取得不得伪装成已授权或无需授权', () => {
     { capability: 'live', availability: 'error', reasonCode: 'component-start-failed' },
   ]).phase, 'unknown')
   assert.equal(integrationAuthorizationSummary([
+    { capability: 'runtime', availability: 'available', authorization: 'granted' },
+    { capability: 'live', availability: 'error', reasonCode: 'component-start-failed' },
+  ]).phase, 'unknown')
+  assert.equal(integrationAuthorizationSummary([
     { capability: 'source', availability: 'available' },
     { capability: 'assets', availability: 'available' },
   ]).phase, 'not-required')
