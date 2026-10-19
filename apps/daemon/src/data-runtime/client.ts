@@ -115,6 +115,7 @@ export class DataRuntimeClient {
   private worker: Worker | null = null
   private stateValue: DataRuntimeClientState = 'stopped'
   private readonly pending = new Map<string, PendingRequest>()
+  private readonly workerTerminationReasons = new WeakMap<Worker, Error>()
   private maxPending = 0
   private requests = 0
   private completed = 0
@@ -156,15 +157,31 @@ export class DataRuntimeClient {
     worker.on('message', value => this.handleMessage(value))
     worker.on('error', error => {
       workerFailure = error
-      this.markDegraded(error)
+      if (!this.stopping) {
+        logDataRuntimeFailure('[AgentLens] Data Runtime worker error', {
+          role: this.role,
+          errorType: error.name,
+          errorMessage: error.message,
+        }, `data-runtime-worker-error:${this.role}`)
+        this.markDegraded(error)
+      }
     })
     worker.on('exit', code => {
       this.stopHeartbeat()
       if (this.worker === worker) this.worker = null
-      const unavailableError = workerFailure ?? new Error(`Data Runtime ${this.role} worker exited unexpectedly with code ${code}`)
+      const livenessTermination = this.workerTerminationReasons.get(worker)
+      const unavailableError = workerFailure ?? livenessTermination
+        ?? new Error(`Data Runtime ${this.role} worker exited unexpectedly with code ${code}`)
       if (this.stopping) {
         this.stateValue = 'stopped'
       } else {
+        logDataRuntimeFailure('[AgentLens] Data Runtime worker exited', {
+          role: this.role,
+          exitCode: code,
+          reason: workerFailure ? 'worker_error' : livenessTermination ? 'liveness_timeout' : 'unexpected_exit',
+          errorMessage: unavailableError.message,
+          pendingRequests: this.pending.size,
+        }, `data-runtime-worker-exit:${this.role}`)
         this.markDegraded(unavailableError)
       }
       this.rejectAll(unavailableError)
@@ -331,6 +348,10 @@ export class DataRuntimeClient {
         // liveness probes are allowed to recycle a Worker.
         if (fatalTimeout && !this.stopping && this.worker === worker) {
           this.livenessFailures += 1
+          this.workerTerminationReasons.set(worker, new Error(
+            `Data Runtime ${this.role} worker terminated after ${method} liveness timeout (${timeoutMs}ms)`,
+            { cause: error },
+          ))
           this.markDegraded(error)
           void worker.terminate().catch(() => undefined)
         }
@@ -346,6 +367,11 @@ export class DataRuntimeClient {
     const intervalMs = heartbeatDuration(this.options.heartbeatIntervalMs, HEARTBEAT_INTERVAL_MS)
     this.heartbeatTimer = setInterval(() => {
       if (this.stopping || this.stateValue !== 'ready' || this.heartbeatInFlight) return
+      // Writer operations are serialized within the Worker. A ping queued behind
+      // an active write cannot respond until that write finishes; killing the
+      // Worker here aborts legitimate transactions and loses session projections.
+      // Timed-out write requests stay pending until the Worker really releases them.
+      if (this.role === 'writer' && this.pending.size > 0) return
       this.heartbeatInFlight = true
       void this.requestInternal(
         'ping',
