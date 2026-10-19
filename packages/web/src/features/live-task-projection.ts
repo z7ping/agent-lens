@@ -369,6 +369,37 @@ function upsertTool(
   return copy
 }
 
+/**
+ * Only the newest textual stage owns the visible streaming indicator.
+ * Native events remain unchanged, and parallel tools may keep running.
+ * A delayed delta to a superseded block updates its text without reactivating it.
+ */
+function prepareLiveTextStage(
+  items: readonly LiveTaskProjectionItem[],
+  kind: 'message' | 'thinking',
+  id: string,
+): { items: readonly LiveTaskProjectionItem[]; superseded: boolean } {
+  const existingIndex = findLastProjectionIndex(items, item => item.kind === kind && item.id === id)
+  const superseded = existingIndex >= 0 && items.slice(existingIndex + 1).some(item =>
+    item.kind === 'thinking' || item.kind === 'tool' || item.kind === 'message',
+  )
+  if (superseded) return { items, superseded: true }
+  return {
+    superseded: false,
+    items: items.map(item =>
+      (item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant'))
+        && item.id !== id && item.streaming
+        ? { ...item, streaming: false } : item),
+  }
+}
+
+function settleCurrentLiveText(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
+  return items.map(item =>
+    (item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant'))
+      && item.streaming ? { ...item, streaming: false } : item,
+  )
+}
+
 export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
   return items.map(item => {
     if (item.kind === 'message' && item.streaming) return { ...item, streaming: false }
@@ -381,7 +412,7 @@ export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjection
 export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined): boolean {
   if (!event) return false
   return event.type === 'text.start'
-    || (event.type === 'message.end' && event.phase !== undefined)
+    || (event.type === 'message.end' && event.role === 'assistant')
     || event.type === 'text.delta'
     || event.type === 'text.end'
     || event.type === 'reasoning.start'
@@ -401,19 +432,21 @@ export function reduceLiveTaskEvent(
   if (!event) return [...items]
   const fallback = String(envelope.sequence)
 
-  if (event.type === 'message.end' && event.role === 'assistant' && event.phase) {
-    // 原生消息结束事件明确给出阶段；只修正该消息，不按文案或时间猜测。
+  if (event.type === 'message.end' && event.role === 'assistant') {
+    // Native message-end closes its own text blocks even when phase is unspecified.
+    // Do not guess a final/commentary phase from surrounding prose.
     const lastUser = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'user')
     const lastMessage = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'assistant')
     const prefix = event.messageId ? `message:${event.messageId}:` : undefined
     return items.map((item, index) => item.kind === 'message' && item.role === 'assistant'
       && (prefix ? item.id.startsWith(prefix) : index === lastMessage && index > lastUser)
-      ? { ...item, phase: event.phase, streaming: false } : item)
+      ? { ...item, ...(event.phase ? { phase: event.phase } : {}), streaming: false } : item)
   }
 
   if (event.type === 'text.start' || event.type === 'text.delta' || event.type === 'text.end') {
     const id = contentId(event, 'message', fallback)
-    return upsertMessage(items, id, current => ({
+    const stage = prepareLiveTextStage(items, 'message', id)
+    return upsertMessage(stage.items, id, current => ({
       id,
       kind: 'message',
       role: 'assistant',
@@ -421,14 +454,15 @@ export function reduceLiveTaskEvent(
       text: event.type === 'text.delta'
         ? `${current?.text ?? ''}${event.delta ?? ''}`
         : event.text ?? current?.text ?? '',
-      streaming: event.type !== 'text.end',
+      streaming: event.type !== 'text.end' && !stage.superseded,
       at: current?.at ?? envelope.receivedAt,
     }))
   }
 
   if (event.type === 'reasoning.start' || event.type === 'reasoning.delta' || event.type === 'reasoning.end') {
     const id = contentId(event, 'thinking', fallback)
-    return upsertThinking(items, id, current => {
+    const stage = prepareLiveTextStage(items, 'thinking', id)
+    return upsertThinking(stage.items, id, current => {
       const receivedAtMs = Date.parse(envelope.receivedAt)
       const startedAtMs = current?.startedAtMs ?? (
         event.type === 'reasoning.start' && Number.isFinite(receivedAtMs) ? receivedAtMs : undefined
@@ -442,7 +476,7 @@ export function reduceLiveTaskEvent(
         text: event.type === 'reasoning.delta'
           ? `${current?.text ?? ''}${event.delta ?? ''}`
           : event.text ?? current?.text ?? '',
-        streaming: event.type !== 'reasoning.end',
+        streaming: event.type !== 'reasoning.end' && !stage.superseded,
         at: current?.at ?? envelope.receivedAt,
         ...(startedAtMs === undefined ? {} : { startedAtMs }),
         ...(durationMs === undefined ? {} : { durationMs }),
@@ -452,7 +486,7 @@ export function reduceLiveTaskEvent(
 
   if (event.type === 'tool.start') {
     const callId = event.callId || `sequence-${fallback}`
-    return upsertTool(items, callId, current => ({
+    return upsertTool(settleCurrentLiveText(items), callId, current => ({
       id: current?.id ?? `tool:${callId}`,
       kind: 'tool',
       callId,
