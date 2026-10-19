@@ -438,9 +438,16 @@ export function reduceLiveTaskEvent(
     const lastUser = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'user')
     const lastMessage = findLastProjectionIndex(items, item => item.kind === 'message' && item.role === 'assistant')
     const prefix = event.messageId ? `message:${event.messageId}:` : undefined
-    return items.map((item, index) => item.kind === 'message' && item.role === 'assistant'
-      && (prefix ? item.id.startsWith(prefix) : index === lastMessage && index > lastUser)
-      ? { ...item, ...(event.phase ? { phase: event.phase } : {}), streaming: false } : item)
+    const thinkingPrefix = event.messageId ? `thinking:${event.messageId}:` : undefined
+    return items.map((item, index) => {
+      if (item.kind === 'thinking' && item.streaming
+        && (thinkingPrefix ? item.id.startsWith(thinkingPrefix) : true)) {
+        return { ...item, streaming: false }
+      }
+      return item.kind === 'message' && item.role === 'assistant'
+        && (prefix ? item.id.startsWith(prefix) : index === lastMessage && index > lastUser)
+        ? { ...item, ...(event.phase ? { phase: event.phase } : {}), streaming: false } : item
+    })
   }
 
   if (event.type === 'text.start' || event.type === 'text.delta' || event.type === 'text.end') {

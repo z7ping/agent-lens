@@ -428,3 +428,15 @@ test('即使原生 assistant message.end 没有 phase，也结束对应消息但
   assert.equal(message.streaming, false)
   assert.equal(message.phase, undefined)
 })
+
+test('Pi assistant 消息结束可兜底关闭缺失 reasoning.end 的思考块', () => {
+  let items = reduceLiveTaskEvent([], event(1, {
+    type: 'reasoning.start', messageId: 'assistant-a', contentIndex: 0, text: '思考',
+  }))
+  items = reduceLiveTaskEvent(items, event(2, {
+    type: 'message.end', role: 'assistant', messageId: 'assistant-a',
+  }))
+  const thought = items[0]
+  assert.ok(thought?.kind === 'thinking')
+  assert.equal(thought.streaming, false)
+})
