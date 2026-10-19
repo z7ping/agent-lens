@@ -30,8 +30,6 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const [inspect, setInspect] = useState<ReviewNodeDto | null>(null)
   const [roundFilter, setRoundFilter] = useState<RoundFilter>('all')
   const [roundFilterLoading, setRoundFilterLoading] = useState(false)
-  const [expandAllRounds, setExpandAllRounds] = useState(true)
-  const [roundExpansionRevision, setRoundExpansionRevision] = useState(0)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
@@ -528,16 +526,6 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       ? t('local.interaction.noLatency')
       : t('local.interaction.noMatches')
 
-  const toggleRoundExpansion = () => {
-    const pane = readerPaneRef.current
-    if (pane) pendingReaderAnchorRef.current = {
-      position: captureReviewReaderPosition(pane),
-      userRevision: readerUserRevisionRef.current,
-    }
-    setExpandAllRounds(value => !value)
-    setRoundExpansionRevision(value => value + 1)
-  }
-
   const toggleEventVisibility = () => {
     const pane = readerPaneRef.current
     if (pane) pendingReaderAnchorRef.current = {
@@ -578,8 +566,6 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     setInspect,
     roundFilter,
     roundFilterLoading,
-    expandAllRounds,
-    roundExpansionRevision,
     showAllEvents,
     liveProducts,
     historyInteractionPending,
@@ -612,7 +598,6 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     atStart,
     onReaderScroll,
     emptyLabel,
-    toggleRoundExpansion,
     toggleEventVisibility,
     noteReaderUserIntent,
     runHistoryInteraction,
