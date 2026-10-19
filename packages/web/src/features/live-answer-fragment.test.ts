@@ -51,7 +51,7 @@ test('单条长请求包含多段思考与工具时，UI 只输出一条处理�
     messageActions: [], actionPending: null, runtimeStreaming: false,
     onMessageAction: () => undefined,
   }))
-  assert.equal((html.match(/class="task-thinking task-process-group live-task-process"/g) ?? []).length, 1)
+  assert.equal((html.match(/class="task-thinking task-process-group"/g) ?? []).length, 1)
   assert.match(html, /8 段思考/)
   assert.match(html, /16 次工具调用/)
 })
@@ -76,7 +76,7 @@ test('Live 连续工具调用直接逐条展示，不再套一层工具调用分
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 6)
   assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 6)
   assert.doesNotMatch(html, /live-tool-group|工具调用 6 项|live-tool-group-more/)
-  assert.equal((html.match(/class="task-thinking task-process-group live-task-process"/g) ?? []).length, 1)
+  assert.equal((html.match(/class="task-thinking task-process-group"/g) ?? []).length, 1)
   const renderedOrder = ['title="src/one.ts"', 'title="src/two.ts"', '继续检查', 'exit 1', 'pwd', 'ls', 'git status']
   let last = -1
   for (const entry of renderedOrder) {
