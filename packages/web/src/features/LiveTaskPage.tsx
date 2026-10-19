@@ -154,8 +154,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   // If the reader is looking at an older history window, reload latest *after* the send commits.
   // Doing so earlier could replace the optimistic user message with a stale snapshot.
   const onSendDelivered = useCallback(() => {
-    if (!historyAtLatestRef.current) void jumpLatest()
-  }, [historyAtLatestRef, jumpLatest])
+    if (!historyAtLatestRef.current && followControllerRef.current.isFollowing) void jumpLatest()
+  }, [followControllerRef, historyAtLatestRef, jumpLatest])
 
   const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
