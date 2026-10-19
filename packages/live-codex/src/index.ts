@@ -226,25 +226,26 @@ export class CodexLiveAdapter implements LiveAdapter {
     await this.attach(session)
     if (window?.around) throw new Error('Codex Live does not support centered history snapshots')
     const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
-    // A stable Item anchor is essential: the Web recovery loop passes leafId as 'since',
-    // and later passes the continuation page.after back as 'since'.
+    // Reverse-direction native cursors traverse the whole Thread, not only one Turn.
+    // The first ascending page may repeat its inclusive anchor; drop that exact item.
     const selector = since
       ? decodeCodexHistoryCursor(since)
       : window?.after ? decodeCodexHistoryCursor(window.after) : undefined
     const ascending = Boolean(selector) || window?.edge === 'earliest'
-    const cursor = selector?.kind === 'page'
-      ? selector.cursor
-      : window?.before
+    const cursor = selector?.kind === 'item' ? selector.anchor.backwardsCursor
+      : selector?.kind === 'page' ? selector.cursor : window?.before
     const response = await this.rpc.request('thread/items/list', {
       threadId: session.id,
       limit: Math.max(1, Math.floor(limit / 2)),
       sortDirection: ascending ? 'asc' : 'desc',
       ...(cursor ? { cursor } : {}),
-      ...(selector?.kind === 'item'
-        ? { turnId: selector.anchor.turnId, cursor: { type: 'item', itemId: selector.anchor.itemId } }
-        : {}),
     })
-    const items = Array.isArray(response.data) ? response.data : []
+    const nativeItems = Array.isArray(response.data) ? response.data : []
+    const anchor = selector?.kind === 'item' ? selector.anchor : undefined
+    const items = anchor && nativeItems.length > 0
+      && codexText(codexRecord(codexRecord(nativeItems[0]).item).id) === anchor.itemId
+      && codexText(codexRecord(nativeItems[0]).turnId) === anchor.turnId
+      ? nativeItems.slice(1) : nativeItems
     const chronological = ascending ? items : [...items].reverse()
     const { entries } = codexSnapshotEntries(
       chronological.map(raw => ({ items: [codexRecord(raw).item] })), limit,
@@ -254,14 +255,33 @@ export class CodexLiveAdapter implements LiveAdapter {
     const last = codexRecord(chronological.at(-1))
     const lastItemId = codexText(codexRecord(last.item).id)
     const lastTurnId = codexText(last.turnId)
-    const leafId = lastItemId && lastTurnId
-      ? encodeCodexItemAnchor({ turnId: lastTurnId, itemId: lastItemId })
-      : (since?.startsWith('codex-item:') ? since : undefined)
+
+    let leafId: string | undefined
+    if (!ascending && lastItemId && lastTurnId && backwardsCursor) {
+      leafId = encodeCodexItemAnchor({ turnId: lastTurnId, itemId: lastItemId, backwardsCursor })
+    } else if (ascending && lastItemId && lastTurnId && !nextCursor) {
+      // At the ascending end we can request a stable reverse cursor for the latest item.
+      // Do not advance the checkpoint if a concurrent new item makes the two reads diverge.
+      const latest = await this.rpc.request('thread/items/list', {
+        threadId: session.id, limit: 1, sortDirection: 'desc',
+      }).catch(() => ({}))
+      const latestItem = codexRecord(Array.isArray(latest.data) ? latest.data[0] : null)
+      const sameItem = codexText(latestItem.turnId) === lastTurnId
+        && codexText(codexRecord(latestItem.item).id) === lastItemId
+      if (sameItem && codexText(latest.backwardsCursor)) {
+        leafId = encodeCodexItemAnchor({
+          turnId: lastTurnId, itemId: lastItemId,
+          backwardsCursor: codexText(latest.backwardsCursor),
+        })
+      }
+    }
+    if (!leafId && selector?.kind === 'item') leafId = since
+
     return {
       state: this.view(session), entries,
       ...(leafId ? { leafId } : {}),
       page: {
-        hasEarlier: ascending ? Boolean(selector || window?.after) : Boolean(nextCursor),
+        hasEarlier: ascending ? Boolean(selector) : Boolean(nextCursor),
         ...(ascending
           ? (selector && backwardsCursor ? { before: backwardsCursor } : {})
           : (nextCursor ? { before: nextCursor } : {})),
