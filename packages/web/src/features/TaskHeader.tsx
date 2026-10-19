@@ -107,7 +107,6 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
-  const [infoPanelOpen, setInfoPanelOpen] = useState(false)
   const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
   const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0 || infoPanel)
 
@@ -207,15 +206,10 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     <Drawer
       open={compactInfoOpen}
       className="task-header-info-drawer"
-      title={infoPanelOpen && infoPanel ? infoPanel.label : t('header.taskInfo')}
-      onClose={() => { setCompactInfoOpen(false); setInfoPanelOpen(false) }}
+      title={t('header.taskInfo')}
+      onClose={() => setCompactInfoOpen(false)}
     >
-      {infoPanelOpen && infoPanel ? <>
-        <Button size="small" className="task-header-info-back" onClick={() => setInfoPanelOpen(false)}>
-          <UiIcon name="arrow-left" size={14}/>{t('header.taskInfo')}
-        </Button>
-        {infoPanel.content}
-      </> : <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
+      <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
         {infoItems.length > 0
           ? infoItems.map((item, index) => <div key={`${item.label}-${index}`} data-tone={item.tone ?? ''}><span>{item.label}</span><b>{item.value}</b></div>)
           : <>
@@ -223,13 +217,10 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             {submeta && <div><span>{t('header.workspace')}</span><b>{submeta}</b></div>}
             {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
           </>}
-        {infoPanel && <div className="task-header-info-panel-row">
-          <span>{infoPanel.label}</span>
-          <button type="button" className="task-header-info-panel-trigger" onClick={() => setInfoPanelOpen(true)}>
-            <b>{infoPanel.summary}</b><UiIcon name="chevron-right" size={14}/>
-          </button>
-        </div>}
-      </section>}
+      </section>
+      {infoPanel && <div className="task-header-info-panel-content" aria-label={infoPanel.label}>
+        {infoPanel.content}
+      </div>}
     </Drawer>
   </>
 }
