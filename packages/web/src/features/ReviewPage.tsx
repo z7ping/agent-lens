@@ -10,6 +10,7 @@ import { readableTaskHeaderTitle, workspaceDisplayName } from './task-detail-mod
 import { formatTime, formatDateTime, sessionRelativeTime, duration, compactTitle, hubSessionTime, hubSessionTitle } from './review-session-format'
 import { Inspector } from './ReviewEvidenceInspector'
 import { ReviewRoundAdapter } from './ReviewRoundPresentation'
+import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import type { AgentLensClientModel } from '../client/model'
 import { useReviewSession } from './use-review-session'
 
@@ -133,6 +134,12 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           showStatus={false}
           title={<span title={readableTaskHeaderTitle(taskDetailModel?.title)}>{compactTitle(readableTaskHeaderTitle(taskDetailModel?.title))}</span>}
           metrics={[]}
+          infoPanel={review.fileChanges && (review.fileChanges.summary.count > 0 || review.fileChanges.meta.truncated)
+            ? {
+                label: t('local.fileChanges.titleCount', { count: review.fileChanges.summary.count }),
+                summary: t('local.fileChanges.titleCount', { count: review.fileChanges.summary.count }),
+                content: <TaskFileChangesDisclosure value={review.fileChanges} inlineDetails/>,
+              } : undefined}
           viewActions={<Button role="menuitem" disabled={roundFilterLoading} onClick={toggleRoundExpansion}>{expandAllRounds ? t('local.roundNav.collapsePage') : t('local.roundNav.expandPage')}</Button>}
           readingControls={<Toolbar className="round-nav" aria-label={t('local.roundNav.aria')}>
             <div className="round-nav-filters" aria-label={t('local.roundNav.filterAria')}>

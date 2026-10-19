@@ -9,18 +9,19 @@ const live = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8'
 const styles = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
 const reviewStyles = readFileSync(new URL('../review.css', import.meta.url), 'utf8')
 
-test('Review renders file changes per round only; Live keeps its session-scoped card', () => {
+test('会话级文件归入任务信息，Review 逐轮文件仍留在轮次末尾', () => {
   assert.match(review, /reviewInteractionFileChanges\(sessionId, \{[\s\S]*?id: interaction\.id,[\s\S]*?controller\.signal\)/)
   assert.match(review, /afterProcessEntries\.map\(renderEntry\)[\s\S]*?TaskFileChangesDisclosure/)
   assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count \|\| review\.fileChanges\?\.meta\.truncated\)\}/)
   assert.doesNotMatch(reviewPage, /detail\.interactionCount > 1/)
-  assert.doesNotMatch(reviewPage, /TaskFileChangesDisclosure/)
+  assert.match(reviewPage, /infoPanel=\{review\.fileChanges[\s\S]*?<TaskFileChangesDisclosure value=\{review\.fileChanges\} inlineDetails\/>/)
   assert.match(review, /fileChangesEnabled && roundFileChanges\?\.interactionId === interaction\.id/)
   assert.match(review, /roundFileChanges\.summary\.count > 0 \|\| roundFileChanges\.meta\.truncated/)
   assert.doesNotMatch(review, /sessionFileChanges/)
   assert.match(review, /isConsolidatedFileChangeEvent\([\s\S]*?roundFileChanges\?\.interactionId === interaction\.id \? roundFileChanges : null/)
   assert.match(live, /runtimeFileChanges\(fileChangeRuntimeId/)
-  assert.match(live, /<TaskFileChangesDisclosure key=\{fileChangeRuntimeId\}[\s\S]*?result : null\}/)
+  assert.match(live, /infoPanel=\{fileChanges\?[\s\S]*?<TaskFileChangesDisclosure value=\{fileChanges\.result\} inlineDetails\/>/)
+  assert.doesNotMatch(live, /<TaskFileChangesDisclosure key=/)
   assert.match(styles, /\.task-surface \.task-file-changes/)
   assert.doesNotMatch(reviewStyles, /\.task-file-changes\s*\{/)
 })
@@ -59,4 +60,14 @@ test('仅精确 Session 事实允许查看 Git Diff；逐轮观测只展示来�
   assert.match(component, /evidenceItem\.evidence\.map/)
   assert.match(component, /if \(!diffPath \|\| !sessionId \|\| isInteraction\) return/)
   assert.doesNotMatch(component, /return '\?'/)
+})
+
+test('任务信息只切换同一个 Drawer 内子视图，Diff 和证据不再套 Drawer', () => {
+  const header = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
+  assert.match(header, /infoPanelOpen && infoPanel \?/)
+  assert.match(header, /infoPanel\.content/)
+  assert.match(component, /inlineDetails = false/)
+  assert.match(component, /inspectingInline \? <section/)
+  assert.match(component, /!inlineDetails && evidenceItem && <Drawer/)
+  assert.match(component, /!inlineDetails && diffPath && <Drawer/)
 })

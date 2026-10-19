@@ -34,10 +34,13 @@ export function TaskFileChangesDisclosure({
   value,
   loading = false,
   error = '',
+  inlineDetails = false,
 }: {
   value: TaskFileChangesResponseDto | null
   loading?: boolean
   error?: string
+  /** Reuse a parent's task-info Drawer without opening a second Drawer. */
+  inlineDetails?: boolean
 }) {
   const { t } = useTranslation('review')
   const [showAll, setShowAll] = useState(false)
@@ -68,8 +71,34 @@ export function TaskFileChangesDisclosure({
   const hidden = items.length - displayed.length
   const hasExactDelta = value?.summary.additions !== undefined || value?.summary.deletions !== undefined
   const isObserved = Boolean(value?.interactionId)
+  const inspectingInline = inlineDetails && Boolean(evidenceItem || diffPath)
+  const evidenceContent = evidenceItem && <div className="task-file-change-evidence">
+    <p>{t('local.fileChanges.observationDisclaimer')}</p>
+    <dl>
+      <dt>{t('local.fileChanges.evidenceType')}</dt>
+      <dd>{evidenceItem.evidence.map(kind => t(`local.fileChanges.evidenceKinds.${kind}`)).join(' · ') || t('local.fileChanges.notRecorded')}</dd>
+      <dt>{t('local.fileChanges.firstObserved')}</dt>
+      <dd>{evidenceItem.firstChangedAt}</dd>
+      <dt>{t('local.fileChanges.lastObserved')}</dt>
+      <dd>{evidenceItem.lastChangedAt}</dd>
+      <dt>{t('local.fileChanges.observedAction')}</dt>
+      <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
+    </dl>
+  </div>
+  const diffContent = diffPath && <>
+    {diffLoading && <p>{t('local.fileChanges.refreshing')}</p>}
+    {diffError && <p role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
+    {diff && (!diff.available || !diff.diff)
+      ? <p>{t('local.fileChanges.diffUnavailable')}</p>
+      : diff?.diff && <CopyableCodeBlock copyValue={diff.diff} language="diff">{diff.diff}</CopyableCodeBlock>}
+    {diff?.truncated && <p>{t('local.fileChanges.diffTruncated')}</p>}
+  </>
   return <>
-    <section className="task-file-changes">
+    {inspectingInline ? <section className="task-file-changes task-file-changes-detail">
+      <Button size="small" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.titleCount', { count })}</Button>
+      <h3>{evidenceItem?.path ?? diffPath}</h3>
+      {evidenceContent}{diffContent}
+    </section> : <section className="task-file-changes">
       <div className="task-file-changes-header">
         <span className="task-file-changes-mark" aria-hidden="true"><UiIcon name="tool-edit" size={16}/></span>
         <h3 className="task-file-changes-heading">
@@ -110,29 +139,8 @@ export function TaskFileChangesDisclosure({
           {t('local.fileChanges.showLess')}<UiIcon name="arrow-up" size={14}/>
         </Button>}
       </div>
-    </section>
-    {evidenceItem && <Drawer open title={evidenceItem.path} onClose={() => setEvidenceItem(null)}>
-      <div className="task-file-change-evidence">
-        <p>{t('local.fileChanges.observationDisclaimer')}</p>
-        <dl>
-          <dt>{t('local.fileChanges.evidenceType')}</dt>
-          <dd>{evidenceItem.evidence.map(kind => t(`local.fileChanges.evidenceKinds.${kind}`)).join(' · ') || t('local.fileChanges.notRecorded')}</dd>
-          <dt>{t('local.fileChanges.firstObserved')}</dt>
-          <dd>{evidenceItem.firstChangedAt}</dd>
-          <dt>{t('local.fileChanges.lastObserved')}</dt>
-          <dd>{evidenceItem.lastChangedAt}</dd>
-          <dt>{t('local.fileChanges.observedAction')}</dt>
-          <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
-        </dl>
-      </div>
-    </Drawer>}
-    {diffPath && <Drawer open title={diffPath} onClose={() => setDiffPath(null)}>
-      {diffLoading && <p>{t('local.fileChanges.refreshing')}</p>}
-      {diffError && <p role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
-      {diff && (!diff.available || !diff.diff)
-        ? <p>{t('local.fileChanges.diffUnavailable')}</p>
-        : diff?.diff && <CopyableCodeBlock copyValue={diff.diff} language="diff">{diff.diff}</CopyableCodeBlock>}
-      {diff?.truncated && <p>{t('local.fileChanges.diffTruncated')}</p>}
-    </Drawer>}
+    </section>}
+    {!inlineDetails && evidenceItem && <Drawer open title={evidenceItem.path} onClose={() => setEvidenceItem(null)}>{evidenceContent}</Drawer>}
+    {!inlineDetails && diffPath && <Drawer open title={diffPath} onClose={() => setDiffPath(null)}>{diffContent}</Drawer>}
   </>
 }
