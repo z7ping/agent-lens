@@ -206,6 +206,8 @@ export const englishReviewMessages: LocaleMessagesDto = {
         thinking: 'Thinking',
         output: 'Process output',
         thinkingProcess: 'Thinking process',
+        missingFinalAnswer: 'No final reply recorded for this round',
+        historyNotLive: 'These are historical records and do not confirm that the task is still running.',
         expandToLoad: 'Expand to load full process details',
         loading: 'Loading process details…',
         loadFailed: 'Failed to load process details',

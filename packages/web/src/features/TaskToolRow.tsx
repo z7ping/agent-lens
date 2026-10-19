@@ -170,7 +170,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const elapsedLabel = model.durationLabel
     ?? (model.durationMs !== undefined ? durationLabel(model.durationMs) : undefined)
     ?? (model.status === 'running' && model.startedAtMs !== undefined ? durationLabel(now - model.startedAtMs) : undefined)
-  const status = statusLabel(model.status, t)
+  const status = model.resultMissing ? t('tool.resultMissing') : statusLabel(model.status, t)
 
   return <details
     className={`task-tool-call ${model.status === 'error' ? 'task-tool-row-error ' : ''}${className}`.trim()}
@@ -200,7 +200,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
               : model.status === 'error' ? <UiIcon name="close" size={16}/>
                 : <UiIcon name="clock" size={14}/>}
         </span>
-        {model.status !== 'unknown' && <span className="task-tool-status-label">{status}</span>}
+        {(model.status !== 'unknown' || model.resultMissing) && <span className="task-tool-status-label">{status}</span>}
       </span>
       <UiIcon className="task-tool-row-chevron" name="chevron-right" size={14}/>
     </summary>
@@ -216,7 +216,7 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
         <div className="task-tool-section-title">{t('tool.output')}</div>
         {model.output !== undefined
           ? <ToolOutputContent text={model.output} streaming={model.status === 'running'} highlight={expanded}/>
-          : <span className="task-tool-section-empty">{model.status === 'running' ? t('tool.outputPending') : t('tool.outputUnavailable')}</span>}
+          : <span className="task-tool-section-empty">{model.resultMissing ? t('tool.resultMissing') : model.status === 'running' ? t('tool.outputPending') : t('tool.outputUnavailable')}</span>}
       </section>
       {(meta || elapsedLabel || onClick || details) && <div className="task-tool-detail-footer">
         {elapsedLabel && <span>{status} · {elapsedLabel}</span>}

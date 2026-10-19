@@ -43,6 +43,8 @@ export interface TaskToolModel {
   toolSourceType?: 'builtin' | 'mcp' | 'plugin' | 'extension' | 'skill-runtime' | 'unknown' | undefined
   mcpServerId?: string | undefined
   status: TaskToolStatus
+  /** 历史调用未记录到结果，不表示进程当前仍在执行。 */
+  resultMissing?: boolean | undefined
   primary?: string | undefined
   secondary?: string | undefined
   /** Full native tool input when available, never derived from a truncated preview. */

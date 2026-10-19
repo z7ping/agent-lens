@@ -206,6 +206,8 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         thinking: '思考',
         output: '过程输出',
         thinkingProcess: '思考过程',
+        missingFinalAnswer: '本轮未记录最终回复',
+        historyNotLive: '这里只展示历史记录，不代表任务仍在运行。',
         expandToLoad: '展开后加载完整处理详情',
         loading: '正在加载处理详情…',
         loadFailed: '处理详情加载失败',

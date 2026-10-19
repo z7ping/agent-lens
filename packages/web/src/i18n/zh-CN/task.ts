@@ -357,6 +357,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       output: '出参',
       outputUnavailable: '未记录出参',
       outputPending: '等待工具返回',
+      resultMissing: '未记录到工具结果',
       inspect: '查看原始证据',
       calls: '{{count}} 次工具调用',
       status: {

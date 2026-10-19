@@ -85,7 +85,8 @@ function MessageBubble({
 
 function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
   const info = toolPresentation(node)
-  const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : node.status === 'running' ? 'running' : 'unknown'
+  // Review 不探测实时进程，同时兼容旧 API 将未匹配调用标成 running 的响应。
+  const status = node.status === 'error' ? 'error' : node.status === 'success' ? 'success' : 'unknown'
   return {
     id: node.id,
     name: node.name,
@@ -94,6 +95,7 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
     ...(node.toolSourceType ? { toolSourceType: node.toolSourceType } : {}),
     ...(node.mcpServerId ? { mcpServerId: node.mcpServerId } : {}),
     status,
+    resultMissing: !node.endedAt && node.output === undefined && status === 'unknown',
     primary: info.primary || undefined,
     secondary: info.secondary || undefined,
     ...(node.input === undefined ? {} : { rawInput: typeof node.input === 'string' ? node.input : JSON.stringify(node.input, null, 2) ?? '' }),
@@ -223,7 +225,7 @@ function ReviewProcessGroup({
             preview: item.node.text.replace(/\s+/g, ' ').trim().slice(0, 220),
             state: 'settled',
           }}
-          expansionStore={expansionStore}
+          {...(expansionStore ? { expansionStore } : {})}
         />
         return <TaskSessionProcessText key={item.node.id} text={item.node.text}/>
       })}
@@ -416,6 +418,9 @@ export function ReviewRoundAdapter({
   )
   const lastAssistantId = lastAssistantEntry?.node.id
   const hasFinalAnswer = Boolean(lastAssistantId)
+  const missingFinalAnswer = !hasFinalAnswer && interaction.trigger === 'user'
+    && round.state !== 'running' && Boolean(effectiveSummary?.itemCount || processEntry)
+    && (!effectiveSummary || ['complete', 'available'].includes(effectiveSummary.availability))
   // 只统计当前已经加载的原始事件，避免把未展开的惰性过程误报为 0。
   const unknownCount = groups.reduce((sum, entry) => sum + (entry.type === 'raw-event-group'
     ? entry.items.filter(item => item.category === 'unknown').length : entry.type === 'process'
@@ -472,7 +477,15 @@ export function ReviewRoundAdapter({
     model={round}
     prompt={promptEntries.map(renderEntry)}
     process={processGroup}
-    answer={afterProcessEntries.map(renderEntry)}
+    answer={<>
+      {afterProcessEntries.map(renderEntry)}
+      {missingFinalAnswer && <TaskEvent model={{
+        id: `${interaction.id}:missing-answer`,
+        category: 'lifecycle',
+        label: t('local.process.missingFinalAnswer'),
+        summary: t('local.process.historyNotLive'),
+      }}/>}
+    </>}
     footer={<>
       {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
       {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}

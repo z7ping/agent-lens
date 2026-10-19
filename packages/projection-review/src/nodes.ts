@@ -196,7 +196,8 @@ export function buildNodes(items: TimelineItemDto[], registry = new ToolRegistra
         ...origin,
         ...(registered && !conflict ? { registrationObservationId: registered.registrationObservationId } : {}),
         ...(id ? { callId: id } : {}),
-        status: 'running',
+        // 历史调用记录不能证明进程当前仍在执行；状态由下方关联的返回事实确定。
+        status: 'unknown',
         startedAt: item.effectiveAt,
         ...(payload.input !== undefined ? { input: payload.input } : {}),
         payload: item.payload,
