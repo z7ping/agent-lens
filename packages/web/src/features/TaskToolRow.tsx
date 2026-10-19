@@ -74,7 +74,10 @@ const targetKeys: Record<ReturnType<typeof toolVisualKind>, readonly string[]> =
 function typedTarget(value: unknown, kind: ReturnType<typeof toolVisualKind>): string {
   const outer = record(value)
   if (!outer) return ''
-  const candidates = [outer, record(outer.arguments), record(outer.args), record(outer.input), record(outer.parameters)]
+  const nestedRecord = (value: unknown) => record(
+    typeof value === 'string' ? parseToolInput(value) : value,
+  )
+  const candidates = [outer, nestedRecord(outer.arguments), nestedRecord(outer.args), nestedRecord(outer.input), nestedRecord(outer.parameters)]
   for (const input of candidates) {
     if (!input) continue
     for (const key of targetKeys[kind]) {
