@@ -148,8 +148,10 @@ test('Codex command output deltas are accumulated per item and reset on completi
   const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
   const session = await adapter.start({ workspacePath: '/project' })
   const outputs: string[] = []
+  const completed: string[] = []
   const unsubscribe = adapter.subscribe(session.runtimeSessionId, event => {
     if (event.normalizedEvent?.type === 'tool.output') outputs.push(event.normalizedEvent.output)
+    if (event.normalizedEvent?.type === 'tool.end') completed.push(event.normalizedEvent.output ?? '')
   })
   rpc.emit({ method: 'item/commandExecution/outputDelta',
     params: { threadId: 'thread-1', itemId: 'cmd-1', delta: 'hello' } })
@@ -158,6 +160,7 @@ test('Codex command output deltas are accumulated per item and reset on completi
   assert.deepEqual(outputs, ['hello', 'hello world'])
   rpc.emit({ method: 'item/completed',
     params: { threadId: 'thread-1', item: { id: 'cmd-1', type: 'commandExecution', status: 'completed' } } })
+  assert.equal(completed.at(-1), 'hello world')
   rpc.emit({ method: 'item/commandExecution/outputDelta',
     params: { threadId: 'thread-1', itemId: 'cmd-1', delta: 'later' } })
   assert.equal(outputs.at(-1), 'later')
