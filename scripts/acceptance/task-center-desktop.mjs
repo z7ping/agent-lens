@@ -164,7 +164,7 @@ async function waitForProjectedReviewDetail(win, label) {
       }
       return {
         detail: Boolean(document.querySelector('.review-reader-pane')),
-        roundCount: document.querySelectorAll('[data-task-round-state]').length,
+        roundCount: document.querySelectorAll('.task-reading-round[data-round-semantic-id]').length,
         processExpanded: process instanceof HTMLDetailsElement && process.open,
         thinkingCount: document.querySelectorAll('.task-thinking').length,
         toolCount: document.querySelectorAll('[data-tool-fact="true"] .task-tool-row').length,
@@ -290,7 +290,7 @@ async function inspect(win, viewport, theme) {
       workspaceTopbar: rect(workspaceTopbar), rail: rect(rail), railScroll: rect(railScroll), main: rect(main), detailScroll: rect(detailScroll),
       overflow: { page: pageStyle?.overflow || '', rail: railStyle?.overflow || '', railY: railScrollStyle?.overflowY || '', main: mainStyle?.overflow || '', detailY: detailStyle?.overflowY || '' },
       messageCount: all('.task-message-row').length,
-      roundCount: all('[data-task-round-state]').length,
+      roundCount: all('.task-reading-round[data-round-semantic-id]').length,
       thinkingCount: all('.task-thinking').length,
       toolCount: toolRows.length,
       taskButtonCount: all('.task-center-rail button.session-item').length,
