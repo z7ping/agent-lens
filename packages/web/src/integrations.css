@@ -431,10 +431,40 @@
   background: var(--al-surface);
 }
 
+.integration-management-actions-info {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 250px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .integration-management-actions-label {
+  color: var(--al-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.integration-management-authorization-status {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
   color: var(--al-muted);
   font-size: 12px;
-  font-weight: 620;
+}
+
+.integration-management-authorization-capabilities {
+  color: var(--al-muted-2);
+  font-size: 12px;
+}
+
+.integration-management-actions-info > small {
+  color: var(--al-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .integration-management-action-buttons {
