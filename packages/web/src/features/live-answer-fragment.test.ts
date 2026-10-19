@@ -56,7 +56,7 @@ test('单条长请求包含多段思考与工具时，UI 只输出一条处理�
   assert.match(html, /16 次工具调用/)
 })
 
-test('Live 连续工具调用直接逐条展示，不再套一层工具调用分组', () => {
+test('Live 连续工具批次渐进折叠，保留思考边界与失败状态', () => {
   const items = [
     { id: 'request', kind: 'message' as const, role: 'user' as const, text: '检查相关文件', streaming: false },
     { id: 'tool:1', kind: 'tool' as const, callId: 'call:1', name: 'read', status: 'success' as const, inputPreview: '{"path":"src/one.ts"}' },
@@ -73,11 +73,13 @@ test('Live 连续工具调用直接逐条展示，不再套一层工具调用分
     agentLabel: 'Pi', eager: true, messageActions: [], actionPending: null,
     runtimeStreaming: true, onMessageAction: () => undefined,
   }))
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 6)
-  assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 6)
-  assert.doesNotMatch(html, /live-tool-group|工具调用 6 项|live-tool-group-more/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
+  assert.equal((html.match(/class="task-tool-row"/g) ?? []).length, 5)
+  assert.match(html, /展开其余 1 项/)
+  assert.doesNotMatch(html, /live-tool-group|live-tool-group-more/)
+  assert.doesNotMatch(html, /git status/)
   assert.equal((html.match(/class="task-thinking task-process-group"/g) ?? []).length, 1)
-  const renderedOrder = ['title="src/one.ts"', 'title="src/two.ts"', '继续检查', 'exit 1', 'pwd', 'ls', 'git status']
+  const renderedOrder = ['title="src/one.ts"', 'title="src/two.ts"', '继续检查', 'exit 1', 'pwd', 'ls']
   let last = -1
   for (const entry of renderedOrder) {
     const next = html.indexOf(entry, last + 1)
@@ -86,4 +88,29 @@ test('Live 连续工具调用直接逐条展示，不再套一层工具调用分
   }
   assert.match(html, /task-tool-status-error/)
   assert.match(html, /task-tool-status-ok/)
+})
+
+test('Live 同一批次超长时失败与运行中的调用不被折叠', () => {
+  const items = [
+    { id: 'request:critical', kind: 'message' as const, role: 'user' as const, text: '批量处理', streaming: false },
+    ...Array.from({ length: 8 }, (_, index) => ({
+      id: `tool:critical-${index + 1}`, kind: 'tool' as const,
+      callId: `call:critical-${index + 1}`, name: `tool_${index + 1}`,
+      status: index === 5 ? 'running' as const : index === 6 ? 'error' as const : 'success' as const,
+      inputPreview: `command_${index + 1}`,
+    })),
+  ]
+  const projection = projectLiveTaskRounds(items)[0]!
+  const html = renderToStaticMarkup(createElement(GenericLiveRound, {
+    projection: { ...projection, model: { ...projection.model, state: 'running' } },
+    agentLabel: 'Codex', eager: true, messageActions: [],
+    actionPending: null, runtimeStreaming: true, onMessageAction: () => undefined,
+  }))
+  assert.match(html, /工具调用 · 8 项/)
+  assert.match(html, /展开其余 3 项/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
+  assert.match(html, /command_6/)
+  assert.match(html, /command_7/)
+  assert.doesNotMatch(html, /command_4|command_5|command_8/)
+  assert.equal((html.match(/class="task-thinking task-process-group"/g) ?? []).length, 1)
 })

@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiveMessageActionContributionDto } from '@agent-lens/protocol'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -8,6 +8,8 @@ import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
+import { TaskToolGroup } from './TaskToolGroup'
+import type { TaskToolModel } from './task-detail-model'
 
 /** 仅负责将统一 Live 投影映射到共享 TaskSurface 组件，无订阅与发送副作用。 */
 function contributionText(
@@ -84,19 +86,23 @@ function GenericLiveItem({
       streaming={item.streaming}
     />
   }
-  return <TaskSessionTool model={{
+  return <TaskSessionTool model={liveTaskToolModel(item, t('tool.kind.tool'))}/>
+
+}
+
+function liveTaskToolModel(item: Extract<LiveTaskProjectionItem, { kind: 'tool' }>, kindLabel: string): TaskToolModel {
+  return {
     id: item.id,
     name: item.name,
     kind: 'tool',
-    kindLabel: t('tool.kind.tool'),
+    kindLabel,
     ...(item.toolSourceType ? { toolSourceType: item.toolSourceType } : {}),
     ...(item.mcpServerId ? { mcpServerId: item.mcpServerId } : {}),
     status: item.status,
     primary: item.inputPreview,
     output: item.output,
     durationMs: item.durationMs,
-  }}/>
-
+  }
 }
 
 /** Exactly one answer-action owner per semantic round, even when its final
@@ -136,6 +142,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   runtimeStreaming: boolean
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
+  const { t } = useTranslation('task')
   const awaitingResponse = showResponsePending
     && projection.items.some(item => item.kind === 'message' && item.role === 'user')
     && !projection.items.some(item => item.kind === 'thinking'
@@ -166,10 +173,33 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     item.kind === 'message'
       ? <TaskSessionProcessText key={item.id} text={item.text} streaming={item.streaming}/>
       : renderItem(item)
-  // Every native event keeps its position in the single Process disclosure.
-  // TaskToolRow already owns each tool's input/output toggle; grouping adds
-  // an unnecessary second disclosure and hides successful calls.
-  const processContent = processItems.map(renderProcessItem)
+  // Only consecutive calls form a batch. Thinking/commentary stays in native
+  // order, and all modes share TaskToolGroup's first-three + critical rule.
+  const processContent: ReactNode[] = []
+  let batch: Extract<LiveTaskProjectionItem, { kind: 'tool' }>[] = []
+  const flushTools = () => {
+    if (!batch.length) return
+    const tools = batch.map(item => liveTaskToolModel(item, t('tool.kind.tool')))
+    const id = `tools:${tools[0]!.id}`
+    processContent.push(<TaskToolGroup
+      key={id}
+      compact
+      model={{
+        id, label: t('live.toolGroup'), itemCount: tools.length,
+        errorCount: tools.filter(tool => tool.status === 'error').length,
+        kindCounts: [], tools,
+      }}
+    />)
+    batch = []
+  }
+  for (const item of processItems) {
+    if (item.kind === 'tool') batch.push(item)
+    else {
+      flushTools()
+      processContent.push(renderProcessItem(item))
+    }
+  }
+  flushTools()
 
   const processCount = reading.processCounts.commentary
   const thinkingCount = reading.processCounts.thinking

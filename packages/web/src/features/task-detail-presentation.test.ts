@@ -23,15 +23,16 @@ const toolGroup: TaskToolGroupModel = {
 const round: TaskRoundModel = { id: 'round:test', label: '第 3 轮', state: 'settled', preview: '核对 Tool / Thinking / Message 层级', toolCount: 4, errorCount: 0, durationMs: 108_000, highLatency: false }
 const runningRound: TaskRoundModel = { id: 'round:running', label: '第 6 轮', state: 'running', preview: '当前执行', toolCount: 1, errorCount: 0, durationMs: 0, highLatency: false }
 
-test('Tool Group 不再生成独立“执行过程 / 工具执行”父层', () => {
+test('Tool Group 不新增整组详情层，仅收起超出前三项的普通调用', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
   assert.match(html, /data-task-tool-group="true"/)
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
+  assert.match(html, /展开其余 1 项/)
 })
 
 test('测试类和未知 Tool 使用稳定语义降级', () => {
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup, defaultExpanded: true }))
   // npm test is only a native name, not evidence that the call belongs to
   // the 'test' tool kind. Both it and unknown calls remain generic.
   assert.doesNotMatch(html, /data-kind="test"/)
@@ -96,7 +97,7 @@ test('用户保留右侧气泡，Agent 无头像且不恢复历史视觉别名',
 })
 
 test('默认 Tool 摘要一行展示类型、名称和状态图标，原始数据只在展开后出现', () => {
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup, defaultExpanded: true }))
   assert.equal((html.match(/<summary class="task-tool-row"/g) ?? []).length, 4)
   assert.equal((html.match(/<details class="task-tool-call/g) ?? []).length, 4)
   assert.doesNotMatch(html, /<details class="task-tool-call[^>]*open=""/)
@@ -270,7 +271,7 @@ test('Read/Search 优先使用原生入参目标，不再重复“读取 read”
     { id: 'r-opaque', kind: 'read', kindLabel: '读取', name: 'read', status: 'success',
       rawInput: '{"line":40}', primary: '{"line":40}' },
   ] }
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group, defaultExpanded: true }))
   assert.equal((html.match(/class="task-tool-preview-slot"/g) ?? []).length, 4)
   assert.match(html, /class="task-tool-target" title="src\/menu.ts">src\/menu.ts/)
   assert.match(html, /class="task-tool-target" title="小程序权限菜单">小程序权限菜单/)
