@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { PatchDiff } from '@pierre/diffs/react'
 import type { TaskFileChangeDto, TaskFileChangesResponseDto, TaskFileDiffResponseDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { AgentLensApi } from '../client/api'
+import { copyText } from '../client/clipboard'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { LocalResourceReference } from '../components/LocalResourceReference'
 import { Button, Drawer, UiIcon } from '../components/ui'
@@ -49,6 +51,33 @@ export function TaskFileChangesDisclosure({
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffError, setDiffError] = useState(false)
   const [evidenceItem, setEvidenceItem] = useState<TaskFileChangeDto | null>(null)
+  const [diffLayout, setDiffLayout] = useState<'unified' | 'split'>('unified')
+  const [diffTheme, setDiffTheme] = useState<'light' | 'dark'>(() =>
+    document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  )
+  const [diffCopyState, setDiffCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+
+  useEffect(() => {
+    if (!diffPath) return
+    const root = document.documentElement
+    const syncTheme = () => setDiffTheme(root.dataset.theme === 'dark' ? 'dark' : 'light')
+    syncTheme()
+    const observer = new MutationObserver(syncTheme)
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [diffPath])
+
+  useEffect(() => { setDiffCopyState('idle') }, [diffPath, diff?.diff])
+
+  const copyDiff = async () => {
+    if (!diff?.diff) return
+    try {
+      await copyText(diff.diff)
+      setDiffCopyState('copied')
+    } catch {
+      setDiffCopyState('error')
+    }
+  }
   const sessionId = value?.logicalSessionId
   const isInteraction = Boolean(value?.interactionId)
 
@@ -85,18 +114,44 @@ export function TaskFileChangesDisclosure({
       <dd>{t(`local.fileChanges.status.${evidenceItem.changeType}`)}</dd>
     </dl>
   </div>
-  const diffContent = diffPath && <>
-    {diffLoading && <p>{t('local.fileChanges.refreshing')}</p>}
-    {diffError && <p role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
+  const diffContent = diffPath && <div className="task-file-diff-view">
+    {diffLoading && <p className="task-file-diff-notice" role="status">{t('local.fileChanges.refreshing')}</p>}
+    {diffError && <p className="task-file-diff-notice" role="alert">{t('local.fileChanges.diffUnavailable')}</p>}
     {diff && (!diff.available || !diff.diff)
-      ? <p>{t('local.fileChanges.diffUnavailable')}</p>
-      : diff?.diff && <CopyableCodeBlock copyValue={diff.diff} language="diff">{diff.diff}</CopyableCodeBlock>}
-    {diff?.truncated && <p>{t('local.fileChanges.diffTruncated')}</p>}
-  </>
+      ? <p className="task-file-diff-notice">{t('local.fileChanges.diffUnavailable')}</p>
+      : diff?.diff && <>
+        <div className="task-file-diff-toolbar">
+          <span className="task-file-diff-layout-label">{t('local.fileChanges.diffLayout')}</span>
+          <div className="task-file-diff-layout-actions" role="group" aria-label={t('local.fileChanges.diffLayout')}>
+            <Button size="small" aria-pressed={diffLayout === 'unified'} onClick={() => setDiffLayout('unified')}>
+              {t('local.fileChanges.diffUnified')}
+            </Button>
+            <Button size="small" aria-pressed={diffLayout === 'split'} onClick={() => setDiffLayout('split')}>
+              {t('local.fileChanges.diffSplit')}
+            </Button>
+          </div>
+          <Button size="small" className="task-file-diff-copy" onClick={() => void copyDiff()}>
+            <UiIcon name="copy" size={14}/>
+            {t(diffCopyState === 'copied' ? 'local.fileChanges.diffCopied'
+              : diffCopyState === 'error' ? 'local.fileChanges.diffCopyFailed' : 'local.fileChanges.diffCopy')}
+          </Button>
+        </div>
+        <div className="task-file-diff-code">
+          {diff.truncated
+            ? <CopyableCodeBlock copyValue={diff.diff} language="diff">{diff.diff}</CopyableCodeBlock>
+            : <PatchDiff patch={diff.diff} options={{
+              diffStyle: diffLayout,
+              theme: diffTheme === 'dark' ? 'pierre-dark' : 'pierre-light',
+              hunkSeparators: 'line-info',
+            }}/>}
+        </div>
+      </>}
+    {diff?.truncated && <p className="task-file-diff-notice">{t('local.fileChanges.diffTruncated')}</p>}
+  </div>
   return <>
     {inspectingInline ? <section className="task-file-changes task-file-changes-detail">
       <Button size="small" onClick={() => { setEvidenceItem(null); setDiffPath(null) }}><UiIcon name="arrow-left" size={14}/>{t('local.fileChanges.titleCount', { count })}</Button>
-      <h3>{evidenceItem?.path ?? diffPath}</h3>
+      <h3 className="task-file-diff-path" title={evidenceItem?.path ?? diffPath ?? undefined}>{evidenceItem?.path ?? diffPath}</h3>
       {evidenceContent}{diffContent}
     </section> : <section className="task-file-changes">
       <div className="task-file-changes-header">
