@@ -10,6 +10,7 @@ import { TaskMessage } from './TaskMessage'
 import type { TaskRoundModel } from './task-detail-model'
 import { LiveToolGroup } from './LiveToolGroup'
 import { TaskProcessGroup } from './TaskProcessGroup'
+import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
 import { TaskToolRow } from './TaskToolRow'
 
@@ -161,12 +162,18 @@ export const GenericLiveRound = memo(function GenericLiveRound({
       || (item.kind === 'message' && item.role === 'assistant'))
   // Only native commentary/reasoning/tool stages enter processing.
   // Unknown-phase assistant text stays visible; never infer a final from prose.
-  const processItems = projection.items.filter(item =>
-    item.kind === 'thinking' || item.kind === 'tool'
-    || (item.kind === 'message' && item.role === 'assistant' && item.phase === 'commentary'))
-  const visibleItems = projection.items.filter(item => !processItems.includes(item))
-  const lastAnswerId = [...visibleItems].reverse().find(item =>
-    item.kind === 'message' && item.role === 'assistant')?.id
+  const reading = projectTaskReading(projection.items.map(item => {
+    const kind: TaskReadingFact<LiveTaskProjectionItem>['kind'] = item.kind === 'thinking'
+      ? 'reasoning'
+      : item.kind === 'tool' ? 'tool'
+        : item.role === 'user' ? 'prompt'
+          : item.phase === 'commentary' ? 'commentary'
+            : item.phase === 'final' ? 'answer' : 'unclassified-answer'
+    return { id: item.id, kind, value: item, ...(item.kind === 'tool' && item.status === 'error' ? { error: true } : {}) }
+  }))
+  const processItems = reading.process.map(fact => fact.value)
+  const visibleItems = [...reading.prompts, ...reading.answers, ...reading.auxiliary].map(fact => fact.value)
+  const lastAnswerId = reading.answers.at(-1)?.id
   const renderItem = (item: LiveTaskProjectionItem) => <GenericLiveItem
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
     actionPending={actionPending} runtimeStreaming={runtimeStreaming}
@@ -198,9 +205,9 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   }
   flushTools()
 
-  const processCount = processItems.filter(item => item.kind === 'message').length
-  const thinkingCount = processItems.filter(item => item.kind === 'thinking').length
-  const toolCount = processItems.filter(item => item.kind === 'tool').length
+  const processCount = reading.processCounts.commentary
+  const thinkingCount = reading.processCounts.thinking
+  const toolCount = reading.processCounts.tools
   const processTimes = processItems.flatMap(item => {
     const at = Date.parse(item.at ?? '')
     return Number.isFinite(at) ? [at] : []
@@ -215,7 +222,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     messageCount={processCount}
     thinkingCount={thinkingCount}
     toolCount={toolCount}
-    errorCount={processItems.filter(item => item.kind === 'tool' && item.status === 'error').length}
+    errorCount={reading.processCounts.errors}
     startedAtMs={startedAtMs}
     endedAtMs={endedAtMs}
     thinkingDurationMs={processItems.reduce((sum, item) =>

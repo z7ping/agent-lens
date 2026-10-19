@@ -627,7 +627,7 @@ test('Process Detail retains an upstream unavailable reason instead of treating 
   assert.equal(result.reasonCode, 'hub-redacted')
   assert.equal(result.itemCount, 0)
 
-  const knownEmpty = reviewProjectionInternals.processSummary({ ...interaction, processSummary: undefined })
+  const knownEmpty = reviewProjectionInternals.processSummary((({ processSummary: _ignored, ...withoutSummary }) => withoutSummary)(interaction))
   assert.equal(knownEmpty.availability, 'complete')
   assert.equal(knownEmpty.reasonCode, undefined)
 })

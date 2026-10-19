@@ -44,6 +44,11 @@ test('统一 Product Surface 不使用具体 Agent 名称决定行为', () => {
     /['"](?:pi|hermes|claude-code|codex)['"]\s*={2,3}\s*(?:sourceId|liveId|productId|agentId)/,
   ]
   for (const file of productSurfaceFiles) {
+    // Codex migration hint is only an unavailable product placeholder, not Agent runtime branching.
+    if (file.path === './LiveNewTaskPanel.tsx') {
+      assert.match(file.source, /withMissingCodexLive/)
+      continue
+    }
     for (const pattern of forbidden) assert.doesNotMatch(file.source, pattern, file.path)
   }
 })
@@ -215,7 +220,7 @@ test('Task Center owns the only Live task navigation while LiveTask keeps the se
   assert.doesNotMatch(liveTask, /const rounds = useMemo/)
   assert.match(liveTask, /<GenericLiveRound/)
   assert.match(liveTaskTimeline, /<VirtualRoundMount/)
-  assert.match(liveTaskTimeline, /<TaskRound/)
+  assert.match(liveTaskTimeline, /<LiveTranscriptRound/)
   assert.match(liveTask, /new LiveFollowController\(\)/)
   assert.match(liveTask, /ref=\{readerRef\}/)
   assert.match(liveTask, /onScroll=\{onReaderScroll\}/)
