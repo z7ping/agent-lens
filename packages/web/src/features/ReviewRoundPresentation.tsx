@@ -432,9 +432,11 @@ export function ReviewRoundAdapter({
   const processEntry = groups.find((entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'process' }> => entry.type === 'process')
   const promptEntries = groups.filter(entry => entry.type === 'message' && entry.node.role === 'user')
   const afterProcessEntries = groups.filter(entry => !(entry.type === 'message' && entry.node.role === 'user') && entry.type !== 'process')
-  const lastAssistantId = [...afterProcessEntries].reverse().find(entry => entry.type === 'message' && entry.node.role === 'assistant')?.type === 'message'
-    ? ([...afterProcessEntries].reverse().find(entry => entry.type === 'message' && entry.node.role === 'assistant') as Extract<ReviewInteractionPresentationEntry, { type: 'message' }>).node.id
-    : undefined
+  const lastAssistantEntry = [...afterProcessEntries].reverse().find(
+    (entry): entry is Extract<ReviewInteractionPresentationEntry, { type: 'message' }> =>
+      entry.type === 'message' && entry.node.role === 'assistant',
+  )
+  const lastAssistantId = lastAssistantEntry?.node.id
   const hasFinalAnswer = Boolean(lastAssistantId)
   // 只统计当前已经加载的原始事件，避免把未展开的惰性过程误报为 0。
   const unknownCount = groups.reduce((sum, entry) => sum + (entry.type === 'raw-event-group'
