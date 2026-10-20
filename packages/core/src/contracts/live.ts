@@ -384,6 +384,10 @@ export interface LiveCompletedEvent {
   type: 'completed'
   status: LiveCompletionStatus
   message?: string | undefined
+  /** Optional native failure facts, forwarded unchanged by shared transport. */
+  code?: LiveErrorEvent['code']
+  category?: LiveErrorEvent['category']
+  retryable?: LiveErrorEvent['retryable']
 }
 
 export interface LiveQueueUpdateEvent {
