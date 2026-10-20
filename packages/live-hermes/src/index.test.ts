@@ -100,3 +100,20 @@ test('Hermes Live maps public run events into the same Live renderer vocabulary'
     status: 'completed',
   })
 })
+
+
+test('Hermes exposes object-shaped transport and terminal diagnostics without guessing status codes', () => {
+  assert.deepEqual(normalizeHermesLiveEvent({
+    event: 'transport.error',
+    error: { code: 'CONNECTION_LOST', message: 'socket closed', category: 'network', retryable: false },
+  }), {
+    type: 'error', message: 'socket closed', code: 'CONNECTION_LOST',
+    category: 'network', retryable: false,
+  })
+  assert.deepEqual(normalizeHermesLiveEvent({
+    event: 'run.failed', error: { code: 'NATIVE_FAILURE', cause: { message: 'failed to start' } },
+  }), {
+    type: 'completed', status: 'failed', message: 'failed to start',
+    code: 'NATIVE_FAILURE',
+  })
+})
