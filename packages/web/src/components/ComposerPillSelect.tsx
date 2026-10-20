@@ -21,7 +21,7 @@ export function ComposerPillSelect({
   control: 'model' | 'thinking'
   onChange(value: string): void
 }) {
-  return <span className={`pi-live-compose-control pi-live-compose-control--${control}`}>
+  return <span className={`task-composer-control task-composer-control--${control}`}>
     <SelectMenu
       value={value}
       placeholder={placeholder}
