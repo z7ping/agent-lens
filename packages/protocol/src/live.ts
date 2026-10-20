@@ -691,7 +691,23 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     }
   }
   if (type === 'error') {
-    return typeof event.message === 'string' && event.message ? { type, message: event.message } : null
+    // Preserve adapter-authored diagnostic facts across JSON/SSE parsing.
+    // Never derive capability or retry safety from provider error prose.
+    const message = eventText(event.message)
+    const code = eventText(event.code)
+    const category = eventText(event.category)
+    const retryable = typeof event.retryable === 'boolean' ? event.retryable : undefined
+    const validCategory = category === 'provider' || category === 'network'
+      || category === 'runtime' || category === 'tool'
+      || category === 'permission' || category === 'unknown'
+    if (!message && !code) return null
+    return {
+      type,
+      message: message || code!,
+      ...(code ? { code } : {}),
+      ...(validCategory ? { category: category as NonNullable<Extract<LiveRuntimeEventDto, { type: 'error' }>['category']> } : {}),
+      ...(retryable !== undefined ? { retryable } : {}),
+    }
   }
   if (type === 'completed') {
     const status = event.status
