@@ -8,6 +8,7 @@ import {
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
   mergeLiveActiveProjectionItems,
+  reconcileLiveSnapshotProjection,
   projectLiveInputHistory,
   projectLiveSnapshotEntries,
   projectLiveTaskRounds,
@@ -674,4 +675,34 @@ test('active round stays running between completed tool events', () => {
   const finished = projector.projectSegmented(items, [])
   assert.equal(finished.active.length, 0)
   assert.equal(finished.stable[0]?.model.state, 'settled')
+})
+
+test('recovery reuses unchanged snapshot facts and never discards newer live tail', () => {
+  const stable = [{ id: 'history-a', kind: 'message' as const, role: 'user' as const, text: 'Earlier', streaming: false }]
+  const active = [{ id: 'tool-1', kind: 'tool' as const, callId: 'call-1', name: 'shell', status: 'running' as const }]
+  const old = { stable, active }
+  const snapshot = {
+    stable: [{ ...stable[0]! }],
+    active: [{ ...active[0]! }],
+  }
+  assert.strictEqual(reconcileLiveSnapshotProjection(old, snapshot, true), old,
+    'identical recovery must not invalidate the rendered timeline')
+
+  const withNewerSse = { stable, active: [...active, {
+    id: 'assistant-new', kind: 'message' as const, role: 'assistant' as const,
+    text: 'newer than the snapshot', streaming: true,
+  }] }
+  const recovered = reconcileLiveSnapshotProjection(withNewerSse, snapshot, true)
+  assert.strictEqual(recovered.stable, stable)
+  assert.strictEqual(recovered.active, withNewerSse.active)
+})
+
+test('recovery repairs a tool result lost during SSE disconnect without duplicating rows', () => {
+  const running = { id: 'tool-1', kind: 'tool' as const, callId: 'call-1', name: 'shell', status: 'running' as const }
+  const completed = { ...running, status: 'success' as const, output: 'finished' }
+  const updated = mergeLiveActiveProjectionItems([running], [completed])
+  assert.equal(updated.length, 1)
+  assert.equal(updated[0]?.kind === 'tool' ? updated[0].status : null, 'success')
+  assert.strictEqual(mergeLiveActiveProjectionItems(updated, [completed]), updated,
+    'replaying the same completed tool should reuse the projection')
 })
