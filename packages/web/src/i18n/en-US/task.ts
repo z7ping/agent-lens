@@ -26,6 +26,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       you: 'You',
       agent: 'Agent',
       waitingResponse: 'Waiting for the agent to respond',
+      requestFailed: 'Request failed',
       generating: 'Generating',
       collapse: 'Collapse',
       expand: 'Expand',
