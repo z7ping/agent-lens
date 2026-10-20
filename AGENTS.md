@@ -96,6 +96,14 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 不得建立平行的第二套 Task 组件体系。
 
 
+### Task 工具调用与可见性恢复契约（强制）
+
+- **相邻分组，不整轮聚合**：同一逻辑轮次中，仅相邻连续工具调用构成一个独立组；思考、过程消息、原生事件等非工具事实即使隐藏也必须打断分组。每组默认展示前 3 条，运行中/失败工具始终可见，展开/折叠独立且不改变原始顺序或证据。
+- **同一实现**：Live 与 Review 必须复用 `TaskProcessSequence` / `TaskToolGroup`，不得在任一页面复制筛选、预览或折叠规则。Review 处理详情初始折叠，Live 活动过程初始展开；状态结算不得自动关闭用户正在阅读的详情。
+- **阅读现场**：浏览器短暂切换标签页仅同步运行状态；长时间后台/断线恢复不清空已显示会话、不用整页 Loading 覆盖已有内容。恢复快照复用未变化的投影事实，允许增量修补遗漏的工具结果；必须保护手动滚动位置、每组工具/过程的展开意图及输入草稿。
+- **活动轮次**：工具间无事件不代表任务完成，活动尾轮必须在真实结算/稳定历史切换前持续为运行中状态。虚拟轮次不能因 `document.visibilityState === 'hidden'` 自行卸载。
+- **回归**：`task-tool-group.test.ts`、`review-tool-round-collapse.test.ts`、`live-task-projection.test.ts`、`live-task-history-window.test.ts` 均属于共享规则守护。涉及其中一项时，须同步校验多 Agent 的 Live / Review 表现，不允许以 Agent ID 添加独立 CSS 或状态分支。
+
 ### 会话输入区唯一实现（强制）
 
 - `components/TaskSessionComposer.tsx` 是 **Review + Live 的唯一完整输入区**；持有展开/收起、运行状态、模型、推理级别、发送模式、发送按钮等 DOM。两页只通过 props 传入真实 Runtime 状态/能力和回调，禁止各自构造第二套 Composer 外壳。
