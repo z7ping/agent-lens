@@ -494,11 +494,16 @@ export interface LiveMessageActionResult {
 export type LiveContributionTone = 'neutral' | 'info' | 'warning' | 'danger'
 export type LiveContributionActionTone = 'default' | 'primary' | 'danger'
 export type LiveRuntimeContributionFieldKind = 'text' | 'list' | 'code'
+export type LiveRuntimeContributionSection = 'status' | 'performance' | 'resources' | 'advanced'
 
 export type LiveContributionValue = string | LiveContributionText
 
 export interface LiveRuntimeContributionField {
   label: LiveContributionText
+  /** Adapter-owned semantic id, stable across translation and copy changes. */
+  fieldId?: string | undefined
+  /** Placement belongs to AgentLens; the adapter only declares the semantic section. */
+  section?: LiveRuntimeContributionSection | undefined
   kind?: LiveRuntimeContributionFieldKind | undefined
   value?: LiveContributionValue | undefined
   values?: readonly LiveContributionValue[] | undefined

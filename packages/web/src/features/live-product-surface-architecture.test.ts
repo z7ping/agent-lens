@@ -125,6 +125,19 @@ test('Runtime 私有诊断通过次级 Disclosure Contribution 暴露，不污�
   assert.doesNotMatch(liveTask, /pi\.runtime\.retry|initializationStage|startupResources|runtimeMode|processId/)
 })
 
+test('扩展语义分组由字段契约决定，通用 UI 不根据英文 Label 猜测', () => {
+  const core = readFileSync(new URL('../../../core/src/contracts/live.ts', import.meta.url), 'utf8')
+  const protocol = readFileSync(new URL('../../../protocol/src/live.ts', import.meta.url), 'utf8')
+  assert.match(core, /export type LiveRuntimeContributionSection/)
+  assert.match(core, /fieldId\?: string/)
+  assert.match(core, /section\?: LiveRuntimeContributionSection/)
+  assert.match(protocol, /export type LiveRuntimeContributionSectionDto/)
+  assert.match(runtimeDisclosures, /return field\.section \?\?/)
+  assert.match(runtimeDisclosures, /id: field\.fieldId \?\? ''/)
+  assert.match(runtimeDisclosures, /field\.id === 'startup\.metrics'/)
+  assert.doesNotMatch(runtimeDisclosures, /field\.id === '(?:Main costs|Extensions|Startup metrics|Contexts|Package updates)'/)
+})
+
 test('Live Snapshot 附件通过通用 TaskMessage 展示', () => {
   const liveTask = liveTaskImplementation
   assert.match(liveTaskProjection, /messageAttachments\(item, nested\)/)

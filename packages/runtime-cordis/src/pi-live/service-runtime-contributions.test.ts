@@ -142,6 +142,19 @@ test('Pi runtime retry action reuses native retry lifecycle and becomes a ready 
     assert.equal(labels.includes('Skills'), true)
     assert.equal(labels.includes('Package updates'), true)
     assert.equal(labels.includes('Resource diagnostics'), true)
+    const semantic = new Map(disclosure.fields.map(field => [field.fieldId, field.section]))
+    assert.equal(semantic.get('runtime.sdk'), 'status')
+    assert.equal(semantic.get('runtime.worker.pid'), 'status')
+    assert.equal(semantic.get('extensions.binding'), 'status')
+    assert.equal(semantic.get('startup.metrics'), 'performance')
+    assert.equal(semantic.get('startup.main-costs'), 'performance')
+    assert.equal(semantic.get('resources.contexts'), 'resources')
+    assert.equal(semantic.get('resources.skills'), 'resources')
+    assert.equal(semantic.get('resources.package-updates'), 'resources')
+    assert.equal(semantic.get('resources.diagnostics'), 'advanced')
+    assert.equal(semantic.get('runtime.output'), 'advanced')
+    assert.ok(disclosure.fields.every(field => typeof field.fieldId === 'string' && field.fieldId.length > 0
+      && ['status', 'performance', 'resources', 'advanced'].includes(field.section ?? '')))
   } finally {
     await service.dispose()
   }

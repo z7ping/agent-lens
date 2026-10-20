@@ -237,6 +237,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   const currentStage = stageLabel(state.initializationStage)
   if (currentStage) {
     fields.push({
+      fieldId: 'runtime.stage',
+      section: 'status',
       label: contributionText('Current stage', '当前阶段'),
       value: contributionText(currentStage.en, currentStage.zh),
     })
@@ -246,6 +248,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
   if (elapsed !== undefined) {
     fields.push({
+      fieldId: 'runtime.elapsed',
+      section: 'status',
       label: contributionText('Initialization elapsed', '初始化耗时'),
       value: contributionDuration(elapsed),
     })
@@ -253,6 +257,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
 
   if (state.initializationTimings?.length) {
     fields.push({
+      fieldId: 'startup.stages',
+      section: 'performance',
       label: contributionText('Initialization stages', '初始化阶段'),
       kind: 'list' as const,
       values: state.initializationTimings.map(item => {
@@ -273,6 +279,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     }
     const warm = warmLabels[state.warmWorkerStatus]
     fields.push({
+      fieldId: 'runtime.worker.warm',
+      section: 'status',
       label: contributionText('Warm worker', '预热 Worker'),
       value: contributionText(warm.en, warm.zh),
     })
@@ -285,12 +293,16 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     }
     const binding = labels[state.extensionBindingStatus]
     fields.push({
+      fieldId: 'extensions.binding',
+      section: 'status',
       label: contributionText('Extensions', '扩展绑定'),
       value: contributionText(binding.en, binding.zh),
     })
   }
   if (state.extensionBindingError) {
     fields.push({
+      fieldId: 'extensions.binding.error',
+      section: 'advanced',
       label: contributionText('Extension binding error', '扩展绑定错误'),
       kind: 'code' as const,
       values: [state.extensionBindingError],
@@ -304,17 +316,23 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
       .slice(0, 2)
     if (mainCosts.length) {
       fields.push({
-        label: contributionText('Main costs', '主要耗时'),
+        fieldId: 'startup.main-costs',
+      section: 'performance',
+      label: contributionText('Main costs', '主要耗时'),
         kind: 'list' as const,
         values: mainCosts.map(item => startupMetricValue(item.name, item.durationMs)),
       })
     }
     fields.push({
+      fieldId: 'startup.metrics',
+      section: 'performance',
       label: contributionText('Startup metrics', '启动耗时明细'),
       kind: 'list' as const,
       values: sortedMetrics.map(item => startupMetricValue(item.name, item.durationMs)),
     })
     fields.push({
+      fieldId: 'startup.metrics.raw',
+      section: 'advanced',
       label: contributionText('Raw startup metrics', '原始启动指标'),
       kind: 'code' as const,
       values: state.startupMetrics.map(item => `${item.name} · ${contributionDuration(item.durationMs)}`),
@@ -324,12 +342,16 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   const sdkVersion = state.sdkVersion ?? state.capabilities?.sdkVersion
   if (sdkVersion) {
     fields.push({
+      fieldId: 'runtime.sdk',
+      section: 'status',
       label: contributionText('Pi SDK', 'Pi SDK'),
       value: sdkVersion,
     })
   }
   if (state.runtimeMode) {
     fields.push({
+      fieldId: 'runtime.mode',
+      section: 'status',
       label: contributionText('Runtime mode', '运行时模式'),
       value: state.runtimeMode === 'session_runtime'
         ? contributionText('Session Runtime', 'Session Runtime')
@@ -338,6 +360,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   }
   if (state.processId !== undefined) {
     fields.push({
+      fieldId: 'runtime.worker.pid',
+      section: 'status',
       label: contributionText('Worker PID', 'Worker PID'),
       value: String(state.processId),
     })
@@ -354,6 +378,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   for (const [en, zh, values] of resourceGroups) {
     if (!values?.length) continue
     fields.push({
+      fieldId: `resources.${en.toLowerCase()}`,
+      section: 'resources',
       label: contributionText(en, zh),
       kind: 'list' as const,
       values,
@@ -362,6 +388,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
 
   if (state.packageUpdates?.length) {
     fields.push({
+      fieldId: 'resources.package-updates',
+      section: 'resources',
       label: contributionText('Package updates', '可用包更新'),
       kind: 'list' as const,
       values: state.packageUpdates.map(item => contributionText(
@@ -372,12 +400,16 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   }
   if (state.packageUpdateCheck === 'failed') {
     fields.push({
+      fieldId: 'runtime.package-update-check',
+      section: 'status',
       label: contributionText('Package update check', '包更新检查'),
       value: contributionText('Failed', '失败'),
     })
   }
   if (resources?.diagnostics.length) {
     fields.push({
+      fieldId: 'resources.diagnostics',
+      section: 'advanced',
       label: contributionText('Resource diagnostics', '资源诊断'),
       kind: 'code' as const,
       values: resources.diagnostics,
@@ -385,6 +417,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   }
   if (state.startupOutput?.length) {
     fields.push({
+      fieldId: 'runtime.output',
+      section: 'advanced',
       label: contributionText('Startup output', '启动输出'),
       kind: 'code' as const,
       values: state.startupOutput,
@@ -392,6 +426,8 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   }
   if (state.error) {
     fields.push({
+      fieldId: 'runtime.error',
+      section: 'advanced',
       label: contributionText('Runtime error', '运行时错误'),
       kind: 'code' as const,
       value: state.error,
