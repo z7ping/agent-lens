@@ -57,6 +57,19 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+/** Read native error facts independent of HTTP status or provider. Do not infer failures from prose. */
+function errorText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  const fields = record(value)
+  return text(fields.message).trim() || text(fields.errorMessage).trim()
+    || text(fields.detail).trim() || text(fields.description).trim()
+}
+
+function nativeErrorText(item: Record<string, unknown>, nested: Record<string, unknown>): string {
+  return errorText(nested.errorMessage) || errorText(nested.error)
+    || errorText(item.errorMessage) || errorText(item.error)
+}
+
 function contentText(value: unknown): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) {
@@ -143,7 +156,11 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     const rawRole = text(item.role) || text(nested.role)
     const nativeEntryId = item.type === 'message' ? text(item.id) : ''
     const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
-    const errorMessage = text(nested.errorMessage) || text(item.errorMessage)
+    const errorMessage = nativeErrorText(item, nested)
+    const assistantFailed = nested.stopReason === 'error' || item.stopReason === 'error'
+      || nested.isError === true || item.isError === true
+      || nested.status === 'failed' || item.status === 'failed'
+      || nested.status === 'error' || item.status === 'error'
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
     const content = Array.isArray(nested.content)
       ? nested.content
@@ -151,17 +168,48 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         ? item.content
         : undefined
 
+    const pushError = (message: string) => {
+      projected.push({
+        id: `${baseId}:error`,
+        kind: 'message',
+        role: 'assistant',
+        text: message,
+        error: true,
+        streaming: false,
+        ...(at ? { at } : {}),
+      })
+    }
+
+    // Explicit non-message failures may also be present in native snapshot histories.
+    // Restrict this branch to failure facts; ordinary status and metadata are not answers.
+    const nativeFailure = item.type === 'error' || item.type === 'extension_error'
+      || item.type === 'runtime_exit' || (item.type === 'runtime_status' && item.status === 'failed')
+      || item.kind === 'error'
+    if (!rawRole && nativeFailure) {
+      pushError(errorMessage || errorText(item.message) || agentLensI18n.t('task:message.requestFailed'))
+      return
+    }
+
     const toolResult = rawRole === 'toolResult' || rawRole === 'tool_result'
     if (toolResult) {
       const callId = text(nested.toolCallId) || text(nested.tool_call_id) || text(item.toolCallId) || text(item.tool_call_id)
-      if (!callId) return
-      const output = contentText(nested.content) || contentText(item.content) || text(nested.output) || text(item.output)
+      if (!callId) {
+        if (nested.isError === true || item.isError === true || errorMessage) {
+          pushError(errorMessage || contentText(nested.content) || contentText(item.content)
+            || agentLensI18n.t('task:message.requestFailed'))
+        }
+        return
+      }
+      const failed = nested.isError === true || item.isError === true || Boolean(errorMessage)
+      const output = contentText(nested.content) || contentText(item.content)
+        || text(nested.output) || text(item.output) || errorMessage
+        || (failed ? agentLensI18n.t('task:message.requestFailed') : '')
       pushTool({
         id: `tool:${callId}`,
         kind: 'tool',
         callId,
         name: text(nested.toolName) || text(nested.tool_name) || text(item.toolName) || text(item.tool_name) || 'tool',
-        status: nested.isError === true || item.isError === true ? 'error' : 'success',
+        status: failed ? 'error' : 'success',
         ...(output ? { output } : {}),
         ...(at ? { at } : {}),
       })
@@ -169,7 +217,10 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     }
 
     const role = messageRole(rawRole)
-    if (!role) return
+    if (!role) {
+      if (errorMessage) pushError(errorMessage)
+      return
+    }
 
     if (role === 'user') {
       const body = contentText(item.content)
@@ -192,16 +243,13 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     }
 
     const pushAssistantError = () => {
-      if (!errorMessage.trim()) return
-      projected.push({
-        id: `${baseId}:error`,
-        kind: 'message',
-        role: 'assistant',
-        text: errorMessage,
-        error: true,
-        streaming: false,
-        ...(at ? { at } : {}),
-      })
+      if (!errorMessage && !assistantFailed) return
+      const detail = errorMessage || agentLensI18n.t('task:message.requestFailed')
+      // Some providers mirror the failure string in content; show it only once.
+      if (projected.some(candidate => candidate.kind === 'message'
+        && candidate.role === 'assistant' && candidate.text === detail
+        && (candidate.id === baseId || candidate.id.startsWith(`${baseId}:content:`)))) return
+      pushError(detail)
     }
 
     if (!content) {
@@ -313,6 +361,22 @@ export function mergeLiveActiveProjectionItems(
     // Existing exact IDs are therefore newer presentation state and must win.
     if (indexes.has(item.id)) continue
 
+    // Replace the transient SSE failure with its persisted native counterpart.
+    // Never deduplicate errors across different user turns.
+    if (item.kind === 'message' && item.error) {
+      const lastUser = findLastProjectionIndex(merged, candidate =>
+        candidate.kind === 'message' && candidate.role === 'user')
+      const transient = merged.findIndex((candidate, index) =>
+        index > lastUser && candidate.kind === 'message'
+        && candidate.role === 'assistant' && candidate.error && candidate.text === item.text)
+      if (transient >= 0) {
+        indexes.delete(merged[transient]!.id)
+        merged[transient] = item
+        indexes.set(item.id, transient)
+        continue
+      }
+    }
+
     // Reconcile a persisted user row with its local optimistic placeholder.
     if (item.kind === 'message' && item.role === 'user') {
       const optimisticIndex = merged.findIndex(candidate =>
@@ -418,11 +482,11 @@ function settleCurrentLiveText(items: readonly LiveTaskProjectionItem[]): LiveTa
   )
 }
 
-export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
+export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[], failed = false): LiveTaskProjectionItem[] {
   return items.map(item => {
     if (item.kind === 'message' && item.streaming) return { ...item, streaming: false }
     if (item.kind === 'thinking' && item.streaming) return { ...item, streaming: false }
-    if (item.kind === 'tool' && item.status === 'running') return { ...item, status: 'success' as const }
+    if (item.kind === 'tool' && item.status === 'running') return { ...item, status: failed ? 'error' as const : 'success' as const }
     return item
   })
 }
@@ -439,6 +503,8 @@ export function liveEventChangesTaskTranscript(event: LiveEventDto | undefined):
     || event.type === 'tool.start'
     || event.type === 'tool.output'
     || event.type === 'tool.end'
+    || event.type === 'error'
+    || (event.type === 'status' && event.status === 'failed')
     || event.type === 'completed'
 }
 
@@ -449,6 +515,31 @@ export function reduceLiveTaskEvent(
   const event = envelope.normalizedEvent
   if (!event) return [...items]
   const fallback = String(envelope.sequence)
+  const failureEvent = event.type === 'error'
+    || (event.type === 'status' && event.status === 'failed')
+    || (event.type === 'completed' && event.status === 'failed')
+  if (failureEvent) {
+    const detail = ('message' in event ? event.message ?? '' : '').trim()
+    const lastUser = findLastProjectionIndex(items, item =>
+      item.kind === 'message' && item.role === 'user')
+    const alreadyFailed = items.slice(lastUser + 1).some(item =>
+      item.kind === 'message' && item.role === 'assistant' && item.error
+      && (!detail || item.text === detail))
+    if (alreadyFailed) {
+      return event.type === 'completed' || event.type === 'status'
+        ? settleLiveTaskProjectionItems(items, true) : [...items]
+    }
+    return [...(event.type === 'completed' || event.type === 'status'
+      ? settleLiveTaskProjectionItems(items, true) : settleCurrentLiveText(items)), {
+      id: `live-error:${fallback}`,
+      kind: 'message' as const,
+      role: 'assistant' as const,
+      text: detail || agentLensI18n.t('task:message.requestFailed'),
+      error: true as const,
+      streaming: false,
+      at: envelope.receivedAt,
+    }]
+  }
 
   if (event.type === 'message.end' && event.role === 'assistant') {
     // Native message-end closes its own text blocks even when phase is unspecified.

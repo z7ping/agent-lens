@@ -296,6 +296,9 @@ test('generic Live transcript classification ignores control-only events', () =>
   assert.equal(liveEventChangesTaskTranscript({ type: 'queue.update', steering: [], followUp: [] }), false)
   assert.equal(liveEventChangesTaskTranscript({ type: 'text.delta', delta: 'x' }), true)
   assert.equal(liveEventChangesTaskTranscript({ type: 'completed', status: 'completed' }), true)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'error', message: 'network failure' }), true)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'failed' }), true)
+  assert.equal(liveEventChangesTaskTranscript({ type: 'status', status: 'ready' }), false)
 })
 
 test('generic Live round projector reuses stable history while streaming the current turn', () => {
@@ -480,4 +483,82 @@ test('partial assistant response and its separate persisted error are both visib
   assert.equal(projectLiveSnapshotEntries([
     { type: 'message', id: 'ok', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }] } },
   ]).some(item => item.kind === 'message' && item.error), false)
+})
+
+test('all failures from generic SSE events appear in the same user round, independently of HTTP status', () => {
+  const start = [{ id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'request', streaming: false }]
+  const cases = [
+    'HTTP 400: invalid request',
+    'HTTP 401: unauthorized',
+    'HTTP 403: forbidden',
+    'HTTP 429: quota exceeded',
+    'HTTP 500: internal error',
+    'HTTP 503: overloaded',
+    'ECONNRESET: upstream disconnected',
+    'Model context window exceeded',
+  ]
+  for (const message of cases) {
+    const result = reduceLiveTaskEvent(start, event(1, { type: 'error', message }))
+    const failure = result[1]
+    assert.equal(failure?.kind, 'message')
+    assert.equal(failure?.kind === 'message' ? failure.error : false, true)
+    assert.equal(failure?.kind === 'message' ? failure.text : '', message)
+    assert.equal(projectLiveTaskRounds(result)[0]?.model.errorCount, 1)
+  }
+})
+
+test('terminal Runtime failures and missing error details are always visible', () => {
+  const base = [{ id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'hello', streaming: false }]
+  const runtimeFailed = reduceLiveTaskEvent(base, event(1, { type: 'status', status: 'failed', message: 'Worker exited' }))
+  assert.equal(runtimeFailed.at(-1)?.kind === 'message' ? runtimeFailed.at(-1)?.text : '', 'Worker exited')
+  assert.equal(runtimeFailed.at(-1)?.kind === 'message' ? runtimeFailed.at(-1)?.error : false, true)
+  const ended = reduceLiveTaskEvent(runtimeFailed, event(2, { type: 'completed', status: 'failed', message: 'Worker exited' }))
+  assert.equal(ended.length, runtimeFailed.length)
+  const withPendingTool = [...base, {
+    id: 'tool:pending', kind: 'tool' as const, callId: 'pending',
+    name: 'shell', status: 'running' as const,
+  }]
+  const crashed = reduceLiveTaskEvent(withPendingTool, event(5, {
+    type: 'status', status: 'failed', message: 'Worker terminated',
+  }))
+  assert.equal(crashed[1]?.kind === 'tool' ? crashed[1].status : null, 'error')
+  const noDetails = reduceLiveTaskEvent(base, event(3, { type: 'completed', status: 'failed' }))
+  assert.equal(noDetails.at(-1)?.kind === 'message' ? noDetails.at(-1)?.error : false, true)
+  assert.ok(noDetails.at(-1)?.kind === 'message' && noDetails.at(-1)?.text.length)
+  assert.deepEqual(reduceLiveTaskEvent(base, event(4, { type: 'completed', status: 'cancelled' })), base)
+})
+
+test('persisted generic error wrappers, objects, tool failures and assistant stop errors remain readable', () => {
+  const items = projectLiveSnapshotEntries([
+    { id: 'provider', type: 'error', error: { message: 'HTTP 409: conflict' } },
+    { id: 'runtime', type: 'runtime_status', status: 'failed', errorMessage: 'Runtime startup failed' },
+    { id: 'tool', role: 'toolResult', toolCallId: 'call-1', isError: true, content: [] },
+    { id: 'assistant', role: 'assistant', stopReason: 'error', content: [] },
+    { id: 'assistant-nested', role: 'assistant', error: { detail: 'Parser rejected response' } },
+  ])
+  const errors = items.filter(item => item.kind === 'message' && item.error)
+  assert.equal(errors.length, 4)
+  assert.equal(errors[0]?.kind === 'message' ? errors[0].text : '', 'HTTP 409: conflict')
+  assert.equal(errors[1]?.kind === 'message' ? errors[1].text : '', 'Runtime startup failed')
+  assert.ok(errors[2]?.kind === 'message' && errors[2].text.trim())
+  assert.equal(errors[3]?.kind === 'message' ? errors[3].text : '', 'Parser rejected response')
+  const tool = items.find(item => item.kind === 'tool')
+  assert.equal(tool?.kind === 'tool' ? tool.status : null, 'error')
+  assert.ok(tool?.kind === 'tool' && tool.output)
+})
+
+test('SSE failure reconciles with persisted error instead of duplicating the same failure', () => {
+  const user = { id: 'user:1', kind: 'message' as const, role: 'user' as const, text: 'hello', streaming: false }
+  const live = reduceLiveTaskEvent([user], event(1, { type: 'error', message: 'Network timeout' }))
+  const snapshot = projectLiveSnapshotEntries([
+    { id: 'persisted-1', role: 'assistant', errorMessage: 'Network timeout' },
+  ])
+  const reconciled = mergeLiveActiveProjectionItems(live, snapshot)
+  assert.equal(reconciled.length, 2)
+  assert.equal(reconciled[1]?.id, 'persisted-1:error')
+  const anotherTurn = reduceLiveTaskEvent([
+    ...reconciled,
+    { id: 'user:2', kind: 'message', role: 'user', text: 'retry', streaming: false },
+  ], event(2, { type: 'error', message: 'Network timeout' }))
+  assert.equal(anotherTurn.filter(item => item.kind === 'message' && item.error).length, 2)
 })

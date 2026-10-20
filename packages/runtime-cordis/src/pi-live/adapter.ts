@@ -114,6 +114,21 @@ function liveText(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function piErrorText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  const nested = liveRecord(value)
+  return liveText(nested.message).trim() || liveText(nested.errorMessage).trim()
+    || liveText(nested.detail).trim() || liveText(nested.description).trim()
+}
+
+function piEventErrorText(...values: unknown[]): string {
+  for (const value of values) {
+    const message = piErrorText(value)
+    if (message) return message
+  }
+  return ''
+}
+
 function livePreview(value: unknown, max = 4_000): string {
   if (value === undefined || value === null) return ''
   const text = typeof value === 'string'
@@ -202,18 +217,12 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   if (type === 'message_start' || type === 'message_end') {
     const message = liveRecord(event.message)
     const rawRole = liveText(message.role)
-    // Pi can finish an assistant message with no text and only errorMessage.
-    // Surface a recoverable request failure instead of silently treating it as a reply.
+    // Normalize every persisted assistant failure, regardless of HTTP status,
+    // model provider or transport. Keep adapter generic; no status-code hints.
     if (type === 'message_end' && rawRole === 'assistant') {
-      const originalError = liveText(message.errorMessage) || liveText(event.errorMessage)
-      if (originalError.trim()) {
-        const unsupportedDeveloperRole = /\b422\b/i.test(originalError)
-          && /\bdeveloper\b/i.test(originalError)
-          && /\brole\b/i.test(originalError)
-        const guidance = unsupportedDeveloperRole
-          ? '\nPi model compatibility: set compat.supportsDeveloperRole=false for this provider/model in ~/.pi/agent/models.json, then reopen the Runtime.'
-          : ''
-        return { type: 'error', message: originalError + guidance }
+      const nativeError = piEventErrorText(message.errorMessage, message.error, event.errorMessage, event.error)
+      if (nativeError.trim() || message.stopReason === 'error') {
+        return { type: 'error', message: nativeError.trim() || 'Pi assistant request failed' }
       }
     }
     const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
@@ -285,7 +294,9 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       return {
         type: 'status',
         status,
-        ...(liveText(event.message) ? { message: liveText(event.message) } : {}),
+        ...(liveText(event.message) || status === 'failed'
+          ? { message: piEventErrorText(event.errorMessage, event.error, event.message) || 'Pi Live runtime failed' }
+          : {}),
       }
     }
   }
@@ -319,7 +330,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     }
   }
   if (type === 'runtime_exit') {
-    const message = liveText(event.errorMessage) || liveText(event.error)
+    const message = piEventErrorText(event.errorMessage, event.error)
     return {
       type: 'status',
       status: 'failed',
