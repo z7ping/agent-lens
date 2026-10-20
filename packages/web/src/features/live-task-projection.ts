@@ -198,13 +198,14 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         : undefined
 
     const pushError = (message: string) => {
+      const diagnostic = nativeErrorDiagnostic(item, nested)
       projected.push({
         id: `${baseId}:error`,
         kind: 'message',
         role: 'assistant',
         text: message,
         error: true,
-        ...(nativeErrorDiagnostic(item, nested) ? { errorDiagnostic: nativeErrorDiagnostic(item, nested) } : {}),
+        ...(diagnostic ? { errorDiagnostic: diagnostic } : {}),
         streaming: false,
         ...(at ? { at } : {}),
       })
