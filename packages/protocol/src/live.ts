@@ -315,7 +315,13 @@ export type LiveEventDto =
       placeholder?: string | undefined
       prefill?: string | undefined
     }
-  | { type: 'error'; message: string }
+  | {
+      type: 'error'
+      message: string
+      code?: string | undefined
+      category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
+      retryable?: boolean | undefined
+    }
   | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
 
 export interface LiveControlDisplayInfoDto {
