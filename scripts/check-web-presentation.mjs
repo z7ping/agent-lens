@@ -453,7 +453,7 @@ const livePageSource = readFileSync(p('features/LiveTaskPage.tsx'), 'utf8')
 const reviewPageSource = readFileSync(p('features/ReviewPage.tsx'), 'utf8')
 const composerSource = readFileSync(p('components/TaskSessionComposer.tsx'), 'utf8')
 for (const [name, source] of [['LiveTaskPage', livePageSource], ['ReviewPage', reviewPageSource]]) {
-  if (!source.includes('<TaskSessionComposer') || /<LiveMarkdownComposer|<ComposerPillSelect/.test(source)) {
+  if (!source.includes('<TaskSessionComposer') || /<LiveMarkdownComposer(?:\s|\/>|>)|<ComposerPillSelect/.test(source)) {
     throw new Error(name + ' 必须复用唯一 TaskSessionComposer，不能重建输入区')
   }
 }
