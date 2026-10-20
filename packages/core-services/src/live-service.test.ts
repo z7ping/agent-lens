@@ -86,6 +86,40 @@ test('Live registry accepts thinking-control only when capability and methods ag
 })
 
 
+test('Capability contract: all advertised native operations require real Adapter implementations', () => {
+  const operations: Array<[LiveCapabilityName, string[]]> = [
+    ['resume', ['resume']], ['fork', ['fork']], ['fork-at', ['forkAt']],
+    ['interrupt', ['interrupt']], ['queue', ['queueState', 'clearQueue']],
+    ['model-switching', ['modelControl', 'setModelControl']],
+    ['extension-ui', ['respondToExtension']], ['command-discovery', ['commands']],
+    ['workspace-file-reference', ['workspaceFileReferences']],
+    ['history-index', ['historyIndex']], ['session-tree', ['sessionTree']],
+  ]
+  for (const [capability, methods] of operations) {
+    const adapter = liveAdapter('missing-' + capability, [capability], false)
+    assert.throws(() => new DefaultLiveService().register(adapter),
+      new RegExp(capability + ' capability requires ' + methods[0]), capability)
+    for (const method of methods) Object.assign(adapter, { [method]: async () => [] })
+    assert.doesNotThrow(() => new DefaultLiveService().register(adapter), capability)
+  }
+})
+
+test('Live Capability manifest and Runtime declaration must match exactly', () => {
+  const adapter = liveAdapter('mismatch', ['resume'], false)
+  Object.assign(adapter, { resume: async () => readyState })
+  adapter.manifest.capabilities = ['fork']
+  assert.throws(() => new DefaultLiveService().register(adapter), /manifest\/capability mismatch/)
+  adapter.manifest.capabilities = ['resume', 'resume']
+  assert.throws(() => new DefaultLiveService().register(adapter), /manifest\/capability mismatch/)
+  adapter.manifest.capabilities = ['resume']
+  assert.doesNotThrow(() => new DefaultLiveService().register(adapter))
+})
+
+test('steer cannot be declared without native queue support', () => {
+  const adapter = liveAdapter('steer-without-queue', ['steer'], false)
+  assert.throws(() => new DefaultLiveService().register(adapter), /steer requires queue capability/)
+})
+
 test('Live observers see first send and completed checkpoints without changing adapter identity', async () => {
   const service = new DefaultLiveService()
   const state: LiveRuntimeState = {
