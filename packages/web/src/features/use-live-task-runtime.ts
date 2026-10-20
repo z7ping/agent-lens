@@ -195,9 +195,12 @@ export function useLiveTaskRuntime({
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
         historyIndexAnchorCursorRef.current = firstUserEntryCursor(projectedItems)
-        setProjection(previous => liveTurnRevisionRef.current === startingTranscriptRevision
-          ? reconcileLiveSnapshotProjection(previous, nextProjection, snapshot.state.isStreaming)
-          : reconcileLiveSnapshotProjection(previous, nextProjection, true))
+        setProjection(previous => {
+          // An empty/stale initial response must not erase SSE facts already visible.
+          if (!projectedItems.length && (previous.stable.length || previous.active.length)) return previous
+          return reconcileLiveSnapshotProjection(previous, nextProjection,
+            snapshot.state.isStreaming || liveTurnRevisionRef.current !== startingTranscriptRevision)
+        })
         historyBlocksRef.current = [historyPageBlock(snapshot, projectedItems)]
         setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
         historyAtLatestRef.current = snapshot.page?.hasLater !== true
@@ -315,7 +318,9 @@ export function useLiveTaskRuntime({
         } else if (!recoveryLeafId) {
           const nextProjection = splitLiveProjectionItems(recovered, snapshot.state.isStreaming)
           retainReaderAnchor()
-          setProjection(previous => reconcileLiveSnapshotProjection(previous, nextProjection, snapshot.state.isStreaming))
+          setProjection(previous => !recovered.length && (previous.stable.length || previous.active.length)
+            ? previous
+            : reconcileLiveSnapshotProjection(previous, nextProjection, snapshot.state.isStreaming))
           historyBlocksRef.current = [historyPageBlock(snapshot, recovered)]
           setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
           setInputHistory(projectLiveInputHistory(recovered))
