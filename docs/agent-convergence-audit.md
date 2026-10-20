@@ -12,18 +12,18 @@
 
 ## 可复核的遗留和 Owner
 
-| 问题 | 真实代码位置 | 当前已知债务 | 子 Issue |
+| 问题 | 真实代码位置 | 当前代码状态 / 待用户手工验收 | 子 Issue |
 | --- | --- | --- | --- |
-| Agent 能力与运行态一致性 | `packages/core/src/contracts/{plugin,source,live,integration}.ts`、`packages/{runtime-cordis,live-codex,live-hermes}` | 已有统一契约，但需要逐 Agent 能力/方法/运行态验证矩阵 | #515 |
-| 错误/诊断 | `live-task-projection.ts`、Pi/Codex/Hermes Adapter | #514/#531/#532 已补通用错误显示、取消中断工具状态及嵌套/code-only 错误；仍缺结构化诊断与回溯完整性验证 | #516 |
+| Agent 能力与运行态一致性 | `packages/core/src/contracts/{plugin,source,live,integration}.ts`、`packages/{runtime-cordis,live-codex,live-hermes}` | 已合并 #530/#548–#551/#554/#558：注册期校验、身份防伪与 Product 多 Live 可用性回读；真实 Agent 运行由用户验收 | #515 |
+| 错误/诊断 | `live-task-projection.ts`、Pi/Codex/Hermes Adapter | #514/#531/#532/#543–#546/#555 已补原生结构化诊断及共享投影；端到端真实失败恢复由用户验收 | #516 |
 | Review 消息来源判断 | `features/ReviewRoundPresentation.tsx` | PR #528 已移除展示层 Codex ID 特判；代码收敛完成，手工历史回放由用户验收 | #517 |
 | Review 事件 Label 来源判断 | `features/review-event-presentation.ts` | PR #528 已改为 kind/action 语义；代码收敛完成，真实记录由用户验收 | #517 |
 | Review 来源私有生命周期 | `features/review-interaction-presentation.ts` | PR #528 已按 assistant.stop + stopReason 语义判别，不依赖 Pi ID | #517 |
 | 旧 Pi 会话渲染 | `features/LiveTaskTimeline.tsx` | PR #527 已删除旧 `PiLiveTaskRound` 与独立投影；代码收敛完成，长会话/重连由用户验收 | #518 |
 | Live 通用页面命名 | `features/LiveTaskPage.tsx`、`live-task.css` | `LiveTaskPage.tsx` / `live-task.css` 通用 CSS 类全部更名为 `live-task-*`，现有名称例外清零；对应门禁禁止恢复 | #519 |
 | Runtime Disclosure | `components/LiveRuntimeDisclosures.tsx`、Pi Service | 已在 PR #524 改用 `fieldId` / `section`，代码收敛完成，Web/Runtime 实机验收由用户负责 | #520 |
-| 复用与自动门禁 | `scripts/task-session-ownership.mjs`、`check-web-presentation.mjs` | 原有 AST/CSS 门禁；本轮追加 Agent 来源分支和历史钩子递减门禁 | #521 |
-| 第三方接入 | `AGENTS.md`、`product-internal`、`agent-swe-skills` | 需要最小模拟插件及完整接入说明/例外清退清单 | #522 |
+| 复用与自动门禁 | `scripts/task-session-ownership.mjs`、`check-web-presentation.mjs` | 已合并 #525/#534/#535/#547/#556/#559：动态 Task/Review/Live 扫描与反例检查 | #521 |
+| 第三方接入 | `AGENTS.md`、`product-internal`、`agent-swe-skills` | 已合并 #536/#541/#542/#557：第三方 Source/Live 接入指南、模拟契约、Cordis→Canonical SQLite/Live 集成代码测试 | #522 |
 
 ## 禁止误判完成
 
@@ -50,6 +50,10 @@ P0：#515、#516、#521 → P1：#517、#518、#519、#520 → P2：#522。若�
 ## 2026-10-20 代码交付与关闭状态
 
 - **已关闭**：#517（#528）、#518（#527/#552）、#519（#529/#535/#545）、#520（#524/#537–#540）；其余真实运行或视觉复核均由用户负责。
-- **仍需代码工作**：#515（Capability/Source/Live 全链路）、#516（错误入口剩余归一化）、#521（全目录门禁与反例覆盖）、#522（第三方经 Cordis→Canonical/Web 端到端接入）。
+- **代码已交付并关闭**：#515（#554/#558 等）、#516（#555 等）、#521（#556/#559 等）、#522（#557 等）；手工验收由用户负责。
 - 近期增量 #543/#544/#546 补足结构化错误跨 SSE / Snapshot / 投影链路，#547 增强共享 UI Owner 扫描，#548–#551 补 Source/Live Manifest 与生产 Cordis 同步边界，#552 清除确认的 TS 错误与过时 Pi 测试。
 - 不等待 CI / Actions；只记录真实执行过的检查，不能以未执行的验证阻塞已完成代码 Issue 的关闭。
+
+## 2026-10-20 最终结项
+
+全部代码子 Issue #515–#522 已按代码提交且 PR 合并标准完成，相关 PR 至 #559，主 Issue #523 可关闭。完整 npm typecheck/test/build、Pi/Codex/Hermes 真实运行、Windows/浏览器与视觉验收**未在本轮执行**，由用户独立验收；若发现缺陷另开或重开 Issue。此处的代码完成仅表示需求按现有架构实现并合并，绝不暗示手工运行结果。
