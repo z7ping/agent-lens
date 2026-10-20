@@ -77,7 +77,7 @@
   .task-session-view .task-session-document,
   .task-session-view .task-session-composer { padding-inline: 96px; }
 
-  .task-surface-live .pi-live-float-stack {
+  .task-surface-live .live-task-float-stack {
     right: 96px;
     left: 96px;
     width: auto;
@@ -95,7 +95,7 @@
   .task-session-view .task-header-metrics { display: none; }
   .task-session-view .task-header-actions { grid-column: 2; }
 
-  .task-surface-live .pi-live-float-stack {
+  .task-surface-live .live-task-float-stack {
     right: 20px;
     left: 20px;
     width: calc(100% - 40px);
@@ -117,7 +117,7 @@
   .task-session-view .task-header-submeta,
   .task-session-view .task-header-metrics { display: none; }
 
-  .task-surface-live .pi-live-float-stack {
+  .task-surface-live .live-task-float-stack {
     right: 10px;
     left: 10px;
     width: calc(100% - 20px);
