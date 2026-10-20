@@ -270,6 +270,8 @@
 /* Persisted provider failures share TaskMessage markup; they are not assistant answers. */
 .task-surface .task-message-row[data-error='true'] .task-message-content { color: var(--al-danger); overflow-wrap: anywhere; }
 .task-surface .task-message-error-status { display: inline-flex; align-items: center; gap: 5px; color: var(--al-danger); font-weight: 650; }
+.task-surface .task-message-error-diagnostic { display: flex; flex-wrap: wrap; gap: 5px 12px; color: var(--al-muted); font-size: 12px; overflow-wrap: anywhere; }
+.task-surface .task-message-error-guidance { flex-basis: 100%; }
 
 .task-surface .task-message-model-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-message-model-meta time { flex: 0 0 auto; margin-left: auto; }
