@@ -36,3 +36,15 @@ test('Runtime Contribution 不再把文案当语义', () => {
   assert.equal(auditAgentConvergenceSources({ [runtimePath]: stable + "\nif (field.id === 'Main costs') {}" }).length, 1)
   assert.equal(auditAgentConvergenceSources({ [runtimePath]: "function fieldSection(field) { return 'status' }" }).length, 1)
 })
+
+test('共享 UI 不可通过对象属性访问规避 Agent ID 门禁', () => {
+  for (const condition of [
+    "node.sourceId === 'codex'",
+    "runtime?.productId === 'pi'",
+    "state.runtime.liveId !== 'hermes'",
+    "'claude-code' === session.agentId",
+    "'codex' !== state?.sourceId",
+  ]) {
+    assert.equal(auditAgentConvergenceSources({ [livePath]: condition }).length, 1, condition)
+  }
+})
