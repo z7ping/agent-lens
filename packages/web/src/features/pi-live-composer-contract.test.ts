@@ -60,7 +60,7 @@ test('Review 会话续聊输入区保持与 Live 相同的外壳、展开操作�
   const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
   for (const source of [liveTask, review]) {
     assert.match(source, /className="pi-live-compose-wrap live-task-compose-wrap"/)
-    assert.match(source, /pi-live-composer \\$\{composerExpanded \? 'is-expanded' : ''\}/)
+    assert.match(source, /pi-live-composer \$\{composerExpanded \? 'is-expanded' : ''\}/)
     assert.match(source, /className="pi-live-editor-toolbar"/)
     assert.match(source, /className="pi-live-editor-action"/)
     assert.match(source, /<LiveMarkdownComposer/)
