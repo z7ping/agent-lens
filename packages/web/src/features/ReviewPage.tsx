@@ -280,6 +280,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             onAttachmentError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
             disabled={Boolean(historyInteractionPending)}
             connectionLabel={t('local.header.resumeOnSend')}
+            pendingConnection
             controlsReady={false}
             pendingModelControl={detailLiveInteraction?.canModelControl}
             pendingThinkingControl={detailLiveInteraction?.canThinkingControl}
