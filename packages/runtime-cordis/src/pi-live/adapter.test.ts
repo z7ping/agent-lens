@@ -65,6 +65,10 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
   }), { type: 'error', message: 'HTTP 500: generic provider failure' })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
+    message: { role: 'assistant', stopReason: 'error', errorMessage: 'HTTP 422: unsupported image format' },
+  }), { type: 'error', message: 'HTTP 422: unsupported image format' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
     message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'ok' }] },
   }), { type: 'message.end', role: 'assistant', phase: 'final' })
   assert.deepEqual(normalizePiLiveEvent({
