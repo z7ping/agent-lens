@@ -69,6 +69,9 @@ export function auditAgentConvergenceSources(sources) {
       if (/field\.id\s*===?\s*['"](?:Main costs|Startup metrics|Extensions|Contexts|Package updates)['"]/.test(content)) {
         failures.push(`${path}: 扩展布局不能按英文 label 推断；见 #520`)
       }
+      if (!content.includes("fields.filter(field => fieldSection(field) === 'performance')")) {
+        failures.push(`${path}: Runtime performance 字段必须依照结构化 section 展示，禁止只识别 Pi 专用字段`)
+      }
       if (!content.includes('return field.section ??')) {
         failures.push(`${path}: 扩展布局必须通过结构化 section`)
       }

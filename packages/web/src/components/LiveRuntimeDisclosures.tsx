@@ -339,7 +339,7 @@ function diagnosticCopyText(
 ): string {
   const lifecycle = item.lifecycle
   const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'runtime.elapsed')
-  const performanceFields = fields.filter(field => field.id === 'startup.metrics')
+  const performanceFields = fields.filter(field => fieldSection(field) === 'performance')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lines = [
@@ -390,7 +390,8 @@ function RuntimeDiagnostics({
 }) {
   const fields = prepareFields(item, language)
   const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'runtime.elapsed')
-  const startupMetrics = fields.find(field => field.id === 'startup.metrics')
+  const performanceFields = fields.filter(field => fieldSection(field) === 'performance')
+  const startupMetrics = performanceFields.find(field => field.id === 'startup.metrics')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lifecycle = item.lifecycle
@@ -410,7 +411,7 @@ function RuntimeDiagnostics({
       </div>
     </section>}
 
-    {(lifecycle?.stages.length || startupMetrics) && <div className="live-runtime-diagnostic-primary-grid">
+    {(lifecycle?.stages.length || performanceFields.length > 0) && <div className="live-runtime-diagnostic-primary-grid">
       {lifecycle?.stages.length && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-stage-section">
         <h3>{runtimeText('startupStages')}</h3>
         <div className="live-runtime-diagnostic-stages">
@@ -428,16 +429,19 @@ function RuntimeDiagnostics({
         </div>
       </section>}
 
-      {startupMetrics && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-performance">
+      {performanceFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-performance">
         <div className="live-runtime-diagnostic-section-head">
           <h3>{runtimeText('startupPerformance')}</h3>
           <CopyAction
-            value={timingCopyText(item, language, fields)}
+            value={startupMetrics ? timingCopyText(item, language, fields) : diagnosticCopyText(item, language, fields)}
             language={language}
-            labelKey="copyTiming"
+            labelKey={startupMetrics ? 'copyTiming' : 'copyDiagnostics'}
           />
         </div>
-        <MetricRows values={startupMetrics.values}/>
+        {performanceFields.map(field => <div key={field.key}>
+          <b>{field.label}</b>
+          <MetricRows values={field.values}/>
+        </div>)}
       </section>}
     </div>}
 
