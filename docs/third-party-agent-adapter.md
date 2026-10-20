@@ -30,6 +30,13 @@
 
 此外 `packages/core/src/contracts/mock-source-adapter.test.ts` 覆盖 Source 能力声明、未知原生记录投影与 Evidence 保留。
 
-## 已知待办
+## 最小集成样例（正式组件链路）
 
-仍需真实 Cordis 注册、Canonical Pipeline/通用 TaskSurface/Review 端到端联调，完成 #522 后再关闭 Issue。
+`apps/daemon/src/third-party-adapter.integration.test.ts` 在同一 `AgentLensApplication` 中注册 Source 和 Live 插件，依次走：
+- `Cordis → DefaultSourceService → prepareRegisteredSources → SourceHistoryRunner → SQLite Canonical Observation / Evidence`；
+- `Cordis → DefaultLiveService → LiveAdapter → normalizedEvent`，保留原生事件；
+- `resolveIntegrationStatus(productId)` 从实际注册的 Live Adapter 回读可用性，允许 `integrationId/productId/liveId` 三者不同。
+
+无需新建插件运行时、Task UI 或 CSS。Source 的 `unknown` 类型必须作为可追溯事实保留，不能静默丢弃；Live 的通用事件进入现有 `LiveTaskTimeline` 与共享 Task 投影。
+
+上述为**自动化代码集成测试**，不是完整桌面端可视化、真实 Agent、Windows/浏览器或交互验收。用户自行进行后者；代码 PR 合并后可关闭对应代码 Issue。
