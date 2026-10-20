@@ -322,7 +322,14 @@ export type LiveEventDto =
       category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
       retryable?: boolean | undefined
     }
-  | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
+  | {
+      type: 'completed'
+      status: LiveCompletionStatusDto
+      message?: string | undefined
+      code?: string | undefined
+      category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
+      retryable?: boolean | undefined
+    }
 
 export interface LiveControlDisplayInfoDto {
   label?: string | undefined
@@ -716,6 +723,10 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       type,
       status: status as LiveCompletionStatusDto,
       ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+      ...(eventText(event.code) ? { code: eventText(event.code) } : {}),
+      ...(['provider', 'network', 'runtime', 'tool', 'permission', 'unknown'].includes(String(event.category))
+        ? { category: event.category as Extract<LiveEventDto, { type: 'completed' }>['category'] } : {}),
+      ...(typeof event.retryable === 'boolean' ? { retryable: event.retryable } : {}),
     }
   }
   return null
