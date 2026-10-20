@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { HubReviewSessionSummaryDto, ReviewNodeDto } from '@agent-lens/protocol'
+import type { HubReviewSessionSummaryDto, LiveMessageDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { liveApi, type LiveProductMetadata } from '../client/live'
+import { clearLiveComposerDraft, liveComposerDraftKey } from '../components/live-composer-session-state'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel } from '../components/AgentScope'
 import { historyTaskPresentation } from './task-center'
@@ -33,7 +34,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const [showAllEvents, setShowAllEvents] = useState(true)
   const [hubSessions, setHubSessions] = useState<HubReviewSessionSummaryDto[]>([])
   const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
-  const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork'>('')
+  const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork-at'>('')
   const [historyInteractionError, setHistoryInteractionError] = useState('')
   const [pathError, setPathError] = useState('')
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
@@ -538,17 +539,33 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     pendingReaderAnchorRef.current = null
   }
 
-  const runHistoryInteraction = async (action: 'resume' | 'fork') => {
-    if (!detail || !detailLiveInteraction || historyInteractionPending) return
-    if (action === 'resume' && !detailLiveInteraction.canResume) return
-    if (action === 'fork' && !detailLiveInteraction.canFork) return
-    setHistoryInteractionPending(action)
+  const sendReviewMessage = async (message: LiveMessageDto) => {
+    if (!detail || !detailLiveInteraction?.canResume || !detailLiveInteraction.canSend || historyInteractionPending) return
+    const liveId = detailLiveInteraction.liveId
+    const historicalId = detail.id
+    setHistoryInteractionPending('resume')
     setHistoryInteractionError('')
     try {
-      const state = action === 'resume'
-        ? await liveApi.resume(detailLiveInteraction.liveId, detail.id)
-        : await liveApi.fork(detailLiveInteraction.liveId, detail.id)
-      navigate(taskLiveRuntimeHref({ liveId: detailLiveInteraction.liveId, state }))
+      const state = await liveApi.resume(liveId, historicalId)
+      await liveApi.send(liveId, state.runtimeSessionId, message)
+      clearLiveComposerDraft(liveComposerDraftKey(liveId, `history:${historicalId}`))
+      navigate(taskLiveRuntimeHref({ liveId, state }))
+    } catch (reason) {
+      // Do not clear the draft on failure; retry must use the same message.
+      setHistoryInteractionError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setHistoryInteractionPending('')
+    }
+  }
+
+  const forkReviewAt = async (nativeEventId: string) => {
+    if (!detail || !detailLiveInteraction?.canForkAt || historyInteractionPending || !nativeEventId) return
+    const liveId = detailLiveInteraction.liveId
+    setHistoryInteractionPending('fork-at')
+    setHistoryInteractionError('')
+    try {
+      const state = await liveApi.forkAt(liveId, detail.id, nativeEventId)
+      navigate(taskLiveRuntimeHref({ liveId, state }))
     } catch (reason) {
       setHistoryInteractionError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -598,6 +615,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     emptyLabel,
     toggleEventVisibility,
     noteReaderUserIntent,
-    runHistoryInteraction,
+    sendReviewMessage,
+    forkReviewAt,
   }
 }
