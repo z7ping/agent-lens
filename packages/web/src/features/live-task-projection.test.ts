@@ -611,3 +611,22 @@ test('generic structured Live error keeps code/category/retryability with no pro
   const legacy = reduceLiveTaskEvent(initial, event(2, { type: 'error', message: 'plain failure' }))
   assert.equal(legacy.at(-1)?.kind === 'message' ? legacy.at(-1).text : '', 'plain failure')
 })
+
+test('reconnect retains structured SSE diagnostic when native snapshot has the same error text', () => {
+  const before = reduceLiveTaskEvent([
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'hello', streaming: false },
+  ], event(1, {
+    type: 'error', message: 'network unavailable', code: 'UPSTREAM_TIMEOUT', category: 'network', retryable: true,
+  }))
+  const persisted = projectLiveSnapshotEntries([
+    { id: 'native-error', role: 'assistant', errorMessage: 'network unavailable' },
+  ])
+  const merged = mergeLiveActiveProjectionItems(before, persisted)
+  const error = merged.find(item => item.kind === 'message' && item.error)
+  assert.ok(error?.kind === 'message')
+  assert.equal(error.id, 'native-error:error')
+  assert.deepEqual(error.errorDiagnostic, {
+    code: 'UPSTREAM_TIMEOUT', category: 'network', retryable: true,
+  })
+  assert.equal(merged.filter(item => item.kind === 'message' && item.error).length, 1)
+})
