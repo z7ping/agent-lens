@@ -72,7 +72,7 @@ export function auditAgentConvergenceSources(sources) {
       if (!content.includes("fields.filter(field => fieldSection(field) === 'performance')")) {
         failures.push(`${path}: Runtime performance 字段必须依照结构化 section 展示，禁止只识别 Pi 专用字段`)
       }
-      if (!content.includes('return field.section ??')) {
+      if (!content.includes('switch (field.section)')) {
         failures.push(`${path}: 扩展布局必须通过结构化 section`)
       }
     }
