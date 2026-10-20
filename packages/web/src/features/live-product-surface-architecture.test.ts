@@ -197,7 +197,7 @@ test('Live Composer 草稿与输入历史留在 Composer 边界内', () => {
 test('Task Center owns the only Live task navigation while LiveTask keeps the session detail shell', () => {
   const taskCenter = productSurfaceFiles.find(file => file.path === './TaskCenterPage.tsx')!.source
   const liveTask = liveTaskImplementation
-  const styles = readFileSync(new URL('../pi-live.css', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../live-task.css', import.meta.url), 'utf8')
 
   assert.match(appShell, /<Route path="\/review\/live\/:liveId\/:runtimeSessionId" element=\{<TaskCenterPage model=\{model\} mode="live" sidebarHost=\{sidebarHost\}\/>\} \/>/)
   assert.match(taskCenter, /TaskCenterMode = 'history' \| 'live' \| 'new' \| 'hub'/)
