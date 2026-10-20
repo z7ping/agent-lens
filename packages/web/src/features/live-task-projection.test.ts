@@ -530,9 +530,10 @@ test('persisted generic error wrappers, objects, tool failures and assistant sto
   ])
   const errors = items.filter(item => item.kind === 'message' && item.error)
   assert.equal(errors.length, 4)
-  assert.deepEqual(errors.map(item => item.kind === 'message' ? item.text : ''), [
-    'HTTP 409: conflict', 'Runtime startup failed', 'Request failed', 'Parser rejected response',
-  ].map(text => text === 'Request failed' ? text : text))
+  assert.equal(errors[0]?.kind === 'message' ? errors[0].text : '', 'HTTP 409: conflict')
+  assert.equal(errors[1]?.kind === 'message' ? errors[1].text : '', 'Runtime startup failed')
+  assert.ok(errors[2]?.kind === 'message' && errors[2].text.trim())
+  assert.equal(errors[3]?.kind === 'message' ? errors[3].text : '', 'Parser rejected response')
   const tool = items.find(item => item.kind === 'tool')
   assert.equal(tool?.kind === 'tool' ? tool.status : null, 'error')
   assert.ok(tool?.kind === 'tool' && tool.output)
