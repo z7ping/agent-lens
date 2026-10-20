@@ -319,7 +319,7 @@ test('Review Assistant 正文即使后面还有 Tool / Reasoning 也不进入处
 })
 
 
-test('Review hides legacy Pi assistant.stop for normal stop/toolUse but keeps meaningful states', () => {
+test('Review 按原生 assistant.stop + stopReason 跳过无意义结束记录，不依赖 Agent ID', () => {
   const legacy = (id: string, stopReason: string): ReviewEventNodeDto => ({
     type: 'event',
     id,
@@ -338,12 +338,14 @@ test('Review hides legacy Pi assistant.stop for normal stop/toolUse but keeps me
   const entries = projectReviewInteractionPresentation([
     legacy('legacy-stop', 'stop'),
     legacy('legacy-tool-use', 'toolUse'),
+    { ...legacy('cross-agent-stop', 'stop'), sourceId: 'hermes' },
     truncated,
   ])
 
   assert.equal(entries.some(entry => entry.type === 'event' && entry.node.id === 'legacy-stop'), false)
   assert.equal(entries.some(entry => entry.type === 'event' && entry.node.id === 'legacy-tool-use'), false)
   assert.equal(entries.some(entry => entry.type === 'event' && entry.node.id === 'legacy-length'), true)
+  assert.equal(entries.some(entry => entry.type === 'event' && entry.node.id === 'cross-agent-stop'), false)
 })
 
 test('Review 可证明的 Turn terminal 状态位于 final answer 之后', () => {
