@@ -84,7 +84,7 @@ function MessageBubble({
       ...(node.evidence.length > 0 ? { evidence: <EvidenceBadges evidence={node.evidence}/> } : {}),
     }}
     showContentActions={node.role === 'assistant' && showContentActions}
-    actions={<>
+    actions={node.evidence.length > 0 || (showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt) ? <>
       {node.evidence.length > 0 && <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button>}
       {showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt && <IconButton
         size="small"
@@ -93,7 +93,7 @@ function MessageBubble({
         title={t('local.header.forkFromRound')}
         onClick={() => onForkAt(node.nativeEventId!)}
       ><UiIcon name="fork" size={14}/></IconButton>}
-    </>}
+    </> : undefined}
   />
 }
 
