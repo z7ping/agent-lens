@@ -57,8 +57,7 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
   })
   assert.equal(failed?.type, 'error')
   assert.match(failed?.type === 'error' ? failed.message : '', /HTTP 422: developer role is not supported/)
-  assert.match(failed?.type === 'error' ? failed.message : '', /compat\.supportsDeveloperRole=false/)
-  assert.match(failed?.type === 'error' ? failed.message : '', /models\.json/)
+  assert.equal(failed?.type === 'error' ? failed.message : '', 'HTTP 422: developer role is not supported')
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'HTTP 500: generic provider failure' },
@@ -67,6 +66,26 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'error', errorMessage: 'HTTP 422: unsupported image format' },
   }), { type: 'error', message: 'HTTP 422: unsupported image format' })
+  for (const message of [
+    'HTTP 400: malformed request',
+    'HTTP 401: authentication failed',
+    'HTTP 429: rate limited',
+    'HTTP 500: provider failure',
+    'HTTP 502: upstream unavailable',
+    'ECONNRESET: connection dropped',
+  ]) {
+    assert.deepEqual(normalizePiLiveEvent({
+      type: 'message_end',
+      message: { role: 'assistant', stopReason: 'error', errorMessage: message },
+    }), { type: 'error', message })
+  }
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end', message: { role: 'assistant', stopReason: 'error', content: [] },
+  }), { type: 'error', message: 'Pi assistant request failed' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'runtime_status', status: 'failed',
+    error: 'Model runtime crashed',
+  }), { type: 'status', status: 'failed', message: 'Model runtime crashed' })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'ok' }] },
