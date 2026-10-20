@@ -10,7 +10,7 @@ import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
 import { HostDirectoryBrowser } from './HostDirectoryBrowser'
 import { pickTaskProject, type TaskProjectOption } from './task-center'
-import { missingCodexLiveReason, withMissingCodexLive } from './live-new-task-candidates'
+import { missingIntegrationLiveReason, unregisteredLiveId, withUnregisteredIntegrationLives } from './live-new-task-candidates'
 
 export interface LiveNewTaskPanelProps {
   options: TaskProjectOption[]
@@ -59,7 +59,7 @@ export function LiveNewTaskPanel({
   const { t } = useTranslation('task')
   const navigate = useNavigate()
   const [registeredProducts, setRegisteredProducts] = useState<LiveProductDto[]>([])
-  const [codexManagement, setCodexManagement] = useState<IntegrationManagementItemDto>()
+  const [integrationManagement, setIntegrationManagement] = useState<IntegrationManagementItemDto[]>([])
   const [productsLoading, setProductsLoading] = useState(true)
   const [productsError, setProductsError] = useState('')
   const [selectedLiveId, setSelectedLiveId] = useState('')
@@ -96,20 +96,18 @@ export function LiveNewTaskPanel({
     let cancelled = false
     // Integration management retains the reason even when no Live adapter was registered.
     void integrationApi.integrations().then(result => {
-      if (!cancelled) setCodexManagement(result.items.find(item => item.integrationId === 'codex'))
+      if (!cancelled) setIntegrationManagement(result.items)
     }).catch(() => {
       // Keep the registered products usable if the management service is unavailable.
     })
     return () => { cancelled = true }
   }, [])
 
-  const products = useMemo(() => withMissingCodexLive(
+  const products = useMemo(() => withUnregisteredIntegrationLives(
     registeredProducts,
-    codexManagement,
-    codexManagement
-      ? t(`center.newTask.codexUnregistered.${missingCodexLiveReason(codexManagement)}`)
-      : '',
-  ), [registeredProducts, codexManagement, t])
+    integrationManagement,
+    item => t(`center.newTask.unregisteredLive.${missingIntegrationLiveReason(item)}`, { agent: item.displayName }),
+  ), [registeredProducts, integrationManagement, t])
   useEffect(() => {
     setSelectedLiveId(current => {
       if (current && products.some(item => item.liveId === current)) return current
@@ -182,13 +180,14 @@ export function LiveNewTaskPanel({
   })), [products, t])
 
   const available = Boolean(selectedProduct?.availability.available)
-  const missingCodexEntry = selectedProduct?.liveId === 'codex'
-    && !registeredProducts.some(item => item.liveId === 'codex')
+  const missingIntegration = integrationManagement.find(item =>
+    selectedProduct?.liveId === unregisteredLiveId(item))
+  const missingIntegrationEntry = Boolean(missingIntegration)
   const readiness = productsLoading
     ? { state: 'checking', label: t('center.newTask.checkingAgents') }
     : available
       ? { state: 'ready', label: t('center.newTask.agentReady', { agent: selectedProduct?.displayName ?? '' }) }
-      : missingCodexEntry
+      : missingIntegrationEntry
         ? { state: 'unavailable', label: t('center.newTask.agentUnavailable', { agent: selectedProduct?.displayName ?? '' }) }
         : { state: 'unavailable', label: selectedProduct?.availability.reason
           ? t('center.newTask.agentUnavailableReason', { agent: selectedProduct.displayName, reason: selectedProduct.availability.reason })
@@ -284,9 +283,9 @@ export function LiveNewTaskPanel({
           />
         </label>
 
-        {missingCodexEntry && <div className="task-center-project-hint" role="status">
+        {missingIntegration && <div className="task-center-project-hint" role="status">
             {selectedProduct.availability.reason}
-            <Button size="small" onClick={() => navigate('/agents?view=management&agent=codex')}>
+            <Button size="small" onClick={() => navigate(`/agents?view=management&agent=${encodeURIComponent(missingIntegration.productId)}`)}>
               {t('center.newTask.openIntegrationManagement')}
             </Button>
           </div>}
@@ -375,7 +374,7 @@ export function LiveNewTaskPanel({
         </section>}
       </div>
 
-      {(error || productsError) && <div className="pi-live-error" role="alert">{error || productsError}</div>}
+      {(error || productsError) && <div className="task-center-project-hint" role="alert">{error || productsError}</div>}
       {workspaceSupported && projectDiscoveryError && <div className="task-center-project-hint" role="alert">{projectDiscoveryError}</div>}
       {workspaceSupported && !options.length && !projectLoading && !projectDiscoveryError && !projectSearchActive && <div className="task-center-project-hint">{t('center.newTask.noLocalProjects')}</div>}
       {!productsLoading && products.length === 0 && !productsError && <div className="task-center-project-hint">{t('center.newTask.noLiveAgents')}</div>}
