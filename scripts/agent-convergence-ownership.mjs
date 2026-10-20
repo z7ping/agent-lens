@@ -54,8 +54,8 @@ export function auditAgentConvergenceSources(sources) {
         failures.push(`${path}: 通用 Task Owner 不能依赖旧 PiLiveTaskRound`)
       }
       const piLegacy = (content.match(/pi-live-/g) ?? []).length
-      const max = path.endsWith('/LiveTaskPage.tsx') ? 27 : 0
-      if (piLegacy > max) failures.push(`${path}: 通用视图增加 pi-live-* 钩子（${piLegacy} > ${max}）；#519 只能减少`)
+      const max = 0
+      if (piLegacy > max) failures.push(`${path}: 通用视图禁止 Pi 专属 pi-live-* 钩子（${piLegacy} > ${max}）；#519 只能减少`)
     }
 
     if (path.endsWith('/LiveRuntimeDisclosures.tsx')) {
