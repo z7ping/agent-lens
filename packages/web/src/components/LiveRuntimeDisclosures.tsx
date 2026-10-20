@@ -229,35 +229,35 @@ function RuntimeLifecycle({
   )
 
   return <details
-    className={`pi-startup-disclosure live-runtime-lifecycle is-${lifecycle.status}`}
+    className={`live-runtime-disclosure live-runtime-lifecycle is-${lifecycle.status}`}
     open={expanded}
     onToggle={event => setExpanded(event.currentTarget.open)}
   >
     <summary>
-      <span className="pi-startup-summary-state" aria-hidden="true"/>
-      <span className="pi-startup-summary-copy">
+      <span className="live-runtime-summary-state" aria-hidden="true"/>
+      <span className="live-runtime-summary-copy">
         <b>{title}</b>
         <small>{[statusLabel, resourceSummary].filter(Boolean).join(' · ')}</small>
       </span>
-      <span className="pi-startup-summary-time">{duration(elapsedMs)}</span>
-      <UiIcon className="pi-startup-chevron" name="chevron-down" size={14}/>
+      <span className="live-runtime-summary-time">{duration(elapsedMs)}</span>
+      <UiIcon className="live-runtime-chevron" name="chevron-down" size={14}/>
     </summary>
 
-    <div className="pi-startup-body">
-      <div className="pi-startup-steps" aria-label={runtimeText('startupStages')}>
+    <div className="live-runtime-body">
+      <div className="live-runtime-steps" aria-label={runtimeText('startupStages')}>
         {lifecycle.stages.map(stage => <div
           key={stage.stageId}
-          className={`pi-startup-step is-${stage.status}`}
+          className={`live-runtime-step is-${stage.status}`}
         >
-          <span className="pi-startup-step-dot" aria-hidden="true">
+          <span className="live-runtime-step-dot" aria-hidden="true">
             {stage.status === 'done'
               ? <UiIcon name="check" size={12}/>
               : stage.status === 'failed'
                 ? <UiIcon name="exclamation" size={12}/>
                 : null}
           </span>
-          <span className="pi-startup-step-copy"><b>{contributionText(stage.label, language)}</b></span>
-          <span className="pi-startup-step-time">
+          <span className="live-runtime-step-copy"><b>{contributionText(stage.label, language)}</b></span>
+          <span className="live-runtime-step-time">
             {stage.status === 'pending'
               ? runtimeText('waiting')
               : stage.status === 'active'
@@ -267,13 +267,13 @@ function RuntimeLifecycle({
         </div>)}
       </div>
 
-      {(lifecycle.resources?.length ?? 0) > 0 && <details className="pi-startup-resource-details">
+      {(lifecycle.resources?.length ?? 0) > 0 && <details className="live-runtime-resource-details">
         <summary>
           {resourceSummary}
-          <UiIcon className="pi-startup-resource-chevron" name="chevron-right" size={14}/>
+          <UiIcon className="live-runtime-resource-chevron" name="chevron-right" size={14}/>
         </summary>
-        <div className="pi-startup-resources" aria-label={runtimeText('runtimeResources')}>
-          {lifecycle.resources!.map(group => <div className="pi-startup-resource-row" key={group.groupId}>
+        <div className="live-runtime-resources" aria-label={runtimeText('runtimeResources')}>
+          {lifecycle.resources!.map(group => <div className="live-runtime-resource-row" key={group.groupId}>
             <b>[{contributionText(group.label, language)}]</b>
             <span>{group.values.join(', ')}</span>
           </div>)}
@@ -284,7 +284,7 @@ function RuntimeLifecycle({
         {contributionText(lifecycle.message, language)}
       </div>}
 
-      <div className="pi-startup-actions live-runtime-lifecycle-actions">
+      <div className="live-runtime-actions live-runtime-lifecycle-actions">
         <Button size="small" onClick={event => { event.preventDefault(); onDiagnostics() }}>
           {runtimeText('runtimeDiagnostics')}
         </Button>
