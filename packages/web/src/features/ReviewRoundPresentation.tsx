@@ -275,7 +275,7 @@ export function ReviewProcessGroup({
     </div>}
     {loadState === 'loaded' && unavailable && <div className="task-process-loading" role="status">{reasonLabel ?? t('local.process.unavailable')}</div>}
     {loadState === 'loaded' && !unavailable && <div className="task-process-sequence">
-      <TaskProcessSequence id={id} sequence={processSequence}/>
+      <TaskProcessSequence id={id} sequence={processSequence} expansionStore={expansionStore}/>
     </div>}
   </TaskSessionProcess>
 }
