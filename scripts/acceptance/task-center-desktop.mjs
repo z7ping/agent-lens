@@ -251,7 +251,7 @@ async function inspect(win, viewport, theme) {
     const rail = pick('.task-center-rail')
     const railScroll = pick('.task-center-scroll')
     const main = pick('.task-center-main')
-    const detailScroll = pick('.review-reader-pane') || pick('.pi-live-reader') || pick('.task-center-new')
+    const detailScroll = pick('.review-reader-pane') || pick('.live-task-reader') || pick('.task-center-new')
     const pageStyle = page ? getComputedStyle(page) : null
     const railStyle = rail ? getComputedStyle(rail) : null
     const railScrollStyle = railScroll ? getComputedStyle(railScroll) : null
