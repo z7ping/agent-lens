@@ -304,6 +304,7 @@ export interface LiveStatusEvent {
   type: 'status'
   status: LiveEventStatus
   message?: string | undefined
+  diagnostic?: LiveErrorDiagnostic | undefined
 }
 
 export interface LiveTitleUpdateEvent {
@@ -389,6 +390,7 @@ export interface LiveCompletedEvent {
   type: 'completed'
   status: LiveCompletionStatus
   message?: string | undefined
+  diagnostic?: LiveErrorDiagnostic | undefined
 }
 
 export interface LiveQueueUpdateEvent {
