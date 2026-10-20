@@ -30,6 +30,7 @@ test('统一渲染器与合法原生 CSS 所有者允许通过', () => {
     ...sharedReaders,
     'task-detail.css': '.task-message-row { color: inherit } @media (max-width: 992px) { .task-thinking-summary { display: block } }',
     'components/valid.css': '.task-header { margin: 0 }',
+    'components/copyable-code-block.css': '.task-surface .task-tool-section .copyable-code-block > pre { margin: 0 }',
   }, root => assert.deepEqual(auditTaskSessionOwnership(root), []))
 })
 
@@ -38,7 +39,7 @@ test('扫描新增子目录 TSX，拒绝自建 Task 消息与变相 DOM', () => 
     ...sharedReaders,
     'features/codex/AltSessionView.tsx': 'export const View = () => <TaskMessage text="other" />',
     'features/another-agent/NewView.tsx': 'export const View = () => <div className="task-message-row">body</div>',
-    'features/hermes/HermesMessage.tsx': 'export const View = () => <article className="hermes-live-message">body</article>',
+    'features/thirdparty/ThirdPartyMessage.tsx': 'export const View = () => <article className="thirdparty-live-message">body</article>',
   }, root => {
     const errors = auditTaskSessionOwnership(root).join('\n')
     assert.match(errors, /AltSessionView.tsx.*TaskMessage/)
