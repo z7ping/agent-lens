@@ -388,9 +388,17 @@ export function mergeLiveActiveProjectionItems(
   const indexes = new Map(merged.map((item, index) => [item.id, index] as const))
 
   for (const item of incoming) {
-    // A live SSE update can arrive while reconnect recovery is reading a snapshot.
-    // Existing exact IDs are therefore newer presentation state and must win.
-    if (indexes.has(item.id)) continue
+    // Exact-ID SSE facts usually win during recovery. A persisted terminal
+    // tool result is the exception: it may repair a missed tool.end event.
+    const existingIndex = indexes.get(item.id)
+    if (existingIndex !== undefined) {
+      const existing = merged[existingIndex]
+      if (existing?.kind === 'tool' && item.kind === 'tool'
+        && existing.status === 'running' && item.status !== 'running') {
+        merged[existingIndex] = { ...existing, ...item }
+      }
+      continue
+    }
 
     // Replace the transient SSE failure with its persisted native counterpart.
     // Never deduplicate errors across different user turns.
