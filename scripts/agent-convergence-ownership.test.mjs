@@ -34,7 +34,7 @@ test('Runtime Contribution 不再把文案当语义', () => {
   const stable = "function fieldSection(field) { switch (field.section) { default: return 'status' } }\nconst performanceFields = fields.filter(field => fieldSection(field) === 'performance')"
   assert.deepEqual(auditAgentConvergenceSources({ [runtimePath]: stable }), [])
   assert.equal(auditAgentConvergenceSources({ [runtimePath]: stable + "\nif (field.id === 'Main costs') {}" }).length, 1)
-  assert.equal(auditAgentConvergenceSources({ [runtimePath]: "function fieldSection(field) { return 'status' }" }).length, 1)
+  assert.equal(auditAgentConvergenceSources({ [runtimePath]: "function fieldSection(field) { return 'status' }" }).length, 2)
 })
 
 test('共享 UI 不可通过对象属性访问规避 Agent ID 门禁', () => {
