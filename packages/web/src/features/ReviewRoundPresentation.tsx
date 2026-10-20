@@ -75,7 +75,7 @@ function MessageBubble({
   const messageTime = taskSessionMessageTime(node.at)
   return <TaskSessionMessage
     role={node.role === 'user' ? 'user' : 'assistant'}
-    text={node.role === 'user' && node.sourceId === 'codex' ? taskUserRequestText(node.text) : node.text}
+    text={node.role === 'user' ? taskUserRequestText(node.text) : node.text}
     attachments={attachments}
     presentation={{
       author: node.role === 'user' ? t('local.role.you') : agentLabel(node.sourceId),
@@ -331,7 +331,7 @@ export function interactionStats(interaction: ReviewInteractionDto): Interaction
   return {
     ...toolStats,
     durationMs: elapsed(interaction.startedAt, interaction.endedAt),
-    preview: brief(user?.sourceId === 'codex' ? taskUserRequestText(user.text) : user?.text ?? '', 86),
+    preview: brief(user ? taskUserRequestText(user.text) : '', 86),
   }
 }
 
