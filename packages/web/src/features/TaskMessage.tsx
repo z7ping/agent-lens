@@ -30,6 +30,7 @@ export interface TaskMessageProps {
   /** Hide copy/source controls for process and non-final assistant chunks. */
   showContentActions?: boolean | undefined
   pending?: boolean | undefined
+  error?: boolean | undefined
   pendingLabel?: string | undefined
   className?: string | undefined
 }
@@ -48,6 +49,7 @@ export function TaskMessage({
   streaming = false,
   showContentActions = true,
   pending = false,
+  error = false,
   pendingLabel,
   className = '',
 }: TaskMessageProps) {
@@ -128,12 +130,15 @@ export function TaskMessage({
     data-task-message-role={role}
     data-streaming={streaming ? 'true' : undefined}
     data-pending={awaitingFirstContent ? 'true' : undefined}
+    data-error={error ? 'true' : undefined}
+    role={error ? 'alert' : undefined}
     data-model-label={modelLabel || undefined}
     aria-busy={streaming || awaitingFirstContent || undefined}
   >
     <div className={`task-message-bubble ${bubbleClass}`}>
-      {(modelLabel || time || meta) && <div className="task-message-model-meta">
+      {(modelLabel || time || meta || error) && <div className="task-message-model-meta">
         <b>{resolvedAuthor}</b>
+        {error && <span className="task-message-error-status"><UiIcon name="alert-circle" size={14}/>{t('message.requestFailed')}</span>}
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
