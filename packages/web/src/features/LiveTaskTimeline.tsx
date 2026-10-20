@@ -129,6 +129,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   messageActions,
   actionPending,
   runtimeStreaming,
+  processExpansionStore,
   showResponsePending = false,
   showAnswerActions = true,
   onMessageAction,
@@ -141,6 +142,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
+  processExpansionStore?: Map<string, boolean>
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t } = useTranslation('task')
@@ -207,6 +209,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     thinkingDurationMs={processItems.reduce((sum, item) =>
       sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
     state={processState}
+    expansionStore={processExpansionStore}
   ><div className="task-process-sequence">{processContent}</div></TaskSessionProcess>
 
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
@@ -236,6 +239,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   messageActions,
   actionPending,
   runtimeStreaming,
+  processExpansionStore,
   onMessageAction,
 }: {
   rounds: readonly LiveTaskRoundProjection[]
@@ -244,6 +248,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
+  processExpansionStore?: Map<string, boolean>
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   return <>
@@ -256,6 +261,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
       messageActions={messageActions}
       actionPending={actionPending}
       runtimeStreaming={runtimeStreaming}
+      processExpansionStore={processExpansionStore}
       onMessageAction={onMessageAction}
     />)}
   </>
