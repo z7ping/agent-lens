@@ -35,7 +35,7 @@ function MessageBubble({
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   nestedTools?: ReviewToolNodeDto[]
-  expansionStore?: Map<string, boolean>
+  expansionStore?: Map<string, boolean> | undefined
   modelLabel?: string | undefined
   showContentActions?: boolean | undefined
   onForkAt?: ((nativeEventId: string) => void) | undefined
@@ -121,7 +121,7 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
   }
 }
 
-function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void; expansionStore?: Map<string, boolean> }) {
+function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void; expansionStore?: Map<string, boolean> | undefined }) {
   const { t } = useTranslation('task')
   const tools = items.map(reviewToolModel)
   const byId = new Map(items.map(node => [node.id, node] as const))
@@ -208,7 +208,7 @@ export function ReviewProcessGroup({
   showAllEvents: boolean
   loadState?: 'idle' | 'loading' | 'loaded' | 'error'
   loadError?: string
-  expansionStore?: Map<string, boolean>
+  expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: (expanded: boolean) => void
   onRetry?: () => void
 }) {
