@@ -55,7 +55,7 @@ requireText(desktop, /Page\.captureScreenshot/, '桌面验收必须保存真实 
 requireText(desktop, /captureBeyondViewport:\s*false/, '桌面截图不得越过目标 viewport')
 requireText(desktop, /safeDetachDebugger/, '桌面验收必须处理 Window teardown / debugger detach 竞态')
 requireText(desktop, /viewport 几何未稳定到当前响应式基线/, '截图前必须等待 viewport / dvh / Rail 几何稳定')
-for (const selector of ['.task-center-scroll', '.review-reader-pane', '.pi-live-reader', '.task-tool-row', '.task-tool-summary-text', '.task-tool-status', '.task-thinking-content', '.task-tool-section', '.task-tool-inspect']) {
+for (const selector of ['.task-center-scroll', '.review-reader-pane', '.live-task-reader', '.task-tool-row', '.task-tool-summary-text', '.task-tool-status', '.task-thinking-content', '.task-tool-section', '.task-tool-inspect']) {
   if (!desktop.includes(selector)) failures.push(`桌面验收仍未使用当前 Task Surface 选择器：${selector}`)
 }
 if (/\.tool-row|\.tool-action|\.tool-target|\.tool-status|\.thinking-content|\.tool-live-output|\.tool-output-details/.test(desktop.replaceAll('.task-tool-row', '').replaceAll('.task-tool-summary-text', '').replaceAll('.task-tool-status', '').replaceAll('.task-thinking-content', '').replaceAll('.task-tool-section', '').replaceAll('.task-tool-inspect', ''))) {
