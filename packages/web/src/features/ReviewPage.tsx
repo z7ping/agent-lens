@@ -1,5 +1,8 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
+import { LiveMarkdownComposer, type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
+import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
 import { Button, IconButton, Input, SelectMenu, StatusBadge, Toolbar, UiIcon } from '../components/ui'
@@ -58,8 +61,23 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     emptyLabel,
     toggleEventVisibility,
     noteReaderUserIntent,
-    runHistoryInteraction
+    sendReviewMessage,
+    forkReviewAt
   } = useReviewSession(model, embedded)
+
+  const composerRef = useRef<LiveMarkdownComposerHandle>(null)
+  const [composerDraft, setComposerDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
+  const [composerHasContent, setComposerHasContent] = useState(false)
+  const [attachmentPending, setAttachmentPending] = useState(false)
+  const draftKey = useMemo(() => detail && detailLiveInteraction
+    ? liveComposerDraftKey(detailLiveInteraction.liveId, `history:${detail.id}`)
+    : '', [detail?.id, detailLiveInteraction?.liveId])
+  useEffect(() => {
+    setComposerDraft(previous => ({ revision: previous.revision + 1, value: draftKey ? readLiveComposerDraft(draftKey) : '' }))
+    setComposerHasContent(false)
+    setAttachmentPending(false)
+  }, [draftKey])
+  const canCompose = Boolean(detailLiveInteraction?.canResume && detailLiveInteraction.canSend)
 
   return <main className={`review-page ${embedded ? 'review-page-embedded' : ''}`}>
     {!embedded && <Toolbar className="workspace-toolbar" aria-label={t('local.filters.toolbarAria')}>
@@ -177,10 +195,6 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             {historyInteractionError && <StatusBadge tone="danger" title={historyInteractionError}>{t('local.header.continueFailed', { error: historyInteractionError })}</StatusBadge>}
             <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? t('local.header.viewAll') : t('local.header.viewCore')}</button>
           </>}
-          continuationActions={<>
-            {detailLiveInteraction?.canResume && <Button size="small" loading={historyInteractionPending === 'resume'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('resume')}><UiIcon name="arrow-right" size={14}/>{t('local.header.continueSession')}</Button>}
-            {detailLiveInteraction?.canFork && <Button size="small" loading={historyInteractionPending === 'fork'} disabled={Boolean(historyInteractionPending)} onClick={() => void runHistoryInteraction('fork')}><UiIcon name="plus" size={14}/>{t('local.header.forkContinue')}</Button>}
-          </>}
         />}
 
         <div
@@ -227,6 +241,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
                   inspect={setInspect}
                   loadAttachments={model.reviewAttachments}
                   loadProcess={model.reviewProcessDetail}
+                  onForkAt={detailLiveInteraction?.canForkAt ? nativeEventId => { void forkReviewAt(nativeEventId) } : undefined}
+                  forkPending={Boolean(historyInteractionPending)}
                 />
               </VirtualRoundMount>)}
               {!annotatedInteractions.length && <div className="round-filter-empty">{emptyLabel}</div>}
@@ -244,6 +260,41 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             </div>
           </div>}
         </div>
+        {detail && canCompose && <div className="pi-live-compose-wrap live-task-compose-wrap">
+          <div className="pi-live-composer">
+            <div className="pi-live-editor">
+              <LiveMarkdownComposer
+                key={draftKey}
+                ref={composerRef}
+                draft={composerDraft}
+                draftKey={draftKey}
+                onDraftPresenceChange={setComposerHasContent}
+                canSubmit={!historyInteractionPending && !attachmentPending}
+                onSubmit={message => { void sendReviewMessage(message) }}
+                onEscape={undefined}
+                placeholder={t('local.header.continuePlaceholder')}
+                ariaLabel={t('local.header.continuePlaceholder')}
+                inputClassName="pi-live-input"
+                onAttachmentPendingChange={setAttachmentPending}
+                onAttachmentError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
+                disabled={Boolean(historyInteractionPending)}
+              />
+            </div>
+            <div className="pi-live-compose-bar">
+              <span className="pi-live-compose-runtime">{t('local.header.resumeOnSend')}</span>
+              <IconButton
+                variant="primary"
+                className="pi-live-send"
+                disabled={Boolean(historyInteractionPending) || attachmentPending || !composerHasContent}
+                aria-label={t('local.header.sendContinue')}
+                onClick={() => {
+                  const message = composerRef.current?.getMessage()
+                  if (message) void sendReviewMessage(message)
+                }}
+              ><UiIcon name="send" size={20}/></IconButton>
+            </div>
+          </div>
+        </div>}
       </TaskSurface>
     </div>
     {inspect && <Inspector key={inspect.id} node={inspect} loadSourceRecords={model.sourceRecords} onClose={() => setInspect(null)}/>} 
