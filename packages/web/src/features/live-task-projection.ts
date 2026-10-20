@@ -160,6 +160,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     const assistantFailed = nested.stopReason === 'error' || item.stopReason === 'error'
       || nested.isError === true || item.isError === true
       || nested.status === 'failed' || item.status === 'failed'
+      || nested.status === 'error' || item.status === 'error'
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
     const content = Array.isArray(nested.content)
       ? nested.content
@@ -199,7 +200,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         }
         return
       }
-      const failed = nested.isError === true || item.isError === true
+      const failed = nested.isError === true || item.isError === true || Boolean(errorMessage)
       const output = contentText(nested.content) || contentText(item.content)
         || text(nested.output) || text(item.output) || errorMessage
         || (failed ? agentLensI18n.t('task:message.requestFailed') : '')
@@ -481,11 +482,11 @@ function settleCurrentLiveText(items: readonly LiveTaskProjectionItem[]): LiveTa
   )
 }
 
-export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
+export function settleLiveTaskProjectionItems(items: readonly LiveTaskProjectionItem[], failed = false): LiveTaskProjectionItem[] {
   return items.map(item => {
     if (item.kind === 'message' && item.streaming) return { ...item, streaming: false }
     if (item.kind === 'thinking' && item.streaming) return { ...item, streaming: false }
-    if (item.kind === 'tool' && item.status === 'running') return { ...item, status: 'success' as const }
+    if (item.kind === 'tool' && item.status === 'running') return { ...item, status: failed ? 'error' as const : 'success' as const }
     return item
   })
 }
@@ -525,9 +526,11 @@ export function reduceLiveTaskEvent(
       item.kind === 'message' && item.role === 'assistant' && item.error
       && (!detail || item.text === detail))
     if (alreadyFailed) {
-      return event.type === 'completed' ? settleLiveTaskProjectionItems(items) : [...items]
+      return event.type === 'completed' || event.type === 'status'
+        ? settleLiveTaskProjectionItems(items, true) : [...items]
     }
-    return [...(event.type === 'completed' ? settleLiveTaskProjectionItems(items) : settleCurrentLiveText(items)), {
+    return [...(event.type === 'completed' || event.type === 'status'
+      ? settleLiveTaskProjectionItems(items, true) : settleCurrentLiveText(items)), {
       id: `live-error:${fallback}`,
       kind: 'message' as const,
       role: 'assistant' as const,
