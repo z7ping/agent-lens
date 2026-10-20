@@ -41,7 +41,7 @@
   padding: 8px var(--al-space-page-x) 128px;
 }
 
-/* Composer 是 Live 的可选能力；外层几何归 Session View，内部交互归通用 Live Composer。 */
+/* Composer 是会话的可选能力；外层几何归 Session View，内部交互归通用 Live Composer。 */
 .task-session-view .task-session-composer {
   position: relative;
   z-index: 10;
