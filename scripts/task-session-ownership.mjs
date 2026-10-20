@@ -5,17 +5,17 @@ import ts from 'typescript'
 // New agent implementations are data adapters, not alternative Task renderers.
 // Exceptions are narrowly pinned to current owners, not directory/name patterns.
 const directOwners = new Map([
-  ['TaskMessage', new Set(['features/TaskSessionContent.tsx', 'features/PiLiveTaskRound.tsx'])],
-  ['TaskThinking', new Set(['features/TaskSessionContent.tsx', 'features/TaskProcessGroup.tsx', 'features/ReviewRoundPresentation.tsx', 'features/PiLiveTaskRound.tsx'])],
+  ['TaskMessage', new Set(['features/TaskSessionContent.tsx'])],
+  ['TaskThinking', new Set(['features/TaskSessionContent.tsx', 'features/TaskProcessGroup.tsx', 'features/ReviewRoundPresentation.tsx'])],
   ['TaskToolRow', new Set(['features/TaskSessionContent.tsx', 'features/TaskToolGroup.tsx'])],
-  ['TaskProcessGroup', new Set(['features/TaskSessionContent.tsx', 'features/PiLiveTaskRound.tsx'])],
+  ['TaskProcessGroup', new Set(['features/TaskSessionContent.tsx'])],
 ])
 const htmlOwners = new Map([
   ['task-message-row', new Set(['features/TaskMessage.tsx'])],
   ['task-thinking', new Set(['features/TaskThinking.tsx'])],
   ['task-tool-call', new Set(['features/TaskToolRow.tsx'])],
   ['task-process-group', new Set(['features/TaskProcessGroup.tsx', 'features/ReviewRoundPresentation.tsx'])],
-  ['task-process-message', new Set(['features/TaskSessionContent.tsx', 'features/PiLiveTaskRound.tsx'])],
+  ['task-process-message', new Set(['features/TaskSessionContent.tsx'])],
 ])
 const sourceOwners = new Map([
   ['features/LiveTaskTimeline.tsx', 'TaskSessionContent'],
@@ -70,7 +70,7 @@ function inspectTsx(source, path) {
           const matchesClass = new RegExp('(?:^|\\s)' + name + '(?=\\s|$)').test(value)
           if (matchesClass && !owners.has(path)) failures.push(path + ':' + lineOf(node, file) + ': 私自构造 ' + name + ' DOM')
         }
-        if (agentPrivate.test(value) && path !== 'features/PiLiveTaskRound.tsx') {
+        if (agentPrivate.test(value)) {
           failures.push(path + ':' + lineOf(node, file) + ': 智能体私有消息/过程样式；应使用共享 Task Session')
         }
       }
