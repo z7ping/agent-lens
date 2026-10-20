@@ -41,9 +41,9 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
   assert.match(css, /\.task-surface \.task-tool-group \{/)
   assert.match(css, /\.task-surface \.task-tool-group-toggle \{/)
   assert.match(css, /\.task-surface \.task-tool-group \.task-tool-list \{/)
-  assert.doesNotMatch(read('../pi-live.css'), /\.task-tool-group(?:\b|[.#:{])/)
+  assert.doesNotMatch(read('../live-task.css'), /\.task-tool-group(?:\b|[.#:{])/)
   assert.doesNotMatch(read('../review.css'), /\.task-tool-group(?:\b|[.#:{])/)
-  assert.doesNotMatch(read('../pi-live.css'), /\.pi-live-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
+  assert.doesNotMatch(read('../live-task.css'), /\.pi-live-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
   assert.doesNotMatch(read('../review.css'), /\.review-(?:message|thinking|tool|process)(?:\s|[.#:{])/)
 })
 
@@ -123,7 +123,7 @@ test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺�
   assert.doesNotMatch(messageSource, /!user && modelLabel &&/)
   assert.match(read('../task-detail.css'), /\.task-surface \.task-message-context-evidence/)
   assert.doesNotMatch(read('../review.css'), /\.task-message-model-meta/)
-  assert.doesNotMatch(read('../pi-live.css'), /\.task-message-model-meta/)
+  assert.doesNotMatch(read('../live-task.css'), /\.task-message-model-meta/)
 })
 
 test('真实桌面验收使用唯一的 Session Process 选择器，避免重构后假超时', () => {
@@ -162,5 +162,5 @@ test('Review/Live 共享头部使用 Agent Logo；历史证据与实时输入保
   assert.match(read('./ReviewPage.tsx'), /marker=\{<AgentLogo sourceId=/)
   assert.match(read('./LiveTaskPage.tsx'), /marker=\{<AgentLogo sourceId=/)
   assert.match(read('./ReviewRoundPresentation.tsx'), /meta=\{<EvidenceBadges/)
-  assert.match(read('./LiveTaskPage.tsx'), /className="pi-live-editor"/)
+  assert.match(read('./LiveTaskPage.tsx'), /<TaskSessionComposer/)
 })
