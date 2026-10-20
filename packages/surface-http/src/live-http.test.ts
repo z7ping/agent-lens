@@ -30,9 +30,9 @@ class FakeLiveAdapter implements LiveAdapter {
     displayName: 'Test Live',
     liveId: 'test',
     productId: 'test-agent',
-    capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'],
+    capabilities: ['create', 'resume', 'fork', 'fork-at', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'],
   }
-  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'])
+  readonly capabilities: ReadonlySet<LiveCapabilityName> = new Set(['create', 'resume', 'fork', 'fork-at', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'])
   readonly inputCapabilities = {
     text: 'native' as const,
     largeText: 'native' as const,
@@ -49,7 +49,7 @@ class FakeLiveAdapter implements LiveAdapter {
   readonly extensionResponses: Array<{ runtimeSessionId: string; requestId: string; response: unknown }> = []
   readonly messageActionExecutions: Array<{ runtimeSessionId: string; actionId: string; targetEntryId: string }> = []
   readonly runtimeActionExecutions: Array<{ runtimeSessionId: string; actionId: string }> = []
-  readonly historyInteractions: Array<{ action: 'resume' | 'fork'; logicalSessionId: string }> = []
+  readonly historyInteractions: Array<{ action: 'resume' | 'fork' | 'fork-at'; logicalSessionId: string; nativeEventId?: string }> = []
   readonly snapshotWindows: Array<{ since?: string | undefined; window?: LiveSnapshotWindow | undefined }> = []
   readonly queueMessages = { steering: ['queued steer'], followUp: ['queued follow-up'] }
   readonly readCounts = { availability: 0, list: 0, state: 0, snapshot: 0, disclosures: 0 }
@@ -106,6 +106,11 @@ class FakeLiveAdapter implements LiveAdapter {
 
   async fork(logicalSessionId: string) {
     this.historyInteractions.push({ action: 'fork', logicalSessionId })
+    return this.start({ workspacePath: `/history/${logicalSessionId}` })
+  }
+
+  async forkAt(logicalSessionId: string, nativeEventId: string) {
+    this.historyInteractions.push({ action: 'fork-at', logicalSessionId, nativeEventId })
     return this.start({ workspacePath: `/history/${logicalSessionId}` })
   }
 
@@ -534,7 +539,7 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
         liveId: 'test',
         productId: 'test-agent',
         displayName: 'Test Live',
-        capabilities: ['create', 'resume', 'fork', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'],
+        capabilities: ['create', 'resume', 'fork', 'fork-at', 'send', 'stream', 'interrupt', 'queue', 'command-discovery', 'workspace-file-reference', 'history-index', 'session-tree', 'model-switching', 'extension-ui'],
         inputCapabilities: {
           text: 'native',
           largeText: 'native',
@@ -948,9 +953,23 @@ test('generic Live HTTP surface routes history resume and fork through adapter c
     assert.equal(forked.status, 201)
     assert.equal((await forked.json() as LiveRuntimeState).runtimeSessionId, 'runtime-2')
 
+    const at = await fetch(`${base}/api/v1/live/test/history/logical-1/fork-at`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nativeEventId: 'native-assistant-1' }),
+    })
+    assert.equal(at.status, 201)
+    assert.equal((await at.json() as LiveRuntimeState).runtimeSessionId, 'runtime-3')
+    const invalid = await fetch(`${base}/api/v1/live/test/history/logical-1/fork-at`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nativeEventId: '' }),
+    })
+    assert.equal(invalid.status, 400)
     assert.deepEqual(adapter.historyInteractions, [
       { action: 'resume', logicalSessionId: 'logical-1' },
       { action: 'fork', logicalSessionId: 'logical-1' },
+      { action: 'fork-at', logicalSessionId: 'logical-1', nativeEventId: 'native-assistant-1' },
     ])
   } finally {
     await surface.dispose()
