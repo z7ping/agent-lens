@@ -58,11 +58,21 @@ function text(value: unknown): string {
 }
 
 /** Read native error facts independent of HTTP status or provider. Do not infer failures from prose. */
-function errorText(value: unknown): string {
+function errorText(value: unknown, seen = new Set<object>(), depth = 0): string {
   if (typeof value === 'string') return value.trim()
+  if (!value || typeof value !== 'object' || depth >= 5 || seen.has(value)) return ''
+  seen.add(value)
+  if (Array.isArray(value)) {
+    return value.map(item => errorText(item, seen, depth + 1)).filter(Boolean).join('; ')
+  }
   const fields = record(value)
-  return text(fields.message).trim() || text(fields.errorMessage).trim()
+  const detail = text(fields.message).trim() || text(fields.errorMessage).trim()
     || text(fields.detail).trim() || text(fields.description).trim()
+    || errorText(fields.cause, seen, depth + 1)
+    || errorText(fields.errors, seen, depth + 1)
+  const code = typeof fields.code === 'string' || typeof fields.code === 'number'
+    ? String(fields.code).trim() : ''
+  return detail ? (code && !detail.includes(code) ? `${code}: ${detail}` : detail) : code
 }
 
 function nativeErrorText(item: Record<string, unknown>, nested: Record<string, unknown>): string {

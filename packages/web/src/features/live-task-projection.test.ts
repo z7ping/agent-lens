@@ -577,3 +577,21 @@ test('cancelled and interrupted completion never mark unfinished tools successfu
   const complete = reduceLiveTaskEvent(base, event(11, { type: 'completed', status: 'completed' }))
   assert.equal(complete[1]?.kind === 'tool' ? complete[1].status : null, 'success')
 })
+
+test('generic snapshot errors preserve code, nested cause and error arrays without HTTP-specific branches', () => {
+  const entries = [
+    { id: 'code-only', type: 'error', error: { code: 'ETIMEDOUT' } },
+    { id: 'nested', type: 'error', error: { code: 'PROVIDER_ERROR', cause: { message: 'connection dropped' } } },
+    { id: 'aggregate', type: 'error', error: { errors: [{ message: 'first failure' }, { code: 503, detail: 'retry later' }] } },
+  ]
+  const projected = projectLiveSnapshotEntries(entries)
+  assert.deepEqual(projected.filter(item => item.kind === 'message' && item.error).map(item => item.kind === 'message' ? item.text : ''), [
+    'ETIMEDOUT',
+    'PROVIDER_ERROR: connection dropped',
+    'first failure; 503: retry later',
+  ])
+  const cyclic: { code: string; cause?: unknown } = { code: 'CYCLE' }
+  cyclic.cause = cyclic
+  assert.equal(projectLiveSnapshotEntries([{ id: 'cyclic', type: 'error', error: cyclic }])[0]?.kind === 'message'
+    ? (projectLiveSnapshotEntries([{ id: 'cyclic', type: 'error', error: cyclic }])[0] as { text: string }).text : '', 'CYCLE')
+})
