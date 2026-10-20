@@ -12,6 +12,7 @@ import {
   createLiveInputCapabilities,
   dispatchLiveSend,
   liveMessageToPlainText,
+  normalizeNativeLiveError,
 } from '@agent-lens/live-support'
 import {
   defineAgentLensPlugin,
@@ -157,17 +158,18 @@ export function normalizeHermesLiveEvent(event: Readonly<Record<string, unknown>
   if (name === 'run.cancelled') return { type: 'completed', status: 'cancelled' }
   if (name === 'run.interrupted') return { type: 'completed', status: 'interrupted' }
   if (name === 'run.failed') {
+    const failure = normalizeNativeLiveError(event.error ?? event, 'Hermes Live run failed')
     return {
       type: 'completed',
       status: 'failed',
-      ...(hermesText(event.error) ? { message: hermesText(event.error) } : {}),
+      message: failure.message,
+      ...(failure.code ? { code: failure.code } : {}),
+      ...(failure.category ? { category: failure.category } : {}),
+      ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}),
     }
   }
   if (name === 'transport.error' || name === 'error') {
-    return {
-      type: 'error',
-      message: hermesText(event.error) || hermesText(event.message) || 'Hermes Live transport failed',
-    }
+    return normalizeNativeLiveError(event.error ?? event, 'Hermes Live transport failed')
   }
   return undefined
 }
