@@ -14,6 +14,7 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   onSendClick(): void
   connectionLabel: string
   disconnected?: boolean
+  pendingConnection?: boolean
   modelControl?: LiveModelControlDto | null
   thinking?: LiveThinkingControlDto | null
   /** Advertised in Review but unavailable until native Runtime resumes. No invented options. */
@@ -37,6 +38,7 @@ export function TaskSessionComposer({
   onSendClick,
   connectionLabel,
   disconnected = false,
+  pendingConnection = false,
   modelControl,
   thinking,
   pendingModelControl = false,
@@ -69,7 +71,7 @@ export function TaskSessionComposer({
       <LiveMarkdownComposer {...editorProps} ref={editorRef} inputClassName="task-composer-input"/>
     </div>
     <div className="task-composer-bar">
-      <span className={`task-composer-runtime ${disconnected ? 'task-composer-disconnected' : ''}`.trim()} title={connectionLabel}>
+      <span className={`task-composer-runtime ${disconnected ? 'task-composer-disconnected' : pendingConnection ? 'task-composer-pending' : ''}`.trim()} title={connectionLabel}>
         <span className="task-composer-idle-dot" aria-hidden="true"/>
         {connectionLabel}
       </span>
