@@ -66,14 +66,15 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   } = useReviewSession(model, embedded)
 
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
-  const [composerDraft, setComposerDraft] = useState<LiveMarkdownComposerDraft>({ revision: 0, value: '' })
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [attachmentPending, setAttachmentPending] = useState(false)
   const draftKey = useMemo(() => detail && detailLiveInteraction
     ? liveComposerDraftKey(detailLiveInteraction.liveId, `history:${detail.id}`)
     : '', [detail?.id, detailLiveInteraction?.liveId])
+  const composerDraft = useMemo<LiveMarkdownComposerDraft>(
+    () => ({ revision: 0, value: draftKey ? readLiveComposerDraft(draftKey) : '' }), [draftKey],
+  )
   useEffect(() => {
-    setComposerDraft(previous => ({ revision: previous.revision + 1, value: draftKey ? readLiveComposerDraft(draftKey) : '' }))
     setComposerHasContent(false)
     setAttachmentPending(false)
   }, [draftKey])
