@@ -185,6 +185,8 @@ npm run build:dist
 
 Task Center / Pi Live 还必须保留对应契约、性能与真实 Smoke 门禁。CI 通过不能代替用户要求的真实 Pi / Windows / 长时间狗粮验收。
 
+- **Issue 交付标准（#523）**：代码需求完成并合并 PR 后即可关闭 Issue，不等待 CI/Actions 或用户手工验收；Pi/Codex/Hermes 实际运行、跨端与视觉检查由用户自行验收。禁止把跳过手工验收理解成允许留下未实现的代码事项，或在 PR 中谎称已执行未执行的检查。
+
 ## 提交
 
 提交信息、Issue / PR 说明优先中文。重要实现变化同步相关 Issue / Checklist，不允许实现进度只存在聊天上下文中。

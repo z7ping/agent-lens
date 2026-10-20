@@ -71,3 +71,14 @@ test('generic Runtime Disclosure cannot restore Pi-specific stylesheet hooks', (
   assert.deepEqual(auditAgentConvergenceSources({ [css]: '.live-runtime-disclosure { display: block }' }), [])
   assert.equal(auditAgentConvergenceSources({ [css]: '.pi-startup-disclosure { display: block }' }).length, 1)
 })
+
+test('shared Live lifecycle hooks and Task header reject new Agent-specific comparisons', () => {
+  for (const path of [
+    'packages/web/src/features/use-live-task-runtime.ts',
+    'packages/web/src/features/use-live-task-actions.ts',
+    'packages/web/src/features/use-live-task-history.ts',
+    'packages/web/src/features/TaskHeader.tsx',
+  ]) {
+    assert.equal(auditAgentConvergenceSources({ [path]: "if (runtime.productId === 'pi') {}" }).length, 1, path)
+  }
+})

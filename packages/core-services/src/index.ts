@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { AGENT_LENS_PLUGIN_API_VERSION } from '@agent-lens/core'
 import type {
   AgentActor,
+  AgentLensPluginManifest,
   AgentInstallation,
   AssetBinding,
   AssetDefinition,
@@ -73,11 +75,31 @@ function normalizedPathIdentity(value: string): string {
   return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized
 }
 
+function assertPluginManifest(manifest: AgentLensPluginManifest, type: AgentLensPluginManifest['pluginType']): void {
+  if (manifest.pluginType !== type
+    || manifest.apiVersion !== AGENT_LENS_PLUGIN_API_VERSION
+    || !manifest.pluginId?.trim()
+    || !manifest.pluginVersion?.trim()
+    || !manifest.displayName?.trim()) {
+    throw new Error(`AgentLens ${type} manifest invalid or incompatible`)
+  }
+}
+
 export class DefaultSourceService implements SourceService {
   private readonly definitions = new Map<string, SourceDefinition>()
 
   register(definition: SourceDefinition): Disposable {
-    const id = definition.manifest.sourceId
+    const manifest = definition.manifest
+    const id = manifest.sourceId
+    assertPluginManifest(manifest, 'source')
+    if (!id?.trim() || !manifest.productId?.trim() || !manifest.parserVersion?.trim()) {
+      throw new Error('AgentLens source manifest invalid or incompatible')
+    }
+    for (const method of ['detect', 'declareCapabilities', 'normalize'] as const) {
+      if (typeof definition[method] !== 'function') {
+        throw new Error(`AgentLens source missing required ${method}(): ${id}`)
+      }
+    }
     if (this.definitions.has(id)) {
       throw new Error(`AgentLens source already registered: ${id}`)
     }
@@ -94,7 +116,16 @@ export class DefaultSourceService implements SourceService {
   }
 
   async detect(context: SourceDetectionContext): Promise<DetectedSource[]> {
-    const detected = await Promise.all(this.list().map(source => source.detect(context)))
+    const detected = await Promise.all(this.list().map(async source => {
+      const found = await source.detect(context)
+      for (const installation of found) {
+        if (installation.sourceId !== source.manifest.sourceId
+          || installation.productId !== source.manifest.productId) {
+          throw new Error(`AgentLens source detection identity mismatch: ${source.manifest.sourceId}`)
+        }
+      }
+      return found
+    }))
     return detected.flat()
   }
 }
@@ -104,7 +135,11 @@ export class DefaultLiveService implements LiveService {
   private readonly observers = new Set<LiveRuntimeObserver>()
 
   register(adapter: LiveAdapter): Disposable {
+    assertPluginManifest(adapter.manifest, 'live')
     const id = adapter.manifest.liveId
+    if (!id?.trim() || !adapter.manifest.productId?.trim()) {
+      throw new Error('AgentLens live manifest invalid or incompatible')
+    }
     if (this.adapters.has(id)) {
       throw new Error(`AgentLens live adapter already registered: ${id}`)
     }

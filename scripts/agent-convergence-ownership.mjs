@@ -19,6 +19,9 @@ export const SHARED_TASK_OWNERS = Object.freeze([
   'packages/web/src/features/TaskSessionContent.tsx',
   'packages/web/src/features/TaskMessage.tsx',
   'packages/web/src/components/TaskSessionComposer.tsx',
+  'packages/web/src/features/TaskHeader.tsx',
+  'packages/web/src/features/TaskFileChangesDisclosure.tsx',
+  'packages/web/src/features/LiveExtensionPrompt.tsx',
 ])
 
 export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
@@ -27,6 +30,14 @@ export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
   'packages/web/src/components/LiveRuntimeDisclosures.tsx',
   'packages/web/src/features/live-task-projection.ts',
   'packages/web/src/features/live-semantic-rounds.ts',
+  'packages/web/src/features/live-task-state.ts',
+  'packages/web/src/features/use-live-task-runtime.ts',
+  'packages/web/src/features/use-live-task-history.ts',
+  'packages/web/src/features/use-live-task-actions.ts',
+  'packages/web/src/features/live-task-queue.ts',
+  'packages/web/src/features/live-task-input.ts',
+  'packages/web/src/features/live-task-history-window.ts',
+  'packages/web/src/features/task-live-runtime.ts',
   'packages/web/src/live-task.css',
   'packages/web/src/components/live-runtime-disclosure.css',
 ])

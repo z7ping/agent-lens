@@ -75,8 +75,8 @@ export function TaskToolGroup({
         : t('live.toolGroupMore', { count: hiddenCount })}</span>
       <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
     </Button>}
-    <div className="task-tool-list">{(sequence ?? tools.map(tool => ({
-      type: 'tool' as const, key: tool.id, tool,
+    <div className="task-tool-list">{(sequence ?? tools.map((tool): TaskToolGroupSequenceEntry => ({
+      type: 'tool', key: tool.id, tool,
     }))).map((entry, index) => entry.type === 'content'
       ? <Fragment key={entry.key}>{entry.content}</Fragment>
       : visibleIds.has(entry.tool.id) && <TaskToolRow
