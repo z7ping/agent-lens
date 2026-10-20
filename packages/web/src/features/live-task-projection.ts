@@ -1,4 +1,4 @@
-import { reviewMessageAttachmentsFromPayload, type LiveEventDto, type LiveRuntimeEventDto, type ReviewMessageAttachmentDto } from '@agent-lens/protocol'
+import { reviewMessageAttachmentsFromPayload, type LiveErrorDiagnosticDto, type LiveEventDto, type LiveRuntimeEventDto, type ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { agentLensI18n } from '../i18n/runtime'
 import type { TaskRoundModel } from './task-detail-model'
 
@@ -16,6 +16,7 @@ export type LiveTaskProjectionItem =
       text: string
       /** Native assistant failure, not a successful generated reply. */
       error?: true | undefined
+      diagnostic?: LiveErrorDiagnosticDto | undefined
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
       attachments?: LiveTaskProjectionAttachment[] | undefined
@@ -68,6 +69,27 @@ function errorText(value: unknown): string {
 function nativeErrorText(item: Record<string, unknown>, nested: Record<string, unknown>): string {
   return errorText(nested.errorMessage) || errorText(nested.error)
     || errorText(item.errorMessage) || errorText(item.error)
+}
+
+/** Snapshot records may predate the structured protocol; preserve actual fields only. */
+function nativeErrorDiagnostic(item: Record<string, unknown>, nested: Record<string, unknown>): LiveErrorDiagnosticDto | undefined {
+  const raw = [nested.error, nested.errorMessage, item.error, item.errorMessage]
+    .map(record).find(value => Object.keys(value).length > 0) ?? {}
+  const code = typeof raw.code === 'string' || typeof raw.code === 'number' ? String(raw.code) : ''
+  const category = text(raw.category)
+  const stageValue = text(raw.stage)
+  const stage = ['model', 'tool', 'runtime', 'network', 'permission', 'extension', 'unknown']
+    .includes(stageValue) ? stageValue as LiveErrorDiagnosticDto['stage'] : undefined
+  const retryable = typeof raw.retryable === 'boolean' ? raw.retryable : undefined
+  const guidance = raw.guidanceVerified === true ? text(raw.guidance) : ''
+  if (!code && !category && !stage && retryable === undefined && !guidance) return undefined
+  return {
+    ...(code ? { code } : {}),
+    ...(category ? { category } : {}),
+    ...(stage ? { stage } : {}),
+    ...(retryable !== undefined ? { retryable } : {}),
+    ...(guidance ? { guidance } : {}),
+  }
 }
 
 function contentText(value: unknown): string {
@@ -157,6 +179,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     const nativeEntryId = item.type === 'message' ? text(item.id) : ''
     const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
     const errorMessage = nativeErrorText(item, nested)
+    const errorDiagnostic = nativeErrorDiagnostic(item, nested)
     const assistantFailed = nested.stopReason === 'error' || item.stopReason === 'error'
       || nested.isError === true || item.isError === true
       || nested.status === 'failed' || item.status === 'failed'
@@ -175,6 +198,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         role: 'assistant',
         text: message,
         error: true,
+        ...(errorDiagnostic ? { diagnostic: errorDiagnostic } : {}),
         streaming: false,
         ...(at ? { at } : {}),
       })
@@ -536,6 +560,7 @@ export function reduceLiveTaskEvent(
       role: 'assistant' as const,
       text: detail || agentLensI18n.t('task:message.requestFailed'),
       error: true as const,
+      ...(event.diagnostic ? { diagnostic: event.diagnostic } : {}),
       streaming: false,
       at: envelope.receivedAt,
     }]
