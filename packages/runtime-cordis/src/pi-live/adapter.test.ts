@@ -87,6 +87,18 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
     error: 'Model runtime crashed',
   }), { type: 'status', status: 'failed', message: 'Model runtime crashed' })
   assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end', message: { role: 'assistant', stopReason: 'error',
+      error: { message: 'Transport timeout' } },
+  }), { type: 'error', message: 'Transport timeout' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'runtime_status', status: 'failed',
+    error: { detail: 'Process terminated unexpectedly' },
+  }), { type: 'status', status: 'failed', message: 'Process terminated unexpectedly' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_error', error: { message: 'Plugin initialization failed' },
+  }), { type: 'error', message: 'Plugin initialization failed' })
+
+  assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'ok' }] },
   }), { type: 'message.end', role: 'assistant', phase: 'final' })
