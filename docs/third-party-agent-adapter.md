@@ -28,6 +28,8 @@
 
 参见 `packages/core/src/contracts/mock-live-adapter.test.ts`：构造无来源私有 UI 的最小 Live Adapter，覆盖 Capability、start/snapshot/send/subscribe、标准事件与取消订阅。它验证契约夹具，不等于在正式 Daemon/Cordis 中注册、也不等于 Source→Canonical→Review 联调。
 
+此外 `packages/core/src/contracts/mock-source-adapter.test.ts` 覆盖 Source 能力声明、未知原生记录投影与 Evidence 保留。
+
 ## 已知待办
 
-仍需模拟 Source 插件与真实 Cordis 注册、通用 TaskSurface/Review 端到端联调，完成 #522 后再关闭 Issue。
+仍需真实 Cordis 注册、Canonical Pipeline/通用 TaskSurface/Review 端到端联调，完成 #522 后再关闭 Issue。
