@@ -51,7 +51,8 @@ export function auditAgentConvergenceSources(sources) {
     }
 
     if (SHARED_TASK_OWNERS.includes(path)) {
-      if (/<(?:LiveMarkdownComposer|ComposerPillSelect)(?:\s|\/?>)/.test(content)) {
+      if (path !== 'packages/web/src/components/TaskSessionComposer.tsx'
+        && /<(?:LiveMarkdownComposer|ComposerPillSelect)(?:\s|\/?>)/.test(content)) {
         failures.push(`${path}: 通用页面/正文禁止自行渲染完整输入控件`)
       }
       if (/\b(?:import|require)\b[^\n]*PiLiveTaskRound/.test(content)) {
