@@ -322,6 +322,15 @@ export const liveApi = {
     return historyInteraction(liveId, logicalSessionId, 'fork')
   },
 
+  async forkAt(liveId: string, logicalSessionId: string, nativeEventId: string): Promise<LiveRuntimeStateDto> {
+    const state = await requestJson<LiveRuntimeStateDto>(
+      livePath(liveId, `/history/${encodeURIComponent(logicalSessionId)}/fork-at`),
+      jsonRequest('POST', { nativeEventId }),
+    )
+    notifyLiveStateChanged(liveId, state.runtimeSessionId)
+    return state
+  },
+
   state(liveId: string, runtimeSessionId: string): Promise<LiveRuntimeStateDto> {
     return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/state')))
   },
