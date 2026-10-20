@@ -660,3 +660,18 @@ test('completed failures retain native diagnostics in the shared Task message', 
     code: 'RUNTIME_EXIT', category: 'runtime', retryable: false,
   })
 })
+
+test('active round stays running between completed tool events', () => {
+  const projector = new LiveTaskRoundProjector()
+  const items = [
+    { id: 'user-gap', kind: 'message' as const, role: 'user' as const, text: 'task', streaming: false },
+    { id: 'tool-done', kind: 'tool' as const, callId: 'done', name: 'read', status: 'success' as const },
+    { id: 'thinking-gap', kind: 'thinking' as const, text: 'next action', streaming: false },
+  ]
+  const pending = projector.projectSegmented([], items)
+  assert.equal(pending.active.length, 1)
+  assert.equal(pending.active[0]?.model.state, 'running')
+  const finished = projector.projectSegmented(items, [])
+  assert.equal(finished.active.length, 0)
+  assert.equal(finished.stable[0]?.model.state, 'settled')
+})
