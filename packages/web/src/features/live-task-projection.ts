@@ -217,7 +217,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
 
     const role = messageRole(rawRole)
     if (!role) {
-      if (errorMessage && (assistantFailed || nativeFailure)) pushError(errorMessage)
+      if (errorMessage) pushError(errorMessage)
       return
     }
 
@@ -518,7 +518,7 @@ export function reduceLiveTaskEvent(
     || (event.type === 'status' && event.status === 'failed')
     || (event.type === 'completed' && event.status === 'failed')
   if (failureEvent) {
-    const detail = (event.message ?? '').trim()
+    const detail = ('message' in event ? event.message ?? '' : '').trim()
     const lastUser = findLastProjectionIndex(items, item =>
       item.kind === 'message' && item.role === 'user')
     const alreadyFailed = items.slice(lastUser + 1).some(item =>
@@ -527,7 +527,7 @@ export function reduceLiveTaskEvent(
     if (alreadyFailed) {
       return event.type === 'completed' ? settleLiveTaskProjectionItems(items) : [...items]
     }
-    return [...settleCurrentLiveText(items), {
+    return [...(event.type === 'completed' ? settleLiveTaskProjectionItems(items) : settleCurrentLiveText(items)), {
       id: `live-error:${fallback}`,
       kind: 'message' as const,
       role: 'assistant' as const,
