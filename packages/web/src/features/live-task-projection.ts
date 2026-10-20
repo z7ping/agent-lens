@@ -554,7 +554,7 @@ export function reduceLiveTaskEvent(
     || (event.type === 'completed' && event.status === 'failed')
   if (failureEvent) {
     const detail = ('message' in event ? event.message ?? '' : '').trim()
-      || (event.type === 'error' ? event.code?.trim() ?? '' : '')
+      || ((event.type === 'error' || event.type === 'completed') ? event.code?.trim() ?? '' : '')
     const lastUser = findLastProjectionIndex(items, item =>
       item.kind === 'message' && item.role === 'user')
     const alreadyFailed = items.slice(lastUser + 1).some(item =>
@@ -571,7 +571,7 @@ export function reduceLiveTaskEvent(
       role: 'assistant' as const,
       text: detail || agentLensI18n.t('task:message.requestFailed'),
       error: true as const,
-      ...(event.type === 'error' && (event.code || event.category || event.retryable !== undefined)
+      ...((event.type === 'error' || event.type === 'completed') && (event.code || event.category || event.retryable !== undefined)
         ? { errorDiagnostic: {
             ...(event.code ? { code: event.code } : {}),
             ...(event.category ? { category: event.category } : {}),

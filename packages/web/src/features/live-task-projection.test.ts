@@ -647,3 +647,16 @@ test('persisted native error includes code/category/retryable after page reload'
     code: 'SERVICE_DOWN', category: 'runtime', retryable: false,
   })
 })
+
+test('completed failures retain native diagnostics in the shared Task message', () => {
+  const items = reduceLiveTaskEvent([], event(1, {
+    type: 'completed', status: 'failed', message: 'runtime exited',
+    code: 'RUNTIME_EXIT', category: 'runtime', retryable: false,
+  }))
+  const failure = items.find(item => item.kind === 'message' && item.error)
+  assert.ok(failure && failure.kind === 'message')
+  assert.equal(failure.text, 'runtime exited')
+  assert.deepEqual(failure.errorDiagnostic, {
+    code: 'RUNTIME_EXIT', category: 'runtime', retryable: false,
+  })
+})

@@ -238,3 +238,30 @@ test('Live session tree DTO stays agent-neutral and flat', () => {
   ])
   assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
 })
+
+test('Live protocol retains adapter-authored structured failures and safely drops unknown categories', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'error', message: 'connection lost', code: 'TRANSPORT_DOWN',
+    category: 'network', retryable: false,
+  }), {
+    type: 'error', message: 'connection lost', code: 'TRANSPORT_DOWN',
+    category: 'network', retryable: false,
+  })
+  assert.deepEqual(parseLiveEventDto({
+    type: 'error', code: 'NATIVE_ERROR', category: 'arbitrary', retryable: 'yes',
+  }), { type: 'error', message: 'NATIVE_ERROR', code: 'NATIVE_ERROR' })
+  assert.deepEqual(parseLiveEventDto({ type: 'error', message: 'legacy plain error' }),
+    { type: 'error', message: 'legacy plain error' })
+  assert.equal(parseLiveEventDto({ type: 'error', category: 'network' }), null)
+})
+
+
+test('Live completed failure retains structured diagnostics without provider parsing', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'completed', status: 'failed', message: 'failed',
+    code: 'NATIVE_FAILURE', category: 'runtime', retryable: false,
+  }), {
+    type: 'completed', status: 'failed', message: 'failed',
+    code: 'NATIVE_FAILURE', category: 'runtime', retryable: false,
+  })
+})

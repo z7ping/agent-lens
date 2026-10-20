@@ -322,7 +322,14 @@ export type LiveEventDto =
       category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
       retryable?: boolean | undefined
     }
-  | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
+  | {
+      type: 'completed'
+      status: LiveCompletionStatusDto
+      message?: string | undefined
+      code?: string | undefined
+      category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
+      retryable?: boolean | undefined
+    }
 
 export interface LiveControlDisplayInfoDto {
   label?: string | undefined
@@ -691,7 +698,23 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
     }
   }
   if (type === 'error') {
-    return typeof event.message === 'string' && event.message ? { type, message: event.message } : null
+    // Preserve adapter-authored diagnostic facts across JSON/SSE parsing.
+    // Never derive capability or retry safety from provider error prose.
+    const message = eventText(event.message)
+    const code = eventText(event.code)
+    const category = eventText(event.category)
+    const retryable = typeof event.retryable === 'boolean' ? event.retryable : undefined
+    const validCategory = category === 'provider' || category === 'network'
+      || category === 'runtime' || category === 'tool'
+      || category === 'permission' || category === 'unknown'
+    if (!message && !code) return null
+    return {
+      type,
+      message: message || code!,
+      ...(code ? { code } : {}),
+      ...(validCategory ? { category: category as NonNullable<Extract<LiveEventDto, { type: 'error' }>['category']> } : {}),
+      ...(retryable !== undefined ? { retryable } : {}),
+    }
   }
   if (type === 'completed') {
     const status = event.status
@@ -700,6 +723,10 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       type,
       status: status as LiveCompletionStatusDto,
       ...(eventText(event.message) !== undefined ? { message: eventText(event.message) } : {}),
+      ...(eventText(event.code) ? { code: eventText(event.code) } : {}),
+      ...(['provider', 'network', 'runtime', 'tool', 'permission', 'unknown'].includes(String(event.category))
+        ? { category: event.category as Extract<LiveEventDto, { type: 'completed' }>['category'] } : {}),
+      ...(typeof event.retryable === 'boolean' ? { retryable: event.retryable } : {}),
     }
   }
   return null

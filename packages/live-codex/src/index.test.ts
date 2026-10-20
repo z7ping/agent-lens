@@ -240,3 +240,18 @@ test('Codex recovery uses a cross-turn native cursor and excludes the repeated a
   assert.equal(Object.hasOwn(calls[1]!.params, 'turnId'), false, 'must not restrict continuation to the old turn')
   await adapter.dispose()
 })
+
+
+test('Codex preserves native error code and explicit retryability for failures', () => {
+  assert.deepEqual(normalizeCodexEvent('error', {
+    error: { code: 'RPC_DISCONNECTED', message: 'transport lost', category: 'network', retryable: false },
+  }), {
+    type: 'error', message: 'transport lost', code: 'RPC_DISCONNECTED',
+    category: 'network', retryable: false,
+  })
+  assert.deepEqual(normalizeCodexEvent('turn/completed', {
+    turn: { status: 'failed', error: { code: 'MODEL_FAILED', message: 'inference failed' } },
+  }), {
+    type: 'completed', status: 'failed', message: 'inference failed', code: 'MODEL_FAILED',
+  })
+})
