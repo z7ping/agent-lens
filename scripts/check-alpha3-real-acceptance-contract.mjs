@@ -21,7 +21,8 @@ const toolModel = readFileSync('packages/web/src/features/task-detail-model.ts',
 const toolIcon = readFileSync('packages/web/src/components/ToolKindIcon.tsx', 'utf8')
 const taskDetailCss = readFileSync('packages/web/src/task-detail.css', 'utf8')
 const taskCenterCss = readFileSync('packages/web/src/task-center.css', 'utf8')
-const piCss = readFileSync('packages/web/src/pi-live.css', 'utf8')
+const runtimeCss = readFileSync('packages/web/src/live-task.css', 'utf8')
+const composerCss = readFileSync('packages/web/src/task-session-composer.css', 'utf8')
 const piTaskRound = readFileSync('packages/web/src/features/PiLiveTaskRound.tsx', 'utf8')
 const piHistory = readFileSync('packages/web/src/features/pi-live-history.ts', 'utf8')
 const mainEntry = readFileSync('packages/web/src/main.tsx', 'utf8')
@@ -164,7 +165,8 @@ if (/!important/.test(taskDetailCss)) failures.push('Task Surface 唯一所有�
 
 /* Task Center 和 Pi Live 只持有自己的壳层/输入器，不能重新定义共享 Task 组件。 */
 if (/\.task-(?:header|round|message|thinking|tool|event)/.test(taskCenterCss)) failures.push('task-center.css 不得复制 Task Surface 共享组件样式')
-if (/\.task-(?:header|round|message|thinking|tool|event)/.test(piCss)) failures.push('pi-live.css 不得复制 Task Surface 共享组件样式')
+if (/\.task-(?:header|round|message|thinking|tool|event)/.test(runtimeCss)) failures.push('live-task.css 不得复制 Task Surface 共享组件样式')
+if (/\.task-(?:header|round|message|thinking|tool|event)/.test(composerCss)) failures.push('task-session-composer.css 不得复制 Task Surface 正文样式')
 const taskCenterImport = mainEntry.indexOf("import './task-center.css'")
 const taskDetailImport = mainEntry.indexOf("import './task-detail.css'")
 if (taskCenterImport < 0 || taskDetailImport <= taskCenterImport) failures.push('Task Detail 必须在页面所有者之后加载并最终接管共享 Task 组件')
