@@ -113,3 +113,17 @@ test('new shared Task implementation files join the convergence gate automatical
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('new-task onboarding is a shared owner, not an Agent-specific Live exception', () => {
+  const path = 'packages/web/src/features/LiveNewTaskPanel.tsx'
+  assert.equal(auditAgentConvergenceSources({
+    [path]: "if (item.liveId === 'codex') return legacy",
+  }).length, 1)
+  assert.equal(auditAgentConvergenceSources({
+    [path]: '<LiveMarkdownComposer />',
+  }).length, 1)
+  assert.equal(auditAgentConvergenceSources({
+    [path]: "const cls = 'pi-live-input'",
+  }).length, 1)
+  assert.ok(discoverConvergencePaths().includes(path))
+})
