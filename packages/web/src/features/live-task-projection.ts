@@ -844,7 +844,12 @@ export class LiveTaskRoundProjector {
     return {
       stable: this.stableRounds,
       active: activeItems.length
-        ? projectLiveTaskRounds(activeItems, this.stableOrdinal)
+        ? projectLiveTaskRounds(activeItems, this.stableOrdinal).map((round, index, rounds) =>
+          // Active-tail ownership is authoritative until completion/recovery commits
+          // the turn to stable history. Gaps between text/tool events are not completion.
+          index === rounds.length - 1 && round.model.state !== 'running'
+            ? { ...round, model: { ...round.model, state: 'running' as const } }
+            : round)
         : [],
     }
   }
