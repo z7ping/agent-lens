@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { auditAgentConvergenceSources } from './agent-convergence-ownership.mjs'
+import { auditAgentConvergenceSources, discoverConvergencePaths } from './agent-convergence-ownership.mjs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const reviewPath = 'packages/web/src/features/ReviewRoundPresentation.tsx'
 const livePath = 'packages/web/src/features/LiveTaskPage.tsx'
@@ -80,5 +83,33 @@ test('shared Live lifecycle hooks and Task header reject new Agent-specific comp
     'packages/web/src/features/TaskHeader.tsx',
   ]) {
     assert.equal(auditAgentConvergenceSources({ [path]: "if (runtime.productId === 'pi') {}" }).length, 1, path)
+  }
+})
+
+test('new shared Task implementation files join the convergence gate automatically', () => {
+  const root = mkdtempSync(join(tmpdir(), 'agent-lens-convergence-'))
+  try {
+    mkdirSync(join(root, 'features'))
+    mkdirSync(join(root, 'components'))
+    writeFileSync(join(root, 'features', 'LiveTaskUnexpected.tsx'),
+      "const privateBranch = node.sourceId === 'pi'")
+    writeFileSync(join(root, 'features', 'LiveTaskUnexpected.test.tsx'), '')
+    writeFileSync(join(root, 'components', 'TaskNewWidget.tsx'), '<LiveMarkdownComposer />')
+    const paths = discoverConvergencePaths(root)
+    assert.deepEqual(paths, [
+      'packages/web/src/components/TaskNewWidget.tsx',
+      'packages/web/src/features/LiveTaskUnexpected.tsx',
+    ])
+    assert.equal(auditAgentConvergenceSources({
+      [paths[0]]: '<LiveMarkdownComposer />',
+    }).length, 1)
+    assert.equal(auditAgentConvergenceSources({
+      [paths[1]]: "node.sourceId === 'pi'",
+    }).length, 1)
+    assert.equal(auditAgentConvergenceSources({
+      [paths[1]]: "const style = 'pi-live-custom'",
+    }).length, 1)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
   }
 })
