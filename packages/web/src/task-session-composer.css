@@ -4,7 +4,7 @@
 .task-composer-idle-dot { display: inline-block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; border: 1px solid var(--al-line-strong); background: var(--al-surface); }
 .task-composer-disconnected { color: var(--al-warning); }
 .task-composer-pending .task-composer-idle-dot { border-color: var(--al-muted); background: var(--al-muted); }
-.task-composer-runtime:not(.task-composer-disconnected) .task-composer-idle-dot {
+.task-composer-runtime:not(.task-composer-disconnected):not(.task-composer-pending) .task-composer-idle-dot {
   border-color: var(--al-success);
   background: var(--al-success);
 }
