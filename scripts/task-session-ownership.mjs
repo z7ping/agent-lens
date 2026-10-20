@@ -23,7 +23,7 @@ const sourceOwners = new Map([
 ])
 const cssOwner = 'task-detail.css'
 const componentCss = /\.(?:task-(?:message|thinking|tool)(?:-[\w-]+)?|task-process-(?:group|message|summary)(?:-[\w-]+)?)(?![\w-])/
-const agentPrivate = /(?:^|\s)(?:codex|hermes|claude(?:-code)?|opencode)(?:-[\w]+)*-(?:message|thinking|tool|process)(?:-[\w]+)*(?=\s|$)/i
+const agentPrivate = /(?:^|\s)[a-z][\w-]*-(?:live|review|session)(?:-task)?-(?:message|thinking|tool|process)(?:-[\w-]+)*(?=\s|$)/i
 
 function* sourceFiles(root) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
