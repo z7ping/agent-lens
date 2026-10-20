@@ -66,6 +66,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
   } = useReviewSession(model, embedded)
 
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
+  const [composerExpanded, setComposerExpanded] = useState(false)
   const [composerHasContent, setComposerHasContent] = useState(false)
   const [attachmentPending, setAttachmentPending] = useState(false)
   const draftKey = useMemo(() => detail && detailLiveInteraction
@@ -262,8 +263,18 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           </div>}
         </div>
         {detail && canCompose && <div className="pi-live-compose-wrap live-task-compose-wrap">
-          <div className="pi-live-composer">
+          <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
             <div className="pi-live-editor">
+              <div className="pi-live-editor-toolbar" aria-label={t('task:live.composerToolbarAria')}>
+                <IconButton
+                  className="pi-live-editor-action"
+                  title={composerExpanded ? t('task:live.composerShrink') : t('task:live.composerExpand')}
+                  aria-label={composerExpanded ? t('task:live.composerShrink') : t('task:live.composerExpand')}
+                  onClick={() => setComposerExpanded(value => !value)}
+                >
+                  <UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/>
+                </IconButton>
+              </div>
               <LiveMarkdownComposer
                 key={draftKey}
                 ref={composerRef}
@@ -282,7 +293,11 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               />
             </div>
             <div className="pi-live-compose-bar">
-              <span className="pi-live-compose-runtime">{t('local.header.resumeOnSend')}</span>
+              <span className="pi-live-compose-runtime" title={t('local.header.resumeOnSend')}>
+                <span className="pi-live-idle-dot" aria-hidden="true"/>
+                {t('local.header.resumeOnSend')}
+              </span>
+              <span className="pi-live-compose-spacer" aria-hidden="true"/>
               <IconButton
                 variant="primary"
                 className="pi-live-send"
