@@ -65,3 +65,9 @@ test('Runtime performance 分组不得退回为 Pi 专属字段识别', () => {
   const oldOnly = "function fieldSection(field) { return 'status' }\nconst startupMetrics = fields.find(field => field.id === 'startup.metrics')"
   assert.ok(auditAgentConvergenceSources({ [path]: oldOnly }).length >= 1)
 })
+
+test('generic Runtime Disclosure cannot restore Pi-specific stylesheet hooks', () => {
+  const css = 'packages/web/src/components/live-runtime-disclosure.css'
+  assert.deepEqual(auditAgentConvergenceSources({ [css]: '.live-runtime-disclosure { display: block }' }), [])
+  assert.equal(auditAgentConvergenceSources({ [css]: '.pi-startup-disclosure { display: block }' }).length, 1)
+})
