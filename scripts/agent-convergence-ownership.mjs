@@ -27,8 +27,8 @@ export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
   'packages/web/src/components/LiveRuntimeDisclosures.tsx',
 ])
 
-const agentCompare = /\b(?:[A-Za-z_$][\w$]*\?\.)*(sourceId|productId|liveId|agentId)\s*(===|!==|==|!=)\s*(['"`])(pi|codex|hermes|claude-code)\3/g
-const agentCompareReversed = /(['"`])(pi|codex|hermes|claude-code)\1\s*(===|!==|==|!=)\s*\b(?:[A-Za-z_$][\w$]*\?\.)*(sourceId|productId|liveId|agentId)\b/g
+const agentCompare = /\b(?:[A-Za-z_$][\w$]*(?:\?\.|\.))*(sourceId|productId|liveId|agentId)\s*(===|!==|==|!=)\s*(['"`])(pi|codex|hermes|claude-code)\3/g
+const agentCompareReversed = /(['"`])(pi|codex|hermes|claude-code)\1\s*(===|!==|==|!=)\s*\b(?:[A-Za-z_$][\w$]*(?:\?\.|\.))*(sourceId|productId|liveId|agentId)\b/g
 
 export function auditAgentConvergenceSources(sources) {
   const failures = []
