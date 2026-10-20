@@ -194,11 +194,11 @@ function assertMinFont(key, includeShorthand = false) {
   const tooSmall = values.filter(value => value > 0 && value < 12)
   if (tooSmall.length) throw new Error(`${files[key]} 出现小于 12px 的有效字号：${[...new Set(tooSmall)].join(', ')}px`)
 }
-for (const key of ['styles', 'theme', 'typography', 'readability', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail']) {
+for (const key of ['styles', 'theme', 'typography', 'readability', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'liveTask', 'taskComposer', 'taskCenter', 'taskDetail']) {
   assertMinFont(key)
 }
 for (const key of ['uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) assertMinFont(key, true)
-for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'pi', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) {
+for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'liveTask', 'taskComposer', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) {
   if (/!important\b/.test(css[key])) throw new Error(`${files[key]} 不得用 !important 争夺表现所有权`)
 }
 

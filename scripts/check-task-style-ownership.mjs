@@ -51,7 +51,7 @@ for (const marker of [
   "'live-task-reader'",
   "'review-reader'",
   "'live-task-document'",
-  "'live-task-compose-wrap'",
+  "'task-session-composer-slot'",
   "withSessionClass(candidate, 'task-session-document')",
   "withSessionClass(element, 'task-session-reader'",
   "withSessionClass(candidate, 'task-session-composer')",
