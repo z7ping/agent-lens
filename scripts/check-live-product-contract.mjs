@@ -203,7 +203,7 @@ requireText(liveTask, /<TaskSessionComposer/, 'LiveTaskPage 必须只复用唯�
 requireText(reviewPage, /<TaskSessionComposer/, 'Review 必须复用与 Live 相同的完整输入组件')
 requireText(taskComposerView, /<ComposerPillSelect/, '唯一 Composer 必须持有模型/推理控件')
 requireText(taskComposerView, /showStreamingModes &&/, '唯一 Composer 必须持有流式消息模式')
-forbidText(liveTask, /<LiveMarkdownComposer(?:\\s|\\/>|>)|<ComposerPillSelect/, 'LiveTaskPage 不得重建编辑器或选择器')
+forbidText(liveTask, /<LiveMarkdownComposer(?:\s|\/>|>)|<ComposerPillSelect/, 'LiveTaskPage 不得重建编辑器或选择器')
 requireText(liveTask, /composerExpanded/, 'LiveTaskPage 必须保留通用输入区展开/收起能力')
 requireText(liveTask, /startupQueued/, 'LiveTaskPage 必须保留 Runtime 初始化期首条消息暂存')
 requireText(liveTask, /interruptNotice/, 'LiveTaskPage 必须保留中断成功反馈')
