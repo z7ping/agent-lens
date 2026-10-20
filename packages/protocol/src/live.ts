@@ -267,7 +267,7 @@ export interface LiveErrorDiagnosticDto {
 }
 
 export type LiveEventDto =
-  | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
+  | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined; diagnostic?: LiveErrorDiagnosticDto | undefined }
   | { type: 'title.update'; title: string }
   | { type: 'control.changed'; control: 'model' | 'thinking' }
   | { type: 'runtime-disclosure.changed' }
@@ -326,7 +326,7 @@ export type LiveEventDto =
       prefill?: string | undefined
     }
   | { type: 'error'; message: string; diagnostic?: LiveErrorDiagnosticDto | undefined }
-  | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
+  | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined; diagnostic?: LiveErrorDiagnosticDto | undefined }
 
 export interface LiveControlDisplayInfoDto {
   label?: string | undefined
