@@ -7,6 +7,7 @@ import type {
   LiveCapabilityName,
   LiveCommand,
   LiveEvent,
+  LiveErrorDiagnostic,
   LiveHistoryIndexQuery,
   LiveMessage,
   LiveMessageInput,
@@ -129,6 +130,22 @@ function piEventErrorText(...values: unknown[]): string {
   return ''
 }
 
+/** Preserve only real native diagnostic fields; never guess fixes from error text or status. */
+function piErrorDiagnostic(stage: NonNullable<LiveErrorDiagnostic['stage']>, ...errors: unknown[]): LiveErrorDiagnostic {
+  const detail = errors.map(liveRecord).find(value => Object.keys(value).length > 0) ?? {}
+  const rawCode = detail.code
+  const code = typeof rawCode === 'string' || typeof rawCode === 'number' ? String(rawCode) : ''
+  const category = liveText(detail.category)
+  const guidance = detail.guidanceVerified === true ? liveText(detail.guidance) : ''
+  return {
+    stage,
+    ...(code ? { code } : {}),
+    ...(category ? { category } : {}),
+    ...(typeof detail.retryable === 'boolean' ? { retryable: detail.retryable } : {}),
+    ...(guidance ? { guidance } : {}),
+  }
+}
+
 function livePreview(value: unknown, max = 4_000): string {
   if (value === undefined || value === null) return ''
   const text = typeof value === 'string'
@@ -222,7 +239,8 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     if (type === 'message_end' && rawRole === 'assistant') {
       const nativeError = piEventErrorText(message.errorMessage, message.error, event.errorMessage, event.error)
       if (nativeError.trim() || message.stopReason === 'error') {
-        return { type: 'error', message: nativeError.trim() || 'Pi assistant request failed' }
+        return { type: 'error', message: nativeError.trim() || 'Pi assistant request failed',
+          diagnostic: piErrorDiagnostic('model', message.errorMessage, message.error, event.errorMessage, event.error) }
       }
     }
     const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
@@ -297,6 +315,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
         ...(liveText(event.message) || status === 'failed'
           ? { message: piEventErrorText(event.errorMessage, event.error, event.message) || 'Pi Live runtime failed' }
           : {}),
+        ...(status === 'failed' ? { diagnostic: piErrorDiagnostic('runtime', event.errorMessage, event.error) } : {}),
       }
     }
   }
@@ -335,11 +354,13 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       type: 'status',
       status: 'failed',
       message: message || 'Pi Live runtime exited',
+      diagnostic: piErrorDiagnostic('runtime', event.errorMessage, event.error),
     }
   }
   if (type === 'extension_error') {
-    const message = liveText(event.errorMessage) || liveText(event.error)
-    return { type: 'error', message: message || 'Pi Live extension failed' }
+    const message = piEventErrorText(event.errorMessage, event.error)
+    return { type: 'error', message: message || 'Pi Live extension failed',
+      diagnostic: piErrorDiagnostic('extension', event.errorMessage, event.error) }
   }
   return undefined
 }
