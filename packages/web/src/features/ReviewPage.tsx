@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
-import { type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
+import type { LiveMarkdownComposerDraft, LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
 import { TaskSessionComposer } from '../components/TaskSessionComposer'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { LocalPathActions } from '../components/LocalPathActions'
