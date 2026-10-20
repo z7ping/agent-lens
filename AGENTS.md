@@ -96,6 +96,15 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 不得建立平行的第二套 Task 组件体系。
 
 
+### 会话输入区唯一实现（强制）
+
+- `components/TaskSessionComposer.tsx` 是 **Review + Live 的唯一完整输入区**；持有展开/收起、运行状态、模型、推理级别、发送模式、发送按钮等 DOM。两页只通过 props 传入真实 Runtime 状态/能力和回调，禁止各自构造第二套 Composer 外壳。
+- `components/LiveMarkdownComposer.tsx` 仅负责 Markdown、输入历史、附件、键盘和草稿。不得误以为复用了编辑器就等于复用了完整输入区。
+- `task-session-composer.css` 独占完整 Composer 外观，`task-session-view.css` 独占 Session 槽位几何，`live-task.css` 独占 Live Runtime/队列/诊断视觉；**禁止恢复 `pi-live.css`**，禁止为特定 Agent 创建输入框 CSS。
+- 输入区公共类名统一为 `task-composer-*`，不使用 `pi-live-*` 命名新的通用组件/样式。现有 `live-task.css` 内的 `pi-live-*` 仅为历史 Runtime 兼容钩子，不得扩散。
+- Review 尚未恢复原生 Runtime 时，只能显示 capability 可确认的**禁用**模型/推理/流式模式控件，不能伪造当前模型、推理生效状态；发送后才进入原生 Live Runtime。
+- `features/task-session-composer-contract.test.ts` 与 `scripts/check-web-presentation.mjs` 是禁止第二实现、样式漂移和错误文件命名的硬门禁。
+
 ### 多智能体 Session 单一渲染所有权（强制）
 
 - **唯一正文实现**：Pi / Codex / Hermes / 后续 Agent 的 Live 均进入 `LiveTaskTimeline`；Live 与 Review 共用 `TaskSessionContent`、`TaskToolGroup`，按 `mode='live'|'review'` 表达生命周期，不再另建消息、思考、工具、过程 JSX 或 CSS。
