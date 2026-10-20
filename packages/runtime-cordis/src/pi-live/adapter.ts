@@ -374,8 +374,9 @@ export class PiLiveAdapter implements LiveAdapter {
     const listSessions = this.storage.repositories.sessions.listSourceSessionsByLogicalSession
     if (!listSessions) throw new Error('Pi history source sessions are unavailable')
     const sessions = await listSessions(logicalSessionId, { sourceId: 'pi', limit: 8 })
-    const records = await Promise.all(sessions.map(session =>
-      this.storage!.repositories.sourceRecords.findByNativeId('pi', session.installationId, nativeEventId),
+    const installations = [...new Set(sessions.map(session => session.installationId))]
+    const records = await Promise.all(installations.map(installationId =>
+      this.storage!.repositories.sourceRecords.findByNativeId('pi', installationId, nativeEventId),
     ))
     const valid = records.filter((record): record is NonNullable<typeof record> => {
       if (!record || record.sourceId !== 'pi' || record.nativeType !== 'history/message'
