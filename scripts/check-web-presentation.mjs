@@ -446,7 +446,7 @@ if (css.review.includes('.pi-session-tree')) throw new Error('Review 样式不�
 if (/\.inspector-panel\b|\.inspector-head\b|\.inspector-title\b/.test(css.review)) throw new Error('Review Inspector 外壳必须由统一 Drawer 持有，不得恢复页面自建抽屉')
 if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话导航与虚拟挂载能力')
 if (!css.taskTurnRail.includes('.task-turn-rail') || !css.taskTurnRail.includes('.turn-tick')) throw new Error('task-turn-rail.css 必须持有共享轮次导轨能力')
-if (!css.liveTask.includes('.pi-live-queue') || css.liveTask.includes('.task-composer {')) throw new Error('live-task.css 仅持有 Runtime 页面/队列，不能定义共享 Composer')
+if (!css.liveTask.includes('.live-task-queue') || css.liveTask.includes('.task-composer {')) throw new Error('live-task.css 仅持有 Runtime 页面/队列，不能定义共享 Composer')
 if (!css.taskComposer.includes('.task-composer {') || !css.taskComposer.includes('.task-composer-settings') || !/\.task-composer-hint[\s\S]*?position:\s*absolute/m.test(css.taskComposer)) throw new Error('task-session-composer.css 必须完整持有唯一输入区外观与交互')
 if (existsSync(p('pi-live.css'))) throw new Error('旧 pi-live.css 命名不得恢复')
 const livePageSource = readFileSync(p('features/LiveTaskPage.tsx'), 'utf8')

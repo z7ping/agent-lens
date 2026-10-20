@@ -20,7 +20,7 @@
 | Review 事件 Label 来源判断 | `features/review-event-presentation.ts` | Codex/Claude Code/Pi 各 **1 处** 来源分支，需迁移至可扩展语义投影 | #517 |
 | Review 来源私有生命周期 | `features/review-interaction-presentation.ts` | Pi assistant.stop **1 处**特判，需要保留原生证据并迁移 | #517 |
 | 旧 Pi 会话渲染 | `features/PiLiveTaskRound.tsx`、`features/pi-live-task-projection.ts` | 和 `LiveTaskTimeline` 并存；先核查消费者，再退役 | #518 |
-| Live 通用页面命名 | `features/LiveTaskPage.tsx`、`live-task.css` | 当前 **27 处** `pi-live-` 兼容钩子引用；只许递减 | #519 |
+| Live 通用页面命名 | `features/LiveTaskPage.tsx`、`live-task.css` | `LiveTaskPage.tsx` / `live-task.css` 通用 CSS 类全部更名为 `live-task-*`，现有名称例外清零；对应门禁禁止恢复 | #519 |
 | Runtime Disclosure | `components/LiveRuntimeDisclosures.tsx`、Pi Service | 已在 PR #524 改用 `fieldId` / `section`，仍需实际 Web/Runtime 测试 | #520 |
 | 复用与自动门禁 | `scripts/task-session-ownership.mjs`、`check-web-presentation.mjs` | 原有 AST/CSS 门禁；本轮追加 Agent 来源分支和历史钩子递减门禁 | #521 |
 | 第三方接入 | `AGENTS.md`、`product-internal`、`agent-swe-skills` | 需要最小模拟插件及完整接入说明/例外清退清单 | #522 |
