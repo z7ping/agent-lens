@@ -146,7 +146,7 @@ export class DefaultLiveService implements LiveService {
     for (const [capability, methods] of Object.entries(requiredMethods)) {
       if (!adapter.capabilities.has(capability as keyof typeof requiredMethods)) continue
       for (const method of methods) {
-        if (typeof adapter[method] !== 'function') {
+        if (typeof adapter[method as keyof LiveAdapter] !== 'function') {
           throw new Error(`AgentLens live adapter ${capability} capability requires ${method}(): ${id}`)
         }
       }
