@@ -254,3 +254,14 @@ test('Live protocol retains adapter-authored structured failures and safely drop
     { type: 'error', message: 'legacy plain error' })
   assert.equal(parseLiveEventDto({ type: 'error', category: 'network' }), null)
 })
+
+
+test('Live completed failure retains structured diagnostics without provider parsing', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'completed', status: 'failed', message: 'failed',
+    code: 'NATIVE_FAILURE', category: 'runtime', retryable: false,
+  }), {
+    type: 'completed', status: 'failed', message: 'failed',
+    code: 'NATIVE_FAILURE', category: 'runtime', retryable: false,
+  })
+})
