@@ -24,6 +24,10 @@
 - 新增 Agent 不修改 `LiveTaskPage`、`LiveTaskTimeline`、`ReviewRoundPresentation`、`TaskSessionComposer` 及通用 CSS。
 - 运行项目现有 `check:web-presentation`、单测、类型检查和构建；当前完整 Pi/Codex/Hermes 实机矩阵由 #521 跟踪。
 
+## 最小模拟插件契约测试
+
+参见 `packages/core/src/contracts/mock-live-adapter.test.ts`：构造无来源私有 UI 的最小 Live Adapter，覆盖 Capability、start/snapshot/send/subscribe、标准事件与取消订阅。它验证契约夹具，不等于在正式 Daemon/Cordis 中注册、也不等于 Source→Canonical→Review 联调。
+
 ## 已知待办
 
-本指南是可核实契约与接入步骤，**不是** #522 所要求的可运行最小模拟插件。模拟插件和完整端到端集成测试仍需实现后再关闭 #522。
+仍需模拟 Source 插件与真实 Cordis 注册、通用 TaskSurface/Review 端到端联调，完成 #522 后再关闭 Issue。
