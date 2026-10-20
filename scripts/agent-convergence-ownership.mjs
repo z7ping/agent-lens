@@ -25,6 +25,9 @@ export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
   ...SHARED_TASK_OWNERS,
   ...SHARED_REVIEW_OWNERS,
   'packages/web/src/components/LiveRuntimeDisclosures.tsx',
+  'packages/web/src/features/live-task-projection.ts',
+  'packages/web/src/features/live-semantic-rounds.ts',
+  'packages/web/src/live-task.css',
 ])
 
 const agentCompare = /\b(?:[A-Za-z_$][\w$]*(?:\?\.|\.))*(sourceId|productId|liveId|agentId)\s*(===|!==|==|!=)\s*(['"`])(pi|codex|hermes|claude-code)\3/g
@@ -43,6 +46,10 @@ export function auditAgentConvergenceSources(sources) {
       const key = `${match[4]} ${match[3]} ${match[2]}`
       remaining[key] = (remaining[key] ?? 0) - 1
       if (remaining[key] < 0) failures.push(`${path}: 新增 Agent 私有比较 ${key}`)
+    }
+
+    if (path === 'packages/web/src/live-task.css' && content.includes('pi-live-')) {
+      failures.push(`${path}: 通用 Live CSS 不允许恢复 Pi 私有钩子`)
     }
 
     if (SHARED_TASK_OWNERS.includes(path)) {
