@@ -372,6 +372,12 @@ export interface LiveToolEndEvent {
 export interface LiveErrorEvent {
   type: 'error'
   message: string
+  /** Optional native error code; never interpret HTTP/provider-specific values in Product UI. */
+  code?: string | undefined
+  /** Adapter-classified origin, not inferred from localized error text. */
+  category?: 'provider' | 'network' | 'runtime' | 'tool' | 'permission' | 'unknown' | undefined
+  /** Only supplied when the owning adapter can reliably establish retry safety. */
+  retryable?: boolean | undefined
 }
 
 export interface LiveCompletedEvent {
