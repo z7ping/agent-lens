@@ -53,7 +53,7 @@ export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
  */
 export function discoverConvergencePaths(root = 'packages/web/src') {
   const found = []
-  const sharedStem = /^(?:Task|Review|LiveTask|LiveExtensionPrompt|LiveRuntimeDisclosures|live-|review-|task-|use-live-|live-runtime-disclosure)/
+  const sharedStem = /^(?:Task|Review|LiveTask|LiveNewTask|LiveExtensionPrompt|LiveRuntimeDisclosures|live-|review-|task-|use-live-|live-runtime-disclosure)/
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
@@ -94,12 +94,12 @@ export function auditAgentConvergenceSources(sources) {
     }
 
     if ((path === 'packages/web/src/live-task.css'
-      || /\/features\/(?:Task|Review|LiveTask|live-|review-|task-|use-live-)/.test(path))
+      || /\/features\/(?:Task|Review|LiveTask|LiveNewTask|live-|review-|task-|use-live-)/.test(path))
       && content.includes('pi-live-')) {
       failures.push(`${path}: 通用 Task/Live 不能恢复 Pi 私有样式钩子`)
     }
 
-    if (SHARED_TASK_OWNERS.includes(path) || /\/(?:features|components)\/(?:Task|Review|LiveTask|LiveExtensionPrompt|live-|review-|task-|use-live-)/.test(path)) {
+    if (SHARED_TASK_OWNERS.includes(path) || /\/(?:features|components)\/(?:Task|Review|LiveTask|LiveNewTask|LiveExtensionPrompt|live-|review-|task-|use-live-)/.test(path)) {
       if (path !== 'packages/web/src/components/TaskSessionComposer.tsx'
         && /<(?:LiveMarkdownComposer|ComposerPillSelect)(?:\s|\/?>)/.test(content)) {
         failures.push(`${path}: 通用页面/正文禁止自行渲染完整输入控件`)
