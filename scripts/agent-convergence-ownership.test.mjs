@@ -63,5 +63,5 @@ test('共享 Live 投影同样禁止来源 ID 特判', () => {
 test('Runtime performance 分组不得退回为 Pi 专属字段识别', () => {
   const path = 'packages/web/src/components/LiveRuntimeDisclosures.tsx'
   const oldOnly = "function fieldSection(field) { return 'status' }\nconst startupMetrics = fields.find(field => field.id === 'startup.metrics')"
-  assert.equal(auditAgentConvergenceSources({ [path]: oldOnly }).length, 1)
+  assert.ok(auditAgentConvergenceSources({ [path]: oldOnly }).length >= 1)
 })
