@@ -3,19 +3,14 @@
  * conditionals. Every count below must decrease to zero under epic #523.
  * This is a static boundary check, not a substitute for semantic/visual tests.
  */
-export const CONVERGENCE_SOURCE_BUDGETS = Object.freeze({
-  'packages/web/src/features/ReviewRoundPresentation.tsx': {
-    'sourceId === codex': 2,
-  },
-  'packages/web/src/features/review-event-presentation.ts': {
-    'sourceId === codex': 1,
-    'sourceId === claude-code': 1,
-    'sourceId === pi': 1,
-  },
-  'packages/web/src/features/review-interaction-presentation.ts': {
-    'sourceId !== pi': 1,
-  },
-})
+// No remaining UI-level Agent ID conditions are allowed in shared Review.
+export const CONVERGENCE_SOURCE_BUDGETS = Object.freeze({})
+
+export const SHARED_REVIEW_OWNERS = Object.freeze([
+  'packages/web/src/features/ReviewRoundPresentation.tsx',
+  'packages/web/src/features/review-event-presentation.ts',
+  'packages/web/src/features/review-interaction-presentation.ts',
+])
 
 export const SHARED_TASK_OWNERS = Object.freeze([
   'packages/web/src/features/LiveTaskPage.tsx',
@@ -28,7 +23,7 @@ export const SHARED_TASK_OWNERS = Object.freeze([
 
 export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
   ...SHARED_TASK_OWNERS,
-  ...Object.keys(CONVERGENCE_SOURCE_BUDGETS),
+  ...SHARED_REVIEW_OWNERS,
   'packages/web/src/components/LiveRuntimeDisclosures.tsx',
 ])
 
