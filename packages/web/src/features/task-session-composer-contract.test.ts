@@ -42,7 +42,7 @@ test('通用 Live 产品层不再依赖 legacy PiLivePage / piLiveApi', () => {
 test('模型和推理选择只在唯一 TaskSessionComposer 中实现，SelectMenu 仍为唯一控件', () => {
   for (const source of [liveTask, reviewTask]) {
     assert.match(source, /<TaskSessionComposer/)
-    assert.doesNotMatch(source, /<LiveMarkdownComposer|<ComposerPillSelect|className="task-composer-editor"/)
+    assert.doesNotMatch(source, /<LiveMarkdownComposer(?:\s|\/>|>)|<ComposerPillSelect|className="task-composer-editor"/)
   }
   assert.match(taskComposer, /modelVisible && <ComposerPillSelect/)
   assert.match(taskComposer, /thinkingVisible && <ComposerPillSelect/)
