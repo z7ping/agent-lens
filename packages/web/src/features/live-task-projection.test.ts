@@ -510,8 +510,9 @@ test('all failures from generic SSE events appear in the same user round, indepe
 test('terminal Runtime failures and missing error details are always visible', () => {
   const base = [{ id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'hello', streaming: false }]
   const runtimeFailed = reduceLiveTaskEvent(base, event(1, { type: 'status', status: 'failed', message: 'Worker exited' }))
-  assert.equal(runtimeFailed.at(-1)?.kind === 'message' ? runtimeFailed.at(-1)?.text : '', 'Worker exited')
-  assert.equal(runtimeFailed.at(-1)?.kind === 'message' ? runtimeFailed.at(-1)?.error : false, true)
+  const runtimeFailure = runtimeFailed.at(-1)
+  assert.equal(runtimeFailure?.kind === 'message' ? runtimeFailure.text : '', 'Worker exited')
+  assert.equal(runtimeFailure?.kind === 'message' ? runtimeFailure.error : false, true)
   const ended = reduceLiveTaskEvent(runtimeFailed, event(2, { type: 'completed', status: 'failed', message: 'Worker exited' }))
   assert.equal(ended.length, runtimeFailed.length)
   const withPendingTool = [...base, {
@@ -523,8 +524,9 @@ test('terminal Runtime failures and missing error details are always visible', (
   }))
   assert.equal(crashed[1]?.kind === 'tool' ? crashed[1].status : null, 'error')
   const noDetails = reduceLiveTaskEvent(base, event(3, { type: 'completed', status: 'failed' }))
-  assert.equal(noDetails.at(-1)?.kind === 'message' ? noDetails.at(-1)?.error : false, true)
-  assert.ok(noDetails.at(-1)?.kind === 'message' && noDetails.at(-1)?.text.length)
+  const emptyDetailFailure = noDetails.at(-1)
+  assert.equal(emptyDetailFailure?.kind === 'message' ? emptyDetailFailure.error : false, true)
+  assert.ok(emptyDetailFailure?.kind === 'message' && emptyDetailFailure.text.length)
   assert.deepEqual(reduceLiveTaskEvent(base, event(4, { type: 'completed', status: 'cancelled' })), base)
 })
 

@@ -127,6 +127,7 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
     if (action.includes('stop')) return agentLensI18n.t('review:local.event.turnStop')
   }
   if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
+  if (node.kind === 'context.injected' && action === 'instructions.loaded') return agentLensI18n.t('review:local.event.instructionsLoaded')
   if (node.kind === 'context.injected') return agentLensI18n.t('review:local.event.injectedContext')
   if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
   if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
@@ -152,14 +153,6 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
   }
   const commonKey = node.kind === 'session.lifecycle' ? commonLifecycle[action] : undefined
   if (commonKey) return agentLensI18n.t(`review:local.event.${commonKey}`)
-  if (node.kind === 'context.injected' && action === 'instructions.loaded') {
-    return agentLensI18n.t('review:local.event.instructionsLoaded')
-  }
-  if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-  if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
-  if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
   if (node.kind === 'permission.response') return agentLensI18n.t('review:local.event.permissionResponse')
-  if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
-  if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
   return node.label
 }

@@ -273,8 +273,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             onDraftPresenceChange={setComposerHasContent}
             canSubmit={!historyInteractionPending && !attachmentPending}
             onSubmit={message => { void sendReviewMessage(message) }}
-            onEscape={undefined}
-            placeholder={t('task:live.composerPlaceholder')}
+                        placeholder={t('task:live.composerPlaceholder')}
             ariaLabel={t('task:live.composerAria')}
             onAttachmentPendingChange={setAttachmentPending}
             onAttachmentError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
@@ -282,9 +281,9 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             connectionLabel={t('local.header.resumeOnSend')}
             pendingConnection
             controlsReady={false}
-            pendingModelControl={detailLiveInteraction?.canModelControl}
-            pendingThinkingControl={detailLiveInteraction?.canThinkingControl}
-            showStreamingModes={detailLiveInteraction?.canStreamModes}
+            pendingModelControl={Boolean(detailLiveInteraction?.canModelControl)}
+            pendingThinkingControl={Boolean(detailLiveInteraction?.canThinkingControl)}
+            showStreamingModes={Boolean(detailLiveInteraction?.canStreamModes)}
             modesDisabled
             hasContent={composerHasContent}
             onSendClick={() => {
