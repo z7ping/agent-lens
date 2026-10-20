@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import type { ReviewMessageAttachmentDto } from '@agent-lens/protocol'
+import type { LiveErrorDiagnosticDto, ReviewMessageAttachmentDto } from '@agent-lens/protocol'
 import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
@@ -31,6 +31,7 @@ export interface TaskMessageProps {
   showContentActions?: boolean | undefined
   pending?: boolean | undefined
   error?: boolean | undefined
+  errorDiagnostic?: LiveErrorDiagnosticDto | undefined
   pendingLabel?: string | undefined
   className?: string | undefined
 }
@@ -50,6 +51,7 @@ export function TaskMessage({
   showContentActions = true,
   pending = false,
   error = false,
+  errorDiagnostic,
   pendingLabel,
   className = '',
 }: TaskMessageProps) {
@@ -142,6 +144,13 @@ export function TaskMessage({
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
+      </div>}
+      {error && errorDiagnostic && (errorDiagnostic.stage || errorDiagnostic.code || errorDiagnostic.category || errorDiagnostic.retryable !== undefined || errorDiagnostic.guidance) && <div className="task-message-error-diagnostic">
+        {errorDiagnostic.stage && <span>{t('message.errorStage')}: {errorDiagnostic.stage}</span>}
+        {errorDiagnostic.code && <span>{t('message.errorCode')}: {errorDiagnostic.code}</span>}
+        {errorDiagnostic.category && <span>{t('message.errorCategory')}: {errorDiagnostic.category}</span>}
+        {errorDiagnostic.retryable !== undefined && <span>{errorDiagnostic.retryable ? t('message.retryable') : t('message.notRetryable')}</span>}
+        {errorDiagnostic.guidance && <span className="task-message-error-guidance">{t('message.errorGuidance')}: {errorDiagnostic.guidance}</span>}
       </div>}
       {awaitingFirstContent ? <div
         className="task-message-response-pending"
