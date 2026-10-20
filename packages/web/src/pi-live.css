@@ -251,6 +251,8 @@
 .pi-live-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
 .pi-live-preview-empty { color: var(--al-muted-2); font-size: 13px; }
 .pi-live-compose-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
+/* Review has no active Runtime controls until the first send; keep its send action in the same trailing slot as Live. */
+.pi-live-compose-spacer { flex: 1 1 auto; }
 .pi-live-compose-runtime { display: inline-flex; width: 132px; min-width: 132px; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 /* The shared SelectMenu owns height, borders and interaction. The composer owns
  * only the available horizontal space for its two semantically different controls. */

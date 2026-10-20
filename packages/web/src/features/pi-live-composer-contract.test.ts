@@ -56,6 +56,23 @@ test('通用 Live 模型和推理选择只使用共享 SelectMenu 契约', () =>
   assert.match(selectCss, /\.select-menu-popover\s*\{[\s\S]*?position:\s*fixed;/)
 })
 
+test('Review 会话续聊输入区保持与 Live 相同的外壳、展开操作与发送布局', () => {
+  const review = readFileSync(new URL('./ReviewPage.tsx', import.meta.url), 'utf8')
+  for (const source of [liveTask, review]) {
+    assert.match(source, /className="pi-live-compose-wrap live-task-compose-wrap"/)
+    assert.match(source, /pi-live-composer \$\{composerExpanded \? 'is-expanded' : ''\}/)
+    assert.match(source, /className="pi-live-editor-toolbar"/)
+    assert.match(source, /className="pi-live-editor-action"/)
+    assert.match(source, /<LiveMarkdownComposer/)
+    assert.match(source, /inputClassName="pi-live-input"/)
+    assert.match(source, /className="pi-live-compose-bar"/)
+    assert.match(source, /className="pi-live-send"/)
+  }
+  assert.match(review, /className="pi-live-compose-spacer"/)
+  assert.match(css, /\.pi-live-compose-spacer \{ flex: 1 1 auto; \}/)
+  assert.doesNotMatch(review, /<textarea/)
+})
+
 test('通用 Live Composer 只通过共享 LiveMarkdownComposer 承载编辑状态', () => {
   assert.match(page, /<LiveMarkdownComposer/)
   assert.match(page, /draft=\{draft\}/)
