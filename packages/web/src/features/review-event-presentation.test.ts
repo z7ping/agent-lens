@@ -74,6 +74,19 @@ test('Pi 真实生命周期事件获得友好标签，同时原始事件保持�
   }
 })
 
+test('Canonical kind/action 语义跨来源保持同一事件文案', () => {
+  const node: ReviewEventNodeDto = {
+    type: 'event', id: 'event', at: '2026-10-20T00:00:00Z',
+    capturedAt: '2026-10-20T00:00:00Z', sourceId: 'pi',
+    kind: 'session.lifecycle', category: 'lifecycle', label: 'native lifecycle',
+    payload: { event: 'assistant.error' }, evidence: [], observationIds: [],
+  }
+  for (const sourceId of ['pi', 'codex', 'claude-code', 'hermes', 'unknown-agent']) {
+    assert.equal(reviewEventLabel({ ...node, sourceId }), '助手执行错误')
+    assert.equal(reviewEventLabel({ ...node, sourceId, payload: { event: 'turn.error' } }), '轮次执行失败')
+  }
+})
+
 test('新原生事件保留一致的人类可读标签，且不因跨 Agent 丢失语义', () => {
   const cases: Array<[string, ReviewEventNodeDto['kind'], string, string]> = [
     ['pi', 'session.lifecycle', 'context.edited', '上下文条目已编辑'],
