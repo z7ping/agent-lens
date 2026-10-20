@@ -20,11 +20,14 @@ const [page, mount, projection] = await Promise.all([
   readFile(new URL('../../packages/web/src/features/live-task-projection.ts', import.meta.url), 'utf8'),
 ])
 
-const chunkSize = Number(projection.match(/LIVE_TASK_ROUND_FACT_LIMIT\s*=\s*(\d+)/)?.[1])
+// Generic timeline virtualizes semantic user turns, not obsolete 8-fact fragments.
+// This scenario models one visible fact per turn; a huge single turn needs a separate benchmark.
+const chunkSize = 1
+const minimumRoundHeight = Number(projection.match(/return Math\.max\(\(?(\d+)\)?, Math\.min\(/)?.[1])
 const eagerChunks = 2
 const rootMargin = Number(mount.match(/REVIEW_ROUND_ROOT_MARGIN_PX\s*=\s*(\d+)/)?.[1])
 
-if (!Number.isFinite(chunkSize) || chunkSize <= 0) throw new Error('Cannot resolve generic Live round chunk size')
+if (!Number.isFinite(minimumRoundHeight) || minimumRoundHeight <= 0) throw new Error('Cannot resolve generic Live round minimum estimate')
 if (!Number.isFinite(rootMargin) || rootMargin < 0) throw new Error('Cannot resolve virtual mount root margin')
 if (!/rootSelector="\.pi-live-reader"/.test(page)) throw new Error('Live task virtualization is not mounted against .pi-live-reader')
 if (!/const StableLiveRounds = memo/.test(page) || !/roundSegments\.active\.map/.test(page) || !/<VirtualRoundMount/.test(page) || !/LiveTaskRoundProjector/.test(page)) throw new Error('Generic Live semantic round virtualization is missing')
@@ -36,7 +39,7 @@ if (!/sharedVirtualObservers\s*=\s*new WeakMap/.test(mount)) throw new Error('Vi
 if (!/observer\.unobserve\(element\)/.test(mount)) throw new Error('Shared virtual observer must unobserve disposed targets')
 if (!/listeners\.size === 0[\s\S]*observer\.disconnect/.test(mount)) throw new Error('Shared virtual observer must disconnect when the last target leaves')
 
-const chunkHeight = minimumFactHeight * chunkSize
+const chunkHeight = Math.max(minimumRoundHeight, minimumFactHeight) * chunkSize
 const observationWindowHeight = viewportHeight + rootMargin * 2
 const intersectingChunks = Math.ceil(observationWindowHeight / chunkHeight) + 2
 const mountedChunks = Math.min(Math.ceil(facts / chunkSize), intersectingChunks + eagerChunks)
@@ -45,7 +48,9 @@ const observedTargets = Math.ceil(facts / chunkSize)
 const observerInstances = observedTargets > 0 ? 1 : 0
 
 const report = {
-  benchmark: 'generic-live-history-virtualization',
+  benchmark: 'generic-live-semantic-round-virtualization',
+  scenario: 'one fact per semantic round; not a bound for huge single-turn processes',
+  minimumRoundHeight,
   facts,
   viewportHeight,
   rootMargin,
