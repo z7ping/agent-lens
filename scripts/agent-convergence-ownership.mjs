@@ -28,6 +28,7 @@ export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
   'packages/web/src/features/live-task-projection.ts',
   'packages/web/src/features/live-semantic-rounds.ts',
   'packages/web/src/live-task.css',
+  'packages/web/src/components/live-runtime-disclosure.css',
 ])
 
 const agentCompare = /\b(?:[A-Za-z_$][\w$]*(?:\?\.|\.))*(sourceId|productId|liveId|agentId)\s*(===|!==|==|!=)\s*(['"`])(pi|codex|hermes|claude-code)\3/g
@@ -46,6 +47,11 @@ export function auditAgentConvergenceSources(sources) {
       const key = `${match[4]} ${match[3]} ${match[2]}`
       remaining[key] = (remaining[key] ?? 0) - 1
       if (remaining[key] < 0) failures.push(`${path}: 新增 Agent 私有比较 ${key}`)
+    }
+
+    if ((path.endsWith('/LiveRuntimeDisclosures.tsx') || path.endsWith('/live-runtime-disclosure.css'))
+      && content.includes('pi-startup-')) {
+      failures.push(`${path}: 通用 Runtime Disclosure 禁止恢复 Pi 专属样式钩子`)
     }
 
     if (path === 'packages/web/src/live-task.css' && content.includes('pi-live-')) {

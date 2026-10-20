@@ -10,7 +10,7 @@ const files = {
   backup: p('backup.css'), backupResponsive: p('backup-responsive.css'), review: p('review.css'), reviewLong: p('review-long-session.css'),
   liveTask: p('live-task.css'), taskComposer: p('task-session-composer.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'), taskTurnRail: p('task-turn-rail.css'),
   uiPrimitives: p('components/ui/ui-primitives.css'), uiOverlay: p('components/ui/overlay.css'),
-  selectMenu: p('components/select-menu.css'), piStartup: p('components/pi-startup-disclosure.css'),
+  selectMenu: p('components/select-menu.css'), runtimeDisclosure: p('components/live-runtime-disclosure.css'),
 }
 
 const retired = [
@@ -197,8 +197,8 @@ function assertMinFont(key, includeShorthand = false) {
 for (const key of ['styles', 'theme', 'typography', 'readability', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'liveTask', 'taskComposer', 'taskCenter', 'taskDetail']) {
   assertMinFont(key)
 }
-for (const key of ['uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) assertMinFont(key, true)
-for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'liveTask', 'taskComposer', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'piStartup']) {
+for (const key of ['uiPrimitives', 'uiOverlay', 'selectMenu', 'runtimeDisclosure']) assertMinFont(key, true)
+for (const key of ['theme', 'semantic', 'shell', 'shellResponsive', 'states', 'tools', 'insights', 'agents', 'agentResponsive', 'backup', 'backupResponsive', 'review', 'reviewLong', 'liveTask', 'taskComposer', 'taskCenter', 'taskDetail', 'uiPrimitives', 'uiOverlay', 'selectMenu', 'runtimeDisclosure']) {
   if (/!important\b/.test(css[key])) throw new Error(`${files[key]} 不得用 !important 争夺表现所有权`)
 }
 
