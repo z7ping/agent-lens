@@ -501,8 +501,8 @@ test('all failures from generic SSE events appear in the same user round, indepe
     const result = reduceLiveTaskEvent(start, event(1, { type: 'error', message }))
     const failure = result[1]
     assert.equal(failure?.kind, 'message')
-    assert.equal(failure.kind === 'message' ? failure.error : false, true)
-    assert.equal(failure.kind === 'message' ? failure.text : '', message)
+    assert.equal(failure?.kind === 'message' ? failure.error : false, true)
+    assert.equal(failure?.kind === 'message' ? failure.text : '', message)
     assert.equal(projectLiveTaskRounds(result)[0]?.model.errorCount, 1)
   }
 })
