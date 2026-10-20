@@ -90,6 +90,8 @@ function inspectCss(source, path) {
   for (const match of clean.matchAll(/([^{}]+)\{/g)) {
     const selector = match[1].trim()
     if (selector.startsWith('@')) continue
+    // CopyableCodeBlock owns only its nested copy control styling, even when embedded in Task output.
+    if (path === 'components/copyable-code-block.css' && /\.(?:copyable-code-block|code-block-copy)(?![\w-])/.test(selector)) continue
     if (componentCss.test(selector)) failures.push(path + ': 越权定义 Task Session 样式 ' + selector.slice(0, 100))
     if (path !== 'pi-live.css' && agentPrivate.test(selector.replaceAll('.', ' '))) {
       failures.push(path + ': 新增智能体私有 Session CSS ' + selector.slice(0, 100))
