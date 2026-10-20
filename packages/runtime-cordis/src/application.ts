@@ -181,7 +181,15 @@ export class AgentLensApplication {
     if (currentLive?.availability !== 'available') return base
 
     const lives = this.context.get('lives')
-    const adapter = lives?.get(base.integrationId) ?? lives?.get(productId) ?? null
+    // Integration IDs and adapter live IDs are independently owned. In
+    // particular, third-party adapters need not name either ID after productId.
+    // Only an adapter actually registered for this product can make Live ready.
+    const matching = lives?.list().filter(candidate =>
+      candidate.manifest.productId === productId
+    ) ?? []
+    const adapter = matching.find(candidate => candidate.manifest.liveId === base.integrationId)
+      ?? matching.find(candidate => candidate.manifest.liveId === productId)
+      ?? (matching.length === 1 ? matching[0] : null)
     const next = base.capabilities.map(item => ({ ...item }))
     const liveComponent = registered.integration.components.find(component =>
       component.capabilities.includes('live')
