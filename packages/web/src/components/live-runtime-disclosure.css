@@ -1,0 +1,156 @@
+@reference "../styles.css";
+
+.live-runtime-disclosure {
+  margin: 6px 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--al-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--al-soft-2) 56%, var(--al-surface));
+}
+.live-runtime-disclosure > summary {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: 9px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.live-runtime-disclosure.is-ready:not([open]) { margin: 4px 0 8px; }
+.live-runtime-disclosure.is-ready:not([open]) > summary { min-height: 34px; padding-block: 3px; }
+.live-runtime-disclosure > summary::-webkit-details-marker { display: none; }
+.live-runtime-summary-state {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--al-muted-2);
+}
+.live-runtime-disclosure.is-initializing .live-runtime-summary-state {
+  background: var(--al-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 12%, transparent);
+  animation: live-runtime-pulse 1.4s ease-in-out infinite;
+}
+.live-runtime-disclosure.is-ready .live-runtime-summary-state { background: var(--al-success); }
+.live-runtime-disclosure.is-failed .live-runtime-summary-state { background: var(--al-danger); }
+.live-runtime-summary-copy { display: flex; min-width: 0; align-items: baseline; gap: 7px; overflow: hidden; white-space: nowrap; }
+.live-runtime-summary-copy b { flex: 0 0 auto; color: var(--al-ink); font-size: 12.5px; font-weight: 680; }
+.live-runtime-summary-copy small { min-width: 0; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.live-runtime-summary-time { color: var(--al-muted); font: 12px/1 var(--font-mono); white-space: nowrap; }
+.live-runtime-chevron { color: var(--al-muted); flex: 0 0 14px; transition: transform .15s ease; }
+.live-runtime-disclosure[open] .live-runtime-chevron { transform: rotate(180deg); }
+.live-runtime-body { padding: 0 10px 9px 27px; }
+.live-runtime-inline .live-runtime-body { padding: 1px 0 5px; }
+.live-runtime-complete { display: flex; min-height: 32px; align-items: center; gap: 7px; color: var(--al-success); font-size: 12px; }
+.live-runtime-complete b { color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.live-runtime-complete span { margin-left: auto; color: var(--al-muted); font: 12px/1 var(--font-mono); }
+.live-runtime-steps { display: grid; gap: 1px; border-top: 1px solid var(--al-line); padding-top: 6px; }
+.live-runtime-inline .live-runtime-steps { border-top: 0; padding-top: 0; }
+.live-runtime-step {
+  display: grid;
+  min-height: 36px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 0;
+}
+.live-runtime-inline .live-runtime-step { min-height: 30px; padding: 1px 0; }
+.live-runtime-step-dot {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 1px solid var(--al-line-strong);
+  border-radius: 50%;
+  color: transparent;
+  font-size: 12px;
+  font-weight: 800;
+}
+.live-runtime-step-dot svg { display: block; }
+.live-runtime-step.is-done .live-runtime-step-dot { border-color: color-mix(in srgb, var(--al-success) 65%, var(--al-line)); background: var(--al-success); color: var(--al-on-accent); }
+.live-runtime-step.is-active .live-runtime-step-dot {
+  border-color: var(--al-accent);
+  background: color-mix(in srgb, var(--al-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 4px var(--al-surface);
+  animation: live-runtime-active-ring 1.25s ease-in-out infinite;
+}
+.live-runtime-step.is-failed .live-runtime-step-dot { border-color: var(--al-danger); background: var(--al-danger); color: var(--al-on-accent); }
+.live-runtime-step-copy { display: grid; min-width: 0; gap: 1px; }
+.live-runtime-step-copy b { color: var(--al-ink-2); font-size: 12px; font-weight: 620; }
+.live-runtime-step-copy small { color: var(--al-muted); font-size: 12px; }
+.live-runtime-step.is-pending .live-runtime-step-copy,
+.live-runtime-step.is-pending .live-runtime-step-time { opacity: .48; }
+.live-runtime-step-time { color: var(--al-muted); font: 12px/1 var(--font-mono); white-space: nowrap; }
+.live-runtime-step.is-active .live-runtime-step-time { color: var(--al-accent); }
+.live-runtime-step.is-active .live-runtime-step-copy b {
+  color: var(--al-ink);
+  animation: live-runtime-active-copy 1.6s ease-in-out infinite;
+}
+.live-runtime-step.is-failed .live-runtime-step-time { color: var(--al-danger); }
+.live-runtime-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.live-runtime-meta span { padding: 2px 6px; border-radius: 999px; background: var(--al-soft); color: var(--al-muted); font-size: 12px; }
+.live-runtime-resource-details { margin-top: 6px; border-top: 1px solid var(--al-line); padding-top: 5px; }
+.live-runtime-resource-details > summary { display: inline-flex; width: fit-content; align-items: center; gap: 4px; cursor: pointer; list-style: none; color: var(--al-muted); font-size: 12px; line-height: 1.45; }
+.live-runtime-resource-details > summary::-webkit-details-marker { display: none; }
+.live-runtime-resource-chevron { color: var(--al-muted-2); transition: transform .15s ease; }
+.live-runtime-resource-details[open] .live-runtime-resource-chevron { transform: rotate(90deg); }
+.live-runtime-resources { display: grid; gap: 4px; max-height: 280px; margin-top: 5px; overflow: auto; padding-top: 2px; }
+.live-runtime-resource-row { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 7px; align-items: start; font-size: 12px; line-height: 1.45; }
+.live-runtime-resource-row b { color: var(--al-muted); font: 600 12px/1.55 var(--font-mono); white-space: nowrap; }
+.live-runtime-resource-row span { color: var(--al-ink-2); overflow-wrap: anywhere; }
+.live-runtime-package-row { grid-template-columns: minmax(0, 1fr) max-content; }
+.live-runtime-package-row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.live-runtime-package-row span { white-space: nowrap; }
+.live-runtime-output { display: grid; gap: 4px; margin-top: 8px; border-top: 1px solid var(--al-line); padding-top: 7px; }
+.live-runtime-output > b, .live-runtime-diagnostics > b { color: var(--al-muted); font: 600 12px/1.4 var(--font-mono); }
+.live-runtime-output pre { max-height: 150px; margin: 0; overflow: auto; padding: 6px 8px; border-radius: 7px; background: color-mix(in srgb, var(--al-soft) 72%, transparent); color: var(--al-ink-2); font: 12px/1.45 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.live-runtime-diagnostics { display: grid; gap: 3px; margin-top: 7px; }
+.live-runtime-diagnostics span { color: var(--al-warning); font-size: 12px; line-height: 1.4; }
+.live-runtime-failure { display: grid; gap: 3px; margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--al-danger-soft); color: var(--al-danger); font-size: 12px; }
+.live-runtime-failure b { font-weight: 700; }
+.live-runtime-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 7px; }
+.live-runtime-actions:empty { display: none; }
+
+@keyframes live-runtime-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 10%, transparent);
+    opacity: .82;
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--al-accent) 4%, transparent);
+    opacity: 1;
+  }
+}
+
+@keyframes live-runtime-active-ring {
+  0%, 100% {
+    transform: scale(.92);
+    border-color: color-mix(in srgb, var(--al-accent) 72%, var(--al-line));
+  }
+  50% {
+    transform: scale(1.08);
+    border-color: var(--al-accent);
+  }
+}
+
+@keyframes live-runtime-active-copy {
+  0%, 100% { opacity: .82; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-runtime-disclosure.is-initializing .live-runtime-summary-state,
+  .live-runtime-step.is-active .live-runtime-step-dot,
+  .live-runtime-step.is-active .live-runtime-step-copy b {
+    animation: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .live-runtime-body { padding-left: 10px; }
+  .live-runtime-inline .live-runtime-body { padding-left: 0; }
+  .live-runtime-summary-copy small { display: none; }
+  .live-runtime-step-copy small { display: none; }
+  .live-runtime-resource-row { grid-template-columns: 1fr; gap: 1px; }
+}
