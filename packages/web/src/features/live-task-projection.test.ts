@@ -562,3 +562,28 @@ test('SSE failure reconciles with persisted error instead of duplicating the sam
   ], event(2, { type: 'error', message: 'Network timeout' }))
   assert.equal(anotherTurn.filter(item => item.kind === 'message' && item.error).length, 2)
 })
+
+test('structured error facts survive native Snapshot and generic SSE for any Live Agent', () => {
+  const native = projectLiveSnapshotEntries([
+    { id: 'failure-1', role: 'assistant', stopReason: 'error',
+      error: { message: 'Socket closed', stage: 'network', code: 'ECONNRESET', retryable: true } },
+  ])
+  assert.equal(native.length, 1)
+  assert.deepEqual(native[0]?.kind === 'message' ? native[0].diagnostic : null, {
+    stage: 'network', code: 'ECONNRESET', retryable: true,
+  })
+  for (const agent of ['pi', 'codex', 'hermes']) {
+    const items = reduceLiveTaskEvent([], event(3, {
+      type: 'error', message: agent + ' permission denied',
+      diagnostic: { stage: 'permission', code: 'PERMISSION_DENIED', retryable: false },
+    }))
+    assert.equal(items[0]?.kind === 'message' ? items[0].text : '', agent + ' permission denied')
+    assert.deepEqual(items[0]?.kind === 'message' ? items[0].diagnostic : null, {
+      stage: 'permission', code: 'PERMISSION_DENIED', retryable: false,
+    })
+  }
+  const unverified = projectLiveSnapshotEntries([
+    { id: 'failure-2', role: 'assistant', error: { message: 'Bad request', guidance: 'Disable security checks' } },
+  ])
+  assert.equal(unverified[0]?.kind === 'message' ? unverified[0].diagnostic : undefined, undefined)
+})
