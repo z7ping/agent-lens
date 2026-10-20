@@ -560,7 +560,7 @@ export function reduceLiveTaskEvent(
       role: 'assistant' as const,
       text: detail || agentLensI18n.t('task:message.requestFailed'),
       error: true as const,
-      ...(event.diagnostic ? { diagnostic: event.diagnostic } : {}),
+      ...('diagnostic' in event && event.diagnostic ? { diagnostic: event.diagnostic } : {}),
       streaming: false,
       at: envelope.receivedAt,
     }]
