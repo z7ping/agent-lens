@@ -23,7 +23,7 @@ export interface TaskToolGroupProps {
   model: TaskToolGroupModel
   defaultExpanded?: boolean
   /** Shared owner keeps user disclosure intent when virtual rounds unmount. */
-  expansionStore?: Map<string, boolean>
+  expansionStore?: Map<string, boolean> | undefined
   /** Defer expensive payload rendering until a tool row is opened. */
   compact?: boolean
   renderMeta?: ((tool: TaskToolModel) => ReactNode) | undefined
@@ -123,7 +123,7 @@ export function splitAdjacentTaskToolEntries(sequence: readonly TaskToolGroupSeq
 export function TaskProcessSequence({ id, sequence, expansionStore }: {
   id: string
   sequence: readonly TaskToolGroupSequenceEntry[]
-  expansionStore?: Map<string, boolean>
+  expansionStore?: Map<string, boolean> | undefined
 }) {
   const { t } = useTranslation('task')
   return <>{splitAdjacentTaskToolEntries(sequence).map(segment => {
