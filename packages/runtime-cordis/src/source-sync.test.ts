@@ -355,3 +355,25 @@ test('profiled source detection preserves one installation root while keeping pr
   ])
 })
 
+
+test('production source preparation rejects productId spoofing and isolates failed Source', async () => {
+  const spoof = sourceDefinition('spoof', async () => [{
+    sourceId: 'spoof', productId: 'other-product', confidence: 'exact',
+  }])
+  const healthy = sourceDefinition('healthy', async () => [{
+    sourceId: 'healthy', productId: 'test-product', confidence: 'exact',
+  }])
+  const ctx = {
+    sources: { list: () => [spoof, healthy] },
+    identity: {
+      async resolveHost() { return host },
+      async resolveInstallation() { return installation },
+    },
+    emit() {},
+  } as unknown as AgentLensContext
+  const prepared = await prepareRegisteredSources(ctx, new AbortController().signal)
+  assert.deepEqual(prepared.targets.map(target => target.source.manifest.sourceId), ['healthy'])
+  assert.equal(prepared.failures.length, 1)
+  assert.equal(prepared.failures[0]?.sourceId, 'spoof')
+  assert.equal(prepared.failures[0]?.stage, 'detect')
+})

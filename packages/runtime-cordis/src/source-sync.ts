@@ -109,9 +109,10 @@ export async function prepareRegisteredSources(
       const detected = await source.detect({ host, env: process.env })
       const targets: RegisteredSourceTarget[] = []
       for (const item of detected) {
-        if (item.sourceId !== source.manifest.sourceId) {
+        if (item.sourceId !== source.manifest.sourceId
+          || item.productId !== source.manifest.productId) {
           throw new Error(
-            `Source mismatch: definition=${source.manifest.sourceId}, detected=${item.sourceId}`,
+            `Source identity mismatch: definition=${source.manifest.sourceId}/${source.manifest.productId}, detected=${item.sourceId}/${item.productId}`,
           )
         }
         await registerDetectedSource(ctx, host, item)
