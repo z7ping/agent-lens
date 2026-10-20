@@ -7,11 +7,11 @@ const livePath = 'packages/web/src/features/LiveTaskPage.tsx'
 const runtimePath = 'packages/web/src/components/LiveRuntimeDisclosures.tsx'
 const composerPath = 'packages/web/src/components/TaskSessionComposer.tsx'
 
-test('现存 Review 来源特判只允许减少，不允许增加新来源分支', () => {
-  assert.deepEqual(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'codex'\nuser.sourceId === 'codex'" }), [])
-  assert.equal(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'codex'\nuser.sourceId === 'codex'\nnode.sourceId === 'pi'" }).length, 1)
-  assert.equal(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'codex'\nuser.sourceId === 'codex'\nnode.sourceId === 'codex'" }).length, 1)
-  assert.deepEqual(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'codex'" }), [])
+test('共享 Review 不再允许任何新增 Agent 来源条件分支', () => {
+  assert.deepEqual(auditAgentConvergenceSources({ [reviewPath]: 'const text = taskUserRequestText(node.text)' }), [])
+  assert.equal(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'codex'" }).length, 1)
+  assert.equal(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'pi'" }).length, 1)
+  assert.equal(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'hermes'" }).length, 1)
 })
 
 test('共享 Task 视图禁止品牌分支、旧 Pi 渲染和再次复制输入控件', () => {

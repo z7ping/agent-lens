@@ -107,39 +107,32 @@ export function reviewEventLabel(node: ReviewEventNodeDto): string {
 
   if (node.kind === 'artifact.action') return reviewArtifactLabel(node.payload) ?? node.label
 
-  if (node.sourceId === 'codex') {
-    if (node.kind === 'session.lifecycle' && action === 'turn.context') return agentLensI18n.t('review:local.event.codexTurnContext')
-    if (node.kind === 'session.lifecycle' && action === 'turn.started') return agentLensI18n.t('review:local.event.codexTurnStarted')
-    if (node.kind === 'session.lifecycle' && action === 'turn.completed') return agentLensI18n.t('review:local.event.codexTurnCompleted')
-    if (node.kind === 'session.lifecycle' && action === 'turn.aborted') return agentLensI18n.t('review:local.event.codexTurnAborted')
-    if (node.kind === 'session.lifecycle' && action === 'turn.error') return agentLensI18n.t('review:local.event.codexTurnError')
-    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-    if (node.kind === 'context.injected') return agentLensI18n.t('review:local.event.injectedContext')
-    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
-    if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
-    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
-    if (node.kind === 'session.lifecycle' && action.includes('stop')) return agentLensI18n.t('review:local.event.turnStop')
-  }
-
-  if (node.sourceId === 'claude-code') {
-    if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
-    if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
-    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
-    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-  }
-
-  if (node.sourceId === 'pi') {
-    // Canonical lifecycle 原样保留；展示层按已经确认的原生 action 给出易读标签。
-    if (node.kind === 'session.lifecycle') {
-      if (action === 'assistant.error') return agentLensI18n.t('review:local.event.piAssistantError')
-      if (action === 'assistant.cancelled') return agentLensI18n.t('review:local.event.piAssistantCancelled')
-      if (action === 'pi.bash' || action === 'pi.bash_execution') return agentLensI18n.t('review:local.event.piShell')
-      if (action === 'pi.bash_result') return agentLensI18n.t('review:local.event.piShellResult')
+  // Presentation is keyed by canonical kind + verified native action, never Agent identity.
+  // Source adapters preserve raw payload and can add future stable semantics without UI forks.
+  if (node.kind === 'session.lifecycle') {
+    const lifecycleLabels: Record<string, string> = {
+      'turn.context': 'codexTurnContext',
+      'turn.started': 'codexTurnStarted',
+      'turn.completed': 'codexTurnCompleted',
+      'turn.aborted': 'codexTurnAborted',
+      'turn.error': 'turnFailed',
+      'assistant.error': 'piAssistantError',
+      'assistant.cancelled': 'piAssistantCancelled',
+      'pi.bash': 'piShell',
+      'pi.bash_execution': 'piShell',
+      'pi.bash_result': 'piShellResult',
     }
-    if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
-    if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
-    if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.branchSummary')
+    const key = lifecycleLabels[action]
+    if (key) return agentLensI18n.t(`review:local.event.${key}`)
+    if (action.includes('stop')) return agentLensI18n.t('review:local.event.turnStop')
   }
+  if (node.kind === 'model.changed') return agentLensI18n.t('review:local.event.modelChanged')
+  if (node.kind === 'context.injected') return agentLensI18n.t('review:local.event.injectedContext')
+  if (node.kind === 'context.compaction') return agentLensI18n.t('review:local.event.contextCompaction')
+  if (node.kind === 'context.summary') return agentLensI18n.t('review:local.event.contextSummary')
+  if (node.kind === 'subagent.spawn') return agentLensI18n.t('review:local.event.subagentSpawn')
+  if (node.kind === 'subagent.end') return agentLensI18n.t('review:local.event.subagentEnd')
+  if (node.kind === 'permission.request') return agentLensI18n.t('review:local.event.permissionRequest')
 
   // Common source-backed actions use stable vocabulary across Agent adapters.
   const commonLifecycle: Record<string, string> = {

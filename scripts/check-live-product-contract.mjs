@@ -336,16 +336,18 @@ requireText(liveTaskActionsHook, /composerRef\.current\?\.restoreMessage\(messag
 requireText(liveTask, /onDraftPresenceChange=\{setComposerHasContent\}/, 'LiveTaskPage 只能消费轻量内容存在性')
 forbidText(liveTaskImplementation, /onDraftChange=/, 'LiveTaskPage 不得接收每次按键的完整草稿')
 requireText(liveTask, /onAttachmentPendingChange=\{setComposerAttachmentPending\}/, 'LiveTaskPage 必须感知附件上传 pending')
-requireText(liveTask, /disabled=\{!canSubmit \|\| !composerHasContent\}/, '发送按钮必须受 capability/pending/content 联合约束')
+requireText(liveTask, /canSubmit=\{canSubmit\}/, 'LiveTaskPage 必须传入 capability/pending 限制')
+requireText(liveTask, /hasContent=\{composerHasContent\}/, 'LiveTaskPage 必须传入输入存在性')
+requireText(taskComposerView, /disabled=\{!editorProps\.canSubmit \|\| !hasContent\}/, '唯一 Composer 发送按钮必须受 capability/pending/content 联合约束')
 
 /* Historical Review actions are also product/capability projections, never source-id checks. */
 requireText(reviewImplementation, /projectReviewLiveInteraction\(detail, liveProducts\)/, 'Review 必须通过通用 Live Product 投影恢复/分叉能力')
-requireText(reviewImplementation, /liveApi\.resume\(detailLiveInteraction\.liveId, detail\.id\)/, 'Review resume 必须走通用 liveId')
-requireText(reviewImplementation, /liveApi\.fork\(detailLiveInteraction\.liveId, detail\.id\)/, 'Review fork 必须走通用 liveId')
+requireText(reviewImplementation, /const liveId = detailLiveInteraction\.liveId[\s\S]*?const historicalId = detail\.id[\s\S]*?liveApi\.resume\(liveId, historicalId\)/, 'Review resume 必须走通用 liveId')
+requireText(reviewImplementation, /const liveId = detailLiveInteraction\.liveId[\s\S]*?liveApi\.forkAt\(liveId, detail\.id, nativeEventId\)/, 'Review 指定轮次 fork-at 必须走通用 liveId 与原生 event ID')
 forbidText(reviewImplementation, /sourceIds\.includes\(['"]pi['"]\)[\s\S]{0,500}(?:continueSession|forkContinue)/, 'Review 不得再通过 Pi sourceId 决定历史继续能力')
 requireText(reviewLiveInteraction, /product\.productId === session\.productId/, 'Review Live 能力必须按 productId 匹配')
 requireText(reviewLiveInteraction, /product\.capabilities\.includes\('resume'\)/, 'Review resume 必须来自 capability')
-requireText(reviewLiveInteraction, /product\.capabilities\.includes\('fork'\)/, 'Review fork 必须来自 capability')
+requireText(reviewLiveInteraction, /product\.capabilities\.includes\('fork-at'\)/, 'Review fork-at 必须来自 capability')
 
 /* Keep the architecture anti-regression test itself alive. */
 requireText(architectureTest, /统一 Product Surface 不直接依赖 Pi Live 兼容 Client 或页面/, '缺少 Product Surface 去 Pi 专属依赖回归测试')

@@ -25,9 +25,9 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   onModelChange?(value: string): void
   onThinkingChange?(value: string): void
   showStreamingModes?: boolean
-  streamingMode?: 'steer' | 'followUp'
+  streamingMode?: 'steer' | 'follow-up'
   modesDisabled?: boolean
-  onStreamingModeChange?(value: 'steer' | 'followUp'): void
+  onStreamingModeChange?(value: 'steer' | 'follow-up'): void
 }
 
 export function TaskSessionComposer({
@@ -105,7 +105,7 @@ export function TaskSessionComposer({
       </div>
       {showStreamingModes && <div className="task-composer-mode" aria-label={t('live.streamingMode')}>
         <Button size="small" className={`task-composer-mode-action ${streamingMode === 'steer' ? 'active' : ''}`} aria-pressed={streamingMode === 'steer'} disabled={modesDisabled} onClick={() => onStreamingModeChange?.('steer')}>{t('live.steer')}</Button>
-        <Button size="small" className={`task-composer-mode-action ${streamingMode === 'followUp' ? 'active' : ''}`} aria-pressed={streamingMode === 'followUp'} disabled={modesDisabled} onClick={() => onStreamingModeChange?.('followUp')}>{t('live.followUp')}</Button>
+        <Button size="small" className={`task-composer-mode-action ${streamingMode === 'follow-up' ? 'active' : ''}`} aria-pressed={streamingMode === 'follow-up'} disabled={modesDisabled} onClick={() => onStreamingModeChange?.('follow-up')}>{t('live.followUp')}</Button>
       </div>}
       <IconButton variant="primary" className="task-composer-send" disabled={!editorProps.canSubmit || !hasContent} onClick={onSendClick} aria-label={t('live.send')}>
         <UiIcon name="send" size={20}/>

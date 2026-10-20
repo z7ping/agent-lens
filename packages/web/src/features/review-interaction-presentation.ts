@@ -121,8 +121,8 @@ function isTerminalEvent(node: ReviewEventNodeDto): boolean {
   return ['turn.completed', 'turn.stopped', 'turn.aborted', 'turn.error'].includes(eventAction(node))
 }
 
-function isLegacyPiBenignAssistantStop(node: ReviewEventNodeDto): boolean {
-  if (node.sourceId !== 'pi' || node.kind !== 'session.lifecycle' || eventAction(node) !== 'assistant.stop') return false
+function isBenignNativeAssistantStop(node: ReviewEventNodeDto): boolean {
+  if (node.kind !== 'session.lifecycle' || eventAction(node) !== 'assistant.stop') return false
   const payload = record(node.payload)
   const stopReason = stringField(payload, 'stopReason', 'stop_reason')
   return stopReason === 'stop' || stopReason === 'toolUse'
@@ -192,7 +192,7 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   }
 
   for (const node of nodes) {
-    if (node.type === 'event' && isLegacyPiBenignAssistantStop(node)) continue
+    if (node.type === 'event' && isBenignNativeAssistantStop(node)) continue
     if (node.type === 'event' && isSessionTitleUpdate(node)) {
       titleUpdates.push(node)
       continue
