@@ -110,7 +110,7 @@ requireText(thinking, /task-disclosure-chevron task-thinking-chevron/, 'Thinking
 
 /* Tool：Group 不产生第二折叠层；每次 Tool Call 都是直接事实行。 */
 requireText(toolGroup, /data-task-tool-group="true"/, 'Tool Group 必须保留稳定语义边界')
-requireText(toolGroup, /tools\.map\(\(tool, index\) => visibleIds\.has\(tool\.id\) && <TaskToolRow/, 'Tool Group 必须逐条按可见 ID 渲染原生 Tool Row')
+requireText(toolGroup, /visibleIds\.has\(entry\.tool\.id\) && <TaskToolRow/, 'Tool Group 必须按可见 ID 渲染每个原生 Tool Row，同时保留交错内容顺序')
 requireText(toolGroup, /index < TASK_TOOL_PREVIEW_LIMIT \|\| tool\.status === 'running' \|\| tool\.status === 'error'/, 'Tool Group 必须展示前 3 条及全部运行/失败项')
 if (/<details[\s\S]*data-task-tool-group="true"/.test(toolGroup)) failures.push('Tool Group 不得恢复独立 details 层')
 if (/errorsOnly|execution-group-toolbar/.test(toolGroup)) failures.push('Tool Group 不得恢复只看错误/汇总工具栏替代主执行轨')
