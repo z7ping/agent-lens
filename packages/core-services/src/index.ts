@@ -111,7 +111,16 @@ export class DefaultSourceService implements SourceService {
   }
 
   async detect(context: SourceDetectionContext): Promise<DetectedSource[]> {
-    const detected = await Promise.all(this.list().map(source => source.detect(context)))
+    const detected = await Promise.all(this.list().map(async source => {
+      const found = await source.detect(context)
+      for (const installation of found) {
+        if (installation.sourceId !== source.manifest.sourceId
+          || installation.productId !== source.manifest.productId) {
+          throw new Error(`AgentLens source detection identity mismatch: ${source.manifest.sourceId}`)
+        }
+      }
+      return found
+    }))
     return detected.flat()
   }
 }
