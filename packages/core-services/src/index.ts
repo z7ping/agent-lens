@@ -118,6 +118,42 @@ export class DefaultLiveService implements LiveService {
       )
     }
 
+    // A capability must never be advertised without a real implementation.
+    // All Agent-specific differences remain in adapters; Product Surface only
+    // sees capabilities that this registry has verified at the boundary.
+    const declared = [...adapter.capabilities]
+    if (declared.length !== new Set(declared).size
+      || adapter.manifest.capabilities.length !== new Set(adapter.manifest.capabilities).size
+      || declared.length !== adapter.manifest.capabilities.length
+      || declared.some(capability => !adapter.manifest.capabilities.includes(capability))) {
+      throw new Error(`AgentLens live adapter manifest/capability mismatch: ${id}`)
+    }
+    const requiredMethods = {
+      resume: ['resume'],
+      fork: ['fork'],
+      'fork-at': ['forkAt'],
+      interrupt: ['interrupt'],
+      queue: ['queueState', 'clearQueue'],
+      'model-switching': ['modelControl', 'setModelControl'],
+      'thinking-control': ['thinkingControl', 'setThinkingControl'],
+      'extension-ui': ['respondToExtension'],
+      'command-discovery': ['commands'],
+      'workspace-file-reference': ['workspaceFileReferences'],
+      'history-index': ['historyIndex'],
+      'session-tree': ['sessionTree'],
+    } as const
+    for (const [capability, methods] of Object.entries(requiredMethods)) {
+      if (!adapter.capabilities.has(capability as keyof typeof requiredMethods)) continue
+      for (const method of methods) {
+        if (typeof adapter[method] !== 'function') {
+          throw new Error(`AgentLens live adapter ${capability} capability requires ${method}(): ${id}`)
+        }
+      }
+    }
+    if (adapter.capabilities.has('steer') && !adapter.capabilities.has('queue')) {
+      throw new Error(`AgentLens live adapter steer requires queue capability: ${id}`)
+    }
+
     const watchers = new Map<string, () => void>()
     const terminalSettled = new Set<string>()
     const originalSend = adapter.send
