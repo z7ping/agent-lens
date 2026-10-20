@@ -440,3 +440,44 @@ test('Pi assistant 消息结束可兜底关闭缺失 reasoning.end 的思考块'
   assert.ok(thought?.kind === 'thinking')
   assert.equal(thought.streaming, false)
 })
+
+test('Pi persisted assistant error without text survives snapshot, round projection and reload', () => {
+  const items = projectLiveSnapshotEntries([
+    { type: 'message', id: 'u-422', message: { role: 'user', content: [{ type: 'text', text: '你好' }] } },
+    {
+      type: 'message', id: 'a-422', timestamp: '2026-10-20T10:00:00.000Z',
+      message: { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'HTTP 422: developer role is not supported' },
+    },
+  ])
+  assert.equal(items.length, 2)
+  assert.deepEqual(items[1], {
+    id: 'a-422:error', kind: 'message', role: 'assistant',
+    text: 'HTTP 422: developer role is not supported',
+    error: true, streaming: false, at: '2026-10-20T10:00:00.000Z',
+  })
+  const rounds = projectLiveTaskRounds(items)
+  assert.equal(rounds.length, 1)
+  assert.equal(rounds[0]?.model.errorCount, 1)
+  assert.equal(rounds[0]?.items[1]?.id, 'a-422:error')
+})
+
+test('partial assistant response and its separate persisted error are both visible in order', () => {
+  const items = projectLiveSnapshotEntries([
+    {
+      type: 'message', id: 'a-partial',
+      message: { role: 'assistant', stopReason: 'error',
+        content: [{ type: 'text', text: 'partial output' }],
+        errorMessage: 'HTTP 422: model rejected request' },
+    },
+    { id: 'flat-error', role: 'assistant', errorMessage: 'HTTP 502: upstream unavailable' },
+  ])
+  assert.equal(items.length, 3)
+  assert.equal(items[0]?.kind === 'message' ? items[0].text : null, 'partial output')
+  assert.equal(items[1]?.kind === 'message' ? items[1].text : null, 'HTTP 422: model rejected request')
+  assert.equal(items[1]?.kind === 'message' ? items[1].error : null, true)
+  assert.equal(items[2]?.id, 'flat-error:error')
+  assert.equal(items[2]?.kind === 'message' ? items[2].error : null, true)
+  assert.equal(projectLiveSnapshotEntries([
+    { type: 'message', id: 'ok', message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'done' }] } },
+  ]).some(item => item.kind === 'message' && item.error), false)
+})

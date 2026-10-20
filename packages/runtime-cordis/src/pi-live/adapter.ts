@@ -202,6 +202,20 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   if (type === 'message_start' || type === 'message_end') {
     const message = liveRecord(event.message)
     const rawRole = liveText(message.role)
+    // Pi can finish an assistant message with no text and only errorMessage.
+    // Surface a recoverable request failure instead of silently treating it as a reply.
+    if (type === 'message_end' && rawRole === 'assistant') {
+      const originalError = liveText(message.errorMessage) || liveText(event.errorMessage)
+      if (originalError.trim()) {
+        const unsupportedDeveloperRole = /\b422\b/i.test(originalError)
+          && /\bdeveloper\b/i.test(originalError)
+          && /\brole\b/i.test(originalError)
+        const guidance = unsupportedDeveloperRole
+          ? '\nPi model compatibility: set compat.supportsDeveloperRole=false for this provider/model in ~/.pi/agent/models.json, then reopen the Runtime.'
+          : ''
+        return { type: 'error', message: originalError + guidance }
+      }
+    }
     const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
       ? rawRole
       : 'unknown'

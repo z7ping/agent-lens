@@ -41,7 +41,7 @@ function GenericLiveItem({
 }) {
   const { t, i18n } = useTranslation('task')
   if (item.kind === 'message') {
-    const actions = item.entryId
+    const actions = item.entryId && !item.error
       ? messageActions.filter(action => action.roles.includes(item.role))
       : []
     const messageTime = taskSessionMessageTime(item.at)
@@ -54,7 +54,8 @@ function GenericLiveItem({
         ...(messageTime ? { time: messageTime } : {}),
       }}
       streaming={item.streaming}
-      showContentActions={showContentActions}
+      error={item.error === true}
+      showContentActions={showContentActions && !item.error}
       actions={actions.length
         ? actions.map(action => {
             const key = `${action.actionId}:${item.entryId}`
@@ -114,7 +115,7 @@ export function liveRoundOwnsAnswerActions(
   const round = rounds[index]
   if (!round) return false
   const hasAnswer = (candidate: LiveTaskRoundProjection) => candidate.items.some(item =>
-    item.kind === 'message' && item.role === 'assistant' && item.phase !== 'commentary')
+    item.kind === 'message' && item.role === 'assistant' && !item.error && item.phase !== 'commentary')
   if (!hasAnswer(round)) return false
   const semanticId = round.model.semanticId ?? round.model.id
   return !rounds.slice(index + 1).some(candidate =>
@@ -157,7 +158,9 @@ export const GenericLiveRound = memo(function GenericLiveRound({
         : item.role === 'user' ? 'prompt'
           : item.phase === 'commentary' ? 'commentary'
             : item.phase === 'final' ? 'answer' : 'unclassified-answer'
-    return { id: item.id, kind, value: item, ...(item.kind === 'tool' && item.status === 'error' ? { error: true } : {}) }
+    return { id: item.id, kind, value: item,
+      ...((item.kind === 'tool' && item.status === 'error') || (item.kind === 'message' && item.error) ? { error: true } : {}),
+    }
   }))
   const processItems = reading.process.map(fact => fact.value)
   const visibleItems = [...reading.prompts, ...reading.answers, ...reading.auxiliary].map(fact => fact.value)
@@ -166,7 +169,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     key={item.id} item={item} agentLabel={agentLabel} messageActions={messageActions}
     actionPending={actionPending} runtimeStreaming={runtimeStreaming}
     showContentActions={item.kind === 'message' && item.role === 'assistant'
-      && item.id === lastAnswerId && projection.model.state !== 'running' && showAnswerActions}
+      && !item.error && item.id === lastAnswerId && projection.model.state !== 'running' && showAnswerActions}
     onMessageAction={onMessageAction}
   />
   const renderProcessItem = (item: LiveTaskProjectionItem) =>

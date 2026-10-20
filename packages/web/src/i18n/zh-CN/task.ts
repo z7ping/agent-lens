@@ -26,6 +26,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       you: '你',
       agent: '智能体',
       waitingResponse: '正在等待智能体响应',
+      requestFailed: '请求失败',
       generating: '正在输出',
       collapse: '收起',
       expand: '展开全文',

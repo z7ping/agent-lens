@@ -14,6 +14,8 @@ export type LiveTaskProjectionItem =
       role: 'user' | 'assistant'
       phase?: 'commentary' | 'final' | undefined
       text: string
+      /** Native assistant failure, not a successful generated reply. */
+      error?: true | undefined
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
       attachments?: LiveTaskProjectionAttachment[] | undefined
@@ -141,6 +143,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
     const rawRole = text(item.role) || text(nested.role)
     const nativeEntryId = item.type === 'message' ? text(item.id) : ''
     const baseId = text(item.id) || text(item.message_id) || text(nested.id) || `snapshot-${entryIndex}`
+    const errorMessage = text(nested.errorMessage) || text(item.errorMessage)
     const at = text(item.created_at) || text(item.createdAt) || text(item.timestamp)
     const content = Array.isArray(nested.content)
       ? nested.content
@@ -188,12 +191,25 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
       return
     }
 
+    const pushAssistantError = () => {
+      if (!errorMessage.trim()) return
+      projected.push({
+        id: `${baseId}:error`,
+        kind: 'message',
+        role: 'assistant',
+        text: errorMessage,
+        error: true,
+        streaming: false,
+        ...(at ? { at } : {}),
+      })
+    }
+
     if (!content) {
       const body = contentText(item.content)
         || contentText(item.text)
         || contentText(nested.content)
         || contentText(nested.text)
-      if (!body) return
+      if (!body) { pushAssistantError(); return }
       projected.push({
         id: baseId,
         kind: 'message',
@@ -204,6 +220,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         streaming: false,
         ...(at ? { at } : {}),
       })
+      pushAssistantError()
       return
     }
 
@@ -272,6 +289,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         })
       }
     })
+    pushAssistantError()
   })
 
   return projected
@@ -587,7 +605,8 @@ function buildRoundModel(
     (item): item is Extract<LiveTaskProjectionItem, { kind: 'message' }> => item.kind === 'message',
   )
   const toolCount = items.filter(item => item.kind === 'tool').length
-  const errorCount = items.filter(item => item.kind === 'tool' && item.status === 'error').length
+  const errorCount = items.filter(item => (item.kind === 'tool' && item.status === 'error')
+    || (item.kind === 'message' && item.error === true)).length
   const running = items.some(item =>
     (item.kind === 'message' || item.kind === 'thinking') ? item.streaming : item.status === 'running',
   )

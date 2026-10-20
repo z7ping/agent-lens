@@ -94,6 +94,22 @@ test('相同的 Session 事实在两种模式中只有一份 DOM 结构', () => 
   assert.doesNotMatch(runningReview, /<details[^>]*open/)
 })
 
+test('失败模型请求复用共享 TaskMessage，以错误语义呈现，不冒充正常答复', () => {
+  const rendered = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'HTTP 422: developer role is not supported', error: true,
+    presentation: { author: 'Pi' },
+  }))
+  assert.match(rendered, /data-error="true"/)
+  assert.match(rendered, /role="alert"/)
+  assert.match(rendered, /task-message-error-status/)
+  assert.match(rendered, /HTTP 422: developer role is not supported/)
+  const normal = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: '完成', presentation: { author: 'Pi' },
+  }))
+  assert.doesNotMatch(normal, /data-error="true"/)
+  assert.match(read('../task-detail.css'), /task-message-row\[data-error='true'\]/)
+})
+
 test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺少 modelLabel 隐藏时间与证据', () => {
   const evidence = createElement('span', {}, '证据 2 条')
   const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
