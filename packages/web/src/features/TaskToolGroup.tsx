@@ -13,7 +13,7 @@ export function visibleTaskToolIds(tools: readonly TaskToolModel[], expanded: bo
   ).map(tool => tool.id))
 }
 
-/** Preserve interleaved thinking, commentary and events while collapsing tools across the whole round. */
+/** Tool entries and non-tool facts in original semantic order. */
 export type TaskToolGroupSequenceEntry =
   | { type: 'tool'; key: string; tool: TaskToolModel; meta?: ReactNode; details?: ReactNode; onToolClick?: () => void }
   | { type: 'content'; key: string; content: ReactNode }
@@ -89,4 +89,48 @@ export function TaskToolGroup({
         onClick={entry.onToolClick ?? (onToolClick ? () => onToolClick(entry.tool) : undefined)}
       />)}</div>
   </div>
+}
+
+/** Only uninterrupted tool runs share an independent disclosure budget. */
+export type TaskProcessSequenceSegment =
+  | { type: 'tools'; key: string; entries: Extract<TaskToolGroupSequenceEntry, { type: 'tool' }>[] }
+  | { type: 'content'; key: string; content: ReactNode }
+
+export function splitAdjacentTaskToolEntries(sequence: readonly TaskToolGroupSequenceEntry[]): TaskProcessSequenceSegment[] {
+  const segments: TaskProcessSequenceSegment[] = []
+  for (const entry of sequence) {
+    if (entry.type === 'content') {
+      segments.push(entry)
+      continue
+    }
+    const previous = segments[segments.length - 1]
+    if (previous?.type === 'tools') previous.entries.push(entry)
+    else segments.push({ type: 'tools', key: entry.key, entries: [entry] })
+  }
+  return segments
+}
+
+/** Shared Live / Review ordering and progressive tool-group renderer. */
+export function TaskProcessSequence({ id, sequence }: {
+  id: string
+  sequence: readonly TaskToolGroupSequenceEntry[]
+}) {
+  const { t } = useTranslation('task')
+  return <>{splitAdjacentTaskToolEntries(sequence).map(segment => {
+    if (segment.type === 'content') return <Fragment key={segment.key}>{segment.content}</Fragment>
+    const tools = segment.entries.map(entry => entry.tool)
+    return <TaskToolGroup
+      key={segment.key}
+      compact
+      sequence={segment.entries}
+      model={{
+        id: `tools:${id}:${segment.key}`,
+        label: t('live.toolGroup'),
+        itemCount: tools.length,
+        errorCount: tools.filter(tool => tool.status === 'error').length,
+        kindCounts: [],
+        tools,
+      }}
+    />
+  })}</>
 }
