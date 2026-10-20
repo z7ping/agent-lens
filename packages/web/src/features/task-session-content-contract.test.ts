@@ -135,7 +135,7 @@ test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺�
     assert.match(read(source), /taskSessionMessageTime/)
   }
   const messageSource = read('./TaskMessage.tsx')
-  assert.match(messageSource, /\(modelLabel \|\| time \|\| meta\)/)
+  assert.match(messageSource, /\(modelLabel \|\| time \|\| meta \|\| error\)/)
   assert.doesNotMatch(messageSource, /!user && modelLabel &&/)
   assert.match(read('../task-detail.css'), /\.task-surface \.task-message-context-evidence/)
   assert.doesNotMatch(read('../review.css'), /\.task-message-model-meta/)

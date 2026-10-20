@@ -56,7 +56,7 @@ test('Review 116 次工具跨 58 个原生分组仍只使用一次整轮渐进�
 
   assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 1)
   assert.match(html, /工具调用 · 116 项/)
-  assert.match(html, /展开其余 111 项/)
+  assert.match(html, /展开其余 112 项/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
   assert.match(html, /native_call_84/)
   assert.match(html, /native_call_96/)

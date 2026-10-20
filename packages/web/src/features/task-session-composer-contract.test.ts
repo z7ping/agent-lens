@@ -159,7 +159,7 @@ test('Review/Live 头部、阅读区和 Live Composer 共用 820px 宽度上限'
   assert.match(sessionCss, /\.task-session-view \.task-session-document \{[^}]*max-width:\s*var\(--al-content-task-reading\);/s)
   assert.match(sessionCss, /\.task-session-view \.task-header \{[^}]*max-width:\s*var\(--al-content-task-reading\);/s)
   assert.match(composerCss, /\.task-composer \{[^}]*max-width:\s*var\(--al-content-task-composer\);/s)
-  assert.match(css, /\.pi-live-float-stack \{[^}]*width:\s*min\(var\(--al-content-task-composer\),/s)
+  assert.match(css, /\.live-task-float-stack \{[^}]*width:\s*min\(var\(--al-content-task-composer\),/s)
   assert.match(sessionCss, /@media \(max-width: 767\.98px\)/)
   assert.match(composerCss, /@media \(max-width: 767\.98px\)/)
 })
