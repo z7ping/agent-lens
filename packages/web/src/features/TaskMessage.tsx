@@ -138,7 +138,7 @@ export function TaskMessage({
     <div className={`task-message-bubble ${bubbleClass}`}>
       {(modelLabel || time || meta || error) && <div className="task-message-model-meta">
         <b>{resolvedAuthor}</b>
-        {error && <span className="task-message-error-status"><UiIcon name="alert-circle" size={14}/>{t('message.requestFailed')}</span>}
+        {error && <span className="task-message-error-status"><UiIcon name="alert" size={14}/>{t('message.requestFailed')}</span>}
         {modelLabel && <><span aria-hidden="true">·</span><span className="task-message-model-label">{modelLabel}</span></>}
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
