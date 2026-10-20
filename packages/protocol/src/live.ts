@@ -256,6 +256,16 @@ export type LiveEventStatusDto =
 
 export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' | 'failed'
 
+/** Optional adapter-supplied failure facts; do not infer a category or a fix from HTTP status codes. */
+export interface LiveErrorDiagnosticDto {
+  stage?: 'model' | 'tool' | 'runtime' | 'network' | 'permission' | 'extension' | 'unknown' | undefined
+  code?: string | undefined
+  category?: string | undefined
+  retryable?: boolean | undefined
+  /** Only explicit, source-owned and evidence-backed guidance may be provided. */
+  guidance?: string | undefined
+}
+
 export type LiveEventDto =
   | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
   | { type: 'title.update'; title: string }
@@ -315,7 +325,7 @@ export type LiveEventDto =
       placeholder?: string | undefined
       prefill?: string | undefined
     }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; diagnostic?: LiveErrorDiagnosticDto | undefined }
   | { type: 'completed'; status: LiveCompletionStatusDto; message?: string | undefined }
 
 export interface LiveControlDisplayInfoDto {
