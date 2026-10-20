@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentScope, agentLabel, sourceDot } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
-import { LiveMarkdownComposer, type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
+import { type LiveMarkdownComposerDraft, type LiveMarkdownComposerHandle } from '../components/LiveMarkdownComposer'
+import { TaskSessionComposer } from '../components/TaskSessionComposer'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { VirtualRoundMount } from '../components/VirtualRoundMount'
@@ -262,54 +263,34 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             </div>
           </div>}
         </div>
-        {detail && canCompose && <div className="pi-live-compose-wrap live-task-compose-wrap">
-          <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
-            <div className="pi-live-editor">
-              <div className="pi-live-editor-toolbar" aria-label={t('task:live.composerToolbarAria')}>
-                <IconButton
-                  className="pi-live-editor-action"
-                  title={composerExpanded ? t('task:live.composerShrink') : t('task:live.composerExpand')}
-                  aria-label={composerExpanded ? t('task:live.composerShrink') : t('task:live.composerExpand')}
-                  onClick={() => setComposerExpanded(value => !value)}
-                >
-                  <UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/>
-                </IconButton>
-              </div>
-              <LiveMarkdownComposer
-                key={draftKey}
-                ref={composerRef}
-                draft={composerDraft}
-                draftKey={draftKey}
-                onDraftPresenceChange={setComposerHasContent}
-                canSubmit={!historyInteractionPending && !attachmentPending}
-                onSubmit={message => { void sendReviewMessage(message) }}
-                onEscape={undefined}
-                placeholder={t('local.header.continuePlaceholder')}
-                ariaLabel={t('local.header.continuePlaceholder')}
-                inputClassName="pi-live-input"
-                onAttachmentPendingChange={setAttachmentPending}
-                onAttachmentError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
-                disabled={Boolean(historyInteractionPending)}
-              />
-            </div>
-            <div className="pi-live-compose-bar">
-              <span className="pi-live-compose-runtime" title={t('local.header.resumeOnSend')}>
-                <span className="pi-live-idle-dot" aria-hidden="true"/>
-                {t('local.header.resumeOnSend')}
-              </span>
-              <span className="pi-live-compose-spacer" aria-hidden="true"/>
-              <IconButton
-                variant="primary"
-                className="pi-live-send"
-                disabled={Boolean(historyInteractionPending) || attachmentPending || !composerHasContent}
-                aria-label={t('local.header.sendContinue')}
-                onClick={() => {
-                  const message = composerRef.current?.getMessage()
-                  if (message) void sendReviewMessage(message)
-                }}
-              ><UiIcon name="send" size={20}/></IconButton>
-            </div>
-          </div>
+        {detail && canCompose && <div className="task-session-composer-slot">
+          <TaskSessionComposer
+            editorRef={composerRef}
+            expanded={composerExpanded}
+            onExpandedChange={setComposerExpanded}
+            draft={composerDraft}
+            draftKey={draftKey}
+            onDraftPresenceChange={setComposerHasContent}
+            canSubmit={!historyInteractionPending && !attachmentPending}
+            onSubmit={message => { void sendReviewMessage(message) }}
+            onEscape={undefined}
+            placeholder={t('task:live.composerPlaceholder')}
+            ariaLabel={t('task:live.composerAria')}
+            onAttachmentPendingChange={setAttachmentPending}
+            onAttachmentError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
+            disabled={Boolean(historyInteractionPending)}
+            connectionLabel={t('local.header.resumeOnSend')}
+            controlsReady={false}
+            pendingModelControl={detailLiveInteraction?.canModelControl}
+            pendingThinkingControl={detailLiveInteraction?.canThinkingControl}
+            showStreamingModes={detailLiveInteraction?.canStreamModes}
+            modesDisabled
+            hasContent={composerHasContent}
+            onSendClick={() => {
+              const message = composerRef.current?.getMessage()
+              if (message) void sendReviewMessage(message)
+            }}
+          />
         </div>}
       </TaskSurface>
     </div>
