@@ -285,8 +285,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const itemCount = projection.stable.length + projection.active.length
 
   if (!current) {
-    return <main className="pi-live-page pi-live-page-embedded">
-      <div className="pi-live-error" role="alert">{error || t('live.invalidRuntime')}</div>
+    return <main className="live-task-page-embedded">
+      <div className="live-task-error" role="alert">{error || t('live.invalidRuntime')}</div>
     </main>
   }
 
@@ -322,10 +322,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     ...restoredQueue.map(item => ({ ...item, active: false })),
   ]
 
-  return <main className={`pi-live-page live-task-page ${embedded ? 'pi-live-page-embedded' : ''}`}>
+  return <main className={`live-task-page live-task-page ${embedded ? 'live-task-page-embedded' : ''}`}>
     <TaskSurface
       mode="live"
-      className="pi-live-workspace live-task-workspace"
+      className="live-task-workspace"
       boundaryNavigation={{
         startDisabled: historyLoading,
         endDisabled: historyLoading,
@@ -377,13 +377,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
       <div
         ref={readerRef}
-        className="pi-live-reader live-task-reader"
+        className="live-task-reader"
         onScroll={onReaderScroll}
         onWheel={event => markReaderUserIntent(event.deltaY < 0 ? 'older' : 'newer')}
         onTouchStart={() => markReaderUserIntent()}
         onPointerDown={() => markReaderUserIntent()}
       >
-        <div className="pi-live-document live-task-document">
+        <div className="live-task-document">
           {historyPage?.hasEarlier && <div
             ref={historyLoadSentinelRef}
             className={`live-task-history-sentinel ${historyLoading ? 'is-loading' : ''}`}
@@ -395,7 +395,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             pendingAction={runtimeActionPending}
             onAction={action => { void runRuntimeAction(action) }}
           />
-          {runtimeDisclosures.every(item => !item.lifecycle) && (!state || state.status === 'initializing') && !error && <div className="pi-live-startup-spotlight">
+          {runtimeDisclosures.every(item => !item.lifecycle) && (!state || state.status === 'initializing') && !error && <div className="live-task-startup-spotlight">
             <OperationProgress
               statusLabel={runtimeStatus}
               title={t('live.loadingTitle')}
@@ -411,7 +411,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             runtimeStreaming={state?.isStreaming ?? false}
             onMessageAction={runMessageAction}
           />
-          {noProgressWarning && <div className="pi-live-sync-warning" role="status">
+          {noProgressWarning && <div className="live-task-sync-warning" role="status">
             <UiIcon name="alert" size={14}/>
             {t('live.noProgressWarning', { duration: taskPreciseDurationLabel(progressClockMs - lastProgressAtRef.current) })}
           </div>}
@@ -432,31 +432,31 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             className={`live-task-history-sentinel live-task-history-sentinel-newer ${historyLoading ? 'is-loading' : ''}`}
             aria-hidden="true"
           />}
-          {!itemCount && state?.status === 'ready' && <div className="pi-live-empty">{t('live.empty')}</div>}
-          {syncError && <div className="pi-live-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
-          {error && <div className="pi-live-error pi-live-reader-error" role="alert">{error}</div>}
-          {pathError && <div className="pi-live-error pi-live-reader-error" role="alert">{pathError}</div>}
+          {!itemCount && state?.status === 'ready' && <div className="live-task-empty">{t('live.empty')}</div>}
+          {syncError && <div className="live-task-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
+          {error && <div className="live-task-error live-task-reader-error" role="alert">{error}</div>}
+          {pathError && <div className="live-task-error live-task-reader-error" role="alert">{pathError}</div>}
         </div>
       </div>
 
       <div className="task-session-composer-slot">
-        <div className="pi-live-float-stack">
-          {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('live.newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
-          {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite">
+        <div className="live-task-float-stack">
+          {newRecords && <Button size="small" className="live-task-new-records" onClick={jumpLatest}>{t('live.newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
+          {interruptNotice && <div className="live-task-interrupt-notice" role="status" aria-live="polite">
             <UiIcon name="check" size={14}/>
             <b>{t('live.interruptedTitle')}</b>
             <span>{t('live.interruptedDescription')}</span>
           </div>}
-          {startupQueued && <div className="pi-live-startup-queue" role="status">
+          {startupQueued && <div className="live-task-startup-queue" role="status">
             <span>{t('live.startupWaitingReady')}</span>
             <b>{messageText(startupQueued)}</b>
             <div>
-              <Button size="small" className="pi-live-queue-action" onClick={editStartupQueued}>{t('live.queue.edit')}</Button>
-              <Button size="small" className="pi-live-queue-action" onClick={() => setStartupQueued(null)}>{t('live.queue.withdraw')}</Button>
+              <Button size="small" className="live-task-queue-action" onClick={editStartupQueued}>{t('live.queue.edit')}</Button>
+              <Button size="small" className="live-task-queue-action" onClick={() => setStartupQueued(null)}>{t('live.queue.withdraw')}</Button>
             </div>
           </div>}
-          {queueItems.length > 0 && <div className="pi-live-queue" role="status" aria-live="polite">
-            {queueItems.map(item => <div key={item.id} className={`pi-live-queue-item ${item.active ? 'active' : 'restored'}`}>
+          {queueItems.length > 0 && <div className="live-task-queue" role="status" aria-live="polite">
+            {queueItems.map(item => <div key={item.id} className={`live-task-queue-item ${item.active ? 'active' : 'restored'}`}>
               <span>{item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
               <b>{item.text}</b>
               {item.active
@@ -466,14 +466,14 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
                       <small>{t('live.queue.queued')}</small>
                       {item.queueIndex !== undefined && <Button
                         size="small"
-                        className="pi-live-queue-action"
+                        className="live-task-queue-action"
                         disabled={queueMutationPending}
                         onClick={() => { void removeQueued(item.mode, item.queueIndex!, item.text) }}
                       >{t('live.queue.withdraw')}</Button>}
                     </div>
                 : <div>
-                    <Button size="small" className="pi-live-queue-action" onClick={() => editRestoredQueue(item)}>{t('live.queue.edit')}</Button>
-                    <Button size="small" className="pi-live-queue-action" onClick={() => removeRestoredQueue(item.id)}>{t('live.queue.withdraw')}</Button>
+                    <Button size="small" className="live-task-queue-action" onClick={() => editRestoredQueue(item)}>{t('live.queue.edit')}</Button>
+                    <Button size="small" className="live-task-queue-action" onClick={() => removeRestoredQueue(item.id)}>{t('live.queue.withdraw')}</Button>
                   </div>}
             </div>)}
           </div>}
