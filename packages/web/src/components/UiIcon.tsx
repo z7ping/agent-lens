@@ -93,6 +93,7 @@ export type UiIconName =
   | 'event-context'
   | 'expand'
   | 'filter'
+  | 'fork'
   | 'file'
   | 'file-code'
   | 'link'
@@ -157,6 +158,7 @@ const icons = {
   'event-context': Layers,
   expand: Maximize2,
   filter: Filter,
+  fork: GitFork,
   file: File,
   'file-code': FileCode2,
   link: Link2,

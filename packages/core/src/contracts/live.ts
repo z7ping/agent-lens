@@ -5,6 +5,7 @@ export type LiveCapabilityName =
   | 'create'
   | 'resume'
   | 'fork'
+  | 'fork-at'
   | 'send'
   | 'stream'
   | 'interrupt'
@@ -620,6 +621,8 @@ export interface LiveAdapter {
   resume?(logicalSessionId: string): Promise<LiveRuntimeState>
   /** Present only when the adapter declares fork. Logical session ids stay AgentLens-owned. */
   fork?(logicalSessionId: string): Promise<LiveRuntimeState>
+  /** Exact native end-of-round anchor, validated by the owning adapter against the logical history. */
+  forkAt?(logicalSessionId: string, nativeEventId: string): Promise<LiveRuntimeState>
   state(runtimeSessionId: string): Promise<LiveRuntimeState>
   /**
    * Must be bounded. Omitting window means LIVE_SNAPSHOT_DEFAULT_LIMIT, never

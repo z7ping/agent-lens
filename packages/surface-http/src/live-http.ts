@@ -944,7 +944,7 @@ export async function handleLiveRequest(
       return true
     }
 
-    const historyMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/history\/([^/]+)\/(resume|fork)$/)
+    const historyMatch = url.pathname.match(/^\/api\/v1\/live\/([^/]+)\/history\/([^/]+)\/(resume|fork|fork-at)$/)
     if (historyMatch) {
       if (request.method !== 'POST') {
         writeJson(response, 405, { error: 'method_not_allowed' })
@@ -952,9 +952,19 @@ export async function handleLiveRequest(
       }
       const liveId = decodeURIComponent(historyMatch[1]!)
       const logicalSessionId = decodeURIComponent(historyMatch[2]!)
-      const action = historyMatch[3] as 'resume' | 'fork'
+      const action = historyMatch[3] as 'resume' | 'fork' | 'fork-at'
       const adapter = adapterFor(service, liveId)
       requireCapability(adapter, action)
+      if (action === 'fork-at') {
+        const body = objectBody(await readJson(request))
+        const nativeEventId = body.nativeEventId
+        if (typeof nativeEventId !== 'string' || !nativeEventId.trim() || nativeEventId.length > 256) {
+          throw httpError(400, 'Invalid history fork anchor')
+        }
+        if (!adapter.forkAt) throw httpError(409, `${adapter.manifest.displayName} does not expose Live fork-at`)
+        writeJson(response, 201, jsonValue(normalizePublicRuntimeState(await adapter.forkAt(logicalSessionId, nativeEventId))))
+        return true
+      }
       const handler = action === 'resume' ? adapter.resume : adapter.fork
       if (!handler) throw httpError(409, `${adapter.manifest.displayName} does not expose Live ${action}`)
       writeJson(response, 201, jsonValue(normalizePublicRuntimeState(await handler.call(adapter, logicalSessionId))))

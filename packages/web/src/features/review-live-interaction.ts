@@ -4,7 +4,9 @@ export interface ReviewLiveInteraction {
   liveId: string
   displayName: string
   canResume: boolean
+  canSend: boolean
   canFork: boolean
+  canForkAt: boolean
 }
 
 /**
@@ -20,7 +22,7 @@ export function projectReviewLiveInteraction(
   if (!session?.productId) return null
   const candidates = products.filter(product =>
     product.productId === session.productId
-    && (product.capabilities.includes('resume') || product.capabilities.includes('fork')),
+    && (product.capabilities.includes('resume') || product.capabilities.includes('fork') || product.capabilities.includes('fork-at')),
   )
   if (candidates.length !== 1) return null
   const product = candidates[0]!
@@ -28,6 +30,8 @@ export function projectReviewLiveInteraction(
     liveId: product.liveId,
     displayName: product.displayName,
     canResume: product.capabilities.includes('resume'),
+    canSend: product.capabilities.includes('send'),
     canFork: product.capabilities.includes('fork'),
+    canForkAt: product.capabilities.includes('fork-at'),
   }
 }

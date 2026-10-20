@@ -36,6 +36,7 @@ const CAPABILITIES = [
   'create',
   'resume',
   'fork',
+  'fork-at',
   'send',
   'stream',
   'interrupt',
@@ -364,6 +365,30 @@ export class PiLiveAdapter implements LiveAdapter {
   async fork(logicalSessionId: string): Promise<PiLiveRuntimeState> {
     if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
     return this.service.start(await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork'))
+  }
+
+  async forkAt(logicalSessionId: string, nativeEventId: string): Promise<PiLiveRuntimeState> {
+    if (!this.storage) throw new Error('Pi Live history interactions are unavailable')
+    if (!nativeEventId || nativeEventId.length > 256) throw new Error('Invalid history fork anchor')
+    const input = await resolvePiLiveHistoryInput(this.storage, logicalSessionId, 'fork')
+    const listSessions = this.storage.repositories.sessions.listSourceSessionsByLogicalSession
+    if (!listSessions) throw new Error('Pi history source sessions are unavailable')
+    const sessions = await listSessions(logicalSessionId, { sourceId: 'pi', limit: 8 })
+    const installations = [...new Set(sessions.map(session => session.installationId))]
+    const records = await Promise.all(installations.map(installationId =>
+      this.storage!.repositories.sourceRecords.findByNativeId('pi', installationId, nativeEventId),
+    ))
+    const valid = records.filter((record): record is NonNullable<typeof record> => {
+      if (!record || record.sourceId !== 'pi' || record.nativeType !== 'history/message'
+        || record.locator.kind !== 'file' || record.locator.path !== input.sessionPath
+        || !sessions.some(session => session.installationId === record.installationId
+          && session.nativeSessionId === record.sourceSessionNativeId)) return false
+      const payload = record.payload as { entry?: { type?: string; id?: string; message?: { role?: string } } }
+      return payload.entry?.type === 'message' && payload.entry.id === nativeEventId
+        && payload.entry.message?.role === 'assistant'
+    })
+    if (valid.length !== 1) throw new Error('No uniquely verified Pi assistant message at this round boundary')
+    return this.service.start({ ...input, branchFromEntryId: nativeEventId })
   }
 
   state(runtimeSessionId: string): Promise<PiLiveRuntimeState> {

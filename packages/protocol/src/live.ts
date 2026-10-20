@@ -48,6 +48,7 @@ export type LiveCapabilityNameDto =
   | 'create'
   | 'resume'
   | 'fork'
+  | 'fork-at'
   | 'send'
   | 'stream'
   | 'interrupt'

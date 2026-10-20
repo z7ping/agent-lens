@@ -30,7 +30,9 @@ test('matches by product id and returns advertised operations', () => {
       liveId: 'alpha-live',
       displayName: 'Alpha',
       canResume: true,
+      canSend: false,
       canFork: false,
+      canForkAt: false,
     },
   )
 })
@@ -45,7 +47,9 @@ test('history capabilities are not gated on transient adapter availability', () 
       liveId: 'alpha-live',
       displayName: 'Alpha',
       canResume: true,
+      canSend: false,
       canFork: true,
+      canForkAt: false,
     },
   )
   assert.equal(projectReviewLiveInteraction({ productId: 'other' }, [product()]), null)
@@ -59,4 +63,21 @@ test('ambiguous product mappings are rejected instead of guessing an adapter', (
     ]),
     null,
   )
+})
+
+test('round fork and inline resume are gated by separate advertised capabilities', () => {
+  assert.deepEqual(
+    projectReviewLiveInteraction({ productId: 'alpha' }, [product({ capabilities: ['resume', 'send', 'fork-at'] })]),
+    {
+      liveId: 'alpha-live',
+      displayName: 'Alpha',
+      canResume: true,
+      canSend: true,
+      canFork: false,
+      canForkAt: true,
+    },
+  )
+  const codex = projectReviewLiveInteraction({ productId: 'alpha' }, [product({ capabilities: ['resume', 'send'] })])
+  assert.equal(codex?.canResume && codex.canSend, true)
+  assert.equal(codex?.canForkAt, false)
 })

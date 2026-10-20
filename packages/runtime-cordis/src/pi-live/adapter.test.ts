@@ -1,7 +1,10 @@
 import { Buffer } from 'node:buffer'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import type { LiveAttachmentService } from '@agent-lens/core'
+import type { LiveAttachmentService, StorageService } from '@agent-lens/core'
 import { normalizePiLiveEvent, normalizePiLiveRuntimeEvent, PiLiveAdapter } from './adapter'
 import type { PiLiveImageInput, PiLiveRuntimeState, PiLiveService } from './types'
 
@@ -576,4 +579,65 @@ test('Pi Live Adapter exposes native session tree only through the generic sessi
   assert.deepEqual(await adapter.sessionTree('runtime-1'), tree)
   assert.deepEqual(calls, ['runtime-1'])
   assert.equal(Object.hasOwn(tree.nodes[0]!, 'entry'), false)
+})
+
+test('Pi history round fork validates the native assistant anchor in the original session', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'agentlens-pi-fork-at-'))
+  const file = join(root, 'session.jsonl')
+  const header = { type: 'session', id: 'native-session', cwd: root }
+  const assistant = { type: 'message', id: 'assistant-1', message: { role: 'assistant' } }
+  const user = { type: 'message', id: 'user-1', message: { role: 'user' } }
+  try {
+    await writeFile(file, [header, assistant, user].map(value => JSON.stringify(value)).join('\n') + '\n')
+    const sourceRecord = (entry: typeof header | typeof assistant | typeof user) => ({
+      sourceId: 'pi',
+      installationId: 'installation-1',
+      sourceSessionNativeId: 'native-session',
+      nativeType: `history/${entry.type}`,
+      locator: { kind: 'file', path: file },
+      payload: { entry, session: { cwd: root } },
+    })
+    const records = new Map([
+      [header.id, sourceRecord(header)],
+      [assistant.id, sourceRecord(assistant)],
+      [user.id, sourceRecord(user)],
+    ])
+    const storage = {
+      repositories: {
+        sessions: {
+          getLogicalSession: async () => ({ workspaceId: 'workspace-1' }),
+          getWorkspace: async () => ({ path: root }),
+          listSourceSessionsByLogicalSession: async () => [
+            { installationId: 'installation-1', nativeSessionId: 'native-session' },
+          ],
+        },
+        sourceRecords: {
+          findByNativeId: async (_sourceId: string, _installationId: string, nativeId: string) => records.get(nativeId) ?? null,
+        },
+      },
+    } as unknown as StorageService
+    const started: unknown[] = []
+    const service = {
+      start: async (input: unknown) => {
+        started.push(input)
+        return readyState
+      },
+    } as unknown as PiLiveService
+    const adapter = new PiLiveAdapter(service, attachmentService(), storage)
+
+    await adapter.forkAt('logical-1', assistant.id)
+    assert.equal(started.length, 1)
+    assert.deepEqual(started[0], {
+      cwd: root,
+      sessionPath: file,
+      historyAction: 'fork',
+      logicalSessionId: 'logical-1',
+      branchFromEntryId: assistant.id,
+    })
+    await assert.rejects(() => adapter.forkAt('logical-1', user.id), /uniquely verified Pi assistant/)
+    await assert.rejects(() => adapter.forkAt('logical-1', 'unknown-entry'), /uniquely verified Pi assistant/)
+    assert.equal(started.length, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
