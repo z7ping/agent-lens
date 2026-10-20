@@ -99,7 +99,7 @@ export function auditAgentConvergenceSources(sources) {
       failures.push(`${path}: 通用 Task/Live 不能恢复 Pi 私有样式钩子`)
     }
 
-    if (SHARED_TASK_OWNERS.includes(path) || /\/features\/(?:Task|Review|LiveTask|live-|review-|task-|use-live-)/.test(path)) {
+    if (SHARED_TASK_OWNERS.includes(path) || /\/(?:features|components)\/(?:Task|Review|LiveTask|LiveExtensionPrompt|live-|review-|task-|use-live-)/.test(path)) {
       if (path !== 'packages/web/src/components/TaskSessionComposer.tsx'
         && /<(?:LiveMarkdownComposer|ComposerPillSelect)(?:\s|\/?>)/.test(content)) {
         failures.push(`${path}: 通用页面/正文禁止自行渲染完整输入控件`)
