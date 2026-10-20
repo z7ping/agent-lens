@@ -142,7 +142,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
-  processExpansionStore?: Map<string, boolean>
+  processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t } = useTranslation('task')
@@ -248,7 +248,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
-  processExpansionStore?: Map<string, boolean>
+  processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   return <>
