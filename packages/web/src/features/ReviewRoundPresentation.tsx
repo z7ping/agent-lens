@@ -4,7 +4,7 @@ import type { ReviewEventNodeDto, ReviewInteractionDto, ReviewMessageAttachmentD
 import { agentLabel } from '../components/AgentScope'
 import { AgentLensApi } from '../client/api'
 import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
-import { UiIcon } from '../components/ui'
+import { IconButton, UiIcon } from '../components/ui'
 import { projectReviewInteractionPresentation, projectReviewInteractionToolStats, projectReviewMessageModelLabels, type ReviewInteractionPresentationEntry, type ReviewProcessPresentationItem } from './review-interaction-presentation'
 import { isConsolidatedFileChangeEvent, isFailedLifecycleEvent, isSessionTitleUpdate, reviewEventLabel } from './review-event-presentation'
 import { TaskEvent } from './TaskEvent'
@@ -27,6 +27,8 @@ function MessageBubble({
   nestedTools = [],
   modelLabel,
   showContentActions = false,
+  onForkAt,
+  forkPending = false,
 }: {
   node: ReviewMessageNodeDto
   inspect(node: ReviewNodeDto): void
@@ -34,6 +36,8 @@ function MessageBubble({
   nestedTools?: ReviewToolNodeDto[]
   modelLabel?: string | undefined
   showContentActions?: boolean | undefined
+  onForkAt?: ((nativeEventId: string) => void) | undefined
+  forkPending?: boolean | undefined
 }) {
   const { t } = useTranslation('review')
   const [attachments, setAttachments] = useState<ReviewMessageAttachmentDto[]>(node.attachments ?? [])
@@ -80,7 +84,16 @@ function MessageBubble({
       ...(node.evidence.length > 0 ? { evidence: <EvidenceBadges evidence={node.evidence}/> } : {}),
     }}
     showContentActions={node.role === 'assistant' && showContentActions}
-    actions={node.evidence.length > 0 ? <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button> : undefined}
+    actions={<>
+      {node.evidence.length > 0 && <button onClick={() => inspect(node)}>{t('local.evidence.evidenceDetail', { count: node.evidence.length })}</button>}
+      {showContentActions && node.role === 'assistant' && node.nativeEventId && onForkAt && <IconButton
+        size="small"
+        disabled={forkPending}
+        aria-label={t('local.header.forkFromRound')}
+        title={t('local.header.forkFromRound')}
+        onClick={() => onForkAt(node.nativeEventId!)}
+      ><UiIcon name="fork" size={14}/></IconButton>}
+    </>}
   />
 }
 
@@ -333,6 +346,8 @@ export function ReviewRoundAdapter({
   showAllEvents,
   onShowAllEvents,
   fileChangesEnabled,
+  onForkAt,
+  forkPending = false,
 }: {
   sessionId: string
   interaction: ReviewInteractionDto
@@ -344,6 +359,8 @@ export function ReviewRoundAdapter({
   showAllEvents: boolean
   onShowAllEvents: () => void
   fileChangesEnabled?: boolean
+  onForkAt?: ((nativeEventId: string) => void) | undefined
+  forkPending?: boolean | undefined
 }) {
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
@@ -488,7 +505,7 @@ export function ReviewRoundAdapter({
       return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     }
     if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
-    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId}/>
+    if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
     if (entry.type === 'event') {
       if (isConsolidatedEvent(entry.node)) return null
       return <EventRow key={entry.node.id} event={entry.node} inspect={inspect}/>
