@@ -48,3 +48,14 @@ test('共享 UI 不可通过对象属性访问规避 Agent ID 门禁', () => {
     assert.equal(auditAgentConvergenceSources({ [livePath]: condition }).length, 1, condition)
   }
 })
+
+test('共享 Live CSS 不能恢复旧 Pi 专有 class', () => {
+  const path = 'packages/web/src/live-task.css'
+  assert.deepEqual(auditAgentConvergenceSources({ [path]: '.live-task-reader { display: block }' }), [])
+  assert.equal(auditAgentConvergenceSources({ [path]: '.pi-live-reader { display: block }' }).length, 1)
+})
+
+test('共享 Live 投影同样禁止来源 ID 特判', () => {
+  const path = 'packages/web/src/features/live-task-projection.ts'
+  assert.equal(auditAgentConvergenceSources({ [path]: "if (adapter.productId === 'pi') {}" }).length, 1)
+})
