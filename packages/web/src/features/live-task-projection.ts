@@ -82,6 +82,23 @@ function nativeErrorText(item: Record<string, unknown>, nested: Record<string, u
     || errorText(item.errorMessage) || errorText(item.error)
 }
 
+function nativeErrorDiagnostic(item: Record<string, unknown>, nested: Record<string, unknown>) {
+  // The native source remains authoritative; unknown codes/categories are kept opaque.
+  const sources = [record(nested.error), record(item.error), record(nested.errorMessage),
+    record(item.errorMessage), nested, item]
+  const read = (name: string) => sources.find(source => source[name] !== undefined)?.[name]
+  const code = read('code')
+  const category = read('category')
+  const retryable = read('retryable')
+  if ((typeof code !== 'string' && typeof code !== 'number')
+    && typeof category !== 'string' && typeof retryable !== 'boolean') return undefined
+  return {
+    ...(typeof code === 'string' || typeof code === 'number' ? { code: String(code) } : {}),
+    ...(typeof category === 'string' ? { category } : {}),
+    ...(typeof retryable === 'boolean' ? { retryable } : {}),
+  }
+}
+
 function contentText(value: unknown): string {
   if (typeof value === 'string') return value
   if (Array.isArray(value)) {
@@ -187,6 +204,7 @@ export function projectLiveSnapshotEntries(entries: readonly unknown[]): LiveTas
         role: 'assistant',
         text: message,
         error: true,
+        ...(nativeErrorDiagnostic(item, nested) ? { errorDiagnostic: nativeErrorDiagnostic(item, nested) } : {}),
         streaming: false,
         ...(at ? { at } : {}),
       })
