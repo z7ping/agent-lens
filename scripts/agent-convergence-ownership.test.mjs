@@ -5,6 +5,7 @@ import { auditAgentConvergenceSources } from './agent-convergence-ownership.mjs'
 const reviewPath = 'packages/web/src/features/ReviewRoundPresentation.tsx'
 const livePath = 'packages/web/src/features/LiveTaskPage.tsx'
 const runtimePath = 'packages/web/src/components/LiveRuntimeDisclosures.tsx'
+const composerPath = 'packages/web/src/components/TaskSessionComposer.tsx'
 
 test('现存 Review 来源特判只允许减少，不允许增加新来源分支', () => {
   assert.deepEqual(auditAgentConvergenceSources({ [reviewPath]: "node.sourceId === 'codex'\nuser.sourceId === 'codex'" }), [])
@@ -20,6 +21,12 @@ test('共享 Task 视图禁止品牌分支、旧 Pi 渲染和再次复制输入�
   assert.equal(auditAgentConvergenceSources({ [livePath]: "<ComposerPillSelect />" }).length, 1)
   assert.equal(auditAgentConvergenceSources({ [livePath]: 'pi-live-'.repeat(28) }).length, 1)
   assert.deepEqual(auditAgentConvergenceSources({ [livePath]: 'pi-live-'.repeat(26) }), [])
+})
+
+test('唯一 TaskSessionComposer 可以持有编辑器与模型选择器，其他页面不得持有', () => {
+  const markup = '<LiveMarkdownComposer /><ComposerPillSelect />'
+  assert.deepEqual(auditAgentConvergenceSources({ [composerPath]: markup }), [])
+  assert.equal(auditAgentConvergenceSources({ [livePath]: markup }).length, 1)
 })
 
 test('Runtime Contribution 不再把文案当语义', () => {
