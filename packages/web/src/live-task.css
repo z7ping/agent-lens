@@ -1,8 +1,8 @@
 @reference "./styles.css";
 
 /*
- * Live Runtime 页面样式所有者（保留 pi-live 类名作为兼容钩子）。
- * 只负责 Runtime 页面壳层、Legacy Pi 会话侧栏、Composer 内容、队列和扩展交互。
+ * Live Runtime page owner: runtime shells, historical Pi-only hooks and runtime disclosures.
+ * Shared composer styles live exclusively in task-session-composer.css.
  * Session Header / Reader / 阅读轴与 Composer 外层留白统一由 task-session-view.css 负责；
  * Round / Message / Thinking / Tool / Event 统一由 task-detail.css 负责。
  */
@@ -57,23 +57,12 @@
 .pi-live-session-foot { display: flex; min-width: 0; align-items: center; gap: 7px; color: var(--al-muted); font-size: 12px; }
 .pi-live-session-foot span:first-child { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-session-title { margin: 5px 0; overflow: hidden; color: var(--al-ink-2); font-size: 13px; font-weight: 650; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
-.pi-live-pulse,
-.pi-live-idle-dot { display: inline-block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
+.pi-live-pulse { display: inline-block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; }
 .pi-live-pulse { background: var(--al-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--al-accent) 11%, transparent); }
-.pi-live-idle-dot { border: 1px solid var(--al-line-strong); background: var(--al-surface); }
 .pi-live-side-empty { padding: 16px 10px; color: var(--al-muted); font-size: 12px; line-height: 1.55; }
 .pi-live-review-link { display: flex; width: 100%; margin-top: 8px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 0; border-top: 1px solid var(--al-line); background: transparent; color: var(--al-muted); font-size: 12px; text-align: left; }
 .pi-live-review-link:hover { color: var(--al-accent); }
 
-.pi-live-disconnected { color: var(--al-warning); }
-.pi-live-compose-runtime:not(.pi-live-disconnected) .pi-live-idle-dot {
-  border-color: var(--al-success);
-  background: var(--al-success);
-}
-.pi-live-compose-runtime.pi-live-disconnected .pi-live-idle-dot {
-  border-color: var(--al-warning);
-  background: var(--al-warning);
-}
 .pi-live-header-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-live-header-branch { max-width: 220px; color: var(--al-muted); font: 12px/1.4 var(--font-mono); }
 .pi-live-header-branch::before { content: "·"; margin-right: 6px; color: var(--al-line-strong); }
@@ -183,153 +172,17 @@
 .pi-live-queue-item.restored { border-style: dashed; }
 .pi-live-queue-item > div { display: flex; gap: 6px; }
 
-.pi-live-composer {
-  position: relative;
-  width: 100%;
-  max-width: var(--al-content-task-composer);
-  margin: 0 auto;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--al-line-strong) 82%, transparent);
-  border-radius: var(--al-radius-product-special);
-  background: var(--al-surface);
-  box-shadow: 0 2px 10px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .035);
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-.pi-live-composer:focus-within { border-color: color-mix(in srgb, var(--al-accent) 26%, var(--al-line-strong)); box-shadow: 0 2px 10px rgb(16 24 40 / .07), 0 8px 28px rgb(16 24 40 / .045); }
-.pi-live-editor { position: relative; height: 82px; min-height: 82px; overflow: hidden; cursor: text; }
-.pi-live-editor-toolbar { cursor: default; }
-.pi-live-composer.is-expanded .pi-live-editor { height: clamp(260px, 48vh, 520px); }
-.pi-live-editor-toolbar {
-  position: absolute;
-  top: 8px;
-  right: 11px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.pi-live-editor-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); }
-.pi-live-editor-action:hover:not(:disabled) { border-color: transparent; background: var(--al-soft-2); color: var(--al-ink-2); }
-.pi-live-input {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  max-height: none;
-  resize: none;
-  overflow: auto;
-  padding: 15px 98px 7px 18px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--al-ink);
-  font-size: 15px;
-  line-height: 1.55;
-}
-.pi-live-input:disabled { color: var(--al-muted); cursor: default; }
-.pi-live-markdown-preview {
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  padding: 14px 98px 8px 18px;
-  color: var(--al-ink);
-  font-size: 15px;
-  line-height: 1.58;
-  overflow-wrap: anywhere;
-}
-.pi-live-markdown-preview > :first-child { margin-top: 0; }
-.pi-live-markdown-preview > :last-child { margin-bottom: 0; }
-.pi-live-markdown-preview p,
-.pi-live-markdown-preview ul,
-.pi-live-markdown-preview ol,
-.pi-live-markdown-preview blockquote,
-.pi-live-markdown-preview pre { margin: 0 0 8px; }
-.pi-live-markdown-preview ul,
-.pi-live-markdown-preview ol { padding-left: 22px; }
-.pi-live-markdown-preview blockquote { padding-left: 9px; border-left: 2px solid var(--al-line-strong); color: var(--al-muted); }
-.pi-live-markdown-preview pre { padding: 7px 9px; overflow: auto; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); font: 12px/1.55 var(--font-mono); white-space: pre-wrap; }
-.pi-live-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
-.pi-live-preview-empty { color: var(--al-muted-2); font-size: 13px; }
-.pi-live-compose-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
-/* Review has no active Runtime controls until the first send; keep its send action in the same trailing slot as Live. */
-.pi-live-compose-spacer { flex: 1 1 auto; }
-.pi-live-compose-runtime { display: inline-flex; width: 132px; min-width: 132px; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-/* The shared SelectMenu owns height, borders and interaction. The composer owns
- * only the available horizontal space for its two semantically different controls. */
-.pi-live-compose-settings { display: flex; min-width: 0; flex: 0 1 420px; flex-wrap: nowrap; align-items: center; gap: 8px; }
-.pi-live-compose-control { display: flex; min-width: 0; align-items: center; }
-.pi-live-compose-control--model { flex: 1 1 264px; }
-.pi-live-compose-control--thinking { flex: 0 0 140px; }
-.pi-live-compose-mode { display: flex; margin-left: auto; gap: 2px; padding: 2px; border-radius: 999px; background: var(--al-soft-2); }
-.pi-live-mode-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); white-space: nowrap; }
-.pi-live-mode-action:hover:not(:disabled) { border-color: transparent; }
-.pi-live-mode-action.active { border-color: transparent; background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .06); color: var(--al-ink); font-weight: 650; }
-/* 发送继续使用强调图标，但 30px 命中区由 IconButton Primitive 统一持有。 */
-.pi-live-send { border-radius: 50%; }
-.pi-live-compose-hint,
-.pi-live-composer:focus-within .pi-live-compose-hint {
-  position: absolute;
-  right: 18px;
-  bottom: 54px;
-  z-index: 3;
-  display: block;
-  max-width: calc(100% - 36px);
-  padding: 3px 6px;
-  overflow: hidden;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
-  color: var(--al-muted-2);
-  font-size: 12px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(2px);
-  pointer-events: none;
-  transition: opacity .15s ease, transform .15s ease;
-}
-.pi-live-composer:focus-within .pi-live-compose-hint { opacity: .82; transform: translateY(0); }
-.pi-live-diagnostics {
-  position: absolute;
-  right: 22px;
-  top: 0;
-  z-index: 9;
-  max-width: min(520px, 52%);
-  overflow: hidden;
-  color: var(--al-muted);
-  font-size: 12px;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: .78;
-  transform: translateY(-100%);
-  pointer-events: none;
-}
 .pi-live-error { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--al-danger) 24%, var(--al-line)); border-radius: 8px; background: var(--al-danger-soft); color: var(--al-danger); font-size: 12px; line-height: 1.5; }
 
 @media (max-width: 1199.98px) {
   .pi-live-page { --pi-live-side: 260px; }
-  .pi-live-compose-runtime { display: none; }
 }
 @media (max-width: 991.98px) {
   .pi-live-page { --pi-live-side: 236px; }
-  .pi-live-composer.is-expanded .pi-live-editor { height: clamp(220px, 44vh, 440px); }
 }
 @media (max-width: 767.98px) {
   .pi-live-page { grid-template-columns: 1fr; }
   .pi-live-sessions { display: none; }
-  .pi-live-editor { height: 78px; min-height: 78px; }
-  .pi-live-composer.is-expanded .pi-live-editor { height: clamp(200px, 40vh, 360px); }
-  .pi-live-compose-runtime { display: none; }
-  .pi-live-compose-bar { flex-wrap: wrap; gap: 6px 8px; }
-  .pi-live-compose-settings { width: 100%; flex: 1 1 100%; order: 1; }
-  .pi-live-compose-control--model { flex: 1 1 180px; }
-  .pi-live-compose-control--thinking { flex: 0 0 116px; }
-  .pi-live-compose-mode { order: 2; margin-left: 0; }
-  .pi-live-send { order: 3; margin-left: auto; }
-  .pi-live-mode-action { padding-inline: 6px; }
-  .pi-live-compose-hint { display: none; }
-  .pi-live-diagnostics { display: none; }
   .pi-live-startup-queue { grid-template-columns: 1fr auto; }
   .pi-live-startup-queue > span { grid-column: 1; }
   .pi-live-startup-queue > b { grid-column: 1 / 3; grid-row: 2; }
@@ -337,10 +190,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .pi-live-stage-dot { animation: none; }
-  .pi-live-compose-hint,
-  .pi-live-composer { transition: none; }
 }
-
 
 .live-runtime-disclosures {
   display: grid;

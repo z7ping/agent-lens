@@ -33,6 +33,9 @@ test('matches by product id and returns advertised operations', () => {
       canSend: false,
       canFork: false,
       canForkAt: false,
+      canModelControl: false,
+      canThinkingControl: false,
+      canStreamModes: false,
     },
   )
 })
@@ -50,6 +53,9 @@ test('history capabilities are not gated on transient adapter availability', () 
       canSend: false,
       canFork: true,
       canForkAt: false,
+      canModelControl: false,
+      canThinkingControl: false,
+      canStreamModes: false,
     },
   )
   assert.equal(projectReviewLiveInteraction({ productId: 'other' }, [product()]), null)
@@ -75,9 +81,22 @@ test('round fork and inline resume are gated by separate advertised capabilities
       canSend: true,
       canFork: false,
       canForkAt: true,
+      canModelControl: false,
+      canThinkingControl: false,
+      canStreamModes: false,
     },
   )
   const codex = projectReviewLiveInteraction({ productId: 'alpha' }, [product({ capabilities: ['resume', 'send'] })])
   assert.equal(codex?.canResume && codex.canSend, true)
   assert.equal(codex?.canForkAt, false)
+})
+
+test('historical composer renders only advertised inactive controls before native Runtime exists', () => {
+  const result = projectReviewLiveInteraction({ productId: 'alpha' }, [
+    product({ capabilities: ['resume', 'send', 'model-switching', 'thinking-control', 'steer', 'queue'] }),
+  ])
+  assert.equal(result?.canModelControl, true)
+  assert.equal(result?.canThinkingControl, true)
+  assert.equal(result?.canStreamModes, true)
+  assert.equal(result?.canForkAt, false)
 })

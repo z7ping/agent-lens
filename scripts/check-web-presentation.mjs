@@ -8,7 +8,7 @@ const files = {
   readability: p('readability.css'), semantic: p('semantic-colors.css'), shell: p('shell.css'), shellResponsive: p('shell-responsive.css'),
   states: p('states.css'), tools: p('tools.css'), insights: p('insights.css'), agents: p('agents.css'), agentResponsive: p('agent-insights-responsive.css'),
   backup: p('backup.css'), backupResponsive: p('backup-responsive.css'), review: p('review.css'), reviewLong: p('review-long-session.css'),
-  pi: p('pi-live.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'), taskTurnRail: p('task-turn-rail.css'),
+  liveTask: p('live-task.css'), taskComposer: p('task-session-composer.css'), taskCenter: p('task-center.css'), taskDetail: p('task-detail.css'), taskTurnRail: p('task-turn-rail.css'),
   uiPrimitives: p('components/ui/ui-primitives.css'), uiOverlay: p('components/ui/overlay.css'),
   selectMenu: p('components/select-menu.css'), piStartup: p('components/pi-startup-disclosure.css'),
 }
@@ -36,7 +36,7 @@ const at = value => imports.indexOf(value)
 for (const required of [
   './styles.css', './tokens.css', './theme.css', './typography.css', './readability.css', './semantic-colors.css',
   './shell.css', './shell-responsive.css', './states.css', './agents.css', './agent-insights-responsive.css', './tools.css', './insights.css',
-  './review.css', './review-long-session.css', './backup.css', './backup-responsive.css', './pi-live.css', './task-center.css', './task-detail.css', './task-turn-rail.css',
+  './review.css', './review-long-session.css', './backup.css', './backup-responsive.css', './live-task.css', './task-session-composer.css', './task-center.css', './task-detail.css', './task-turn-rail.css',
 ]) {
   if (at(required) < 0) throw new Error(`正式 Web 缺少样式入口：${required}`)
 }
@@ -336,7 +336,7 @@ for (const file of tsxFiles(root)) {
   for (const match of source.matchAll(/<UiIcon\b[^>]*\bsize=\{(\d+)\}/g)) {
     if (!['12', '14', '16', '20'].includes(match[1])) throw new Error(`${file} 的 UiIcon 尺寸 ${match[1]} 不在统一档位内`)
   }
-  if (/<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|pi-live-send)/.test(source)) throw new Error(`${file} 的纯图标操作必须复用 IconButton`)
+  if (/<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|task-composer-send)/.test(source)) throw new Error(`${file} 的纯图标操作必须复用 IconButton`)
 }
 const duplicated = ['--al-canvas', '--al-surface', '--al-soft', '--al-line', '--al-ink', '--al-accent']
   .filter(token => new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`).test(css.theme))
@@ -352,7 +352,7 @@ for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (
 if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(css.shellResponsive)) throw new Error('xs 窄窗口必须保留 Logo')
 for (const legacy of ['1180px', '1100px', '1080px', '900px', '820px', '760px', '640px', '560px']) {
   const re = new RegExp(`@media\\s*\\([^)]*(?:max-width|min-width)\\s*:\\s*${legacy.replace('.', '\\.')}\\b`)
-  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.backup) || re.test(css.pi) || re.test(css.taskCenter) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) {
+  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.backup) || re.test(css.liveTask) || re.test(css.taskCenter) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) {
     throw new Error(`壳层/核心页面/统一组件不得恢复一次性断点：${legacy}`)
   }
 }
@@ -446,7 +446,24 @@ if (css.review.includes('.pi-session-tree')) throw new Error('Review 样式不�
 if (/\.inspector-panel\b|\.inspector-head\b|\.inspector-title\b/.test(css.review)) throw new Error('Review Inspector 外壳必须由统一 Drawer 持有，不得恢复页面自建抽屉')
 if (!css.reviewLong.includes('.round-nav') || !css.reviewLong.includes('.virtual-round-shell')) throw new Error('review-long-session.css 必须持有长会话导航与虚拟挂载能力')
 if (!css.taskTurnRail.includes('.task-turn-rail') || !css.taskTurnRail.includes('.turn-tick')) throw new Error('task-turn-rail.css 必须持有共享轮次导轨能力')
-if (!css.pi.includes('Live Runtime 页面样式所有者（保留 pi-live 类名作为兼容钩子）') || !css.pi.includes('.pi-live-composer') || !css.pi.includes('.pi-live-queue') || !/\.pi-live-compose-hint[\s\S]*?position:\s*absolute/m.test(css.pi)) throw new Error('pi-live.css 当前作为 Live Runtime 兼容样式所有者，必须持有 Composer/Queue，且快捷提示不得参与布局高度')
+if (!css.liveTask.includes('.pi-live-queue') || css.liveTask.includes('.task-composer {')) throw new Error('live-task.css 仅持有 Runtime 页面/队列，不能定义共享 Composer')
+if (!css.taskComposer.includes('.task-composer {') || !css.taskComposer.includes('.task-composer-settings') || !/\.task-composer-hint[\s\S]*?position:\s*absolute/m.test(css.taskComposer)) throw new Error('task-session-composer.css 必须完整持有唯一输入区外观与交互')
+if (existsSync(p('pi-live.css'))) throw new Error('旧 pi-live.css 命名不得恢复')
+const livePageSource = readFileSync(p('features/LiveTaskPage.tsx'), 'utf8')
+const reviewPageSource = readFileSync(p('features/ReviewPage.tsx'), 'utf8')
+const composerSource = readFileSync(p('components/TaskSessionComposer.tsx'), 'utf8')
+for (const [name, source] of [['LiveTaskPage', livePageSource], ['ReviewPage', reviewPageSource]]) {
+  if (!source.includes('<TaskSessionComposer') || /<LiveMarkdownComposer(?:\s|\/>|>)|<ComposerPillSelect/.test(source)) {
+    throw new Error(name + ' 必须复用唯一 TaskSessionComposer，不能重建输入区')
+  }
+}
+if (!composerSource.includes('<LiveMarkdownComposer') || !composerSource.includes('<ComposerPillSelect')
+  || !composerSource.includes('showStreamingModes &&')) {
+  throw new Error('TaskSessionComposer 必须完整持有编辑器、模型/推理与发送模式操作')
+}
+if (/\.task-composer(?:-|\s|\{)/.test(css.liveTask) || /\.task-composer(?:-|\s|\{)/.test(css.review)) {
+  throw new Error('Composer 样式只能由 task-session-composer.css 定义')
+}
 if (!css.taskCenter.includes('Task Center 页面壳层唯一所有者') || !css.taskCenter.includes('.task-center-rail') || !css.taskCenter.includes('.task-center-main') || !/\.task-center-scroll\s*\{[^}]*overflow:\s*auto/.test(css.taskCenter) || !/\.task-center-main\s*\{[^}]*overflow:\s*hidden/.test(css.taskCenter)) throw new Error('task-center.css 必须持有 Rail/详情壳层和独立滚动')
 if (!css.taskDetail.includes('Task Surface 共享详情组件的唯一样式所有者') || !css.taskDetail.includes('.task-header') || !css.taskDetail.includes('.task-round') || !css.taskDetail.includes('.task-message-bubble-user') || !css.taskDetail.includes('background: var(--al-user-bubble)') || !css.taskDetail.includes('.task-message-assistant') || !css.taskDetail.includes('.task-thinking') || !css.taskDetail.includes('.task-tool-row') || !css.taskDetail.includes('.task-event-row')) throw new Error('task-detail.css 必须完整持有 Task Surface 共享组件')
 

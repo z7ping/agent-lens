@@ -48,7 +48,7 @@ const [
   readFile(new URL('../packages/web/src/features/LiveTaskTimeline.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/live-task-history-window.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/features/live-task-projection.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../packages/web/src/pi-live.css', import.meta.url), 'utf8'),
+  readFile(new URL('../packages/web/src/live-task.css', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/client/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/protocol/src/live.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/core/src/contracts/live.ts', import.meta.url), 'utf8'),
@@ -65,6 +65,8 @@ const [
   readFile(new URL('../packages/web/src/i18n/zh-CN/task.ts', import.meta.url), 'utf8'),
   readFile(new URL('../packages/web/src/i18n/en-US/task.ts', import.meta.url), 'utf8'),
 ])
+const composerStyles = await readFile(new URL('../packages/web/src/task-session-composer.css', import.meta.url), 'utf8')
+const taskComposerView = await readFile(new URL('../packages/web/src/components/TaskSessionComposer.tsx', import.meta.url), 'utf8')
 const liveRuntimeDisclosures = await readFile(
   new URL('../packages/web/src/components/LiveRuntimeDisclosures.tsx', import.meta.url),
   'utf8',
@@ -191,12 +193,17 @@ forbidText(liveRuntimeDisclosures, /\bPi\b|pi\.runtime|initializationStage|start
 
 requireText(liveStyles, /\.live-task-page\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/, '通用 LiveTaskPage 必须保持单列详情，不得恢复第二套会话导航')
 forbidText(liveStyles, /max-width:\s*720px/, 'Live 样式不得引入脱离统一断点体系的 720px 私有断点')
-requireText(liveStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.pi-live-compose-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
+requireText(composerStyles, /@media \(max-width: 767\.98px\)[\s\S]{0,1200}\.task-composer-bar \{ flex-wrap: wrap/, 'Live 窄窗 Composer 控件必须换行，不能横向顶爆')
 forbidText(liveTaskImplementation, /pi-live-sessions|pi-live-session-scroll|liveApi\.list\(current\.liveId\)/, 'LiveTaskPage 不得再次持有独立实时会话导航或重复拉取 runtime list')
 requireText(liveTaskStateHook, /LiveTaskRoundProjector/, 'LiveTaskPage 必须通过通用增量 Projector 构造语义 Round')
 requireText(liveTaskTimeline, /<VirtualRoundMount/, 'LiveTaskPage 必须恢复长会话 Round 虚拟挂载')
 requireText(liveTaskRuntimeHook, /new LiveFollowController\(\)/, 'LiveTaskPage 必须恢复流式阅读自动跟随控制')
 requireText(liveTask, /pi-live-new-records/, 'LiveTaskPage 必须在用户脱离底部后提供新内容提示')
+requireText(liveTask, /<TaskSessionComposer/, 'LiveTaskPage 必须只复用唯一通用输入组件')
+requireText(reviewPage, /<TaskSessionComposer/, 'Review 必须复用与 Live 相同的完整输入组件')
+requireText(taskComposerView, /<ComposerPillSelect/, '唯一 Composer 必须持有模型/推理控件')
+requireText(taskComposerView, /showStreamingModes &&/, '唯一 Composer 必须持有流式消息模式')
+forbidText(liveTask, /<LiveMarkdownComposer(?:\s|\/>|>)|<ComposerPillSelect/, 'LiveTaskPage 不得重建编辑器或选择器')
 requireText(liveTask, /composerExpanded/, 'LiveTaskPage 必须保留通用输入区展开/收起能力')
 requireText(liveTask, /startupQueued/, 'LiveTaskPage 必须保留 Runtime 初始化期首条消息暂存')
 requireText(liveTask, /interruptNotice/, 'LiveTaskPage 必须保留中断成功反馈')

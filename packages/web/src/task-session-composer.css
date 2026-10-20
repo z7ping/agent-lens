@@ -1,0 +1,159 @@
+@reference "./styles.css";
+
+/* Session composer is owned here once for both Review and Live; no page CSS overrides. */
+.task-composer-idle-dot { display: inline-block; width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; border: 1px solid var(--al-line-strong); background: var(--al-surface); }
+.task-composer-disconnected { color: var(--al-warning); }
+.task-composer-pending .task-composer-idle-dot { border-color: var(--al-muted); background: var(--al-muted); }
+.task-composer-runtime:not(.task-composer-disconnected):not(.task-composer-pending) .task-composer-idle-dot {
+  border-color: var(--al-success);
+  background: var(--al-success);
+}
+.task-composer-runtime.task-composer-disconnected .task-composer-idle-dot {
+  border-color: var(--al-warning);
+  background: var(--al-warning);
+}
+
+.task-composer {
+  position: relative;
+  width: 100%;
+  max-width: var(--al-content-task-composer);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--al-line-strong) 82%, transparent);
+  border-radius: var(--al-radius-product-special);
+  background: var(--al-surface);
+  box-shadow: 0 2px 10px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .035);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.task-composer:focus-within { border-color: color-mix(in srgb, var(--al-accent) 26%, var(--al-line-strong)); box-shadow: 0 2px 10px rgb(16 24 40 / .07), 0 8px 28px rgb(16 24 40 / .045); }
+.task-composer-editor { position: relative; height: 82px; min-height: 82px; overflow: hidden; cursor: text; }
+.task-composer-editor-toolbar { cursor: default; }
+.task-composer.is-expanded .task-composer-editor { height: clamp(260px, 48vh, 520px); }
+.task-composer-editor-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 11px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.task-composer-editor-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); }
+.task-composer-editor-action:hover:not(:disabled) { border-color: transparent; background: var(--al-soft-2); color: var(--al-ink-2); }
+.task-composer-input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  resize: none;
+  overflow: auto;
+  padding: 15px 98px 7px 18px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--al-ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.task-composer-input:disabled { color: var(--al-muted); cursor: default; }
+.task-composer-markdown-preview {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 14px 98px 8px 18px;
+  color: var(--al-ink);
+  font-size: 15px;
+  line-height: 1.58;
+  overflow-wrap: anywhere;
+}
+.task-composer-markdown-preview > :first-child { margin-top: 0; }
+.task-composer-markdown-preview > :last-child { margin-bottom: 0; }
+.task-composer-markdown-preview p,
+.task-composer-markdown-preview ul,
+.task-composer-markdown-preview ol,
+.task-composer-markdown-preview blockquote,
+.task-composer-markdown-preview pre { margin: 0 0 8px; }
+.task-composer-markdown-preview ul,
+.task-composer-markdown-preview ol { padding-left: 22px; }
+.task-composer-markdown-preview blockquote { padding-left: 9px; border-left: 2px solid var(--al-line-strong); color: var(--al-muted); }
+.task-composer-markdown-preview pre { padding: 7px 9px; overflow: auto; border: 1px solid var(--al-line); border-radius: 7px; background: var(--al-soft-2); font: 12px/1.55 var(--font-mono); white-space: pre-wrap; }
+.task-composer-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
+.task-composer-preview-empty { color: var(--al-muted-2); font-size: 13px; }
+.task-composer-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
+.task-composer-runtime { display: inline-flex; width: 132px; min-width: 132px; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+/* The shared SelectMenu owns height, borders and interaction. The composer owns
+ * only the available horizontal space for its two semantically different controls. */
+.task-composer-settings { display: flex; min-width: 0; flex: 0 1 420px; flex-wrap: nowrap; align-items: center; gap: 8px; }
+.task-composer-control { display: flex; min-width: 0; align-items: center; }
+.task-composer-control--model { flex: 1 1 264px; }
+.task-composer-control--thinking { flex: 0 0 140px; }
+.task-composer-mode { display: flex; margin-left: auto; gap: 2px; padding: 2px; border-radius: 999px; background: var(--al-soft-2); }
+.task-composer-mode-action { border-color: transparent; border-radius: 999px; background: transparent; color: var(--al-muted); white-space: nowrap; }
+.task-composer-mode-action:hover:not(:disabled) { border-color: transparent; }
+.task-composer-mode-action.active { border-color: transparent; background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .06); color: var(--al-ink); font-weight: 650; }
+/* 发送继续使用强调图标，但 30px 命中区由 IconButton Primitive 统一持有。 */
+.task-composer-send { margin-left: auto; border-radius: 50%; }
+.task-composer-hint,
+.task-composer:focus-within .task-composer-hint {
+  position: absolute;
+  right: 18px;
+  bottom: 54px;
+  z-index: 3;
+  display: block;
+  max-width: calc(100% - 36px);
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--al-surface) 92%, transparent);
+  color: var(--al-muted-2);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+}
+.task-composer:focus-within .task-composer-hint { opacity: .82; transform: translateY(0); }
+.task-composer-diagnostics {
+  position: absolute;
+  right: 22px;
+  top: 0;
+  z-index: 9;
+  max-width: min(520px, 52%);
+  overflow: hidden;
+  color: var(--al-muted);
+  font-size: 12px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .78;
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+@media (max-width: 1199.98px) {
+  .task-composer-runtime { display: none; }
+}
+@media (max-width: 991.98px) {
+  .task-composer.is-expanded .task-composer-editor { height: clamp(220px, 44vh, 440px); }
+}
+@media (max-width: 767.98px) {
+  .task-composer-editor { height: 78px; min-height: 78px; }
+  .task-composer.is-expanded .task-composer-editor { height: clamp(200px, 40vh, 360px); }
+  .task-composer-runtime { display: none; }
+  .task-composer-bar { flex-wrap: wrap; gap: 6px 8px; }
+  .task-composer-settings { width: 100%; flex: 1 1 100%; order: 1; }
+  .task-composer-control--model { flex: 1 1 180px; }
+  .task-composer-control--thinking { flex: 0 0 116px; }
+  .task-composer-mode { order: 2; margin-left: 0; }
+  .task-composer-send { order: 3; margin-left: auto; }
+  .task-composer-mode-action { padding-inline: 6px; }
+  .task-composer-hint { display: none; }
+  .task-composer-diagnostics { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-composer-hint,
+  .task-composer { transition: none; }
+}

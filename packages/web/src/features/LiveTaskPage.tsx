@@ -4,10 +4,9 @@ import { useTranslation } from 'react-i18next'
 import type { LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
-import { ComposerPillSelect } from '../components/ComposerPillSelect'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
-import { LiveMarkdownComposer } from '../components/LiveMarkdownComposer'
+import { TaskSessionComposer } from '../components/TaskSessionComposer'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { OperationProgress } from '../components/StateViews'
 import { Button, IconButton } from '../components/ui'
@@ -440,7 +439,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         </div>
       </div>
 
-      <div className="pi-live-compose-wrap live-task-compose-wrap">
+      <div className="task-session-composer-slot">
         <div className="pi-live-float-stack">
           {newRecords && <Button size="small" className="pi-live-new-records" onClick={jumpLatest}>{t('live.newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
           {interruptNotice && <div className="pi-live-interrupt-notice" role="status" aria-live="polite">
@@ -480,90 +479,40 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           </div>}
           {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
         </div>
-        <div className={`pi-live-composer ${composerExpanded ? 'is-expanded' : ''}`}>
-          <div className="pi-live-editor">
-            <div className="pi-live-editor-toolbar" aria-label={t('live.composerToolbarAria')}>
-              <IconButton
-                className="pi-live-editor-action"
-                title={composerExpanded ? t('live.composerShrink') : t('live.composerExpand')}
-                aria-label={composerExpanded ? t('live.composerShrink') : t('live.composerExpand')}
-                onClick={() => setComposerExpanded(value => !value)}
-              >
-                <UiIcon name={composerExpanded ? 'collapse' : 'expand'} size={16}/>
-              </IconButton>
-            </div>
-            <LiveMarkdownComposer
-              ref={composerRef}
-              draft={draft}
-              draftKey={composerDraftKey || undefined}
-              inputHistory={inputHistory}
-              commands={commands}
-              workspaceReferenceSearch={product?.capabilities.includes('workspace-file-reference')
-                ? searchWorkspaceReferences
-                : undefined}
-              onDraftPresenceChange={setComposerHasContent}
-              canSubmit={canSubmit}
-              onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
-              onEscape={canInterrupt ? () => { void interrupt() } : undefined}
-              placeholder={t('live.composerPlaceholder')}
-              ariaLabel={t('live.composerAria')}
-              inputClassName="pi-live-input"
-              onAttachmentPendingChange={setComposerAttachmentPending}
-              onAttachmentError={reason => setError(reason instanceof Error ? reason.message : String(reason))}
-              disabled={state?.status === 'terminating' || state?.status === 'terminated'}
-            />
-          </div>
-          <div className="pi-live-compose-bar">
-            <span
-              className={`pi-live-compose-runtime ${streamSupported && !connected ? 'pi-live-disconnected' : ''}`.trim()}
-              title={connectionLabel}
-            >
-              <span className="pi-live-idle-dot" aria-hidden="true"/>
-              {connectionLabel}
-            </span>
-            <div className="pi-live-compose-settings">
-              {modelControl && <ComposerPillSelect
-                control="model"
-                ariaLabel={t('live.model')}
-                title={t('live.model')}
-                value={modelControl.value ?? ''}
-                placeholder={modelControl.label || t('live.model')}
-                disabled={busy || state?.status !== 'ready'}
-                options={modelControl.options.map(option => ({
-                  value: option.value,
-                  label: option.label || option.value,
-                  ...(option.description ? { description: option.description } : {}),
-                }))}
-                onChange={value => { void changeModel(value) }}
-              />}
-              {thinking && <ComposerPillSelect
-                control="thinking"
-                ariaLabel={t('live.thinking')}
-                title={thinking.options.length <= 1 ? t('live.thinkingNoAlternatives') : t('live.thinking')}
-                value={thinking.value}
-                placeholder={thinking.label || thinking.value}
-                disabled={busy || state?.status !== 'ready' || thinking.options.length <= 1}
-                options={thinking.options.map(option => ({
-                  value: option.value,
-                  label: option.label || option.value,
-                  ...(option.description ? { description: option.description } : {}),
-                }))}
-                onChange={value => { void changeThinking(value) }}
-              />}
-            </div>
-            {product?.capabilities.includes('steer') && product.capabilities.includes('queue') && <div className="pi-live-compose-mode" aria-label={t('live.streamingMode')}>
-              <Button size="small" className={`pi-live-mode-action ${streamingBehavior === 'steer' ? 'active' : ''}`} aria-pressed={streamingBehavior === 'steer'} onClick={() => setStreamingBehavior('steer')}>{t('live.steer')}</Button>
-              <Button size="small" className={`pi-live-mode-action ${streamingBehavior === 'follow-up' ? 'active' : ''}`} aria-pressed={streamingBehavior === 'follow-up'} onClick={() => setStreamingBehavior('follow-up')}>{t('live.followUp')}</Button>
-            </div>}
-            <IconButton
-              variant="primary"
-              className="pi-live-send"
-              disabled={!canSubmit || !composerHasContent}
-              onClick={submitMessage}
-              aria-label={t('live.send')}
-            ><UiIcon name="send" size={20}/></IconButton>
-          </div>
-        </div>
+        <TaskSessionComposer
+          editorRef={composerRef}
+          expanded={composerExpanded}
+          onExpandedChange={setComposerExpanded}
+          draft={draft}
+          draftKey={composerDraftKey || undefined}
+          inputHistory={inputHistory}
+          commands={commands}
+          workspaceReferenceSearch={product?.capabilities.includes('workspace-file-reference')
+            ? searchWorkspaceReferences
+            : undefined}
+          onDraftPresenceChange={setComposerHasContent}
+          canSubmit={canSubmit}
+          onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
+          onEscape={canInterrupt ? () => { void interrupt() } : undefined}
+          placeholder={t('live.composerPlaceholder')}
+          ariaLabel={t('live.composerAria')}
+          onAttachmentPendingChange={setComposerAttachmentPending}
+          onAttachmentError={reason => setError(reason instanceof Error ? reason.message : String(reason))}
+          disabled={state?.status === 'terminating' || state?.status === 'terminated'}
+          connectionLabel={connectionLabel}
+          disconnected={streamSupported && !connected}
+          modelControl={modelControl}
+          thinking={thinking}
+          controlsBusy={busy}
+          controlsReady={state?.status === 'ready'}
+          onModelChange={value => { void changeModel(value) }}
+          onThinkingChange={value => { void changeThinking(value) }}
+          showStreamingModes={Boolean(product?.capabilities.includes('steer') && product.capabilities.includes('queue'))}
+          streamingMode={streamingBehavior}
+          onStreamingModeChange={setStreamingBehavior}
+          hasContent={composerHasContent}
+          onSendClick={submitMessage}
+        />
       </div>
     </TaskSurface>
   </main>

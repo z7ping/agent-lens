@@ -7,6 +7,9 @@ export interface ReviewLiveInteraction {
   canSend: boolean
   canFork: boolean
   canForkAt: boolean
+  canModelControl: boolean
+  canThinkingControl: boolean
+  canStreamModes: boolean
 }
 
 /**
@@ -33,5 +36,8 @@ export function projectReviewLiveInteraction(
     canSend: product.capabilities.includes('send'),
     canFork: product.capabilities.includes('fork'),
     canForkAt: product.capabilities.includes('fork-at'),
+    canModelControl: product.capabilities.includes('model-switching'),
+    canThinkingControl: product.capabilities.includes('thinking-control'),
+    canStreamModes: product.capabilities.includes('steer') && product.capabilities.includes('queue'),
   }
 }
