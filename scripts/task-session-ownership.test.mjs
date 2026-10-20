@@ -73,10 +73,14 @@ test('扫描嵌套目录和 @media CSS，拒绝共享组件选择器被重写', 
   })
 })
 
-test('兼容 Pi 旧入口仅允许在既有文件内继续使用，不放宽新增实现', () => {
+test('旧 Pi 渲染组件彻底退出白名单，不能复活私有消息和工具渲染', () => {
   fixture({
     ...sharedReaders,
     'features/PiLiveTaskRound.tsx': 'export const Old = () => <TaskProcessGroup><TaskMessage text="legacy"/></TaskProcessGroup>',
     'features/PiSessionCopy.tsx': 'export const Copy = () => <TaskProcessGroup />',
-  }, root => assert.match(auditTaskSessionOwnership(root).join('\n'), /PiSessionCopy\.tsx.*TaskProcessGroup/))
+  }, root => {
+    const errors = auditTaskSessionOwnership(root).join('\n')
+    assert.match(errors, /PiLiveTaskRound\.tsx.*TaskMessage/)
+    assert.match(errors, /PiSessionCopy\.tsx.*TaskProcessGroup/)
+  })
 })
