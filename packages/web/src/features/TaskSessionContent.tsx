@@ -95,14 +95,13 @@ export function TaskSessionTool({
 
 export function TaskSessionProcess({
   mode, ...props
-}: Omit<TaskProcessGroupProps, 'defaultExpanded' | 'autoCollapseOnSettle' | 'className'> & {
+}: Omit<TaskProcessGroupProps, 'defaultExpanded' | 'className'> & {
   mode: TaskSessionMode
 }) {
-  // The only mode difference is lifecycle: Live opens while running and
-  // settles automatically; Review is read-only and lazy-loads from its adapter.
+  // Live initially opens its active process; Review initially collapses history.
+  // Neither mode ever collapses an already-open process on a status update.
   return <TaskProcessGroup
     {...props}
     defaultExpanded={mode === 'live' && props.state === 'running'}
-    autoCollapseOnSettle={mode === 'live'}
   />
 }
