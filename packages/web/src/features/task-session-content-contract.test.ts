@@ -110,6 +110,22 @@ test('失败模型请求复用共享 TaskMessage，以错误语义呈现，不�
   assert.match(read('../task-detail.css'), /task-message-row\[data-error='true'\]/)
 })
 
+test('通用错误诊断只由共享 TaskMessage 渲染且只消费确证字段', () => {
+  const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'Provider rejected request', error: true,
+    errorDiagnostic: {
+      stage: 'model', code: 'E_MODEL', retryable: false, guidance: 'Select a supported model',
+    },
+  }))
+  assert.match(html, /task-message-error-diagnostic/)
+  assert.match(html, /E_MODEL/)
+  assert.match(html, /Select a supported model/)
+  const plain = renderToStaticMarkup(createElement(TaskSessionMessage, {
+    role: 'assistant', text: 'Provider rejected request', error: true,
+  }))
+  assert.doesNotMatch(plain, /task-message-error-diagnostic/)
+})
+
 test('Live 和 Review 的消息辅助信息共用一套字段模型，不因缺少 modelLabel 隐藏时间与证据', () => {
   const evidence = createElement('span', {}, '证据 2 条')
   const html = renderToStaticMarkup(createElement(TaskSessionMessage, {
