@@ -90,8 +90,8 @@ const TaskSurfaceViewContext = createContext<TaskSurfaceViewValue>({
   setShowUsageDetails: () => undefined,
 })
 
-const sessionReaderHooks = new Set(['review-reader-pane', 'live-task-reader', 'pi-live-reader'])
-const sessionDocumentHooks = new Set(['review-reader', 'live-task-document', 'pi-live-document'])
+const sessionReaderHooks = new Set(['review-reader-pane', 'live-task-reader'])
+const sessionDocumentHooks = new Set(['review-reader', 'live-task-document'])
 const sessionComposerHooks = new Set(['task-session-composer-slot'])
 
 export function useTaskSurfaceView(): TaskSurfaceViewValue {
