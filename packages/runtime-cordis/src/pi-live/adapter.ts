@@ -114,6 +114,21 @@ function liveText(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function piErrorText(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  const nested = liveRecord(value)
+  return liveText(nested.message).trim() || liveText(nested.errorMessage).trim()
+    || liveText(nested.detail).trim() || liveText(nested.description).trim()
+}
+
+function piEventErrorText(...values: unknown[]): string {
+  for (const value of values) {
+    const message = piErrorText(value)
+    if (message) return message
+  }
+  return ''
+}
+
 function livePreview(value: unknown, max = 4_000): string {
   if (value === undefined || value === null) return ''
   const text = typeof value === 'string'
@@ -205,8 +220,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     // Normalize every persisted assistant failure, regardless of HTTP status,
     // model provider or transport. Keep adapter generic; no status-code hints.
     if (type === 'message_end' && rawRole === 'assistant') {
-      const nativeError = liveText(message.errorMessage) || liveText(message.error)
-        || liveText(event.errorMessage) || liveText(event.error)
+      const nativeError = piEventErrorText(message.errorMessage, message.error, event.errorMessage, event.error)
       if (nativeError.trim() || message.stopReason === 'error') {
         return { type: 'error', message: nativeError.trim() || 'Pi assistant request failed' }
       }
@@ -281,8 +295,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
         type: 'status',
         status,
         ...(liveText(event.message) || status === 'failed'
-          ? { message: liveText(event.errorMessage) || liveText(event.error)
-            || liveText(event.message) || 'Pi Live runtime failed' }
+          ? { message: piEventErrorText(event.errorMessage, event.error, event.message) || 'Pi Live runtime failed' }
           : {}),
       }
     }
@@ -317,7 +330,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     }
   }
   if (type === 'runtime_exit') {
-    const message = liveText(event.errorMessage) || liveText(event.error)
+    const message = piEventErrorText(event.errorMessage, event.error)
     return {
       type: 'status',
       status: 'failed',
