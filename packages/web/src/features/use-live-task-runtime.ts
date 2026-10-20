@@ -479,7 +479,8 @@ export function useLiveTaskRuntime({
             runtimeCompacting = false
             runtimeActive = false
           }
-          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
+          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message
+            && !historyAtLatestRef.current) {
             setError(envelope.normalizedEvent.message)
           }
           if (envelope.normalizedEvent.status === 'running') {
@@ -539,7 +540,8 @@ export function useLiveTaskRuntime({
           setExtension(null)
           runtimeCompacting = false
           runtimeActive = false
-          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message) {
+          if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message
+            && !historyAtLatestRef.current) {
             setError(envelope.normalizedEvent.message)
           }
           setActivityStatus('idle')
@@ -556,7 +558,10 @@ export function useLiveTaskRuntime({
             snapshotBaseActiveCountRef.current = 0
           }
         }
-        if (envelope.normalizedEvent?.type === 'error') setError(envelope.normalizedEvent.message)
+        if (envelope.normalizedEvent?.type === 'error' && !historyAtLatestRef.current) {
+          // Timeline owns errors at the live tail; banner is a fallback while browsing history.
+          setError(envelope.normalizedEvent.message)
+        }
       },
       () => {
         streamDisconnected = true
