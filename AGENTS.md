@@ -112,6 +112,7 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 - **允许差异**：确有原生能力的 Agent 专属控制、扩展、证据及状态可以按已有 Contribution/Capability 接口呈现，但必须复用既有 UI Primitive，不能改变共享消息 DOM 或覆盖共享组件 CSS。
 - **受控扩展语义**：Runtime Disclosure 的字段分组由 `fieldId`（稳定语义键）和 `section`（status/performance/resources/advanced）提供。Web 不得根据英文 label、翻译文案或 Agent ID 猜测语义/分区；旧插件未声明时应按字段类型安全降级。
 - **现存例外**：`features/PiLiveTaskRound.tsx` 是兼容旧 Pi 入口的历史实现，仅允许维持现状并逐步删除；`ReviewRoundPresentation.tsx` 的原始事件详情可直接使用 `TaskThinking`。不得复制例外、扩大白名单或将它们作为新 Agent 的实现模板。
+- **全量收敛递减门禁**：`scripts/check-agent-convergence-ownership.mjs` 由 `check:web-presentation` 执行，禁止共享 Task 页面再引入 Agent ID 特判、私有 Pi CSS 钩子和第二套编辑器；`scripts/agent-convergence-ownership.mjs` 的已知旧例外额度**只能减少，不能扩大**，跟踪 #517/#519/#521/#523。新增例外必须先解决底层能力边界，不能修改额度蒙混通过。
 - **硬门禁**：`scripts/check-task-style-ownership.mjs` 调用 `task-session-ownership.mjs`，递归检查 `packages/web/src` 全部 TSX 的 JSX AST 与 CSS 选择器；禁止新增私有 Task 组件、DOM、样式及绕开共享入口的 Live/Review 实现。对应负例在 `scripts/task-session-ownership.test.mjs`；两者分别由 `check:web-presentation` 和 `npm test` 执行。任何新增例外必须先说明不能复用的真实差异、收敛计划和对应回归测试，不可静默放行。
 
 
