@@ -336,7 +336,7 @@ for (const file of tsxFiles(root)) {
   for (const match of source.matchAll(/<UiIcon\b[^>]*\bsize=\{(\d+)\}/g)) {
     if (!['12', '14', '16', '20'].includes(match[1])) throw new Error(`${file} 的 UiIcon 尺寸 ${match[1]} 不在统一档位内`)
   }
-  if (/<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|pi-live-send)/.test(source)) throw new Error(`${file} 的纯图标操作必须复用 IconButton`)
+  if (/<button[^>]+className="[^"]*(?:icon-button|theme-toggle|pi-live-menu|task-composer-send)/.test(source)) throw new Error(`${file} 的纯图标操作必须复用 IconButton`)
 }
 const duplicated = ['--al-canvas', '--al-surface', '--al-soft', '--al-line', '--al-ink', '--al-accent']
   .filter(token => new RegExp(`${token.replaceAll('-', '\\-')}\\s*:`).test(css.theme))
@@ -352,7 +352,7 @@ for (const breakpoint of ['1199.98px', '991.98px', '767.98px', '575.98px']) if (
 if (!/@media \(max-width: 575\.98px\)[\s\S]*?\.app-header \.brand\s*\{[\s\S]*?display:\s*flex/m.test(css.shellResponsive)) throw new Error('xs 窄窗口必须保留 Logo')
 for (const legacy of ['1180px', '1100px', '1080px', '900px', '820px', '760px', '640px', '560px']) {
   const re = new RegExp(`@media\\s*\\([^)]*(?:max-width|min-width)\\s*:\\s*${legacy.replace('.', '\\.')}\\b`)
-  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.backup) || re.test(css.pi) || re.test(css.taskCenter) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) {
+  if (re.test(css.shellResponsive) || re.test(css.states) || re.test(css.backup) || re.test(css.liveTask) || re.test(css.taskCenter) || re.test(css.uiPrimitives) || re.test(css.uiOverlay)) {
     throw new Error(`壳层/核心页面/统一组件不得恢复一次性断点：${legacy}`)
   }
 }
@@ -449,6 +449,21 @@ if (!css.taskTurnRail.includes('.task-turn-rail') || !css.taskTurnRail.includes(
 if (!css.liveTask.includes('.pi-live-queue') || css.liveTask.includes('.task-composer {')) throw new Error('live-task.css 仅持有 Runtime 页面/队列，不能定义共享 Composer')
 if (!css.taskComposer.includes('.task-composer {') || !css.taskComposer.includes('.task-composer-settings') || !/\.task-composer-hint[\s\S]*?position:\s*absolute/m.test(css.taskComposer)) throw new Error('task-session-composer.css 必须完整持有唯一输入区外观与交互')
 if (existsSync(p('pi-live.css'))) throw new Error('旧 pi-live.css 命名不得恢复')
+const livePageSource = readFileSync(p('features/LiveTaskPage.tsx'), 'utf8')
+const reviewPageSource = readFileSync(p('features/ReviewPage.tsx'), 'utf8')
+const composerSource = readFileSync(p('components/TaskSessionComposer.tsx'), 'utf8')
+for (const [name, source] of [['LiveTaskPage', livePageSource], ['ReviewPage', reviewPageSource]]) {
+  if (!source.includes('<TaskSessionComposer') || /<LiveMarkdownComposer|<ComposerPillSelect/.test(source)) {
+    throw new Error(name + ' 必须复用唯一 TaskSessionComposer，不能重建输入区')
+  }
+}
+if (!composerSource.includes('<LiveMarkdownComposer') || !composerSource.includes('<ComposerPillSelect')
+  || !composerSource.includes('showStreamingModes &&')) {
+  throw new Error('TaskSessionComposer 必须完整持有编辑器、模型/推理与发送模式操作')
+}
+if (/\.task-composer(?:-|\s|\{)/.test(css.liveTask) || /\.task-composer(?:-|\s|\{)/.test(css.review)) {
+  throw new Error('Composer 样式只能由 task-session-composer.css 定义')
+}
 if (!css.taskCenter.includes('Task Center 页面壳层唯一所有者') || !css.taskCenter.includes('.task-center-rail') || !css.taskCenter.includes('.task-center-main') || !/\.task-center-scroll\s*\{[^}]*overflow:\s*auto/.test(css.taskCenter) || !/\.task-center-main\s*\{[^}]*overflow:\s*hidden/.test(css.taskCenter)) throw new Error('task-center.css 必须持有 Rail/详情壳层和独立滚动')
 if (!css.taskDetail.includes('Task Surface 共享详情组件的唯一样式所有者') || !css.taskDetail.includes('.task-header') || !css.taskDetail.includes('.task-round') || !css.taskDetail.includes('.task-message-bubble-user') || !css.taskDetail.includes('background: var(--al-user-bubble)') || !css.taskDetail.includes('.task-message-assistant') || !css.taskDetail.includes('.task-thinking') || !css.taskDetail.includes('.task-tool-row') || !css.taskDetail.includes('.task-event-row')) throw new Error('task-detail.css 必须完整持有 Task Surface 共享组件')
 
