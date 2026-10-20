@@ -1,11 +1,11 @@
 import type { useTranslation } from 'react-i18next'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
-import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot } from './live-task-history-window'
-import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reduceLiveTaskEvent } from './live-task-projection'
+import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
+import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
 import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
 
@@ -82,8 +82,21 @@ export function useLiveTaskRuntime({
     roundProjectorRef,
     queueRevisionRef
   } = session
+  const recoveryReaderAnchorRef = useRef<{ anchor: ReturnType<typeof captureLiveReaderAnchor>; scrollTop: number } | null>(null)
+  // Restore before paint; recovery is a data update, not a navigation request.
+  useLayoutEffect(() => {
+    const saved = recoveryReaderAnchorRef.current
+    if (!saved) return
+    recoveryReaderAnchorRef.current = null
+    const reader = readerRef.current
+    if (!reader || followControllerRef.current.isFollowing
+      || Math.abs(lastReaderScrollTopRef.current - saved.scrollTop) > 2) return
+    restoreLiveReaderAnchor(reader, saved.anchor)
+    lastReaderScrollTopRef.current = reader.scrollTop
+  })
   useEffect(() => {
     let cancelled = false
+    recoveryReaderAnchorRef.current = null
     setProduct(null)
     setState(null)
     lastProgressAtRef.current = Date.now()
@@ -168,6 +181,7 @@ export function useLiveTaskRuntime({
       () => undefined,
     )
 
+    const startingTranscriptRevision = liveTurnRevisionRef.current
     void liveApi.snapshot(
       current.liveId,
       current.runtimeSessionId,
@@ -181,7 +195,12 @@ export function useLiveTaskRuntime({
         const projectedItems = projectLiveSnapshotEntries(snapshot.entries)
         const nextProjection = splitLiveProjectionItems(projectedItems, snapshot.state.isStreaming)
         historyIndexAnchorCursorRef.current = firstUserEntryCursor(projectedItems)
-        setProjection(nextProjection)
+        setProjection(previous => {
+          // An empty/stale initial response must not erase SSE facts already visible.
+          if (!projectedItems.length && (previous.stable.length || previous.active.length)) return previous
+          return reconcileLiveSnapshotProjection(previous, nextProjection,
+            snapshot.state.isStreaming || liveTurnRevisionRef.current !== startingTranscriptRevision)
+        })
         historyBlocksRef.current = [historyPageBlock(snapshot, projectedItems)]
         setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
         historyAtLatestRef.current = snapshot.page?.hasLater !== true
@@ -259,6 +278,15 @@ export function useLiveTaskRuntime({
     let recoveryActive = true
     let recoveryTask: Promise<void> | null = null
     let pendingRecoveryMode: 'live' | 'settle' | null = null
+    const retainReaderAnchor = () => {
+      const reader = readerRef.current
+      if (reader && !followControllerRef.current.isFollowing) {
+        recoveryReaderAnchorRef.current = {
+          anchor: captureLiveReaderAnchor(reader),
+          scrollTop: lastReaderScrollTopRef.current,
+        }
+      }
+    }
 
     const recoverOnce = async (mode: 'live' | 'settle') => {
       if (!product.capabilities.includes('recovery')) return
@@ -281,7 +309,7 @@ export function useLiveTaskRuntime({
         ])
         if (!recoveryActive || generation !== recoveryGeneration) return
         if (liveTurnRevisionRef.current !== recoveryTurnRevision) return
-        setState(snapshot.state)
+        setState(previous => sameLiveRuntimeState(previous, snapshot.state) ? previous : snapshot.state)
         const recovered = projectLiveSnapshotEntries(snapshot.entries)
         if (mode === 'settle' && snapshot.state.isStreaming) {
           // A new turn started before the previous completion reconciliation returned.
@@ -289,7 +317,10 @@ export function useLiveTaskRuntime({
           // recovery will reconcile every persisted entry since the original leaf.
         } else if (!recoveryLeafId) {
           const nextProjection = splitLiveProjectionItems(recovered, snapshot.state.isStreaming)
-          setProjection(nextProjection)
+          retainReaderAnchor()
+          setProjection(previous => !recovered.length && (previous.stable.length || previous.active.length)
+            ? previous
+            : reconcileLiveSnapshotProjection(previous, nextProjection, snapshot.state.isStreaming))
           historyBlocksRef.current = [historyPageBlock(snapshot, recovered)]
           setHistoryPage(aggregateHistoryPage(historyBlocksRef.current))
           setInputHistory(projectLiveInputHistory(recovered))
@@ -298,24 +329,33 @@ export function useLiveTaskRuntime({
         } else if (snapshot.state.isStreaming) {
           // 重连中的增量快照只补当前活动轮的已持久化片段，不复制稳定历史；
           // 完成态仍从旧 leaf 对账，替换活动轮中的乐观/流式临时节点。
-          setProjection(previous => ({
-            ...previous,
-            active: mergeLiveActiveProjectionItems(previous.active, recovered),
-          }))
+          retainReaderAnchor()
+          setProjection(previous => {
+            const active = mergeLiveActiveProjectionItems(previous.active, recovered)
+            return active === previous.active ? previous : { ...previous, active }
+          })
         } else if (recovered.length > 0) {
+          retainReaderAnchor()
           setProjection(previous => {
             const reconciledActive = [
               ...previous.active.slice(0, snapshotBaseActiveCount),
               ...recovered,
             ]
             return {
-              stable: [...previous.stable, ...reconciledActive],
+              stable: appendUniqueLiveProjectionItems(previous.stable, reconciledActive),
               active: [],
             }
           })
           snapshotBaseActiveCountRef.current = 0
           leafIdRef.current = snapshot.leafId ?? recoveryLeafId
         } else {
+          // A confirmed settled snapshot may have no new persisted rows yet.
+          // Keep the visible active tail rather than leaving its Process running forever.
+          retainReaderAnchor()
+          setProjection(previous => previous.active.length
+            ? { stable: appendUniqueLiveProjectionItems(previous.stable, previous.active), active: [] }
+            : previous)
+          snapshotBaseActiveCountRef.current = 0
           leafIdRef.current = snapshot.leafId ?? recoveryLeafId
         }
         setRuntimeDisclosures(disclosureOptions)
@@ -420,6 +460,7 @@ export function useLiveTaskRuntime({
       envelope => {
         setConnected(true)
         if (liveEventChangesTaskTranscript(envelope.normalizedEvent)) {
+          liveTurnRevisionRef.current += 1
           lastProgressAtRef.current = Date.now()
           if (historyAtLatestRef.current) {
             setProjection(previous => ({

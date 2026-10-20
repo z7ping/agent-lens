@@ -25,6 +25,7 @@ function MessageBubble({
   inspect,
   loadAttachments,
   nestedTools = [],
+  expansionStore,
   modelLabel,
   showContentActions = false,
   onForkAt,
@@ -34,6 +35,7 @@ function MessageBubble({
   inspect(node: ReviewNodeDto): void
   loadAttachments(observationId: string): Promise<ReviewMessageAttachmentDto[]>
   nestedTools?: ReviewToolNodeDto[]
+  expansionStore?: Map<string, boolean> | undefined
   modelLabel?: string | undefined
   showContentActions?: boolean | undefined
   onForkAt?: ((nativeEventId: string) => void) | undefined
@@ -68,7 +70,7 @@ function MessageBubble({
       model={thinking}
       meta={<EvidenceBadges evidence={node.evidence} compact/>}
       actions={node.evidence.length > 0 ? <button className="evidence-link" onClick={() => inspect(node)}>{t('local.evidence.allEvidence', { count: node.evidence.length })}</button> : undefined}
-      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter items={nestedTools} inspect={inspect}/> : undefined}
+      nested={nestedTools.length > 0 ? <ReviewToolGroupAdapter items={nestedTools} inspect={inspect} expansionStore={expansionStore}/> : undefined}
     />
   }
 
@@ -119,12 +121,13 @@ function reviewToolModel(node: ReviewToolNodeDto): TaskToolModel {
   }
 }
 
-function ReviewToolGroupAdapter({ items, inspect }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void }) {
+function ReviewToolGroupAdapter({ items, inspect, expansionStore }: { items: ReviewToolNodeDto[]; inspect(node: ReviewNodeDto): void; expansionStore?: Map<string, boolean> | undefined }) {
   const { t } = useTranslation('task')
   const tools = items.map(reviewToolModel)
   const byId = new Map(items.map(node => [node.id, node] as const))
   return <TaskToolGroup
     compact
+    expansionStore={expansionStore}
     model={{
       id: `tools:${items[0]?.id ?? 'empty'}`,
       label: t('live.toolGroup'),
@@ -205,7 +208,7 @@ export function ReviewProcessGroup({
   showAllEvents: boolean
   loadState?: 'idle' | 'loading' | 'loaded' | 'error'
   loadError?: string
-  expansionStore?: Map<string, boolean>
+  expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: (expanded: boolean) => void
   onRetry?: () => void
 }) {
@@ -275,7 +278,7 @@ export function ReviewProcessGroup({
     </div>}
     {loadState === 'loaded' && unavailable && <div className="task-process-loading" role="status">{reasonLabel ?? t('local.process.unavailable')}</div>}
     {loadState === 'loaded' && !unavailable && <div className="task-process-sequence">
-      <TaskProcessSequence id={id} sequence={processSequence}/>
+      <TaskProcessSequence id={id} sequence={processSequence} expansionStore={expansionStore}/>
     </div>}
   </TaskSessionProcess>
 }
@@ -491,13 +494,13 @@ export function ReviewRoundAdapter({
       ? entry.items : [])
 
   const renderEntry = (entry: ReviewInteractionPresentationEntry, index: number) => {
-    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect}/>
+    if (entry.type === 'tool-group') return <ReviewToolGroupAdapter key={`tools-${index}`} items={entry.items} inspect={inspect} expansionStore={expansionStore}/>
     if (entry.type === 'runtime-event-group') return null
     if (entry.type === 'raw-event-group') {
       if (entry.items.every(isSessionTitleUpdate)) return null
       return showAllEvents ? <RawEventGroup key={`raw-${index}`} items={entry.items} inspect={inspect}/> : null
     }
-    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments}/>
+    if (entry.type === 'reasoning') return <MessageBubble key={entry.node.id} node={entry.node} nestedTools={entry.tools} inspect={inspect} loadAttachments={loadAttachments} expansionStore={expansionStore}/>
     if (entry.type === 'message') return <MessageBubble key={entry.node.id} node={entry.node} inspect={inspect} loadAttachments={loadAttachments} modelLabel={modelLabels.get(entry.node.id)} showContentActions={entry.node.id === lastAssistantId} onForkAt={onForkAt} forkPending={forkPending}/>
     if (entry.type === 'event') {
       if (isConsolidatedEvent(entry.node)) return null

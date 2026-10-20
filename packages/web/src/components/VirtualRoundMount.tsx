@@ -117,11 +117,13 @@ export function VirtualRoundMount({
         return
       }
 
+      // Browser backgrounding is not a reader scroll; preserve mounted DOM.
+      if (document.visibilityState === 'hidden') return
       cancelPendingUnmount()
       unmountTimerRef.current = window.setTimeout(() => {
         unmountTimerRef.current = null
         const current = ref.current
-        if (!current) return
+        if (!current || document.visibilityState === 'hidden') return
         const active = document.activeElement
         if (active instanceof Node && current.contains(active)) return
         setMounted(false)

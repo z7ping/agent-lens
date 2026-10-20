@@ -15,7 +15,7 @@ export interface StableLiveTaskRoundProps {
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
-  processExpansionStore?: Map<string, boolean>
+  processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction: (
     action: LiveMessageActionContributionDto,
     item: Extract<LiveTaskProjectionItem, { kind: 'message' }>,

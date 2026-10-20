@@ -208,3 +208,32 @@ test('相邻工具独立成组；思考/消息分隔独立的前三项预算和�
   ])
   assert.equal(hidden.filter(segment => segment.type === 'tools').length, 2)
 })
+
+test('adjacent group expansion is independent and survives virtual remount in Live/Review', () => {
+  const entries: TaskToolGroupSequenceEntry[] = [
+    ...Array.from({ length: 5 }, (_, index) => ({
+      type: 'tool' as const,
+      key: `one-${index}`,
+      tool: { ...model.tools[0]!, id: `one-${index}`, name: `first-batch-${index}` },
+    })),
+    { type: 'content', key: 'reasoning', content: 'reasoning boundary' },
+    ...Array.from({ length: 4 }, (_, index) => ({
+      type: 'tool' as const,
+      key: `two-${index}`,
+      tool: { ...model.tools[0]!, id: `two-${index}`, name: `second-batch-${index}` },
+    })),
+  ]
+  const saved = new Map([['tools:round:one-0', true]])
+  const firstRender = renderToStaticMarkup(createElement(TaskProcessSequence, {
+    id: 'round', sequence: entries, expansionStore: saved,
+  }))
+  const remounted = renderToStaticMarkup(createElement(TaskProcessSequence, {
+    id: 'round', sequence: entries, expansionStore: saved,
+  }))
+  assert.equal(firstRender, remounted)
+  assert.equal((firstRender.match(/data-task-tool-group="true"/g) ?? []).length, 2)
+  assert.equal((firstRender.match(/data-tool-fact="true"/g) ?? []).length, 8)
+  assert.match(firstRender, /first-batch-4/)
+  assert.doesNotMatch(firstRender, /second-batch-3/)
+  assert.match(firstRender, /展开其余 1 项/)
+})

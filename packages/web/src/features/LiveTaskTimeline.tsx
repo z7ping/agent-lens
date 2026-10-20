@@ -142,7 +142,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
-  processExpansionStore?: Map<string, boolean>
+  processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t } = useTranslation('task')
@@ -183,7 +183,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     item.kind === 'tool'
       ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool')) }
       : { type: 'content', key: item.id, content: renderProcessItem(item) })
-  const processContent = <TaskProcessSequence id={projection.model.id} sequence={processSequence}/>
+  const processContent = <TaskProcessSequence id={projection.model.id} sequence={processSequence} expansionStore={processExpansionStore}/>
 
   const processCount = reading.processCounts.commentary
   const thinkingCount = reading.processCounts.thinking
@@ -248,7 +248,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
-  processExpansionStore?: Map<string, boolean>
+  processExpansionStore?: Map<string, boolean> | undefined
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   return <>

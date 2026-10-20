@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import type { LiveTaskProjectionItem } from './live-task-projection'
 import {
   LIVE_TASK_SNAPSHOT_PAGE_LIMIT,
   aggregateHistoryPage,
+  captureLiveReaderAnchor,
+  restoreLiveReaderAnchor,
   compactHistoryBlocks,
   refreshLatestHistoryBlock,
   type LiveHistoryPageBlock,
@@ -58,4 +61,36 @@ test('活动投影刷新末页时不重复插入已存在的稳定历史项', ()
   assert.deepEqual(next[0]!.itemIds, ['already-fixed'])
   assert.deepEqual(next[1]!.itemIds, ['new-stable', 'new-active'])
   assert.deepEqual(tail.itemIds, ['old-active'], '刷新不能原地修改旧的历史窗口')
+})
+
+test('recovery restores a detached reader by semantic round rather than jumping to the end', () => {
+  let roundTop = 150
+  const reader = {
+    clientHeight: 600,
+    scrollTop: 250,
+    getBoundingClientRect: () => ({ top: 100 }),
+    querySelectorAll: () => [round],
+  } as unknown as HTMLElement
+  const round = {
+    dataset: { interactionId: 'live-round:user-a' },
+    getBoundingClientRect: () => ({ top: roundTop }),
+    closest: () => reader,
+  }
+  const anchor = captureLiveReaderAnchor(reader)
+  assert.equal(anchor.interactionId, 'live-round:user-a')
+  roundTop = 180
+  restoreLiveReaderAnchor(reader, anchor)
+  assert.equal(reader.scrollTop, 280, 'same round must remain at its prior screen offset')
+})
+
+test('background tab never unmounts virtualized content or resets Live input and projection', () => {
+  const virtual = readFileSync(new URL('../components/VirtualRoundMount.tsx', import.meta.url), 'utf8')
+  const runtime = readFileSync(new URL('./use-live-task-runtime.ts', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+  assert.match(virtual, /document\.visibilityState === 'hidden'\) return/)
+  assert.match(runtime, /restoreLiveReaderAnchor\(reader, saved\.anchor\)/)
+  assert.match(runtime, /reconcileLiveSnapshotProjection\(previous, nextProjection/)
+  assert.match(runtime, /shouldRecoverLiveOnVisible\(hiddenForMs, streamDisconnected\)/)
+  assert.match(page, /readLiveComposerDraft\(composerDraftKey\)/)
+  assert.match(page, /processExpansionStore=\{processExpansionStore\}/)
 })
