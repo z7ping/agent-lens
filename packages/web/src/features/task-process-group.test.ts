@@ -100,16 +100,16 @@ test('思考与工具分别统计，不把推理误算为工具', () => {
   assert.match(html, /process details/)
 })
 
-test('运行中允许打开执行详情，已完成历史任务默认只展示摘要', () => {
+test('运行中默认可展开，历史默认折叠且没有强制完成态折叠', () => {
   const running = renderToStaticMarkup(createElement(TaskProcessGroup, {
     id: 'process:active', messageCount: 0, thinkingCount: 1, toolCount: 2,
-    state: 'running', defaultExpanded: true, autoCollapseOnSettle: true,
+    state: 'running', defaultExpanded: true,
     children: '执行中',
   }))
   assert.match(running, /执行中/)
   const settled = renderToStaticMarkup(createElement(TaskProcessGroup, {
     id: 'process:settled', messageCount: 0, thinkingCount: 1, toolCount: 2,
-    state: 'settled', defaultExpanded: false, autoCollapseOnSettle: true,
+    state: 'settled', defaultExpanded: false,
     children: '执行细节',
   }))
   assert.doesNotMatch(settled, /执行细节/)

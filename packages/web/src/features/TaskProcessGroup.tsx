@@ -17,7 +17,6 @@ export interface TaskProcessGroupProps {
   endedAtMs?: number | undefined
   state?: TaskRoundState | undefined
   defaultExpanded?: boolean | undefined
-  autoCollapseOnSettle?: boolean | undefined
   expansionStore?: Map<string, boolean> | undefined
   onExpandedChange?: ((expanded: boolean) => void) | undefined
   summaryExtra?: ReactNode | undefined
@@ -37,7 +36,6 @@ export function TaskProcessGroup({
   endedAtMs,
   state = 'settled',
   defaultExpanded = false,
-  autoCollapseOnSettle = false,
   expansionStore,
   onExpandedChange,
   summaryExtra,
@@ -73,7 +71,6 @@ export function TaskProcessGroup({
     model={model}
     kind="process"
     defaultExpanded={defaultExpanded}
-    autoCollapseOnSettle={autoCollapseOnSettle}
     expansionStore={expansionStore}
     onExpandedChange={onExpandedChange}
     className={`task-process-group ${className}`.trim()}

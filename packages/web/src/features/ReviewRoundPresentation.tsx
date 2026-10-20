@@ -11,7 +11,7 @@ import { TaskEvent } from './TaskEvent'
 import { TaskReadingRound } from './TaskReadingRound'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
 import { TaskThinking } from './TaskThinking'
-import { TaskToolGroup, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
+import { TaskToolGroup, TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { agentLensI18n } from '../i18n/runtime'
 import { taskUserRequestText, type TaskRoundModel, type TaskThinkingModel, type TaskToolModel } from './task-detail-model'
@@ -220,8 +220,7 @@ export function ReviewProcessGroup({
   const unavailable = summary?.availability === 'unavailable'
   const reasonLabel = summary?.reasonCode ? t(`local.process.reasons.${summary.reasonCode}`) : undefined
 
-  // The projection intentionally splits native tool parents; aggregate only
-  // visibility at the round boundary, without changing evidence ancestry/order.
+  // Preserve source order and evidence ownership; split only adjacent tool runs.
   const processSequence: TaskToolGroupSequenceEntry[] = items.flatMap((item, index): TaskToolGroupSequenceEntry[] => {
     if (item.type === 'tool-group') return item.items.map(node => ({
       type: 'tool' as const,
@@ -234,10 +233,10 @@ export function ReviewProcessGroup({
       type: 'content' as const, key: item.node.id,
       content: <EventRow event={item.node} inspect={inspect}/>,
     }]
-    if (item.type === 'raw-event-group') return showAllEvents ? [{
+    if (item.type === 'raw-event-group') return [{
       type: 'content' as const, key: `raw:${index}`,
-      content: <RawEventGroup items={item.items} inspect={inspect}/>,
-    }] : []
+      content: showAllEvents ? <RawEventGroup items={item.items} inspect={inspect}/> : null,
+    }]
     if (item.node.role === 'reasoning') return [{
       type: 'content' as const, key: item.node.id,
       content: <TaskSessionThinking model={{
@@ -253,7 +252,6 @@ export function ReviewProcessGroup({
       content: <TaskSessionProcessText text={item.node.text}/>,
     }]
   })
-  const processToolModels = processSequence.flatMap(entry => entry.type === 'tool' ? [entry.tool] : [])
   return <TaskSessionProcess
     mode="review"
     id={id}
@@ -277,12 +275,7 @@ export function ReviewProcessGroup({
     </div>}
     {loadState === 'loaded' && unavailable && <div className="task-process-loading" role="status">{reasonLabel ?? t('local.process.unavailable')}</div>}
     {loadState === 'loaded' && !unavailable && <div className="task-process-sequence">
-      <TaskToolGroup compact sequence={processSequence} model={{
-        id: `tools:${id}`, label: t('task:live.toolGroup'),
-        itemCount: processToolModels.length,
-        errorCount: processToolModels.filter(tool => tool.status === 'error').length,
-        kindCounts: [], tools: processToolModels,
-      }}/>
+      <TaskProcessSequence id={id} sequence={processSequence}/>
     </div>}
   </TaskSessionProcess>
 }

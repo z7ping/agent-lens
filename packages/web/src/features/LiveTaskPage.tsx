@@ -48,6 +48,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [fileChanges, setFileChanges] = useState<{ runtimeId: string; result: TaskFileChangesResponseDto | null } | null>(null)
   const [progressClockMs, setProgressClockMs] = useState(() => Date.now())
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
+  // Keep the reader's disclosure intent through live snapshot reconciliation.
+  const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
   const composerDraftKey = useMemo(
     () => current ? liveComposerDraftKey(current.liveId, current.runtimeSessionId) : '',
     [current?.liveId, current?.runtimeSessionId],
@@ -409,6 +411,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             messageActions={messageActions}
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
+            processExpansionStore={processExpansionStore}
             onMessageAction={runMessageAction}
           />
           {noProgressWarning && <div className="live-task-sync-warning" role="status">
@@ -425,6 +428,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             actionPending={messageActionPending}
             runtimeStreaming={state?.isStreaming ?? false}
             showResponsePending={Boolean(state?.isStreaming) && index === roundSegments.active.length - 1}
+            processExpansionStore={processExpansionStore}
             onMessageAction={runMessageAction}
           />)}
           {historyPage?.hasLater && <div

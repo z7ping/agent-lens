@@ -39,7 +39,7 @@ function thinking(index: number): ReviewMessageNodeDto {
   }
 }
 
-test('Review 116 次工具跨 58 个原生分组仍只使用一次整轮渐进折叠', () => {
+test('Review 116 次工具按思考分为 58 个独立相邻组，不整轮折叠', () => {
   const items: ReviewProcessPresentationItem[] = []
   for (let index = 0; index < 58; index += 1) {
     items.push({ type: 'tool-group', items: [tool(index * 2 + 1), tool(index * 2 + 2)] })
@@ -54,13 +54,13 @@ test('Review 116 次工具跨 58 个原生分组仍只使用一次整轮渐进�
     expansionStore: new Map([['process:116', true]]),
   }))
 
-  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 1)
-  assert.match(html, /工具调用 · 116 项/)
-  assert.match(html, /展开其余 112 项/)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
+  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 58)
+  assert.doesNotMatch(html, /工具调用 · 116 项/)
+  assert.doesNotMatch(html, /展开其余/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 116)
+  assert.match(html, /native_call_4/)
   assert.match(html, /native_call_84/)
   assert.match(html, /native_call_96/)
-  assert.doesNotMatch(html, /native_call_4/)
   assert.match(html, /native reasoning 0/)
   assert.match(html, /native reasoning 57/)
   assert.equal((html.match(/class="task-thinking task-process-thinking-card"/g) ?? []).length, 58)

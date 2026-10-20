@@ -8,7 +8,7 @@ import { sameStableLiveTaskRoundProps } from './live-task-render-boundary'
 import { TaskReadingRound } from './TaskReadingRound'
 import { TaskSessionMessage, TaskSessionThinking, TaskSessionTool, TaskSessionProcessText, TaskSessionProcess, taskSessionMessageTime } from './TaskSessionContent'
 import { projectTaskReading, type TaskReadingFact } from './task-reading-semantics'
-import { TaskToolGroup, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
+import { TaskProcessSequence, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import type { TaskToolModel } from './task-detail-model'
 
 /** 仅负责将统一 Live 投影映射到共享 TaskSurface 组件，无订阅与发送副作用。 */
@@ -129,6 +129,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   messageActions,
   actionPending,
   runtimeStreaming,
+  processExpansionStore,
   showResponsePending = false,
   showAnswerActions = true,
   onMessageAction,
@@ -141,6 +142,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
+  processExpansionStore?: Map<string, boolean>
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   const { t } = useTranslation('task')
@@ -176,22 +178,12 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     item.kind === 'message'
       ? <TaskSessionProcessText key={item.id} text={item.text} streaming={item.streaming}/>
       : renderItem(item)
-  // One round-wide visibility policy, not independent batches split by thinking.
-  const processTools = processItems.filter((item): item is Extract<LiveTaskProjectionItem, { kind: 'tool' }> => item.kind === 'tool')
-    .map(item => liveTaskToolModel(item, t('tool.kind.tool')))
-  const toolsById = new Map(processTools.map(tool => [tool.id, tool] as const))
+  // Thinking/commentary interrupts tool runs; each run has its own 3-call preview.
   const processSequence: TaskToolGroupSequenceEntry[] = processItems.map(item =>
     item.kind === 'tool'
-      ? { type: 'tool', key: item.id, tool: toolsById.get(item.id)! }
+      ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool')) }
       : { type: 'content', key: item.id, content: renderProcessItem(item) })
-  const processContent = processTools.length
-    ? <TaskToolGroup compact sequence={processSequence} model={{
-        id: `tools:${projection.model.id}`, label: t('live.toolGroup'),
-        itemCount: processTools.length,
-        errorCount: processTools.filter(tool => tool.status === 'error').length,
-        kindCounts: [], tools: processTools,
-      }}/>
-    : processItems.map(renderProcessItem)
+  const processContent = <TaskProcessSequence id={projection.model.id} sequence={processSequence}/>
 
   const processCount = reading.processCounts.commentary
   const thinkingCount = reading.processCounts.thinking
@@ -217,6 +209,7 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     thinkingDurationMs={processItems.reduce((sum, item) =>
       sum + (item.kind === 'thinking' ? item.durationMs ?? 0 : 0), 0) || undefined}
     state={processState}
+    expansionStore={processExpansionStore}
   ><div className="task-process-sequence">{processContent}</div></TaskSessionProcess>
 
   const prompt = visibleItems.filter(item => item.kind === 'message' && item.role === 'user').map(renderItem)
@@ -246,6 +239,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   messageActions,
   actionPending,
   runtimeStreaming,
+  processExpansionStore,
   onMessageAction,
 }: {
   rounds: readonly LiveTaskRoundProjection[]
@@ -254,6 +248,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
+  processExpansionStore?: Map<string, boolean>
   onMessageAction(action: LiveMessageActionContributionDto, item: Extract<LiveTaskProjectionItem, { kind: 'message' }>): void
 }) {
   return <>
@@ -266,6 +261,7 @@ export const StableLiveRounds = memo(function StableLiveRounds({
       messageActions={messageActions}
       actionPending={actionPending}
       runtimeStreaming={runtimeStreaming}
+      processExpansionStore={processExpansionStore}
       onMessageAction={onMessageAction}
     />)}
   </>

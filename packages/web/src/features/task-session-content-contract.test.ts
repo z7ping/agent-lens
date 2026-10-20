@@ -24,15 +24,12 @@ test('Live 和 Review 共用消息、思考、工具、过程与文本渲染入�
   assert.doesNotMatch(review, /<TaskToolRow|<TaskMessage|<TaskProcessGroup|<MarkdownContent/)
   assert.match(live, /<TaskSessionProcess\s+mode="live"/)
   assert.match(review, /<TaskSessionProcess\s+mode="review"/)
-  // Groups of consecutive calls are progressively disclosed by one shared ToolGroup
-  // in both modes; Review adds evidence/inspect callbacks, never a second renderer.
+  // Live / Review share the same adjacency-aware grouping owner.
   const group = read('./TaskToolGroup.tsx')
-  assert.match(live, /<TaskToolGroup/)
-  assert.match(review, /<TaskToolGroup/)
-  assert.match(live, /compact[\s\S]*?model=\{\{/)
-  assert.match(review, /compact[\s\S]*?model=\{\{/)
-  assert.match(review, /renderMeta=\{tool =>/)
-  assert.match(review, /onToolClick=\{tool =>/)
+  assert.match(live, /<TaskProcessSequence/)
+  assert.match(review, /<TaskProcessSequence/)
+  assert.match(group, /splitAdjacentTaskToolEntries/)
+  assert.match(group, /<TaskToolGroup/)
   assert.match(group, /visibleTaskToolIds\(tools, expanded\)/)
   assert.match(group, /index < TASK_TOOL_PREVIEW_LIMIT \|\| tool\.status === 'running' \|\| tool\.status === 'error'/)
   assert.match(read('./TaskSessionContent.tsx'), /return <TaskToolRow model=\{model\} compact/)

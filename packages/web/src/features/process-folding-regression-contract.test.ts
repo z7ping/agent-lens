@@ -6,7 +6,9 @@ const review = [
   'review-session-format.ts', 'ReviewEvidenceInspector.tsx', 'ReviewRoundPresentation.tsx',
   'review-reader-position.ts', 'use-review-session.ts', 'ReviewPage.tsx',
 ].map(file => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).join('\n')
-const piRound = readFileSync(new URL('./PiLiveTaskRound.tsx', import.meta.url), 'utf8')
+const live = readFileSync(new URL('./LiveTaskTimeline.tsx', import.meta.url), 'utf8')
+const liveProjection = readFileSync(new URL('./live-task-projection.ts', import.meta.url), 'utf8')
+const session = readFileSync(new URL('./TaskSessionContent.tsx', import.meta.url), 'utf8')
 const thinking = readFileSync(new URL('./TaskThinking.tsx', import.meta.url), 'utf8')
 const round = readFileSync(new URL('./TaskRound.tsx', import.meta.url), 'utf8')
 const tool = readFileSync(new URL('./TaskToolRow.tsx', import.meta.url), 'utf8')
@@ -18,9 +20,9 @@ test('Review summary-mode 外层统计使用 Process Summary 且重正文可被�
   assert.doesNotMatch(review, /<VirtualRoundMount[\s\S]{0,260}\bretainMounted\b/)
 })
 
-test('Review 与 Pi 在 revision 更新后会为仍展开的 Process 自动重拉', () => {
+test('Review 与 Live 均保留展开意图，Review 的 revision 更新可重拉', () => {
   assert.match(review, /expansionStore\.get\(summary\.id\) === true[\s\S]{0,120}startProcessLoad\(summary\)/)
-  assert.match(piRound, /expansionStore\?\.get\(processId\) === true[\s\S]{0,120}startProcessLoad\(process\.revision\)/)
+  assert.match(live, /expansionStore=\{processExpansionStore\}/)
 })
 
 test('处理详情的 Thinking 摘要两行并将所有折叠箭头放在右侧', () => {
@@ -52,16 +54,18 @@ test('Task disclosure 只把真实用户 toggle 写回展开意图，程序同�
 })
 
 
-test('Review / Pi 一旦 Final 已出现，上方 Process 必须按 settled 展示', () => {
+test('Review 依据 Final 收束，Live 活动尾轮不在工具间隙误判完成', () => {
   assert.match(review, /const hasFinalAnswer = Boolean\(lastAssistantId\)[\s\S]*?const resolvedProcessState = hasFinalAnswer \? 'settled' : round\.state/)
   assert.match(review, /state=\{resolvedProcessState\}/)
-  assert.match(piRound, /const hasFinal = entries\.some\([\s\S]*?const resolvedProcessState = hasFinal \? 'settled' : processState/)
+  assert.match(liveProjection, /active: activeItems\.length[\s\S]*?round\.model\.state !== 'running'/)
 })
 
 test('Review Process 对中间 Assistant\/Commentary 明确标识为过程输出', () => {
   assert.match(review, /<TaskSessionProcessText/)
 })
 
-test('Pi Indexed 不把 process duration 写入 Round duration', () => {
-  assert.match(piRound, /const model: TaskRoundModel = \{[\s\S]*?durationMs: 0,/)
+test('Live 处理详情不会因运行状态变化被自动收起', () => {
+  assert.doesNotMatch(session, /autoCollapseOnSettle/)
+  assert.doesNotMatch(thinking, /autoCollapseOnSettle/)
+  assert.match(live, /expansionStore=\{processExpansionStore\}/)
 })
