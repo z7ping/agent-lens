@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import type { SourceDefinition } from '@agent-lens/core'
+import type { SourceDefinition, SourceDetectionContext } from '@agent-lens/core'
 import { DefaultSourceService } from './index'
 
 function stubSource(): SourceDefinition {
@@ -54,4 +54,22 @@ test('Source registration checks all required runtime methods and duplicate ids'
   const registry = new DefaultSourceService()
   registry.register(stubSource())
   assert.throws(() => registry.register(stubSource()), /already registered/)
+})
+
+test('Source discovery must not impersonate another registered Source or Agent product', async () => {
+  for (const identity of [
+    { sourceId: 'other-source', productId: 'mock' },
+    { sourceId: 'mock-source', productId: 'other-product' },
+  ]) {
+    const registry = new DefaultSourceService()
+    const source = stubSource()
+    source.detect = async () => [{ ...identity, confidence: 'exact' }]
+    registry.register(source)
+    await assert.rejects(registry.detect({} as SourceDetectionContext), /detection identity mismatch/)
+  }
+  const registry = new DefaultSourceService()
+  const valid = stubSource()
+  valid.detect = async () => [{ sourceId: 'mock-source', productId: 'mock', confidence: 'exact' }]
+  registry.register(valid)
+  assert.equal((await registry.detect({} as SourceDetectionContext)).length, 1)
 })
