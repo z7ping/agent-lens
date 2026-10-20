@@ -87,7 +87,7 @@ function inspectCss(source, path) {
   // don't confuse declaration values or comments with selectors.
   const clean = source.replace(/\/\*[\s\S]*?\*\//g, '')
   const failures = []
-  for (const match of clean.matchAll(/(?:^|[{}])\s*([^{}]+?)\s*\{/g)) {
+  for (const match of clean.matchAll(/([^{}]+)\{/g)) {
     const selector = match[1].trim()
     if (selector.startsWith('@')) continue
     if (componentCss.test(selector)) failures.push(path + ': 越权定义 Task Session 样式 ' + selector.slice(0, 100))
