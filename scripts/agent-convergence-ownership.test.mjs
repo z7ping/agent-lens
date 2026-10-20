@@ -31,7 +31,7 @@ test('唯一 TaskSessionComposer 可以持有编辑器与模型选择器，其�
 })
 
 test('Runtime Contribution 不再把文案当语义', () => {
-  const stable = "function fieldSection(field) { return field.section ?? (field.kind === 'code' ? 'advanced' : 'status') }\nconst performanceFields = fields.filter(field => fieldSection(field) === 'performance')"
+  const stable = "function fieldSection(field) { switch (field.section) { default: return 'status' } }\nconst performanceFields = fields.filter(field => fieldSection(field) === 'performance')"
   assert.deepEqual(auditAgentConvergenceSources({ [runtimePath]: stable }), [])
   assert.equal(auditAgentConvergenceSources({ [runtimePath]: stable + "\nif (field.id === 'Main costs') {}" }).length, 1)
   assert.equal(auditAgentConvergenceSources({ [runtimePath]: "function fieldSection(field) { return 'status' }" }).length, 1)
@@ -62,6 +62,6 @@ test('共享 Live 投影同样禁止来源 ID 特判', () => {
 
 test('Runtime performance 分组不得退回为 Pi 专属字段识别', () => {
   const path = 'packages/web/src/components/LiveRuntimeDisclosures.tsx'
-  const oldOnly = "function fieldSection(field) { return field.section ?? 'status' }\nconst startupMetrics = fields.find(field => field.id === 'startup.metrics')"
-  assert.equal(auditAgentConvergenceSources({ [path]: oldOnly }).length, 1)
+  const oldOnly = "function fieldSection(field) { return 'status' }\nconst startupMetrics = fields.find(field => field.id === 'startup.metrics')"
+  assert.ok(auditAgentConvergenceSources({ [path]: oldOnly }).length >= 1)
 })

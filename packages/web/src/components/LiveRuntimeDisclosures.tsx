@@ -68,7 +68,17 @@ function prepareFields(item: LiveRuntimeDisclosureContributionDto, language: str
 function fieldSection(field: PreparedField): LiveRuntimeContributionSectionDto {
   // Missing sections from third-party/older plugins fall back to readable defaults.
   // Presentation must never infer semantic meaning from localized labels.
-  return field.section ?? (field.kind === 'code' ? 'advanced' : 'status')
+  switch (field.section) {
+    case 'status':
+    case 'performance':
+    case 'resources':
+    case 'advanced':
+      return field.section
+    default:
+      // Older/third-party plugins may send an unknown section at runtime.
+      // Keep their fields visible rather than silently dropping diagnostics.
+      return field.kind === 'code' ? 'advanced' : 'status'
+  }
 }
 
 function RuntimeActions({
