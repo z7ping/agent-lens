@@ -514,6 +514,14 @@ test('terminal Runtime failures and missing error details are always visible', (
   assert.equal(runtimeFailed.at(-1)?.kind === 'message' ? runtimeFailed.at(-1)?.error : false, true)
   const ended = reduceLiveTaskEvent(runtimeFailed, event(2, { type: 'completed', status: 'failed', message: 'Worker exited' }))
   assert.equal(ended.length, runtimeFailed.length)
+  const withPendingTool = [...base, {
+    id: 'tool:pending', kind: 'tool' as const, callId: 'pending',
+    name: 'shell', status: 'running' as const,
+  }]
+  const crashed = reduceLiveTaskEvent(withPendingTool, event(5, {
+    type: 'status', status: 'failed', message: 'Worker terminated',
+  }))
+  assert.equal(crashed[1]?.kind === 'tool' ? crashed[1].status : null, 'error')
   const noDetails = reduceLiveTaskEvent(base, event(3, { type: 'completed', status: 'failed' }))
   assert.equal(noDetails.at(-1)?.kind === 'message' ? noDetails.at(-1)?.error : false, true)
   assert.ok(noDetails.at(-1)?.kind === 'message' && noDetails.at(-1)?.text.length)
