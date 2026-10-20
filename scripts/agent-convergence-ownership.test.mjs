@@ -20,7 +20,8 @@ test('共享 Task 视图禁止品牌分支、旧 Pi 渲染和再次复制输入�
   assert.equal(auditAgentConvergenceSources({ [livePath]: "<LiveMarkdownComposer />" }).length, 1)
   assert.equal(auditAgentConvergenceSources({ [livePath]: "<ComposerPillSelect />" }).length, 1)
   assert.equal(auditAgentConvergenceSources({ [livePath]: 'pi-live-'.repeat(28) }).length, 1)
-  assert.deepEqual(auditAgentConvergenceSources({ [livePath]: 'pi-live-'.repeat(26) }), [])
+  assert.equal(auditAgentConvergenceSources({ [livePath]: 'pi-live-'.repeat(1) }).length, 1)
+  assert.deepEqual(auditAgentConvergenceSources({ [livePath]: 'live-task-'.repeat(26) }), [])
 })
 
 test('唯一 TaskSessionComposer 可以持有编辑器与模型选择器，其他页面不得持有', () => {
