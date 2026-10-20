@@ -652,7 +652,10 @@ export function reduceLiveTaskEvent(
     }))
   }
 
-  if (event.type === 'completed') return settleLiveTaskProjectionItems(items)
+  if (event.type === 'completed') {
+    // Cancelled/interrupted runs must not turn unfinished native tool calls into successes.
+    return settleLiveTaskProjectionItems(items, event.status !== 'completed')
+  }
   return [...items]
 }
 
