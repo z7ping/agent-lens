@@ -276,7 +276,7 @@
   color: var(--al-muted-2);
   font-size: 12px;
 }
-.task-center-rail .session-item-meta > span:not(.source-dot):not(.agent-logo):not(.pi-live-pulse):not(.pi-live-idle-dot):not(.session-item-meta-separator) {
+.task-center-rail .session-item-meta > span:not(.source-dot):not(.agent-logo):not(.live-task-pulse):not(.task-composer-idle-dot):not(.session-item-meta-separator) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -320,10 +320,10 @@
   background: var(--al-surface);
 }
 .task-center-main > .review-page,
-.task-center-main > .pi-live-page,
+.task-center-main > .live-task-page,
 .task-center-main > .task-center-new { height: 100%; }
 .task-center-main .review-layout { grid-template-columns: minmax(0, 1fr); }
-.task-center-main .pi-live-page { grid-template-columns: minmax(0, 1fr); }
+.task-center-main .live-task-page { grid-template-columns: minmax(0, 1fr); }
 
 /* 新建任务：按 Live Product capability 呈现启动上下文。 */
 .task-center-new {
