@@ -450,7 +450,9 @@ function RuntimeDiagnostics({
         </div>
         {performanceFields.map(field => <div key={field.key}>
           <b>{field.label}</b>
-          <MetricRows values={field.values}/>
+          {field.kind === 'code'
+            ? <CopyableCodeBlock copyValue={field.values.join('\n')}>{field.values.join('\n')}</CopyableCodeBlock>
+            : <MetricRows values={field.values}/>}
         </div>)}
       </section>}
     </div>}
