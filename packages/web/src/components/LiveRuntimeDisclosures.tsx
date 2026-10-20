@@ -391,6 +391,7 @@ function RuntimeDiagnostics({
   const fields = prepareFields(item, language)
   const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'runtime.elapsed')
   const performanceFields = fields.filter(field => fieldSection(field) === 'performance')
+  const startupMetrics = performanceFields.find(field => field.id === 'startup.metrics')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lifecycle = item.lifecycle
@@ -432,9 +433,9 @@ function RuntimeDiagnostics({
         <div className="live-runtime-diagnostic-section-head">
           <h3>{runtimeText('startupPerformance')}</h3>
           <CopyAction
-            value={diagnosticCopyText(item, language, fields)}
+            value={startupMetrics ? timingCopyText(item, language, fields) : diagnosticCopyText(item, language, fields)}
             language={language}
-            labelKey="copyDiagnostics"
+            labelKey={startupMetrics ? 'copyTiming' : 'copyDiagnostics'}
           />
         </div>
         {performanceFields.map(field => <div key={field.key}>
