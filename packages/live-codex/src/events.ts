@@ -1,4 +1,5 @@
 import type { LiveEvent } from '@agent-lens/core'
+import { normalizeNativeLiveError } from '@agent-lens/live-support'
 
 export const codexRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -27,11 +28,16 @@ export function normalizeCodexEvent(method: string, params: Record<string, unkno
   if (method === 'turn/completed') {
     const turn = codexRecord(params.turn)
     const status = codexText(turn.status)
+    const failure = turn.error == null ? null : normalizeNativeLiveError(turn.error, 'Codex turn failed')
     return {
       type: 'completed',
       status: status === 'completed' ? 'completed' : status === 'interrupted' ? 'interrupted' : 'failed',
-      ...(codexText(codexRecord(turn.error).message)
-        ? { message: codexText(codexRecord(turn.error).message) } : {}),
+      ...(failure ? {
+        message: failure.message,
+        ...(failure.code ? { code: failure.code } : {}),
+        ...(failure.category ? { category: failure.category } : {}),
+        ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}),
+      } : {}),
     }
   }
   if (method === 'item/agentMessage/delta') {
@@ -72,7 +78,7 @@ export function normalizeCodexEvent(method: string, params: Record<string, unkno
     if (item.type === 'reasoning') return { type: 'reasoning.end', ...common }
   }
   if (method === 'error') {
-    return { type: 'error', message: codexText(params.message) || codexText(codexRecord(params.error).message) || 'Codex error' }
+    return normalizeNativeLiveError(params, 'Codex error')
   }
   if (method === 'thread/name/updated' && codexText(params.threadName)) {
     return { type: 'title.update', title: codexText(params.threadName) }
