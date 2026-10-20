@@ -4,6 +4,7 @@ import type {
   LiveContributionValueDto,
   LiveRuntimeActionContributionDto,
   LiveRuntimeDisclosureContributionDto,
+  LiveRuntimeContributionSectionDto,
 } from '@agent-lens/protocol'
 import { copyText } from '../client/clipboard'
 import { translateProduct } from '../i18n/runtime'
@@ -42,6 +43,7 @@ interface PreparedField {
   id: string
   label: string
   kind: 'text' | 'list' | 'code'
+  section?: LiveRuntimeContributionSectionDto | undefined
   values: string[]
 }
 
@@ -53,8 +55,9 @@ function prepareFields(item: LiveRuntimeDisclosureContributionDto, language: str
     ].map(value => contributionValue(value, language))
     if (!values.length) return []
     return [{
-      key: `${item.contributionId}:${field.label.default}:${index}`,
-      id: field.label.default,
+      key: `${item.contributionId}:${field.fieldId ?? field.label.default}:${index}`,
+      id: field.fieldId ?? '',
+      section: field.section,
       label: contributionText(field.label, language),
       kind: field.kind ?? (values.length > 1 ? 'list' : 'text'),
       values,
@@ -62,20 +65,10 @@ function prepareFields(item: LiveRuntimeDisclosureContributionDto, language: str
   })
 }
 
-function fieldSection(field: PreparedField): 'status' | 'performance' | 'resources' | 'advanced' {
-  if (field.kind === 'code') return 'advanced'
-  if (field.id === 'Main costs' || field.id === 'Initialization stages' || field.id === 'Startup metrics') {
-    return 'performance'
-  }
-  if (
-    field.id === 'Contexts'
-    || field.id === 'Skills'
-    || field.id === 'Prompts'
-    || field.id === 'Themes'
-    || field.id === 'Package updates'
-    || (field.id === 'Extensions' && field.kind === 'list')
-  ) return 'resources'
-  return 'status'
+function fieldSection(field: PreparedField): LiveRuntimeContributionSectionDto {
+  // Missing sections from third-party/older plugins fall back to readable defaults.
+  // Presentation must never infer semantic meaning from localized labels.
+  return field.section ?? (field.kind === 'code' ? 'advanced' : 'status')
 }
 
 function RuntimeActions({
@@ -321,7 +314,7 @@ function timingCopyText(
   fields: readonly PreparedField[],
 ): string {
   const lifecycle = item.lifecycle
-  const startupMetrics = fields.find(field => field.id === 'Startup metrics')
+  const startupMetrics = fields.find(field => field.id === 'startup.metrics')
   const lines = [
     runtimeText('startupTiming'),
     '',
@@ -345,8 +338,8 @@ function diagnosticCopyText(
   fields: readonly PreparedField[],
 ): string {
   const lifecycle = item.lifecycle
-  const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'Initialization elapsed')
-  const performanceFields = fields.filter(field => field.id === 'Startup metrics')
+  const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'runtime.elapsed')
+  const performanceFields = fields.filter(field => field.id === 'startup.metrics')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lines = [
@@ -396,8 +389,8 @@ function RuntimeDiagnostics({
   language: string
 }) {
   const fields = prepareFields(item, language)
-  const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'Initialization elapsed')
-  const startupMetrics = fields.find(field => field.id === 'Startup metrics')
+  const statusFields = fields.filter(field => fieldSection(field) === 'status' && field.id !== 'runtime.elapsed')
+  const startupMetrics = fields.find(field => field.id === 'startup.metrics')
   const resourceFields = fields.filter(field => fieldSection(field) === 'resources')
   const advancedFields = fields.filter(field => fieldSection(field) === 'advanced')
   const lifecycle = item.lifecycle
