@@ -15,6 +15,7 @@ export interface StableLiveTaskRoundProps {
   messageActions: readonly LiveMessageActionContributionDto[]
   actionPending: string | null
   runtimeStreaming: boolean
+  processExpansionStore?: Map<string, boolean>
   onMessageAction: (
     action: LiveMessageActionContributionDto,
     item: Extract<LiveTaskProjectionItem, { kind: 'message' }>,
@@ -32,6 +33,7 @@ export function sameStableLiveTaskRoundProps(
     || previous.messageActions !== next.messageActions
     || previous.actionPending !== next.actionPending
     || previous.runtimeStreaming !== next.runtimeStreaming
+    || previous.processExpansionStore !== next.processExpansionStore
     || previous.onMessageAction !== next.onMessageAction) return false
 
   const before = previous.projection
