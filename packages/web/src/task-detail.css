@@ -80,9 +80,9 @@
 }
 .task-surface .task-header-status[data-tone='success'] { color: var(--al-success); }
 .task-surface .task-header-status:has(.session-status-error),
-.task-surface .task-header-status:has(.pi-live-disconnected) { color: var(--al-danger); }
+.task-surface .task-header-status:has(.task-composer-disconnected) { color: var(--al-danger); }
 .task-surface .task-header-status .session-status-error,
-.task-surface .task-header-status .pi-live-disconnected { color: inherit; }
+.task-surface .task-header-status .task-composer-disconnected { color: inherit; }
 .task-surface .task-header-title {
   grid-column: 1;
   grid-row: 1;
