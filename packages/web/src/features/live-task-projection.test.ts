@@ -562,3 +562,18 @@ test('SSE failure reconciles with persisted error instead of duplicating the sam
   ], event(2, { type: 'error', message: 'Network timeout' }))
   assert.equal(anotherTurn.filter(item => item.kind === 'message' && item.error).length, 2)
 })
+
+
+test('cancelled and interrupted completion never mark unfinished tools successful', () => {
+  const base = [
+    { id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'run', streaming: false },
+    { id: 'tool:t1', kind: 'tool' as const, callId: 't1', name: 'shell', status: 'running' as const },
+  ]
+  for (const status of ['cancelled', 'interrupted'] as const) {
+    const items = reduceLiveTaskEvent(base, event(10, { type: 'completed', status }))
+    assert.equal(items[1]?.kind === 'tool' ? items[1].status : null, 'error')
+    assert.equal(items.some(item => item.kind === 'message' && item.error), false)
+  }
+  const complete = reduceLiveTaskEvent(base, event(11, { type: 'completed', status: 'completed' }))
+  assert.equal(complete[1]?.kind === 'tool' ? complete[1].status : null, 'success')
+})
