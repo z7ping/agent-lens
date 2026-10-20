@@ -45,6 +45,33 @@ test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable exten
   })
 })
 
+test('Pi Live propagates persisted assistant errors immediately without replacing other message events', () => {
+  const failed = normalizePiLiveEvent({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      stopReason: 'error',
+      content: [],
+      errorMessage: "HTTP 422: developer role is not supported",
+    },
+  })
+  assert.equal(failed?.type, 'error')
+  assert.match(failed?.type === 'error' ? failed.message : '', /HTTP 422: developer role is not supported/)
+  assert.match(failed?.type === 'error' ? failed.message : '', /compat\.supportsDeveloperRole=false/)
+  assert.match(failed?.type === 'error' ? failed.message : '', /models\.json/)
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'HTTP 500: generic provider failure' },
+  }), { type: 'error', message: 'HTTP 500: generic provider failure' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'ok' }] },
+  }), { type: 'message.end', role: 'assistant', phase: 'final' })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end', message: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+  }), { type: 'message.end', role: 'user' })
+})
+
 test('Pi Live Adapter maps native control and compaction changes into generic events', () => {
   assert.deepEqual(normalizePiLiveEvent({ type: 'model_changed' }), {
     type: 'control.changed',
