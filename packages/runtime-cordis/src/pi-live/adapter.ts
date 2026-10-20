@@ -202,18 +202,13 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   if (type === 'message_start' || type === 'message_end') {
     const message = liveRecord(event.message)
     const rawRole = liveText(message.role)
-    // Pi can finish an assistant message with no text and only errorMessage.
-    // Surface a recoverable request failure instead of silently treating it as a reply.
+    // Normalize every persisted assistant failure, regardless of HTTP status,
+    // model provider or transport. Keep adapter generic; no status-code hints.
     if (type === 'message_end' && rawRole === 'assistant') {
-      const originalError = liveText(message.errorMessage) || liveText(event.errorMessage)
-      if (originalError.trim()) {
-        const unsupportedDeveloperRole = /\b422\b/i.test(originalError)
-          && /\bdeveloper\b/i.test(originalError)
-          && /\brole\b/i.test(originalError)
-        const guidance = unsupportedDeveloperRole
-          ? '\nPi model compatibility: set compat.supportsDeveloperRole=false for this provider/model in ~/.pi/agent/models.json, then reopen the Runtime.'
-          : ''
-        return { type: 'error', message: originalError + guidance }
+      const nativeError = liveText(message.errorMessage) || liveText(message.error)
+        || liveText(event.errorMessage) || liveText(event.error)
+      if (nativeError.trim() || message.stopReason === 'error') {
+        return { type: 'error', message: nativeError.trim() || 'Pi assistant request failed' }
       }
     }
     const role = rawRole === 'user' || rawRole === 'assistant' || rawRole === 'tool' || rawRole === 'system'
@@ -285,7 +280,10 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       return {
         type: 'status',
         status,
-        ...(liveText(event.message) ? { message: liveText(event.message) } : {}),
+        ...(liveText(event.message) || status === 'failed'
+          ? { message: liveText(event.errorMessage) || liveText(event.error)
+            || liveText(event.message) || 'Pi Live runtime failed' }
+          : {}),
       }
     }
   }
