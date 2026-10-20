@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { AGENT_LENS_PLUGIN_API_VERSION } from '@agent-lens/core'
 import type {
-  AGENT_LENS_PLUGIN_API_VERSION,
   AgentActor,
   AgentInstallation,
   AssetBinding,
