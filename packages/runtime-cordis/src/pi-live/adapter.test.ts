@@ -35,6 +35,7 @@ test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable exten
     type: 'status',
     status: 'failed',
     message: 'worker exited',
+    diagnostic: { stage: 'runtime' },
   })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'extension_error',
@@ -42,6 +43,7 @@ test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable exten
   }), {
     type: 'error',
     message: 'extension failed',
+    diagnostic: { stage: 'extension' },
   })
 })
 
@@ -61,11 +63,11 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'error', content: [], errorMessage: 'HTTP 500: generic provider failure' },
-  }), { type: 'error', message: 'HTTP 500: generic provider failure' })
+  }), { type: 'error', message: 'HTTP 500: generic provider failure', diagnostic: { stage: 'model' } })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'error', errorMessage: 'HTTP 422: unsupported image format' },
-  }), { type: 'error', message: 'HTTP 422: unsupported image format' })
+  }), { type: 'error', message: 'HTTP 422: unsupported image format', diagnostic: { stage: 'model' } })
   for (const message of [
     'HTTP 400: malformed request',
     'HTTP 401: authentication failed',
@@ -77,27 +79,39 @@ test('Pi Live propagates persisted assistant errors immediately without replacin
     assert.deepEqual(normalizePiLiveEvent({
       type: 'message_end',
       message: { role: 'assistant', stopReason: 'error', errorMessage: message },
-    }), { type: 'error', message })
+    }), { type: 'error', message, diagnostic: { stage: 'model' } })
   }
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end', message: { role: 'assistant', stopReason: 'error', content: [] },
-  }), { type: 'error', message: 'Pi assistant request failed' })
+  }), { type: 'error', message: 'Pi assistant request failed', diagnostic: { stage: 'model' } })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'runtime_status', status: 'failed',
     error: 'Model runtime crashed',
-  }), { type: 'status', status: 'failed', message: 'Model runtime crashed' })
+  }), { type: 'status', status: 'failed', message: 'Model runtime crashed', diagnostic: { stage: 'runtime' } })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end', message: { role: 'assistant', stopReason: 'error',
       error: { message: 'Transport timeout' } },
-  }), { type: 'error', message: 'Transport timeout' })
+  }), { type: 'error', message: 'Transport timeout', diagnostic: { stage: 'model' } })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'runtime_status', status: 'failed',
     error: { detail: 'Process terminated unexpectedly' },
-  }), { type: 'status', status: 'failed', message: 'Process terminated unexpectedly' })
+  }), { type: 'status', status: 'failed', message: 'Process terminated unexpectedly', diagnostic: { stage: 'runtime' } })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'extension_error', error: { message: 'Plugin initialization failed' },
-  }), { type: 'error', message: 'Plugin initialization failed' })
+  }), { type: 'error', message: 'Plugin initialization failed', diagnostic: { stage: 'extension' } })
 
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'error',
+      error: { message: 'Quota reached', code: 429, category: 'quota', retryable: true,
+        guidance: 'Increase the plan limit', guidanceVerified: true } },
+  }), { type: 'error', message: 'Quota reached', diagnostic: {
+    stage: 'model', code: '429', category: 'quota', retryable: true, guidance: 'Increase the plan limit',
+  } })
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'message_end', message: { role: 'assistant', stopReason: 'error',
+      error: { message: 'No permission', guidance: 'Disable sandbox' } },
+  }), { type: 'error', message: 'No permission', diagnostic: { stage: 'model' } })
   assert.deepEqual(normalizePiLiveEvent({
     type: 'message_end',
     message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: 'ok' }] },
