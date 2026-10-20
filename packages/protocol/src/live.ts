@@ -705,7 +705,7 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       type,
       message: message || code!,
       ...(code ? { code } : {}),
-      ...(validCategory ? { category: category as NonNullable<Extract<LiveRuntimeEventDto, { type: 'error' }>['category']> } : {}),
+      ...(validCategory ? { category: category as NonNullable<Extract<LiveEventDto, { type: 'error' }>['category']> } : {}),
       ...(retryable !== undefined ? { retryable } : {}),
     }
   }
