@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs'
+import { join, relative } from 'node:path'
+
 /**
  * Regression budgets are evidence of existing debt, NOT approval for new Agent
  * conditionals. Every count below must decrease to zero under epic #523.
@@ -42,6 +45,31 @@ export const CONVERGENCE_CHECKED_PATHS = Object.freeze([
   'packages/web/src/components/live-runtime-disclosure.css',
 ])
 
+
+/**
+ * Discover all generic Task/Review/Live implementation files, including new
+ * files added after this audit. Adapter-owned and unrelated pages are excluded.
+ * Stable return paths match the checked-path keys independent of OS separator.
+ */
+export function discoverConvergencePaths(root = 'packages/web/src') {
+  const found = []
+  const sharedStem = /^(?:Task|Review|LiveTask|LiveExtensionPrompt|LiveRuntimeDisclosures|live-|review-|task-|use-live-|live-runtime-disclosure)/
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (!['node_modules', 'dist', '__fixtures__'].includes(entry.name)) walk(join(dir, entry.name))
+      } else if (entry.isFile()
+        && /\.(?:ts|tsx|js|jsx|css)$/.test(entry.name)
+        && !/\.(?:test|spec|stories)\./.test(entry.name)
+        && sharedStem.test(entry.name)) {
+        found.push('packages/web/src/' + relative(root, join(dir, entry.name)).replaceAll('\\', '/'))
+      }
+    }
+  }
+  for (const folder of ['features', 'components']) walk(join(root, folder))
+  return found.sort()
+}
+
 const agentCompare = /\b(?:[A-Za-z_$][\w$]*(?:\?\.|\.))*(sourceId|productId|liveId|agentId)\s*(===|!==|==|!=)\s*(['"`])(pi|codex|hermes|claude-code)\3/g
 const agentCompareReversed = /(['"`])(pi|codex|hermes|claude-code)\1\s*(===|!==|==|!=)\s*\b(?:[A-Za-z_$][\w$]*(?:\?\.|\.))*(sourceId|productId|liveId|agentId)\b/g
 
@@ -65,11 +93,13 @@ export function auditAgentConvergenceSources(sources) {
       failures.push(`${path}: 通用 Runtime Disclosure 禁止恢复 Pi 专属样式钩子`)
     }
 
-    if (path === 'packages/web/src/live-task.css' && content.includes('pi-live-')) {
-      failures.push(`${path}: 通用 Live CSS 不允许恢复 Pi 私有钩子`)
+    if ((path === 'packages/web/src/live-task.css'
+      || /\/features\/(?:Task|Review|LiveTask|live-|review-|task-|use-live-)/.test(path))
+      && content.includes('pi-live-')) {
+      failures.push(`${path}: 通用 Task/Live 不能恢复 Pi 私有样式钩子`)
     }
 
-    if (SHARED_TASK_OWNERS.includes(path)) {
+    if (SHARED_TASK_OWNERS.includes(path) || /\/features\/(?:Task|Review|LiveTask|live-|review-|task-|use-live-)/.test(path)) {
       if (path !== 'packages/web/src/components/TaskSessionComposer.tsx'
         && /<(?:LiveMarkdownComposer|ComposerPillSelect)(?:\s|\/?>)/.test(content)) {
         failures.push(`${path}: 通用页面/正文禁止自行渲染完整输入控件`)
