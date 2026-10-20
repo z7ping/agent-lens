@@ -1,19 +1,26 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import type { IntegrationManagementItemDto, LiveProductDto } from '@agent-lens/protocol'
-import { missingCodexLiveReason, withMissingCodexLive } from './live-new-task-candidates'
+import {
+  missingIntegrationLiveReason,
+  unregisteredLiveId,
+  withUnregisteredIntegrationLives,
+} from './live-new-task-candidates'
 
-function codex(): IntegrationManagementItemDto {
+function integration(
+  integrationId = 'third-party',
+  productId = 'third-party-product',
+): IntegrationManagementItemDto {
   return {
-    integrationId: 'codex', productId: 'codex', displayName: 'Codex',
+    integrationId, productId, displayName: 'Third-party Agent',
     enabled: {
       configured: true, effective: true, editable: true,
       managedBy: 'file', restartRequired: false,
     },
     packageState: {
-      integrationId: 'codex', installed: true,
+      integrationId, installed: true,
       integrity: 'verified', compatibility: 'compatible',
-      installedVersion: '1.0.0-alpha.7', availableVersion: '1.0.0-alpha.7',
+      installedVersion: '1.0.0', availableVersion: '1.0.0',
       restartRequired: false,
     },
     availability: 'partial',
@@ -26,36 +33,53 @@ function codex(): IntegrationManagementItemDto {
   }
 }
 
-test('An authorized-only Codex Live is visible but cannot be started', () => {
-  const items = withMissingCodexLive([], codex(), 'needs authorization')
-  assert.equal(items.length, 1)
-  assert.equal(items[0]?.liveId, 'codex')
-  assert.equal(items[0]?.availability.available, false)
-  assert.equal(items[0]?.availability.reason, 'needs authorization')
-  assert.deepEqual(items[0]?.capabilities, ['create'])
-  assert.equal(missingCodexLiveReason(codex()), 'needs-authorization')
+test('a missing third-party Live appears as unavailable without invented capabilities', () => {
+  const item = integration()
+  const products = withUnregisteredIntegrationLives([], [item], () => 'needs authorization')
+  assert.equal(products.length, 1)
+  assert.equal(products[0]?.liveId, unregisteredLiveId(item))
+  assert.equal(products[0]?.productId, item.productId)
+  assert.equal(products[0]?.availability.available, false)
+  assert.equal(products[0]?.availability.reason, 'needs authorization')
+  assert.deepEqual(products[0]?.capabilities, [])
+  assert.equal(products[0]?.startCapabilities.workspace, 'unsupported')
+  assert.equal(missingIntegrationLiveReason(item), 'needs-authorization')
 })
 
-test('Registered Live adapter remains authoritative and is never duplicated', () => {
+test('registered Live descriptor remains authoritative even when liveId differs from productId', () => {
+  const item = integration()
   const live: LiveProductDto = {
-    ...withMissingCodexLive([], codex(), 'unavailable')[0]!,
-    availability: { available: true }, displayName: 'Codex Live',
+    liveId: 'runtime-plugin-id', productId: item.productId, displayName: 'Runtime',
+    availability: { available: true }, capabilities: ['create'],
+    inputCapabilities: {
+      text: 'native', largeText: 'unsupported', image: 'unsupported',
+      file: 'unsupported', multiline: 'native',
+    },
+    startCapabilities: { workspace: 'optional', title: 'optional' },
+    runtimes: [],
   }
-  assert.deepEqual(withMissingCodexLive([live], codex(), 'stale status'), [live])
+  assert.deepEqual(withUnregisteredIntegrationLives([live], [item], () => 'stale'), [live])
 })
 
-test('Missing package and restart status explain a missing Codex entry', () => {
-  const unplugged = codex()
+test('all missing Live-enabled integrations appear without provider-specific UI logic', () => {
+  const sourceOnly = integration('source-only', 'source-only-product')
+  sourceOnly.capabilities = [{ capability: 'source', availability: 'available' }]
+  const missing = [integration(), integration('second', 'second-product'), sourceOnly]
+  assert.deepEqual(
+    withUnregisteredIntegrationLives([], missing, () => 'unavailable').map(item => item.productId),
+    ['third-party-product', 'second-product'],
+  )
+  assert.equal(withUnregisteredIntegrationLives([], [], () => 'error').length, 0)
+})
+
+test('missing package and restart status use Integration lifecycle semantics', () => {
+  const unplugged = integration()
   unplugged.packageState = { ...unplugged.packageState!, installed: false }
-  assert.equal(missingCodexLiveReason(unplugged), 'not-installed')
-  const restarted = codex()
+  assert.equal(missingIntegrationLiveReason(unplugged), 'not-installed')
+  const restarted = integration()
   restarted.capabilities = [
     { capability: 'live', availability: 'unavailable',
       authorization: 'granted', reasonCode: 'authorization-restart-required' },
   ]
-  assert.equal(missingCodexLiveReason(restarted), 'needs-restart')
-})
-
-test('Unknown or unavailable integration management does not invent an adapter', () => {
-  assert.deepEqual(withMissingCodexLive([], undefined, 'error'), [])
+  assert.equal(missingIntegrationLiveReason(restarted), 'needs-restart')
 })
