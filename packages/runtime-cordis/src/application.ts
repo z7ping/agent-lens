@@ -187,16 +187,16 @@ export class AgentLensApplication {
     const matching = lives?.list().filter(candidate =>
       candidate.manifest.productId === productId
     ) ?? []
-    const adapter = matching.find(candidate => candidate.manifest.liveId === base.integrationId)
+    const preferred = matching.find(candidate => candidate.manifest.liveId === base.integrationId)
       ?? matching.find(candidate => candidate.manifest.liveId === productId)
-      ?? (matching.length === 1 ? matching[0] : null)
+    const candidates = preferred ? [preferred, ...matching.filter(candidate => candidate !== preferred)] : matching
     const next = base.capabilities.map(item => ({ ...item }))
     const liveComponent = registered.integration.components.find(component =>
       component.capabilities.includes('live')
     )
     const affected: readonly AgentIntegrationCapability[] = liveComponent?.capabilities ?? ['live']
 
-    if (!adapter) {
+    if (!candidates.length) {
       for (const capability of affected) {
         const index = next.findIndex(item => item.capability === capability)
         if (index < 0 || next[index]!.availability !== 'available') continue
@@ -210,29 +210,28 @@ export class AgentLensApplication {
       return { ...base, availability: integrationAvailability(next), capabilities: next }
     }
 
-    try {
-      const availability = await adapter.availability()
-      if (availability.available) return base
-      for (const capability of affected) {
-        const index = next.findIndex(item => item.capability === capability)
-        if (index < 0 || next[index]!.availability !== 'available') continue
-        next[index] = {
-          ...next[index]!,
-          capability,
-          availability: 'unavailable',
-          ...(availability.reason ? { reason: availability.reason } : {}),
-        }
+    // Multiple adapters may serve a single Agent product. One actual ready
+    // runtime is sufficient; no adapter is inferred from integration naming.
+    let failureReason: string | undefined
+    let probeFailed = false
+    for (const candidate of candidates) {
+      try {
+        const availability = await candidate.availability()
+        if (availability.available) return base
+        failureReason ??= availability.reason
+      } catch {
+        probeFailed = true
       }
-    } catch {
-      for (const capability of affected) {
-        const index = next.findIndex(item => item.capability === capability)
-        if (index < 0 || next[index]!.availability !== 'available') continue
-        next[index] = {
-          ...next[index]!,
-          capability,
-          availability: 'error',
-          reasonCode: 'live-availability-failed',
-        }
+    }
+    for (const capability of affected) {
+      const index = next.findIndex(item => item.capability === capability)
+      if (index < 0 || next[index]!.availability !== 'available') continue
+      next[index] = {
+        ...next[index]!,
+        capability,
+        availability: probeFailed ? 'error' : 'unavailable',
+        ...(probeFailed ? { reasonCode: 'live-availability-failed' as const }
+          : failureReason ? { reason: failureReason } : {}),
       }
     }
     return { ...base, availability: integrationAvailability(next), capabilities: next }

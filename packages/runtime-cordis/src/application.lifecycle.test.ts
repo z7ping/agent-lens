@@ -134,6 +134,24 @@ test('third-party Live is discovered by product when integrationId differs from 
     assert.equal(app.context.get('lives')?.get('custom-live-runtime'), adapter)
     const unavailable = await app.resolveIntegrationStatus('mock-product')
     assert.equal(unavailable?.capabilities.find(item => item.capability === 'live')?.availability, 'unavailable')
+    // Multiple independently registered Live implementations may share a
+    // product. Do not guess one canonical liveId or let the first offline
+    // adapter hide a second ready one.
+    const second: LiveAdapter = {
+      ...adapter,
+      manifest: {
+        ...adapter.manifest, pluginId: 'mock-second-live',
+        liveId: 'another-third-party-live',
+      },
+      async availability() { return { available: true } },
+    }
+    const handle = app.context.get('lives')!.register(second)
+    try {
+      const aggregated = await app.resolveIntegrationStatus('mock-product')
+      assert.equal(aggregated?.capabilities.find(item => item.capability === 'live')?.availability, 'available')
+    } finally {
+      handle.dispose()
+    }
     ready = true
     const available = await app.resolveIntegrationStatus('mock-product')
     assert.equal(available?.capabilities.find(item => item.capability === 'live')?.availability, 'available')
