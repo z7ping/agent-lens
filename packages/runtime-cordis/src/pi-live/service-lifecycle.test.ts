@@ -55,6 +55,40 @@ class MemoryRecoveryStore implements PiLiveRecoveryStore {
   }
 }
 
+test('执行中 Worker 退出后通过贡献操作原位恢复原生会话，不自动重发任务', async () => {
+  let crash: ((error: Error) => void) | undefined
+  let starts = 0
+  let prompts = 0
+  let resumedInput: PiLiveStartInput | undefined
+  const service = new DefaultPiLiveService({
+    start: async (id, input, _signal, _onEvent, onExit) => {
+      starts += 1
+      crash = onExit
+      if (starts > 1) resumedInput = input
+      return { ...handle(id, '/sessions/recoverable.jsonl'), prompt: async () => { prompts += 1 } }
+    },
+  })
+  try {
+    const initial = await service.start({ cwd: '/workspace' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    await service.prompt(initial.runtimeSessionId, '这个功能要做国际化，处理一下吧')
+    crash!(new Error('Pi Runtime Worker critical IPC queue overflow'))
+    assert.equal((await service.state(initial.runtimeSessionId)).status, 'failed')
+    const disclosures = await service.runtimeDisclosures(initial.runtimeSessionId)
+    const action = disclosures.flatMap(item => item.actions ?? []).find(item => item.actionId === 'pi.runtime.retry')
+    assert.ok(action)
+    await service.executeRuntimeAction(initial.runtimeSessionId, action.actionId)
+    await new Promise(resolve => setTimeout(resolve, 0))
+    const restored = await service.state(initial.runtimeSessionId)
+    assert.equal(restored.status, 'ready')
+    assert.equal(restored.runtimeSessionId, initial.runtimeSessionId)
+    assert.equal(resumedInput?.sessionPath, '/sessions/recoverable.jsonl')
+    assert.equal(prompts, 1)
+  } finally {
+    await service.dispose()
+  }
+})
+
 test('Start 立即返回 initializing，后台就绪后原位切换为 ready', async () => {
   const gate = deferred<PiRuntimeHandle>()
   const host: PiRuntimeHost = { start: async () => gate.promise }

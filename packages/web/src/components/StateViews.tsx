@@ -47,11 +47,15 @@ export function EmptyStatePanel({
 
 export function ErrorStateBanner({
   message,
+  title,
+  actions,
   onRetry,
   retryLabel,
   showDoctor = true,
 }: {
   message: string
+  title?: string
+  actions?: ReactNode
   onRetry?: () => void
   retryLabel?: string
   showDoctor?: boolean
@@ -59,8 +63,9 @@ export function ErrorStateBanner({
   const { t } = useTranslation('common')
   const resolvedRetryLabel = retryLabel ?? t('retry')
   return <div className="state-error" role="alert">
-    <div className="state-error-copy"><b>{t('loadFailed')}</b><span>{message}</span></div>
+    <div className="state-error-copy"><b>{title ?? t('loadFailed')}</b><span>{message}</span></div>
     <div className="state-error-actions">
+      {actions}
       {onRetry && <Button variant="primary" onClick={onRetry}>{resolvedRetryLabel}</Button>}
       {showDoctor && <CommandRow command="agent-lens doctor"/>}
     </div>

@@ -11,7 +11,7 @@ import { translateProduct } from '../i18n/runtime'
 import { CopyableCodeBlock } from './CopyableCodeBlock'
 import { Button, Dialog, UiIcon } from './ui'
 
-function contributionText(value: LiveContributionTextDto, language: string): string {
+export function contributionText(value: LiveContributionTextDto, language: string): string {
   const normalized = language.replace(/_/g, '-').toLowerCase()
   const localized = Object.entries(value.localizations ?? {})
     .find(([locale]) => locale.toLowerCase() === normalized)?.[1]
@@ -81,7 +81,7 @@ function fieldSection(field: PreparedField): LiveRuntimeContributionSectionDto {
   }
 }
 
-function RuntimeActions({
+export function LiveRuntimeActions({
   item,
   language,
   pendingAction,
@@ -288,7 +288,7 @@ function RuntimeLifecycle({
         <Button size="small" onClick={event => { event.preventDefault(); onDiagnostics() }}>
           {runtimeText('runtimeDiagnostics')}
         </Button>
-        <RuntimeActions
+        <LiveRuntimeActions
           item={item}
           language={language}
           pendingAction={pendingAction}

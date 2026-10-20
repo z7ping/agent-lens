@@ -27,6 +27,15 @@ const readyState: PiLiveRuntimeState = {
   pendingMessageCount: 0,
 }
 
+test('Worker 失败状态优先保留具体退出原因供界面展示', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'runtime_status', status: 'failed', message: 'Pi Runtime Worker 已退出',
+    error: 'Pi Runtime Worker critical IPC queue overflow',
+  }), {
+    type: 'status', status: 'failed', message: 'Pi Runtime Worker critical IPC queue overflow',
+  })
+})
+
 test('Pi Live Adapter distinguishes terminal Runtime exit from recoverable extension error', () => {
   assert.deepEqual(normalizePiLiveEvent({
     type: 'runtime_exit',

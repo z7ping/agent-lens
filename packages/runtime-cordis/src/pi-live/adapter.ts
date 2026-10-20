@@ -338,7 +338,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
     }
   }
   if (type === 'extension_error') {
-    const message = liveText(event.errorMessage) || liveText(event.error)
+    const message = piEventErrorText(event.errorMessage, event.error)
     return { type: 'error', message: message || 'Pi Live extension failed' }
   }
   return undefined

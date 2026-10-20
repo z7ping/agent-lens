@@ -5,10 +5,10 @@ import type { LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-len
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { LocalPathActions } from '../components/LocalPathActions'
-import { LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
+import { contributionText, LiveRuntimeActions, LiveRuntimeDisclosures } from '../components/LiveRuntimeDisclosures'
 import { TaskSessionComposer } from '../components/TaskSessionComposer'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
-import { OperationProgress } from '../components/StateViews'
+import { ErrorStateBanner, OperationProgress } from '../components/StateViews'
 import { Button, IconButton } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { useLiveTaskState } from './live-task-state'
@@ -434,12 +434,25 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           />}
           {!itemCount && state?.status === 'ready' && <div className="live-task-empty">{t('live.empty')}</div>}
           {syncError && <div className="live-task-sync-warning" role="status">{t('live.syncWarning', { message: syncError })}</div>}
-          {error && <div className="live-task-error live-task-reader-error" role="alert">{error}</div>}
+          {error && state?.status !== 'failed' && <div className="live-task-error live-task-reader-error" role="alert">{error}</div>}
           {pathError && <div className="live-task-error live-task-reader-error" role="alert">{pathError}</div>}
         </div>
       </div>
 
       <div className="task-session-composer-slot">
+        {state?.status === 'failed' && <ErrorStateBanner
+          title={t('center.runtimeStatus.failed')}
+          message={error || runtimeDisclosures.flatMap(item => item.lifecycle?.status === 'failed' && item.lifecycle.message
+            ? [contributionText(item.lifecycle.message, i18n.resolvedLanguage ?? i18n.language)] : []).join('\n') || t('center.runtimeStatus.failed')}
+          showDoctor={false}
+          actions={runtimeDisclosures.map(item => <LiveRuntimeActions
+            key={item.contributionId}
+            item={item}
+            language={i18n.resolvedLanguage ?? i18n.language}
+            pendingAction={runtimeActionPending}
+            onAction={action => { void runRuntimeAction(action) }}
+          />)}
+        />}
         <div className="live-task-float-stack">
           {newRecords && <Button size="small" className="live-task-new-records" onClick={jumpLatest}>{t('live.newRecords')} <UiIcon name="arrow-down" size={14}/></Button>}
           {interruptNotice && <div className="live-task-interrupt-notice" role="status" aria-live="polite">

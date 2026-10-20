@@ -13,7 +13,6 @@ const SNAPSHOT_TRANSFER_TTL_MS = 30_000
 const LIVE_SNAPSHOT_DEFAULT_LIMIT = 120
 const LIVE_SNAPSHOT_MAX_LIMIT = 500
 const LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT = 120
-const MAX_OUTBOUND_MESSAGES = 256
 const MAX_SEEN_REQUEST_IDS = 512
 let runtimeSessionId = ''
 let runtimeCwd = ''
@@ -232,7 +231,8 @@ function isCoalescibleEnvelope(envelope) {
   const payload = record(envelope.payload)
   if (payload.type !== 'message_update') return false
   const update = record(payload.assistantMessageEvent)
-  return (update.type === 'text_delta' || update.type === 'thinking_delta') && typeof update.delta === 'string'
+  // 工具参数也会按 token 突发输出，必须与文字增量共用有界合并机制。
+  return (update.type === 'text_delta' || update.type === 'thinking_delta' || update.type === 'toolcall_delta') && typeof update.delta === 'string'
 }
 
 function mergeCoalescibleEnvelope(target, incoming) {
@@ -242,13 +242,16 @@ function mergeCoalescibleEnvelope(target, incoming) {
   const targetUpdate = record(targetPayload.assistantMessageEvent)
   const incomingUpdate = record(incomingPayload.assistantMessageEvent)
   if (targetUpdate.type !== incomingUpdate.type || targetUpdate.contentIndex !== incomingUpdate.contentIndex) return false
+  // 合并后仍须遵守单条 IPC 消息上限，不能让发送失败悄悄丢掉整段增量。
+  const delta = `${targetUpdate.delta ?? ''}${incomingUpdate.delta ?? ''}`
+  if (Buffer.byteLength(delta, 'utf8') > MAX_MESSAGE_BYTES / 2) return false
   target.payload = {
     ...targetPayload,
     ...incomingPayload,
     assistantMessageEvent: {
       ...targetUpdate,
       ...incomingUpdate,
-      delta: `${targetUpdate.delta ?? ''}${incomingUpdate.delta ?? ''}`,
+      delta,
     },
   }
   return true
@@ -285,14 +288,6 @@ function enqueueEnvelope(envelope) {
   if (isCoalescibleEnvelope(envelope)) {
     const tail = outboundQueue.at(-1)
     if (tail && mergeCoalescibleEnvelope(tail, envelope)) return true
-  }
-  if (outboundQueue.length >= MAX_OUTBOUND_MESSAGES) {
-    const disposableIndex = outboundQueue.findIndex(isCoalescibleEnvelope)
-    if (disposableIndex >= 0) outboundQueue.splice(disposableIndex, 1)
-    else {
-      failTransport(new Error('Pi Runtime Worker critical IPC queue overflow'))
-      return false
-    }
   }
   outboundQueue.push(envelope)
   flushOutbound()

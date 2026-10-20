@@ -378,6 +378,13 @@ export function useLiveTaskRuntime({
               ? 'idle'
               : null)
         const canRecover = runtime.status === 'ready' || runtime.status === 'initializing'
+        // SSE 可能在 Worker 退出时断开；对账发现失败也要刷新已有恢复操作。
+        if ((changed || forceRecovery) && runtime.status === 'failed') {
+          setExtension(null)
+          const disclosures = await liveApi.runtimeDisclosures(current.liveId, current.runtimeSessionId)
+          if (!recoveryActive || epoch !== reconcileEpoch) return
+          setRuntimeDisclosures(disclosures)
+        }
         if ((changed || forceRecovery) && canRecover && product.capabilities.includes('recovery')) {
           const mode = runtime.status === 'ready' && !runtime.isStreaming ? 'settle' : 'live'
           void recover(mode)
@@ -478,6 +485,8 @@ export function useLiveTaskRuntime({
             || envelope.normalizedEvent.status === 'terminated') {
             runtimeCompacting = false
             runtimeActive = false
+            setActivityStatus(null)
+            setExtension(null)
           }
           if (envelope.normalizedEvent.status === 'failed' && envelope.normalizedEvent.message
             && !historyAtLatestRef.current) {
