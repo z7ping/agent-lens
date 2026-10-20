@@ -22,6 +22,8 @@ export interface TaskToolGroupProps {
   sequence?: readonly TaskToolGroupSequenceEntry[]
   model: TaskToolGroupModel
   defaultExpanded?: boolean
+  /** Shared owner keeps user disclosure intent when virtual rounds unmount. */
+  expansionStore?: Map<string, boolean>
   /** Defer expensive payload rendering until a tool row is opened. */
   compact?: boolean
   renderMeta?: ((tool: TaskToolModel) => ReactNode) | undefined
@@ -34,6 +36,7 @@ export function TaskToolGroup({
   model,
   sequence,
   defaultExpanded = false,
+  expansionStore,
   compact = false,
   renderMeta,
   renderDetails,
@@ -41,8 +44,10 @@ export function TaskToolGroup({
   className = '',
 }: TaskToolGroupProps) {
   const { t } = useTranslation('task')
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  useEffect(() => setExpanded(defaultExpanded), [defaultExpanded, model.id])
+  const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
+  useEffect(() => {
+    setExpanded(expansionStore?.get(model.id) ?? defaultExpanded)
+  }, [expansionStore, model.id])
 
   const tools = sequence ? sequence.flatMap(entry => entry.type === 'tool' ? [entry.tool] : []) : model.tools
   const collapsible = tools.some((tool, index) =>
@@ -64,7 +69,11 @@ export function TaskToolGroup({
       size="small"
       className="task-tool-group-toggle"
       aria-expanded={expanded}
-      onClick={() => setExpanded(value => !value)}
+      onClick={() => setExpanded(value => {
+        const next = !value
+        expansionStore?.set(model.id, next)
+        return next
+      })}
     >
       <UiIcon name="tool-shell" size={14}/>
       <span className="task-tool-group-title">{t('live.toolGroup')} · {t('live.toolGroupCount', { count: tools.length })}</span>
@@ -111,9 +120,10 @@ export function splitAdjacentTaskToolEntries(sequence: readonly TaskToolGroupSeq
 }
 
 /** Shared Live / Review ordering and progressive tool-group renderer. */
-export function TaskProcessSequence({ id, sequence }: {
+export function TaskProcessSequence({ id, sequence, expansionStore }: {
   id: string
   sequence: readonly TaskToolGroupSequenceEntry[]
+  expansionStore?: Map<string, boolean>
 }) {
   const { t } = useTranslation('task')
   return <>{splitAdjacentTaskToolEntries(sequence).map(segment => {
@@ -122,6 +132,7 @@ export function TaskProcessSequence({ id, sequence }: {
     return <TaskToolGroup
       key={segment.key}
       compact
+      expansionStore={expansionStore}
       sequence={segment.entries}
       model={{
         id: `tools:${id}:${segment.key}`,
