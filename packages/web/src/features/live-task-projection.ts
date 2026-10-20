@@ -382,8 +382,11 @@ export function mergeLiveActiveProjectionItems(
         index > lastUser && candidate.kind === 'message'
         && candidate.role === 'assistant' && candidate.error && candidate.text === item.text)
       if (transient >= 0) {
-        indexes.delete(merged[transient]!.id)
-        merged[transient] = item
+        const previous = merged[transient]
+        indexes.delete(previous!.id)
+        merged[transient] = previous?.kind === 'message' && previous.errorDiagnostic && !item.errorDiagnostic
+          ? { ...item, errorDiagnostic: previous.errorDiagnostic }
+          : item
         indexes.set(item.id, transient)
         continue
       }
