@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { AGENT_LENS_PLUGIN_API_VERSION } from '@agent-lens/core'
 import type {
   AgentActor,
   AgentInstallation,
@@ -77,7 +78,23 @@ export class DefaultSourceService implements SourceService {
   private readonly definitions = new Map<string, SourceDefinition>()
 
   register(definition: SourceDefinition): Disposable {
-    const id = definition.manifest.sourceId
+    const manifest = definition.manifest
+    const id = manifest.sourceId
+    if (manifest.pluginType !== 'source'
+      || manifest.apiVersion !== AGENT_LENS_PLUGIN_API_VERSION
+      || !manifest.pluginId?.trim()
+      || !manifest.pluginVersion?.trim()
+      || !manifest.displayName?.trim()
+      || !id?.trim()
+      || !manifest.productId?.trim()
+      || !manifest.parserVersion?.trim()) {
+      throw new Error('AgentLens source manifest invalid or incompatible')
+    }
+    for (const method of ['detect', 'declareCapabilities', 'normalize'] as const) {
+      if (typeof definition[method] !== 'function') {
+        throw new Error(`AgentLens source missing required ${method}(): ${id}`)
+      }
+    }
     if (this.definitions.has(id)) {
       throw new Error(`AgentLens source already registered: ${id}`)
     }
