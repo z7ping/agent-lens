@@ -55,6 +55,7 @@ function GenericLiveItem({
       }}
       streaming={item.streaming}
       error={item.error === true}
+      errorDiagnostic={item.diagnostic}
       showContentActions={showContentActions && !item.error}
       actions={actions.length
         ? actions.map(action => {
