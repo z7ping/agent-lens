@@ -16,6 +16,8 @@ export type LiveTaskProjectionItem =
       text: string
       /** Native assistant failure, not a successful generated reply. */
       error?: true | undefined
+      /** Native adapter diagnostic facts; never inferred from HTTP codes or prose. */
+      errorDiagnostic?: { code?: string; category?: string; retryable?: boolean } | undefined
       /** Stable native session entry id; present only for snapshot-backed messages. */
       entryId?: string | undefined
       attachments?: LiveTaskProjectionAttachment[] | undefined
@@ -530,6 +532,7 @@ export function reduceLiveTaskEvent(
     || (event.type === 'completed' && event.status === 'failed')
   if (failureEvent) {
     const detail = ('message' in event ? event.message ?? '' : '').trim()
+      || (event.type === 'error' ? event.code?.trim() ?? '' : '')
     const lastUser = findLastProjectionIndex(items, item =>
       item.kind === 'message' && item.role === 'user')
     const alreadyFailed = items.slice(lastUser + 1).some(item =>
@@ -546,6 +549,12 @@ export function reduceLiveTaskEvent(
       role: 'assistant' as const,
       text: detail || agentLensI18n.t('task:message.requestFailed'),
       error: true as const,
+      ...(event.type === 'error' && (event.code || event.category || event.retryable !== undefined)
+        ? { errorDiagnostic: {
+            ...(event.code ? { code: event.code } : {}),
+            ...(event.category ? { category: event.category } : {}),
+            ...(event.retryable !== undefined ? { retryable: event.retryable } : {}),
+          } } : {}),
       streaming: false,
       at: envelope.receivedAt,
     }]
