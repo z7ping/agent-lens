@@ -430,7 +430,53 @@ export function mergeLiveActiveProjectionItems(
     indexes.set(item.id, merged.length)
     merged.push(item)
   }
-  return merged
+  return merged.length === previous.length && merged.every((item, index) => item === previous[index])
+    ? previous as LiveTaskProjectionItem[]
+    : merged
+}
+
+/** Keep unchanged snapshot rows mounted; refreshing identical history must not flash. */
+function sameLiveProjectionFact(left: LiveTaskProjectionItem, right: LiveTaskProjectionItem): boolean {
+  if (left === right) return true
+  if (left.id !== right.id || left.kind !== right.kind) return false
+  const keys = Object.keys(left) as Array<keyof LiveTaskProjectionItem>
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every(key => {
+    const l = left[key]
+    const r = right[key]
+    if (l === r) return true
+    if (!l || !r || typeof l !== 'object' || typeof r !== 'object') return false
+    return JSON.stringify(l) === JSON.stringify(r)
+  })
+}
+
+function reuseLiveSnapshotRows(
+  previous: readonly LiveTaskProjectionItem[],
+  incoming: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  if (!incoming.length && !previous.length) return previous as LiveTaskProjectionItem[]
+  const byId = new Map(previous.map(item => [item.id, item] as const))
+  const rows = incoming.map(item => {
+    const old = byId.get(item.id)
+    return old && sameLiveProjectionFact(old, item) ? old : item
+  })
+  return rows.length === previous.length && rows.every((item, index) => item === previous[index])
+    ? previous as LiveTaskProjectionItem[]
+    : rows
+}
+
+/** Reuse stable facts after recovery and preserve SSE-only active facts while streaming. */
+export function reconcileLiveSnapshotProjection(
+  previous: { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] },
+  incoming: { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] },
+  streaming: boolean,
+): { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] } {
+  const stable = reuseLiveSnapshotRows(previous.stable, incoming.stable)
+  const incomingActive = streaming
+    ? mergeLiveActiveProjectionItems(previous.active, incoming.active)
+    : incoming.active
+  const active = reuseLiveSnapshotRows(previous.active, incomingActive)
+  return stable === previous.stable && active === previous.active ? previous : { stable, active }
 }
 
 function findLastProjectionIndex(
