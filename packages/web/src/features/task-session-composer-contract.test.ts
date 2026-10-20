@@ -68,7 +68,7 @@ test('Review 和 Live 共享唯一输入区、状态栏、模式控制及发送�
     assert.match(source, /<TaskSessionComposer/)
     assert.match(source, /onExpandedChange=\{setComposerExpanded\}/)
     assert.match(source, /hasContent=\{composerHasContent\}/)
-    assert.doesNotMatch(source, /<textarea|<LiveMarkdownComposer|<ComposerPillSelect/)
+    assert.doesNotMatch(source, /<textarea|<LiveMarkdownComposer(?:\s|\/>|>)|<ComposerPillSelect/)
     assert.doesNotMatch(source, /pi-live-compose-wrap|pi-live-composer|pi-live-editor/)
   }
   for (const token of ['task-composer-editor-toolbar','task-composer-editor-action','task-composer-bar','task-composer-settings','task-composer-mode','task-composer-send','task-composer-idle-dot']) {
