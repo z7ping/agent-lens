@@ -595,3 +595,19 @@ test('generic snapshot errors preserve code, nested cause and error arrays witho
   assert.equal(projectLiveSnapshotEntries([{ id: 'cyclic', type: 'error', error: cyclic }])[0]?.kind === 'message'
     ? (projectLiveSnapshotEntries([{ id: 'cyclic', type: 'error', error: cyclic }])[0] as { text: string }).text : '', 'CYCLE')
 })
+
+test('generic structured Live error keeps code/category/retryability with no provider branching', () => {
+  const initial = [{ id: 'u1', kind: 'message' as const, role: 'user' as const, text: 'hello', streaming: false }]
+  const result = reduceLiveTaskEvent(initial, event(1, {
+    type: 'error', message: '', code: 'MODEL_UNAVAILABLE', category: 'provider', retryable: true,
+  }))
+  const failure = result.at(-1)
+  assert.ok(failure?.kind === 'message')
+  assert.equal(failure.text, 'MODEL_UNAVAILABLE')
+  assert.equal(failure.error, true)
+  assert.deepEqual(failure.errorDiagnostic, {
+    code: 'MODEL_UNAVAILABLE', category: 'provider', retryable: true,
+  })
+  const legacy = reduceLiveTaskEvent(initial, event(2, { type: 'error', message: 'plain failure' }))
+  assert.equal(legacy.at(-1)?.kind === 'message' ? legacy.at(-1).text : '', 'plain failure')
+})
