@@ -122,10 +122,11 @@ export class DefaultLiveService implements LiveService {
     // All Agent-specific differences remain in adapters; Product Surface only
     // sees capabilities that this registry has verified at the boundary.
     const declared = [...adapter.capabilities]
+    const advertised = adapter.manifest.capabilities ?? []
     if (declared.length !== new Set(declared).size
-      || adapter.manifest.capabilities.length !== new Set(adapter.manifest.capabilities).size
-      || declared.length !== adapter.manifest.capabilities.length
-      || declared.some(capability => !adapter.manifest.capabilities.includes(capability))) {
+      || advertised.length !== new Set(advertised).size
+      || declared.length !== advertised.length
+      || declared.some(capability => !advertised.includes(capability))) {
       throw new Error(`AgentLens live adapter manifest/capability mismatch: ${id}`)
     }
     const requiredMethods = {
