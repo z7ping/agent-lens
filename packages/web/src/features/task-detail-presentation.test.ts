@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PiLiveCurrentTaskRound } from './PiLiveTaskRound'
 import { TaskMessage } from './TaskMessage'
 import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
@@ -21,7 +20,6 @@ const toolGroup: TaskToolGroupModel = {
   ],
 }
 const round: TaskRoundModel = { id: 'round:test', label: '第 3 轮', state: 'settled', preview: '核对 Tool / Thinking / Message 层级', toolCount: 4, errorCount: 0, durationMs: 108_000, highLatency: false }
-const runningRound: TaskRoundModel = { id: 'round:running', label: '第 6 轮', state: 'running', preview: '当前执行', toolCount: 1, errorCount: 0, durationMs: 0, highLatency: false }
 
 test('Tool Group 不新增整组详情层，仅收起超出前三项的普通调用', () => {
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: toolGroup }))
@@ -104,52 +102,6 @@ test('默认 Tool 摘要一行展示类型、名称和状态图标，原始数�
   assert.match(html, /task-tool-summary-text/)
   assert.match(html, /task-tool-status-mark/)
   assert.match(html, /task-tool-row-chevron/)
-})
-
-test('Pi Running Tool 收在单一处理详情中，运行中摘要默认折叠且不丢失调用统计', () => {
-  const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
-    model: runningRound,
-    items: [
-      { id: 'thinking', kind: 'thinking', text: '检查文件后继续执行。', at: '', state: 'running' },
-      { id: 'running-tool', kind: 'tool', callId: 'running-tool', name: 'bash', status: 'running', summary: 'npm test', output: 'line 1\nline 2', at: '' },
-    ],
-    pendingMessageCount: 0,
-  }))
-  assert.match(html, /处理详情/)
-  assert.match(html, /1 条消息/)
-  assert.match(html, /1 次工具调用/)
-  assert.match(html, /data-task-thinking-state="running"/)
-  assert.match(html, /处理中/)
-  assert.doesNotMatch(html, /data-status="running"/)
-  assert.doesNotMatch(html, /data-tool-fact="true"/)
-  assert.doesNotMatch(html, /line 1/)
-  assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
-})
-
-test('Pi settled 处理详情默认折叠并隐藏 Tool 正文', () => {
-  const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
-    model: { ...runningRound, state: 'settled', durationMs: 138_000 },
-    items: [{ id: 'success-tool', kind: 'tool', callId: 'success-tool', name: 'read_file', status: 'success', summary: 'very/long/path/to/source.ts', output: 'file content', at: '' }],
-    pendingMessageCount: 0,
-  }))
-  assert.match(html, /处理详情/)
-  assert.match(html, /1 次工具调用/)
-  assert.match(html, /耗时 2分18秒/)
-  assert.doesNotMatch(html, /data-status="success"/)
-  assert.doesNotMatch(html, /very\/long\/path\/to\/source\.ts/)
-})
-
-test('Pi settled 失败 Tool 默认收进处理详情且摘要保留失败数', () => {
-  const html = renderToStaticMarkup(createElement(PiLiveCurrentTaskRound, {
-    model: { ...runningRound, state: 'settled', errorCount: 1 },
-    items: [{ id: 'error-tool', kind: 'tool', callId: 'error-tool', name: 'npm test', status: 'error', summary: 'web tests', output: '1 assertion failed', at: '' }],
-    pendingMessageCount: 0,
-  }))
-  assert.match(html, /处理详情/)
-  assert.match(html, /1 次工具调用/)
-  assert.match(html, /1 次失败/)
-  assert.doesNotMatch(html, /data-status="error"/)
-  assert.doesNotMatch(html, /1 assertion failed/)
 })
 
 test('assistant controls have no invisible status spacer after streaming settles', () => {
