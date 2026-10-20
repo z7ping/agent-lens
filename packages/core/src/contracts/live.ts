@@ -369,9 +369,20 @@ export interface LiveToolEndEvent {
   durationMs?: number | undefined
 }
 
+/** Optional adapter-supplied failure facts; do not infer a category or a fix from HTTP status codes. */
+export interface LiveErrorDiagnostic {
+  stage?: 'model' | 'tool' | 'runtime' | 'network' | 'permission' | 'extension' | 'unknown' | undefined
+  code?: string | undefined
+  category?: string | undefined
+  retryable?: boolean | undefined
+  /** Only explicit, source-owned and evidence-backed guidance may be provided. */
+  guidance?: string | undefined
+}
+
 export interface LiveErrorEvent {
   type: 'error'
   message: string
+  diagnostic?: LiveErrorDiagnostic | undefined
 }
 
 export interface LiveCompletedEvent {
