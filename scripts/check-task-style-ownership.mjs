@@ -1,3 +1,4 @@
+import { auditTaskSessionOwnership } from './task-session-ownership.mjs'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
 const webRoot = 'packages/web/src'
@@ -316,3 +317,8 @@ for (const component of ['TaskHeader.tsx', 'TaskRound.tsx', 'TaskMessage.tsx', '
 }
 
 console.log('Task 样式所有权检查通过：TaskSurface 统一 Session 槽位、语义 Turn Rail 与 BoundaryNav；Review / 通用 Live 共用 Rail Frame，tick 固定 6×2px，状态不改变几何。')
+
+const sessionOwnershipFailures = auditTaskSessionOwnership(webRoot)
+if (sessionOwnershipFailures.length) {
+  throw new Error('Task Session 所有权门禁失败：\n' + sessionOwnershipFailures.join('\n'))
+}

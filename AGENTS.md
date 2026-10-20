@@ -95,6 +95,16 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 不得建立平行的第二套 Task 组件体系。
 
+
+### 多智能体 Session 单一渲染所有权（强制）
+
+- **唯一正文实现**：Pi / Codex / Hermes / 后续 Agent 的 Live 均进入 `LiveTaskTimeline`；Live 与 Review 共用 `TaskSessionContent`、`TaskToolGroup`，按 `mode='live'|'review'` 表达生命周期，不再另建消息、思考、工具、过程 JSX 或 CSS。
+- **唯一样式所有者**：`task-detail.css` 持有消息/思考/工具/过程视觉；`task-session-view.css` 持有会话阅读轴和壳层。智能体 Adapter 只提供原始事实、语义投影、模型/推理/审批等 capability；不能以来源名称创建新的会话外观。
+- **允许差异**：确有原生能力的 Agent 专属控制、扩展、证据及状态可以按已有 Contribution/Capability 接口呈现，但必须复用既有 UI Primitive，不能改变共享消息 DOM 或覆盖共享组件 CSS。
+- **现存例外**：`features/PiLiveTaskRound.tsx` 是兼容旧 Pi 入口的历史实现，仅允许维持现状并逐步删除；`ReviewRoundPresentation.tsx` 的原始事件详情可直接使用 `TaskThinking`。不得复制例外、扩大白名单或将它们作为新 Agent 的实现模板。
+- **硬门禁**：`scripts/check-task-style-ownership.mjs` 调用 `task-session-ownership.mjs`，递归检查 `packages/web/src` 全部 TSX 的 JSX AST 与 CSS 选择器；禁止新增私有 Task 组件、DOM、样式及绕开共享入口的 Live/Review 实现。对应负例在 `scripts/task-session-ownership.test.mjs`；两者分别由 `check:web-presentation` 和 `npm test` 执行。任何新增例外必须先说明不能复用的真实差异、收敛计划和对应回归测试，不可静默放行。
+
+
 ### 禁止
 
 - 禁止页面因为空间不足私自缩小正常字号、按钮高度或点击命中区。
