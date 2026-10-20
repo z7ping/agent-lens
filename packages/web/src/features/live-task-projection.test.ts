@@ -630,3 +630,18 @@ test('reconnect retains structured SSE diagnostic when native snapshot has the s
   })
   assert.equal(merged.filter(item => item.kind === 'message' && item.error).length, 1)
 })
+
+test('persisted native error includes code/category/retryable after page reload', () => {
+  const items = projectLiveSnapshotEntries([
+    { id: 'native-1', type: 'error', error: {
+      code: 'SERVICE_DOWN', message: 'Service unavailable',
+      category: 'runtime', retryable: false,
+    } },
+  ])
+  const failure = items[0]
+  assert.ok(failure?.kind === 'message')
+  assert.equal(failure.error, true)
+  assert.deepEqual(failure.errorDiagnostic, {
+    code: 'SERVICE_DOWN', category: 'runtime', retryable: false,
+  })
+})
