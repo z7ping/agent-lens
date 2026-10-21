@@ -150,6 +150,18 @@ test('Pi Live Adapter invalidates Runtime Disclosure for private diagnostic upda
   assert.equal(normalizePiLiveEvent({ type: 'runtime_output', message: 'loading resource' }), undefined)
 })
 
+test('Pi native session name changes are reflected as authoritative Live title updates', () => {
+  assert.deepEqual(normalizePiLiveEvent({ type: 'session_title', title: '修复 Pi 会话标题' }), {
+    type: 'title.update',
+    title: '修复 Pi 会话标题',
+  })
+  assert.deepEqual(normalizePiLiveEvent({ type: 'session_title', title: '' }), {
+    type: 'title.update',
+    title: '',
+  })
+  assert.equal(normalizePiLiveEvent({ type: 'session_info_changed', name: '由 Adapter Service 处理' }), undefined)
+})
+
 test('Pi Live Adapter maps task summary into generic title.update', () => {
   assert.deepEqual(normalizePiLiveEvent({
     type: 'task_summary',
