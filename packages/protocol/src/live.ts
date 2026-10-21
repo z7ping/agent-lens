@@ -210,6 +210,13 @@ export interface LiveQueueStateDto {
   followUp: string[]
 }
 
+export interface LiveQueueMutationDto {
+  expected: LiveQueueStateDto
+  mode: 'steer' | 'follow-up'
+  index: number
+  text?: string | undefined
+}
+
 export interface LiveInterruptResultDto {
   restoredQueue?: LiveQueueStateDto | undefined
 }
