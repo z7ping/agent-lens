@@ -113,6 +113,13 @@ export function taskToolTargetText(model: TaskToolModel, visualKind: ReturnType<
   return preview
 }
 
+/** Display a reliable file target as a filename with a subdued directory. */
+export function taskToolFilePathParts(value: string): { name: string; directory: string } | undefined {
+  const separator = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'))
+  if (separator < 0 || separator === value.length - 1) return undefined
+  return { name: value.slice(separator + 1), directory: value.slice(0, separator + 1) }
+}
+
 /** Dim only an initial `cd path &&` chain, preserving every original
  * character and leaving quoted paths (including spaces) untouched. */
 export function taskShellCommandParts(value: string): { prefix: string; command: string } {
@@ -145,6 +152,8 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
   const target = taskToolTargetText(model, visualKind)
   const hasTarget = Boolean(target)
   const commandParts = visualKind === 'shell' ? taskShellCommandParts(target) : undefined
+  const fileTarget = hasTarget && (visualKind === 'read' || visualKind === 'edit')
+    ? taskToolFilePathParts(target) : undefined
   const mcpPrefix = model.toolSourceType === 'mcp' && model.mcpServerId
     ? `mcp__${model.mcpServerId}__`
     : undefined
@@ -191,7 +200,12 @@ export function TaskToolRow({ model, meta, details, onClick, className = '', com
               {commandParts?.prefix && <span className="task-tool-command-context">{commandParts.prefix}</span>}
               {commandParts?.command ?? target}
             </code>
-          : hasTarget ? <span className="task-tool-target" title={target}>{target}</span> : null}
+          : fileTarget
+            ? <span className="task-tool-target task-tool-target-file" title={target}>
+                <span className="task-tool-file-name">{fileTarget.name}</span>
+                <span className="task-tool-file-directory">{fileTarget.directory}</span>
+              </span>
+            : hasTarget ? <span className="task-tool-target" title={target}>{target}</span> : null}
       </span>
       <span className={`task-tool-status task-tool-status-${statusClass(model.status)}`} title={[status, elapsedLabel].filter(Boolean).join(' · ')}>
         <span className="task-tool-status-mark" aria-hidden="true">

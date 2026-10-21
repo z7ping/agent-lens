@@ -31,6 +31,19 @@
   color: var(--al-danger);
 }
 
+/* Shared borderless text action; preserve Button size, focus and keyboard behavior. */
+.btn.quiet {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--al-muted);
+}
+.btn.quiet:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--al-soft);
+  color: var(--al-ink-2);
+}
+
 .btn.is-loading {
   cursor: progress;
 }

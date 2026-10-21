@@ -3,7 +3,7 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TaskToolGroup, TaskProcessSequence, splitAdjacentTaskToolEntries, visibleTaskToolIds, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
-import { taskToolTargetText } from './TaskToolRow'
+import { taskToolFilePathParts, taskToolTargetText } from './TaskToolRow'
 import { GenericLiveRound } from './LiveTaskTimeline'
 import type { LiveTaskProjectionItem } from './live-task-projection'
 import type { TaskToolGroupModel } from './task-detail-model'
@@ -32,8 +32,9 @@ function render(defaultExpanded?: boolean): string {
 test('连续多条工具成组且默认只显示首条，展开保留原生顺序', () => {
   const html = render()
   assert.match(html, /data-task-tool-group="true"/)
-  assert.match(html, /工具调用 · 3 项/)
-  assert.match(html, /展开其余 2 项/)
+  assert.match(html, /class="task-tool-group-title">工具调用<\/span>/)
+  assert.match(html, /class="ui-status-badge is-neutral task-tool-group-count">3<\/span>/)
+  assert.match(html, /展开 2 项/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 1)
   assert.doesNotMatch(html, /代码搜索|pnpm test/)
   const opened = render(true)
@@ -50,7 +51,7 @@ test('工具摘要保留类型、状态与箭头，Shell 命令通过独立预�
   assert.match(html, /<code class="task-tool-command-preview" title="pnpm test">pnpm test<\/code>/)
   assert.match(html, /task-tool-row-chevron/)
   assert.doesNotMatch(html, /class="task-tool-command"/)
-  assert.match(html, /class="task-tool-target"/)
+  assert.match(html, /class="task-tool-target task-tool-target-file"/)
   assert.doesNotMatch(html, /class="task-tool-action"/)
   assert.match(html, /class="task-tool-status-mark"/)
 })
@@ -93,7 +94,7 @@ test('没有状态结果时用中性状态，不按名称猜工具类型', () =>
       { id: 'unknown', name: 'npm test', kind: 'tool', kindLabel: '工具', status: 'unknown' },
     ],
   }
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: unknown }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: unknown, defaultExpanded: true }))
   assert.match(html, /data-kind="mcp"/)
   assert.match(html, /data-kind="tool"/)
   assert.doesNotMatch(html, /data-kind="test"/)
@@ -139,8 +140,9 @@ test('连续大量工具仅展示前三项及所有失败、运行中工具，�
   const group = { ...model, id: 'batch:9', tools, itemCount: tools.length, errorCount: 1 }
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group, compact: true }))
   assert.match(html, /aria-expanded="false"/)
-  assert.match(html, /工具调用 · 9 项/)
-  assert.match(html, /展开其余 5 项/)
+  assert.match(html, /class="task-tool-group-title">工具调用<\/span>/)
+  assert.match(html, /class="ui-status-badge is-neutral task-tool-group-count">9<\/span>/)
+  assert.match(html, /展开 5 项/)
   assert.match(html, /1 失败/)
   assert.match(html, /2 运行中/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
@@ -199,9 +201,10 @@ test('相邻工具独立成组；思考/消息打断，每组仅预览首条', (
     [4, 'thought', 3, 'commentary', 1])
   const html = renderToStaticMarkup(createElement(TaskProcessSequence, { id: 'round', sequence }))
   assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 2)
-  assert.match(html, /工具调用 · 4 项/)
-  assert.match(html, /展开其余 3 项/)
-  assert.doesNotMatch(html, /工具调用 · 8 项/)
+  assert.match(html, /class="task-tool-group-title">工具调用<\/span>/)
+  assert.match(html, /class="ui-status-badge is-neutral task-tool-group-count">4<\/span>/)
+  assert.match(html, /展开 3 项/)
+  assert.doesNotMatch(html, /class="ui-status-badge is-neutral task-tool-group-count">8<\/span>/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
   assert.doesNotMatch(html, /native_2|native_3|native_4|native_7/)
   assert.match(html, /native_6/)
@@ -248,7 +251,7 @@ test('adjacent group expansion is independent and survives virtual remount in Li
   assert.equal((firstRender.match(/data-tool-fact="true"/g) ?? []).length, 6)
   assert.match(firstRender, /first-batch-4/)
   assert.doesNotMatch(firstRender, /second-batch-3/)
-  assert.match(firstRender, /展开其余 3 项/)
+  assert.match(firstRender, /展开 3 项/)
 })
 
 test('Live native assistant message interrupts adjacent tool runs even when rendered outside Process', () => {
@@ -277,4 +280,35 @@ test('Live native assistant message interrupts adjacent tool runs even when rend
   assert.match(html, /native_b/)
   assert.match(html, /native_d/)
   assert.doesNotMatch(html, /native_c/)
+})
+
+test('read/edit file rows emphasize basename, dim full directory and keep exact path accessible', () => {
+  assert.deepEqual(taskToolFilePathParts('E:/decard/projects/auth-center-web/src/views/index.vue'), {
+    name: 'index.vue', directory: 'E:/decard/projects/auth-center-web/src/views/',
+  })
+  assert.deepEqual(taskToolFilePathParts('src\\\\views\\\\menu.vue'), {
+    name: 'menu.vue', directory: 'src\\\\views\\\\',
+  })
+  assert.equal(taskToolFilePathParts('index.vue'), undefined)
+  const fileTool: TaskToolGroupModel = {
+    ...model,
+    tools: [{
+      id: 'file-read', name: 'read', kind: 'read', kindLabel: '读取', status: 'success',
+      primary: 'E:/decard/projects/auth-center-web/src/views/index.vue',
+    }],
+  }
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: fileTool }))
+  assert.ok(html.includes('class="task-tool-file-name">index.vue</span>'))
+  assert.ok(html.includes('class="task-tool-file-directory">E:/decard/projects/auth-center-web/src/views/</span>'))
+  assert.ok(html.includes('title="E:/decard/projects/auth-center-web/src/views/index.vue"'))
+  assert.doesNotMatch(html, /data-task-tool-group="true"/)
+})
+
+test('group header is a quiet accessible action distinct from non-interactive title and count', () => {
+  const html = render()
+  assert.match(html, /class="task-tool-group-header"/)
+  assert.match(html, /class="ui-status-badge is-neutral task-tool-group-count">3<\/span>/)
+  assert.match(html, /class="btn small quiet task-tool-group-toggle"|class="btn quiet small task-tool-group-toggle"/)
+  assert.match(html, /aria-expanded="false"/)
+  assert.match(render(true), /收起/)
 })
