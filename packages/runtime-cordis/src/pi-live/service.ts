@@ -1454,6 +1454,11 @@ export class DefaultPiLiveService implements PiLiveService {
   async mutateQueue(id: string, mutation: LiveQueueMutation): Promise<PiLiveQueueState> {
     const runtime = await this.readyRuntime(id)
     try {
+      if (!runtime.handle!.mutateQueue) {
+        const unavailable = new Error('This runtime does not support queue mutation') as Error & { statusCode: number }
+        unavailable.statusCode = 409
+        throw unavailable
+      }
       const next = await runtime.handle!.mutateQueue(mutation)
       runtime.queue = { steering: [...next.steering], followUp: [...next.followUp] }
       return next
