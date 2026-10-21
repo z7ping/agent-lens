@@ -94,7 +94,7 @@ test('没有状态结果时用中性状态，不按名称猜工具类型', () =>
       { id: 'unknown', name: 'npm test', kind: 'tool', kindLabel: '工具', status: 'unknown' },
     ],
   }
-  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: unknown }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: unknown, defaultExpanded: true }))
   assert.match(html, /data-kind="mcp"/)
   assert.match(html, /data-kind="tool"/)
   assert.doesNotMatch(html, /data-kind="test"/)
