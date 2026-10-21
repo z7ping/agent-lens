@@ -6,6 +6,14 @@ import { LiveMarkdownComposer, type LiveMarkdownComposerHandle, type LiveMarkdow
 import { Button, IconButton, Popover, UiIcon } from './ui'
 
 /** One composer for Review and Live. Pages own Runtime state/actions, never its markup or CSS. */
+export interface ComposerSessionAction {
+  id: string
+  label: string
+  description?: string | undefined
+  disabled?: boolean | undefined
+  onClick(): void
+}
+
 export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   editorRef: Ref<LiveMarkdownComposerHandle>
   expanded: boolean
@@ -18,6 +26,7 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   onSyncSession?(): void
   onReconnectSession?(): void
   connectionBusy?: boolean
+  sessionActions?: readonly ComposerSessionAction[] | undefined
   modelControl?: LiveModelControlDto | null
   thinking?: LiveThinkingControlDto | null
   /** Advertised in Review but unavailable until native Runtime resumes. No invented options. */
@@ -45,6 +54,7 @@ export function TaskSessionComposer({
   onSyncSession,
   onReconnectSession,
   connectionBusy = false,
+  sessionActions = [],
   modelControl,
   thinking,
   pendingModelControl = false,
@@ -64,6 +74,8 @@ export function TaskSessionComposer({
   const thinkingVisible = Boolean(thinking || pendingThinkingControl)
   const [connectionMenuOpen, setConnectionMenuOpen] = useState(false)
   const connectionAnchorRef = useRef<HTMLSpanElement>(null)
+  const actionAnchorRef = useRef<HTMLSpanElement>(null)
+  const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const canManageConnection = Boolean(onSyncSession || onReconnectSession)
   return <div className={`task-composer ${expanded ? 'is-expanded' : ''}`}>
     <div className="task-composer-editor">
@@ -141,6 +153,29 @@ export function TaskSessionComposer({
         <Button size="small" className={`task-composer-mode-action ${streamingMode === 'steer' ? 'active' : ''}`} aria-pressed={streamingMode === 'steer'} disabled={modesDisabled} onClick={() => onStreamingModeChange?.('steer')}>{t('live.steer')}</Button>
         <Button size="small" className={`task-composer-mode-action ${streamingMode === 'follow-up' ? 'active' : ''}`} aria-pressed={streamingMode === 'follow-up'} disabled={modesDisabled} onClick={() => onStreamingModeChange?.('follow-up')}>{t('live.followUp')}</Button>
       </div>}
+      {sessionActions.length > 0 && <span ref={actionAnchorRef} className="task-composer-action-anchor">
+        <IconButton
+          size="small"
+          aria-label={t('live.sessionActions')}
+          title={t('live.sessionActions')}
+          aria-haspopup="menu"
+          aria-expanded={actionMenuOpen}
+          onClick={() => setActionMenuOpen(value => !value)}
+        ><UiIcon name="more" size={16}/></IconButton>
+        <Popover open={actionMenuOpen} anchorRef={actionAnchorRef} onClose={() => setActionMenuOpen(false)} className="task-composer-menu-popover">
+          <div className="task-composer-menu-list" role="menu" aria-label={t('live.sessionActions')}>
+            {sessionActions.map(action => <Button
+              key={action.id}
+              size="small"
+              variant="quiet"
+              role="menuitem"
+              disabled={action.disabled}
+              title={action.description}
+              onClick={() => { setActionMenuOpen(false); action.onClick() }}
+            ><UiIcon name="collapse" size={16}/>{action.label}</Button>)}
+          </div>
+        </Popover>
+      </span>}
       <IconButton variant="primary" className="task-composer-send" disabled={!editorProps.canSubmit || !hasContent} onClick={onSendClick} aria-label={t('live.send')}>
         <UiIcon name="send" size={20}/>
       </IconButton>
