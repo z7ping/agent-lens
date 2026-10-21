@@ -369,7 +369,7 @@ export function ReviewRoundAdapter({
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
   const fileChangeObservationIds = useMemo(() => interaction.nodes.flatMap(node =>
-    node.type === 'event' && node.kind === 'artifact.action' ? node.observationIds : []), [interaction.nodes])
+    node.type === 'tool' || (node.type === 'event' && node.kind === 'artifact.action') ? node.observationIds : []), [interaction.nodes])
   useEffect(() => {
     if (!fileChangesEnabled) return
     const controller = new AbortController()
@@ -377,12 +377,13 @@ export function ReviewRoundAdapter({
       id: interaction.id,
       startedAt: interaction.startedAt,
       endedAt: interaction.endedAt,
-      observationIds: fileChangeObservationIds,
+      observationIds: interaction.observationRange ? [] : fileChangeObservationIds,
+      ...(interaction.observationRange ? { observationRange: interaction.observationRange } : {}),
     }, controller.signal)
       .then(value => { if (!controller.signal.aborted) setRoundFileChanges(value) })
       .catch(() => { if (!controller.signal.aborted) setRoundFileChanges(null) })
     return () => controller.abort()
-  }, [fileChangesEnabled, sessionId, interaction.id, interaction.startedAt, interaction.endedAt, fileChangeObservationIds])
+  }, [fileChangesEnabled, sessionId, interaction.id, interaction.startedAt, interaction.endedAt, interaction.observationRange, fileChangeObservationIds])
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
   const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)
