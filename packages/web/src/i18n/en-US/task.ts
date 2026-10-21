@@ -98,7 +98,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       toolGroupRunning: '{{count}} running',
       toolGroupFailed: '{{count}} failed',
       toolGroupMore: 'Show {{count}} more',
-      toolGroupLess: 'Show fewer tools',
+      toolGroupLess: 'Show less',
       invalidRuntime: 'The live task address is invalid.',
       productUnavailable: 'This live agent is unavailable.',
       runtimeId: 'Runtime ID',
