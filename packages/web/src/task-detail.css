@@ -149,6 +149,105 @@
 .task-surface .task-header-metric[data-tone='danger'] span { color: var(--al-danger); }
 .task-surface .task-header-metric[data-tone='accent'] b { color: var(--al-accent); }
 
+/* Session file summary: one action, three container-width presentations. */
+.task-surface .task-header { position: relative; }
+.task-surface .task-header-file-summary-trigger.btn {
+  display: inline-flex;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 9px;
+  border: 1px solid var(--al-line);
+  border-radius: var(--radius-md);
+  background: var(--al-surface);
+  color: var(--al-ink-2);
+  box-shadow: none;
+  font-size: var(--text-task-meta);
+  font-weight: 550;
+  white-space: nowrap;
+}
+.task-surface .task-header-file-summary-trigger:hover { background: var(--al-soft-2); }
+.task-surface .task-header-file-summary-trigger[aria-expanded='true'] { color: var(--al-accent); }
+.task-surface .task-header-file-summary-project,
+.task-surface .task-header-file-summary-count { display: none; }
+.task-surface .task-header-file-summary-data,
+.task-surface .task-header-file-summary-delta { display: inline-flex; align-items: center; gap: 7px; }
+.task-surface .task-header-file-summary-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.task-surface .task-header-file-summary-delta { margin-left: auto; font: var(--text-task-code)/1.3 var(--font-mono); }
+.task-surface .task-header-file-summary-delta [data-change='added'] { color: var(--al-success); }
+.task-surface .task-header-file-summary-delta [data-change='deleted'] { color: var(--al-danger); }
+.task-surface .task-header-file-summary-arrow { color: var(--al-muted); }
+
+/* This threshold measures the actual TaskSurface, not the monitor. The side
+   lane exists only when the 216px card fits outside the centered reading axis. */
+@container task-surface (min-width: 1400px) {
+  .task-surface .task-header-file-summary-trigger.btn {
+    position: absolute;
+    left: calc(100% + 16px);
+    top: 8px;
+    width: 216px;
+    min-height: 58px;
+    height: auto;
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px;
+    text-align: left;
+    white-space: normal;
+  }
+  .task-surface .task-header-file-summary-project {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    color: var(--al-ink);
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .task-surface .task-header-file-summary-data { width: 100%; }
+  .task-surface .task-header-file-summary-label { white-space: nowrap; }
+}
+@container task-surface (max-width: 767.98px) {
+  .task-surface .task-header-file-summary-trigger.btn {
+    height: 28px;
+    padding: 4px 7px;
+    border-color: transparent;
+  }
+  .task-surface .task-header-file-summary-label,
+  .task-surface .task-header-file-summary-delta,
+  .task-surface .task-header-file-summary-arrow { display: none; }
+  .task-surface .task-header-file-summary-count { display: inline; font-variant-numeric: tabular-nums; }
+}
+
+.task-header-info-drawer .ui-overlay-panel { width: min(92vw, 480px); }
+.task-header-info-drawer:has(.task-file-diff-view) .ui-overlay-panel { width: min(96vw, 1100px); }
+.task-header-info-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--al-soft-2);
+}
+.task-header-info-tabs .btn {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--al-muted);
+  box-shadow: none;
+  font-size: var(--text-task-tool);
+}
+.task-header-info-tabs .btn[aria-selected='true'] {
+  background: var(--al-surface);
+  color: var(--al-ink);
+  font-weight: 650;
+}
+.task-header-info-tabs + .task-header-info-panel-content,
+.task-header-info-tabs + .task-header-compact-info-list { margin-top: 12px; }
+.task-header-info-panel-content:first-of-type { padding-top: 0; border-top: 0; }
+
 /* 任务信息入口是 TaskHeader 的共享能力，Review / Live 使用同一 Drawer。 */
 .task-header-compact-info-list { display: grid; gap: 0; }
 .task-header-compact-info-list > div { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: start; gap: 8px; padding: 7px; }
