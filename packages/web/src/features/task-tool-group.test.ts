@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TaskToolGroup, TaskProcessSequence, splitAdjacentTaskToolEntries, visibleTaskToolIds, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { taskToolTargetText } from './TaskToolRow'
+import { GenericLiveRound } from './LiveTaskTimeline'
+import type { LiveTaskProjectionItem } from './live-task-projection'
 import type { TaskToolGroupModel } from './task-detail-model'
 
 const model: TaskToolGroupModel = {
@@ -247,4 +249,32 @@ test('adjacent group expansion is independent and survives virtual remount in Li
   assert.match(firstRender, /first-batch-4/)
   assert.doesNotMatch(firstRender, /second-batch-3/)
   assert.match(firstRender, /展开其余 3 项/)
+})
+
+test('Live native assistant message interrupts adjacent tool runs even when rendered outside Process', () => {
+  const items: LiveTaskProjectionItem[] = [
+    { id: 'prompt', kind: 'message', role: 'user', text: 'do work', streaming: false },
+    { id: 'tool-a', kind: 'tool', callId: 'a', name: 'native_a', status: 'success' },
+    { id: 'intermediate-answer', kind: 'message', role: 'assistant', text: 'intermediate', streaming: false },
+    { id: 'tool-b', kind: 'tool', callId: 'b', name: 'native_b', status: 'success' },
+    { id: 'tool-c', kind: 'tool', callId: 'c', name: 'native_c', status: 'success' },
+    { id: 'thinking', kind: 'thinking', text: 'next step', streaming: false },
+    { id: 'tool-d', kind: 'tool', callId: 'd', name: 'native_d', status: 'success' },
+  ]
+  const html = renderToStaticMarkup(createElement(GenericLiveRound, {
+    projection: { model: {
+      id: 'native-round', label: 'Round 1', state: 'settled',
+      toolCount: 4, errorCount: 0, durationMs: 0, highLatency: false,
+    }, items },
+    agentLabel: 'Codex', eager: true, messageActions: [], actionPending: null,
+    runtimeStreaming: false,
+    processExpansionStore: new Map([['process:native-round', true]]),
+    onMessageAction: () => undefined,
+  }))
+  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 1)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
+  assert.match(html, /native_a/)
+  assert.match(html, /native_b/)
+  assert.match(html, /native_d/)
+  assert.doesNotMatch(html, /native_c/)
 })
