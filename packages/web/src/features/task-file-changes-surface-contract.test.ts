@@ -87,8 +87,8 @@ test('仅精确 Session 事实允许查看 Git Diff；逐轮观测只展示来�
 
 test('会话文件列表在任务信息抽屉第一层，Diff 和证据在同一抽屉切换', () => {
   const header = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
-  assert.match(header, /<section className="task-header-compact-info-list"/)
-  assert.match(header, /\{infoPanel && <div className="task-header-info-panel-content" aria-label=\{infoPanel\.label\}>/)
+  assert.match(header, /className="task-header-compact-info-list"/)
+  assert.match(header, /\{infoPanel && infoTab === 'files' && <div id="task-header-files-panel" role="tabpanel" className="task-header-info-panel-content"/)
   assert.match(header, /\{infoPanel\.content\}/)
   assert.doesNotMatch(header, /infoPanelOpen|setInfoPanelOpen|task-header-info-panel-trigger/)
   assert.match(styles, /\.task-header-info-panel-content \{/)
