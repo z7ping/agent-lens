@@ -857,7 +857,7 @@ async function connectNotificationEvents(
   response.setHeader('connection', 'keep-alive')
   response.setHeader('x-accel-buffering', 'no')
   response.flushHeaders?.()
-  response.write(': agent-lens notifications\\n\\n')
+  response.write(': agent-lens notifications\n\n')
 
   const subscriptions = new Map<string, () => void>()
   let closed = false
@@ -888,9 +888,9 @@ async function connectNotificationEvents(
             const type = value.normalizedEvent?.type
             if (type !== 'notification' && type !== 'ui.request'
               && type !== 'error' && type !== 'completed') return
-            if (!closed) response.write(`event: notification\\ndata: ${JSON.stringify(jsonValue({
+            if (!closed) response.write(`event: notification\ndata: ${JSON.stringify(jsonValue({
               liveId, runtimeSessionId: state.runtimeSessionId, event: value,
-            }))}\\n\\n`)
+            }))}\n\n`)
           })
           subscriptions.set(key, dispose)
         } catch { /* A single unavailable native runtime must not kill the stream. */ }
@@ -900,7 +900,7 @@ async function connectNotificationEvents(
   await refresh()
   const heartbeat = setInterval(() => {
     if (closed) return
-    response.write(': heartbeat\\n\\n')
+    response.write(': heartbeat\n\n')
     void refresh()
   }, SSE_HEARTBEAT_MS)
   heartbeat.unref?.()
