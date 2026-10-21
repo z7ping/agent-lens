@@ -10,9 +10,10 @@ const styles = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf
 const reviewStyles = readFileSync(new URL('../review.css', import.meta.url), 'utf8')
 
 test('会话级文件归入任务信息，Review 逐轮文件仍留在轮次末尾', () => {
-  assert.match(review, /reviewInteractionFileChanges\(sessionId, \{[\s\S]*?id: interaction\.id,[\s\S]*?controller\.signal\)/)
+  assert.match(review, /reviewInteractionFileChanges\(sessionId, \{[\s\S]*?id: interaction\.id,[\s\S]*?observationRange: interaction\.observationRange[\s\S]*?controller\.signal\)/)
   assert.match(review, /afterProcessEntries\.map\(renderEntry\)[\s\S]*?TaskFileChangesDisclosure/)
-  assert.match(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges\?\.summary\.count \|\| review\.fileChanges\?\.meta\.truncated\)\}/)
+  assert.match(reviewPage, /fileChangesEnabled=\{item\.round\.toolCount > 0/)
+  assert.doesNotMatch(reviewPage, /fileChangesEnabled=\{Boolean\(review\.fileChanges/)
   assert.doesNotMatch(reviewPage, /detail\.interactionCount > 1/)
   assert.match(reviewPage, /infoPanel=\{review\.fileChanges[\s\S]*?<TaskFileChangesDisclosure value=\{review\.fileChanges\} inlineDetails\/>/)
   assert.match(review, /fileChangesEnabled && roundFileChanges\?\.interactionId === interaction\.id/)
@@ -139,4 +140,10 @@ test('文件观测与准确变更的标题语义分离，详情文案双语覆�
       assert.ok(messages.includes(key + ':'), `missing ${key}`)
     }
   }
+})
+
+test('Review per-round file changes are not gated by session-wide totals', () => {
+  assert.match(reviewPage, /fileChangesEnabled=\\{item\\.round\\.toolCount > 0/)
+  assert.doesNotMatch(reviewPage, /fileChangesEnabled=\\{Boolean\\(review\\.fileChanges/)
+  assert.match(review, /observationRange: interaction\\.observationRange/)
 })
