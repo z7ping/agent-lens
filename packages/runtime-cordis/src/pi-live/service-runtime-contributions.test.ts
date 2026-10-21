@@ -6,6 +6,8 @@ import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 
 class RuntimeContributionHost implements PiRuntimeHost {
   starts = 0
+  compactions = 0
+  constructor(private readonly supportsCompaction = false) {}
 
   async start(
     runtimeSessionId: string,
@@ -15,11 +17,12 @@ class RuntimeContributionHost implements PiRuntimeHost {
     _onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle> {
     this.starts += 1
-    if (this.starts === 1) throw new Error('SDK bootstrap failed')
+    if (!this.supportsCompaction && this.starts === 1) throw new Error('SDK bootstrap failed')
 
     const state = (): PiLiveRuntimeState => ({
       runtimeSessionId,
       status: 'ready',
+      ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
       sdkVersion: '0.84.4',
       runtimeMode: 'compatibility',
       warmWorkerStatus: 'hit',
@@ -50,6 +53,8 @@ class RuntimeContributionHost implements PiRuntimeHost {
       leafId: null,
     })
     return {
+      ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
+      ...(this.supportsCompaction ? { compact: async () => { this.compactions += 1 } } : {}),
       processId: 4321,
       state: async () => state(),
       snapshot: async () => ({ state: state(), entries: [], leafId: null }),
