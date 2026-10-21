@@ -71,6 +71,7 @@ function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
   const cwd = stringField(session, 'cwd')
   const cliVersion = stringField(session, 'cliVersion')
   const title = stringField(session, 'title')
+  const titleKind = session.titleKind === 'generated' ? 'generated' : 'unverified'
   const startedAt = stringField(session, 'startedAt')
   return {
     entry: asRecord(payload.entry),
@@ -80,7 +81,7 @@ function storedEnvelope(record: SourceRecord): CodexStoredEnvelope {
         ?? 'unknown',
       ...(cwd ? { cwd } : {}),
       ...(cliVersion ? { cliVersion } : {}),
-      ...(title ? { title } : {}),
+      ...(title ? { title, titleKind } : {}),
       ...(startedAt ? { startedAt } : {}),
     },
   }
@@ -200,7 +201,7 @@ function identityHints(record: SourceRecord, envelope: CodexStoredEnvelope): Obs
   return {
     nativeSessionId: envelope.session.nativeSessionId || record.sourceSessionNativeId || 'unknown',
     ...(envelope.session.cwd ? { workspacePath: envelope.session.cwd } : {}),
-    ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim() } : {}),
+    ...(envelope.session.title?.trim() ? { sessionTitle: envelope.session.title.trim(), sessionTitleKind: envelope.session.titleKind ?? 'unverified' } : {}),
   }
 }
 
