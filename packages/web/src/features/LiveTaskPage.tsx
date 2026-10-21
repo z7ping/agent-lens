@@ -25,7 +25,7 @@ import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task
 import { coalesceLiveSemanticSegments } from './live-semantic-rounds'
 import { parseTaskLiveRuntimeLocation, shouldWarnLiveNoProgress, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
-import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
+import { TaskFileChangesDisclosure, summarizeTaskFileChanges } from './TaskFileChangesDisclosure'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
 import { readableTaskHeaderTitle, taskPreciseDurationLabel, workspaceDisplayName } from './task-detail-model'
 
@@ -443,8 +443,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           && fileChanges.result
           && (fileChanges.result.summary.count > 0 || fileChanges.result.meta.truncated)
           ? {
-              label: t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
-              summary: t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              label: summarizeTaskFileChanges(fileChanges.result).observed
+                ? t('review:local.fileChanges.activityCount', { count: fileChanges.result.summary.count })
+                : t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              summary: summarizeTaskFileChanges(fileChanges.result).observed
+                ? t('review:local.fileChanges.activityCount', { count: fileChanges.result.summary.count })
+                : t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              fileSummary: summarizeTaskFileChanges(fileChanges.result),
               content: <TaskFileChangesDisclosure value={fileChanges.result} inlineDetails/>,
             } : undefined}
         infoItems={[
