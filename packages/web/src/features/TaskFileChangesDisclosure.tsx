@@ -28,8 +28,8 @@ function isObservedOnly(change: TaskFileChangeDto): boolean {
 export function summarizeTaskFileChanges(value: TaskFileChangesResponseDto) {
   return {
     count: value.summary.count,
-    additions: value.summary.additions,
-    deletions: value.summary.deletions,
+    ...(value.summary.additions !== undefined ? { additions: value.summary.additions } : {}),
+    ...(value.summary.deletions !== undefined ? { deletions: value.summary.deletions } : {}),
     observed: Boolean(value.interactionId || value.summary.observedCount || value.items.some(isObservedOnly)),
   }
 }
