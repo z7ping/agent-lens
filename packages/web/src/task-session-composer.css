@@ -144,10 +144,9 @@
 }
 @media (max-width: 1199.98px) {
   .task-composer-connection-anchor { width: 32px; min-width: 32px; }
-  .task-composer-connection-anchor .task-composer-runtime:not(.task-composer-runtime-action) { display: none; }
+  .task-composer-connection-anchor:has(.task-composer-runtime:not(.task-composer-runtime-action)) { display: none; }
   .task-composer-runtime-action { justify-content: center; }
-  .task-composer-runtime-label,
-  .task-composer-runtime-action > svg { display: none; }
+  .task-composer-runtime-label { display: none; }
 }
 @media (max-width: 991.98px) {
   .task-composer.is-expanded .task-composer-editor { height: clamp(220px, 44vh, 440px); }
