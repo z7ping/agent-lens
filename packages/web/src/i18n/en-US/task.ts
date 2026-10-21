@@ -143,6 +143,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
         aria: 'Workspace files',
       },
       connected: 'Live connection established',
+      sessionActions: 'Session actions',
       connectionMenu: 'Connection actions',
       syncSession: 'Sync session',
       reconnectSession: 'Reconnect',
