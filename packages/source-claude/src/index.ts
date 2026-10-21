@@ -912,7 +912,7 @@ export async function normalizeClaudeRecord(
     observations.push(candidate(record, envelope, 'session.lifecycle', {
       event: 'session.title',
       ...(title ? { title } : {}),
-    }, { identity: title ? { sessionTitle: title } : {} }))
+    }, { identity: title ? { sessionTitle: title, sessionTitleKind: 'explicit' } : {} }))
   } else if (type === 'summary') {
     observations.push(candidate(record, envelope, 'context.summary', {
       text: textFromContent(entry.summary ?? content),
