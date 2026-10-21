@@ -162,8 +162,13 @@ test('流式消息继续复用 TaskMessage，不恢复第二套响应气泡', ()
   assert.match(globalStyles, /\.markdown-streaming-tail\s*\{[\s\S]*?white-space:\s*pre-wrap;/)
 })
 
-test('Live Composer 窄窗继续收回状态文本空间', () => {
-  assert.match(composerCss, /@media \(max-width: 1199\.98px\) \{[\s\S]*?\.task-composer-runtime \{ display: none; \}/)
+test('Live Composer 窄窗收起连接文字但保留可操作入口', () => {
+  assert.match(composerCss, /@media \(max-width: 1199\.98px\)/)
+  assert.match(composerCss, /\.task-composer-runtime-label \{ display: none; \}/)
+  assert.match(composerCss, /\.task-composer-connection-anchor:has/)
+  assert.match(taskComposer, /sessionActions\.length > 0/)
+  assert.match(liveTask, /sessionActions=\{composerSessionActions\}/)
+  assert.match(liveTask, /action\.placement === 'composer'/)
 })
 
 test('Review/Live 头部、阅读区和 Live Composer 共用 820px 宽度上限', () => {
