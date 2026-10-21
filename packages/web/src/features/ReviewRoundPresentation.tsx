@@ -225,13 +225,22 @@ export function ReviewProcessGroup({
 
   // Preserve source order and evidence ownership; split only adjacent tool runs.
   const processSequence: TaskToolGroupSequenceEntry[] = items.flatMap((item, index): TaskToolGroupSequenceEntry[] => {
-    if (item.type === 'tool-group') return item.items.map(node => ({
-      type: 'tool' as const,
-      key: node.id,
-      tool: reviewToolModel(node),
-      meta: <EvidenceBadges evidence={node.evidence} compact/>,
-      onToolClick: () => inspect(node),
-    }))
+    if (item.type === 'tool-group') {
+      // A different explicit reasoning parent is a real boundary, even if
+      // both native tool runs are adjacent after projection.
+      const previous = items[index - 1]
+      const boundary: TaskToolGroupSequenceEntry[] = previous?.type === 'tool-group'
+        && previous.parentReasoningId !== item.parentReasoningId
+        ? [{ type: 'content', key: `tool-parent-boundary:${index}`, content: null }]
+        : []
+      return [...boundary, ...item.items.map(node => ({
+        type: 'tool' as const,
+        key: node.id,
+        tool: reviewToolModel(node),
+        meta: <EvidenceBadges evidence={node.evidence} compact/>,
+        onToolClick: () => inspect(node),
+      }))]
+    }
     if (item.type === 'event') return [{
       type: 'content' as const, key: item.node.id,
       content: <EventRow event={item.node} inspect={inspect}/>,
@@ -246,7 +255,7 @@ export function ReviewProcessGroup({
         id: item.node.id,
         label: t('local.process.thinking'),
         text: item.node.text,
-        preview: item.node.text.replace(/\\s+/g, ' ').trim().slice(0, 220),
+        preview: item.node.text.replace(/\s+/g, ' ').trim().slice(0, 220),
         state: 'settled',
       }} {...(expansionStore ? { expansionStore } : {})}/>,
     }]
