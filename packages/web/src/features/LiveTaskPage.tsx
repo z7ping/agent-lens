@@ -317,6 +317,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const connectionLabel = streamSupported
     ? connected ? t('live.connected') : t('live.connecting')
     : runtimeStatus
+  const composerSessionActions = runtimeDisclosures.flatMap(disclosure =>
+    (disclosure.actions ?? [])
+      .filter(action => action.placement === 'composer')
+      .map(action => ({
+        id: action.actionId,
+        label: contributionText(action.label, i18n.resolvedLanguage ?? i18n.language),
+        ...(action.description ? { description: contributionText(action.description, i18n.resolvedLanguage ?? i18n.language) } : {}),
+        disabled: runtimeActionPending !== null || state?.status !== 'ready' || state.isStreaming,
+        onClick: () => { void runRuntimeAction(action) },
+      })),
+  )
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
     if (message) void send(message)
@@ -538,6 +549,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           onSyncSession={streamSupported && product?.capabilities.includes('recovery') ? synchronizeSession : undefined}
           onReconnectSession={streamSupported && (state?.status === 'ready' || state?.status === 'initializing') ? reconnectSession : undefined}
           connectionBusy={connectionBusy}
+          sessionActions={composerSessionActions}
           modelControl={modelControl}
           thinking={thinking}
           controlsBusy={busy}
