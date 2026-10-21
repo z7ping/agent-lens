@@ -177,3 +177,44 @@ test('Review/Live 共享头部使用 Agent Logo；历史证据与实时输入保
   assert.match(read('./ReviewRoundPresentation.tsx'), /meta=\{<EvidenceBadges/)
   assert.match(read('./LiveTaskPage.tsx'), /<TaskSessionComposer/)
 })
+
+test('Task Surface 字号只有 typography.css 一处语义源，Live/Review 不保留像素硬编码', () => {
+  const typography = read('../typography.css')
+  const detail = read('../task-detail.css')
+  const sessionView = read('../task-session-view.css')
+  const sizes = [
+    ['body', 'var(--text-body)'],
+    ['process', 'var(--text-secondary)'],
+    ['thinking-markdown', 'var(--text-task-body)'],
+    ['tool', 'var(--text-secondary)'],
+    ['tool-code', 'var(--text-task-tool)'],
+    ['code', 'var(--text-caption)'],
+    ['meta', 'var(--text-caption)'],
+    ['heading', 'var(--text-section-title)'],
+    ['emphasis', '15px'],
+  ] as const
+  for (const [role, value] of sizes) {
+    assert.ok(typography.includes(`--text-task-${role}:${value};`), `Task typography role missing: ${role}`)
+  }
+
+  // Changing a single role must reach the real Task owner, not a later page override.
+  for (const selector of [
+    '.task-message-content .markdown { font-size: var(--text-task-body); }',
+    '.task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); }',
+    '.task-tool-summary-text {',
+  ]) assert.ok(detail.includes(selector), `Task owner missing: ${selector}`)
+  assert.match(detail, /\.task-thinking-content \{[^}]*font-size: var\(--text-task-process\)/)
+  assert.match(detail, /\.task-tool-call > summary\.task-tool-row \{[^}]*font: var\(--text-task-tool\)/)
+  assert.match(detail, /\.task-surface \.markdown pre,[\s\S]*?font: var\(--text-task-code\)/)
+  assert.match(sessionView, /\.task-header-title \{[^}]*font-size: var\(--text-task-emphasis\)/)
+
+  const known = new Set(sizes.map(([role]) => `--text-task-${role}`))
+  const refs = [...detail.matchAll(/var\((--text-task-[a-z-]+)\)/g)].map(match => match[1]!)
+  assert.ok(refs.length >= 60)
+  for (const ref of refs) assert.ok(known.has(ref), `Undefined Task font token: ${ref}`)
+  assert.doesNotMatch(detail, /font-size:\s*\d+(?:\.\d+)?px\b/)
+  assert.doesNotMatch(detail, /\bfont:\s*(?:\d{3}\s+)?\d+(?:\.\d+)?px\//)
+  assert.doesNotMatch(sessionView, /\.task-header-title \{[^}]*font-size:\s*15px/)
+  assert.doesNotMatch(read('../live-task.css'), /--text-task-[a-z-]+\s*:/)
+  assert.doesNotMatch(read('../review.css'), /--text-task-[a-z-]+\s*:/)
+})
