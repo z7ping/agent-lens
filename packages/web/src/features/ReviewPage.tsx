@@ -235,7 +235,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
               >
                 <ReviewRoundAdapter
                   sessionId={detail.id}
-                  fileChangesEnabled={Boolean(review.fileChanges?.summary.count || review.fileChanges?.meta.truncated)}
+                  fileChangesEnabled={item.round.toolCount > 0
+                     || item.interaction.nodes.some(node => node.type === 'event' && node.kind === 'artifact.action')}
                   interaction={item.interaction}
                   round={item.round}
                   expansionStore={roundExpansionRef.current}
