@@ -9,6 +9,7 @@ import type {
   Interaction,
   LogicalSession,
   LogicalSessionIdentityHint,
+  SessionTitleKind,
   Project,
   ProjectIdentityHint,
   RuntimeProfile,
@@ -208,6 +209,7 @@ export interface SessionSummaryRecord {
   workspaceId?: WorkspaceId
   workspacePath?: string
   title?: string
+  titleKind?: SessionTitleKind
   firstUserPayload?: JsonValue
   startedAt: string
   endedAt: string
