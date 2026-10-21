@@ -394,7 +394,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         <span className="live-task-queue-type">{t('live.queue.waitingReady')}</span>
         <b title={messageText(startupQueued)}>{messageText(startupQueued)}</b>
         <span className="live-task-queue-actions">
-          <IconButton size="small" aria-label={t('live.queue.edit')} disabled={queueMutationPending} onClick={editStartupQueued}><UiIcon name="tool-edit" size={14}/></IconButton>
+          <IconButton size="small" aria-label={t('live.queue.edit')} title={composerHasContent ? t('live.queue.draftPending') : t('live.queue.edit')} disabled={queueMutationPending || composerHasContent} onClick={editStartupQueued}><UiIcon name="tool-edit" size={14}/></IconButton>
           <IconButton size="small" aria-label={t('live.queue.withdraw')} disabled={queueMutationPending} onClick={() => setStartupQueued(null)}><UiIcon name="close" size={14}/></IconButton>
         </span>
       </div>}
@@ -402,7 +402,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         <span className="live-task-queue-type">{item.pending ? t('live.queue.joining') : !item.active ? t('live.queue.restored') : item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
         <b title={item.text}>{item.text}</b>
         <span className="live-task-queue-actions">
-          {!item.pending && <IconButton size="small" aria-label={t('live.queue.edit')} disabled={queueMutationPending || busy}
+          {!item.pending && <IconButton size="small" aria-label={t('live.queue.edit')} title={composerHasContent ? t('live.queue.draftPending') : t('live.queue.edit')} disabled={queueMutationPending || busy || composerHasContent}
             onClick={() => { if (item.active && item.queueIndex !== undefined) void editQueued(item.mode, item.queueIndex, item.text); else if (!item.active) editRestoredQueue(item) }}
           ><UiIcon name="tool-edit" size={14}/></IconButton>}
           {!item.pending && <IconButton size="small" aria-label={t('live.queue.withdraw')} disabled={queueMutationPending || busy}
