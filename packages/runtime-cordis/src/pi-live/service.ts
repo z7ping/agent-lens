@@ -1162,6 +1162,7 @@ export class DefaultPiLiveService implements PiLiveService {
           && !state.isStreaming && !state.isCompacting && !this.requireRuntime(id).manualCompactionPending
           ? { actions: [{
               actionId: 'pi.runtime.compact',
+              placement: 'composer' as const,
               label: contributionText('Compact context', '压缩上下文'),
               description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
             }] }
