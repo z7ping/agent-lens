@@ -17,28 +17,11 @@
 
 
 /* 高级筛选是独立 IconButton + Portal Popover；不修改共享智能体/项目控件样式。 */
+/* Task filter reuses shared icon hover/selected/focus state; only geometry is local. */
 .task-center-advanced-filter-trigger.ui-icon-button {
-  box-sizing: border-box;
-  display: grid;
   width: 32px;
   min-width: 32px;
   height: 32px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--al-line);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--al-surface) 76%, transparent);
-  color: var(--al-ink-2);
-}
-.task-center-advanced-filter-trigger.ui-icon-button:hover,
-.task-center-advanced-filter-trigger.ui-icon-button[aria-expanded="true"] {
-  border-color: var(--al-line-strong);
-  background: var(--al-surface);
-  color: var(--al-ink);
-}
-.task-center-advanced-filter-trigger.ui-icon-button:focus-visible {
-  outline: 2px solid var(--al-accent);
-  outline-offset: 2px;
 }
 .task-center-advanced-filter-popover.ui-popover {
   z-index: 1200;

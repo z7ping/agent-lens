@@ -58,6 +58,7 @@
   animation: ui-spin .7s linear infinite;
 }
 
+/* Shared icon-only actions: state color, not permanent boxes. */
 .ui-icon-button {
   width: 30px;
   height: 30px;
@@ -66,11 +67,12 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid var(--al-line-strong);
+  border: 0;
   border-radius: 8px;
-  background: var(--al-surface);
+  background: transparent;
   color: var(--al-ink-2);
-  transition: border-color .15s, background .15s, color .15s;
+  cursor: pointer;
+  transition: background-color .15s, color .15s;
 }
 
 .ui-icon-button.is-small {
@@ -79,23 +81,40 @@
 }
 
 .ui-icon-button:hover:not(:disabled) {
-  border-color: var(--al-accent);
+  background: var(--al-soft);
+  color: var(--al-ink);
+}
+
+/* Toggle state is shared across disclosure/popover/pressed icon actions. */
+.ui-icon-button:not(.is-primary):not(.is-danger):is([aria-pressed='true'], [aria-expanded='true'], .is-active):not(:disabled) {
   color: var(--al-accent);
 }
 
+.ui-icon-button:not(.is-primary):not(.is-danger):is([aria-pressed='true'], [aria-expanded='true'], .is-active):hover:not(:disabled) {
+  background: var(--al-accent-soft);
+  color: var(--al-accent);
+}
+
+.ui-icon-button:focus-visible {
+  outline: 2px solid var(--al-accent);
+  outline-offset: 2px;
+}
+
 .ui-icon-button.is-primary {
-  border-color: var(--al-accent);
+  background: var(--al-accent);
+  color: var(--al-on-accent);
+}
+
+.ui-icon-button.is-primary:hover:not(:disabled) {
   background: var(--al-accent);
   color: var(--al-on-accent);
 }
 
 .ui-icon-button.is-danger {
-  border-color: color-mix(in srgb, var(--al-danger) 34%, var(--al-line-strong));
   color: var(--al-danger);
 }
 
 .ui-icon-button.is-danger:hover:not(:disabled) {
-  border-color: var(--al-danger);
   background: var(--al-danger-soft);
   color: var(--al-danger);
 }
