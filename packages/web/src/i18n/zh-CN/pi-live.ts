@@ -109,6 +109,11 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
     interruptedTitle: '已停止当前生成',
     interruptedDescription: '可以继续输入。',
     queue: {
+      title: '待处理消息',
+      count: '排队 {{count}} 条',
+      menu: '队列操作',
+      clear: '清空队列',
+      restored: '恢复草稿',
       waitingReady: '等待 Pi 就绪',
       edit: '编辑',
       withdraw: '撤回',
