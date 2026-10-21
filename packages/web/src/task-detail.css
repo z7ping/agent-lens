@@ -181,8 +181,8 @@
 
 /* This threshold measures the actual TaskSurface, not the monitor. The side
    lane exists only when the 216px card fits outside the centered reading axis. */
-@container task-surface (min-width: 1400px) {
-  .task-surface .task-header-file-summary-trigger.btn {
+/* Side-card appearance is enabled by measured free reading-lane space. */
+  .task-surface .task-header-file-summary-trigger.btn.is-side-card {
     position: absolute;
     left: calc(100% + 16px);
     top: 8px;
@@ -197,7 +197,7 @@
     text-align: left;
     white-space: normal;
   }
-  .task-surface .task-header-file-summary-project {
+  .task-surface .task-header-file-summary-trigger.is-side-card .task-header-file-summary-project {
     display: block;
     width: 100%;
     overflow: hidden;
@@ -206,9 +206,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .task-surface .task-header-file-summary-data { width: 100%; }
-  .task-surface .task-header-file-summary-label { white-space: nowrap; }
-}
+  .task-surface .task-header-file-summary-trigger.is-side-card .task-header-file-summary-data { width: 100%; }
+  .task-surface .task-header-file-summary-trigger.is-side-card .task-header-file-summary-label { white-space: nowrap; }
 @container task-surface (max-width: 767.98px) {
   .task-surface .task-header-file-summary-trigger.btn {
     height: 28px;
