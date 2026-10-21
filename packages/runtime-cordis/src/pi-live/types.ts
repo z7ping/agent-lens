@@ -144,6 +144,7 @@ export interface PiLiveSnapshot extends LiveSnapshot {
 export type PiLiveCommandSource = 'extension' | 'prompt' | 'skill'
 
 export interface PiLiveCommand {
+  titleRegeneration?: boolean | undefined
   name: string
   description?: string | undefined
   source: PiLiveCommandSource
