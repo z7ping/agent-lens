@@ -3,6 +3,7 @@ import {
   type LucideIcon,
   ArchiveRestore,
   Brain,
+  Bell,
   LoaderCircle,
   CheckCircle2,
   CircleX,
@@ -65,6 +66,7 @@ import {
 export type UiIconName =
   | 'agent'
   | 'backup'
+  | 'bell'
   | 'thinking'
   | 'loading'
   | 'status-success'
@@ -130,6 +132,7 @@ export type UiIconName =
 const icons = {
   agent: Bot,
   backup: ArchiveRestore,
+  bell: Bell,
   thinking: Brain,
   loading: LoaderCircle,
   'status-success': CheckCircle2,

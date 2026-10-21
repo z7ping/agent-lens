@@ -2,6 +2,24 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 
 export const chineseTaskMessages: LocaleMessagesDto = {
   task: {
+    notifications: {
+      bell: '通知中心，{{count}} 条未读',
+      title: '通知中心',
+      markAllRead: '全部标记已读',
+      all: '全部',
+      unread: '未读 ({{count}})',
+      unreadDot: '未读',
+      empty: '暂无通知',
+      viewSession: '查看会话',
+      dismiss: '关闭通知',
+      level: {
+        info: '智能体通知',
+        success: '任务执行完成',
+        warning: '任务提醒',
+        error: '任务执行失败',
+        action: '需要用户操作',
+      },
+    },
     event: {
       rawTitle: '{{label}} · 原始数据',
       piNative: 'Pi 原生事件 · {{type}}',

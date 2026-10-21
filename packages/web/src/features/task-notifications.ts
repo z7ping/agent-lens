@@ -97,25 +97,25 @@ export function projectTaskNotification(
   let nativeId = String(envelope.sequence)
   if (event.type === 'notification') {
     level = event.level
-    title = event.title || '智能体通知'
+    title = event.title || ''
     message = event.message
     nativeId = event.id || nativeId
   } else if (event.type === 'ui.request') {
     level = 'action'
-    title = event.title || '需要用户操作'
+    title = event.title || ''
     message = event.message || '智能体正在等待用户确认'
     nativeId = event.requestId
   } else if (event.type === 'error') {
     level = 'error'
-    title = '执行出错'
+    title = ''
     message = event.message
   } else if (event.type === 'completed') {
     // A finished foreground turn already has its own answer. Notify only when
     // another runtime finished while the reader was elsewhere.
     if (focused || (event.status !== 'completed' && event.status !== 'failed')) return null
     level = event.status === 'failed' ? 'error' : 'success'
-    title = event.status === 'failed' ? '任务执行失败' : '任务执行完成'
-    message = event.message || (event.status === 'failed' ? '查看会话中的错误详情' : '查看会话结果')
+    title = ''
+    message = event.message || (event.status === 'failed' ? 'Task failed' : 'Turn completed')
   } else return null
   if (!message.trim()) return null
   return {
