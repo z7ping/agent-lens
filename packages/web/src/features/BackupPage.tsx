@@ -442,7 +442,6 @@ export function BackupPage({
     statusLabel={t('loading.status')}
     title={t('loading.title')}
     description={t('loading.description')}
-    facts={[t('loading.factOrdered'), t('loading.factReadonly'), t('loading.factProgressive')]}
   />
 
   const indexTime = overview.index?.generatedAt
