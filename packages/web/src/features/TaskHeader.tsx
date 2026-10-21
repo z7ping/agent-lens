@@ -1,7 +1,7 @@
 import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Drawer, IconButton, Popover, UiIcon } from '../components/ui'
+import { Button, Drawer, IconButton, Popover, UiIcon } from '../components/ui'
 import { useTaskSurfaceView } from './TaskSurface'
 
 export interface TaskHeaderMetric {
@@ -20,6 +20,13 @@ export interface TaskHeaderInfoPanel {
   label: string
   summary: string
   content: ReactNode
+  /** Verified aggregate vs source observation; unknown counts stay absent. */
+  fileSummary?: {
+    count: number
+    additions?: number
+    deletions?: number
+    observed?: boolean
+  }
 }
 
 export interface TaskHeaderProps {
@@ -107,8 +114,14 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const viewMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
+  const [infoTab, setInfoTab] = useState<'files' | 'info'>('files')
   const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
   const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0 || infoPanel)
+  const fileSummary = infoPanel?.fileSummary
+  const openInfo = (tab: 'files' | 'info') => {
+    setInfoTab(tab)
+    setCompactInfoOpen(true)
+  }
 
   useLayoutEffect(() => {
     const documentRoot = readonlySessionDocument(headerRef.current)
@@ -164,15 +177,36 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
           </div>)}
         </div>}
         {hasHeaderActions && <div className="task-header-actions">
-          {hasCompactInfo && <IconButton
+          {hasCompactInfo && !fileSummary && <IconButton
             size="small"
             className="task-header-compact-info-trigger"
             aria-haspopup="dialog"
             aria-expanded={compactInfoOpen}
-            onClick={() => setCompactInfoOpen(true)}
+            onClick={() => openInfo('info')}
             title={t('header.taskInfo')}
             aria-label={t('header.taskInfo')}
           ><UiIcon name="info" size={16}/></IconButton>}
+          {fileSummary && <Button
+            size="small"
+            className="task-header-file-summary-trigger"
+            aria-haspopup="dialog"
+            aria-expanded={compactInfoOpen}
+            aria-label={infoPanel?.label}
+            title={infoPanel?.label}
+            onClick={() => openInfo('files')}
+          >
+            <span className="task-header-file-summary-project">{resolvedContext}</span>
+            <span className="task-header-file-summary-data">
+              <UiIcon name="file-code" size={14}/>
+              <span className="task-header-file-summary-label">{infoPanel?.summary}</span>
+              <span className="task-header-file-summary-count">{fileSummary.count}</span>
+              <span className="task-header-file-summary-delta">
+                {fileSummary.additions !== undefined && <span data-change="added">+{fileSummary.additions}</span>}
+                {fileSummary.deletions !== undefined && <span data-change="deleted">-{fileSummary.deletions}</span>}
+              </span>
+              <UiIcon className="task-header-file-summary-arrow" name="chevron-right" size={14}/>
+            </span>
+          </Button>}
           {(auditToggle || viewActions) && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
               <IconButton
@@ -209,7 +243,11 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
       title={t('header.taskInfo')}
       onClose={() => setCompactInfoOpen(false)}
     >
-      <section className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
+      {infoPanel && <div className="task-header-info-tabs" role="tablist" aria-label={t('header.taskInfo')}>
+        <Button size="small" role="tab" aria-selected={infoTab === 'files'} aria-controls="task-header-files-panel" onClick={() => setInfoTab('files')}>{infoPanel.label}</Button>
+        <Button size="small" role="tab" aria-selected={infoTab === 'info'} aria-controls="task-header-metadata-panel" onClick={() => setInfoTab('info')}>{t('header.taskInfo')}</Button>
+      </div>}
+      {(!infoPanel || infoTab === 'info') && <section id="task-header-metadata-panel" role={infoPanel ? 'tabpanel' : undefined} className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
         {infoItems.length > 0
           ? infoItems.map((item, index) => <div key={`${item.label}-${index}`} data-tone={item.tone ?? ''}><span>{item.label}</span><b>{item.value}</b></div>)
           : <>
@@ -217,8 +255,8 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             {submeta && <div><span>{t('header.workspace')}</span><b>{submeta}</b></div>}
             {metrics.map(metric => <div key={metric.label} data-tone={metric.tone ?? ''}><span>{metric.label}</span><b>{metric.value}</b></div>)}
           </>}
-      </section>
-      {infoPanel && <div className="task-header-info-panel-content" aria-label={infoPanel.label}>
+      </section>}
+      {infoPanel && infoTab === 'files' && <div id="task-header-files-panel" role="tabpanel" className="task-header-info-panel-content" aria-label={infoPanel.label}>
         {infoPanel.content}
       </div>}
     </Drawer>
