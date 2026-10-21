@@ -906,13 +906,10 @@
   width: 32px;
   min-width: 32px;
   height: 32px;
-  border-color: var(--al-line);
-  background: var(--al-surface);
   color: var(--al-muted-2);
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-search-refresh:hover:not(:disabled) {
-  border-color: var(--al-line-strong);
   color: var(--al-ink);
 }
 
