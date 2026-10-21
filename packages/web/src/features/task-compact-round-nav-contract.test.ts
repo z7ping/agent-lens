@@ -5,6 +5,12 @@ import test from 'node:test'
 const taskSurface = readFileSync(new URL('./TaskSurface.tsx', import.meta.url), 'utf8')
 const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 'utf8')
 
+test('桌面边界导航减轻视觉层级且不影响移动端紧凑导航', () => {
+  assert.match(railCss, /\.task-boundary-nav > \.ui-icon-button \{[\s\S]*?width: 34px;[\s\S]*?opacity: \.72;/)
+  assert.match(railCss, /\.task-compact-round-nav > \.ui-icon-button \{[\s\S]*?width: 44px;/)
+  assert.doesNotMatch(taskSurface, /className="task-boundary-latest"\s+variant="primary"/)
+})
+
 test('窄窗长会话导航由共享 TaskSurface 持有并复用动态 Composer 边界', () => {
   assert.match(taskSurface, /className="task-compact-round-nav"/)
   assert.match(taskSurface, /style=\{\{ bottom: railPosition\.boundaryBottom \}\}/)
