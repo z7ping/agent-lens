@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { resolveExecutable, resolveWindowsNpmShimTarget } from '@agent-lens/runtime-cordis'
+import { formatLiveError } from '@agent-lens/live-support'
 
 export interface RpcMessage {
   method: string
@@ -8,12 +9,13 @@ export interface RpcMessage {
 }
 type Listener = (message: RpcMessage) => void
 export class CodexRpcError extends Error {
+  readonly code = 'live_interaction_unavailable'
   constructor(
     readonly method: string,
     readonly rpcCode: string | number | undefined,
     message: string,
   ) {
-    super(message)
+    super(`Codex ${method} failed (${String(rpcCode ?? 'unknown')}): ${formatLiveError(message, 600)}`)
     this.name = 'CodexRpcError'
   }
 }
@@ -102,7 +104,7 @@ export class CodexRpc {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error('Codex RPC timeout: ' + method))
+        reject(new CodexRpcError(method, 'TIMEOUT', 'App Server request timed out'))
       }, 30_000)
       timeout.unref?.()
       this.pending.set(id, { method, resolve, reject, timeout })
