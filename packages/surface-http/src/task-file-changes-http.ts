@@ -22,32 +22,63 @@ export async function observedInteractionFileChanges(
   from: string,
   to: string,
   observationIds: readonly string[] = [],
+  observationRange?: { firstId: string; lastId: string },
 ): Promise<{ items: TaskFileChangeRecord[]; truncated: boolean }> {
+  const repo = storage.repositories.observations
+  // Review's ordinal interactionId is not a native observation interactionId.
+  // The projection's inclusive first/last observation IDs are authoritative:
+  // this also works before the lazy Process detail has been loaded.
+  const first = observationRange ? await repo.get(observationRange.firstId) : null
+  const last = observationRange ? await repo.get(observationRange.lastId) : null
+  if (observationRange && (!first || !last
+    || first.logicalSessionId !== logicalSessionId || last.logicalSessionId !== logicalSessionId)) {
+    return { items: [], truncated: true }
+  }
+  const effectiveAt = (item: CanonicalObservation) => item.occurredAt ?? item.capturedAt
+  const fromAt = first ? effectiveAt(first) : from
+  const toAt = last ? effectiveAt(last) : to
+  if (Date.parse(fromAt) > Date.parse(toAt)) return { items: [], truncated: true }
+
   const observations: CanonicalObservation[] = []
   let after: ObservationCursor | undefined
   let truncated = false
   let scanned = 0
+  let inside = !observationRange
+  let reachedEnd = !observationRange
   const explicitIds = new Set(observationIds)
-  while (scanned < MAX_ROUND_OBSERVATIONS) {
-    const page = await storage.repositories.observations.query({
+  while (scanned < MAX_ROUND_OBSERVATIONS && !reachedEnd) {
+    const page = await repo.query({
       logicalSessionIds: [logicalSessionId],
-      from,
-      to,
+      from: fromAt,
+      to: toAt,
       ...(after ? { after } : {}),
       order: 'asc',
       limit: PAGE_SIZE,
     })
     scanned += page.length
-    // Review 的轮次 ID 可由投影生成；原生事件缺少 interactionId 时只用已知证据 ID 关联。
-    observations.push(...page.filter(item => item.logicalSessionId === logicalSessionId
-      && (item.interactionId === interactionId || explicitIds.has(item.id))))
+    for (const item of page) {
+      if (observationRange && !inside) {
+        if (item.id !== observationRange.firstId) continue
+        inside = true
+      }
+      if (item.logicalSessionId === logicalSessionId &&
+        (observationRange || item.interactionId === interactionId || explicitIds.has(item.id))) {
+        observations.push(item)
+      }
+      if (observationRange && item.id === observationRange.lastId) {
+        reachedEnd = true
+        break
+      }
+    }
+    if (reachedEnd) break
     if (page.length < PAGE_SIZE) break
     if (scanned >= MAX_ROUND_OBSERVATIONS) { truncated = true; break }
     after = cursorFor(page[page.length - 1]!)
   }
+  // An incomplete window must never be presented as the full round.
+  if (observationRange && !reachedEnd) truncated = true
   return { items: summarizeObservedTaskFileChanges(observedTaskFileChanges(observations)), truncated }
 }
-
 
 // 旧会话只从既有 Canonical 工具与原生文件事件补算；不猜测 Shell 副作用，
 // 不扫描整个数据库，也不伪造 Git 基线。
