@@ -70,6 +70,8 @@ export interface Workspace {
   worktreeId?: string
 }
 
+export type SessionTitleKind = 'explicit' | 'generated' | 'unverified'
+
 export interface LogicalSession {
   id: LogicalSessionId
   installationId: AgentInstallationId
@@ -77,6 +79,7 @@ export interface LogicalSession {
   projectId?: ProjectId
   workspaceId?: WorkspaceId
   title?: string
+  titleKind?: SessionTitleKind
   startedAt?: string
   endedAt?: string
 }
@@ -200,6 +203,7 @@ export interface LogicalSessionIdentityHint {
   projectId?: ProjectId
   workspaceId?: WorkspaceId
   title?: string
+  titleKind?: SessionTitleKind
 }
 
 export interface SourceSessionIdentityHint {
@@ -229,4 +233,5 @@ export interface ObservationIdentityHints {
   interactionNativeId?: string
   modelName?: string
   sessionTitle?: string
+  sessionTitleKind?: SessionTitleKind
 }
