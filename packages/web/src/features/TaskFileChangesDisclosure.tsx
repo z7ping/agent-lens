@@ -24,6 +24,16 @@ function isObservedOnly(change: TaskFileChangeDto): boolean {
   return change.confidence !== 'exact' || change.changeType === 'unknown'
 }
 
+/** Both Live and Review consume the same confidence-aware aggregate presentation. */
+export function summarizeTaskFileChanges(value: TaskFileChangesResponseDto) {
+  return {
+    count: value.summary.count,
+    additions: value.summary.additions,
+    deletions: value.summary.deletions,
+    observed: Boolean(value.interactionId || value.summary.observedCount || value.items.some(isObservedOnly)),
+  }
+}
+
 function fileNameAndDirectory(path: string): { name: string; directory: string } {
   const normalized = path.replace(/\\/g, '/')
   const separator = normalized.lastIndexOf('/')
@@ -219,10 +229,16 @@ export function TaskFileChangesDisclosure({
           return <div className="task-file-change-row" key={`${item.changeType}:${item.oldPath ?? ''}:${item.path}`}>
             <span className={`task-file-change-status ${observedOnly ? 'is-observed' : `is-${item.changeType}`}`} title={t(observedOnly ? 'local.fileChanges.observed' : `local.fileChanges.status.${item.changeType}`)}>{observedOnly ? t('local.fileChanges.observed') : statusCode(item)}</span>
             <span className="task-file-change-path">
-              {item.changeType === 'renamed' && item.oldPath && <><code title={item.oldPath}>{item.oldPath}</code><UiIcon name="arrow-right" size={14}/></>}
-              {target
-                ? <LocalResourceReference value={target} displayValue={item.path} kind="file" presentation="inline"/>
-                : <code title={item.path}>{item.path}</code>}
+              <span className="task-file-change-name">
+                {target
+                  ? <LocalResourceReference value={target} displayValue={fileNameAndDirectory(item.path).name} kind="file" presentation="inline"/>
+                  : <code title={item.path}>{fileNameAndDirectory(item.path).name}</code>}
+              </span>
+              <span className="task-file-change-directory" title={item.path}>
+                {item.changeType === 'renamed' && item.oldPath
+                  ? `${item.oldPath} → ${item.path}`
+                  : fileNameAndDirectory(item.path).directory}
+              </span>
             </span>
             {item.additions !== undefined && <span className="task-file-change-added">+{item.additions}</span>}
             {item.deletions !== undefined && <span className="task-file-change-deleted">-{item.deletions}</span>}
