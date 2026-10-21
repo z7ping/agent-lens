@@ -1353,10 +1353,9 @@ async function selectModel(provider, modelId) {
   await session.setModel(model)
 }
 
-function nativeTitleCommand() {
+function nativeTitleCommand(registered = session?.extensionRunner?.getRegisteredCommands?.()) {
   const runner = session?.extensionRunner
   if (typeof runner?.createCommandContext !== 'function') return undefined
-  const registered = runner.getRegisteredCommands?.()
   if (!Array.isArray(registered)) return undefined
   return registered.find(item => {
     const command = record(item)
@@ -1373,7 +1372,7 @@ function slashCommands() {
   const commands = []
 
   const registered = session?.extensionRunner?.getRegisteredCommands?.()
-  const titleCommand = nativeTitleCommand()
+  const titleCommand = nativeTitleCommand(registered)
   if (Array.isArray(registered)) {
     for (const item of registered) {
       const command = record(item)
