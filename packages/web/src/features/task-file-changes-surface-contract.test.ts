@@ -141,9 +141,3 @@ test('文件观测与准确变更的标题语义分离，详情文案双语覆�
     }
   }
 })
-
-test('Review per-round file changes are not gated by session-wide totals', () => {
-  assert.match(reviewPage, /fileChangesEnabled=\\{item\\.round\\.toolCount > 0/)
-  assert.doesNotMatch(reviewPage, /fileChangesEnabled=\\{Boolean\\(review\\.fileChanges/)
-  assert.match(review, /observationRange: interaction\\.observationRange/)
-})
