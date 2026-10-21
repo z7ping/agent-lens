@@ -25,6 +25,10 @@
   box-shadow: 0 2px 10px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .035);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
+.task-composer-queue-slot {
+  border-bottom: 1px solid var(--al-line);
+  background: var(--al-soft-2);
+}
 .task-composer:focus-within { border-color: color-mix(in srgb, var(--al-accent) 26%, var(--al-line-strong)); box-shadow: 0 2px 10px rgb(16 24 40 / .07), 0 8px 28px rgb(16 24 40 / .045); }
 .task-composer-editor { position: relative; height: 82px; min-height: 82px; overflow: hidden; cursor: text; }
 .task-composer-editor-toolbar { cursor: default; }
