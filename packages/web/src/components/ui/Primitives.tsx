@@ -48,7 +48,7 @@ export function Button({
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   'aria-label': string
   size?: ButtonSize
-  variant?: Exclude<ButtonVariant, 'media'>
+  variant?: Exclude<ButtonVariant, 'media' | 'quiet'>
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton({
