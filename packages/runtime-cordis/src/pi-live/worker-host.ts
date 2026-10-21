@@ -81,7 +81,7 @@ export interface PiRuntimeHandle {
   steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   clearQueue(): Promise<PiLiveQueueState>
-  mutateQueue(mutation: LiveQueueMutation): Promise<PiLiveQueueState>
+  mutateQueue?(mutation: LiveQueueMutation): Promise<PiLiveQueueState>
   abort(restoreQueue?: boolean): Promise<PiLiveQueueState>
   respondToExtension(requestId: string, response: unknown): Promise<void>
   terminate(): Promise<void>
