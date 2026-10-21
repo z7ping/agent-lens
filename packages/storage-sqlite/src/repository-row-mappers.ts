@@ -242,6 +242,7 @@ export function mapLogicalSession(value: unknown): LogicalSession {
   const projectId = optionalString(row, 'project_id')
   const workspaceId = optionalString(row, 'workspace_id')
   const title = optionalString(row, 'title')
+  const titleKind = optionalString(row, 'title_kind') as LogicalSession['titleKind']
   const startedAt = optionalString(row, 'started_at')
   const endedAt = optionalString(row, 'ended_at')
   return {
@@ -251,6 +252,7 @@ export function mapLogicalSession(value: unknown): LogicalSession {
     ...(projectId === undefined ? {} : { projectId }),
     ...(workspaceId === undefined ? {} : { workspaceId }),
     ...(title === undefined ? {} : { title }),
+    ...(titleKind === undefined ? {} : { titleKind }),
     ...(startedAt === undefined ? {} : { startedAt }),
     ...(endedAt === undefined ? {} : { endedAt }),
   }
