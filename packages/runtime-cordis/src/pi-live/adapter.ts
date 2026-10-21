@@ -11,6 +11,7 @@ import type {
   LiveMessage,
   LiveMessageInput,
   LiveModelControl,
+  LiveQueueMutation,
   LiveRuntimeEvent,
   LiveSendOptions,
   LiveSnapshotWindow,
@@ -641,6 +642,10 @@ export class PiLiveAdapter implements LiveAdapter {
 
   clearQueue(runtimeSessionId: string) {
     return this.service.clearQueue(runtimeSessionId)
+  }
+
+  mutateQueue(runtimeSessionId: string, mutation: LiveQueueMutation) {
+    return this.service.mutateQueue(runtimeSessionId, mutation)
   }
 
   async interrupt(runtimeSessionId: string) {
