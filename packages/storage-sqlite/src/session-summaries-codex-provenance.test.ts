@@ -265,3 +265,45 @@ test('独立运行时启动审计归为系统活动，而带真实用户请求�
     await storage.close()
   }
 })
+
+test('native title confidence survives SQLite storage and summary projection', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    const identity = new DefaultIdentityService(storage)
+    const observations = new DefaultObservationService(storage, identity)
+    const host = await identity.resolveHost({ name: 'title-precedence-host' })
+    const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'codex' })
+    const nativeSessionId = 'title-precedence-session'
+    const { observation } = await observations.commit({
+      sourceId: 'codex', host, installation,
+      candidate: {
+        kind: 'message.user',
+        nativeEventId: 'first-real-user-message',
+        capturedAt: '2026-10-20T01:00:00.000Z',
+        payload: { text: '第一个真正的用户请求' },
+        identityHints: { nativeSessionId },
+        dedupHints: { nativeEventId: 'first-real-user-message' },
+      },
+      evidenceCandidates: [],
+    })
+    for (const [title, titleKind] of [
+      ['不可信索引标题', 'unverified'],
+      ['Codex 生成标题', 'generated'],
+      ['用户明确命名', 'explicit'],
+      ['稍后生成的标题', 'generated'],
+      ['后来的旧索引', 'unverified'],
+    ] as const) {
+      await identity.resolveLogicalSession({ installationId: installation.id, nativeSessionId, title, titleKind })
+    }
+    for (const materialized of [false, true]) {
+      if (materialized) await storage.sessionSummaryProjection.rebuild()
+      const { items } = await storage.sessionSummaries.query({ logicalSessionId: observation.logicalSessionId, limit: 1 })
+      assert.equal(items[0]?.title, '用户明确命名')
+      assert.equal(items[0]?.titleKind, 'explicit')
+      assert.equal((items[0]?.firstUserPayload as { text?: string } | undefined)?.text, '第一个真正的用户请求')
+    }
+  } finally {
+    await storage.close()
+  }
+})
