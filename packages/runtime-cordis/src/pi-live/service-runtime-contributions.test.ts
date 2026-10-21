@@ -7,21 +7,29 @@ import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 class RuntimeContributionHost implements PiRuntimeHost {
   starts = 0
   compactions = 0
+  sessionName: string | undefined
+  onEvent?: (event: Record<string, unknown>) => void
+  rename(name: string | undefined) {
+    this.sessionName = name
+    this.onEvent?.({ type: 'session_info_changed', name })
+  }
   constructor(private readonly supportsCompaction = false) {}
 
   async start(
     runtimeSessionId: string,
     _input: PiLiveStartInput,
     _signal: AbortSignal,
-    _onEvent: (event: Record<string, unknown>) => void,
+    onEvent: (event: Record<string, unknown>) => void,
     _onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle> {
     this.starts += 1
+    this.onEvent = onEvent
     if (!this.supportsCompaction && this.starts === 1) throw new Error('SDK bootstrap failed')
 
     const state = (): PiLiveRuntimeState => ({
       runtimeSessionId,
       status: 'ready',
+      ...(this.sessionName ? { sessionName: this.sessionName } : {}),
       ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
       sdkVersion: '0.84.4',
       runtimeMode: 'compatibility',
@@ -84,6 +92,27 @@ async function waitForStatus(
   }
   throw new Error(`runtime did not reach ${status}`)
 }
+
+test('Pi Live 优先采用 SDK 原生标题，扩展更名与清除能覆盖首条消息回退', async () => {
+  const host = new RuntimeContributionHost(true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    await service.prompt(started.runtimeSessionId, '原始用户提问标题')
+    assert.equal((await service.state(started.runtimeSessionId)).title, '原始用户提问标题')
+
+    host.rename('AI 生成的真实原生标题')
+    assert.equal((await service.state(started.runtimeSessionId)).title, 'AI 生成的真实原生标题')
+    assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, 'AI 生成的真实原生标题')
+
+    host.rename(undefined)
+    assert.equal((await service.state(started.runtimeSessionId)).title, '原始用户提问标题')
+    assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, '原始用户提问标题')
+  } finally {
+    await service.dispose()
+  }
+})
 
 test('Pi 原生压缩仅在可信 Runtime capability 下开放，并经 Worker Handle 执行', async () => {
   const host = new RuntimeContributionHost(true)
