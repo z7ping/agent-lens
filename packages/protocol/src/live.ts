@@ -412,6 +412,7 @@ export interface LiveRuntimeActionContributionDto {
   label: LiveContributionTextDto
   description?: LiveContributionTextDto | undefined
   tone?: LiveContributionActionToneDto | undefined
+  placement?: 'composer' | undefined
 }
 
 export type LiveRuntimeLifecycleStatusDto = 'initializing' | 'ready' | 'failed'
