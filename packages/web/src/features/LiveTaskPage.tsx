@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
@@ -9,7 +9,7 @@ import { contributionText, LiveRuntimeActions, LiveRuntimeDisclosures } from '..
 import { TaskSessionComposer } from '../components/TaskSessionComposer'
 import { liveComposerDraftKey, readLiveComposerDraft } from '../components/live-composer-session-state'
 import { ErrorStateBanner, OperationProgress } from '../components/StateViews'
-import { Button, IconButton } from '../components/ui'
+import { Button, IconButton, Popover } from '../components/ui'
 import { LiveExtensionPrompt } from './LiveExtensionPrompt'
 import { useLiveTaskState } from './live-task-state'
 import { useLiveTaskRuntime } from './use-live-task-runtime'
@@ -49,6 +49,9 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [progressClockMs, setProgressClockMs] = useState(() => Date.now())
   const [reconnectEpoch, setReconnectEpoch] = useState(0)
   const [connectionBusy, setConnectionBusy] = useState(false)
+  const [queueExpanded, setQueueExpanded] = useState(false)
+  const [queueMenuOpen, setQueueMenuOpen] = useState(false)
+  const queueMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
@@ -176,7 +179,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     if (!historyAtLatestRef.current && followControllerRef.current.isFollowing) void jumpLatest()
   }, [followControllerRef, historyAtLatestRef, jumpLatest])
 
-  const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
+  const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
   const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
     if (!current || historyLoading) return
@@ -353,6 +356,63 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     ...restoredQueue.map(item => ({ ...item, active: false })),
   ]
 
+  const queueCount = queueItems.length + Number(Boolean(startupQueued))
+  const queuePreview = startupQueued ? messageText(startupQueued) : queueItems[0]?.text ?? ''
+  const queueContent = queueCount > 0 ? <div className="live-task-queue" role="region" aria-label={t('live.queue.title')}>
+    <div className="live-task-queue-header">
+      <Button
+        variant="quiet"
+        className="live-task-queue-toggle"
+        aria-expanded={queueExpanded}
+        onClick={() => setQueueExpanded(value => !value)}
+      >
+        <UiIcon name="task" size={14}/>
+        <strong>{t('live.queue.count', { count: queueCount })}</strong>
+        <span className="live-task-queue-preview" title={queuePreview}>{queuePreview}</span>
+        <UiIcon name={queueExpanded ? 'sort-up' : 'sort-down'} size={12}/>
+      </Button>
+      <span ref={queueMenuAnchorRef} className="live-task-queue-menu-anchor">
+        <IconButton
+          size="small"
+          aria-label={t('live.queue.menu')}
+          aria-haspopup="menu"
+          aria-expanded={queueMenuOpen}
+          onClick={() => setQueueMenuOpen(value => !value)}
+        ><UiIcon name="more" size={16}/></IconButton>
+        <Popover open={queueMenuOpen} anchorRef={queueMenuAnchorRef} onClose={() => setQueueMenuOpen(false)} className="task-composer-menu-popover">
+          <div className="task-composer-menu-list" role="menu" aria-label={t('live.queue.menu')}>
+            <Button size="small" variant="quiet" role="menuitem"
+              disabled={queueMutationPending || busy || pendingQueue.length > 0}
+              onClick={() => { setQueueMenuOpen(false); void clearQueued() }}
+            ><UiIcon name="close" size={16}/>{t('live.queue.clear')}</Button>
+          </div>
+        </Popover>
+      </span>
+    </div>
+    {queueExpanded && <div className="live-task-queue-list">
+      {startupQueued && <div className="live-task-queue-item">
+        <span className="live-task-queue-type">{t('live.queue.waitingReady')}</span>
+        <b title={messageText(startupQueued)}>{messageText(startupQueued)}</b>
+        <span className="live-task-queue-actions">
+          <IconButton size="small" aria-label={t('live.queue.edit')} disabled={queueMutationPending} onClick={editStartupQueued}><UiIcon name="tool-edit" size={14}/></IconButton>
+          <IconButton size="small" aria-label={t('live.queue.withdraw')} disabled={queueMutationPending} onClick={() => setStartupQueued(null)}><UiIcon name="close" size={14}/></IconButton>
+        </span>
+      </div>}
+      {queueItems.map(item => <div key={item.id} className="live-task-queue-item">
+        <span className="live-task-queue-type">{item.pending ? t('live.queue.joining') : !item.active ? t('live.queue.restored') : item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
+        <b title={item.text}>{item.text}</b>
+        <span className="live-task-queue-actions">
+          {!item.pending && <IconButton size="small" aria-label={t('live.queue.edit')} disabled={queueMutationPending || busy}
+            onClick={() => { if (item.active && item.queueIndex !== undefined) void editQueued(item.mode, item.queueIndex, item.text); else if (!item.active) editRestoredQueue(item) }}
+          ><UiIcon name="tool-edit" size={14}/></IconButton>}
+          {!item.pending && <IconButton size="small" aria-label={t('live.queue.withdraw')} disabled={queueMutationPending || busy}
+            onClick={() => { if (item.active && item.queueIndex !== undefined) void removeQueued(item.mode, item.queueIndex, item.text); else if (!item.active) removeRestoredQueue(item.id) }}
+          ><UiIcon name="close" size={14}/></IconButton>}
+        </span>
+      </div>)}
+    </div>}
+  </div> : undefined
+
   return <main className={`live-task-page live-task-page ${embedded ? 'live-task-page-embedded' : ''}`}>
     <TaskSurface
       mode="live"
@@ -493,39 +553,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             <b>{t('live.interruptedTitle')}</b>
             <span>{t('live.interruptedDescription')}</span>
           </div>}
-          {startupQueued && <div className="live-task-startup-queue" role="status">
-            <span>{t('live.startupWaitingReady')}</span>
-            <b>{messageText(startupQueued)}</b>
-            <div>
-              <Button size="small" className="live-task-queue-action" onClick={editStartupQueued}>{t('live.queue.edit')}</Button>
-              <Button size="small" className="live-task-queue-action" onClick={() => setStartupQueued(null)}>{t('live.queue.withdraw')}</Button>
-            </div>
-          </div>}
-          {queueItems.length > 0 && <div className="live-task-queue" role="status" aria-live="polite">
-            {queueItems.map(item => <div key={item.id} className={`live-task-queue-item ${item.active ? 'active' : 'restored'}`}>
-              <span>{item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
-              <b>{item.text}</b>
-              {item.active
-                ? item.pending
-                  ? <small>{t('live.queue.joining')}</small>
-                  : <div>
-                      <small>{t('live.queue.queued')}</small>
-                      {item.queueIndex !== undefined && <Button
-                        size="small"
-                        className="live-task-queue-action"
-                        disabled={queueMutationPending}
-                        onClick={() => { void removeQueued(item.mode, item.queueIndex!, item.text) }}
-                      >{t('live.queue.withdraw')}</Button>}
-                    </div>
-                : <div>
-                    <Button size="small" className="live-task-queue-action" onClick={() => editRestoredQueue(item)}>{t('live.queue.edit')}</Button>
-                    <Button size="small" className="live-task-queue-action" onClick={() => removeRestoredQueue(item.id)}>{t('live.queue.withdraw')}</Button>
-                  </div>}
-            </div>)}
-          </div>}
           {extension && <LiveExtensionPrompt request={extension} pending={extensionPending} onAnswer={value => { void answerExtension(value) }}/>}
         </div>
         <TaskSessionComposer
+          queueContent={queueContent}
           editorRef={composerRef}
           expanded={composerExpanded}
           onExpandedChange={setComposerExpanded}
