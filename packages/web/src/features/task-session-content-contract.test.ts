@@ -242,3 +242,32 @@ test('Task reading typography has three viewport tiers and never enlarges naviga
   assert.doesNotMatch(read('../live-task.css'), /--text-task-(?:body|process|tool|code)\s*:/)
   assert.doesNotMatch(read('../review.css'), /--text-task-(?:body|process|tool|code)\s*:/)
 })
+
+test('Task reading rhythm is shared by Live/Review while user bubbles and document Markdown stay unchanged', () => {
+  const detail = read('../task-detail.css')
+  const message = read('./TaskMessage.tsx')
+  const shared = read('./TaskSessionContent.tsx')
+
+  // Only the real shared assistant content gets the more generous reading rhythm.
+  assert.match(shared, /return <TaskMessage/)
+  assert.match(message, /roleClass = user \? 'task-message-user' : 'task-message-assistant'/)
+  assert.match(detail, /\.task-message-assistant \.markdown \{ line-height: 1\.72; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > p,\s*\.task-surface \.task-message-assistant \.markdown > \.markdown-streaming-tail \{ margin: \.56em 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :is\(h1, h2, h3, h4, h5, h6\) \{\s*margin: 1\.06em 0 \.4em;\s*line-height: 1\.4;/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :is\(ul, ol\) \{ margin: \.62em 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown li \{ margin: \.2em 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :is\(\.copyable-code-block, \.markdown-table-scroll\) \{ margin: 11px 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :first-child \{ margin-top: 0; \}/)
+  assert.match(detail, /\.task-message-assistant \.markdown > :last-child \{ margin-bottom: 0; \}/)
+
+  // Thinking and in-round narrative stay subordinate; neither style creates a new per-agent renderer.
+  assert.match(detail, /\.task-thinking-content \.markdown \{ font-size: var\(--text-task-thinking-markdown\); line-height: 1\.58; \}/)
+  assert.match(detail, /\.task-process-message \.markdown \{ font-size: var\(--text-task-process\); line-height: 1\.6; \}/)
+  assert.doesNotMatch(detail, /\.task-message-bubble-user \.markdown > (?:p|:is\()/)
+  assert.doesNotMatch(read('../live-task.css'), /\.task-message-assistant \.markdown >/)
+  assert.doesNotMatch(read('../review.css'), /\.task-message-assistant \.markdown >/)
+
+  // Never change response typography size or global document themes to implement Task rhythm.
+  assert.match(detail, /\.task-message-content \.markdown \{ font-size: var\(--text-task-body\); \}/)
+  assert.match(detail, /\.task-tool-call > summary\.task-tool-row \{[^}]*font: var\(--text-task-tool\)/)
+})
