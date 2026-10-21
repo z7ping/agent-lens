@@ -182,3 +182,23 @@ test('Review/Live 头部、阅读区和 Live Composer 共用 820px 宽度上限'
   assert.match(sessionCss, /@media \(max-width: 767\.98px\)/)
   assert.match(composerCss, /@media \(max-width: 767\.98px\)/)
 })
+
+test('排队消息进入唯一 Composer 顶部，默认轻量收起且由 Runtime 页面提供内容', () => {
+  assert.match(taskComposer, /queueContent\?: ReactNode/)
+  assert.match(taskComposer, /task-composer-queue-slot/)
+  assert.match(liveTask, /queueContent=\{queueContent\}/)
+  assert.match(liveTask, /aria-expanded=\{queueExpanded\}/)
+  assert.match(liveTask, /queueItems\.map\(item =>/)
+  assert.match(css, /\.live-task-queue-list \{[^}]*max-height:\s*156px;/s)
+  assert.doesNotMatch(css, /\.live-task-queue-item \{[^}]*box-shadow:/s)
+  assert.doesNotMatch(liveTask, /live-task-startup-queue/)
+})
+
+test('Live 单条队列操作经原生变更接口，不再在浏览器清空并重发', () => {
+  assert.match(liveActions, /await liveApi\.mutateQueue\(/)
+  assert.match(liveActions, /expected: \{ steering: \[\.\.\.queue\.steering\], followUp: \[\.\.\.queue\.followUp\] \}/)
+  assert.match(liveActions, /const editQueued = useCallback/)
+  assert.match(liveActions, /const clearQueued = useCallback/)
+  assert.doesNotMatch(liveActions, /for \(const message of steering\)/)
+  assert.doesNotMatch(liveActions, /for \(const message of followUp\)/)
+})
