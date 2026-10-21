@@ -298,6 +298,7 @@ export function buildInteractionGroups(groups: TimelineItemDto[][], startingOrdi
       ordinal,
       trigger: group[0]!.kind === 'message.user' ? 'user' : 'background',
       startedAt: group[0]!.effectiveAt,
+      observationRange: { firstId: group[0]!.id, lastId: group[group.length - 1]!.id },
       endedAt: [...group].reverse().find(item => !(item.kind === 'session.lifecycle'
         && isSessionMetadataAction(stringField(asRecord(item.payload), 'event', 'action', 'type'))))?.effectiveAt ?? group[0]!.effectiveAt,
       nodes: buildNodes(group, registry),
