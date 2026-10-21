@@ -314,7 +314,22 @@
 .task-surface .markdown-message { display: block; min-width: 0; }
 /* Explicit Task roles beat the global Markdown default without a late override layer. */
 .task-surface .task-message-content .markdown { font-size: var(--text-task-body); }
-.task-surface .task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); }
+/* Assistant reading rhythm, not a second Markdown theme: keep user bubbles compact. */
+.task-surface .task-message-assistant .markdown { line-height: 1.72; }
+.task-surface .task-message-assistant .markdown > p,
+.task-surface .task-message-assistant .markdown > .markdown-streaming-tail { margin: .56em 0; }
+.task-surface .task-message-assistant .markdown > :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.06em 0 .4em;
+  line-height: 1.4;
+}
+.task-surface .task-message-assistant .markdown > :is(ul, ol) { margin: .62em 0; }
+.task-surface .task-message-assistant .markdown li { margin: .2em 0; }
+.task-surface .task-message-assistant .markdown > :is(.copyable-code-block, .markdown-table-scroll) { margin: 11px 0; }
+.task-surface .task-message-assistant .markdown > blockquote { margin: .72em 0; }
+.task-surface .task-message-assistant .markdown > :first-child { margin-top: 0; }
+.task-surface .task-message-assistant .markdown > :last-child { margin-bottom: 0; }
+/* Supporting evidence stays more compact than the assistant's final answer. */
+.task-surface .task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); line-height: 1.58; }
 .task-surface .markdown-surface { position: relative; min-width: 0; overflow: visible; line-height: 1.68; overflow-wrap: anywhere; }
 .task-surface .task-message-content .markdown-surface.is-collapsed { overflow: hidden; }
 .task-surface .markdown,
@@ -531,7 +546,7 @@
 .task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }
 .task-surface .task-process-sequence > .task-event-row { padding-inline-start: 8px; }
 .task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
-.task-surface .task-process-message .markdown { font-size: var(--text-task-process); }
+.task-surface .task-process-message .markdown { font-size: var(--text-task-process); line-height: 1.6; }
 .task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }
 .task-surface .task-process-thinking-card { border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--al-soft-2) 72%, transparent); }
 .task-surface .task-process-thinking-card > .task-thinking-summary { padding: 4px 8px; }
