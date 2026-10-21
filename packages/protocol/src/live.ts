@@ -53,6 +53,7 @@ export type LiveCapabilityNameDto =
   | 'stream'
   | 'interrupt'
   | 'queue'
+  | 'queue-mutation'
   | 'steer'
   | 'model-switching'
   | 'thinking-control'
@@ -208,6 +209,13 @@ export interface LiveSessionTreeDto {
 export interface LiveQueueStateDto {
   steering: string[]
   followUp: string[]
+}
+
+export interface LiveQueueMutationDto {
+  expected: LiveQueueStateDto
+  mode: 'steer' | 'follow-up'
+  index: number
+  text?: string | undefined
 }
 
 export interface LiveInterruptResultDto {

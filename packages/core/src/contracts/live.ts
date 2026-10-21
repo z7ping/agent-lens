@@ -10,6 +10,7 @@ export type LiveCapabilityName =
   | 'stream'
   | 'interrupt'
   | 'queue'
+  | 'queue-mutation'
   | 'steer'
   | 'model-switching'
   | 'thinking-control'
@@ -453,6 +454,15 @@ export interface LiveQueueState {
   followUp: readonly string[]
 }
 
+/** Applied by the native runtime as one operation; expected guards against stale positions. */
+export interface LiveQueueMutation {
+  expected: LiveQueueState
+  mode: 'steer' | 'follow-up'
+  index: number
+  /** Absent removes the entry; nonempty text replaces it. */
+  text?: string | undefined
+}
+
 export interface LiveInterruptResult {
   restoredQueue?: LiveQueueState | undefined
 }
@@ -707,6 +717,8 @@ export interface LiveAdapter {
   queueState?(runtimeSessionId: string): Promise<LiveQueueState>
   /** Present only when the adapter declares queue. Clears and returns the current queued messages. */
   clearQueue?(runtimeSessionId: string): Promise<LiveQueueState>
+  /** Optional native atomic mutation. Never emulate by clearing/re-enqueuing in the Web client. */
+  mutateQueue?(runtimeSessionId: string, mutation: LiveQueueMutation): Promise<LiveQueueState>
   interrupt?(runtimeSessionId: string): Promise<LiveInterruptResult>
   terminate(runtimeSessionId: string): Promise<void>
   dispose(): Promise<void>

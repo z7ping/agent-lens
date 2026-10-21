@@ -20,6 +20,7 @@ import { latestPiSessionEntryId } from './session-disk-tail'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
+import type { LiveQueueMutation } from '@agent-lens/core'
 import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
 
 interface OwnedRuntime {
@@ -1449,6 +1450,26 @@ export class DefaultPiLiveService implements PiLiveService {
     const queue = await runtime.handle!.clearQueue()
     runtime.queue = { steering: [], followUp: [] }
     return queue
+  }
+  async mutateQueue(id: string, mutation: LiveQueueMutation): Promise<PiLiveQueueState> {
+    const runtime = await this.readyRuntime(id)
+    try {
+      if (!runtime.handle!.mutateQueue) {
+        const unavailable = new Error('This runtime does not support queue mutation') as Error & { statusCode: number }
+        unavailable.statusCode = 409
+        throw unavailable
+      }
+      const next = await runtime.handle!.mutateQueue(mutation)
+      runtime.queue = { steering: [...next.steering], followUp: [...next.followUp] }
+      return next
+    } catch (reason) {
+      if (reason instanceof Error && reason.message.includes('LIVE_QUEUE_CONFLICT')) {
+        const conflict = new Error('Queued messages changed. Refresh the queue before editing.') as Error & { statusCode: number }
+        conflict.statusCode = 409
+        throw conflict
+      }
+      throw reason
+    }
   }
   async abort(id: string, options: { restoreQueue?: boolean } = {}): Promise<PiLiveQueueState> {
     const runtime = await this.readyRuntime(id)

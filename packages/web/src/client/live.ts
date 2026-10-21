@@ -13,6 +13,7 @@ import type {
   LiveProductDto,
   LiveProductsResponseDto,
   LiveQueueStateDto,
+  LiveQueueMutationDto,
   LiveRuntimeActionResultDto,
   LiveRuntimeDisclosureContributionDto,
   LiveRuntimeDisclosuresResponseDto,
@@ -459,6 +460,10 @@ export const liveApi = {
 
   queueState(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {
     return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/queue')))
+  },
+
+  mutateQueue(liveId: string, runtimeSessionId: string, mutation: LiveQueueMutationDto): Promise<LiveQueueStateDto> {
+    return requestJson(livePath(liveId, runtimeSuffix(runtimeSessionId, '/queue')), jsonRequest('PATCH', mutation))
   },
 
   clearQueue(liveId: string, runtimeSessionId: string): Promise<LiveQueueStateDto> {

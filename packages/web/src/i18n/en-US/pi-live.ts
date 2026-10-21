@@ -109,6 +109,13 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
     interruptedTitle: 'Current generation stopped',
     interruptedDescription: 'You can continue typing.',
     queue: {
+      title: 'Pending messages',
+      count: '{{count}} queued',
+      menu: 'Queue options',
+      clear: 'Clear queue',
+      changed: 'Queue changed; reopen the message and try again.',
+      draftPending: 'Finish the current draft before editing a queued message',
+      restored: 'Restored draft',
       waitingReady: 'Waiting for Pi to be ready',
       edit: 'Edit',
       withdraw: 'Withdraw',

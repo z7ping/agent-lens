@@ -1,4 +1,4 @@
-import { useRef, useState, type Ref } from 'react'
+import { useRef, useState, type ReactNode, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { LiveModelControlDto, LiveThinkingControlDto } from '@agent-lens/protocol'
 import { ComposerPillSelect } from './ComposerPillSelect'
@@ -17,6 +17,8 @@ export interface ComposerSessionAction {
 
 export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   editorRef: Ref<LiveMarkdownComposerHandle>
+  /** Runtime-owned content placed in the shared composer shell. */
+  queueContent?: ReactNode
   expanded: boolean
   onExpandedChange(value: boolean): void
   hasContent: boolean
@@ -45,6 +47,7 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
 
 export function TaskSessionComposer({
   editorRef,
+  queueContent,
   expanded,
   onExpandedChange,
   hasContent,
@@ -79,6 +82,7 @@ export function TaskSessionComposer({
   const [actionMenuOpen, setActionMenuOpen] = useState(false)
   const canManageConnection = Boolean(onSyncSession || onReconnectSession)
   return <div className={`task-composer ${expanded ? 'is-expanded' : ''}`}>
+    {queueContent && <div className="task-composer-queue-slot">{queueContent}</div>}
     <div className="task-composer-editor">
       <div className="task-composer-editor-toolbar" aria-label={t('live.composerToolbarAria')}>
         <IconButton

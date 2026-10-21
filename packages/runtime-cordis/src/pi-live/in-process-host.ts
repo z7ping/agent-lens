@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveHistoryIndex, type LiveHistoryIndexQuery, type LiveSnapshotWindow } from '@agent-lens/core'
+import { LIVE_HISTORY_INDEX_QUERY_MAX_LIMIT, LIVE_SNAPSHOT_DEFAULT_LIMIT, LIVE_SNAPSHOT_MAX_LIMIT, isLiveThinkingControl, type LiveHistoryIndex, type LiveHistoryIndexQuery, type LiveSnapshotWindow, type LiveQueueMutation } from '@agent-lens/core'
 import { formatLiveError } from '@agent-lens/live-support'
 import { isAbsolute, resolve } from 'node:path'
 import { PiExtensionUiBridge } from './extension-ui-bridge'
@@ -394,6 +394,31 @@ class InProcessHandle implements PiRuntimeHandle {
   async steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { await this.session.steer(message, images?.length ? [...images] : undefined) }
   async followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { await this.session.followUp(message, images?.length ? [...images] : undefined) }
   async clearQueue(): Promise<PiLiveQueueState> { return this.session.clearQueue() }
+  async mutateQueue(mutation: LiveQueueMutation): Promise<PiLiveQueueState> {
+    const previous = this.session.clearQueue()
+    const unchanged = (['steering', 'followUp'] as const).every(key =>
+      mutation.expected[key].length === previous[key].length
+      && mutation.expected[key].every((text, index) => text === previous[key][index]))
+    const next = { steering: [...previous.steering], followUp: [...previous.followUp] }
+    const key = mutation.mode === 'steer' ? 'steering' : 'followUp'
+    if (!unchanged || !Number.isSafeInteger(mutation.index) || mutation.index < 0 || mutation.index >= next[key].length) {
+      for (const text of previous.steering) this.session.steer(text)
+      for (const text of previous.followUp) this.session.followUp(text)
+      throw new Error('LIVE_QUEUE_CONFLICT: queue changed before mutation')
+    }
+    if (mutation.text !== undefined) next[key].splice(mutation.index, 1, mutation.text)
+    else next[key].splice(mutation.index, 1)
+    try {
+      for (const text of next.steering) this.session.steer(text)
+      for (const text of next.followUp) this.session.followUp(text)
+    } catch (error) {
+      this.session.clearQueue()
+      for (const text of previous.steering) this.session.steer(text)
+      for (const text of previous.followUp) this.session.followUp(text)
+      throw error
+    }
+    return next
+  }
   async abort(restoreQueue = true): Promise<PiLiveQueueState> { const queue = restoreQueue ? this.session.clearQueue() : { steering: [], followUp: [] }; this.session.abortBash?.(); await this.session.abort(); return queue }
   async respondToExtension(requestId: string, response: unknown): Promise<void> { this.extensionUi.respond(requestId, response) }
   async terminate(): Promise<void> { this.unsubscribe(); this.extensionUi.dispose(); if (this.session.isStreaming) { this.session.abortBash?.(); await this.session.abort().catch(() => undefined) } this.session.dispose() }

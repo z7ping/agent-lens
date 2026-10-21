@@ -2,7 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deserialize } from 'node:v8'
-import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSessionTree, LiveSnapshotWindow } from '@agent-lens/core'
+import type { LiveHistoryIndex, LiveHistoryIndexQuery, LiveSessionTree, LiveSnapshotWindow, LiveQueueMutation } from '@agent-lens/core'
 import { discoverInstalledPiSdk } from './sdk-loader'
 import type {
   PiLiveCommand,
@@ -31,7 +31,7 @@ type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 type WorkerCommand =
   | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
   | 'navigateTree' | 'compact' | 'regenerateTitle'
-  | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'abort'
+  | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'mutateQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
 
 interface WorkerEnvelope {
@@ -81,6 +81,7 @@ export interface PiRuntimeHandle {
   steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   clearQueue(): Promise<PiLiveQueueState>
+  mutateQueue?(mutation: LiveQueueMutation): Promise<PiLiveQueueState>
   abort(restoreQueue?: boolean): Promise<PiLiveQueueState>
   respondToExtension(requestId: string, response: unknown): Promise<void>
   terminate(): Promise<void>
@@ -386,6 +387,7 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('steer', { message, images }) }
   followUp(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('followUp', { message, images }) }
   clearQueue(): Promise<PiLiveQueueState> { return this.request('clearQueue') }
+  mutateQueue(mutation: LiveQueueMutation): Promise<PiLiveQueueState> { return this.request('mutateQueue', mutation) }
   abort(restoreQueue = true): Promise<PiLiveQueueState> { return this.request('abort', { restoreQueue }) }
   respondToExtension(requestId: string, response: unknown): Promise<void> { return this.request('extensionResponse', { requestId, response }) }
 
