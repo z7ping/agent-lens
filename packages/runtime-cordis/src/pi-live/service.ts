@@ -6,6 +6,7 @@ import {
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
   type LiveContributionText,
+  type LiveRuntimeActionContribution,
   type LiveHistoryIndexQuery,
   type LiveRuntimeContributionField,
   type LiveRuntimeDisclosureContribution,
@@ -61,6 +62,7 @@ interface OwnedRuntime {
   isStreaming: boolean
   isCompacting: boolean
   manualCompactionPending?: boolean | undefined
+  titleRegenerationPending?: boolean | undefined
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -1133,6 +1135,35 @@ export class DefaultPiLiveService implements PiLiveService {
       ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
     const duration = contributionDuration(elapsed)
     const lifecycle = runtimeLifecycle(state)
+    const isIdle = state.status === 'ready' && !state.isStreaming && !state.isCompacting
+    // Registry-backed capability detection: only a known non-interactive
+    // extension command is offered. Other /title commands may open a UI.
+    const canRegenerate = isIdle && state.extensionBindingStatus === 'ready'
+      && !this.requireRuntime(id).titleRegenerationPending
+      && (await this.commands(id).catch(() => [])).some(command => command.titleRegeneration === true)
+    const actions: LiveRuntimeActionContribution[] = state.status === 'failed' ? [{
+      actionId: 'pi.runtime.retry',
+      label: contributionText('Retry', '重试'),
+      description: contributionText(
+        'Restart this failed Pi Runtime with the same task context.',
+        '使用相同任务上下文重新启动失败的 Pi Runtime。',
+      ),
+      tone: 'primary',
+    }] : [
+      ...(canRegenerate ? [{
+        actionId: 'pi.runtime.regenerate-title',
+        placement: 'composer' as const,
+        label: contributionText('AI generate title', 'AI 生成标题'),
+        description: contributionText('Use installed pi-title to regenerate the native session name.', '使用已安装的 pi-title 扩展重新生成原生会话标题。'),
+      }] : []),
+      ...(isIdle && state.capabilities?.manualCompaction === true
+        && !this.requireRuntime(id).manualCompactionPending ? [{
+          actionId: 'pi.runtime.compact',
+          placement: 'composer' as const,
+          label: contributionText('Compact context', '压缩上下文'),
+          description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
+        }] : []),
+    ]
     return [{
       contributionId: 'pi.runtime.diagnostics',
       title: contributionText('This run', '本次运行'),
@@ -1148,32 +1179,30 @@ export class DefaultPiLiveService implements PiLiveService {
         || state.extensionBindingStatus === 'failed',
       ...(lifecycle ? { lifecycle } : {}),
       fields: runtimeDisclosureFields(state),
-      ...(state.status === 'failed'
-        ? {
-            actions: [{
-              actionId: 'pi.runtime.retry',
-              label: contributionText('Retry', '重试'),
-              description: contributionText(
-                'Restart this failed Pi Runtime with the same task context.',
-                '使用相同任务上下文重新启动失败的 Pi Runtime。',
-              ),
-              tone: 'primary' as const,
-            }],
-          }
-        : state.status === 'ready' && state.capabilities?.manualCompaction === true
-          && !state.isStreaming && !state.isCompacting && !this.requireRuntime(id).manualCompactionPending
-          ? { actions: [{
-              actionId: 'pi.runtime.compact',
-              placement: 'composer' as const,
-              label: contributionText('Compact context', '压缩上下文'),
-              description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
-            }] }
-          : {}),
+      ...(actions.length ? { actions } : {}),
     }]
   }
 
   async executeRuntimeAction(id: string, actionId: string) {
     if (actionId === 'pi.runtime.retry') return { runtime: await this.retry(id) }
+    if (actionId === 'pi.runtime.regenerate-title') {
+      const runtime = await this.readyRuntime(id)
+      if (runtime.isStreaming || runtime.isCompacting || runtime.titleRegenerationPending) {
+        throw this.conflict('Pi title regeneration requires an idle session')
+      }
+      if (runtime.extensionBindingStatus !== 'ready'
+        || !runtime.handle?.regenerateTitle
+        || !(await this.commands(id)).some(command => command.titleRegeneration === true)) {
+        throw this.conflict('Supported pi-title regeneration is not available')
+      }
+      runtime.titleRegenerationPending = true
+      try {
+        await runtime.handle.regenerateTitle()
+        return { runtime: await this.runtimeState(runtime) }
+      } finally {
+        runtime.titleRegenerationPending = false
+      }
+    }
     if (actionId === 'pi.runtime.compact') {
       const runtime = await this.readyRuntime(id)
       if (runtime.capabilities?.manualCompaction !== true || !runtime.handle?.compact) {
