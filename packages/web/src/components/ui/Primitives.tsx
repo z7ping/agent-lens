@@ -14,7 +14,7 @@ function classes(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(' ')
 }
 
-export type ButtonVariant = 'default' | 'primary' | 'danger' | 'media'
+export type ButtonVariant = 'default' | 'primary' | 'danger' | 'quiet' | 'media'
 export type ButtonSize = 'default' | 'small'
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
