@@ -71,6 +71,23 @@ export function TaskToolGroup({
     />
   }
 
+  // One header, two semantic modes: interactive only when there are hidden tools.
+  const headerContent = <>
+    <span className="task-tool-group-heading">
+      <UiIcon name="tool-shell" size={14}/>
+      <span className="task-tool-group-title">{t('live.toolGroup')}</span>
+      <StatusBadge tone="neutral" className="task-tool-group-count">{tools.length}</StatusBadge>
+    </span>
+    {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
+    {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
+    {collapsible && <>
+      <span className="task-tool-group-more">{expanded
+        ? t('live.toolGroupLess')
+        : t('live.toolGroupMore', { count: hiddenCount })}</span>
+      <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
+    </>}
+  </>
+
   return <div
     className={`task-tool-group ${failed ? 'task-tool-group-error' : ''} ${className}`.trim()}
     role="group"
@@ -92,28 +109,8 @@ export function TaskToolGroup({
             expansionStore?.set(model.id, next)
             return next
           })}
-        >
-          <span className="task-tool-group-heading">
-            <UiIcon name="tool-shell" size={14}/>
-            <span className="task-tool-group-title">{t('live.toolGroup')}</span>
-            <StatusBadge tone="neutral" className="task-tool-group-count">{tools.length}</StatusBadge>
-          </span>
-          {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
-          {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
-          <span className="task-tool-group-more">{expanded
-            ? t('live.toolGroupLess')
-            : t('live.toolGroupMore', { count: hiddenCount })}</span>
-          <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
-        </Button>
-      : <div className="task-tool-group-header">
-          <span className="task-tool-group-heading">
-            <UiIcon name="tool-shell" size={14}/>
-            <span className="task-tool-group-title">{t('live.toolGroup')}</span>
-            <StatusBadge tone="neutral" className="task-tool-group-count">{tools.length}</StatusBadge>
-          </span>
-          {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
-          {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
-        </div>}
+        >{headerContent}</Button>
+      : <div className="task-tool-group-header">{headerContent}</div>}
     <div id={listId} className="task-tool-list">{(sequence ?? tools.map((tool): TaskToolGroupSequenceEntry => ({
       type: 'tool', key: tool.id, tool,
     }))).map((entry, index) => entry.type === 'content'
