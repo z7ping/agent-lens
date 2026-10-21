@@ -1139,6 +1139,7 @@ function runtimeCapabilities(hasSessionRuntime) {
     thinkingLevelControl: typeof session?.setThinkingLevel === 'function' && typeof session?.getAvailableThinkingLevels === 'function',
     extensionUi: typeof session?.bindExtensions === 'function',
     treeNavigation: typeof session?.navigateTree === 'function',
+    manualCompaction: typeof session?.compact === 'function',
     messageFork: typeof session?.sessionManager?.createBranchedSession === 'function'
       && typeof session?.sessionManager?.newSession === 'function',
   }
@@ -1417,6 +1418,7 @@ async function command(name, value = {}) {
   if (!session && name !== 'terminate') throw new Error('Pi Runtime is not ready')
   const needsExtensions = name === 'commands'
     || name === 'navigateTree'
+    || name === 'compact'
     || name === 'setModel'
     || name === 'setThinkingLevel'
     || name === 'prompt'
@@ -1446,6 +1448,13 @@ async function command(name, value = {}) {
       cancelled: result?.cancelled === true,
       ...(typeof result?.editorText === 'string' ? { editorText: result.editorText } : {}),
     }
+  }
+  if (name === 'compact') {
+    if (session.isStreaming || session.isCompacting) throw new Error('Pi manual compaction requires an idle session')
+    if (typeof session.compact !== 'function') throw new Error('Installed Pi SDK does not support manual compaction')
+    await session.compact()
+    roundIndexCache = undefined
+    return
   }
   if (name === 'controls') {
     const thinking = thinkingControl()
