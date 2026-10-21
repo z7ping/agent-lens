@@ -427,7 +427,7 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
       await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }) })
       const resources = runtimeResourceSnapshot(session)
       if (resources) onEvent({ type: 'runtime_resources', resources })
-      if (input.name) session.setSessionName(input.name)
+      if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
       if (input.provider || input.model) { const snapshot = session.modelRuntime.getAvailableSnapshot(); const models = snapshot.length ? snapshot : await session.modelRuntime.getAvailable(input.provider); const model = models.find(item => (!input.provider || item.provider === input.provider) && (!input.model || item.id === input.model || item.name === input.model)); if (!model) throw new Error(`Pi model is not available: ${[input.provider, input.model].filter(Boolean).join('/')}`); await session.setModel(model) }
       const packageUpdateState: PackageUpdateState = { status: 'checking', updates: [] }
       const handle = new InProcessHandle(id, session, extensionUi, unsubscribe, packageUpdateState)
