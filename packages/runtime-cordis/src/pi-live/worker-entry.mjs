@@ -1252,7 +1252,8 @@ async function initialize(input) {
   send('event', { type: 'runtime_capabilities', capabilities })
   extensionUi = createExtensionUi()
   unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
-  if (input.name) session.setSessionName(input.name)
+  // Never replay a stale launch title onto an existing native Pi session.
+  if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
 
   // Match Pi Web lifecycle semantics: Session Core becomes usable first;
