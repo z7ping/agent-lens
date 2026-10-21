@@ -94,7 +94,7 @@ export function LiveRuntimeActions({
 }) {
   if (!item.actions?.length) return null
   return <>
-    {item.actions.map(action => <Button
+    {item.actions.filter(action => action.placement !== 'composer').map(action => <Button
       key={action.actionId}
       size="small"
       variant={actionVariant(action)}
