@@ -55,6 +55,8 @@ interface OwnedRuntime {
   workspaceContextUpdatedAt?: number | undefined
   workspaceContextTask?: Promise<void> | undefined
   taskSummary?: string | undefined
+  /** Native Pi name events outrank any cached fallback, including explicit name removal. */
+  observedSessionName?: string | null | undefined
   activeAssistantMessageId?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
@@ -1745,6 +1747,17 @@ export class DefaultPiLiveService implements PiLiveService {
     return runtime
   }
 
+  private effectiveSessionName(runtime: OwnedRuntime, state?: Partial<PiLiveRuntimeState>): string | undefined {
+    // A native session_info_changed event is authoritative even if an older
+    // concurrent state/snapshot response still has the previous name.
+    if (runtime.observedSessionName !== undefined) return runtime.observedSessionName || undefined
+    return state?.sessionName?.trim() || undefined
+  }
+
+  private effectiveSessionTitle(runtime: OwnedRuntime, state?: Partial<PiLiveRuntimeState>): string | undefined {
+    return this.effectiveSessionName(runtime, state) || runtime.taskSummary?.trim() || undefined
+  }
+
   private runtimeListState(runtime: OwnedRuntime): PiLiveRuntimeState {
     const elapsed = runtime.status === 'initializing'
       ? Math.max(0, Date.now() - runtime.initializationStartedAt)
@@ -1760,12 +1773,14 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: elapsed,
       ...(runtime.error ? { error: runtime.error } : {}),
-      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      // Before the Worker is ready, its requested name is only a provisional
+      // label. Once observed, the Pi session_info name is authoritative.
+      sessionName: this.effectiveSessionName(runtime, cached)
+        ?? (runtime.status === 'initializing' ? runtime.input.name : undefined),
       ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...((runtime.taskSummary || runtime.input.name || cached.sessionName)
-        ? { title: runtime.taskSummary || runtime.input.name || cached.sessionName }
-        : {}),
+      title: this.effectiveSessionTitle(runtime, cached)
+        ?? (runtime.status === 'initializing' ? runtime.input.name : undefined),
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
@@ -1828,10 +1843,10 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
-      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      ...(runtime.input.name ? { sessionName: runtime.input.name, title: runtime.input.name } : {}),
       ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...((runtime.taskSummary || runtime.input.name) ? { title: runtime.taskSummary || runtime.input.name } : {}),
+      ...(!runtime.input.name && runtime.taskSummary ? { title: runtime.taskSummary } : {}),
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
@@ -1867,9 +1882,8 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...((runtime.taskSummary || safeState.sessionName || runtime.input.name)
-        ? { title: runtime.taskSummary || safeState.sessionName || runtime.input.name }
-        : {}),
+      sessionName: this.effectiveSessionName(runtime, safeState),
+      title: this.effectiveSessionTitle(runtime, safeState),
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
@@ -2019,7 +2033,8 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private captureTaskSummary(runtime: OwnedRuntime, message: string): void {
-    if (runtime.taskSummary || runtime.input.name?.trim()) return
+    if (runtime.taskSummary || runtime.input.name?.trim()
+      || runtime.observedSessionName || runtime.cachedState?.sessionName) return
     const summary = taskSummary(message)
     if (!summary) return
     runtime.taskSummary = summary
@@ -2035,6 +2050,18 @@ export class DefaultPiLiveService implements PiLiveService {
     const messageRole = typeof message?.role === 'string' ? message.role : ''
     const messageId = typeof message?.id === 'string' ? message.id : ''
     runtime.lastActiveAt = Date.now()
+
+    if (type === 'session_info_changed') {
+      // Native Pi extensions (including AI title extensions) persist names via
+      // setSessionName(). Track both setting and clearing names without copying
+      // the transcript or overwriting the native session file.
+      runtime.observedSessionName = typeof event.name === 'string' ? event.name.trim() || null : null
+      if (runtime.cachedState) runtime.cachedState = {
+        ...runtime.cachedState,
+        sessionName: runtime.observedSessionName || undefined,
+        title: this.effectiveSessionTitle(runtime),
+      }
+    }
 
     if (type === 'agent_start') runtime.isStreaming = true
     if (type === 'compaction_start') runtime.isCompacting = true
@@ -2068,6 +2095,11 @@ export class DefaultPiLiveService implements PiLiveService {
       }
     }
     runtime.events.publish(publishedEvent)
+    if (type === 'session_info_changed') {
+      // Native names may change while a turn is running or after an async title
+      // generator finishes. Forward a generic Live title update immediately.
+      this.publish(runtime, { type: 'session_title', title: this.effectiveSessionTitle(runtime) || '' })
+    }
 
     // message_end closes one assistant message but not necessarily the whole
     // logical run. agent_end closes one low-level Pi run and can still be followed
