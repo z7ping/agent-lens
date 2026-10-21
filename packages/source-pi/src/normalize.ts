@@ -286,7 +286,7 @@ export async function normalizePiRecord(
         kind,
         payload,
         offset,
-        { ...(name ? { identity: { sessionTitle: name } } : {}) },
+        { ...(name ? { identity: { sessionTitle: name, sessionTitleKind: 'explicit' } } : {}) },
       ))
       return
     }
