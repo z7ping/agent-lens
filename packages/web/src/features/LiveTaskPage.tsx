@@ -53,6 +53,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
   const queueMenuAnchorRef = useRef<HTMLSpanElement>(null)
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
+  useEffect(() => {
+    setQueueExpanded(false)
+    setQueueMenuOpen(false)
+  }, [current?.liveId, current?.runtimeSessionId])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
   const composerDraftKey = useMemo(
