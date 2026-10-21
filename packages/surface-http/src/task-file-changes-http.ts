@@ -44,7 +44,7 @@ export async function observedInteractionFileChanges(
   let truncated = false
   let scanned = 0
   let inside = !observationRange
-  let reachedEnd = !observationRange
+  let reachedEnd = false
   const explicitIds = new Set(observationIds)
   while (scanned < MAX_ROUND_OBSERVATIONS && !reachedEnd) {
     const page = await repo.query({
