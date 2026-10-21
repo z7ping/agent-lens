@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import type { CheckpointRepository, StorageService } from '@agent-lens/core'
 import { CheckpointCodexRecoveryStore } from './recovery.js'
 import { CodexLiveAdapter } from './index.js'
-import type { CodexRpc, RpcMessage } from './transport.js'
+import { CodexRpcError, type CodexRpc, type RpcMessage } from './transport.js'
 
 class MemoryCheckpoints {
   private data = new Map<string, unknown>()
@@ -22,6 +22,7 @@ class FakeRpc {
   listener: ((message: RpcMessage) => void) | undefined = undefined
   requests: string[] = []
   active = false
+  missingRollout = false
   async available() { return true }
   subscribe(listener: (message: RpcMessage) => void) {
     this.listener = listener
@@ -30,7 +31,12 @@ class FakeRpc {
   async request(method: string) {
     this.requests.push(method)
     if (method === 'thread/start') return { thread: { id: 'native-1' }, model: 'model-a' }
-    if (method === 'thread/resume') return { thread: { id: 'native-1', status: { type: this.active ? 'active' : 'idle' } }, model: 'model-a' }
+    if (method === 'thread/resume') {
+      if (this.missingRollout) {
+        throw new CodexRpcError(method, -32603, 'no rollout found for thread id native-1')
+      }
+      return { thread: { id: 'native-1', status: { type: this.active ? 'active' : 'idle' } }, model: 'model-a' }
+    }
     if (method === 'thread/turns/list') return { data: [{ id: 'turn-active', status: 'inProgress' }] }
     if (method === 'thread/items/list') return {
       data: [{ turnId: 'turn-1', item: { id: 'msg-1', type: 'agentMessage', text: 'restored reply' } }],
@@ -139,5 +145,23 @@ test('Completed native turn does not replay an expired approval on reconnect', a
     if (event.normalizedEvent?.type === 'ui.request') replayed.push(event.normalizedEvent.requestId)
   })()
   assert.deepEqual(replayed, [])
+  await adapter.dispose()
+})
+
+test('Native rollout lookup failure is returned as a specific recoverability error', async () => {
+  const repo = new MemoryCheckpoints()
+  const recovery = new CheckpointCodexRecoveryStore(repo as unknown as CheckpointRepository)
+  await recovery.put({ id: 'native-1', cwd: '/repo', updatedAt: new Date().toISOString() })
+  const rpc = new FakeRpc()
+  rpc.missingRollout = true
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc, recovery)
+  await assert.rejects(() => adapter.state('native-1'), error => {
+    const result = error as Error & { code?: string, reasonCode?: string }
+    assert.equal(result.code, 'live_interaction_unavailable')
+    assert.equal(result.reasonCode, 'codex_rollout_not_found')
+    assert.match(result.message, /rollout/)
+    assert.doesNotMatch(result.message, /native-1/)
+    return true
+  })
   await adapter.dispose()
 })
