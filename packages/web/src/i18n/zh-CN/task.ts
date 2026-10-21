@@ -143,6 +143,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         aria: '工作区文件',
       },
       connected: '实时连接已建立',
+      sessionActions: '会话操作',
       connectionMenu: '连接管理',
       syncSession: '重新同步会话',
       reconnectSession: '重新连接',
