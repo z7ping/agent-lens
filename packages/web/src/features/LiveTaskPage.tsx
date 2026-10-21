@@ -25,7 +25,7 @@ import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task
 import { coalesceLiveSemanticSegments } from './live-semantic-rounds'
 import { parseTaskLiveRuntimeLocation, shouldWarnLiveNoProgress, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
-import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
+import { TaskFileChangesDisclosure, summarizeTaskFileChanges } from './TaskFileChangesDisclosure'
 import { TaskSurface, type TaskTurnRailData } from './TaskSurface'
 import { readableTaskHeaderTitle, taskPreciseDurationLabel, workspaceDisplayName } from './task-detail-model'
 
@@ -46,6 +46,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const navigate = useNavigate()
   const hostApi = useMemo(() => new AgentLensApi(), [])
   const [fileChanges, setFileChanges] = useState<{ runtimeId: string; result: TaskFileChangesResponseDto | null } | null>(null)
+  const [fileChangesFailure, setFileChangesFailure] = useState(false)
   const [progressClockMs, setProgressClockMs] = useState(() => Date.now())
   const [reconnectEpoch, setReconnectEpoch] = useState(0)
   const [connectionBusy, setConnectionBusy] = useState(false)
@@ -242,6 +243,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     [projection.stable, projection.active],
   )
   const fileChangeRuntimeId = current?.runtimeSessionId
+  useEffect(() => {
+    setFileChanges(null)
+    setFileChangesFailure(false)
+  }, [fileChangeRuntimeId])
   // File change projection commits independently from Live transcript SSE.
   // Coalesce rapid events; never refetch on every streamed token.
   useEffect(() => {
@@ -249,8 +254,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
       void hostApi.runtimeFileChanges(fileChangeRuntimeId, controller.signal)
-        .then(value => { if (!controller.signal.aborted) setFileChanges({ runtimeId: fileChangeRuntimeId, result: value }) })
-        .catch(() => undefined)
+        .then(value => {
+          if (!controller.signal.aborted) {
+            setFileChanges({ runtimeId: fileChangeRuntimeId, result: value })
+            setFileChangesFailure(false)
+          }
+        })
+        .catch(() => { if (!controller.signal.aborted) setFileChangesFailure(true) })
     }, 280)
     return () => { window.clearTimeout(timer); controller.abort() }
   }, [fileChangeRuntimeId, projection.stable.length, projection.active.length, state?.isStreaming, hostApi])
@@ -262,8 +272,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     let active = true
     const timer = window.setInterval(() => {
       void hostApi.runtimeFileChanges(fileChangeRuntimeId)
-        .then(result => { if (active) setFileChanges({ runtimeId: fileChangeRuntimeId, result }) })
-        .catch(() => undefined)
+        .then(result => {
+          if (active) {
+            setFileChanges({ runtimeId: fileChangeRuntimeId, result })
+            setFileChangesFailure(false)
+          }
+        })
+        .catch(() => { if (active) setFileChangesFailure(true) })
     }, 4_000)
     return () => { active = false; window.clearInterval(timer) }
   }, [fileChangeRuntimeId, state?.isStreaming, hostApi])
@@ -443,9 +458,23 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           && fileChanges.result
           && (fileChanges.result.summary.count > 0 || fileChanges.result.meta.truncated)
           ? {
-              label: t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
-              summary: t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
-              content: <TaskFileChangesDisclosure value={fileChanges.result} inlineDetails/>,
+              label: summarizeTaskFileChanges(fileChanges.result).observed
+                ? t('review:local.fileChanges.activityCount', { count: fileChanges.result.summary.count })
+                : t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              summary: summarizeTaskFileChanges(fileChanges.result).observed
+                ? t('review:local.fileChanges.activityCount', { count: fileChanges.result.summary.count })
+                : t('review:local.fileChanges.titleCount', { count: fileChanges.result.summary.count }),
+              fileSummary: summarizeTaskFileChanges(fileChanges.result),
+              content: <TaskFileChangesDisclosure value={fileChanges.result} error={fileChangesFailure ? 'failed' : ''} inlineDetails/>,
+            } : fileChangeRuntimeId ? {
+              label: t('review:local.fileChanges.title'),
+              summary: t('review:local.fileChanges.title'),
+              content: <TaskFileChangesDisclosure
+                value={fileChanges?.runtimeId === fileChangeRuntimeId ? fileChanges.result : null}
+                loading={fileChanges?.runtimeId !== fileChangeRuntimeId && !fileChangesFailure}
+                error={fileChangesFailure ? 'failed' : ''}
+                inlineDetails
+              />,
             } : undefined}
         infoItems={[
           { label: t('header.context'), value: workspace || t('header.unlinkedProject') },

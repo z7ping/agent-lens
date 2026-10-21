@@ -87,8 +87,8 @@ test('仅精确 Session 事实允许查看 Git Diff；逐轮观测只展示来�
 
 test('会话文件列表在任务信息抽屉第一层，Diff 和证据在同一抽屉切换', () => {
   const header = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
-  assert.match(header, /<section className="task-header-compact-info-list"/)
-  assert.match(header, /\{infoPanel && <div className="task-header-info-panel-content" aria-label=\{infoPanel\.label\}>/)
+  assert.match(header, /className="task-header-compact-info-list"/)
+  assert.match(header, /\{infoPanel && infoTab === 'files' && <div id="task-header-files-panel" role="tabpanel" className="task-header-info-panel-content"/)
   assert.match(header, /\{infoPanel\.content\}/)
   assert.doesNotMatch(header, /infoPanelOpen|setInfoPanelOpen|task-header-info-panel-trigger/)
   assert.match(styles, /\.task-header-info-panel-content \{/)
@@ -140,4 +140,38 @@ test('文件观测与准确变更的标题语义分离，详情文案双语覆�
       assert.ok(messages.includes(key + ':'), `missing ${key}`)
     }
   }
+})
+
+test('Task header shares one responsive file-summary action across Live and Review', () => {
+  const header = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
+  const livePage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+  const panelStyle = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
+  assert.match(header, /task-header-file-summary-trigger/)
+  assert.match(header, /new ResizeObserver\(update\)/)
+  assert.match(header, /getBoundingClientRect\(\)\.right/)
+  assert.match(header, /fileContent\.type === TaskFileChangesDisclosure/)
+  assert.match(header, /const fileSummary = infoPanel\?\.fileSummary/)
+  assert.match(header, /role="tablist"/)
+  assert.match(header, /role="tabpanel"/)
+  assert.match(header, /setInfoTab\('files'\)/)
+  assert.match(header, /setInfoTab\('info'\)/)
+  assert.equal((header.match(/<Drawer\s/g) ?? []).length, 1)
+  assert.match(panelStyle, /\.task-header-file-summary-trigger\.btn\.is-side-card/)
+  assert.match(panelStyle, /@container task-surface \(max-width: 767\.98px\)/)
+  assert.match(panelStyle, /left: calc\(100% \+ 16px\)/)
+  assert.match(panelStyle, /\.task-header-info-drawer:has\(\.task-file-diff-view\)/)
+  assert.match(livePage, /fileSummary: summarizeTaskFileChanges\(fileChanges\.result\)/)
+  assert.match(reviewPage, /content: <TaskFileChangesDisclosure value=\{review\.fileChanges\} inlineDetails\/>/)
+})
+
+test('File list keeps canonical evidence and single-layer diff while displaying readable filename and directory', () => {
+  assert.match(component, /export function summarizeTaskFileChanges/)
+  assert.match(component, /value\.summary\.observedCount \|\| value\.items\.some\(isObservedOnly\)/)
+  assert.match(component, /fileNameAndDirectory\(item\.path\)\.name/)
+  assert.match(component, /className="task-file-change-directory"/)
+  assert.match(component, /role="status">\{t\('local\.fileChanges\.refreshing'\)\}/)
+  assert.match(component, /t\('local\.fileChanges\.empty'\)/)
+  assert.match(component, /!inlineDetails && selected && <Drawer/)
+  assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
+  assert.match(component, /observedOnly && <Button/)
 })

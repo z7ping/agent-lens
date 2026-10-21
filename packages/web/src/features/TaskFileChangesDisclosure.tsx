@@ -24,6 +24,16 @@ function isObservedOnly(change: TaskFileChangeDto): boolean {
   return change.confidence !== 'exact' || change.changeType === 'unknown'
 }
 
+/** Both Live and Review consume the same confidence-aware aggregate presentation. */
+export function summarizeTaskFileChanges(value: TaskFileChangesResponseDto) {
+  return {
+    count: value.summary.count,
+    ...(value.summary.additions !== undefined ? { additions: value.summary.additions } : {}),
+    ...(value.summary.deletions !== undefined ? { deletions: value.summary.deletions } : {}),
+    observed: Boolean(value.interactionId || value.summary.observedCount || value.items.some(isObservedOnly)),
+  }
+}
+
 function fileNameAndDirectory(path: string): { name: string; directory: string } {
   const normalized = path.replace(/\\/g, '/')
   const separator = normalized.lastIndexOf('/')
@@ -104,8 +114,8 @@ export function TaskFileChangesDisclosure({
     return () => controller.abort()
   }, [diffPath, sessionId, isInteraction])
 
-  if (!value && !loading && !error) return null
-  if (value && value.summary.count === 0 && !value.meta.truncated && !loading && !error) return null
+  if (!value && !loading && !error && !inlineDetails) return null
+  if (value && value.summary.count === 0 && !value.meta.truncated && !loading && !error && !inlineDetails) return null
 
   const count = value?.summary.count ?? 0
   const items = value?.items ?? []
@@ -211,6 +221,9 @@ export function TaskFileChangesDisclosure({
       </div>
       <div className="task-file-changes-list">
         {error && <div className="task-file-changes-error" role="alert">{t('local.fileChanges.loadFailed')}</div>}
+        {loading && <div className="task-file-changes-empty" role="status">{t('local.fileChanges.refreshing')}</div>}
+        {!value && !loading && !error && <div className="task-file-changes-empty">{t('local.fileChanges.empty')}</div>}
+        {value && count === 0 && !value.meta.truncated && !loading && !error && <div className="task-file-changes-empty">{t('local.fileChanges.empty')}</div>}
         {displayed.map(item => {
           const target = item.changeType === 'deleted'
             ? undefined
@@ -219,10 +232,16 @@ export function TaskFileChangesDisclosure({
           return <div className="task-file-change-row" key={`${item.changeType}:${item.oldPath ?? ''}:${item.path}`}>
             <span className={`task-file-change-status ${observedOnly ? 'is-observed' : `is-${item.changeType}`}`} title={t(observedOnly ? 'local.fileChanges.observed' : `local.fileChanges.status.${item.changeType}`)}>{observedOnly ? t('local.fileChanges.observed') : statusCode(item)}</span>
             <span className="task-file-change-path">
-              {item.changeType === 'renamed' && item.oldPath && <><code title={item.oldPath}>{item.oldPath}</code><UiIcon name="arrow-right" size={14}/></>}
-              {target
-                ? <LocalResourceReference value={target} displayValue={item.path} kind="file" presentation="inline"/>
-                : <code title={item.path}>{item.path}</code>}
+              <span className="task-file-change-name">
+                {target
+                  ? <LocalResourceReference value={target} displayValue={fileNameAndDirectory(item.path).name} kind="file" presentation="inline"/>
+                  : <code title={item.path}>{fileNameAndDirectory(item.path).name}</code>}
+              </span>
+              <span className="task-file-change-directory" title={item.path}>
+                {item.changeType === 'renamed' && item.oldPath
+                  ? `${item.oldPath} → ${item.path}`
+                  : fileNameAndDirectory(item.path).directory}
+              </span>
             </span>
             {item.additions !== undefined && <span className="task-file-change-added">+{item.additions}</span>}
             {item.deletions !== undefined && <span className="task-file-change-deleted">-{item.deletions}</span>}
