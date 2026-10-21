@@ -531,6 +531,7 @@
 .task-surface .task-process-sequence > .task-process-message { min-width: 0; padding-inline-start: 8px; }
 .task-surface .task-process-sequence > .task-event-row { padding-inline-start: 8px; }
 .task-surface .task-process-message[data-message-role='commentary'] { color: var(--al-ink-2); }
+.task-surface .task-process-message .markdown { font-size: var(--text-task-process); }
 .task-surface .task-process-group > .task-thinking-content { margin-left: 0; margin-right: 0; }
 .task-surface .task-process-thinking-card { border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--al-soft-2) 72%, transparent); }
 .task-surface .task-process-thinking-card > .task-thinking-summary { padding: 4px 8px; }
