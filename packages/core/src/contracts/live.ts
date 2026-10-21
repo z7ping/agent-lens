@@ -536,6 +536,7 @@ export interface LiveRuntimeActionContribution {
   description?: LiveContributionText | undefined
   tone?: LiveContributionActionTone | undefined
   placement?: 'composer' | undefined
+  icon?: 'sparkles' | 'collapse' | undefined
 }
 
 export type LiveRuntimeLifecycleStatus = 'initializing' | 'ready' | 'failed'
