@@ -36,6 +36,19 @@
   --line-height-tight:1.25;
   --line-height-normal:1.55;
   --line-height-reading:1.7;
+
+  /* One semantic type scale for every Agent's Live + Review Task Surface.
+   * Phase 1 keeps computed sizes unchanged; responsive rules can later
+   * change these values here without adding Task CSS overrides.
+   */
+  --text-task-body:var(--text-body);
+  --text-task-process:var(--text-secondary);
+  --text-task-tool:var(--text-secondary);
+  --text-task-tool-code:var(--text-task-tool);
+  --text-task-code:var(--text-caption);
+  --text-task-meta:var(--text-caption);
+  --text-task-heading:var(--text-section-title);
+  --text-task-emphasis:15px;
 }
 
 html body{
