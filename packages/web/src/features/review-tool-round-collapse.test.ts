@@ -56,7 +56,7 @@ test('Review 116 次工具按思考分为 58 个独立相邻组，不整轮折�
 
   assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 58)
   assert.doesNotMatch(html, /工具调用 · 116 项/)
-  assert.match(html, /展开其余 1 项/)
+  assert.match(html, /展开 1 项/)
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 59)
   assert.doesNotMatch(html, /native_call_4/)
   assert.match(html, /native_call_84/)
