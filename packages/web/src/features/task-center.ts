@@ -101,10 +101,12 @@ export function sessionListTitle(value: string | undefined, fallback: string, so
 }
 
 function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
-  // Codex 的 legacy session_index.thread_name 是来源原生会话标签，但当前格式无法证明
-  // 它一定来自显式 /rename；它也可能由应用注入上下文派生。真实 event_msg.user_message
-  // 已由 Source Adapter 归一为 preview，因此 Codex 用户任务优先使用该结构化用户请求。
-  if (item.sourceIds.includes('codex') && item.preview?.trim()) return taskUserRequestText(item.preview)
+  // Legacy Codex index labels are unverified: they might originate from
+  // injected context rather than user rename or an agent-generated summary.
+  // Only source-attested titles outrank the canonical first human request.
+  const trustedTitle = item.titleKind !== 'unverified'
+    && (!item.sourceIds.includes('codex') || item.titleKind === 'generated' || item.titleKind === 'explicit')
+  if (!trustedTitle) return item.preview?.trim() ? taskUserRequestText(item.preview) : undefined
   const title = cleanSessionTitle(item.title, '')
   const visibleTitle = sessionListTitle(title, '', item.sourceIds)
   const projectName = cleanSessionTitle(item.projectName, '')
