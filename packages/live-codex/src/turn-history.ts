@@ -69,7 +69,15 @@ export async function snapshotCodexTurnHistory(
     sortDirection: direction, itemsView: 'full',
     ...(nativeCursor ? { cursor: nativeCursor } : {}),
   })
-  const turns = Array.isArray(response.data) ? response.data : []
+  if (!Array.isArray(response.data)) {
+    throw Object.assign(new Error('Codex thread/turns/list returned no history page data'),
+      { code: 'live_interaction_unavailable' })
+  }
+  const turns = response.data
+  if (turns.some(raw => !Array.isArray(codexRecord(raw).items))) {
+    throw Object.assign(new Error('Codex thread/turns/list cannot return full turn items'),
+      { code: 'live_interaction_unavailable' })
+  }
   const rows: TurnItem[] = turns.flatMap(raw => {
     const turn = codexRecord(raw)
     const items = Array.isArray(turn.items) ? turn.items : []
