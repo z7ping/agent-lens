@@ -72,6 +72,7 @@ export function TaskToolGroup({
 
   return <div
     className={`task-tool-group ${failed ? 'task-tool-group-error' : ''} ${className}`.trim()}
+    role="group"
     data-error-count={failed}
     data-task-tool-group="true"
     data-collapsible={collapsible || undefined}
