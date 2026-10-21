@@ -1,8 +1,7 @@
 /* Task notification center: task rail owns the bell, task main owns the banner. */
 .task-notification-bell { position: relative; display: inline-flex; flex: 0 0 auto; }
-.task-notification-trigger.ui-icon-button { position: relative; width: 32px; height: 32px; border-color: transparent; background: transparent; color: var(--al-ink-2); }
-.task-notification-trigger.ui-icon-button:hover,
-.task-notification-trigger.ui-icon-button[aria-expanded='true'] { background: var(--al-surface); color: var(--al-ink); }
+/* Bell inherits shared hover/expanded accent states. */
+.task-notification-trigger.ui-icon-button { position: relative; width: 32px; height: 32px; }
 .task-notification-badge { position: absolute; inset-block-start: -3px; inset-inline-end: -5px; min-width: 17px; height: 17px; padding: 0 4px; border: 2px solid var(--al-soft-2); border-radius: 12px; background: var(--al-danger); color: var(--al-on-danger); font-size: var(--text-caption); font-weight: 700; line-height: 14px; text-align: center; }
 .task-notification-popover.ui-popover { z-index: 1250; width: 360px; padding: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 12px; background: var(--al-surface-raised); box-shadow: var(--al-shadow-lg); }
 .task-notification-panel { display: flex; flex-direction: column; max-height: min(560px, calc(100dvh - 36px)); min-width: 0; }
