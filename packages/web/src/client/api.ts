@@ -369,7 +369,7 @@ export class AgentLensApi {
 
   reviewInteractionFileChanges(
     id: string,
-    interaction: { id: string; startedAt: string; endedAt: string; observationIds?: readonly string[] },
+    interaction: { id: string; startedAt: string; endedAt: string; observationIds?: readonly string[]; observationRange?: { firstId: string; lastId: string } },
     signal?: AbortSignal,
   ): Promise<TaskFileChangesResponseDto> {
     const params = new URLSearchParams({
@@ -377,6 +377,10 @@ export class AgentLensApi {
       from: interaction.startedAt,
       to: interaction.endedAt,
     })
+    if (interaction.observationRange) {
+      params.set('firstObservationId', interaction.observationRange.firstId)
+      params.set('lastObservationId', interaction.observationRange.lastId)
+    }
       for (const observationId of interaction.observationIds ?? []) params.append('observationId', observationId)
     return requestJson<TaskFileChangesResponseDto>(
       `/api/v1/review/${encodeURIComponent(id)}/file-changes?${params}`,

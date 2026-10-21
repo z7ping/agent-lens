@@ -4,6 +4,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TaskToolGroup, TaskProcessSequence, splitAdjacentTaskToolEntries, visibleTaskToolIds, type TaskToolGroupSequenceEntry } from './TaskToolGroup'
 import { taskToolTargetText } from './TaskToolRow'
+import { GenericLiveRound } from './LiveTaskTimeline'
+import type { LiveTaskProjectionItem } from './live-task-projection'
 import type { TaskToolGroupModel } from './task-detail-model'
 
 const model: TaskToolGroupModel = {
@@ -27,19 +29,21 @@ function render(defaultExpanded?: boolean): string {
   return renderToStaticMarkup(createElement(TaskToolGroup, defaultExpanded === undefined ? { model } : { model, defaultExpanded }))
 }
 
-test('每次 Tool Call 独立默认收起，Group 不额外折叠，原生顺序不变', () => {
+test('连续多条工具成组且默认只显示首条，展开保留原生顺序', () => {
   const html = render()
   assert.match(html, /data-task-tool-group="true"/)
-  assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
-  assert.equal((html.match(/<details class="task-tool-call/g) ?? []).length, 3)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
-  assert.doesNotMatch(html, /<details class="task-tool-call[^>]* open=/)
-  assert.ok(html.indexOf('读取文件') < html.indexOf('代码搜索'))
-  assert.ok(html.indexOf('代码搜索') < html.indexOf('pnpm test'))
+  assert.match(html, /工具调用 · 3 项/)
+  assert.match(html, /展开其余 2 项/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 1)
+  assert.doesNotMatch(html, /代码搜索|pnpm test/)
+  const opened = render(true)
+  assert.equal((opened.match(/data-tool-fact="true"/g) ?? []).length, 3)
+  assert.ok(opened.indexOf('读取文件') < opened.indexOf('代码搜索'))
+  assert.ok(opened.indexOf('代码搜索') < opened.indexOf('pnpm test'))
 })
 
 test('工具摘要保留类型、状态与箭头，Shell 命令通过独立预览保持可见', () => {
-  const html = render()
+  const html = render(true)
   assert.match(html, /<summary class="task-tool-row"/)
   assert.match(html, /class="task-tool-kind task-tool-kind-shell"/)
   assert.match(html, /class="task-tool-summary-text" title="执行命令">执行命令<\/span>/)
@@ -52,7 +56,7 @@ test('工具摘要保留类型、状态与箭头，Shell 命令通过独立预�
 })
 
 test('展开后入参和出参是两个平级区域，原始数据可复制，错误也不自动展开', () => {
-  const html = render()
+  const html = render(true)
   assert.match(html, /data-tool-section="input"[^>]*aria-label="入参"/)
   assert.match(html, /data-tool-section="output"[^>]*aria-label="出参"/)
   assert.match(html, /\{&quot;command&quot;:&quot;pnpm test&quot;\}/)
@@ -70,7 +74,7 @@ test('展开后入参和出参是两个平级区域，原始数据可复制，�
 })
 
 test('缺少原始入参时，摘要不能冒充真实入参；缺少出参不伪造结果', () => {
-  const html = render()
+  const html = render(true)
   assert.match(html, /调用摘要（原始入参未记录）/)
   assert.match(html, /src\/review\.ts/)
   assert.match(html, /未记录出参/)
@@ -130,20 +134,20 @@ test('连续大量工具仅展示前三项及所有失败、运行中工具，�
       : index === 7 ? 'error' as const : 'success' as const,
   }))
   assert.deepEqual([...visibleTaskToolIds(tools, false)], [
-    'tool-1', 'tool-2', 'tool-3', 'tool-6', 'tool-8', 'tool-9',
+    'tool-1', 'tool-6', 'tool-8', 'tool-9',
   ])
   const group = { ...model, id: 'batch:9', tools, itemCount: tools.length, errorCount: 1 }
   const html = renderToStaticMarkup(createElement(TaskToolGroup, { model: group, compact: true }))
   assert.match(html, /aria-expanded="false"/)
   assert.match(html, /工具调用 · 9 项/)
-  assert.match(html, /展开其余 3 项/)
+  assert.match(html, /展开其余 5 项/)
   assert.match(html, /1 失败/)
   assert.match(html, /2 运行中/)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 6)
-  assert.doesNotMatch(html, /native-4|native-5|native-7/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
+  assert.doesNotMatch(html, /native-2|native-3|native-4|native-5|native-7/)
   assert.doesNotMatch(html, /<details[^>]*data-task-tool-group/)
   let previous = -1
-  for (const name of ['native-1', 'native-2', 'native-3', 'native-6', 'native-8', 'native-9']) {
+  for (const name of ['native-1', 'native-6', 'native-8', 'native-9']) {
     const position = html.indexOf(name, previous + 1)
     assert.ok(position > previous, `tool out of order: ${name}`)
     previous = position
@@ -155,8 +159,17 @@ test('连续大量工具仅展示前三项及所有失败、运行中工具，�
   assert.ok(all.indexOf('native-7') < all.indexOf('native-8'))
 })
 
-test('三条以下不出现批次折叠；全部异常时不产生空操作', () => {
-  assert.doesNotMatch(render(), /task-tool-group-toggle/)
+test('单条工具不创建分组，两条即独立成组；全部异常时不产生空操作', () => {
+  const one = renderToStaticMarkup(createElement(TaskToolGroup, {
+    model: { ...model, tools: model.tools.slice(0, 1) },
+  }))
+  assert.doesNotMatch(one, /data-task-tool-group="true"/)
+  assert.equal((one.match(/data-tool-fact="true"/g) ?? []).length, 1)
+  const two = renderToStaticMarkup(createElement(TaskToolGroup, {
+    model: { ...model, tools: model.tools.slice(0, 2) }, compact: true,
+  }))
+  assert.match(two, /task-tool-group-toggle/)
+  assert.equal((two.match(/data-tool-fact="true"/g) ?? []).length, 1)
   const tools = Array.from({ length: 5 }, (_, index) => ({
     ...model.tools[0]!, id: `error-${index}`, status: 'error' as const,
   }))
@@ -168,7 +181,7 @@ test('三条以下不出现批次折叠；全部异常时不产生空操作', ()
   assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 5)
 })
 
-test('相邻工具独立成组；思考/消息分隔独立的前三项预算和展开按钮', () => {
+test('相邻工具独立成组；思考/消息打断，每组仅预览首条', () => {
   const tools = Array.from({ length: 8 }, (_, index) => ({
     ...model.tools[0]!,
     id: `interleaved-${index + 1}`,
@@ -185,15 +198,15 @@ test('相邻工具独立成组；思考/消息分隔独立的前三项预算和�
   assert.deepEqual(segments.map(segment => segment.type === 'tools' ? segment.entries.length : segment.key),
     [4, 'thought', 3, 'commentary', 1])
   const html = renderToStaticMarkup(createElement(TaskProcessSequence, { id: 'round', sequence }))
-  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 3)
+  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 2)
   assert.match(html, /工具调用 · 4 项/)
-  assert.match(html, /展开其余 1 项/)
+  assert.match(html, /展开其余 3 项/)
   assert.doesNotMatch(html, /工具调用 · 8 项/)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 7)
-  assert.doesNotMatch(html, /native_4/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 4)
+  assert.doesNotMatch(html, /native_2|native_3|native_4|native_7/)
   assert.match(html, /native_6/)
   assert.match(html, /native_8/)
-  const expected = ['native_1', 'native_2', 'native_3', '思考分隔事件', 'native_5', 'native_6', 'native_7', '执行说明内容', 'native_8']
+  const expected = ['native_1', '思考分隔事件', 'native_5', 'native_6', '执行说明内容', 'native_8']
   let last = -1
   for (const token of expected) {
     const next = html.indexOf(token, last + 1)
@@ -232,8 +245,36 @@ test('adjacent group expansion is independent and survives virtual remount in Li
   }))
   assert.equal(firstRender, remounted)
   assert.equal((firstRender.match(/data-task-tool-group="true"/g) ?? []).length, 2)
-  assert.equal((firstRender.match(/data-tool-fact="true"/g) ?? []).length, 8)
+  assert.equal((firstRender.match(/data-tool-fact="true"/g) ?? []).length, 6)
   assert.match(firstRender, /first-batch-4/)
   assert.doesNotMatch(firstRender, /second-batch-3/)
-  assert.match(firstRender, /展开其余 1 项/)
+  assert.match(firstRender, /展开其余 3 项/)
+})
+
+test('Live native assistant message interrupts adjacent tool runs even when rendered outside Process', () => {
+  const items: LiveTaskProjectionItem[] = [
+    { id: 'prompt', kind: 'message', role: 'user', text: 'do work', streaming: false },
+    { id: 'tool-a', kind: 'tool', callId: 'a', name: 'native_a', status: 'success' },
+    { id: 'intermediate-answer', kind: 'message', role: 'assistant', text: 'intermediate', streaming: false },
+    { id: 'tool-b', kind: 'tool', callId: 'b', name: 'native_b', status: 'success' },
+    { id: 'tool-c', kind: 'tool', callId: 'c', name: 'native_c', status: 'success' },
+    { id: 'thinking', kind: 'thinking', text: 'next step', streaming: false },
+    { id: 'tool-d', kind: 'tool', callId: 'd', name: 'native_d', status: 'success' },
+  ]
+  const html = renderToStaticMarkup(createElement(GenericLiveRound, {
+    projection: { model: {
+      id: 'native-round', label: 'Round 1', state: 'settled',
+      toolCount: 4, errorCount: 0, durationMs: 0, highLatency: false,
+    }, items },
+    agentLabel: 'Codex', eager: true, messageActions: [], actionPending: null,
+    runtimeStreaming: false,
+    processExpansionStore: new Map([['process:native-round', true]]),
+    onMessageAction: () => undefined,
+  }))
+  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 1)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
+  assert.match(html, /native_a/)
+  assert.match(html, /native_b/)
+  assert.match(html, /native_d/)
+  assert.doesNotMatch(html, /native_c/)
 })

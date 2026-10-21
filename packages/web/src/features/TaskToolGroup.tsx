@@ -4,7 +4,7 @@ import { Button, UiIcon } from '../components/ui'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
 import { TaskToolRow } from './TaskToolRow'
 
-export const TASK_TOOL_PREVIEW_LIMIT = 3
+export const TASK_TOOL_PREVIEW_LIMIT = 1
 
 /** Share the same progressive visibility rule across Live and Review. */
 export function visibleTaskToolIds(tools: readonly TaskToolModel[], expanded: boolean): Set<string> {
@@ -56,6 +56,19 @@ export function TaskToolGroup({
   const hiddenCount = tools.length - visibleIds.size
   const running = tools.filter(tool => tool.status === 'running').length
   const failed = tools.filter(tool => tool.status === 'error').length
+
+  // A single call is never a tool group: show the normal tool row directly.
+  if (tools.length === 1) {
+    const tool = tools[0]!
+    const entry = sequence?.find(item => item.type === 'tool' && item.tool.id === tool.id)
+    return <TaskToolRow
+      model={tool}
+      compact={compact}
+      meta={entry?.type === 'tool' ? entry.meta ?? renderMeta?.(tool) : renderMeta?.(tool)}
+      details={entry?.type === 'tool' ? entry.details ?? renderDetails?.(tool) : renderDetails?.(tool)}
+      onClick={entry?.type === 'tool' ? entry.onToolClick ?? (onToolClick ? () => onToolClick(tool) : undefined) : onToolClick ? () => onToolClick(tool) : undefined}
+    />
+  }
 
   return <div
     className={`task-tool-group ${failed ? 'task-tool-group-error' : ''} ${className}`.trim()}

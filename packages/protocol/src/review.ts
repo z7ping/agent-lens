@@ -278,6 +278,8 @@ export interface ReviewInteractionDto {
   trigger: 'user' | 'background'
   startedAt: string
   endedAt: string
+  /** Inclusive canonical observation bounds, safe even when native interactionId is absent. */
+  observationRange?: { firstId: string; lastId: string } | undefined
   nodes: ReviewNodeDto[]
   /** Present for process-aware clients. In summary mode process-heavy nodes are omitted from nodes. */
   processSummary?: ReviewProcessSummaryDto

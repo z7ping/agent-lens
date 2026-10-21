@@ -226,11 +226,10 @@ export function ReviewProcessGroup({
   // Preserve source order and evidence ownership; split only adjacent tool runs.
   const processSequence: TaskToolGroupSequenceEntry[] = items.flatMap((item, index): TaskToolGroupSequenceEntry[] => {
     if (item.type === 'tool-group') {
-      // A different explicit reasoning parent is a real boundary, even if
-      // both native tool runs are adjacent after projection.
+      // Preserve every distinct native tool run, including invisible lifecycle
+      // boundaries and events moved out of the Process reading lane.
       const previous = items[index - 1]
       const boundary: TaskToolGroupSequenceEntry[] = previous?.type === 'tool-group'
-        && previous.parentReasoningId !== item.parentReasoningId
         ? [{ type: 'content', key: `tool-parent-boundary:${index}`, content: null }]
         : []
       return [...boundary, ...item.items.map(node => ({
@@ -369,21 +368,29 @@ export function ReviewRoundAdapter({
 }) {
   const { t } = useTranslation('review')
   const [roundFileChanges, setRoundFileChanges] = useState<TaskFileChangesResponseDto | null>(null)
+  const [roundFileChangesError, setRoundFileChangesError] = useState(false)
   const fileChangeObservationIds = useMemo(() => interaction.nodes.flatMap(node =>
-    node.type === 'event' && node.kind === 'artifact.action' ? node.observationIds : []), [interaction.nodes])
+    node.type === 'tool' || (node.type === 'event' && node.kind === 'artifact.action') ? node.observationIds : []), [interaction.nodes])
   useEffect(() => {
     if (!fileChangesEnabled) return
+    setRoundFileChangesError(false)
     const controller = new AbortController()
     void taskFileApi.reviewInteractionFileChanges(sessionId, {
       id: interaction.id,
       startedAt: interaction.startedAt,
       endedAt: interaction.endedAt,
-      observationIds: fileChangeObservationIds,
+      observationIds: interaction.observationRange ? [] : fileChangeObservationIds,
+      ...(interaction.observationRange ? { observationRange: interaction.observationRange } : {}),
     }, controller.signal)
       .then(value => { if (!controller.signal.aborted) setRoundFileChanges(value) })
-      .catch(() => { if (!controller.signal.aborted) setRoundFileChanges(null) })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setRoundFileChanges(null)
+          setRoundFileChangesError(true)
+        }
+      })
     return () => controller.abort()
-  }, [fileChangesEnabled, sessionId, interaction.id, interaction.startedAt, interaction.endedAt, fileChangeObservationIds])
+  }, [fileChangesEnabled, sessionId, interaction.id, interaction.startedAt, interaction.endedAt, interaction.observationRange, fileChangeObservationIds])
   const summary = interaction.processSummary
   const lazy = interaction.processMode === 'summary' && Boolean(summary?.itemCount)
   const [loadedProcess, setLoadedProcess] = useState<ReviewInteractionDto | null>(lazy ? null : interaction)
@@ -550,7 +557,10 @@ export function ReviewRoundAdapter({
       }}/>}
     </>}
     footer={<>
-      {fileChangesEnabled && roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated) && <TaskFileChangesDisclosure value={roundFileChanges}/>}
+      {fileChangesEnabled && (
+        (roundFileChanges?.interactionId === interaction.id && (roundFileChanges.summary.count > 0 || roundFileChanges.meta.truncated))
+        || roundFileChangesError
+      ) && <TaskFileChangesDisclosure value={roundFileChanges?.interactionId === interaction.id ? roundFileChanges : null} error={roundFileChangesError ? 'unavailable' : ''}/>}
       {runtimeRecords.length > 0 && <RawEventGroup items={runtimeRecords} inspect={inspect} runtime/>}
       {showAllEvents && consolidatedEvents.length > 0 && <RawEventGroup items={consolidatedEvents} inspect={inspect}/>}
       {!showAllEvents && unknownCount > 0 && <button type="button" className="review-unknown-count" onClick={onShowAllEvents}>

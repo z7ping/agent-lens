@@ -767,6 +767,15 @@ export async function startHttpSurface(
         const interactionId = url.searchParams.get('interactionId')
         if (interactionId) {
           const observationIds = url.searchParams.getAll('observationId')
+          const firstObservationId = url.searchParams.get('firstObservationId')
+          const lastObservationId = url.searchParams.get('lastObservationId')
+          if (Boolean(firstObservationId) !== Boolean(lastObservationId)
+            || (firstObservationId && firstObservationId.length > 512)
+            || (lastObservationId && lastObservationId.length > 512)) {
+            throw badRequest('Invalid observation range')
+          }
+          const observationRange = firstObservationId && lastObservationId
+            ? { firstId: firstObservationId, lastId: lastObservationId } : undefined
           if (observationIds.length > 500 || observationIds.some(value => !value || value.length > 512)) {
             throw badRequest('Invalid file change observation IDs')
           }
@@ -778,7 +787,7 @@ export async function startHttpSurface(
             throw badRequest('Invalid interaction file changes query')
           }
           const result = await withReadPriority(storage, 'supporting',
-            () => observedInteractionFileChanges(storage, id, interactionId, from, to, observationIds))
+            () => observedInteractionFileChanges(storage, id, interactionId, from, to, observationIds, observationRange))
           const capture = await storage.taskFileChanges?.getLatestBySession(id)
           writeJson(response, 200, taskFileChangesResponse(id, result.items, capture, {
             interactionId,

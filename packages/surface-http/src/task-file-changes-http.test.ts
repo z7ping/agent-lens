@@ -56,6 +56,7 @@ function fakeLegacyStorage(observations: CanonicalObservation[]) {
   const storage = {
     repositories: {
       observations: {
+        async get(id: string) { return observations.find(item => item.id === id) ?? null },
         async query(params: { after?: { id: string }; limit: number }) {
           queried += 1
           const first = params.after
@@ -153,4 +154,28 @@ test('legacy replay limits scan size and never persists an incomplete reconstruc
   assert.equal(result.truncated, true)
   assert.equal(result.items.length, 0)
   assert.equal(persisted.length, 0)
+})
+
+test('Review summary-mode uses inclusive canonical bounds to find tool edits without native interaction IDs', async () => {
+  const changes = { 'native.ts': { type: 'update' } }
+  const observations = [
+    historicalObservation('before', 'artifact.action', { action: 'file.change', changes: { 'before.ts': { type: 'add' } } }),
+    historicalObservation('prompt', 'message.user', { text: 'edit' }),
+    historicalObservation('write', 'tool.call', { nativeToolName: 'write_file', callId: 'w', input: { path: 'round.ts' } }),
+    historicalObservation('result', 'tool.result', { callId: 'w', status: 'success' }),
+    historicalObservation('native', 'artifact.action', { action: 'file.change', changes }),
+    historicalObservation('answer', 'message.assistant', { text: 'done' }),
+    historicalObservation('after', 'artifact.action', { action: 'file.change', changes: { 'after.ts': { type: 'add' } } }),
+  ]
+  const { storage } = fakeLegacyStorage(observations)
+  const result = await observedInteractionFileChanges(storage, 'legacy-session', 'legacy-session:review:3',
+    '2026-09-01T10:00:00Z', '2026-09-01T10:00:00Z', [], { firstId: 'prompt', lastId: 'answer' })
+  assert.deepEqual(result.items.map(item => item.path), ['native.ts', 'round.ts'])
+  assert.equal(result.truncated, false)
+  assert.equal(result.items.every(item => item.confidence !== 'exact'), true)
+
+  const bad = await observedInteractionFileChanges(storage, 'legacy-session', 'legacy-session:review:3',
+    '2026-09-01T10:00:00Z', '2026-09-01T10:00:00Z', [], { firstId: 'missing', lastId: 'answer' })
+  assert.equal(bad.truncated, true)
+  assert.deepEqual(bad.items, [])
 })

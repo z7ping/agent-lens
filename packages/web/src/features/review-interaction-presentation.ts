@@ -192,8 +192,12 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
   }
 
   for (const node of nodes) {
-    if (node.type === 'event' && isBenignNativeAssistantStop(node)) continue
+    if (node.type === 'event' && isBenignNativeAssistantStop(node)) {
+      flushTools()
+      continue
+    }
     if (node.type === 'event' && isSessionTitleUpdate(node)) {
+      flushTools()
       titleUpdates.push(node)
       continue
     }
@@ -213,7 +217,10 @@ export function projectReviewInteractionPresentation(nodes: ReviewNodeDto[]): Re
 
     if (node.type === 'event' && node.category === 'unknown' && node.kind !== 'tool.progress') {
       const duplicateOfReasoning = [...sourceRecordIds(node)].some(id => reasoningSourceRecords.has(id))
-      if (duplicateOfReasoning) continue
+      if (duplicateOfReasoning) {
+        flushTools()
+        continue
+      }
       flushTools()
       flushRuntimeEvents()
       rawEvents.push(node)
