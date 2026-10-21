@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Button, Drawer, IconButton, Popover, UiIcon } from '../components/ui'
 import { useTaskSurfaceView } from './TaskSurface'
+import { TaskFileChangesDisclosure, summarizeTaskFileChanges } from './TaskFileChangesDisclosure'
+import type { TaskFileChangesResponseDto } from '@agent-lens/protocol'
 
 export interface TaskHeaderMetric {
   label: string
@@ -117,7 +119,15 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const [infoTab, setInfoTab] = useState<'files' | 'info'>('files')
   const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
   const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0 || infoPanel)
-  const fileSummary = infoPanel?.fileSummary
+  // Older Review callers already pass the shared file-disclosure element.
+  // Read its typed data without requiring a second file-change fetch or projection.
+  const fileContent = infoPanel?.content
+  const fileValue = fileContent && isValidElement<{ value: TaskFileChangesResponseDto | null }>(fileContent)
+    && fileContent.type === TaskFileChangesDisclosure ? fileContent.props.value : null
+  const fileSummary = infoPanel?.fileSummary ?? (fileValue ? summarizeTaskFileChanges(fileValue) : undefined)
+  const fileSummaryLabel = fileSummary?.observed
+    ? t('review:local.fileChanges.activityCount', { count: fileSummary.count })
+    : infoPanel?.label
   const openInfo = (tab: 'files' | 'info') => {
     setInfoTab(tab)
     setCompactInfoOpen(true)
@@ -191,14 +201,14 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             className="task-header-file-summary-trigger"
             aria-haspopup="dialog"
             aria-expanded={compactInfoOpen}
-            aria-label={infoPanel?.label}
-            title={infoPanel?.label}
+            aria-label={fileSummaryLabel}
+            title={fileSummaryLabel}
             onClick={() => openInfo('files')}
           >
             <span className="task-header-file-summary-project">{resolvedContext}</span>
             <span className="task-header-file-summary-data">
               <UiIcon name="file-code" size={14}/>
-              <span className="task-header-file-summary-label">{infoPanel?.summary}</span>
+              <span className="task-header-file-summary-label">{fileSummaryLabel}</span>
               <span className="task-header-file-summary-count">{fileSummary.count}</span>
               <span className="task-header-file-summary-delta">
                 {fileSummary.additions !== undefined && <span data-change="added">+{fileSummary.additions}</span>}
@@ -244,7 +254,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
       onClose={() => setCompactInfoOpen(false)}
     >
       {infoPanel && <div className="task-header-info-tabs" role="tablist" aria-label={t('header.taskInfo')}>
-        <Button size="small" role="tab" aria-selected={infoTab === 'files'} aria-controls="task-header-files-panel" onClick={() => setInfoTab('files')}>{infoPanel.label}</Button>
+        <Button size="small" role="tab" aria-selected={infoTab === 'files'} aria-controls="task-header-files-panel" onClick={() => setInfoTab('files')}>{fileSummaryLabel}</Button>
         <Button size="small" role="tab" aria-selected={infoTab === 'info'} aria-controls="task-header-metadata-panel" onClick={() => setInfoTab('info')}>{t('header.taskInfo')}</Button>
       </div>}
       {(!infoPanel || infoTab === 'info') && <section id="task-header-metadata-panel" role={infoPanel ? 'tabpanel' : undefined} className="task-header-compact-info-list" aria-label={t('header.taskInfo')}>
