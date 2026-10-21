@@ -87,6 +87,7 @@ export function TaskToolGroup({
       {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
       {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
       {collapsible && <Button
+        variant="quiet"
         size="small"
         className="task-tool-group-toggle"
         aria-expanded={expanded}
