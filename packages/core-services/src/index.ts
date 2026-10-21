@@ -34,6 +34,7 @@ import type {
   LiveService,
   LogicalSession,
   LogicalSessionIdentityHint,
+  SessionTitleKind,
   ObservationCapability,
   ObservationCommitResult,
   ObservationQuery,
@@ -453,12 +454,18 @@ export class DefaultIdentityService implements IdentityService {
     const repository = this.storage.repositories.sessions
     const id = stableId('session', [hint.installationId, hint.nativeSessionId])
     const existing = await repository.getLogicalSession(id)
+    const rank = (kind?: SessionTitleKind) => kind === 'explicit' ? 3 : kind === 'generated' ? 2 : 1
+    const incoming = hint.title?.trim()
+    const acceptTitle = Boolean(incoming) && (!existing?.title || rank(hint.titleKind) >= rank(existing.titleKind))
+    const title = acceptTitle ? incoming : existing?.title
+    const titleKind = acceptTitle ? hint.titleKind : existing?.titleKind
     const session: LogicalSession = {
       id,
       installationId: hint.installationId,
       ...(hint.projectId ?? existing?.projectId ? { projectId: hint.projectId ?? existing!.projectId } : {}),
       ...(hint.workspaceId ?? existing?.workspaceId ? { workspaceId: hint.workspaceId ?? existing!.workspaceId } : {}),
-      ...(hint.title ?? existing?.title ? { title: hint.title ?? existing!.title } : {}),
+      ...(title ? { title } : {}),
+      ...(titleKind ? { titleKind } : {}),
       ...(existing?.startedAt ? { startedAt: existing.startedAt } : {}),
       ...(existing?.endedAt ? { endedAt: existing.endedAt } : {}),
     }
@@ -600,7 +607,7 @@ export class DefaultObservationService implements ObservationService {
       nativeSessionId: hints.nativeSessionId,
       ...(workspace?.projectId ? { projectId: workspace.projectId } : {}),
       ...(workspace ? { workspaceId: workspace.id } : {}),
-      ...(hints.sessionTitle ? { title: hints.sessionTitle } : {}),
+      ...(hints.sessionTitle ? { title: hints.sessionTitle, ...(hints.sessionTitleKind ? { titleKind: hints.sessionTitleKind } : {}) } : {}),
     })
     const sourceSession = await this.identity.resolveSourceSession({
       sourceId: input.sourceId,

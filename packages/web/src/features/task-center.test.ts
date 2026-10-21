@@ -57,7 +57,7 @@ test('系统活动没有项目时使用工作目录或来源作为可辨认上�
   })
 })
 
-test('Codex 用户任务优先使用结构化真实用户请求而不是未验证 thread_name', () => {
+test('Codex legacy index title without attested provenance falls back to the real user message', () => {
   assert.deepEqual(historyTaskPresentation(session({
     sourceIds: ['codex'],
     productId: 'codex',
@@ -67,6 +67,29 @@ test('Codex 用户任务优先使用结构化真实用户请求而不是未验�
   }), 'Codex 任务'), {
     title: '帮我检查 AgentLens 的 Codex 会话解析',
   })
+})
+
+test('Codex verified generated and explicit native titles outrank the first user message', () => {
+  for (const titleKind of ['generated', 'explicit'] as const) {
+    assert.deepEqual(historyTaskPresentation(session({
+      sourceIds: ['codex'], productId: 'codex', titleKind,
+      title: 'Codex 自动生成的任务摘要', preview: '第一条真实用户请求',
+      sessionActivity: 'user-task',
+    }), 'Codex 任务'), { title: 'Codex 自动生成的任务摘要' })
+  }
+})
+
+test('Codex unverified native title never displaces a real user message', () => {
+  assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['codex'], productId: 'codex', titleKind: 'unverified',
+    title: '应用上下文标签', preview: '真正的用户任务',
+    sessionActivity: 'user-task',
+  }), 'Codex 任务'), { title: '真正的用户任务' })
+
+  assert.deepEqual(historyTaskPresentation(session({
+    sourceIds: ['codex'], productId: 'codex', titleKind: 'unverified',
+    title: '应用上下文标签', sessionActivity: 'user-task',
+  }), 'Codex 任务'), { title: 'Codex 任务' })
 })
 
 test('非 Codex 用户任务仍保留来源原生会话名称优先级', () => {

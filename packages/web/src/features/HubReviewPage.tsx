@@ -18,6 +18,7 @@ import {
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { IconButton, UiIcon } from '../components/ui'
 import { TaskSurface } from './TaskSurface'
+import { historyTaskPresentation } from './task-center'
 
 const omittedReasonKey: Record<Extract<HubReadAvailability, { state: 'omitted' }>['reason'], string> = {
   policy: 'hub.omittedReason.policy',
@@ -223,7 +224,7 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
         kind: 'local' as const,
         item,
         id: item.id,
-        title: item.title?.trim() || item.preview?.trim() || item.projectName?.trim() || t('hub.list.localSession'),
+        title: historyTaskPresentation(item, item.projectName?.trim() || t('hub.list.localSession')).title,
         time: item.endedAt || item.startedAt || null,
       })),
       ...remoteSessions.map(item => ({

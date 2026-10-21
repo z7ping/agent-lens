@@ -25,6 +25,7 @@ interface MetadataCheckpoint {
   startFingerprint?: string
   titleFingerprint?: string
   titleContentFingerprint?: string
+  titleOriginFingerprint?: string
 }
 
 
@@ -100,6 +101,9 @@ function chooseThreadName(
   current: CodexThreadName,
 ): CodexThreadName {
   if (!previous) return current
+  // SQLite holds the canonical Desktop title; the index alone cannot prove a rename.
+  if (previous.source === 'sqlite' && current.source !== 'sqlite') return previous
+  if (current.source === 'sqlite' && previous.source !== 'sqlite') return current
   // Where both timestamps exist, use the newest known title. Without a comparable
   // timestamp, the later source is preferred (SQLite follows the legacy index).
   if (previous.updatedAt && !current.updatedAt) return previous
@@ -172,7 +176,7 @@ async function readSessionMetadata(
 ): Promise<CodexSessionMetadata> {
   const fallback: CodexSessionMetadata = {
     nativeSessionId: sessionIdFromFilename(filePath),
-    ...(indexedTitle ? { title: indexedTitle.title } : {}),
+    ...(indexedTitle ? { title: indexedTitle.title, titleKind: indexedTitle.source === 'sqlite' ? 'generated' as const : 'unverified' as const } : {}),
   }
   const handle = await open(filePath, 'r')
   try {
@@ -190,7 +194,7 @@ async function readSessionMetadata(
           nativeSessionId: typeof payload.id === 'string' && payload.id ? payload.id : fallback.nativeSessionId,
           ...(typeof payload.cwd === 'string' ? { cwd: payload.cwd } : {}),
           ...(typeof payload.cli_version === 'string' ? { cliVersion: payload.cli_version } : {}),
-          ...(indexedTitle ? { title: indexedTitle.title } : {}),
+          ...(indexedTitle ? { title: indexedTitle.title, titleKind: indexedTitle.source === 'sqlite' ? 'generated' as const : 'unverified' as const } : {}),
           ...(startedAt ? { startedAt } : {}),
         }
       } catch {
@@ -304,7 +308,7 @@ function metadataRecord(
     : `session-title:${session.nativeSessionId}:${sha256(title!).slice(0, 16)}`
   const payload = kind === 'session_start'
     ? { startedAt: session.startedAt }
-    : { title, ...(indexedTitle?.updatedAt ? { updatedAt: indexedTitle.updatedAt } : {}) }
+    : { title, ...(session.titleKind ? { titleKind: session.titleKind } : {}), ...(indexedTitle?.updatedAt ? { updatedAt: indexedTitle.updatedAt } : {}) }
   return {
     id: `codex-metadata-${sha256(recordKey).slice(0, 32)}`,
     sourceId: 'codex',
@@ -354,7 +358,10 @@ async function* ingestCodexFileWithThreadNames(
   const session = await readSessionMetadata(filePath, threadNames.get(fallbackId))
   onSession?.(session)
   const indexedTitle = threadNames.get(session.nativeSessionId) ?? threadNames.get(fallbackId)
-  if (indexedTitle && session.title !== indexedTitle.title) session.title = indexedTitle.title
+  if (indexedTitle) {
+    session.title = indexedTitle.title
+    session.titleKind = indexedTitle.source === 'sqlite' ? 'generated' : 'unverified'
+  }
 
   const startRecord = metadataRecord(ctx, filePath, session, 'session_start', indexedTitle)
   const startFingerprint = startRecord?.fingerprint
@@ -367,11 +374,14 @@ async function* ingestCodexFileWithThreadNames(
   const titleFingerprint = titleRecord?.fingerprint
   // threads.updated_at 是线程活动时间，不是标题修改时间；只比较标题内容。
   const titleContentFingerprint = session.title?.trim() ? sha256(session.title.trim()) : undefined
+  const titleOriginFingerprint = titleContentFingerprint ? sha256(`${titleContentFingerprint}:${session.titleKind ?? 'unverified'}`) : undefined
   if (titleRecord && titleFingerprint && titleContentFingerprint
-    && previousMetadata.titleContentFingerprint !== titleContentFingerprint) {
+    && (previousMetadata.titleContentFingerprint !== titleContentFingerprint
+      || previousMetadata.titleOriginFingerprint !== titleOriginFingerprint)) {
     yield titleRecord
     previousMetadata.titleFingerprint = titleFingerprint
     previousMetadata.titleContentFingerprint = titleContentFingerprint
+    previousMetadata.titleOriginFingerprint = titleOriginFingerprint
     await ctx.checkpoint.set(metadataKey, previousMetadata)
   }
 

@@ -47,6 +47,7 @@ const migrations: readonly Migration[] = [
   { version: 29, name: 'launchable-project-index', fileName: '029-launchable-project-index.sql' },
   { version: 30, name: 'asset-current-state', fileName: '030-asset-current-state.sql' },
   { version: 31, name: 'task-file-change-projection', fileName: '031-task-file-change-projection.sql' },
+  { version: 32, name: 'session-native-title-provenance', fileName: '032-session-native-title-provenance.sql' },
 ]
 
 async function readMigrationSql(fileName: string): Promise<string> {

@@ -80,7 +80,21 @@ test('Codex native title becomes sessionTitle identity metadata', async () => {
 
   const normalized = await normalizeCodexRecord(record, codexTestContext)
   assert.equal(normalized.observations[0]?.identityHints.sessionTitle, 'Codex 原生线程摘要')
+  assert.equal(normalized.observations[0]?.identityHints.sessionTitleKind, 'unverified')
   assert.equal(normalized.observations[0]?.kind, 'session.lifecycle')
+})
+
+test('Codex verified SQLite title is carried into canonical identity', async () => {
+  const record: SourceRecord = {
+    id: 'verified-title', sourceId: 'codex', installationId: 'installation-codex',
+    sourceSessionNativeId: 'verified-session', nativeType: 'metadata/session_title',
+    capturedAt: '2026-08-20T02:00:00.000Z', fingerprint: 'verified-fingerprint',
+    locator: { kind: 'file', path: 'state_5.sqlite' },
+    payload: { entry: { type: 'session_title', payload: { title: '可信摘要' } }, session: { nativeSessionId: 'verified-session', title: '可信摘要', titleKind: 'generated' } },
+    parserVersion: '12',
+  }
+  const normalized = await normalizeCodexRecord(record, codexTestContext)
+  assert.equal(normalized.observations[0]?.identityHints.sessionTitleKind, 'generated')
 })
 
 test('Codex native SQLite generated title is read when the index is absent', async () => {
@@ -93,12 +107,13 @@ test('Codex native SQLite generated title is read when the index is absent', asy
     } finally { db.close() }
     const titles = await codexHistoryInternals.readThreadNames(root)
     assert.equal(titles.get('sqlite-only')?.title, 'Codex 自动生成的任务标题')
+    assert.equal(titles.get('sqlite-only')?.source, 'sqlite')
   } finally {
     await rm(root, { recursive: true, force: true })
   }
 })
 
-test('Codex title precedence chooses the newer native timestamp, not the last index line', async () => {
+test('Codex trusted SQLite title is preferred to unverified newer index, not index append order', async () => {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-title-priority-'))
   try {
     await writeFile(join(root, 'session_index.jsonl'), [
@@ -114,7 +129,7 @@ test('Codex title precedence chooses the newer native timestamp, not the last in
     } finally { db.close() }
     const titles = await codexHistoryInternals.readThreadNames(root)
     assert.equal(titles.get('sqlite-wins')?.title, '原生生成的摘要标题')
-    assert.equal(titles.get('index-wins')?.title, '最新重命名标题')
+    assert.equal(titles.get('index-wins')?.title, '较早数据库标题')
   } finally {
     await rm(root, { recursive: true, force: true })
   }

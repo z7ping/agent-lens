@@ -104,6 +104,7 @@ function mapSummary(value: unknown): SessionSummaryRecord {
   const firstUserPayload = row.first_user_payload == null
     ? undefined
     : parseJsonValue(row.first_user_payload, 'first_user_payload')
+  const titleKind = optionalString(row, 'title_kind') as SessionSummaryRecord['titleKind']
   const rawTitle = optionalString(row, 'title')
   const nativeTitle = rawTitle?.trim() ? rawTitle.trim() : undefined
   const fallbackTitle = payloadText(firstUserPayload)
@@ -128,6 +129,7 @@ function mapSummary(value: unknown): SessionSummaryRecord {
     ...(workspaceId === undefined ? {} : { workspaceId }),
     ...(workspacePath === undefined ? {} : { workspacePath }),
     ...(title === undefined ? {} : { title }),
+    ...(titleKind === undefined ? {} : { titleKind }),
     ...(firstUserPayload === undefined ? {} : { firstUserPayload }),
     startedAt: requiredString(row, 'started_at'),
     endedAt: requiredString(row, 'ended_at'),
@@ -326,6 +328,7 @@ function legacyQuerySql(observationFilter: string, summaryFilter: string): strin
         logical.workspace_id,
         workspace.path AS workspace_path,
         logical.title,
+        logical.title_kind,
         ${firstUserPayloadSql('aggregate.logical_session_id')} AS first_user_payload,
         (
           SELECT kind
@@ -391,7 +394,8 @@ export function sessionSummaryProjectionSelectSql(summaryFilter: string): string
         project.name AS project_name,
         logical.workspace_id,
         workspace.path AS workspace_path,
-        logical.title
+        logical.title,
+        logical.title_kind
       FROM session_summary_projection AS summary
       JOIN logical_sessions AS logical ON logical.id = summary.logical_session_id
       JOIN agent_installations AS installation ON installation.id = summary.installation_id
