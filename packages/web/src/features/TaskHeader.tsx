@@ -117,6 +117,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const [compactInfoOpen, setCompactInfoOpen] = useState(false)
   const [infoTab, setInfoTab] = useState<'files' | 'info'>('files')
+  const [sideSummaryFits, setSideSummaryFits] = useState(false)
   const [sessionTailHost, setSessionTailHost] = useState<HTMLElement | null>(null)
   const hasCompactInfo = Boolean(infoItems.length > 0 || resolvedContext || submeta || metrics.length > 0 || infoPanel)
   // Older Review callers already pass the shared file-disclosure element.
@@ -132,6 +133,27 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
     setInfoTab(tab)
     setCompactInfoOpen(true)
   }
+
+  useLayoutEffect(() => {
+    const header = headerRef.current
+    const surface = header?.parentElement
+    if (!header || !surface || !fileSummary) {
+      setSideSummaryFits(false)
+      return
+    }
+    const update = () => setSideSummaryFits(
+      surface.getBoundingClientRect().right - header.getBoundingClientRect().right >= 232
+    )
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(header)
+    observer?.observe(surface)
+    window.addEventListener('resize', update)
+    update()
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [Boolean(fileSummary)])
 
   useLayoutEffect(() => {
     const documentRoot = readonlySessionDocument(headerRef.current)
@@ -198,7 +220,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
           ><UiIcon name="info" size={16}/></IconButton>}
           {fileSummary && <Button
             size="small"
-            className="task-header-file-summary-trigger"
+            className={`task-header-file-summary-trigger ${sideSummaryFits ? 'is-side-card' : ''}`}
             aria-haspopup="dialog"
             aria-expanded={compactInfoOpen}
             aria-label={fileSummaryLabel}
