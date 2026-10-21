@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { normalizeCodexEvent, codexSnapshotEntries } from './events.js'
 import { CodexLiveAdapter } from './index.js'
-import type { CodexRpc, RpcMessage } from './transport.js'
+import { CodexRpcError, type CodexRpc, type RpcMessage } from './transport.js'
 
 test('Codex streams assistant, reasoning, tools and terminal status to shared events', () => {
   assert.deepEqual(normalizeCodexEvent('item/agentMessage/delta',
@@ -34,6 +34,8 @@ class FakeRpc {
   calls: { method: string, params: Record<string, unknown> }[] = []
   responses: { id: number | string, value: Record<string, unknown> }[] = []
   itemPages: Record<string, unknown>[] = []
+  itemPaginationUnsupported = false
+  turnPages: Record<string, unknown>[] = []
   async available() { return true }
   subscribe(listener: (message: RpcMessage) => void) {
     this.listener = listener
@@ -44,7 +46,14 @@ class FakeRpc {
     if (method === 'thread/start') return { thread: { id: 'thread-1' } }
     if (method === 'turn/start') return { turn: { id: 'turn-1' } }
     if (method === 'thread/read') return { thread: { turns: [] } }
-    if (method === 'thread/items/list') return this.itemPages.shift() ?? { data: [], nextCursor: null, backwardsCursor: null }
+    if (method === 'thread/list') return { data: [] }
+    if (method === 'thread/turns/list') return this.turnPages.shift() ?? { data: [], nextCursor: null, backwardsCursor: null }
+    if (method === 'thread/items/list') {
+      if (this.itemPaginationUnsupported) {
+        throw new CodexRpcError(method, -32601, 'thread/items/list is not supported yet')
+      }
+      return this.itemPages.shift() ?? { data: [], nextCursor: null, backwardsCursor: null }
+    }
     if (method === 'model/list') return { data: [
       { id: 'codex-one', model: 'codex-one', displayName: 'Codex One', hidden: false,
         defaultReasoningEffort: 'medium', supportedReasoningEfforts: [
@@ -254,4 +263,35 @@ test('Codex preserves native error code and explicit retryability for failures',
   }), {
     type: 'completed', status: 'failed', message: 'inference failed', code: 'MODEL_FAILED',
   })
+})
+
+test('Codex availability verifies the real App Server instead of only resolving an executable', async () => {
+  const rpc = new FakeRpc()
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  assert.deepEqual(await adapter.availability(), { available: true })
+  assert.equal(rpc.calls.some(call => call.method === 'thread/list'), true)
+  await adapter.dispose()
+})
+
+test('Codex snapshot falls back to full turn pages when item paging is unsupported', async () => {
+  const rpc = new FakeRpc()
+  rpc.itemPaginationUnsupported = true
+  rpc.turnPages.push({
+    data: [{ id: 'turn-1', items: [
+      { id: 'user-1', type: 'userMessage', content: [{ type: 'text', text: 'hello' }] },
+      { id: 'assistant-1', type: 'agentMessage', text: 'world' },
+    ] }],
+    nextCursor: null, backwardsCursor: 'reverse-turn',
+  })
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc)
+  const runtime = await adapter.start({ workspacePath: '/project' })
+  const snapshot = await adapter.snapshot(runtime.runtimeSessionId, undefined, { limit: 20 })
+  assert.deepEqual(snapshot.entries.map(item => (item as { text: string }).text), ['hello', 'world'])
+  assert.ok(snapshot.leafId?.startsWith('codex-turn-history:'))
+  assert.equal(rpc.calls.filter(call => call.method === 'thread/items/list').length, 1)
+  assert.equal(rpc.calls.at(-1)?.params.itemsView, 'full')
+  await adapter.snapshot(runtime.runtimeSessionId, undefined, { limit: 20 })
+  assert.equal(rpc.calls.filter(call => call.method === 'thread/items/list').length, 1,
+    'unsupported native item pagination must not be retried every poll')
+  await adapter.dispose()
 })

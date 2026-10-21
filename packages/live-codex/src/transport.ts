@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { resolveExecutable, resolveWindowsNpmShimTarget } from '@agent-lens/runtime-cordis'
+import { formatLiveError } from '@agent-lens/live-support'
 
 export interface RpcMessage {
   method: string
@@ -7,7 +8,19 @@ export interface RpcMessage {
   id?: number | string
 }
 type Listener = (message: RpcMessage) => void
+export class CodexRpcError extends Error {
+  readonly code = 'live_interaction_unavailable'
+  constructor(
+    readonly method: string,
+    readonly rpcCode: string | number | undefined,
+    message: string,
+  ) {
+    super(`Codex ${method} failed (${String(rpcCode ?? 'unknown')}): ${formatLiveError(message, 600)}`)
+    this.name = 'CodexRpcError'
+  }
+}
 type Pending = {
+  method: string
   resolve(value: Record<string, unknown>): void
   reject(error: Error): void
   timeout: ReturnType<typeof setTimeout>
@@ -91,10 +104,10 @@ export class CodexRpc {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id)
-        reject(new Error('Codex RPC timeout: ' + method))
+        reject(new CodexRpcError(method, 'TIMEOUT', 'App Server request timed out'))
       }, 30_000)
       timeout.unref?.()
-      this.pending.set(id, { resolve, reject, timeout })
+      this.pending.set(id, { method, resolve, reject, timeout })
       try { this.write({ id, method, params }) }
       catch (error) {
         clearTimeout(timeout)
@@ -136,7 +149,11 @@ export class CodexRpc {
             clearTimeout(waiting.timeout)
             this.pending.delete(id)
             const error = record(data.error)
-            if (data.error) waiting.reject(new Error(String(error.message || 'Codex RPC error')))
+            if (data.error) {
+              const code = typeof error.code === 'string' || typeof error.code === 'number'
+                ? error.code : undefined
+              waiting.reject(new CodexRpcError(waiting.method, code, String(error.message || 'Codex RPC error')))
+            }
             else waiting.resolve(record(data.result))
           }
         } else if (typeof data.method === 'string') {
