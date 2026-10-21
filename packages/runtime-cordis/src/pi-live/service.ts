@@ -1192,8 +1192,7 @@ export class DefaultPiLiveService implements PiLiveService {
       if (runtime.isStreaming || runtime.isCompacting || runtime.titleRegenerationPending) {
         throw this.conflict('Pi title regeneration requires an idle session')
       }
-      if (runtime.extensionBindingStatus !== 'ready'
-        || !runtime.handle?.regenerateTitle
+      if (!runtime.handle?.regenerateTitle
         || !(await this.commands(id)).some(command => command.titleRegeneration === true)) {
         throw this.conflict('Supported pi-title regeneration is not available')
       }
