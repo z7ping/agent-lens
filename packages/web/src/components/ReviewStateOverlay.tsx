@@ -1,6 +1,6 @@
 import type { AgentLensClientModel, ClientSnapshot } from '../client/model'
 import { useTranslation } from 'react-i18next'
-import { EmptyStatePanel, ErrorStateBanner, FirstRunGuide, ReviewDetailSkeleton, SessionListSkeleton } from './StateViews'
+import { EmptyStatePanel, ErrorStateBanner, FirstRunGuide, ReviewDetailSkeleton } from './StateViews'
 import { UiIcon } from './ui'
 
 function broadReviewFilters(review: ClientSnapshot['review']): boolean {
@@ -24,7 +24,6 @@ export function ReviewStateOverlay({ model, snapshot }: { model: AgentLensClient
 
   if (review.loading && !response) {
     return <div className={`${shellClass} is-loading`} aria-live="polite">
-      <aside className="review-state-session"><SessionListSkeleton/></aside>
       <section className="review-state-reader"><ReviewDetailSkeleton/></section>
     </div>
   }
