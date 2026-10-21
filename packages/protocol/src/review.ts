@@ -185,6 +185,8 @@ export interface ReviewSessionSummaryDto {
   workspaceId?: string
   workspacePath?: string
   title?: string
+  /** Native title attestation. Legacy sessions may not have this field yet. */
+  titleKind?: 'explicit' | 'generated' | 'unverified'
   preview?: string
   startedAt: string
   endedAt: string
