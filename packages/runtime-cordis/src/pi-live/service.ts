@@ -1874,10 +1874,14 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
-      ...(runtime.input.name ? { sessionName: runtime.input.name, title: runtime.input.name } : {}),
+      sessionName: runtime.observedSessionName !== undefined
+        ? this.effectiveSessionName(runtime)
+        : runtime.input.name,
       ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...(!runtime.input.name && runtime.taskSummary ? { title: runtime.taskSummary } : {}),
+      title: runtime.observedSessionName !== undefined
+        ? this.effectiveSessionTitle(runtime)
+        : runtime.input.name || runtime.taskSummary,
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
