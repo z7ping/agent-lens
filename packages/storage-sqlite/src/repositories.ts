@@ -210,19 +210,21 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           WHERE id = ?
         `).get(session.id) as { project_id?: unknown; workspace_id?: unknown } | undefined
         db.prepare(`
-          INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, title, started_at, ended_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO logical_sessions(id, installation_id, project_id, workspace_id, title, title_kind, started_at, ended_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             installation_id = excluded.installation_id,
             project_id = excluded.project_id,
             workspace_id = excluded.workspace_id,
             title = excluded.title,
+            title_kind = excluded.title_kind,
             started_at = excluded.started_at,
             ended_at = excluded.ended_at
           WHERE logical_sessions.installation_id IS NOT excluded.installation_id
              OR logical_sessions.project_id IS NOT excluded.project_id
              OR logical_sessions.workspace_id IS NOT excluded.workspace_id
              OR logical_sessions.title IS NOT excluded.title
+             OR logical_sessions.title_kind IS NOT excluded.title_kind
              OR logical_sessions.started_at IS NOT excluded.started_at
              OR logical_sessions.ended_at IS NOT excluded.ended_at
         `).run(
@@ -231,6 +233,7 @@ export function createSqliteRepositories(executor: SqliteExecutor): RepositorySe
           session.projectId ?? null,
           session.workspaceId ?? null,
           session.title ?? null,
+          session.titleKind ?? null,
           session.startedAt ?? null,
           session.endedAt ?? null,
         )
