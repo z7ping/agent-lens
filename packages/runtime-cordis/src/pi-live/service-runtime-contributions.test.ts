@@ -7,13 +7,14 @@ import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 class RuntimeContributionHost implements PiRuntimeHost {
   starts = 0
   compactions = 0
+  generatedTitles = 0
   sessionName: string | undefined
   onEvent?: (event: Record<string, unknown>) => void
   rename(name: string | undefined) {
     this.sessionName = name
     this.onEvent?.({ type: 'session_info_changed', name })
   }
-  constructor(private readonly supportsCompaction = false) {}
+  constructor(private readonly supportsCompaction = false, private readonly supportsTitle = false) {}
 
   async start(
     runtimeSessionId: string,
@@ -63,6 +64,8 @@ class RuntimeContributionHost implements PiRuntimeHost {
     return {
       ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
       ...(this.supportsCompaction ? { compact: async () => { this.compactions += 1 } } : {}),
+      commands: async () => this.supportsTitle ? [{ name: 'title', source: 'extension' as const, titleRegeneration: true }] : [],
+      ...(this.supportsTitle ? { regenerateTitle: async () => { this.generatedTitles += 1; this.rename('AI 重新生成的标题') } } : {}),
       processId: 4321,
       state: async () => state(),
       snapshot: async () => ({ state: state(), entries: [], leafId: null }),
@@ -109,6 +112,28 @@ test('Pi Live 优先采用 SDK 原生标题，扩展更名与清除能覆盖首�
     host.rename(undefined)
     assert.equal((await service.state(started.runtimeSessionId)).title, '原始用户提问标题')
     assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, '原始用户提问标题')
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('仅在已识别原生 AI 标题生成器时声明菜单动作并使用真实扩展', async () => {
+  const host = new RuntimeContributionHost(true, true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    await service.prompt(started.runtimeSessionId, '请修复登录错误')
+    const before = await service.runtimeDisclosures(started.runtimeSessionId)
+    const action = before[0]?.actions?.find(item => item.actionId === 'pi.runtime.regenerate-title')
+    assert.equal(action?.placement, 'composer')
+    assert.equal(action?.icon, 'sparkles')
+    assert.ok(action)
+
+    const result = await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.regenerate-title')
+    assert.equal(host.generatedTitles, 1)
+    assert.equal(result.runtime.title, 'AI 重新生成的标题')
+    assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, 'AI 重新生成的标题')
   } finally {
     await service.dispose()
   }
