@@ -12,6 +12,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
       empty: '暂无通知',
       viewSession: '查看会话',
       dismiss: '关闭通知',
+      waitingApproval: '智能体正在等待用户确认',
       level: {
         info: '智能体通知',
         success: '任务执行完成',
