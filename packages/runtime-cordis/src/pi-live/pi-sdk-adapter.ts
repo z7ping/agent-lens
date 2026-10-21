@@ -57,6 +57,7 @@ export interface PiSdkSession {
   readonly thinkingLevel: AgentSession['thinkingLevel']
   readonly isStreaming: AgentSession['isStreaming']
   readonly isCompacting: AgentSession['isCompacting']
+  compact?: AgentSession['compact']
   readonly pendingMessageCount: AgentSession['pendingMessageCount']
   readonly modelRuntime: PiSdkModelRuntime
   readonly settingsManager?: AgentSession['settingsManager']
