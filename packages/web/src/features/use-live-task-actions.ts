@@ -252,36 +252,67 @@ export function useLiveTaskActions({
     }
   }, [canInterrupt, current])
 
-  const removeQueued = useCallback(async (mode: LiveQueueMode, queueIndex: number, text: string) => {
+  const mutateQueuedEntry = useCallback(async (
+    mode: LiveQueueMode, queueIndex: number, text: string, restoreDraft: boolean,
+  ) => {
     if (!current || !product?.capabilities.includes('queue') || queueMutationPending) return
+    const items = mode === 'steer' ? queue.steering : queue.followUp
+    if (items[queueIndex] !== text) {
+      setError(t('live.queue.changed'))
+      return
+    }
     setQueueMutationPending(true)
     setError('')
     try {
-      const cleared = await liveApi.clearQueue(current.liveId, current.runtimeSessionId)
-      const steering = [...cleared.steering]
-      const followUp = [...cleared.followUp]
-      const target = mode === 'steer' ? steering : followUp
-      const resolvedIndex = target[queueIndex] === text ? queueIndex : target.indexOf(text)
-      if (resolvedIndex >= 0) target.splice(resolvedIndex, 1)
-
-      setQueue(emptyLiveQueue())
-      for (const message of steering) {
-        await liveApi.send(current.liveId, current.runtimeSessionId, queueTextMessage(message), 'steer')
-      }
-      for (const message of followUp) {
-        await liveApi.send(current.liveId, current.runtimeSessionId, queueTextMessage(message), 'follow-up')
-      }
-      setQueue({ steering, followUp })
+      // Never clear and rebuild the queue in the browser. The native runtime
+      // validates this snapshot and applies the removal in one Worker turn.
+      const next = await liveApi.mutateQueue(current.liveId, current.runtimeSessionId, {
+        expected: { steering: [...queue.steering], followUp: [...queue.followUp] },
+        mode, index: queueIndex,
+      })
+      setQueue(next)
       setState(previous => previous
-        ? { ...previous, pendingMessageCount: steering.length + followUp.length }
+        ? { ...previous, pendingMessageCount: next.steering.length + next.followUp.length }
         : previous)
+      if (restoreDraft) {
+        setComposerValue(text)
+        setStreamingBehavior(mode)
+        requestAnimationFrame(() => composerRef.current?.focus({ preventScroll: true }))
+      }
     } catch (reason) {
+      const refreshed = await liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
+      if (refreshed) setQueue(refreshed)
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setQueueMutationPending(false)
-      composerRef.current?.focus({ preventScroll: true })
     }
-  }, [current, product?.capabilities, queueMutationPending])
+  }, [current, product?.capabilities, queueMutationPending, queue, setComposerValue, t])
+
+  const removeQueued = useCallback((mode: LiveQueueMode, index: number, text: string) =>
+    mutateQueuedEntry(mode, index, text, false), [mutateQueuedEntry])
+  const editQueued = useCallback((mode: LiveQueueMode, index: number, text: string) =>
+    mutateQueuedEntry(mode, index, text, true), [mutateQueuedEntry])
+
+  const clearQueued = useCallback(async () => {
+    if (!current || queueMutationPending || busy) return
+    setQueueMutationPending(true)
+    setError('')
+    try {
+      if (product?.capabilities.includes('queue') && (queue.steering.length || queue.followUp.length)) {
+        await liveApi.clearQueue(current.liveId, current.runtimeSessionId)
+      }
+      setQueue(emptyLiveQueue())
+      setRestoredQueue([])
+      setStartupQueued(null)
+      setState(previous => previous ? { ...previous, pendingMessageCount: 0 } : previous)
+    } catch (reason) {
+      const refreshed = await liveApi.queueState(current.liveId, current.runtimeSessionId).catch(() => null)
+      if (refreshed) setQueue(refreshed)
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setQueueMutationPending(false)
+    }
+  }, [current, product?.capabilities, queueMutationPending, busy, queue])
 
   const editRestoredQueue = useCallback((item: RestoredQueueDraft) => {
     setComposerValue(item.text)
@@ -443,5 +474,5 @@ export function useLiveTaskActions({
   }, [busy, current, thinking, t])
 
 
-  return { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking }
+  return { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking }
 }
