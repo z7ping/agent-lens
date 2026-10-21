@@ -12,6 +12,7 @@ export const englishTaskMessages: LocaleMessagesDto = {
       empty: 'No notifications',
       viewSession: 'View session',
       dismiss: 'Dismiss notification',
+      waitingApproval: 'The agent is waiting for approval',
       level: {
         info: 'Agent notification',
         success: 'Task completed',
