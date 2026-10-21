@@ -115,7 +115,7 @@ export function TaskFileChangesDisclosure({
   }, [diffPath, sessionId, isInteraction])
 
   if (!value && !loading && !error) return null
-  if (value && value.summary.count === 0 && !value.meta.truncated && !loading && !error) return null
+  if (value && value.summary.count === 0 && !value.meta.truncated && !loading && !error && !inlineDetails) return null
 
   const count = value?.summary.count ?? 0
   const items = value?.items ?? []
@@ -221,6 +221,8 @@ export function TaskFileChangesDisclosure({
       </div>
       <div className="task-file-changes-list">
         {error && <div className="task-file-changes-error" role="alert">{t('local.fileChanges.loadFailed')}</div>}
+        {loading && <div className="task-file-changes-empty" role="status">{t('local.fileChanges.refreshing')}</div>}
+        {value && count === 0 && !value.meta.truncated && !loading && !error && <div className="task-file-changes-empty">{t('local.fileChanges.empty')}</div>}
         {displayed.map(item => {
           const target = item.changeType === 'deleted'
             ? undefined
