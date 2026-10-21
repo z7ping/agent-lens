@@ -226,11 +226,10 @@ export function ReviewProcessGroup({
   // Preserve source order and evidence ownership; split only adjacent tool runs.
   const processSequence: TaskToolGroupSequenceEntry[] = items.flatMap((item, index): TaskToolGroupSequenceEntry[] => {
     if (item.type === 'tool-group') {
-      // A different explicit reasoning parent is a real boundary, even if
-      // both native tool runs are adjacent after projection.
+      // Preserve every distinct native tool run, including invisible lifecycle
+      // boundaries and events moved out of the Process reading lane.
       const previous = items[index - 1]
       const boundary: TaskToolGroupSequenceEntry[] = previous?.type === 'tool-group'
-        && previous.parentReasoningId !== item.parentReasoningId
         ? [{ type: 'content', key: `tool-parent-boundary:${index}`, content: null }]
         : []
       return [...boundary, ...item.items.map(node => ({
