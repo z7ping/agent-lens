@@ -18,7 +18,7 @@ export type PiSdkModel = Pick<OfficialPiModel, 'provider' | 'id' | 'name' | 'rea
 export type PiSdkImage = NonNullable<PromptOptions['images']>[number]
 export type PiSdkPromptOptions = Pick<PromptOptions, 'images' | 'streamingBehavior' | 'source' | 'preflightResult'>
 export type PiSdkThinkingLevel = Parameters<AgentSession['setThinkingLevel']>[0]
-export type PiSdkSlashCommandInfo = Pick<SlashCommandInfo, 'name' | 'description' | 'source'>
+export type PiSdkSlashCommandInfo = Pick<SlashCommandInfo, 'name' | 'description' | 'source'> & { titleRegeneration?: boolean }
 export type PiSdkExtensionBindings = OfficialExtensionBindings
 export type PiSdkExtensionUiContext = NonNullable<OfficialExtensionBindings['uiContext']>
 
@@ -62,7 +62,7 @@ export interface PiSdkSession {
   readonly modelRuntime: PiSdkModelRuntime
   readonly settingsManager?: AgentSession['settingsManager']
   readonly resourceLoader?: PiSdkRuntimeResourceLoader
-  readonly extensionRunner?: Pick<AgentSession['extensionRunner'], 'getRegisteredCommands'>
+  readonly extensionRunner?: Pick<AgentSession['extensionRunner'], 'getRegisteredCommands' | 'createCommandContext'>
   readonly promptTemplates?: AgentSession['promptTemplates']
   bindExtensions(bindings: PiSdkExtensionBindings): ReturnType<AgentSession['bindExtensions']>
   subscribe(listener: Parameters<AgentSession['subscribe']>[0]): ReturnType<AgentSession['subscribe']>
@@ -81,8 +81,33 @@ export interface PiSdkSession {
   dispose(): ReturnType<AgentSession['dispose']>
 }
 
+/** Only the known non-interactive pi-title /title regenerate contract is safe
+ * to invoke from a Web UI. pi-sessions /title opens an interactive picker and
+ * must never be treated as the same command just because the names coincide.
+ */
+export function piNativeTitleRegenerationCommand(session: PiSdkSession) {
+  const runner = session.extensionRunner
+  if (typeof runner?.createCommandContext !== 'function') return undefined
+  return runner.getRegisteredCommands().find(command => {
+    const provenance = (command as { sourceInfo?: { path?: string } }).sourceInfo?.path ?? ''
+    return command.invocationName === 'title'
+      && command.name === 'title'
+      && /(?:^|[\\/])pi-title(?:[\\/]|$)/i.test(provenance)
+      && typeof command.handler === 'function'
+  })
+}
+
+export async function piSdkRegenerateNativeTitle(session: PiSdkSession): Promise<void> {
+  const command = piNativeTitleRegenerationCommand(session)
+  const runner = session.extensionRunner
+  if (!command || !runner) throw new Error('A supported pi-title extension is not installed')
+  if (session.isStreaming || session.isCompacting) throw new Error('Pi title regeneration requires an idle session')
+  await command.handler('regenerate', runner.createCommandContext())
+}
+
 export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
   const commands: PiSdkSlashCommandInfo[] = []
+  const titleCommand = piNativeTitleRegenerationCommand(session)
 
   for (const command of session.extensionRunner?.getRegisteredCommands() ?? []) {
     const name = typeof command.invocationName === 'string' ? command.invocationName.trim() : ''
@@ -93,6 +118,7 @@ export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
         ? { description: command.description.trim() }
         : {}),
       source: 'extension',
+      ...(command === titleCommand ? { titleRegeneration: true } : {}),
     })
   }
 
