@@ -5,6 +5,7 @@ export interface CodexSessionMetadata {
   cwd?: string
   cliVersion?: string
   title?: string
+  titleKind?: 'generated' | 'unverified'
   startedAt?: string
 }
 
