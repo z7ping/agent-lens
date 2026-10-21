@@ -208,7 +208,7 @@ test('Task Surface 字号只有 typography.css 一处语义源，Live/Review 不
   assert.match(detail, /\.task-surface \.markdown pre,[\s\S]*?font: var\(--text-task-code\)/)
   assert.match(sessionView, /\.task-header-title \{[^}]*font-size: var\(--text-task-emphasis\)/)
 
-  const known = new Set(sizes.map(([role]) => `--text-task-${role}`))
+  const known = new Set<string>(sizes.map(([role]) => `--text-task-${role}`))
   const refs = [...detail.matchAll(/var\((--text-task-[a-z-]+)\)/g)].map(match => match[1]!)
   assert.ok(refs.length >= 60)
   for (const ref of refs) assert.ok(known.has(ref), `Undefined Task font token: ${ref}`)
