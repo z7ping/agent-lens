@@ -178,6 +178,7 @@ class InProcessHandle implements PiRuntimeHandle {
         && typeof session.getAvailableThinkingLevels === 'function',
       extensionUi: typeof session.bindExtensions === 'function',
       treeNavigation: typeof session.navigateTree === 'function',
+      manualCompaction: typeof session.compact === 'function',
       messageFork: typeof session.sessionManager.createBranchedSession === 'function'
         && typeof session.sessionManager.newSession === 'function',
     }
