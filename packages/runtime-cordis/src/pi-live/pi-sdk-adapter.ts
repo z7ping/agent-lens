@@ -107,9 +107,9 @@ export async function piSdkRegenerateNativeTitle(session: PiSdkSession): Promise
 
 export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
   const commands: PiSdkSlashCommandInfo[] = []
-  const titleCommand = piNativeTitleRegenerationCommand(session)
+  const registered = session.extensionRunner?.getRegisteredCommands() ?? []
 
-  for (const command of session.extensionRunner?.getRegisteredCommands() ?? []) {
+  for (const command of registered) {
     const name = typeof command.invocationName === 'string' ? command.invocationName.trim() : ''
     if (!name) continue
     commands.push({
@@ -118,7 +118,10 @@ export function piSdkCommands(session: PiSdkSession): PiSdkSlashCommandInfo[] {
         ? { description: command.description.trim() }
         : {}),
       source: 'extension',
-      ...(command === titleCommand ? { titleRegeneration: true } : {}),
+      ...(command.invocationName === 'title' && command.name === 'title'
+        && /(?:^|[\\/])pi-title(?:[\\/]|$)/i.test((command as { sourceInfo?: { path?: string } }).sourceInfo?.path ?? '')
+        && typeof session.extensionRunner?.createCommandContext === 'function'
+        ? { titleRegeneration: true } : {}),
     })
   }
 
