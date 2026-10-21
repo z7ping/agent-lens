@@ -33,6 +33,20 @@ const composer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', 
 const imageNode = readFileSync(new URL('../components/LiveImageNode.tsx', import.meta.url), 'utf8')
 const attachmentClient = readFileSync(new URL('../client/live-attachments.ts', import.meta.url), 'utf8')
 
+test('连接状态操作统一由 TaskSessionComposer 渲染，Live 仅提供重连/同步回调', () => {
+  assert.match(taskComposer, /onSyncSession\?\(\): void/)
+  assert.match(taskComposer, /onReconnectSession\?\(\): void/)
+  assert.match(taskComposer, /<Popover open=\{connectionMenuOpen && canManageConnection\}/)
+  assert.match(taskComposer, /aria-haspopup="menu"/)
+  assert.match(liveTask, /onSyncSession=\{streamSupported/)
+  assert.match(liveTask, /onReconnectSession=\{streamSupported/)
+  assert.match(page, /manualSyncRef\.current = async \(\) =>/)
+  assert.match(page, /await recover\(runtimeStateRef\.current\?\.isStreaming/)
+  assert.match(page, /reconnectEpoch/)
+  assert.match(composerCss, /\.task-composer-menu-popover \{/)
+  assert.doesNotMatch(reviewTask, /onSyncSession=|onReconnectSession=/)
+})
+
 test('通用 Live 产品层不再依赖 legacy PiLivePage / piLiveApi', () => {
   assert.doesNotMatch(app, /import\(['"]\.\/features\/PiLivePage['"]\)/)
   assert.doesNotMatch(taskCenter, /PiLivePage|piLiveApi/)
