@@ -131,7 +131,7 @@ export function InsightsPage({ model, toolbarHost }: { model: AgentLensClientMod
       <div className="page-content insights-content">
         {insights.error && <ErrorStateBanner message={insights.error} onRetry={() => void insightsModel.refresh()}/>} 
 
-        {insights.loading && !data ? <WorkspaceSkeleton kind="table"/> : data && data.summary.sessionCount > 0 ? <>
+        {insights.loading && !data ? <WorkspaceSkeleton kind="insights"/> : data && data.summary.sessionCount > 0 ? <>
           <section className="insight-coverage-strip" aria-label={t('page.coverageAria')}>
             <div><span>{t('page.statisticsRange')}</span><b>{rangeLabel(insights.filters.range, t, locale, data.meta.from, data.meta.to)}</b></div>
             <div><span>{t('page.sessionSample')}</span><b>{t('page.sessionCount', { count: data.summary.sessionCount })}</b></div>

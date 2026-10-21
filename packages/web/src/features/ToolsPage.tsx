@@ -219,7 +219,7 @@ export function ToolsPage({ model, toolbarHost }: { model: AgentLensClientModel;
           <span><b>{t('page.projectionTitle')}</b><small>{t('page.projectionDescription', { projected: projection.projectedCount.toLocaleString(locale), total: projection.sourceObservationCount.toLocaleString(locale), percent: projectionPercent })}</small></span>
         </div>}
 
-        {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="table"/> : <>
+        {blockingError ? null : usage.loading && !data ? <WorkspaceSkeleton kind="tools"/> : <>
           <section className="tool-summary-grid">
             <div className="tool-summary-card"><span>{t('page.mostFrequent')}</span><strong>{mostUsed?.nativeToolName ?? '—'}</strong><small>{mostUsed ? t('page.callsAndSessions', { calls: mostUsed.callCount, sessions: mostUsed.sessionCount }) : t('page.noData')}</small></div>
             <div className="tool-summary-card"><span>{t('page.mostFailures')}</span><strong className={mostErrors ? 'is-danger' : ''}>{mostErrors?.nativeToolName ?? '—'}</strong><small>{mostErrors ? t('page.failures', { count: mostErrors.errorCount }) : t('page.noKnownFailures')}</small></div>

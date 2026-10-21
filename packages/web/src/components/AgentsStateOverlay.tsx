@@ -17,7 +17,7 @@ export function AgentsStateOverlay({ model, snapshot }: { model: AgentLensClient
 
   if (!response) {
     return <div className={`${shellClass} is-loading`} aria-live="polite">
-      <div className="agents-state-inner"><WorkspaceSkeleton kind="cards"/></div>
+      <div className="agents-state-inner"><WorkspaceSkeleton kind="agents"/></div>
     </div>
   }
 

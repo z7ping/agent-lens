@@ -19,7 +19,7 @@ import { AgentLogo } from '../components/AgentLogo'
 import { BackupDataRootTree } from '../components/BackupDirectoryTree'
 import { LocalPathActions } from '../components/LocalPathActions'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
-import { PageLoadingState } from '../components/StateViews'
+import { ErrorStateBanner, PageLoadingState } from '../components/StateViews'
 import { Button, Dialog, Drawer, IconButton, StatusBadge, UiIcon } from '../components/ui'
 
 const RECOMMENDED_KINDS: BackupAssetKindDto[] = ['config', 'skill', 'mcp', 'plugin', 'extension', 'hook', 'rule']
@@ -437,12 +437,18 @@ export function BackupPage({
     setError(reason instanceof Error ? reason.message : String(reason))
   }
 
+  // A failed initial overview must not leave an infinite loading placeholder.
+  if ((!overview || overview.index?.ready === false) && error && !loading) {
+    return <div className="page-loading-state">
+      <ErrorStateBanner message={error} onRetry={() => void refresh(true)} showDoctor={false}/>
+    </div>
+  }
+
   if (!overview || overview.index?.ready === false) return <PageLoadingState
     eyebrow={t('loading.eyebrow')}
     statusLabel={t('loading.status')}
     title={t('loading.title')}
     description={t('loading.description')}
-    facts={[t('loading.factOrdered'), t('loading.factReadonly'), t('loading.factProgressive')]}
   />
 
   const indexTime = overview.index?.generatedAt

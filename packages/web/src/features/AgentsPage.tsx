@@ -760,7 +760,7 @@ export function AgentsPage({
             discoveryError={snapshot.integrationDiscoveryError}
             piView={piView}
             onManageIntegration={id => navigate(`/agents?view=management&agent=${encodeURIComponent(id)}`)}
-          /> : detailPending || selectedRow?.summary ? <WorkspaceSkeleton kind="cards"/> : selectedManagement ? <IntegrationOnlyObservationCard
+          /> : detailPending || selectedRow?.summary ? <WorkspaceSkeleton kind="agents"/> : selectedManagement ? <IntegrationOnlyObservationCard
             key={selectedManagement.integrationId}
             management={selectedManagement}
             discovery={selectedDiscovery}

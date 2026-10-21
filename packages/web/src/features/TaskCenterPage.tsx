@@ -11,6 +11,7 @@ import { useClientSnapshotField } from '../client/use-client-snapshot'
 import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
+import { ReviewDetailSkeleton, SessionListSkeleton } from '../components/StateViews'
 import { Button, IconButton, Input, Popover, SelectMenu } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
@@ -577,9 +578,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      {!review.response && <div className="task-center-list-skeleton" aria-hidden="true">
-        <span/><span/><span/>
-      </div>}
+      {review.loading && !review.response && <SessionListSkeleton/>}
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
@@ -599,7 +598,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
         <TaskNotificationBanner/>
-        <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
+        <Suspense fallback={<ReviewDetailSkeleton/>}>
           {mode === 'history' && <ReviewPage model={model} embedded/>}
           {mode === 'live' && <LiveTaskPage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
