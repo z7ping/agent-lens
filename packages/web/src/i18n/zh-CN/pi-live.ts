@@ -113,6 +113,7 @@ export const chinesePiLiveMessages: LocaleMessagesDto = {
       count: '排队 {{count}} 条',
       menu: '队列操作',
       clear: '清空队列',
+      changed: '队列已变化，请重新展开后操作。',
       restored: '恢复草稿',
       waitingReady: '等待 Pi 就绪',
       edit: '编辑',
