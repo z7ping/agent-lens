@@ -56,9 +56,9 @@ test('Review 116 次工具按思考分为 58 个独立相邻组，不整轮折�
 
   assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 58)
   assert.doesNotMatch(html, /工具调用 · 116 项/)
-  assert.doesNotMatch(html, /展开其余/)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 116)
-  assert.match(html, /native_call_4/)
+  assert.match(html, /展开其余 1 项/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 60)
+  assert.doesNotMatch(html, /native_call_4/)
   assert.match(html, /native_call_84/)
   assert.match(html, /native_call_96/)
   assert.match(html, /native reasoning 0/)
@@ -78,6 +78,25 @@ test('Review preserves tool boundaries across different reasoning parents', () =
     expansionStore: new Map([['process:parents', true]]),
   }))
   assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 2)
-  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 6)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 2)
   assert.doesNotMatch(html, /native_call_4|native_call_8/)
+})
+
+test('Review separates adjacent tool batches even with the same reasoning parent', () => {
+  const items: ReviewProcessPresentationItem[] = [
+    { type: 'tool-group', parentReasoningId: 'same', items: [tool(1), tool(2)] },
+    { type: 'tool-group', parentReasoningId: 'same', items: [tool(3), tool(4)] },
+    { type: 'tool-group', items: [tool(5)] },
+  ]
+  const html = renderToStaticMarkup(createElement(ReviewProcessGroup, {
+    id: 'process:hidden-interruption', items, inspect: () => undefined,
+    state: 'settled', showAllEvents: false,
+    expansionStore: new Map([['process:hidden-interruption', true]]),
+  }))
+  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 2)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
+  assert.match(html, /native_call_1/)
+  assert.match(html, /native_call_3/)
+  assert.match(html, /native_call_5/)
+  assert.doesNotMatch(html, /native_call_2|native_call_4/)
 })
