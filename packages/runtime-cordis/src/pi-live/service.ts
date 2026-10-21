@@ -1153,6 +1153,7 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(canRegenerate ? [{
         actionId: 'pi.runtime.regenerate-title',
         placement: 'composer' as const,
+        icon: 'sparkles' as const,
         label: contributionText('AI generate title', 'AI 生成标题'),
         description: contributionText('Use installed pi-title to regenerate the native session name.', '使用已安装的 pi-title 扩展重新生成原生会话标题。'),
       }] : []),
@@ -1160,6 +1161,7 @@ export class DefaultPiLiveService implements PiLiveService {
         && !this.requireRuntime(id).manualCompactionPending ? [{
           actionId: 'pi.runtime.compact',
           placement: 'composer' as const,
+          icon: 'collapse' as const,
           label: contributionText('Compact context', '压缩上下文'),
           description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
         }] : []),
