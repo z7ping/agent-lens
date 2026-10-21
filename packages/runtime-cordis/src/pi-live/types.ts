@@ -1,4 +1,4 @@
-import type { LiveAvailability, LiveHistoryIndex, LiveHistoryIndexQuery, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeActionResult, LiveRuntimeDisclosureContribution, LiveRuntimeEvent, LiveRuntimeState, LiveSessionTree, LiveSnapshot, LiveSnapshotWindow, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
+import type { LiveAvailability, LiveHistoryIndex, LiveHistoryIndexQuery, LiveMessageActionContribution, LiveMessageActionResult, LiveRuntimeActionResult, LiveRuntimeDisclosureContribution, LiveRuntimeEvent, LiveRuntimeState, LiveQueueMutation, LiveSessionTree, LiveSnapshot, LiveSnapshotWindow, LiveThinkingControl, LiveWorkspaceFileReference } from '@agent-lens/core'
 
 export type PiLiveStreamingBehavior = 'steer' | 'followUp'
 
@@ -187,6 +187,7 @@ export interface PiLiveService {
   followUp(runtimeSessionId: string, message: string, images?: readonly PiLiveImageInput[]): Promise<void>
   queueState(runtimeSessionId: string): Promise<PiLiveQueueState>
   clearQueue(runtimeSessionId: string): Promise<PiLiveQueueState>
+  mutateQueue(runtimeSessionId: string, mutation: LiveQueueMutation): Promise<PiLiveQueueState>
   abort(runtimeSessionId: string, options?: { restoreQueue?: boolean }): Promise<PiLiveQueueState>
   respondToExtension(runtimeSessionId: string, requestId: string, response: unknown): Promise<void>
   subscribe(runtimeSessionId: string, listener: PiLiveRuntimeListener): () => void
