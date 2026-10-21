@@ -256,7 +256,7 @@ export function useLiveTaskActions({
   const mutateQueuedEntry = useCallback(async (
     mode: LiveQueueMode, queueIndex: number, text: string, restoreDraft: boolean,
   ) => {
-    if (!current || !product?.capabilities.includes('queue') || queueMutationPending) return
+    if (!current || !product?.capabilities.includes('queue-mutation') || queueMutationPending) return
     const items = mode === 'steer' ? queue.steering : queue.followUp
     if (items[queueIndex] !== text) {
       setError(t('live.queue.changed'))
