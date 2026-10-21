@@ -785,7 +785,11 @@
 :is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-deleted { color: var(--al-danger); }
 :is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-modified,
 :is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-status.is-renamed { color: var(--al-accent); }
-:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path { display: inline-flex; min-width: 0; flex: 1 1 auto; align-items: center; gap: 6px; overflow: hidden; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; align-items: flex-start; gap: 2px; overflow: hidden; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-name,
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-directory { display: block; width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-name { color: var(--al-ink-2); font-weight: 600; }
+:is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-directory { color: var(--al-muted); font-size: var(--text-task-meta); }
 :is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path > code,
 :is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path .local-resource-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :is(.task-surface, .task-header-info-drawer, .task-file-detail-drawer) .task-file-change-path code { font: var(--text-task-code)/1.45 var(--font-mono); }
