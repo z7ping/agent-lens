@@ -314,7 +314,7 @@
 .task-surface .markdown-message { display: block; min-width: 0; }
 /* Explicit Task roles beat the global Markdown default without a late override layer. */
 .task-surface .task-message-content .markdown { font-size: var(--text-task-body); }
-.task-surface .task-thinking-content .markdown { font-size: var(--text-task-process); }
+.task-surface .task-thinking-content .markdown { font-size: var(--text-task-thinking-markdown); }
 .task-surface .markdown-surface { position: relative; min-width: 0; overflow: visible; line-height: 1.68; overflow-wrap: anywhere; }
 .task-surface .task-message-content .markdown-surface.is-collapsed { overflow: hidden; }
 .task-surface .markdown,
