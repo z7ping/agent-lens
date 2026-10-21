@@ -7,7 +7,18 @@ export interface RpcMessage {
   id?: number | string
 }
 type Listener = (message: RpcMessage) => void
+export class CodexRpcError extends Error {
+  constructor(
+    readonly method: string,
+    readonly rpcCode: string | number | undefined,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'CodexRpcError'
+  }
+}
 type Pending = {
+  method: string
   resolve(value: Record<string, unknown>): void
   reject(error: Error): void
   timeout: ReturnType<typeof setTimeout>
@@ -94,7 +105,7 @@ export class CodexRpc {
         reject(new Error('Codex RPC timeout: ' + method))
       }, 30_000)
       timeout.unref?.()
-      this.pending.set(id, { resolve, reject, timeout })
+      this.pending.set(id, { method, resolve, reject, timeout })
       try { this.write({ id, method, params }) }
       catch (error) {
         clearTimeout(timeout)
@@ -136,7 +147,11 @@ export class CodexRpc {
             clearTimeout(waiting.timeout)
             this.pending.delete(id)
             const error = record(data.error)
-            if (data.error) waiting.reject(new Error(String(error.message || 'Codex RPC error')))
+            if (data.error) {
+              const code = typeof error.code === 'string' || typeof error.code === 'number'
+                ? error.code : undefined
+              waiting.reject(new CodexRpcError(waiting.method, code, String(error.message || 'Codex RPC error')))
+            }
             else waiting.resolve(record(data.result))
           }
         } else if (typeof data.method === 'string') {
