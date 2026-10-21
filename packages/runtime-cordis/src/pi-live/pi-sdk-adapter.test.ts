@@ -7,6 +7,7 @@ import {
   assertPiSdkSession,
   inspectPiSdkCompatibility,
   piSdkCommands,
+  piSdkRegenerateNativeTitle,
   resolvePiSdkPackageUpdateApi,
   resolvePiSdkResourceApi,
 } from './pi-sdk-adapter'
@@ -144,4 +145,45 @@ test('1.2.0 Runtime 命令按官方 get_commands 语义组合 Extension / Prompt
     { name: 'explain', description: 'Explain code', source: 'prompt' },
     { name: 'skill:repo-review', description: 'Review repository', source: 'skill' },
   ])
+})
+
+test('仅识别 pi-title 的非交互式 AI 标题命令，不混淆 pi-sessions /title', async () => {
+  const calls: string[] = []
+  const session = {
+    isStreaming: false,
+    isCompacting: false,
+    extensionRunner: {
+      // Pi may return new resolved command instances on every call.
+      getRegisteredCommands: () => [
+        { name: 'title', invocationName: 'title', sourceInfo: { path: '/agent/npm/pi-title/index.ts' },
+          handler: async (args: string) => { calls.push(args) } },
+        { name: 'title', invocationName: 'title:2', sourceInfo: { path: '/agent/npm/pi-sessions/extensions/index.ts' },
+          handler: async () => { throw new Error('interactive command must not run') } },
+      ],
+      createCommandContext: () => ({ mode: 'rpc' }),
+    },
+  } as unknown as import('./pi-sdk-adapter').PiSdkSession
+
+  assert.deepEqual(piSdkCommands(session).map(command => ({
+    name: command.name, canGenerate: command.titleRegeneration === true,
+  })), [
+    { name: 'title', canGenerate: true },
+    { name: 'title:2', canGenerate: false },
+  ])
+  await piSdkRegenerateNativeTitle(session)
+  assert.deepEqual(calls, ['regenerate'])
+  await assert.rejects(
+    () => piSdkRegenerateNativeTitle({ ...session, isStreaming: true }),
+    /requires an idle session/,
+  )
+  await assert.rejects(
+    () => piSdkRegenerateNativeTitle({
+      ...session,
+      extensionRunner: { getRegisteredCommands: () => [{
+        name: 'title', invocationName: 'title', sourceInfo: { path: '/agent/pi-sessions/index.ts' },
+        handler: async () => {},
+      }], createCommandContext: () => ({ mode: 'rpc' }) },
+    } as unknown as import('./pi-sdk-adapter').PiSdkSession),
+    /not installed/,
+  )
 })
