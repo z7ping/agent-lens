@@ -112,7 +112,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid var(--al-line-strong);
+  border: 0;
   border-radius: 11px;
   background: var(--al-surface);
   box-shadow: 0 7px 20px rgb(16 24 40 / .14);
@@ -126,18 +126,15 @@
   height: 20px;
 }
 .task-boundary-nav > .ui-icon-button:hover:not(:disabled) {
-  border-color: var(--al-accent);
   color: var(--al-accent);
   box-shadow: 0 9px 24px rgb(16 24 40 / .17);
   transform: translateY(-1px);
 }
 .task-boundary-nav > .ui-icon-button.is-primary {
-  border-color: var(--al-accent);
   background: var(--al-accent);
   color: var(--al-on-accent);
 }
 .task-boundary-nav > .ui-icon-button.is-primary:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
   background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
   color: var(--al-on-accent);
   box-shadow: 0 9px 24px color-mix(in srgb, var(--al-accent) 28%, transparent);
@@ -154,7 +151,7 @@
   align-items: center;
   gap: 2px;
   padding: 0 4px;
-  border: 1px solid var(--al-line-strong);
+  border: 0;
   border-radius: 12px;
   background: color-mix(in srgb, var(--al-surface-raised) 96%, transparent);
   box-shadow: var(--al-shadow);
@@ -165,16 +162,14 @@
   height: 42px;
   min-height: 42px;
   padding: 0;
-  border-color: transparent;
   border-radius: 9px;
   background: transparent;
   box-shadow: none;
   color: var(--al-ink-2);
 }
 .task-compact-round-nav > .ui-icon-button:hover:not(:disabled) {
-  border-color: transparent;
   background: var(--al-soft);
-  color: var(--al-accent);
+  color: var(--al-ink);
 }
 .task-compact-round-nav > span {
   min-width: 44px;
@@ -194,12 +189,10 @@
   color: var(--al-danger);
 }
 .task-compact-round-nav > .task-compact-round-latest.is-primary {
-  border-color: var(--al-accent);
   background: var(--al-accent);
   color: var(--al-on-accent);
 }
 .task-compact-round-nav > .task-compact-round-latest.is-primary:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
   background: color-mix(in srgb, var(--al-accent) 88%, var(--al-ink));
   color: var(--al-on-accent);
 }

@@ -1,7 +1,7 @@
 import { Children, Fragment, isValidElement, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Button, Drawer, Popover, UiIcon } from '../components/ui'
+import { Drawer, IconButton, Popover, UiIcon } from '../components/ui'
 import { useTaskSurfaceView } from './TaskSurface'
 
 export interface TaskHeaderMetric {
@@ -164,7 +164,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
           </div>)}
         </div>}
         {hasHeaderActions && <div className="task-header-actions">
-          {hasCompactInfo && <Button
+          {hasCompactInfo && <IconButton
             size="small"
             className="task-header-compact-info-trigger"
             aria-haspopup="dialog"
@@ -172,10 +172,10 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
             onClick={() => setCompactInfoOpen(true)}
             title={t('header.taskInfo')}
             aria-label={t('header.taskInfo')}
-          ><UiIcon name="info" size={16}/></Button>}
+          ><UiIcon name="info" size={16}/></IconButton>}
           {(auditToggle || viewActions) && <>
             <span ref={viewMenuAnchorRef} className="task-view-menu-anchor">
-              <Button
+              <IconButton
                 size="small"
                 className="task-view-menu-trigger"
                 aria-label={t('header.viewOptions')}
@@ -183,7 +183,7 @@ export function TaskHeader({ marker, agent, context, status, showStatus = true, 
                 aria-expanded={viewMenuOpen}
                 onClick={() => setViewMenuOpen(value => !value)}
                 title={t('header.viewOptions')}
-              ><UiIcon name="sliders-horizontal" size={16}/></Button>
+              ><UiIcon name="sliders-horizontal" size={16}/></IconButton>
             </span>
             <Popover
               open={viewMenuOpen}
