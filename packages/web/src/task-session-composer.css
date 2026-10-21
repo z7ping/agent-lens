@@ -162,7 +162,8 @@
   .task-composer-control--model { flex: 1 1 180px; }
   .task-composer-control--thinking { flex: 0 0 116px; }
   .task-composer-mode { order: 2; margin-left: 0; }
-  .task-composer-send { order: 3; margin-left: auto; }
+  .task-composer-action-anchor { order: 3; }
+  .task-composer-send { order: 4; margin-left: 0; }
   .task-composer-mode-action { padding-inline: 6px; }
   .task-composer-hint { display: none; }
   .task-composer-diagnostics { display: none; }
