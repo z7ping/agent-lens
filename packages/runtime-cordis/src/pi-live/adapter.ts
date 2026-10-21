@@ -309,6 +309,14 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       : []
     return { type: 'queue.update', steering, followUp }
   }
+  if (type === 'extension_ui_request' && liveText(event.method) === 'notify') {
+    const message = liveText(event.message).trim()
+    if (!message) return undefined
+    const nativeLevel = liveText(event.notifyType)
+    const level = nativeLevel === 'success' || nativeLevel === 'warning' || nativeLevel === 'error' ? nativeLevel : 'info'
+    return { type: 'notification', id: liveText(event.id) || undefined, level, message }
+  }
+  // setStatus/setWidget are transient extension UI state, not individual notifications.
   if (type === 'extension_ui_request') {
     const requestId = liveText(event.id)
     const method = liveText(event.method)
