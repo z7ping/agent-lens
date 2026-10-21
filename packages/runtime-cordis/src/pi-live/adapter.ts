@@ -42,6 +42,7 @@ const CAPABILITIES = [
   'stream',
   'interrupt',
   'queue',
+  'queue-mutation',
   'steer',
   'model-switching',
   'thinking-control',
