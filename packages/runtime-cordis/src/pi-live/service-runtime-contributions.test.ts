@@ -85,6 +85,23 @@ async function waitForStatus(
   throw new Error(`runtime did not reach ${status}`)
 }
 
+test('Pi 原生压缩仅在可信 Runtime capability 下开放，并经 Worker Handle 执行', async () => {
+  const host = new RuntimeContributionHost(true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    const disclosures = await service.runtimeDisclosures(started.runtimeSessionId)
+    const action = disclosures[0]?.actions?.find(item => item.actionId === 'pi.runtime.compact')
+    assert.equal(action?.placement, 'composer')
+    assert.ok(action)
+    await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.compact')
+    assert.equal(host.compactions, 1)
+  } finally {
+    await service.dispose()
+  }
+})
+
 test('Pi failed Runtime exposes retry only through a runtime disclosure contribution', async () => {
   const host = new RuntimeContributionHost()
   const service = new DefaultPiLiveService(host)
