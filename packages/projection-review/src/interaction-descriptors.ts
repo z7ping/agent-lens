@@ -621,6 +621,7 @@ export class InteractionDescriptorStore {
         trigger: group.descriptor.trigger,
         startedAt: group.descriptor.startedAt,
         endedAt: group.descriptor.endedAt,
+        observationRange: { firstId: group.descriptor.start.id, lastId: group.descriptor.end.id },
         nodes: buildNodes(items),
         processSummary: summary,
         processMode: 'summary' as const,
