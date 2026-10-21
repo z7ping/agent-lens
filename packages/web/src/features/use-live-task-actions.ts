@@ -67,7 +67,8 @@ export function useLiveTaskActions({
     startupSendingRef,
     leafIdRef,
     snapshotBaseActiveCountRef,
-    liveTurnRevisionRef
+    liveTurnRevisionRef,
+    queueRevisionRef
   } = session
   const canQueueWhileStreaming = Boolean(
     product?.capabilities.includes('steer') || product?.capabilities.includes('queue'),
@@ -270,6 +271,7 @@ export function useLiveTaskActions({
         expected: { steering: [...queue.steering], followUp: [...queue.followUp] },
         mode, index: queueIndex,
       })
+      queueRevisionRef.current += 1
       setQueue(next)
       setState(previous => previous
         ? { ...previous, pendingMessageCount: next.steering.length + next.followUp.length }
@@ -301,6 +303,7 @@ export function useLiveTaskActions({
       if (product?.capabilities.includes('queue') && (queue.steering.length || queue.followUp.length)) {
         await liveApi.clearQueue(current.liveId, current.runtimeSessionId)
       }
+      queueRevisionRef.current += 1
       setQueue(emptyLiveQueue())
       setRestoredQueue([])
       setStartupQueued(null)
