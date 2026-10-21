@@ -1507,6 +1507,36 @@ async function command(name, value = {}) {
   if (name === 'steer') return await session.steer(value.message, Array.isArray(value.images) && value.images.length ? value.images : undefined)
   if (name === 'followUp') return await session.followUp(value.message, Array.isArray(value.images) && value.images.length ? value.images : undefined)
   if (name === 'clearQueue') return session.clearQueue()
+  if (name === 'mutateQueue') {
+    // All native queue changes run synchronously in one Worker turn. No awaiting
+    // between clear and re-enqueue: generation cannot consume a partial queue.
+    const previous = session.clearQueue()
+    const expected = value.expected ?? {}
+    const unchanged = ['steering', 'followUp'].every(key =>
+      Array.isArray(expected[key]) && expected[key].length === previous[key].length
+      && expected[key].every((text, index) => text === previous[key][index]))
+    const next = { steering: [...previous.steering], followUp: [...previous.followUp] }
+    const key = value.mode === 'steer' ? 'steering' : 'followUp'
+    if (unchanged && Number.isSafeInteger(value.index) && value.index >= 0 && value.index < next[key].length) {
+      if (typeof value.text === 'string' && value.text.trim()) next[key].splice(value.index, 1, value.text)
+      else next[key].splice(value.index, 1)
+    } else {
+      // On a stale index, restore the original snapshot before reporting conflict.
+      for (const text of previous.steering) session.steer(text)
+      for (const text of previous.followUp) session.followUp(text)
+      throw new Error('LIVE_QUEUE_CONFLICT: queue changed before mutation')
+    }
+    try {
+      for (const text of next.steering) session.steer(text)
+      for (const text of next.followUp) session.followUp(text)
+    } catch (error) {
+      session.clearQueue()
+      for (const text of previous.steering) session.steer(text)
+      for (const text of previous.followUp) session.followUp(text)
+      throw error
+    }
+    return next
+  }
   if (name === 'abort') { const queue = value.restoreQueue === false ? { steering: [], followUp: [] } : session.clearQueue(); session.abortBash?.(); await session.abort(); return queue }
   if (name === 'extensionResponse') {
     if (!extensionUi || !extensionUi.respond(value.requestId, value.response)) throw new Error(`Unknown or already settled Pi Extension request id: ${value.requestId ?? 'missing'}`)
