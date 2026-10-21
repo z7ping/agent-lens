@@ -178,6 +178,7 @@ class InProcessHandle implements PiRuntimeHandle {
         && typeof session.getAvailableThinkingLevels === 'function',
       extensionUi: typeof session.bindExtensions === 'function',
       treeNavigation: typeof session.navigateTree === 'function',
+      manualCompaction: typeof session.compact === 'function',
       messageFork: typeof session.sessionManager.createBranchedSession === 'function'
         && typeof session.sessionManager.newSession === 'function',
     }
@@ -366,6 +367,12 @@ class InProcessHandle implements PiRuntimeHandle {
       cancelled: result.cancelled,
       ...(typeof result.editorText === 'string' ? { editorText: result.editorText } : {}),
     }
+  }
+  async compact(): Promise<void> {
+    if (this.session.isStreaming || this.session.isCompacting) throw new Error('Pi manual compaction requires an idle session')
+    if (typeof this.session.compact !== 'function') throw new Error('Installed Pi SDK does not support manual compaction')
+    await this.session.compact()
+    this.roundIndexCache = undefined
   }
   async controls(): Promise<PiLiveControls> {
     const thinking = this.thinkingControl()

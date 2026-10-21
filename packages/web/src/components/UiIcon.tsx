@@ -41,6 +41,7 @@ import {
   ListTodo,
   Maximize2,
   Menu,
+  Ellipsis,
   Minimize2,
   Moon,
   Network,
@@ -103,6 +104,7 @@ export type UiIconName =
   | 'info'
   | 'language'
   | 'menu'
+  | 'more'
   | 'moon'
   | 'panel-left-close'
   | 'panel-left-open'
@@ -169,6 +171,7 @@ const icons = {
   info: Info,
   language: Globe,
   menu: Menu,
+  more: Ellipsis,
   moon: Moon,
   'panel-left-close': PanelLeftClose,
   'panel-left-open': PanelLeftOpen,

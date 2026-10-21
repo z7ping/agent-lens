@@ -200,10 +200,23 @@ function sessionBoundaryPosition(root: HTMLElement, railFrame: RailFrameRect, fa
   const documentRight = document && documentRect && documentRect.width > 0
     ? documentRect.right - cssPixelValue(document, 'padding-right')
     : fallback.right
-  return {
-    bottom: Math.max(16, window.innerHeight - (railFrame.top + railFrame.height) + 16),
-    left: Math.min(window.innerWidth - 58, Math.max(16, documentRight + 12)),
+  // Keep the navigation in the document's right gutter, outside queued messages.
+  const left = Math.min(window.innerWidth - 42, Math.max(16, documentRight + 24))
+  let bottom = Math.max(16, window.innerHeight - (railFrame.top + railFrame.height) + 16)
+  const navigationHeight = 34 * 2 + 8
+  const navigationTop = () => window.innerHeight - bottom - navigationHeight
+  const queueRects = Array.from(root.querySelectorAll<HTMLElement>(
+    '.live-task-queue, .live-task-startup-queue, .live-task-interrupt-notice, .live-task-new-records',
+  )).map(item => item.getBoundingClientRect()).filter(rect => rect.width > 0 && rect.height > 0)
+  // If there is no room alongside the queue (including narrow windows), raise
+  // the navigation above it instead of covering Edit / Withdraw controls.
+  const collisions = queueRects.filter(rect =>
+    left < rect.right + 8 && left + 34 > rect.left - 8
+    && navigationTop() < rect.bottom + 8 && window.innerHeight - bottom > rect.top - 8)
+  if (collisions.length) {
+    bottom = Math.max(bottom, window.innerHeight - Math.min(...collisions.map(rect => rect.top)) + 12)
   }
+  return { bottom, left }
 }
 
 function compactRailPreview(value: string | undefined, max = 86): string {
@@ -600,7 +613,20 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
       ? new ResizeObserver(scheduleRailViewport)
       : null
     resizeObserver?.observe(root)
+    const floating = root.querySelector<HTMLElement>('.live-task-float-stack')
+    if (floating) resizeObserver?.observe(floating)
+    const queueObserver = floating && typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(() => {
+          floating.querySelectorAll<HTMLElement>('.live-task-queue, .live-task-startup-queue').forEach(node => resizeObserver?.observe(node))
+          scheduleRailViewport()
+        })
+      : null
+    if (floating) {
+      floating.querySelectorAll<HTMLElement>('.live-task-queue, .live-task-startup-queue').forEach(node => resizeObserver?.observe(node))
+      queueObserver?.observe(floating, { childList: true, subtree: true })
+    }
     return () => {
+      queueObserver?.disconnect()
       resizeObserver?.disconnect()
       root.removeEventListener('scroll', scheduleRailViewport, true)
       window.removeEventListener('resize', scheduleRailViewport)
@@ -738,7 +764,6 @@ export const TaskSurface = forwardRef<HTMLElement, TaskSurfaceProps>(function Ta
           </IconButton>
           <IconButton
             className="task-boundary-latest"
-            variant="primary"
             title={t('surface.jumpLatest')}
             aria-label={t('surface.jumpLatest')}
             disabled={resolvedBoundaryNavigation.endDisabled}

@@ -50,6 +50,7 @@ export interface PiLiveRuntimeCapabilities {
   extensionUi: boolean
   /** Pi-private support flags used only to decide whether controlled message actions are offered. */
   treeNavigation?: boolean | undefined
+  manualCompaction?: boolean | undefined
   messageFork?: boolean | undefined
 }
 

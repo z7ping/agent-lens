@@ -81,7 +81,16 @@
 .task-composer-markdown-preview :not(pre) > code { padding: 1px 4px; border-radius: 4px; background: var(--al-soft-2); font-family: var(--font-mono); font-size: .9em; }
 .task-composer-preview-empty { color: var(--al-muted-2); font-size: 13px; }
 .task-composer-bar { display: flex; min-height: 48px; align-items: center; gap: 12px; padding: 4px 10px 9px 14px; border-top: 0; }
-.task-composer-runtime { display: inline-flex; width: 132px; min-width: 132px; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-composer-connection-anchor { display: inline-flex; width: 132px; min-width: 132px; align-items: center; }
+.task-composer-runtime { display: inline-flex; width: 100%; min-width: 0; align-items: center; gap: 6px; overflow: hidden; color: var(--al-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-composer-runtime-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-composer-runtime-action { justify-content: flex-start; padding-inline: 4px; border: 0; background: transparent; font-weight: 400; }
+.task-composer-runtime-action:hover:not(:disabled), .task-composer-runtime-action[aria-expanded='true'] { background: var(--al-soft); color: var(--al-ink-2); }
+.task-composer-runtime-action > svg { flex: 0 0 auto; margin-left: auto; }
+.task-composer-menu-popover { width: 210px; padding: 5px; border: 1px solid var(--al-line); border-radius: 9px; background: var(--al-surface-raised); box-shadow: var(--al-shadow-lg); }
+.task-composer-menu-list { display: grid; gap: 2px; }
+.task-composer-menu-list > .btn { display: flex; width: 100%; min-height: 34px; justify-content: flex-start; gap: 10px; border: 0; border-radius: 6px; background: transparent; text-align: left; }
+.task-composer-menu-list > .btn:hover:not(:disabled) { background: var(--al-soft); }
 /* The shared SelectMenu owns height, borders and interaction. The composer owns
  * only the available horizontal space for its two semantically different controls. */
 .task-composer-settings { display: flex; min-width: 0; flex: 0 1 420px; flex-wrap: nowrap; align-items: center; gap: 8px; }
@@ -94,6 +103,8 @@
 .task-composer-mode-action.active { border-color: transparent; background: var(--al-surface); box-shadow: 0 1px 2px rgb(16 24 40 / .06); color: var(--al-ink); font-weight: 650; }
 /* 发送继续使用强调图标，但 30px 命中区由 IconButton Primitive 统一持有。 */
 .task-composer-send { margin-left: auto; border-radius: 50%; }
+.task-composer-action-anchor { display: inline-flex; margin-left: auto; }
+.task-composer-action-anchor + .task-composer-send { margin-left: 0; }
 .task-composer-hint,
 .task-composer:focus-within .task-composer-hint {
   position: absolute;
@@ -134,7 +145,10 @@
   pointer-events: none;
 }
 @media (max-width: 1199.98px) {
-  .task-composer-runtime { display: none; }
+  .task-composer-connection-anchor { width: 32px; min-width: 32px; }
+  .task-composer-connection-anchor:has(.task-composer-runtime:not(.task-composer-runtime-action)) { display: none; }
+  .task-composer-runtime-action { justify-content: center; }
+  .task-composer-runtime-label { display: none; }
 }
 @media (max-width: 991.98px) {
   .task-composer.is-expanded .task-composer-editor { height: clamp(220px, 44vh, 440px); }
@@ -142,13 +156,14 @@
 @media (max-width: 767.98px) {
   .task-composer-editor { height: 78px; min-height: 78px; }
   .task-composer.is-expanded .task-composer-editor { height: clamp(200px, 40vh, 360px); }
-  .task-composer-runtime { display: none; }
+  .task-composer-connection-anchor:has(.task-composer-runtime:not(.task-composer-runtime-action)) { display: none; }
   .task-composer-bar { flex-wrap: wrap; gap: 6px 8px; }
   .task-composer-settings { width: 100%; flex: 1 1 100%; order: 1; }
   .task-composer-control--model { flex: 1 1 180px; }
   .task-composer-control--thinking { flex: 0 0 116px; }
   .task-composer-mode { order: 2; margin-left: 0; }
-  .task-composer-send { order: 3; margin-left: auto; }
+  .task-composer-action-anchor { order: 3; }
+  .task-composer-send { order: 4; margin-left: 0; }
   .task-composer-mode-action { padding-inline: 6px; }
   .task-composer-hint { display: none; }
   .task-composer-diagnostics { display: none; }

@@ -47,6 +47,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const hostApi = useMemo(() => new AgentLensApi(), [])
   const [fileChanges, setFileChanges] = useState<{ runtimeId: string; result: TaskFileChangesResponseDto | null } | null>(null)
   const [progressClockMs, setProgressClockMs] = useState(() => Date.now())
+  const [reconnectEpoch, setReconnectEpoch] = useState(0)
+  const [connectionBusy, setConnectionBusy] = useState(false)
   const current = useMemo(() => parseTaskLiveRuntimeLocation(location.pathname), [location.pathname])
   // Keep the reader's disclosure intent through live snapshot reconciliation.
   const processExpansionStore = useMemo(() => new Map<string, boolean>(), [current?.liveId, current?.runtimeSessionId])
@@ -133,7 +135,22 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     setComposerValue(composerDraftKey ? readLiveComposerDraft(composerDraftKey) : '')
   }, [composerDraftKey, setComposerValue])
 
-  useLiveTaskRuntime({ current, t, session })
+  const { syncCurrentSession } = useLiveTaskRuntime({ current, t, session, reconnectEpoch })
+  const synchronizeSession = useCallback(async () => {
+    if (connectionBusy) return
+    setConnectionBusy(true)
+    try {
+      await syncCurrentSession()
+    } catch (reason) {
+      setSyncError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setConnectionBusy(false)
+    }
+  }, [connectionBusy, syncCurrentSession, setSyncError])
+  const reconnectSession = useCallback(() => {
+    if (connectionBusy) return
+    setReconnectEpoch(value => value + 1)
+  }, [connectionBusy])
 
   const { markReaderUserIntent, onReaderScroll, jumpEarliest, jumpLatest } = useLiveTaskHistory({ current, session })
 
@@ -300,6 +317,17 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const connectionLabel = streamSupported
     ? connected ? t('live.connected') : t('live.connecting')
     : runtimeStatus
+  const composerSessionActions = runtimeDisclosures.flatMap(disclosure =>
+    (disclosure.actions ?? [])
+      .filter(action => action.placement === 'composer')
+      .map(action => ({
+        id: action.actionId,
+        label: contributionText(action.label, i18n.resolvedLanguage ?? i18n.language),
+        ...(action.description ? { description: contributionText(action.description, i18n.resolvedLanguage ?? i18n.language) } : {}),
+        disabled: runtimeActionPending !== null || state?.status !== 'ready' || state.isStreaming,
+        onClick: () => { void runRuntimeAction(action) },
+      })),
+  )
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
     if (message) void send(message)
@@ -518,6 +546,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           disabled={state?.status === 'terminating' || state?.status === 'terminated'}
           connectionLabel={connectionLabel}
           disconnected={streamSupported && !connected}
+          onSyncSession={streamSupported && product?.capabilities.includes('recovery') ? synchronizeSession : undefined}
+          onReconnectSession={streamSupported && (state?.status === 'ready' || state?.status === 'initializing') ? reconnectSession : undefined}
+          connectionBusy={connectionBusy}
+          sessionActions={composerSessionActions}
           modelControl={modelControl}
           thinking={thinking}
           controlsBusy={busy}

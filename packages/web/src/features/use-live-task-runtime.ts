@@ -1,7 +1,7 @@
 import type { useTranslation } from 'react-i18next'
 import type { TaskLiveRuntimeLocation } from './task-live-runtime'
 import type { LiveTaskState } from './live-task-state'
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { liveApi } from '../client/live'
 import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
@@ -14,10 +14,12 @@ export function useLiveTaskRuntime({
   current,
   t,
   session,
+  reconnectEpoch = 0,
 }: {
   current: TaskLiveRuntimeLocation | null
   t: ReturnType<typeof useTranslation>['t']
   session: LiveTaskState
+  reconnectEpoch?: number
 }) {
   const {
     product,
@@ -82,6 +84,9 @@ export function useLiveTaskRuntime({
     roundProjectorRef,
     queueRevisionRef
   } = session
+  const manualSyncRef = useRef<(() => Promise<void>) | null>(null)
+  const syncCurrentSession = useCallback(() => manualSyncRef.current?.()
+    ?? Promise.reject(new Error('Live runtime is not ready for synchronization')), [])
   const recoveryReaderAnchorRef = useRef<{ anchor: ReturnType<typeof captureLiveReaderAnchor>; scrollTop: number } | null>(null)
   // Restore before paint; recovery is a data update, not a navigation request.
   useLayoutEffect(() => {
@@ -434,6 +439,15 @@ export function useLiveTaskRuntime({
       }
     }
 
+    manualSyncRef.current = async () => {
+      // Reuse the existing bounded reconciliation pipeline; never replace the
+      // full transcript, queued messages, reader anchor, or composer draft.
+      await reconcileState(true)
+      if (product.capabilities.includes('recovery')) {
+        await recover(runtimeStateRef.current?.isStreaming ? 'live' : 'settle')
+      }
+    }
+
     const onVisible = () => {
       if (document.visibilityState === 'hidden') {
         hiddenSince = Date.now()
@@ -454,6 +468,7 @@ export function useLiveTaskRuntime({
       }
     }, 5_000)
 
+    setConnected(false)
     const unsubscribe = liveApi.subscribe(
       current.liveId,
       current.runtimeSessionId,
@@ -625,6 +640,7 @@ export function useLiveTaskRuntime({
       },
     )
     return () => {
+      manualSyncRef.current = null
       recoveryActive = false
       recoveryGeneration += 1
       reconcileEpoch += 1
@@ -641,6 +657,7 @@ export function useLiveTaskRuntime({
     current?.runtimeSessionId,
     product?.liveId,
     product?.capabilities,
+    reconnectEpoch,
     t,
   ])
 
@@ -683,4 +700,5 @@ export function useLiveTaskRuntime({
   }, [])
 
 
+  return { syncCurrentSession }
 }

@@ -345,6 +345,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       message: message || 'Pi Live runtime exited',
     }
   }
+  if (type === 'compaction_manual_error') return { type: 'error', message: liveText(event.message) || 'Pi manual compaction failed' }
   if (type === 'extension_error') {
     const message = piEventErrorText(event.errorMessage, event.error)
     return { type: 'error', message: message || 'Pi Live extension failed' }

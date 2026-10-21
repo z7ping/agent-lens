@@ -22,6 +22,14 @@ const review = [
 ].map(file => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')).join('\n')
 const railCss = readFileSync(new URL('../task-turn-rail.css', import.meta.url), 'utf8')
 
+test('边界导航位于正文右侧留白并避让 Live 排队消息', () => {
+  assert.match(taskSurface, /documentRight \+ 24/)
+  assert.match(taskSurface, /live-task-queue, \.live-task-startup-queue/)
+  assert.match(taskSurface, /window\.innerHeight - Math\.min\(\.\.\.collisions/)
+  assert.match(taskSurface, /queueObserver\?\.observe\(floating/)
+  assert.match(railCss, /\.task-boundary-nav > \.ui-icon-button \{[\s\S]*?width: 34px;[\s\S]*?box-shadow: none;/)
+})
+
 test('轮次导轨保持旧版共享阅读锚点与 Rail Frame 位置', () => {
   assert.match(taskSurface, /TASK_ROUND_ANCHOR_RATIO\s*=\s*\.3/)
   assert.match(taskSurface, /roundAnchorY\(viewportRect\)/)

@@ -58,6 +58,7 @@ interface OwnedRuntime {
   activeAssistantMessageId?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
+  manualCompactionPending?: boolean | undefined
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -625,6 +626,7 @@ function runtimeCapabilities(value: unknown): PiLiveRuntimeCapabilities | undefi
     thinkingLevelControl: capabilities.thinkingLevelControl,
     extensionUi: capabilities.extensionUi,
     ...(typeof capabilities.treeNavigation === 'boolean' ? { treeNavigation: capabilities.treeNavigation } : {}),
+    ...(typeof capabilities.manualCompaction === 'boolean' ? { manualCompaction: capabilities.manualCompaction } : {}),
     ...(typeof capabilities.messageFork === 'boolean' ? { messageFork: capabilities.messageFork } : {}),
   }
 }
@@ -1156,15 +1158,36 @@ export class DefaultPiLiveService implements PiLiveService {
               tone: 'primary' as const,
             }],
           }
-        : {}),
+        : state.status === 'ready' && state.capabilities?.manualCompaction === true
+          && !state.isStreaming && !state.isCompacting && !this.requireRuntime(id).manualCompactionPending
+          ? { actions: [{
+              actionId: 'pi.runtime.compact',
+              placement: 'composer' as const,
+              label: contributionText('Compact context', '压缩上下文'),
+              description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
+            }] }
+          : {}),
     }]
   }
 
   async executeRuntimeAction(id: string, actionId: string) {
-    if (actionId !== 'pi.runtime.retry') {
-      throw this.conflict(`Unknown Pi runtime action: ${actionId}`)
+    if (actionId === 'pi.runtime.retry') return { runtime: await this.retry(id) }
+    if (actionId === 'pi.runtime.compact') {
+      const runtime = await this.readyRuntime(id)
+      if (runtime.capabilities?.manualCompaction !== true || !runtime.handle?.compact) {
+        throw this.conflict('Installed Pi SDK does not support manual compaction')
+      }
+      if (runtime.isStreaming || runtime.isCompacting || runtime.manualCompactionPending) {
+        throw this.conflict('Pi manual compaction requires an idle session')
+      }
+      runtime.manualCompactionPending = true
+      // Native compaction can outlive an HTTP request; its events report progress.
+      void runtime.handle.compact().catch(reason => {
+        this.publish(runtime, { type: 'compaction_manual_error', message: reason instanceof Error ? reason.message : String(reason) })
+      }).finally(() => { runtime.manualCompactionPending = false })
+      return { runtime: await this.runtimeState(runtime) }
     }
-    return { runtime: await this.retry(id) }
+    throw this.conflict(`Unknown Pi runtime action: ${actionId}`)
   }
 
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow): Promise<PiLiveSnapshot> {

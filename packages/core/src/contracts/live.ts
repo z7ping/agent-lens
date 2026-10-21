@@ -535,6 +535,7 @@ export interface LiveRuntimeActionContribution {
   label: LiveContributionText
   description?: LiveContributionText | undefined
   tone?: LiveContributionActionTone | undefined
+  placement?: 'composer' | undefined
 }
 
 export type LiveRuntimeLifecycleStatus = 'initializing' | 'ready' | 'failed'

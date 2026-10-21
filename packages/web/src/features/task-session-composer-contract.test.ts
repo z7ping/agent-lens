@@ -33,6 +33,20 @@ const composer = readFileSync(new URL('../components/LiveMarkdownComposer.tsx', 
 const imageNode = readFileSync(new URL('../components/LiveImageNode.tsx', import.meta.url), 'utf8')
 const attachmentClient = readFileSync(new URL('../client/live-attachments.ts', import.meta.url), 'utf8')
 
+test('连接状态操作统一由 TaskSessionComposer 渲染，Live 仅提供重连/同步回调', () => {
+  assert.match(taskComposer, /onSyncSession\?\(\): void/)
+  assert.match(taskComposer, /onReconnectSession\?\(\): void/)
+  assert.match(taskComposer, /<Popover open=\{connectionMenuOpen && canManageConnection\}/)
+  assert.match(taskComposer, /aria-haspopup="menu"/)
+  assert.match(liveTask, /onSyncSession=\{streamSupported/)
+  assert.match(liveTask, /onReconnectSession=\{streamSupported/)
+  assert.match(page, /manualSyncRef\.current = async \(\) =>/)
+  assert.match(page, /await recover\(runtimeStateRef\.current\?\.isStreaming/)
+  assert.match(page, /reconnectEpoch/)
+  assert.match(composerCss, /\.task-composer-menu-popover \{/)
+  assert.doesNotMatch(reviewTask, /onSyncSession=|onReconnectSession=/)
+})
+
 test('通用 Live 产品层不再依赖 legacy PiLivePage / piLiveApi', () => {
   assert.doesNotMatch(app, /import\(['"]\.\/features\/PiLivePage['"]\)/)
   assert.doesNotMatch(taskCenter, /PiLivePage|piLiveApi/)
@@ -148,8 +162,13 @@ test('流式消息继续复用 TaskMessage，不恢复第二套响应气泡', ()
   assert.match(globalStyles, /\.markdown-streaming-tail\s*\{[\s\S]*?white-space:\s*pre-wrap;/)
 })
 
-test('Live Composer 窄窗继续收回状态文本空间', () => {
-  assert.match(composerCss, /@media \(max-width: 1199\.98px\) \{[\s\S]*?\.task-composer-runtime \{ display: none; \}/)
+test('Live Composer 窄窗收起连接文字但保留可操作入口', () => {
+  assert.match(composerCss, /@media \(max-width: 1199\.98px\)/)
+  assert.match(composerCss, /\.task-composer-runtime-label \{ display: none; \}/)
+  assert.match(composerCss, /\.task-composer-connection-anchor:has/)
+  assert.match(taskComposer, /sessionActions\.length > 0/)
+  assert.match(liveTask, /sessionActions=\{composerSessionActions\}/)
+  assert.match(liveTask, /action\.placement === 'composer'/)
 })
 
 test('Review/Live 头部、阅读区和 Live Composer 共用 820px 宽度上限', () => {
