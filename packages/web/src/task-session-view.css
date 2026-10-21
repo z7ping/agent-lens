@@ -111,7 +111,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: 26px 28px;
   }
-  .task-session-view .task-header-title { grid-column: 1; grid-row: 1; font-size: 15px; }
+  .task-session-view .task-header-title { grid-column: 1; grid-row: 1; font-size: var(--text-task-emphasis); }
   .task-session-view .task-header-secondary { grid-column: 1; grid-row: 2; }
   .task-session-view .task-header-actions { grid-column: 2; grid-row: 1 / 3; justify-self: end; }
   .task-session-view .task-header-submeta,
