@@ -92,3 +92,31 @@ test('大块中文参数合并仍受单条消息字节上限约束', () => {
   assert.equal(queue.sent.length, 3)
   assert.equal(queue.failures.length, 0)
 })
+
+test('Worker 原生队列单次变更保留其他条目，拒绝过期索引并恢复原队列', () => {
+  const start = worker.indexOf("  if (name === 'mutateQueue') {")
+  const end = worker.indexOf("  if (name === 'abort')", start)
+  assert.ok(start >= 0 && end > start)
+  const command = worker.slice(start, end)
+  let state = { steering: ['介入一', '介入二'], followUp: ['后续一'] }
+  const session = {
+    clearQueue: () => {
+      const previous = { steering: [...state.steering], followUp: [...state.followUp] }
+      state = { steering: [], followUp: [] }
+      return previous
+    },
+    steer: (text: string) => { state.steering.push(text) },
+    followUp: (text: string) => { state.followUp.push(text) },
+  }
+  const mutate = (value: unknown) => runInNewContext(
+    `(() => { const name = 'mutateQueue'; ${command} })()`,
+    { session, value },
+  ) as { steering: string[]; followUp: string[] }
+  const before = { steering: [...state.steering], followUp: [...state.followUp] }
+  const result = mutate({ expected: before, mode: 'steer', index: 0 })
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), { steering: ['介入二'], followUp: ['后续一'] })
+  assert.deepEqual(state, { steering: ['介入二'], followUp: ['后续一'] })
+
+  assert.throws(() => mutate({ expected: before, mode: 'steer', index: 0 }), /LIVE_QUEUE_CONFLICT/)
+  assert.deepEqual(state, { steering: ['介入二'], followUp: ['后续一'] })
+})
