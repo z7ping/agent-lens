@@ -356,6 +356,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     ...restoredQueue.map(item => ({ ...item, active: false })),
   ]
 
+  const queueCanMutate = Boolean(product?.capabilities.includes('queue-mutation'))
   const queueCount = queueItems.length + Number(Boolean(startupQueued))
   const queuePreview = startupQueued ? messageText(startupQueued) : queueItems[0]?.text ?? ''
   const queueContent = queueCount > 0 ? <div className="live-task-queue" role="region" aria-label={t('live.queue.title')}>
@@ -402,10 +403,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         <span className="live-task-queue-type">{item.pending ? t('live.queue.joining') : !item.active ? t('live.queue.restored') : item.mode === 'steer' ? t('live.queue.steer') : t('live.queue.followUp')}</span>
         <b title={item.text}>{item.text}</b>
         <span className="live-task-queue-actions">
-          {!item.pending && <IconButton size="small" aria-label={t('live.queue.edit')} title={composerHasContent ? t('live.queue.draftPending') : t('live.queue.edit')} disabled={queueMutationPending || busy || composerHasContent}
+          {!item.pending && (!item.active || queueCanMutate) && <IconButton size="small" aria-label={t('live.queue.edit')} title={composerHasContent ? t('live.queue.draftPending') : t('live.queue.edit')} disabled={queueMutationPending || busy || composerHasContent}
             onClick={() => { if (item.active && item.queueIndex !== undefined) void editQueued(item.mode, item.queueIndex, item.text); else if (!item.active) editRestoredQueue(item) }}
           ><UiIcon name="tool-edit" size={14}/></IconButton>}
-          {!item.pending && <IconButton size="small" aria-label={t('live.queue.withdraw')} disabled={queueMutationPending || busy}
+          {!item.pending && (!item.active || queueCanMutate) && <IconButton size="small" aria-label={t('live.queue.withdraw')} disabled={queueMutationPending || busy}
             onClick={() => { if (item.active && item.queueIndex !== undefined) void removeQueued(item.mode, item.queueIndex, item.text); else if (!item.active) removeRestoredQueue(item.id) }}
           ><UiIcon name="close" size={14}/></IconButton>}
         </span>
