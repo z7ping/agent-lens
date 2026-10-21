@@ -866,16 +866,24 @@ async function connectNotificationEvents(
     if (closed || refreshing) return
     refreshing = true
     try {
+      const failedAdapters = new Set<string>()
       const groups = await Promise.all(service.list().map(async adapter => {
         try {
           const states = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
           return states.filter(state => state.status !== 'terminated' && state.status !== 'terminating')
             .map(state => ({ adapter, state }))
-        } catch { return [] }
+        } catch {
+          failedAdapters.add(adapter.manifest.liveId)
+          return []
+        }
       }))
       if (closed) return
       const active = groups.flat().sort((a, b) => Number(b.state.isStreaming) - Number(a.state.isStreaming)).slice(0, 64)
       const next = new Set(active.map(({ adapter, state }) => `${adapter.manifest.liveId}:${state.runtimeSessionId}`))
+      // A transient adapter.list failure must not drop working native subscriptions.
+      for (const key of subscriptions.keys()) {
+        if ([...failedAdapters].some(liveId => key.startsWith(`${liveId}:`))) next.add(key)
+      }
       for (const [key, dispose] of subscriptions) {
         if (!next.has(key)) { dispose(); subscriptions.delete(key) }
       }
@@ -908,6 +916,7 @@ async function connectNotificationEvents(
     if (closed) return
     closed = true
     clearInterval(heartbeat)
+    clearInterval(discovery)
     for (const dispose of subscriptions.values()) dispose()
     subscriptions.clear()
   }
