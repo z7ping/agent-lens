@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, StatusBadge, UiIcon } from '../components/ui'
 import type { TaskToolGroupModel, TaskToolModel } from './task-detail-model'
@@ -44,6 +44,7 @@ export function TaskToolGroup({
   className = '',
 }: TaskToolGroupProps) {
   const { t } = useTranslation('task')
+  const listId = useId()
   const [expanded, setExpanded] = useState(() => expansionStore?.get(model.id) ?? defaultExpanded)
   useEffect(() => {
     setExpanded(expansionStore?.get(model.id) ?? defaultExpanded)
@@ -70,6 +71,23 @@ export function TaskToolGroup({
     />
   }
 
+  // One header, two semantic modes: interactive only when there are hidden tools.
+  const headerContent = <>
+    <span className="task-tool-group-heading">
+      <UiIcon name="tool-shell" size={14}/>
+      <span className="task-tool-group-title">{t('live.toolGroup')}</span>
+      <StatusBadge tone="neutral" className="task-tool-group-count">{tools.length}</StatusBadge>
+    </span>
+    {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
+    {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
+    {collapsible && <>
+      <span className="task-tool-group-more">{expanded
+        ? t('live.toolGroupLess')
+        : t('live.toolGroupMore', { count: hiddenCount })}</span>
+      <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
+    </>}
+  </>
+
   return <div
     className={`task-tool-group ${failed ? 'task-tool-group-error' : ''} ${className}`.trim()}
     role="group"
@@ -79,32 +97,21 @@ export function TaskToolGroup({
     data-interleaved={sequence ? 'true' : undefined}
     aria-label={t('tool.calls', { count: tools.length })}
   >
-    <div className="task-tool-group-header">
-      <span className="task-tool-group-heading">
-        <UiIcon name="tool-shell" size={14}/>
-        <span className="task-tool-group-title">{t('live.toolGroup')}</span>
-        <StatusBadge tone="neutral" className="task-tool-group-count">{tools.length}</StatusBadge>
-      </span>
-      {running > 0 && <span className="task-tool-group-running">{t('live.toolGroupRunning', { count: running })}</span>}
-      {failed > 0 && <span className="task-tool-group-failed">{t('live.toolGroupFailed', { count: failed })}</span>}
-      {collapsible && <Button
-        variant="quiet"
-        size="small"
-        className="task-tool-group-toggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded(value => {
-          const next = !value
-          expansionStore?.set(model.id, next)
-          return next
-        })}
-      >
-        <span className="task-tool-group-more">{expanded
-          ? t('live.toolGroupLess')
-          : t('live.toolGroupMore', { count: hiddenCount })}</span>
-        <UiIcon name="chevron-down" className="task-tool-group-chevron" size={14}/>
-      </Button>}
-    </div>
-    <div className="task-tool-list">{(sequence ?? tools.map((tool): TaskToolGroupSequenceEntry => ({
+    {collapsible
+      ? <Button
+          variant="quiet"
+          size="small"
+          className="task-tool-group-header task-tool-group-toggle"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded(value => {
+            const next = !value
+            expansionStore?.set(model.id, next)
+            return next
+          })}
+        >{headerContent}</Button>
+      : <div className="task-tool-group-header">{headerContent}</div>}
+    <div id={listId} className="task-tool-list">{(sequence ?? tools.map((tool): TaskToolGroupSequenceEntry => ({
       type: 'tool', key: tool.id, tool,
     }))).map((entry, index) => entry.type === 'content'
       ? <Fragment key={entry.key}>{entry.content}</Fragment>
