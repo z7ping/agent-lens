@@ -43,6 +43,8 @@
    */
   --text-task-body:var(--text-body);
   --text-task-process:var(--text-secondary);
+  /* Thinking Markdown currently inherits the 14px document body; preserve it. */
+  --text-task-thinking-markdown:var(--text-task-body);
   --text-task-tool:var(--text-secondary);
   --text-task-tool-code:var(--text-task-tool);
   --text-task-code:var(--text-caption);
