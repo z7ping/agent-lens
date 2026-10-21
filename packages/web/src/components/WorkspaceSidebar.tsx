@@ -12,6 +12,7 @@ import './workspace-sidebar-menu.css'
 
 interface WorkspaceSidebarProps {
   snapshot: ClientSnapshot
+  hasTaskNotifications: boolean
   theme: 'light' | 'dark'
   onToggleTheme(): void
   onOpenMarkdownThemes(): void
@@ -24,6 +25,7 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   snapshot,
+  hasTaskNotifications,
   theme,
   onToggleTheme,
   onOpenMarkdownThemes,
@@ -70,6 +72,7 @@ export function WorkspaceSidebar({
 
     <WorkspacePrimaryNavigation
       activeSection={onReview ? 'review' : onInsights ? 'insights' : onAgents ? 'agents' : onBackup ? 'backup' : undefined}
+      hasTaskNotifications={hasTaskNotifications}
       hasInsightsUpdate={snapshot.usage.hasNewData}
       hasAgentsUpdate={snapshot.agentsHasNewData || Boolean(snapshot.integrationManagement?.items.some(item => item.isNew))}
       onNavigate={onMobileClose}
