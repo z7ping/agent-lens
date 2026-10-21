@@ -1332,7 +1332,7 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'queue' && request.method === 'PATCH') {
-      requireCapability(adapter, 'queue')
+      requireCapability(adapter, 'queue-mutation')
       if (!adapter.mutateQueue) throw httpError(409, `${adapter.manifest.displayName} does not support queue mutation`)
       const body = objectBody(await readJson(request))
       const expected = body.expected
