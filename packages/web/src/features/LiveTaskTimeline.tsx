@@ -178,11 +178,16 @@ export const GenericLiveRound = memo(function GenericLiveRound({
     item.kind === 'message'
       ? <TaskSessionProcessText key={item.id} text={item.text} streaming={item.streaming}/>
       : renderItem(item)
-  // Thinking/commentary interrupts tool runs; each run has its own 3-call preview.
-  const processSequence: TaskToolGroupSequenceEntry[] = processItems.map(item =>
-    item.kind === 'tool'
-      ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool')) }
-      : { type: 'content', key: item.id, content: renderProcessItem(item) })
+  // Build from the ORIGINAL native order: answers/prompts may be rendered in
+  // a separate lane but still interrupt adjacent tool runs. Never join tools
+  // across an invisible item, including streaming intermediary assistant text.
+  const processIds = new Set(reading.process.map(fact => fact.id))
+  const processSequence: TaskToolGroupSequenceEntry[] = projection.items.map(item =>
+    !processIds.has(item.id)
+      ? { type: 'content', key: `boundary:${item.id}`, content: null }
+      : item.kind === 'tool'
+        ? { type: 'tool', key: item.id, tool: liveTaskToolModel(item, t('tool.kind.tool')) }
+        : { type: 'content', key: item.id, content: renderProcessItem(item) })
   const processContent = <TaskProcessSequence id={projection.model.id} sequence={processSequence} expansionStore={processExpansionStore}/>
 
   const processCount = reading.processCounts.commentary
