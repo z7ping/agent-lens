@@ -76,42 +76,87 @@ function SkeletonLine({ width = '100%', height = 11 }: { width?: string; height?
   return <span className="state-skeleton" style={{ width, height }}/>
 }
 
+/** Match the actual Task Center rail: a day heading and compact, borderless session rows. */
 export function SessionListSkeleton() {
   const { t } = useTranslation('common')
-  return <div className="session-list-skeleton" aria-label={t('loadingSessions')}>
-    {[0, 1, 2, 3].map(index => <div className="session-skeleton-card" key={index}>
-      <div className="state-skeleton-row"><span className="state-skeleton state-skeleton-dot"/><SkeletonLine width={index % 2 ? '66px' : '58px'}/><SkeletonLine width="48px"/></div>
-      <SkeletonLine width={index % 2 ? '76%' : '84%'} height={13}/>
-      <SkeletonLine width={index % 2 ? '52%' : '61%'}/>
-    </div>)}
+  return <div className="session-list-skeleton" role="status" aria-label={t('loadingSessions')}>
+    <div aria-hidden="true">
+      <div className="session-skeleton-group"><SkeletonLine width="42px"/></div>
+      {[0, 1, 2, 3].map(index => <div className="session-skeleton-row" key={index}>
+        <SkeletonLine width={index % 2 ? '68%' : '85%'} height={14}/>
+        <div className="state-skeleton-row">
+          <span className="state-skeleton state-skeleton-dot"/>
+          <SkeletonLine width={index % 2 ? '76px' : '64px'}/>
+          <SkeletonLine width="52px"/>
+        </div>
+      </div>)}
+    </div>
   </div>
 }
 
+/** One shared loading shape for the flat Live / Review reading surface. */
 export function ReviewDetailSkeleton() {
   const { t } = useTranslation('common')
-  return <div className="review-detail-skeleton" aria-label={t('loadingSessionDetail')}>
-    <SkeletonLine width="42%" height={19}/>
-    <SkeletonLine width="30%"/>
-    <div className="review-detail-skeleton-metrics">
-      {[0, 1, 2, 3].map(index => <span className="state-skeleton" key={index}/>) }
+  return <div className="review-detail-skeleton" role="status" aria-label={t('loadingSessionDetail')}>
+    <div aria-hidden="true">
+      <div className="review-detail-skeleton-header">
+        <SkeletonLine width="44%" height={17}/>
+        <div className="state-skeleton-row"><SkeletonLine width="82px"/><SkeletonLine width="56px"/></div>
+      </div>
+      <div className="review-detail-skeleton-body">
+        <div className="review-detail-skeleton-user"><SkeletonLine width="72%" height={13}/><SkeletonLine width="48%"/></div>
+        <div className="review-detail-skeleton-answer">
+          <SkeletonLine width="88%" height={13}/><SkeletonLine width="96%" height={13}/><SkeletonLine width="64%"/>
+        </div>
+        <div className="review-detail-skeleton-process"><SkeletonLine width="36%"/><SkeletonLine width="78%"/></div>
+      </div>
     </div>
-    <span className="state-skeleton review-detail-skeleton-message"/>
-    <span className="state-skeleton review-detail-skeleton-flow"/>
-    <span className="state-skeleton review-detail-skeleton-message short"/>
   </div>
 }
 
-export function WorkspaceSkeleton({ kind = 'cards' }: { kind?: 'cards' | 'table' }) {
+export type WorkspaceSkeletonKind = 'agents' | 'insights' | 'tools'
+
+/** Page-aware variants share one primitive rather than inventing page-local loaders. */
+export function WorkspaceSkeleton({ kind = 'agents' }: { kind?: WorkspaceSkeletonKind }) {
   const { t } = useTranslation('common')
-  return <div className={`workspace-skeleton workspace-skeleton-${kind}`} aria-label={t('loadingPageData')}>
-    <SkeletonLine width="112px" height={20}/>
-    <SkeletonLine width="48%"/>
-    {kind === 'table' ? <>
-      <div className="workspace-skeleton-kpis">{[0, 1, 2, 3].map(index => <span key={index} className="state-skeleton"/>)}</div>
-      <div className="workspace-skeleton-table">
-        {[0, 1, 2, 3, 4].map(index => <span key={index} className="state-skeleton"/>) }
-      </div>
-    </> : <div className="workspace-skeleton-cards">{[0, 1].map(index => <span key={index} className="state-skeleton"/>)}</div>}
+  return <div className={`workspace-skeleton is-${kind}`} role="status" aria-label={t('loadingPageData')}>
+    <div aria-hidden="true">
+      {kind === 'agents' ? <>
+        <div className="workspace-skeleton-heading"><SkeletonLine width="160px" height={18}/><SkeletonLine width="80px"/></div>
+        <div className="workspace-skeleton-agent-info">
+          <div className="state-skeleton-row"><SkeletonLine width="44px" height={36}/><SkeletonLine width="42%" height={18}/></div>
+          <div className="workspace-skeleton-agent-properties">
+            {[0, 1, 2].map(i => <div className="state-skeleton-row" key={i}><SkeletonLine width="68px"/><SkeletonLine width={i === 1 ? '52%' : '34%'}/></div>)}
+          </div>
+        </div>
+        <div className="workspace-skeleton-agent-sections">
+          <div><SkeletonLine width="100px" height={14}/><SkeletonLine width="82%"/><SkeletonLine width="64%"/></div>
+          <div><SkeletonLine width="92px" height={14}/><SkeletonLine width="72%"/><SkeletonLine width="58%"/></div>
+        </div>
+      </> : <>
+        {kind === 'insights' && <div className="workspace-skeleton-coverage">
+          {[0, 1, 2, 3].map(i => <div key={i}><SkeletonLine width="62px"/><SkeletonLine width={i % 2 ? '70%' : '55%'} height={14}/></div>)}
+        </div>}
+        <div className="workspace-skeleton-metrics">
+          {[0, 1, 2, 3].map(index => <div key={index}>
+            <SkeletonLine width="66px"/>
+            <SkeletonLine width={index === 0 ? '58%' : '44%'} height={22}/>
+            <SkeletonLine width="72px"/>
+          </div>)}
+        </div>
+        {kind === 'insights' && <div className="workspace-skeleton-chart-panels">
+          <div><SkeletonLine width="120px" height={14}/><span className="state-skeleton workspace-skeleton-chart"/></div>
+          <div><SkeletonLine width="100px" height={14}/>{[0, 1, 2].map(i => <SkeletonLine key={i} width={i === 1 ? '65%' : '84%'}/>)}</div>
+        </div>}
+        <div className="workspace-skeleton-table">
+          <SkeletonLine width={kind === 'tools' ? '86px' : '110px'} height={14}/>
+          <div className="workspace-skeleton-table-head"><SkeletonLine width="42%"/><SkeletonLine width="36%"/></div>
+          {[0, 1, 2, 3].map(i => <div className="workspace-skeleton-table-row" key={i}>
+            <SkeletonLine width={i % 2 ? '52%' : '68%'}/><SkeletonLine width="28%"/>
+          </div>)}
+        </div>
+      </>}
+    </div>
   </div>
 }
 
@@ -129,33 +174,16 @@ export function PageLoadingState({
   facts?: string[]
 }) {
   const { t } = useTranslation('common')
-  const resolvedEyebrow = eyebrow ?? t('processing')
-  const resolvedStatusLabel = statusLabel ?? t('inProgress')
   return <div className="page-loading-state" role="status" aria-live="polite" aria-label={title}>
-    <section className="page-loading-card">
-      <div className="page-loading-main">
-        <div className="page-loading-icon" aria-hidden="true"><UiIcon name="refresh" size={20}/></div>
-        <div className="page-loading-copy">
-          <div className="page-loading-kicker">
-            <span className="eyebrow">{resolvedEyebrow}</span>
-            <span className="page-loading-badge"><i/>{resolvedStatusLabel}</span>
-          </div>
-          <h2>{title}</h2>
-          <p>{description}</p>
-          {facts.length > 0 && <div className="page-loading-facts">
-            {facts.map(fact => <span key={fact}><UiIcon name="check" size={12}/>{fact}</span>)}
-          </div>}
-        </div>
+    <div className="page-loading-card">
+      <UiIcon name="refresh" size={20}/>
+      <div className="page-loading-copy">
+        <div className="page-loading-kicker">{eyebrow ?? t('processing')} · {statusLabel ?? t('inProgress')}</div>
+        <h2>{title}</h2>
+        <p>{description}</p>
+        {facts.length > 0 && <p className="page-loading-facts">{facts.join(' · ')}</p>}
       </div>
-      <div className="page-loading-progress" aria-hidden="true"><i/></div>
-      <div className="page-loading-preview" aria-hidden="true">
-        {[0, 1, 2].map(index => <div className="page-loading-preview-card" key={index}>
-          <SkeletonLine width={index === 0 ? '42%' : index === 1 ? '34%' : '38%'}/>
-          <SkeletonLine width={index === 0 ? '64%' : index === 1 ? '52%' : '58%'} height={21}/>
-          <SkeletonLine width={index === 0 ? '76%' : index === 1 ? '68%' : '72%'}/>
-        </div>)}
-      </div>
-    </section>
+    </div>
   </div>
 }
 
