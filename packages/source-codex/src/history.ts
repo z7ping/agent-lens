@@ -176,7 +176,7 @@ async function readSessionMetadata(
 ): Promise<CodexSessionMetadata> {
   const fallback: CodexSessionMetadata = {
     nativeSessionId: sessionIdFromFilename(filePath),
-    ...(indexedTitle ? { title: indexedTitle.title, titleKind: indexedTitle.source === 'sqlite' ? 'generated' : 'unverified' } : {}),
+    ...(indexedTitle ? { title: indexedTitle.title, titleKind: indexedTitle.source === 'sqlite' ? 'generated' as const : 'unverified' as const } : {}),
   }
   const handle = await open(filePath, 'r')
   try {
