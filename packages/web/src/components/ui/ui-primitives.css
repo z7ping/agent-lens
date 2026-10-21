@@ -86,8 +86,11 @@
 }
 
 /* Toggle state is shared across disclosure/popover/pressed icon actions. */
-.ui-icon-button:is([aria-pressed='true'], [aria-expanded='true'], .is-active):not(:disabled),
-.ui-icon-button:is([aria-pressed='true'], [aria-expanded='true'], .is-active):hover:not(:disabled) {
+.ui-icon-button:not(.is-primary):not(.is-danger):is([aria-pressed='true'], [aria-expanded='true'], .is-active):not(:disabled) {
+  color: var(--al-accent);
+}
+
+.ui-icon-button:not(.is-primary):not(.is-danger):is([aria-pressed='true'], [aria-expanded='true'], .is-active):hover:not(:disabled) {
   background: var(--al-accent-soft);
   color: var(--al-accent);
 }
