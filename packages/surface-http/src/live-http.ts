@@ -298,6 +298,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
           label,
           ...(description ? { description } : {}),
           ...(actionTone ? { tone: actionTone } : {}),
+          ...(action.placement === 'composer' ? { placement: 'composer' as const } : {}),
         })
       }
     }
