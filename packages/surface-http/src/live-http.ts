@@ -1331,6 +1331,29 @@ export async function handleLiveRequest(
       )))
       return true
     }
+    if (action === 'queue' && request.method === 'PATCH') {
+      requireCapability(adapter, 'queue')
+      if (!adapter.mutateQueue) throw httpError(409, `${adapter.manifest.displayName} does not support queue mutation`)
+      const body = objectBody(await readJson(request))
+      const expected = body.expected
+      const validList = (value: unknown): value is string[] =>
+        Array.isArray(value) && value.length <= 100 && value.every(item => typeof item === 'string' && item.length <= 32000)
+      if (!expected || typeof expected !== 'object'
+        || !validList((expected as Record<string, unknown>).steering)
+        || !validList((expected as Record<string, unknown>).followUp)
+        || (body.mode !== 'steer' && body.mode !== 'follow-up')
+        || !Number.isSafeInteger(body.index) || (body.index as number) < 0
+        || (body.text !== undefined && (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 32000))) {
+        throw httpError(400, 'Invalid Live queue mutation')
+      }
+      writeJson(response, 200, jsonValue(await adapter.mutateQueue(runtimeSessionId, {
+        expected: expected as { steering: string[]; followUp: string[] },
+        mode: body.mode,
+        index: body.index as number,
+        ...(typeof body.text === 'string' ? { text: body.text } : {}),
+      })))
+      return true
+    }
     if (action === 'queue' && request.method === 'DELETE') {
       requireCapability(adapter, 'queue')
       if (!adapter.clearQueue) throw httpError(409, `${adapter.manifest.displayName} does not expose Live queue control`)
