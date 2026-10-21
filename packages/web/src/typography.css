@@ -1,11 +1,11 @@
 /*
  * AgentLens 1.0 正式字体系统。
  *
- * 本文件负责 Web 字体与字号的最终收口：
+ * 本文件是 Web 字体栈和语义字号 Token 的唯一来源：
  * - 正常界面文字不低于 12px；
  * - 统一系统字体栈，避免未打包 Inter 带来的环境差异；
- * - 页面只使用语义字号层级，不再依赖 8-11px 的极小字号制造层次；
- * - 旧页面 CSS 暂保留布局职责，本文件统一覆盖其字体表现。
+ * - 组件在自身唯一 CSS Owner 中消费语义字号，不在本文件末尾覆盖组件；
+ * - Task Surface 的 Live / Review 共享 --text-task-*，当前字号保持不变。
  */
 
 :root {
@@ -36,6 +36,21 @@
   --line-height-tight:1.25;
   --line-height-normal:1.55;
   --line-height-reading:1.7;
+
+  /* One semantic type scale for every Agent's Live + Review Task Surface.
+   * Phase 1 keeps computed sizes unchanged; responsive rules can later
+   * change these values here without adding Task CSS overrides.
+   */
+  --text-task-body:var(--text-body);
+  --text-task-process:var(--text-secondary);
+  /* Thinking Markdown currently inherits the 14px document body; preserve it. */
+  --text-task-thinking-markdown:var(--text-task-body);
+  --text-task-tool:var(--text-secondary);
+  --text-task-tool-code:var(--text-task-tool);
+  --text-task-code:var(--text-caption);
+  --text-task-meta:var(--text-caption);
+  --text-task-heading:var(--text-section-title);
+  --text-task-emphasis:15px;
 }
 
 html body{

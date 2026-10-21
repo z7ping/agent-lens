@@ -147,6 +147,9 @@ Task Center / Review / Pi Live 的任务内容继续复用现有：
 
 `packages/web/src/tokens.css` 是正式运行时 Design Token 基线。页面和组件消费语义 Token，不维护自己的品牌色板。
 
+- **字体唯一真值源**：`packages/web/src/typography.css` 统一声明字体族与语义字号。Live / Review 共用的 Task Surface 消费 `--text-task-*`；字号在 `task-detail.css` / `task-session-view.css` 等现有 CSS Owner 中引用，不再硬编码 12/13/14/15/16px 或通过后加载层覆盖。调整阅读字号只改相应 Token，响应式调整必须遵守正式断点与同一 Owner。
+- **保留现有规模**：当前 Task 字号收敛不代表全站字号放大，后续大屏/缩放适配需单独验证。
+
 公共控件尺寸基线：
 
 - 标准按钮：`30px / 12px`
