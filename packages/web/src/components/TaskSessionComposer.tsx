@@ -9,6 +9,7 @@ import { Button, IconButton, Popover, UiIcon } from './ui'
 export interface ComposerSessionAction {
   id: string
   label: string
+  icon?: 'sparkles' | 'collapse' | undefined
   description?: string | undefined
   disabled?: boolean | undefined
   onClick(): void
@@ -172,7 +173,7 @@ export function TaskSessionComposer({
               disabled={action.disabled}
               title={action.description}
               onClick={() => { setActionMenuOpen(false); action.onClick() }}
-            ><UiIcon name="collapse" size={16}/>{action.label}</Button>)}
+            ><UiIcon name={action.icon ?? 'refresh'} size={16}/>{action.label}</Button>)}
           </div>
         </Popover>
       </span>}
