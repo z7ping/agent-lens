@@ -10,7 +10,8 @@ import {
 import {
   defineAgentLensPlugin, type AgentLensContext,
 } from '@agent-lens/runtime-cordis'
-import { CodexRpc, type RpcMessage } from './transport.js'
+import { CodexRpc, CodexRpcError, type RpcMessage } from './transport.js'
+import { isCodexTurnHistoryCursor, snapshotCodexTurnHistory } from './turn-history.js'
 import { CheckpointCodexRecoveryStore, type CodexRecoveryStore } from './recovery.js'
 import { normalizeCodexEvent, codexRecord, codexText, codexSnapshotEntries } from './events.js'
 import { decodeCodexHistoryCursor, encodeCodexItemAnchor, encodeCodexPageCursor } from './history-cursor.js'
@@ -44,6 +45,20 @@ interface Session {
   queuedApprovals: Map<string, RpcMessage>
   toolOutput: Map<string, string>
 }
+function isUnsupportedItemHistory(error: unknown): boolean {
+  return error instanceof CodexRpcError && error.method === 'thread/items/list'
+    && (error.rpcCode === -32601 || /not supported yet|method not found/i.test(error.message))
+}
+
+function explainCodexResumeError(error: unknown): Error {
+  if (error instanceof Error && /no rollout found for thread id/i.test(error.message)) {
+    return Object.assign(new Error(
+      '当前 Codex CLI 无法定位该会话的原生 rollout。请核对 Codex Desktop 与 CLI 的 CODEX_HOME、会话索引和格式兼容性；已有历史记录不会被修改。',
+    ), { code: 'live_interaction_unavailable', reasonCode: 'codex_rollout_not_found' })
+  }
+  return error instanceof Error ? error : new Error(String(error))
+}
+
 const APPROVAL_METHODS = new Set([
   'item/commandExecution/requestApproval',
   'item/fileChange/requestApproval',
@@ -59,6 +74,7 @@ export class CodexLiveAdapter implements LiveAdapter {
   readonly startCapabilities = { workspace: 'required', title: 'optional' } as const
   private sessions = new Map<string, Session>()
   private restored: Promise<void> | undefined
+  private itemPaginationUnavailable = false
   private unsubscribe: () => void
 
   constructor(
@@ -125,16 +141,25 @@ export class CodexLiveAdapter implements LiveAdapter {
         }
       }).catch(error => {
         session.status = 'failed'
-        throw error
+        throw explainCodexResumeError(error)
       }).finally(() => { session.attaching = undefined })
     }
     await session.attaching
   }
 
   async availability() {
-    return await this.rpc.available()
-      ? { available: true }
-      : { available: false, reason: 'Codex CLI is not installed or discoverable' }
+    if (!await this.rpc.available()) {
+      return { available: false, reason: 'Codex CLI is not installed or discoverable' }
+    }
+    try {
+      // Resolve the actual executable, launch App Server and verify a read-only native API.
+      // Item pagination may still be unavailable for legacy thread stores (handled by snapshot).
+      const result = await this.rpc.request('thread/list', { limit: 1 })
+      if (!Array.isArray(result.data)) throw new Error('Invalid thread/list response')
+      return { available: true }
+    } catch {
+      return { available: false, reason: 'Codex CLI was found, but its App Server thread/list check failed' }
+    }
   }
 
   async list(): Promise<LiveRuntimeState[]> {
@@ -228,6 +253,20 @@ export class CodexLiveAdapter implements LiveAdapter {
     const session = this.session(id)
     await this.attach(session)
     if (window?.around) throw new Error('Codex Live does not support centered history snapshots')
+    const legacyCursor = since ?? window?.after ?? window?.before
+    if (this.itemPaginationUnavailable || isCodexTurnHistoryCursor(legacyCursor)) {
+      return snapshotCodexTurnHistory(this.rpc, this.view(session), since, window)
+    }
+    try {
+      return await this.snapshotItems(session, since, window)
+    } catch (error) {
+      if (!isUnsupportedItemHistory(error)) throw error
+      this.itemPaginationUnavailable = true
+      return snapshotCodexTurnHistory(this.rpc, this.view(session), since, window)
+    }
+  }
+
+  private async snapshotItems(session: Session, since?: string, window?: LiveSnapshotWindow) {
     const limit = Math.max(1, Math.min(500, window?.limit ?? 120))
     // Reverse-direction native cursors traverse the whole Thread, not only one Turn.
     // The first ascending page may repeat its inclusive anchor; drop that exact item.
