@@ -6,6 +6,7 @@ import { PiExtensionUiBridge } from './extension-ui-bridge'
 import {
   assertPiSdkSession,
   piSdkCommands,
+  piSdkRegenerateNativeTitle,
   resolvePiSdkPackageUpdateApi,
   type PiSdkSessionManager,
 } from './pi-sdk-adapter'
@@ -358,6 +359,7 @@ class InProcessHandle implements PiRuntimeHandle {
     return isLiveThinkingControl(candidate) ? candidate : undefined
   }
   async commands() { return piSdkCommands(this.session) }
+  async regenerateTitle(): Promise<void> { await piSdkRegenerateNativeTitle(this.session) }
   async navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
     if (this.session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
     if (typeof this.session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
