@@ -304,11 +304,31 @@ test('read/edit file rows emphasize basename, dim full directory and keep exact 
   assert.doesNotMatch(html, /data-task-tool-group="true"/)
 })
 
-test('group header is a quiet accessible action distinct from non-interactive title and count', () => {
+test('entire group header is one accessible button, not a nested action', () => {
   const html = render()
-  assert.match(html, /class="task-tool-group-header"/)
-  assert.match(html, /class="ui-status-badge is-neutral task-tool-group-count">3<\/span>/)
-  assert.match(html, /class="btn small quiet task-tool-group-toggle"|class="btn quiet small task-tool-group-toggle"/)
-  assert.match(html, /aria-expanded="false"/)
+  const header = /<button[^>]*class="btn quiet small task-tool-group-header task-tool-group-toggle"[^>]*>([\s\S]*?)<\/button>/.exec(html)
+  assert.ok(header, 'the full header must be one shared Button')
+  assert.match(header[1]!, /class="task-tool-group-title">工具调用<\/span>/)
+  assert.match(header[1]!, /class="ui-status-badge is-neutral task-tool-group-count">3<\/span>/)
+  assert.match(header[1]!, /展开 2 项/)
+  assert.doesNotMatch(header[1]!, /<button|<a /)
+  const controlledId = /aria-controls="([^"]+)"/.exec(header[0])?.[1]
+  assert.ok(controlledId)
+  assert.ok(html.includes(`id="${controlledId}" class="task-tool-list"`))
+  assert.match(header[0], /aria-expanded="false"/)
+  assert.match(render(true), /aria-expanded="true"/)
   assert.match(render(true), /收起/)
+})
+
+test('all running/failed entries need no inert clickable group header', () => {
+  const tools = Array.from({ length: 3 }, (_, index) => ({
+    ...model.tools[0]!, id: `active-${index}`, status: index === 0 ? 'error' as const : 'running' as const,
+  }))
+  const html = renderToStaticMarkup(createElement(TaskToolGroup, {
+    model: { ...model, id: 'active-only', tools, itemCount: tools.length },
+    compact: true,
+  }))
+  assert.match(html, /<div class="task-tool-group-header">/)
+  assert.doesNotMatch(html, /task-tool-group-toggle/)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 3)
 })
