@@ -141,3 +141,35 @@ test('文件观测与准确变更的标题语义分离，详情文案双语覆�
     }
   }
 })
+
+test('Task header shares one responsive file-summary action across Live and Review', () => {
+  const header = readFileSync(new URL('./TaskHeader.tsx', import.meta.url), 'utf8')
+  const livePage = readFileSync(new URL('./LiveTaskPage.tsx', import.meta.url), 'utf8')
+  const panelStyle = readFileSync(new URL('../task-detail.css', import.meta.url), 'utf8')
+  assert.match(header, /className="task-header-file-summary-trigger"/)
+  assert.match(header, /fileContent\.type === TaskFileChangesDisclosure/)
+  assert.match(header, /const fileSummary = infoPanel\?\.fileSummary/)
+  assert.match(header, /role="tablist"/)
+  assert.match(header, /role="tabpanel"/)
+  assert.match(header, /setInfoTab\('files'\)/)
+  assert.match(header, /setInfoTab\('info'\)/)
+  assert.equal((header.match(/<Drawer\s/g) ?? []).length, 1)
+  assert.match(panelStyle, /@container task-surface \(min-width: 1400px\)/)
+  assert.match(panelStyle, /@container task-surface \(max-width: 767\.98px\)/)
+  assert.match(panelStyle, /left: calc\(100% \+ 16px\)/)
+  assert.match(panelStyle, /\.task-header-info-drawer:has\(\.task-file-diff-view\)/)
+  assert.match(livePage, /fileSummary: summarizeTaskFileChanges\(fileChanges\.result\)/)
+  assert.match(reviewPage, /content: <TaskFileChangesDisclosure value=\{review\.fileChanges\} inlineDetails\/>/)
+})
+
+test('File list keeps canonical evidence and single-layer diff while displaying readable filename and directory', () => {
+  assert.match(component, /export function summarizeTaskFileChanges/)
+  assert.match(component, /value\.summary\.observedCount \|\| value\.items\.some\(isObservedOnly\)/)
+  assert.match(component, /fileNameAndDirectory\(item\.path\)\.name/)
+  assert.match(component, /className="task-file-change-directory"/)
+  assert.match(component, /role="status">\{t\('local\.fileChanges\.refreshing'\)\}/)
+  assert.match(component, /t\('local\.fileChanges\.empty'\)/)
+  assert.match(component, /!inlineDetails && selected && <Drawer/)
+  assert.match(component, /reviewFileDiff\(sessionId, diffPath/)
+  assert.match(component, /observedOnly && <Button/)
+})
