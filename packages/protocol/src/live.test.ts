@@ -265,3 +265,13 @@ test('Live completed failure retains structured diagnostics without provider par
     code: 'NATIVE_FAILURE', category: 'runtime', retryable: false,
   })
 })
+
+test('Live protocol validates adapter-neutral native notification facts', () => {
+  assert.deepEqual(parseLiveEventDto({
+    type: 'notification', id: 'notice-571', level: 'warning', message: 'Attention required',
+  }), {
+    type: 'notification', id: 'notice-571', level: 'warning', message: 'Attention required',
+  })
+  assert.equal(parseLiveEventDto({ type: 'notification', level: 'success', message: '' }), null)
+  assert.equal(parseLiveEventDto({ type: 'notification', level: 'invalid', message: 'x' }), null)
+})

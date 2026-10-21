@@ -16,6 +16,7 @@ import { WorkspaceSidebar } from './components/WorkspaceSidebar'
 import { WorkspaceViewTabs } from './components/WorkspaceViewTabs'
 import { MarkdownThemeManager } from './components/MarkdownThemeManager'
 import { ErrorStateBanner, PageLoadingState } from './components/StateViews'
+import { useTaskNotifications } from './features/task-notifications'
 import { IntegrationOnboarding } from './features/IntegrationOnboarding'
 import { Breadcrumb, Button, IconButton, StatusBadge, UiIcon } from './components/ui'
 
@@ -181,6 +182,7 @@ function LegacyIntegrationRedirect() {
 function Shell({ model }: { model: AgentLensClientModel }) {
   const { t } = useTranslation(['shell', 'common', 'navigation', 'backup'])
   const snapshot = useClientSnapshot(model)
+  const notificationState = useTaskNotifications()
   const location = useLocation()
   const navigate = useNavigate()
   const mainRef = useRef<HTMLDivElement>(null)
@@ -402,6 +404,7 @@ function Shell({ model }: { model: AgentLensClientModel }) {
       <div className={`app-shell ${onReview ? 'is-task-center' : ''} ${hasWorkspaceTabs ? 'is-contextless-workspace' : ''} ${onAgents ? 'is-agent-workspace' : ''} ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''} ${mobileNavigationOpen ? 'is-mobile-navigation-open' : ''}`}>
       <WorkspaceSidebar
         snapshot={snapshot}
+        hasTaskNotifications={notificationState.items.some(item => !item.read)}
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenMarkdownThemes={() => setMarkdownThemeManagerOpen(true)}

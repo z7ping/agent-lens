@@ -845,6 +845,85 @@ async function connectEvents(
   response.once('close', cleanup)
 }
 
+/** One aggregate stream for all Live sessions; avoids opening one browser SSE per runtime. */
+async function connectNotificationEvents(
+  request: IncomingMessage,
+  response: ServerResponse,
+  service: LiveService,
+): Promise<void> {
+  response.statusCode = 200
+  response.setHeader('content-type', 'text/event-stream; charset=utf-8')
+  response.setHeader('cache-control', 'no-cache, no-transform')
+  response.setHeader('connection', 'keep-alive')
+  response.setHeader('x-accel-buffering', 'no')
+  response.flushHeaders?.()
+  response.write(': agent-lens notifications\n\n')
+
+  const subscriptions = new Map<string, () => void>()
+  let closed = false
+  let refreshing = false
+  const refresh = async () => {
+    if (closed || refreshing) return
+    refreshing = true
+    try {
+      const failedAdapters = new Set<string>()
+      const groups = await Promise.all(service.list().map(async adapter => {
+        try {
+          const states = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
+          return states.filter(state => state.status !== 'terminated' && state.status !== 'terminating')
+            .map(state => ({ adapter, state }))
+        } catch {
+          failedAdapters.add(adapter.manifest.liveId)
+          return []
+        }
+      }))
+      if (closed) return
+      const active = groups.flat().sort((a, b) => Number(b.state.isStreaming) - Number(a.state.isStreaming)).slice(0, 64)
+      const next = new Set(active.map(({ adapter, state }) => `${adapter.manifest.liveId}:${state.runtimeSessionId}`))
+      // A transient adapter.list failure must not drop working native subscriptions.
+      for (const key of subscriptions.keys()) {
+        if ([...failedAdapters].some(liveId => key.startsWith(`${liveId}:`))) next.add(key)
+      }
+      for (const [key, dispose] of subscriptions) {
+        if (!next.has(key)) { dispose(); subscriptions.delete(key) }
+      }
+      for (const { adapter, state } of active) {
+        const liveId = adapter.manifest.liveId
+        const key = `${liveId}:${state.runtimeSessionId}`
+        if (subscriptions.has(key)) continue
+        try {
+          const dispose = adapter.subscribe(state.runtimeSessionId, value => {
+            const type = value.normalizedEvent?.type
+            if (type !== 'notification' && type !== 'ui.request'
+              && type !== 'error' && type !== 'completed') return
+            if (!closed) response.write(`event: notification\ndata: ${JSON.stringify(jsonValue({
+              liveId, runtimeSessionId: state.runtimeSessionId, event: value,
+            }))}\n\n`)
+          })
+          subscriptions.set(key, dispose)
+        } catch { /* A single unavailable native runtime must not kill the stream. */ }
+      }
+    } finally { refreshing = false }
+  }
+  await refresh()
+  const heartbeat = setInterval(() => {
+    if (closed) return
+    response.write(': heartbeat\n\n')
+    void refresh()
+  }, SSE_HEARTBEAT_MS)
+  heartbeat.unref?.()
+  const cleanup = () => {
+    if (closed) return
+    closed = true
+    clearInterval(heartbeat)
+    clearInterval(discovery)
+    for (const dispose of subscriptions.values()) dispose()
+    subscriptions.clear()
+  }
+  request.once('close', cleanup)
+  response.once('close', cleanup)
+}
+
 export async function handleLiveRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -932,6 +1011,12 @@ export async function handleLiveRequest(
         .filter(adapter => adapter.manifest.productId === productId)
         .map(adapter => liveMetadata(adapter))
       writeJson(response, 200, { items })
+      return true
+    }
+
+    if (url.pathname === '/api/v1/live/notifications/events') {
+      if (request.method !== 'GET') { writeJson(response, 405, { error: 'method_not_allowed' }); return true }
+      await connectNotificationEvents(request, response, service)
       return true
     }
 

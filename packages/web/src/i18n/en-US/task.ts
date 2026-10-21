@@ -2,6 +2,24 @@ import type { LocaleMessagesDto } from '@agent-lens/protocol'
 
 export const englishTaskMessages: LocaleMessagesDto = {
   task: {
+    notifications: {
+      bell: 'Notifications, {{count}} unread',
+      title: 'Notifications',
+      markAllRead: 'Mark all read',
+      all: 'All',
+      unread: 'Unread ({{count}})',
+      unreadDot: 'Unread',
+      empty: 'No notifications',
+      viewSession: 'View session',
+      dismiss: 'Dismiss notification',
+      level: {
+        info: 'Agent notification',
+        success: 'Task completed',
+        warning: 'Task notice',
+        error: 'Task failed',
+        action: 'Action required',
+      },
+    },
     event: {
       rawTitle: '{{label}} · Raw data',
       piNative: 'Pi native event · {{type}}',

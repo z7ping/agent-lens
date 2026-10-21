@@ -1,0 +1,46 @@
+/* Task notification center: task rail owns the bell, task main owns the banner. */
+.task-notification-bell { position: relative; display: inline-flex; flex: 0 0 auto; }
+.task-notification-trigger.ui-icon-button { position: relative; width: 32px; height: 32px; border-color: transparent; background: transparent; color: var(--al-ink-2); }
+.task-notification-trigger.ui-icon-button:hover,
+.task-notification-trigger.ui-icon-button[aria-expanded='true'] { background: var(--al-surface); color: var(--al-ink); }
+.task-notification-badge { position: absolute; inset-block-start: -3px; inset-inline-end: -5px; min-width: 17px; height: 17px; padding: 0 4px; border: 2px solid var(--al-soft-2); border-radius: 12px; background: var(--al-danger); color: var(--al-on-danger); font-size: var(--text-caption); font-weight: 700; line-height: 14px; text-align: center; }
+.task-notification-popover.ui-popover { z-index: 1250; width: 360px; padding: 0; overflow: hidden; border: 1px solid var(--al-line); border-radius: 12px; background: var(--al-surface-raised); box-shadow: var(--al-shadow-lg); }
+.task-notification-panel { display: flex; flex-direction: column; max-height: min(560px, calc(100dvh - 36px)); min-width: 0; }
+.task-notification-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 14px 8px; }
+.task-notification-heading strong { font-size: var(--text-card-title); font-weight: 650; }
+.task-notification-tabs { display: flex; gap: 5px; padding: 0 12px 8px; border-bottom: 1px solid var(--al-line); }
+.task-notification-tabs .btn[aria-pressed='true'] { background: var(--al-accent-soft); color: var(--al-accent); }
+.task-notification-items { overflow: auto; overscroll-behavior: contain; }
+.task-notification-item { display: flex; width: 100%; align-items: flex-start; gap: 9px; padding: 12px 13px; border: 0; border-bottom: 1px solid var(--al-line); background: transparent; color: var(--al-ink-2); cursor: pointer; text-align: left; }
+.task-notification-item:hover, .task-notification-item:focus-visible { background: var(--al-soft-2); }
+.task-notification-item:focus-visible { outline: 2px solid var(--al-accent); outline-offset: -2px; }
+.task-notification-item.is-read { opacity: .75; }
+.task-notification-item > svg { flex: 0 0 auto; margin-top: 2px; color: var(--al-muted); }
+.task-notification-item.is-success > svg { color: var(--al-success); }
+.task-notification-item.is-error > svg { color: var(--al-danger); }
+.task-notification-item.is-warning > svg, .task-notification-item.is-action > svg { color: var(--al-warning); }
+.task-notification-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.task-notification-title { overflow: hidden; font-size: var(--text-secondary); font-weight: 640; text-overflow: ellipsis; white-space: nowrap; }
+.task-notification-message { display: -webkit-box; overflow: hidden; color: var(--al-ink-2); font-size: var(--text-secondary); line-height: 1.45; overflow-wrap: anywhere; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.task-notification-copy time { color: var(--al-muted-2); font-size: var(--text-caption); }
+.task-notification-unread-dot { flex: 0 0 7px; height: 7px; margin-top: 7px; border-radius: 50%; background: var(--al-accent); }
+.task-notification-empty { margin: 0; padding: 28px 14px; color: var(--al-muted); font-size: var(--text-secondary); text-align: center; }
+.task-center-rail-head .task-notification-bell { margin-left: auto; margin-right: 6px; }
+.task-center-main { position: relative; }
+.task-notification-banner { position: absolute; z-index: 25; top: 66px; left: 50%; display: flex; width: min(var(--al-content-task-reading), calc(100% - 32px)); min-height: 48px; align-items: flex-start; gap: 9px; padding: 10px 12px; transform: translateX(-50%); border: 1px solid var(--al-line-strong); border-radius: 10px; background: var(--al-surface-raised); box-shadow: var(--al-shadow); color: var(--al-ink); }
+.task-notification-banner.is-success { border-color: color-mix(in srgb, var(--al-success) 24%, var(--al-line)); }
+.task-notification-banner.is-error { border-color: color-mix(in srgb, var(--al-danger) 32%, var(--al-line)); }
+.task-notification-banner.is-warning, .task-notification-banner.is-action { border-color: color-mix(in srgb, var(--al-warning) 30%, var(--al-line)); }
+.task-notification-banner > svg { flex: 0 0 auto; margin-top: 2px; color: var(--al-accent); }
+.task-notification-banner.is-success > svg { color: var(--al-success); }
+.task-notification-banner.is-error > svg { color: var(--al-danger); }
+.task-notification-banner.is-warning > svg, .task-notification-banner.is-action > svg { color: var(--al-warning); }
+.task-notification-banner-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.task-notification-banner-copy strong { font-size: var(--text-secondary); }
+.task-notification-banner-copy span { font-size: var(--text-secondary); color: var(--al-ink-2); overflow-wrap: anywhere; }
+.task-notification-banner > .btn, .task-notification-banner > .ui-icon-button { flex: 0 0 auto; }
+@media (max-width: 767.98px) {
+  .task-notification-popover.ui-popover { width: min(360px, calc(100vw - 24px)); }
+  .task-notification-banner { top: 48px; flex-wrap: wrap; width: calc(100% - 24px); }
+}
+@media (prefers-reduced-motion: reduce) { .task-notification-trigger, .task-notification-item { transition: none; } }

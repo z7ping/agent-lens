@@ -6,6 +6,7 @@ export type WorkspacePrimarySection = 'review' | 'insights' | 'agents' | 'backup
 
 interface WorkspacePrimaryNavigationProps {
   activeSection?: WorkspacePrimarySection | undefined
+  hasTaskNotifications: boolean
   hasInsightsUpdate: boolean
   hasAgentsUpdate: boolean
   onNavigate(): void
@@ -28,6 +29,7 @@ const PRIMARY_SECTIONS: Array<{
 /** 工作区一级导航的唯一渲染入口，页面只提供当前状态与数据提示。 */
 export function WorkspacePrimaryNavigation({
   activeSection,
+  hasTaskNotifications,
   hasInsightsUpdate,
   hasAgentsUpdate,
   onNavigate,
@@ -35,7 +37,7 @@ export function WorkspacePrimaryNavigation({
   const { t } = useTranslation('navigation')
   return <nav className="workspace-primary-nav" aria-label={t('primary')}>
     {PRIMARY_SECTIONS.map(section => {
-      const hasUpdate = section.update === 'insights'
+      const hasUpdate = section.id === 'review' && hasTaskNotifications || section.update === 'insights'
         ? hasInsightsUpdate
         : section.update === 'agents' && hasAgentsUpdate
       return <NavLink

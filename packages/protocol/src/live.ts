@@ -261,6 +261,7 @@ export type LiveEventDto =
   | { type: 'title.update'; title: string }
   | { type: 'control.changed'; control: 'model' | 'thinking' }
   | { type: 'runtime-disclosure.changed' }
+  | { type: 'notification'; id?: string | undefined; level: 'info' | 'success' | 'warning' | 'error'; message: string; title?: string | undefined }
   | {
       type: 'message.start' | 'message.end'
       phase?: 'commentary' | 'final' | undefined
@@ -607,6 +608,13 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       : null
   }
   if (type === 'runtime-disclosure.changed') return { type }
+  if (type === 'notification') {
+    const message = eventText(event.message)?.trim()
+    if (!message || !['info', 'success', 'warning', 'error'].includes(String(event.level))) return null
+    return { type, level: event.level as 'info' | 'success' | 'warning' | 'error', message: message.slice(0, 2000),
+      ...(eventText(event.id)?.trim() ? { id: eventText(event.id)!.slice(0, 128) } : {}),
+      ...(eventText(event.title)?.trim() ? { title: eventText(event.title)!.slice(0, 120) } : {}) }
+  }
   if (type === 'message.start' || type === 'message.end') {
     const role = event.role
     const validRole = role === undefined

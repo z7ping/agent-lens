@@ -16,6 +16,7 @@ import { UiIcon } from '../components/UiIcon'
 import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
 import { taskLiveRuntimeHref } from './task-live-runtime'
+import { TaskNotificationBell, TaskNotificationBanner } from './TaskNotificationCenter'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
 
@@ -452,6 +453,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         <img className="task-center-context-brand-logo" src="/agentlens-icon.svg" alt="" aria-hidden="true"/>
         <div className="task-center-context-brand-copy"><b>AgentLens</b><span aria-hidden="true">·</span><strong className="task-center-rail-title">{tNavigation('taskCenter')}</strong></div>
       </div>
+      <TaskNotificationBell/>
       <Button size="small" variant="primary" className="task-center-new-task-button" onPointerEnter={prefetchLaunchableProjects} onFocus={prefetchLaunchableProjects} onClick={newTask} title={t('center.history.newTask')} aria-label={t('center.history.newTask')}><UiIcon name="plus" size={14}/> {t('center.history.newTaskShort')}</Button>
     </div>
 
@@ -596,6 +598,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     {sidebarHost ? createPortal(taskRail, sidebarHost) : null}
     <div className={`task-center-page ${mode === 'new' ? 'is-new-task' : ''}`}>
       <section className="task-center-main">
+        <TaskNotificationBanner/>
         <Suspense fallback={<div className="workspace-skeleton" role="status" aria-label={t('center.history.loadingDetail')}><span className="state-skeleton"/><span className="state-skeleton"/><span className="state-skeleton"/></div>}>
           {mode === 'history' && <ReviewPage model={model} embedded/>}
           {mode === 'live' && <LiveTaskPage embedded/>}

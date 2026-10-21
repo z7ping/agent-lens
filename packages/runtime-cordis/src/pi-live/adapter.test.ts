@@ -712,3 +712,16 @@ test('Pi history round fork validates the native assistant anchor in the origina
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('Pi native extension notify is normalized while status widgets remain transient', () => {
+  assert.deepEqual(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'notice-571', method: 'notify',
+    message: 'Background task completed', notifyType: 'success',
+  }), {
+    type: 'notification', id: 'notice-571', level: 'success', message: 'Background task completed',
+  })
+  assert.equal(normalizePiLiveEvent({
+    type: 'extension_ui_request', id: 'status-1', method: 'setStatus',
+    statusKey: 'sync', statusText: '42%',
+  }), undefined)
+})

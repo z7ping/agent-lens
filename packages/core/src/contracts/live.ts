@@ -369,6 +369,15 @@ export interface LiveToolEndEvent {
   durationMs?: number | undefined
 }
 
+/** Adapter-owned native notification, not inferred from progress or tool output. */
+export interface LiveNotificationEvent {
+  type: 'notification'
+  id?: string | undefined
+  level: 'info' | 'success' | 'warning' | 'error'
+  message: string
+  title?: string | undefined
+}
+
 export interface LiveErrorEvent {
   type: 'error'
   message: string
@@ -421,6 +430,7 @@ export type LiveEvent =
   | LiveToolEndEvent
   | LiveQueueUpdateEvent
   | LiveUiRequestEvent
+  | LiveNotificationEvent
   | LiveErrorEvent
   | LiveCompletedEvent
 
