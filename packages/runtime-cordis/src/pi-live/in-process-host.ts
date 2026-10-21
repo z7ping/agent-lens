@@ -368,6 +368,12 @@ class InProcessHandle implements PiRuntimeHandle {
       ...(typeof result.editorText === 'string' ? { editorText: result.editorText } : {}),
     }
   }
+  async compact(): Promise<void> {
+    if (this.session.isStreaming || this.session.isCompacting) throw new Error('Pi manual compaction requires an idle session')
+    if (typeof this.session.compact !== 'function') throw new Error('Installed Pi SDK does not support manual compaction')
+    await this.session.compact()
+    this.roundIndexCache = undefined
+  }
   async controls(): Promise<PiLiveControls> {
     const thinking = this.thinkingControl()
     return {
