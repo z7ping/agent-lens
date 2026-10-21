@@ -113,6 +113,7 @@ export const englishPiLiveMessages: LocaleMessagesDto = {
       count: '{{count}} queued',
       menu: 'Queue options',
       clear: 'Clear queue',
+      changed: 'Queue changed; reopen the message and try again.',
       restored: 'Restored draft',
       waitingReady: 'Waiting for Pi to be ready',
       edit: 'Edit',
