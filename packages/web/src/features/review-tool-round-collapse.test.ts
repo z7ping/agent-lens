@@ -65,3 +65,19 @@ test('Review 116 次工具按思考分为 58 个独立相邻组，不整轮折�
   assert.match(html, /native reasoning 57/)
   assert.equal((html.match(/class="task-thinking task-process-thinking-card"/g) ?? []).length, 58)
 })
+
+
+test('Review preserves tool boundaries across different reasoning parents', () => {
+  const items: ReviewProcessPresentationItem[] = [
+    { type: 'tool-group', parentReasoningId: 'parent-a', items: [tool(1), tool(2), tool(3), tool(4)] },
+    { type: 'tool-group', parentReasoningId: 'parent-b', items: [tool(5), tool(6), tool(7), tool(8)] },
+  ]
+  const html = renderToStaticMarkup(createElement(ReviewProcessGroup, {
+    id: 'process:parents', items, inspect: () => undefined,
+    state: 'settled', showAllEvents: false,
+    expansionStore: new Map([['process:parents', true]]),
+  }))
+  assert.equal((html.match(/data-task-tool-group="true"/g) ?? []).length, 2)
+  assert.equal((html.match(/data-tool-fact="true"/g) ?? []).length, 6)
+  assert.doesNotMatch(html, /native_call_4|native_call_8/)
+})
