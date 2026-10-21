@@ -299,6 +299,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
           ...(description ? { description } : {}),
           ...(actionTone ? { tone: actionTone } : {}),
           ...(action.placement === 'composer' ? { placement: 'composer' as const } : {}),
+          ...(action.icon === 'sparkles' || action.icon === 'collapse' ? { icon: action.icon } : {}),
         })
       }
     }

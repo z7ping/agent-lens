@@ -6,6 +6,7 @@ import {
   LIVE_SNAPSHOT_DEFAULT_LIMIT,
   LIVE_SNAPSHOT_MAX_LIMIT,
   type LiveContributionText,
+  type LiveRuntimeActionContribution,
   type LiveHistoryIndexQuery,
   type LiveRuntimeContributionField,
   type LiveRuntimeDisclosureContribution,
@@ -55,10 +56,13 @@ interface OwnedRuntime {
   workspaceContextUpdatedAt?: number | undefined
   workspaceContextTask?: Promise<void> | undefined
   taskSummary?: string | undefined
+  /** Native Pi name events outrank any cached fallback, including explicit name removal. */
+  observedSessionName?: string | null | undefined
   activeAssistantMessageId?: string | undefined
   isStreaming: boolean
   isCompacting: boolean
   manualCompactionPending?: boolean | undefined
+  titleRegenerationPending?: boolean | undefined
   queue: PiLiveQueueState
   recoverySessionPath?: string | undefined
   recoveryCheckpointPending?: string | undefined
@@ -1131,6 +1135,37 @@ export class DefaultPiLiveService implements PiLiveService {
       ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
     const duration = contributionDuration(elapsed)
     const lifecycle = runtimeLifecycle(state)
+    const isIdle = state.status === 'ready' && !state.isStreaming && !state.isCompacting
+    // Registry-backed capability detection: only a known non-interactive
+    // extension command is offered. Other /title commands may open a UI.
+    const canRegenerate = isIdle && state.extensionBindingStatus === 'ready'
+      && !this.requireRuntime(id).titleRegenerationPending
+      && (await this.commands(id).catch(() => [])).some(command => command.titleRegeneration === true)
+    const actions: LiveRuntimeActionContribution[] = state.status === 'failed' ? [{
+      actionId: 'pi.runtime.retry',
+      label: contributionText('Retry', '重试'),
+      description: contributionText(
+        'Restart this failed Pi Runtime with the same task context.',
+        '使用相同任务上下文重新启动失败的 Pi Runtime。',
+      ),
+      tone: 'primary',
+    }] : [
+      ...(canRegenerate ? [{
+        actionId: 'pi.runtime.regenerate-title',
+        placement: 'composer' as const,
+        icon: 'sparkles' as const,
+        label: contributionText('AI generate title', 'AI 生成标题'),
+        description: contributionText('Use installed pi-title to regenerate the native session name.', '使用已安装的 pi-title 扩展重新生成原生会话标题。'),
+      }] : []),
+      ...(isIdle && state.capabilities?.manualCompaction === true
+        && !this.requireRuntime(id).manualCompactionPending ? [{
+          actionId: 'pi.runtime.compact',
+          placement: 'composer' as const,
+          icon: 'collapse' as const,
+          label: contributionText('Compact context', '压缩上下文'),
+          description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
+        }] : []),
+    ]
     return [{
       contributionId: 'pi.runtime.diagnostics',
       title: contributionText('This run', '本次运行'),
@@ -1146,32 +1181,29 @@ export class DefaultPiLiveService implements PiLiveService {
         || state.extensionBindingStatus === 'failed',
       ...(lifecycle ? { lifecycle } : {}),
       fields: runtimeDisclosureFields(state),
-      ...(state.status === 'failed'
-        ? {
-            actions: [{
-              actionId: 'pi.runtime.retry',
-              label: contributionText('Retry', '重试'),
-              description: contributionText(
-                'Restart this failed Pi Runtime with the same task context.',
-                '使用相同任务上下文重新启动失败的 Pi Runtime。',
-              ),
-              tone: 'primary' as const,
-            }],
-          }
-        : state.status === 'ready' && state.capabilities?.manualCompaction === true
-          && !state.isStreaming && !state.isCompacting && !this.requireRuntime(id).manualCompactionPending
-          ? { actions: [{
-              actionId: 'pi.runtime.compact',
-              placement: 'composer' as const,
-              label: contributionText('Compact context', '压缩上下文'),
-              description: contributionText('Run native Pi context compaction without adding a chat message.', '使用 Pi 原生能力压缩上下文，不发送聊天消息。'),
-            }] }
-          : {}),
+      ...(actions.length ? { actions } : {}),
     }]
   }
 
   async executeRuntimeAction(id: string, actionId: string) {
     if (actionId === 'pi.runtime.retry') return { runtime: await this.retry(id) }
+    if (actionId === 'pi.runtime.regenerate-title') {
+      const runtime = await this.readyRuntime(id)
+      if (runtime.isStreaming || runtime.isCompacting || runtime.titleRegenerationPending) {
+        throw this.conflict('Pi title regeneration requires an idle session')
+      }
+      if (!runtime.handle?.regenerateTitle
+        || !(await this.commands(id)).some(command => command.titleRegeneration === true)) {
+        throw this.conflict('Supported pi-title regeneration is not available')
+      }
+      runtime.titleRegenerationPending = true
+      try {
+        await runtime.handle.regenerateTitle()
+        return { runtime: await this.runtimeState(runtime) }
+      } finally {
+        runtime.titleRegenerationPending = false
+      }
+    }
     if (actionId === 'pi.runtime.compact') {
       const runtime = await this.readyRuntime(id)
       if (runtime.capabilities?.manualCompaction !== true || !runtime.handle?.compact) {
@@ -1745,6 +1777,17 @@ export class DefaultPiLiveService implements PiLiveService {
     return runtime
   }
 
+  private effectiveSessionName(runtime: OwnedRuntime, state?: Partial<PiLiveRuntimeState>): string | undefined {
+    // A native session_info_changed event is authoritative even if an older
+    // concurrent state/snapshot response still has the previous name.
+    if (runtime.observedSessionName !== undefined) return runtime.observedSessionName || undefined
+    return state?.sessionName?.trim() || undefined
+  }
+
+  private effectiveSessionTitle(runtime: OwnedRuntime, state?: Partial<PiLiveRuntimeState>): string | undefined {
+    return this.effectiveSessionName(runtime, state) || runtime.taskSummary?.trim() || undefined
+  }
+
   private runtimeListState(runtime: OwnedRuntime): PiLiveRuntimeState {
     const elapsed = runtime.status === 'initializing'
       ? Math.max(0, Date.now() - runtime.initializationStartedAt)
@@ -1760,12 +1803,14 @@ export class DefaultPiLiveService implements PiLiveService {
       initializationMessage: runtime.message,
       initializationElapsedMs: elapsed,
       ...(runtime.error ? { error: runtime.error } : {}),
-      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      // Before the Worker is ready, its requested name is only a provisional
+      // label. Once observed, the Pi session_info name is authoritative.
+      sessionName: this.effectiveSessionName(runtime, cached)
+        ?? (runtime.status === 'initializing' ? runtime.input.name : undefined),
       ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...((runtime.taskSummary || runtime.input.name || cached.sessionName)
-        ? { title: runtime.taskSummary || runtime.input.name || cached.sessionName }
-        : {}),
+      title: this.effectiveSessionTitle(runtime, cached)
+        ?? (runtime.status === 'initializing' ? runtime.input.name : undefined),
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
@@ -1828,10 +1873,14 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
-      ...(runtime.input.name ? { sessionName: runtime.input.name } : {}),
+      sessionName: runtime.observedSessionName !== undefined
+        ? this.effectiveSessionName(runtime)
+        : runtime.input.name,
       ...(runtime.input.sessionPath ? { sessionFile: runtime.input.sessionPath } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...((runtime.taskSummary || runtime.input.name) ? { title: runtime.taskSummary || runtime.input.name } : {}),
+      title: runtime.observedSessionName !== undefined
+        ? this.effectiveSessionTitle(runtime)
+        : runtime.input.name || runtime.taskSummary,
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
@@ -1867,9 +1916,8 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.taskSummary ? { taskSummary: runtime.taskSummary } : {}),
-      ...((runtime.taskSummary || safeState.sessionName || runtime.input.name)
-        ? { title: runtime.taskSummary || safeState.sessionName || runtime.input.name }
-        : {}),
+      sessionName: this.effectiveSessionName(runtime, safeState),
+      title: this.effectiveSessionTitle(runtime, safeState),
       ...(runtime.input.logicalSessionId ? { logicalSessionId: runtime.input.logicalSessionId } : {}),
       workspacePath: runtime.workspacePath,
       projectName: runtime.projectName,
@@ -2019,7 +2067,8 @@ export class DefaultPiLiveService implements PiLiveService {
   }
 
   private captureTaskSummary(runtime: OwnedRuntime, message: string): void {
-    if (runtime.taskSummary || runtime.input.name?.trim()) return
+    if (runtime.taskSummary || runtime.input.name?.trim()
+      || runtime.observedSessionName || runtime.cachedState?.sessionName) return
     const summary = taskSummary(message)
     if (!summary) return
     runtime.taskSummary = summary
@@ -2035,6 +2084,18 @@ export class DefaultPiLiveService implements PiLiveService {
     const messageRole = typeof message?.role === 'string' ? message.role : ''
     const messageId = typeof message?.id === 'string' ? message.id : ''
     runtime.lastActiveAt = Date.now()
+
+    if (type === 'session_info_changed') {
+      // Native Pi extensions (including AI title extensions) persist names via
+      // setSessionName(). Track both setting and clearing names without copying
+      // the transcript or overwriting the native session file.
+      runtime.observedSessionName = typeof event.name === 'string' ? event.name.trim() || null : null
+      if (runtime.cachedState) runtime.cachedState = {
+        ...runtime.cachedState,
+        sessionName: runtime.observedSessionName || undefined,
+        title: this.effectiveSessionTitle(runtime),
+      }
+    }
 
     if (type === 'agent_start') runtime.isStreaming = true
     if (type === 'compaction_start') runtime.isCompacting = true
@@ -2068,6 +2129,11 @@ export class DefaultPiLiveService implements PiLiveService {
       }
     }
     runtime.events.publish(publishedEvent)
+    if (type === 'session_info_changed') {
+      // Native names may change while a turn is running or after an async title
+      // generator finishes. Forward a generic Live title update immediately.
+      this.publish(runtime, { type: 'session_title', title: this.effectiveSessionTitle(runtime) || '' })
+    }
 
     // message_end closes one assistant message but not necessarily the whole
     // logical run. agent_end closes one low-level Pi run and can still be followed

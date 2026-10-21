@@ -6,6 +6,7 @@ import { PiExtensionUiBridge } from './extension-ui-bridge'
 import {
   assertPiSdkSession,
   piSdkCommands,
+  piSdkRegenerateNativeTitle,
   resolvePiSdkPackageUpdateApi,
   type PiSdkSessionManager,
 } from './pi-sdk-adapter'
@@ -358,6 +359,7 @@ class InProcessHandle implements PiRuntimeHandle {
     return isLiveThinkingControl(candidate) ? candidate : undefined
   }
   async commands() { return piSdkCommands(this.session) }
+  async regenerateTitle(): Promise<void> { await piSdkRegenerateNativeTitle(this.session) }
   async navigateTree(entryId: string): Promise<{ cancelled: boolean; editorText?: string | undefined }> {
     if (this.session.isStreaming) throw new Error('Pi tree navigation requires an idle session')
     if (typeof this.session.navigateTree !== 'function') throw new Error('Installed Pi SDK does not support navigateTree')
@@ -427,7 +429,7 @@ export class InProcessPiRuntimeHost implements PiRuntimeHost {
       await session.bindExtensions({ uiContext: extensionUi.context, mode: 'rpc', abortHandler: () => { void session.abort() }, onError: value => onEvent({ type: 'extension_error', error: String(record(value).error ?? 'Unknown extension error') }) })
       const resources = runtimeResourceSnapshot(session)
       if (resources) onEvent({ type: 'runtime_resources', resources })
-      if (input.name) session.setSessionName(input.name)
+      if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
       if (input.provider || input.model) { const snapshot = session.modelRuntime.getAvailableSnapshot(); const models = snapshot.length ? snapshot : await session.modelRuntime.getAvailable(input.provider); const model = models.find(item => (!input.provider || item.provider === input.provider) && (!input.model || item.id === input.model || item.name === input.model)); if (!model) throw new Error(`Pi model is not available: ${[input.provider, input.model].filter(Boolean).join('/')}`); await session.setModel(model) }
       const packageUpdateState: PackageUpdateState = { status: 'checking', updates: [] }
       const handle = new InProcessHandle(id, session, extensionUi, unsubscribe, packageUpdateState)

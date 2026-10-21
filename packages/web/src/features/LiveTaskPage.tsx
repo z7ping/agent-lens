@@ -323,6 +323,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
       .map(action => ({
         id: action.actionId,
         label: contributionText(action.label, i18n.resolvedLanguage ?? i18n.language),
+        ...(action.icon ? { icon: action.icon } : {}),
         ...(action.description ? { description: contributionText(action.description, i18n.resolvedLanguage ?? i18n.language) } : {}),
         disabled: runtimeActionPending !== null || state?.status !== 'ready' || state.isStreaming,
         onClick: () => { void runRuntimeAction(action) },

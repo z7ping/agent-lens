@@ -413,6 +413,7 @@ export interface LiveRuntimeActionContributionDto {
   description?: LiveContributionTextDto | undefined
   tone?: LiveContributionActionToneDto | undefined
   placement?: 'composer' | undefined
+  icon?: 'sparkles' | 'collapse' | undefined
 }
 
 export type LiveRuntimeLifecycleStatusDto = 'initializing' | 'ready' | 'failed'

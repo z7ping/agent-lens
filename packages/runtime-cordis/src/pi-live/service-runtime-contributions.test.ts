@@ -7,21 +7,30 @@ import type { PiLiveRuntimeState, PiLiveStartInput } from './types'
 class RuntimeContributionHost implements PiRuntimeHost {
   starts = 0
   compactions = 0
-  constructor(private readonly supportsCompaction = false) {}
+  generatedTitles = 0
+  sessionName: string | undefined
+  onEvent?: (event: Record<string, unknown>) => void
+  rename(name: string | undefined) {
+    this.sessionName = name
+    this.onEvent?.({ type: 'session_info_changed', name })
+  }
+  constructor(private readonly supportsCompaction = false, private readonly supportsTitle = false) {}
 
   async start(
     runtimeSessionId: string,
     _input: PiLiveStartInput,
     _signal: AbortSignal,
-    _onEvent: (event: Record<string, unknown>) => void,
+    onEvent: (event: Record<string, unknown>) => void,
     _onExit: (error: Error) => void,
   ): Promise<PiRuntimeHandle> {
     this.starts += 1
+    this.onEvent = onEvent
     if (!this.supportsCompaction && this.starts === 1) throw new Error('SDK bootstrap failed')
 
     const state = (): PiLiveRuntimeState => ({
       runtimeSessionId,
       status: 'ready',
+      ...(this.sessionName ? { sessionName: this.sessionName } : {}),
       ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
       sdkVersion: '0.84.4',
       runtimeMode: 'compatibility',
@@ -55,6 +64,8 @@ class RuntimeContributionHost implements PiRuntimeHost {
     return {
       ...(this.supportsCompaction ? { capabilities: { protocolVersion: 1, sessionRuntime: false, modelSwitching: true, thinkingLevelControl: true, extensionUi: true, manualCompaction: true } } : {}),
       ...(this.supportsCompaction ? { compact: async () => { this.compactions += 1 } } : {}),
+      commands: async () => this.supportsTitle ? [{ name: 'title', source: 'extension' as const, titleRegeneration: true }] : [],
+      ...(this.supportsTitle ? { regenerateTitle: async () => { this.generatedTitles += 1; this.rename('AI 重新生成的标题') } } : {}),
       processId: 4321,
       state: async () => state(),
       snapshot: async () => ({ state: state(), entries: [], leafId: null }),
@@ -84,6 +95,49 @@ async function waitForStatus(
   }
   throw new Error(`runtime did not reach ${status}`)
 }
+
+test('Pi Live 优先采用 SDK 原生标题，扩展更名与清除能覆盖首条消息回退', async () => {
+  const host = new RuntimeContributionHost(true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    await service.prompt(started.runtimeSessionId, '原始用户提问标题')
+    assert.equal((await service.state(started.runtimeSessionId)).title, '原始用户提问标题')
+
+    host.rename('AI 生成的真实原生标题')
+    assert.equal((await service.state(started.runtimeSessionId)).title, 'AI 生成的真实原生标题')
+    assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, 'AI 生成的真实原生标题')
+
+    host.rename(undefined)
+    assert.equal((await service.state(started.runtimeSessionId)).title, '原始用户提问标题')
+    assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, '原始用户提问标题')
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('仅在已识别原生 AI 标题生成器时声明菜单动作并使用真实扩展', async () => {
+  const host = new RuntimeContributionHost(true, true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    await service.prompt(started.runtimeSessionId, '请修复登录错误')
+    const before = await service.runtimeDisclosures(started.runtimeSessionId)
+    const action = before[0]?.actions?.find(item => item.actionId === 'pi.runtime.regenerate-title')
+    assert.equal(action?.placement, 'composer')
+    assert.equal(action?.icon, 'sparkles')
+    assert.ok(action)
+
+    const result = await service.executeRuntimeAction(started.runtimeSessionId, 'pi.runtime.regenerate-title')
+    assert.equal(host.generatedTitles, 1)
+    assert.equal(result.runtime.title, 'AI 重新生成的标题')
+    assert.equal((await service.list()).find(item => item.runtimeSessionId === started.runtimeSessionId)?.title, 'AI 重新生成的标题')
+  } finally {
+    await service.dispose()
+  }
+})
 
 test('Pi 原生压缩仅在可信 Runtime capability 下开放，并经 Worker Handle 执行', async () => {
   const host = new RuntimeContributionHost(true)

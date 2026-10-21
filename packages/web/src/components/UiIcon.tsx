@@ -55,6 +55,7 @@ import {
   Send,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   Sun,
   SquareTerminal,
   TrendingUp,
@@ -116,6 +117,7 @@ export type UiIconName =
   | 'send'
   | 'settings'
   | 'sliders-horizontal'
+  | 'sparkles'
   | 'sort-down'
   | 'sort-up'
   | 'sun'
@@ -183,6 +185,7 @@ const icons = {
   send: Send,
   settings: Settings,
   'sliders-horizontal': SlidersHorizontal,
+  sparkles: Sparkles,
   'sort-down': ChevronDown,
   'sort-up': ChevronUp,
   sun: Sun,

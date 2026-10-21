@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { LiveRuntimeEventDto } from '@agent-lens/protocol'
+import { translateProduct } from '../i18n/runtime'
 
 /** Lightweight notification metadata only: never replicate native conversation payloads. */
 export type TaskNotificationLevel = 'info' | 'success' | 'warning' | 'error' | 'action'
@@ -103,7 +104,7 @@ export function projectTaskNotification(
   } else if (event.type === 'ui.request') {
     level = 'action'
     title = event.title || ''
-    message = event.message || '智能体正在等待用户确认'
+    message = event.message || translateProduct('task:notifications.waitingApproval')
     nativeId = event.requestId
   } else if (event.type === 'error') {
     level = 'error'

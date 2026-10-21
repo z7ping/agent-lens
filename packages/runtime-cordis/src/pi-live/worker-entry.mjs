@@ -1252,7 +1252,8 @@ async function initialize(input) {
   send('event', { type: 'runtime_capabilities', capabilities })
   extensionUi = createExtensionUi()
   unsubscribe = session.subscribe(event => send('event', wireEvent(event)))
-  if (input.name) session.setSessionName(input.name)
+  // Never replay a stale launch title onto an existing native Pi session.
+  if (input.name && (!input.sessionPath || input.historyAction === 'fork')) session.setSessionName(input.name)
   if (input.provider || input.model) await selectModel(input.provider, input.model)
 
   // Match Pi Web lifecycle semantics: Session Core becomes usable first;
@@ -1352,10 +1353,26 @@ async function selectModel(provider, modelId) {
   await session.setModel(model)
 }
 
+function nativeTitleCommand(registered = session?.extensionRunner?.getRegisteredCommands?.()) {
+  const runner = session?.extensionRunner
+  if (typeof runner?.createCommandContext !== 'function') return undefined
+  if (!Array.isArray(registered)) return undefined
+  return registered.find(item => {
+    const command = record(item)
+    const provenance = record(command.sourceInfo)
+    const path = typeof provenance.path === 'string' ? provenance.path : ''
+    return command.invocationName === 'title'
+      && command.name === 'title'
+      && /(?:^|[\\/])pi-title(?:[\\/]|$)/i.test(path)
+      && typeof command.handler === 'function'
+  })
+}
+
 function slashCommands() {
   const commands = []
 
   const registered = session?.extensionRunner?.getRegisteredCommands?.()
+  const titleCommand = nativeTitleCommand(registered)
   if (Array.isArray(registered)) {
     for (const item of registered) {
       const command = record(item)
@@ -1367,6 +1384,7 @@ function slashCommands() {
           ? { description: command.description.trim() }
           : {}),
         source: 'extension',
+        ...(item.invocationName === titleCommand?.invocationName && item === titleCommand ? { titleRegeneration: true } : {}),
       })
     }
   }
@@ -1419,6 +1437,7 @@ async function command(name, value = {}) {
   const needsExtensions = name === 'commands'
     || name === 'navigateTree'
     || name === 'compact'
+    || name === 'regenerateTitle'
     || name === 'setModel'
     || name === 'setThinkingLevel'
     || name === 'prompt'
@@ -1454,6 +1473,13 @@ async function command(name, value = {}) {
     if (typeof session.compact !== 'function') throw new Error('Installed Pi SDK does not support manual compaction')
     await session.compact()
     roundIndexCache = undefined
+    return
+  }
+  if (name === 'regenerateTitle') {
+    if (session.isStreaming || session.isCompacting) throw new Error('Pi title regeneration requires an idle session')
+    const titleCommand = nativeTitleCommand()
+    if (!titleCommand) throw new Error('A supported pi-title extension is not installed')
+    await titleCommand.handler('regenerate', session.extensionRunner.createCommandContext())
     return
   }
   if (name === 'controls') {
