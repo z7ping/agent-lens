@@ -147,14 +147,14 @@
 .live-task-queue { width: 100%; min-width: 0; }
 .live-task-queue-header { display: flex; min-height: 36px; align-items: center; gap: 4px; padding: 2px 7px 2px 11px; }
 .live-task-queue-toggle { display: flex; min-width: 0; flex: 1 1 auto; align-items: center; justify-content: flex-start; gap: 8px; padding-inline: 4px; border: 0; background: transparent; color: var(--al-muted); text-align: left; }
-.live-task-queue-toggle > strong { flex: 0 0 auto; color: var(--al-ink-2); font-size: var(--text-task-secondary); font-weight: 600; white-space: nowrap; }
-.live-task-queue-preview { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--al-muted); font-size: var(--text-task-secondary); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.live-task-queue-toggle > strong { flex: 0 0 auto; color: var(--al-ink-2); font-size: var(--text-task-process); font-weight: 600; white-space: nowrap; }
+.live-task-queue-preview { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--al-muted); font-size: var(--text-task-process); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .live-task-queue-toggle > svg:last-child { flex: 0 0 auto; }
 .live-task-queue-menu-anchor { display: flex; flex: 0 0 auto; align-items: center; }
 .live-task-queue-list { display: grid; max-height: 156px; gap: 0; overflow: auto; padding: 0 12px 5px; }
 .live-task-queue-item { display: flex; min-height: 40px; align-items: center; gap: 10px; border-top: 1px solid var(--al-line); color: var(--al-muted); }
-.live-task-queue-type { flex: 0 0 auto; color: var(--al-muted); font-size: var(--text-task-secondary); white-space: nowrap; }
-.live-task-queue-item > b { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--al-ink-2); font-size: var(--text-task-secondary); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.live-task-queue-type { flex: 0 0 auto; color: var(--al-muted); font-size: var(--text-task-process); white-space: nowrap; }
+.live-task-queue-item > b { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--al-ink-2); font-size: var(--text-task-process); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .live-task-queue-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; }
 @media (max-width: 767.98px) {
   .live-task-queue-toggle { gap: 6px; }
