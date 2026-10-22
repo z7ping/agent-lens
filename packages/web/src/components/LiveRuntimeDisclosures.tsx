@@ -146,6 +146,34 @@ function CopyAction({
   </Button>
 }
 
+/** Shared presentation: adapters declare severity and native provenance; Web never parses labels. */
+function RuntimeStartupIssues({
+  items,
+  language,
+}: {
+  items: NonNullable<LiveRuntimeDisclosureContributionDto['diagnostics']>
+  language: string
+}) {
+  if (!items.length) return null
+  return <section className="live-runtime-startup-issues" aria-label={runtimeText('startupIssues')}>
+    <strong>{runtimeText('startupIssues')} · {items.length}</strong>
+    <div className="live-runtime-startup-issue-list">
+      {items.map(item => <div key={item.diagnosticId} className={`live-runtime-startup-issue is-${item.severity}`}>
+        <UiIcon name={item.severity === 'error' ? 'status-error' : item.severity === 'warning' ? 'alert' : 'info'} size={14}/>
+        <div>
+          <span className="live-runtime-issue-category">{runtimeText(`category.${item.category}`)}</span>
+          <span>{contributionText(item.message, language)}</span>
+          {item.collision && <div className="live-runtime-issue-collision">
+            <span>{runtimeText('winner')}: {item.collision.winnerPath}</span>
+            <span>{runtimeText('skipped')}: {item.collision.loserPath}</span>
+          </div>}
+          {item.path && !item.collision && <small title={item.path}>{item.path}</small>}
+        </div>
+      </div>)}
+    </div>
+  </section>
+}
+
 function RuntimeLifecycle({
   item,
   language,
@@ -161,7 +189,11 @@ function RuntimeLifecycle({
 }) {
   const lifecycle = item.lifecycle
   const activeStage = lifecycle?.stages.find(stage => stage.status === 'active')
-  const [expanded, setExpanded] = useState(lifecycle?.status !== 'ready')
+  const issues = item.diagnostics ?? []
+  const visibleIssues = issues.filter(issue => issue.severity !== 'info')
+  const issueKey = visibleIssues.map(issue => issue.diagnosticId).join('|')
+  const needsAttention = visibleIssues.length > 0 || item.tone === 'danger' || item.tone === 'warning'
+  const [expanded, setExpanded] = useState(lifecycle?.status !== 'ready' || needsAttention || item.defaultExpanded === true)
   const [clock, setClock] = useState(() => Date.now())
   const timingBaseline = useRef({
     elapsedMs: lifecycle?.elapsedMs ?? 0,
@@ -172,8 +204,8 @@ function RuntimeLifecycle({
 
   useEffect(() => {
     if (!lifecycle) return
-    setExpanded(lifecycle.status !== 'ready')
-  }, [item.contributionId, lifecycle?.status])
+    setExpanded(lifecycle.status !== 'ready' || needsAttention || item.defaultExpanded === true)
+  }, [item.contributionId, lifecycle?.status, item.tone, issueKey])
 
   useEffect(() => {
     const now = Date.now()
@@ -207,7 +239,7 @@ function RuntimeLifecycle({
 
   const title = contributionText(item.title, language)
   const statusLabel = lifecycle.status === 'ready'
-    ? runtimeText('ready')
+    ? needsAttention ? runtimeText('readyWithIssues') : runtimeText('ready')
     : lifecycle.status === 'failed'
       ? runtimeText('startupFailed')
       : runtimeText('preparing')
@@ -229,7 +261,7 @@ function RuntimeLifecycle({
   )
 
   return <details
-    className={`live-runtime-disclosure live-runtime-lifecycle is-${lifecycle.status}`}
+    className={`live-runtime-disclosure live-runtime-lifecycle is-${lifecycle.status} ${needsAttention ? 'has-startup-issues' : ''} ${item.tone === 'danger' ? 'has-startup-errors' : ''}`}
     open={expanded}
     onToggle={event => setExpanded(event.currentTarget.open)}
   >
@@ -237,13 +269,14 @@ function RuntimeLifecycle({
       <span className="live-runtime-summary-state" aria-hidden="true"/>
       <span className="live-runtime-summary-copy">
         <b>{title}</b>
-        <small>{[statusLabel, resourceSummary].filter(Boolean).join(' · ')}</small>
+        <small>{[statusLabel, ...(issues.length ? [`${issues.length} ${runtimeText('issues')}`] : []), resourceSummary].filter(Boolean).join(' · ')}</small>
       </span>
       <span className="live-runtime-summary-time">{duration(elapsedMs)}</span>
       <UiIcon className="live-runtime-chevron" name="chevron-down" size={14}/>
     </summary>
 
     <div className="live-runtime-body">
+      <RuntimeStartupIssues items={issues} language={language}/>
       <div className="live-runtime-steps" aria-label={runtimeText('startupStages')}>
         {lifecycle.stages.map(stage => <div
           key={stage.stageId}
@@ -358,6 +391,16 @@ function diagnosticCopyText(
     `【${runtimeText('runtimeOverview')}】`,
     ...statusFields.map(field => `${field.label}：${field.values.join(' · ')}`),
   ]
+  if (item.diagnostics?.length) {
+    lines.push('', `【${runtimeText('startupIssues')}】`)
+    for (const issue of item.diagnostics) {
+      lines.push(`[${issue.severity}/${issue.category}] ${contributionText(issue.message, language)}`)
+      if (issue.collision) {
+        lines.push(`${runtimeText('winner')}：${issue.collision.winnerPath}`)
+        lines.push(`${runtimeText('skipped')}：${issue.collision.loserPath}`)
+      } else if (issue.path) lines.push(issue.path)
+    }
+  }
 
   if (lifecycle) {
     lines.push(`${runtimeText('totalElapsed')}：${duration(lifecycle.elapsedMs)}`)
@@ -407,6 +450,7 @@ function RuntimeDiagnostics({
   const lifecycle = item.lifecycle
 
   return <div className="live-runtime-diagnostics">
+    <RuntimeStartupIssues items={item.diagnostics ?? []} language={language}/>
     {(statusFields.length > 0 || lifecycle?.elapsedMs !== undefined) && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-overview">
       <h3>{runtimeText('runtimeOverview')}</h3>
       <div className="live-runtime-diagnostic-overview-grid">
