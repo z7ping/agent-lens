@@ -181,7 +181,7 @@ export async function startCodexRuntimeCapture(
         reconcilePollMs: 5 * 60_000,
         reconcileLimit: 20,
         onError: error => {
-          console.error('[AgentLens] Codex history reconcile failed', error)
+          if (!isMissingPathError(error)) console.error('[AgentLens] Codex history reconcile failed', error)
         },
       }),
   ))
