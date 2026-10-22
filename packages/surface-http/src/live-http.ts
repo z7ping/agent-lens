@@ -727,6 +727,8 @@ function writeError(response: ServerResponse, error: unknown): void {
           ? 'bad_request'
           : 'internal_error',
     ...(error instanceof Error && status < 500 ? { message: error.message } : {}),
+    ...(status === 409 && error && typeof error === 'object' && 'reasonCode' in error
+      && typeof error.reasonCode === 'string' ? { reasonCode: error.reasonCode } : {}),
   })
 }
 
