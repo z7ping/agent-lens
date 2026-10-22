@@ -206,6 +206,7 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
   if (type === 'thinking_level_changed') return { type: 'control.changed', control: 'thinking' }
   if (type === 'runtime_resources'
     || type === 'package_updates'
+    || type === 'pi_version_check'
     || type === 'runtime_extension_binding') {
     return { type: 'runtime-disclosure.changed' }
   }
