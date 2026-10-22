@@ -19,7 +19,16 @@ export interface PiLivePackageUpdateDto {
 
 export type PiLivePackageUpdateCheckStatusDto = 'checking' | 'complete' | 'unavailable' | 'failed'
 
+export interface PiLiveStartupIssueDto {
+  severity: 'info' | 'warning' | 'error'
+  category: 'skill' | 'extension' | 'command' | 'tool' | 'flag' | 'prompt' | 'theme' | 'resource'
+  message: string
+  path?: string | undefined
+  collision?: { name: string; winnerPath: string; loserPath: string } | undefined
+}
+
 export interface PiLiveStartupResourcesDto {
+  issues?: PiLiveStartupIssueDto[] | undefined
   contexts: string[]
   skills: string[]
   prompts: string[]
