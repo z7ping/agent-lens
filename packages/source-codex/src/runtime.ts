@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type {
@@ -11,7 +11,7 @@ import type {
 import { abortableDelay } from '@agent-lens/runtime-cordis'
 import { asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
-import { ingestCodexFile, listJsonlFiles } from './history'
+import { codexHistoryRoots, ingestCodexFile, listJsonlFiles } from './history'
 
 const POLL_INTERVAL_MS = 250
 
@@ -154,15 +154,18 @@ export async function startCodexRuntimeCapture(
     }
   })()
 
-  const sessionsDir = ctx.installation.dataRoot
-    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
-  const historyWatch = sessionsDir
-    ? await startHistoryFileWatch({
-        root: sessionsDir,
+  const roots = codexHistoryRoots(ctx.installation)
+  const historyWatches = await Promise.all(roots.map(async root => {
+    // Do not create folders inside native Codex storage. Some installations
+    // have no archived_sessions directory until their first archive.
+    try { if (!(await stat(root)).isDirectory()) return null }
+    catch (error) { if (isMissingPathError(error)) return null; throw error }
+    return startHistoryFileWatch({
+        root,
         signal: ctx.abortSignal,
         accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
         listFiles: limit => listJsonlFiles(
-          sessionsDir,
+          root,
           limit === undefined ? undefined : { sessionLimit: limit },
         ),
         onFile: async filePath => {
@@ -183,13 +186,13 @@ export async function startCodexRuntimeCapture(
           console.error('[AgentLens] Codex history reconcile failed', error)
         },
       })
-    : null
+  }))
 
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
-      await historyWatch?.dispose()
+      await Promise.all(historyWatches.map(watch => watch?.dispose()))
       await task
     },
   }
