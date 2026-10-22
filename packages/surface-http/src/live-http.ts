@@ -967,7 +967,8 @@ async function connectNotificationEvents(
     if (closed) return
     closed = true
     clearInterval(heartbeat)
-    clearInterval(discovery)
+    // Notification discovery is folded into the heartbeat refresh. There is no
+    // separate discovery interval to clear when an SSE client disconnects.
     for (const dispose of subscriptions.values()) dispose()
     subscriptions.clear()
   }
