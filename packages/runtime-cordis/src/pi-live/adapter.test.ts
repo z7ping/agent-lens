@@ -139,6 +139,7 @@ test('Pi Live Adapter invalidates Runtime Disclosure for private diagnostic upda
   for (const event of [
     { type: 'runtime_resources', resources: {} },
     { type: 'package_updates', status: 'complete', updates: [] },
+    { type: 'pi_version_check', status: 'complete', latestVersion: '1.4.0' },
     { type: 'runtime_extension_binding', status: 'ready' },
   ]) {
     assert.deepEqual(normalizePiLiveEvent(event), { type: 'runtime-disclosure.changed' })
