@@ -155,10 +155,13 @@ function RuntimeStartupIssues({
   language: string
 }) {
   if (!items.length) return null
+  const sorted = [...items].sort((a, b) =>
+    ({ error: 0, warning: 1, info: 2 })[a.severity]
+    - ({ error: 0, warning: 1, info: 2 })[b.severity])
   return <section className="live-runtime-startup-issues" aria-label={runtimeText('startupIssues')}>
     <strong>{runtimeText('startupIssues')} · {items.length}</strong>
     <div className="live-runtime-startup-issue-list">
-      {items.map(item => <div key={item.diagnosticId} className={`live-runtime-startup-issue is-${item.severity}`}>
+      {sorted.map(item => <div key={item.diagnosticId} className={`live-runtime-startup-issue is-${item.severity}`}>
         <UiIcon name={item.severity === 'error' ? 'status-error' : item.severity === 'warning' ? 'alert' : 'info'} size={14}/>
         <div>
           <span className="live-runtime-issue-category">{runtimeText(`category.${item.category}`)}</span>
@@ -246,6 +249,10 @@ function RuntimeLifecycle({
   const resourceSummary = (lifecycle.resources ?? [])
     .map(group => `${contributionText(group.label, language)} ${group.values.length}`)
     .join(' · ')
+  const updateAvailable = item.fields.find(field => field.fieldId === 'runtime.update.available')
+  const updateText = updateAvailable?.value
+    ? typeof updateAvailable.value === 'string' ? updateAvailable.value : contributionText(updateAvailable.value, language)
+    : undefined
   const liveDeltaMs = lifecycle.status === 'initializing'
     ? Math.max(0, clock - timingBaseline.current.at)
     : 0
@@ -269,7 +276,7 @@ function RuntimeLifecycle({
       <span className="live-runtime-summary-state" aria-hidden="true"/>
       <span className="live-runtime-summary-copy">
         <b>{title}</b>
-        <small>{[statusLabel, ...(issues.length ? [`${issues.length} ${runtimeText('issues')}`] : []), resourceSummary].filter(Boolean).join(' · ')}</small>
+        <small>{[statusLabel, ...(issues.length ? [`${issues.length} ${runtimeText('issues')}`] : []), ...(updateText ? [updateText] : []), resourceSummary].filter(Boolean).join(' · ')}</small>
       </span>
       <span className="live-runtime-summary-time">{duration(elapsedMs)}</span>
       <UiIcon className="live-runtime-chevron" name="chevron-down" size={14}/>
@@ -465,6 +472,22 @@ function RuntimeDiagnostics({
       </div>
     </section>}
 
+    {resourceFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-resources">
+      <h3>{runtimeText('runtimeResources')}</h3>
+      <div className="live-runtime-diagnostic-resource-groups">
+        {resourceFields.map(field => <section className="live-runtime-diagnostic-resource-group" key={field.key}>
+          <header>
+            <b>{field.label}</b>
+            <span>{field.values.length}</span>
+          </header>
+          <div className="live-runtime-diagnostic-values">
+            {field.values.map((value, index) => <span key={`${field.key}:${index}:${value}`}>{value}</span>)}
+          </div>
+        </section>)}
+      </div>
+    </section>}
+
+
     {(lifecycle?.stages.length || performanceFields.length > 0) && <div className="live-runtime-diagnostic-primary-grid">
       {lifecycle?.stages.length && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-stage-section">
         <h3>{runtimeText('startupStages')}</h3>
@@ -500,21 +523,6 @@ function RuntimeDiagnostics({
         </div>)}
       </section>}
     </div>}
-
-    {resourceFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-resources">
-      <h3>{runtimeText('runtimeResources')}</h3>
-      <div className="live-runtime-diagnostic-resource-groups">
-        {resourceFields.map(field => <section className="live-runtime-diagnostic-resource-group" key={field.key}>
-          <header>
-            <b>{field.label}</b>
-            <span>{field.values.length}</span>
-          </header>
-          <div className="live-runtime-diagnostic-values">
-            {field.values.map((value, index) => <span key={`${field.key}:${index}:${value}`}>{value}</span>)}
-          </div>
-        </section>)}
-      </div>
-    </section>}
 
     {advancedFields.length > 0 && <section className="live-runtime-diagnostic-section live-runtime-diagnostic-advanced">
       <h3>{runtimeText('advancedDiagnostics')}</h3>

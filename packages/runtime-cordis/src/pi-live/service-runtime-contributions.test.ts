@@ -399,3 +399,36 @@ test('Pi 原生 Skill/命令/扩展问题进入统一 Disclosure，Runtime 就�
     await service.dispose()
   }
 })
+
+test('Pi 版本检查晚于启动成功返回时，统一 Runtime Disclosure 实时显示但不报启动失败', async () => {
+  const host = new RuntimeContributionHost(true)
+  const service = new DefaultPiLiveService(host)
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    host.onEvent?.({
+      type: 'pi_version_check',
+      status: 'complete',
+      latestVersion: '1.4.0',
+      checkedAt: '2026-10-22T02:00:00.000Z',
+    })
+    const runtime = await service.state(started.runtimeSessionId)
+    assert.equal(runtime.piVersionCheck, 'complete')
+    assert.equal(runtime.piLatestVersion, '1.4.0')
+    const item = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
+    assert.equal(item?.lifecycle?.status, 'ready')
+    assert.equal(item?.tone, 'neutral')
+    assert.equal(item?.defaultExpanded, false)
+    const update = item?.fields.find(field => field.fieldId === 'runtime.update.available')
+    assert.match(update?.value && typeof update.value !== 'string'
+      ? update.value.localizations?.['zh-CN'] ?? ''
+      : '', /Pi 0\.84\.4 → 1\.4\.0 可更新/)
+    host.onEvent?.({ type: 'pi_version_check', status: 'failed' })
+    const failed = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
+    assert.equal(failed?.tone, 'neutral')
+    assert.equal(failed?.fields.some(field => field.fieldId === 'runtime.update.available'), false)
+    assert.equal(failed?.fields.some(field => field.fieldId === 'runtime.update.check'), true)
+  } finally {
+    await service.dispose()
+  }
+})

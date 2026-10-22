@@ -57,6 +57,9 @@ export interface PiLiveStartupAuditSnapshot {
   packageUpdateCheck?: Exclude<PiLivePackageUpdateCheckStatus, 'checking'> | undefined
   packageUpdates?: PiLivePackageUpdate[] | undefined
   packageUpdatesCheckedAt?: string | undefined
+  piVersionCheck?: 'complete' | 'unavailable' | 'failed' | undefined
+  piLatestVersion?: string | undefined
+  piVersionCheckedAt?: string | undefined
   executable?: string | undefined
   sdkVersion?: string | undefined
   sessionName?: string | undefined
@@ -142,6 +145,9 @@ export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStart
             ...(snapshot.packageUpdateCheck ? { packageUpdateCheck: snapshot.packageUpdateCheck } : {}),
             ...(snapshot.packageUpdates ? { packageUpdates: snapshot.packageUpdates } : {}),
             ...(snapshot.packageUpdatesCheckedAt ? { packageUpdatesCheckedAt: snapshot.packageUpdatesCheckedAt } : {}),
+            ...(snapshot.piVersionCheck ? { piVersionCheck: snapshot.piVersionCheck } : {}),
+            ...(snapshot.piLatestVersion ? { piLatestVersion: snapshot.piLatestVersion } : {}),
+            ...(snapshot.piVersionCheckedAt ? { piVersionCheckedAt: snapshot.piVersionCheckedAt } : {}),
           },
           identityHints: {
             nativeSessionId: snapshot.nativeSessionId,
@@ -183,7 +189,7 @@ export function createPiLiveStartupAuditSink(ctx: AgentLensContext): PiLiveStart
         if (boundary.mode === 'off' || !boundary.payload) return
         const currentPayload = record(observation.payload)
         const mergedPayload: Record<string, unknown> = { ...boundary.payload }
-        for (const key of ['packageUpdateCheck', 'packageUpdates', 'packageUpdatesCheckedAt']) {
+        for (const key of ['packageUpdateCheck', 'packageUpdates', 'packageUpdatesCheckedAt', 'piVersionCheck', 'piLatestVersion', 'piVersionCheckedAt']) {
           if (Object.prototype.hasOwnProperty.call(currentPayload, key)) mergedPayload[key] = currentPayload[key]
         }
         candidate = { ...observation, payload: mergedPayload }

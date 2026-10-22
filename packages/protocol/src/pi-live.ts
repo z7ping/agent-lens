@@ -98,6 +98,9 @@ export interface PiLiveStateDto {
   initializationTimings?: PiLiveInitializationTimingDto[] | undefined
   startupResources?: PiLiveStartupResourcesDto | undefined
   packageUpdates?: PiLivePackageUpdateDto[] | undefined
+  piVersionCheck?: 'checking' | 'complete' | 'unavailable' | 'failed' | undefined
+  piLatestVersion?: string | undefined
+  piVersionCheckedAt?: string | undefined
   packageUpdateCheck?: PiLivePackageUpdateCheckStatusDto | undefined
   startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilitiesDto | undefined

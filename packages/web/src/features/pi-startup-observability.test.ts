@@ -47,3 +47,9 @@ test('就绪伴随启动警告依然展开，显示结构化来源和冲突归�
   assert.match(runtime, /winnerPath/)
   assert.match(css, /has-startup-issues/)
 })
+
+test('统一 Runtime Disclosure 对版本更新使用语义字段并在摘要显示', () => {
+  assert.match(runtime, /runtime\.update\.available/)
+  assert.match(runtime, /updateText/)
+  assert.match(runtime, /sorted\.map/)
+})

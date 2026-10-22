@@ -36,6 +36,9 @@ let runtimeMode = 'compatibility'
 let capabilities
 let packageUpdateCheck = 'checking'
 let packageUpdates = []
+let piVersionCheck = 'unavailable'
+let piLatestVersion
+let piVersionCheckedAt
 let currentStartupResources
 let roundIndexCache
 let initializationStartedAt = 0
@@ -232,6 +235,67 @@ function startPackageUpdateCheck(cwd) {
       status: packageUpdateCheck,
       updates: packageUpdates,
     })
+  })
+}
+
+// Mirrors Pi's official read-only version check; never modifies installed packages.
+const PI_LATEST_VERSION_URL = 'https://pi.dev/api/latest-version'
+function piVersionParts(value) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(String(value ?? '').trim())
+  if (!match) return undefined
+  return { numbers: match.slice(1, 4).map(Number), pre: match[4] ? match[4].split('.') : [] }
+}
+function newerPiVersion(candidate, installed) {
+  const left = piVersionParts(candidate)
+  const right = piVersionParts(installed)
+  if (!left || !right || [...left.numbers, ...right.numbers].some(n => !Number.isSafeInteger(n))) return false
+  for (let i = 0; i < 3; i++) {
+    if (left.numbers[i] !== right.numbers[i]) return left.numbers[i] > right.numbers[i]
+  }
+  if (!left.pre.length) return right.pre.length > 0
+  if (!right.pre.length) return false
+  for (let i = 0; i < Math.max(left.pre.length, right.pre.length); i++) {
+    if (i >= left.pre.length) return false
+    if (i >= right.pre.length) return true
+    const l = left.pre[i], r = right.pre[i]
+    if (l === r) continue
+    const ln = /^\d+$/.test(l), rn = /^\d+$/.test(r)
+    if (ln && rn) return Number(l) > Number(r)
+    if (ln !== rn) return !ln
+    return l > r
+  }
+  return false
+}
+function startPiVersionCheck() {
+  piLatestVersion = undefined
+  piVersionCheckedAt = undefined
+  if (piOfflineModeEnabled() || process.env.PI_SKIP_VERSION_CHECK || !piVersionParts(sdkVersion)) {
+    piVersionCheck = 'unavailable'
+    return
+  }
+  piVersionCheck = 'checking'
+  void (async () => {
+    const response = await fetch(PI_LATEST_VERSION_URL, {
+      headers: { accept: 'application/json', 'User-Agent': `pi/${sdkVersion}` },
+      signal: AbortSignal.timeout(4_000),
+    })
+    if (!response.ok) throw new Error('Pi version endpoint unavailable')
+    const data = record(await response.json())
+    if (typeof data.version !== 'string' || !piVersionParts(data.version)) {
+      throw new Error('Pi version endpoint returned an invalid version')
+    }
+    return data.version.trim().slice(0, 64)
+  })().then(latest => {
+    if (terminating) return
+    piVersionCheck = 'complete'
+    piLatestVersion = newerPiVersion(latest, sdkVersion) ? latest : undefined
+    piVersionCheckedAt = new Date().toISOString()
+    send('event', { type: 'pi_version_check', status: piVersionCheck, latestVersion: piLatestVersion, checkedAt: piVersionCheckedAt })
+  }).catch(() => {
+    if (terminating) return
+    piVersionCheck = 'failed'
+    piVersionCheckedAt = new Date().toISOString()
+    send('event', { type: 'pi_version_check', status: piVersionCheck, checkedAt: piVersionCheckedAt })
   })
 }
 
@@ -1234,6 +1298,9 @@ async function initialize(input) {
   }
   packageUpdateCheck = 'checking'
   packageUpdates = []
+  piVersionCheck = 'unavailable'
+  piLatestVersion = undefined
+  piVersionCheckedAt = undefined
 
   progress('loading_sdk', '正在加载 Pi SDK')
   const sdkWasLoaded = Boolean(sdk)
@@ -1315,7 +1382,10 @@ async function initialize(input) {
   // Package update IO waits until extension binding settles so it never competes
   // with the foreground-critical extension startup path.
   void extensionBindingPromise.finally(() => {
-    if (!terminating) startPackageUpdateCheck(input.cwd)
+    if (!terminating) {
+      startPackageUpdateCheck(input.cwd)
+      startPiVersionCheck()
+    }
   }).catch(() => undefined)
 }
 
@@ -1379,6 +1449,9 @@ function state() {
     ...(currentStartupResources ? { startupResources: currentStartupResources } : {}),
     packageUpdateCheck,
     ...(packageUpdates.length ? { packageUpdates } : {}),
+    piVersionCheck,
+    ...(piLatestVersion ? { piLatestVersion } : {}),
+    ...(piVersionCheckedAt ? { piVersionCheckedAt } : {}),
   }
 }
 
