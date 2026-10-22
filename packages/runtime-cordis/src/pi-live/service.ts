@@ -21,7 +21,7 @@ import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
 import type { LiveQueueMutation } from '@agent-lens/core'
-import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupIssue, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
+import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupIssue, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveVersionCheckStatus, PiLiveWarmWorkerStatus } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -50,6 +50,9 @@ interface OwnedRuntime {
   packageUpdates: PiLivePackageUpdate[]
   packageUpdateCheck?: PiLivePackageUpdateCheckStatus | undefined
   packageUpdatesCheckedAt?: string | undefined
+  piVersionCheck?: PiLiveVersionCheckStatus | undefined
+  piLatestVersion?: string | undefined
+  piVersionCheckedAt?: string | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined
   workspacePath: string
   projectName: string
@@ -426,6 +429,32 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
       )),
     })
   }
+  if (state.piLatestVersion) {
+    const current = state.sdkVersion ?? state.capabilities?.sdkVersion ?? 'unknown'
+    fields.push({
+      fieldId: 'runtime.pi-version-update',
+      section: 'status',
+      label: contributionText('Pi update', 'Pi 主程序更新'),
+      value: contributionText(
+        `Pi ${current} → ${state.piLatestVersion} available`,
+        `Pi ${current} → ${state.piLatestVersion} 可更新`,
+      ),
+    })
+  } else if (state.piVersionCheck === 'complete') {
+    fields.push({
+      fieldId: 'runtime.pi-version-update',
+      section: 'status',
+      label: contributionText('Pi update', 'Pi 主程序更新'),
+      value: contributionText('Up to date', '已是最新版本'),
+    })
+  } else if (state.piVersionCheck === 'failed') {
+    fields.push({
+      fieldId: 'runtime.pi-version-update',
+      section: 'status',
+      label: contributionText('Pi update', 'Pi 主程序更新'),
+      value: contributionText('Check failed · current version unchanged', '检查失败 · 当前版本不受影响'),
+    })
+  }
   if (state.packageUpdateCheck === 'failed') {
     fields.push({
       fieldId: 'runtime.package-update-check',
@@ -673,6 +702,10 @@ function copyStartupResources(resources: PiLiveStartupResources): PiLiveStartupR
     extensions: [...resources.extensions],
     themes: [...resources.themes],
     diagnostics: [...resources.diagnostics],
+    ...(resources.issues?.length ? { issues: resources.issues.map(issue => ({
+      ...issue,
+      ...(issue.collision ? { collision: { ...issue.collision } } : {}),
+    })) } : {}),
   }
 }
 
@@ -839,6 +872,9 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.packageUpdates = []
     runtime.packageUpdateCheck = undefined
     runtime.packageUpdatesCheckedAt = undefined
+    runtime.piVersionCheck = undefined
+    runtime.piLatestVersion = undefined
+    runtime.piVersionCheckedAt = undefined
     runtime.capabilities = undefined
     runtime.activeAssistantMessageId = undefined
     runtime.isStreaming = false
@@ -1075,6 +1111,13 @@ export class DefaultPiLiveService implements PiLiveService {
             runtime.packageUpdatesCheckedAt = new Date().toISOString()
             this.persistPackageUpdatesBestEffort(runtime, generation)
           }
+        } else if (event.type === 'pi_version_check') {
+          runtime.piVersionCheck = packageUpdateStatus(event.status) ?? runtime.piVersionCheck
+          runtime.piLatestVersion = typeof event.latestVersion === 'string'
+            ? event.latestVersion.slice(0, 64) : undefined
+          runtime.piVersionCheckedAt = typeof event.checkedAt === 'string'
+            ? event.checkedAt.slice(0, 32) : runtime.piVersionCheckedAt
+          if (runtime.status === 'ready') this.persistPackageUpdatesBestEffort(runtime, generation)
         } else if (event.type === 'runtime_output') {
           if (typeof event.message === 'string' && event.message.trim()) {
             runtime.startupOutput = [...runtime.startupOutput, event.message.trim()].slice(-80)
@@ -1952,6 +1995,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(runtime.startupResources ? { startupResources: runtime.startupResources } : {}),
       ...(runtime.packageUpdateCheck ? { packageUpdateCheck: runtime.packageUpdateCheck } : {}),
       ...(runtime.packageUpdates.length ? { packageUpdates: runtime.packageUpdates } : {}),
+      ...(runtime.piVersionCheck ? { piVersionCheck: runtime.piVersionCheck } : {}),
+      ...(runtime.piLatestVersion ? { piLatestVersion: runtime.piLatestVersion } : {}),
+      ...(runtime.piVersionCheckedAt ? { piVersionCheckedAt: runtime.piVersionCheckedAt } : {}),
       ...(runtime.startupOutput.length ? { startupOutput: runtime.startupOutput } : {}),
       ...(runtime.capabilities ? { capabilities: runtime.capabilities } : {}),
       ...(runtime.error ? { error: runtime.error } : {}),
@@ -1979,6 +2025,9 @@ export class DefaultPiLiveService implements PiLiveService {
     delete safeState.startupResources
     delete safeState.packageUpdates
     delete safeState.packageUpdateCheck
+    delete safeState.piVersionCheck
+    delete safeState.piLatestVersion
+    delete safeState.piVersionCheckedAt
     return {
       ...safeState,
       runtimeSessionId: runtime.id,
@@ -2024,6 +2073,9 @@ export class DefaultPiLiveService implements PiLiveService {
       }
     }
     if (state.packageUpdates !== undefined) runtime.packageUpdates = packageUpdates(state.packageUpdates)
+    runtime.piVersionCheck = packageUpdateStatus(state.piVersionCheck) ?? runtime.piVersionCheck
+    if (state.piLatestVersion !== undefined) runtime.piLatestVersion = state.piLatestVersion.slice(0, 64)
+    if (state.piVersionCheckedAt !== undefined) runtime.piVersionCheckedAt = state.piVersionCheckedAt.slice(0, 32)
     const resources = startupResources(state.startupResources)
     if (!resources) return
     runtime.startupResources = resources
