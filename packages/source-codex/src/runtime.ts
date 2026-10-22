@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, stat, unlink } from 'node:fs/promises'
+import { mkdir, readFile, readdir, unlink } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { extname, join } from 'node:path'
 import type {
@@ -155,12 +155,10 @@ export async function startCodexRuntimeCapture(
   })()
 
   const roots = codexHistoryRoots(ctx.installation)
-  const historyWatches = await Promise.all(roots.map(async root => {
-    // Do not create folders inside native Codex storage. Some installations
-    // have no archived_sessions directory until their first archive.
-    try { if (!(await stat(root)).isDirectory()) return null }
-    catch (error) { if (isMissingPathError(error)) return null; throw error }
-    return startHistoryFileWatch({
+  const historyWatches = await Promise.all(roots.map(root =>
+    // Absent archive roots use the shared watcher's bounded poll fallback;
+    // never create native Codex directories to force watch startup.
+    startHistoryFileWatch({
         root,
         signal: ctx.abortSignal,
         accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
@@ -185,8 +183,8 @@ export async function startCodexRuntimeCapture(
         onError: error => {
           console.error('[AgentLens] Codex history reconcile failed', error)
         },
-      })
-  }))
+      }),
+  ))
 
   return {
     async dispose(): Promise<void> {
