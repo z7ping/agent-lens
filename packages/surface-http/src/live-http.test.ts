@@ -1020,6 +1020,33 @@ test('Live history resume exposes a bounded native active-writer reason code', a
   }
 })
 
+test('notification SSE disconnect does not crash Daemon or break subsequent API requests', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter()
+  await adapter.start({ workspacePath: '/repo' })
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  const base = `http://${surface.host}:${surface.port}`
+
+  try {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const controller = new AbortController()
+      const stream = await fetch(`${base}/api/v1/live/notifications/events`, { signal: controller.signal })
+      assert.equal(stream.status, 200)
+      assert.match(stream.headers.get('content-type') ?? '', /text\/event-stream/)
+      await stream.body?.getReader().read()
+      controller.abort()
+      // Allow Node's ServerResponse close handler to execute before another request.
+      await new Promise(resolve => setTimeout(resolve, 20))
+      const ordinary = await fetch(`${base}/api/v1/live/runtimes`)
+      assert.equal(ordinary.status, 200, 'a disconnected SSE client must not terminate the HTTP server')
+    }
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
 test('generic Live HTTP surface reports unavailable LiveService without falling through', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()
