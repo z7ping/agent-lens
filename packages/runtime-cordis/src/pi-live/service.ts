@@ -432,7 +432,7 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
   if (state.piLatestVersion) {
     const current = state.sdkVersion ?? state.capabilities?.sdkVersion ?? 'unknown'
     fields.push({
-      fieldId: 'runtime.pi-version-update',
+      fieldId: 'runtime.update.available',
       section: 'status',
       label: contributionText('Pi update', 'Pi 主程序更新'),
       value: contributionText(
@@ -442,14 +442,14 @@ function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContribu
     })
   } else if (state.piVersionCheck === 'complete') {
     fields.push({
-      fieldId: 'runtime.pi-version-update',
+      fieldId: 'runtime.update.check',
       section: 'status',
       label: contributionText('Pi update', 'Pi 主程序更新'),
       value: contributionText('Up to date', '已是最新版本'),
     })
   } else if (state.piVersionCheck === 'failed') {
     fields.push({
-      fieldId: 'runtime.pi-version-update',
+      fieldId: 'runtime.update.check',
       section: 'status',
       label: contributionText('Pi update', 'Pi 主程序更新'),
       value: contributionText('Check failed · current version unchanged', '检查失败 · 当前版本不受影响'),
