@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
 import type { SourceExecutionContext } from '@agent-lens/core'
-import { CODEX_PARSER_VERSION, codexHistoryInternals, ingestCodexHistory } from './history'
+import { CODEX_PARSER_VERSION, codexHistoryInternals, codexHistoryRoots, listCodexHistoryFiles, ingestCodexHistory } from './history'
 
 async function fixture(lineCount: number) {
   const root = await mkdtemp(join(tmpdir(), 'agent-lens-codex-checkpoint-'))
@@ -264,6 +264,52 @@ test('Codex title-only SQLite update refreshes an already checkpointed rollout w
     for await (const record of ingestCodexHistory(ctx)) renamed.push(record)
     assert.equal(renamed.length, 1)
     assert.equal((renamed[0]?.payload as { entry: { payload: { title: string } } }).entry.payload.title, '用户实际修改的标题')
+  } finally {
+    await rm(input.root, { recursive: true, force: true })
+  }
+})
+
+test('Codex Desktop native history reads active and archived JSONL without a CLI runtime', async () => {
+  const input = await fixture(1)
+  const archiveRoot = join(input.root, 'archived_sessions')
+  const archivePath = join(archiveRoot, 'rollout-archived.jsonl')
+  const checkpoints = new Map<string, unknown>()
+  const writes: unknown[] = []
+  await mkdir(archiveRoot, { recursive: true })
+  await writeFile(archivePath, JSON.stringify({
+    timestamp: '2026-08-30T01:00:00.000Z',
+    type: 'event_msg',
+    payload: { type: 'agent_message', message: 'archived desktop answer' },
+  }) + '\n', 'utf8')
+  // Order must not depend on coarse Windows filesystem mtime granularity.
+  await utimes(input.path, new Date('2026-08-29T00:00:00.000Z'), new Date('2026-08-29T00:00:00.000Z'))
+  await utimes(archivePath, new Date('2026-08-30T00:00:00.000Z'), new Date('2026-08-30T00:00:00.000Z'))
+  const base = context(input.sessions, checkpoints, writes)
+  const ctx: SourceExecutionContext = {
+    ...base,
+    installation: { ...base.installation, configRoot: input.root },
+  }
+
+  try {
+    assert.deepEqual(codexHistoryRoots(ctx.installation), [input.sessions, archiveRoot])
+    assert.deepEqual(await listCodexHistoryFiles(ctx.installation, { sessionLimit: 1 }), [archivePath])
+    const first = []
+    for await (const record of ingestCodexHistory(ctx)) first.push(record)
+    assert.equal(first.length, 2)
+    assert.ok(first.some(record => record.locator.path === archivePath))
+
+    await appendFile(input.path, JSON.stringify({
+      timestamp: '2026-08-30T01:00:01.000Z',
+      type: 'event_msg',
+      payload: { type: 'agent_message', message: 'desktop appended answer' },
+    }) + '\n', 'utf8')
+    const appended = []
+    for await (const record of ingestCodexHistory(ctx)) appended.push(record)
+    assert.equal(appended.length, 1, 'only new native bytes are observed, no transcript recopy')
+    assert.equal(appended[0]?.locator.path, input.path)
+    const repeated = []
+    for await (const record of ingestCodexHistory(ctx)) repeated.push(record)
+    assert.equal(repeated.length, 0, 'stable checkpoints prevent duplicate historical facts')
   } finally {
     await rm(input.root, { recursive: true, force: true })
   }

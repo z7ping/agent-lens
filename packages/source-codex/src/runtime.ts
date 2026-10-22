@@ -11,7 +11,7 @@ import type {
 import { abortableDelay } from '@agent-lens/runtime-cordis'
 import { asRecord, isMissingPathError, startHistoryFileWatch } from '@agent-lens/source-support'
 import { CODEX_CURRENT_PARSER_VERSION } from './current-protocol'
-import { ingestCodexFile, listJsonlFiles } from './history'
+import { codexHistoryRoots, ingestCodexFile, listJsonlFiles } from './history'
 
 const POLL_INTERVAL_MS = 250
 
@@ -154,15 +154,16 @@ export async function startCodexRuntimeCapture(
     }
   })()
 
-  const sessionsDir = ctx.installation.dataRoot
-    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
-  const historyWatch = sessionsDir
-    ? await startHistoryFileWatch({
-        root: sessionsDir,
+  const roots = codexHistoryRoots(ctx.installation)
+  const historyWatches = await Promise.all(roots.map(root =>
+    // Absent archive roots use the shared watcher's bounded poll fallback;
+    // never create native Codex directories to force watch startup.
+    startHistoryFileWatch({
+        root,
         signal: ctx.abortSignal,
         accept: filePath => extname(filePath).toLowerCase() === '.jsonl',
         listFiles: limit => listJsonlFiles(
-          sessionsDir,
+          root,
           limit === undefined ? undefined : { sessionLimit: limit },
         ),
         onFile: async filePath => {
@@ -180,16 +181,16 @@ export async function startCodexRuntimeCapture(
         reconcilePollMs: 5 * 60_000,
         reconcileLimit: 20,
         onError: error => {
-          console.error('[AgentLens] Codex history reconcile failed', error)
+          if (!isMissingPathError(error)) console.error('[AgentLens] Codex history reconcile failed', error)
         },
-      })
-    : null
+      }),
+  ))
 
   return {
     async dispose(): Promise<void> {
       if (stopped) return
       stopped = true
-      await historyWatch?.dispose()
+      await Promise.all(historyWatches.map(watch => watch?.dispose()))
       await task
     },
   }

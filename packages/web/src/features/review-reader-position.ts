@@ -1,4 +1,4 @@
-import type { ReviewInteractionDto } from '@agent-lens/protocol'
+import type { ReviewInteractionDto, ReviewSessionDetailDto } from '@agent-lens/protocol'
 import { elapsed } from './review-session-format'
 
 export interface ReviewReaderPosition {
@@ -48,3 +48,10 @@ export function highLatencyThreshold(interactions: ReviewInteractionDto[]): numb
   return Math.max(upperQuartile, median * 1.75)
 }
 
+
+/** Opening the latest native session starts following; browsing older windows never does. */
+export function shouldAutoFollowReviewTail(
+  detail: Pick<ReviewSessionDetailDto, 'page'> | null | undefined,
+): boolean {
+  return detail?.page.direction === 'backward' && detail.page.filter === 'all'
+}

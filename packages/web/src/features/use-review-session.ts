@@ -14,7 +14,7 @@ import { type TaskDetailModel, type TaskRoundModel } from './task-detail-model'
 import { sessionDayLabel, duration, hubSessionTime, hubSessionVisibility } from './review-session-format'
 import type { ReviewDayGroup, UnifiedReviewSessionListEntry } from './review-session-format'
 import { interactionStats } from './ReviewRoundPresentation'
-import { captureReviewReaderPosition, restoreReviewReaderPosition, highLatencyThreshold } from './review-reader-position'
+import { captureReviewReaderPosition, restoreReviewReaderPosition, highLatencyThreshold, shouldAutoFollowReviewTail } from './review-reader-position'
 import type { ReviewReaderPosition } from './review-reader-position'
 import type { AgentLensClientModel } from '../client/model'
 import type { ReviewDetailFilter } from '@agent-lens/protocol'
@@ -145,7 +145,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     setInspect(null)
     setHistoryInteractionPending('')
     setHistoryInteractionError('')
-    followingTailRef.current = false
+    followingTailRef.current = shouldAutoFollowReviewTail(detail)
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
   }, [detail?.id])
   useEffect(() => {

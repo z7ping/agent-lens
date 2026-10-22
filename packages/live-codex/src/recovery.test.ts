@@ -31,6 +31,12 @@ class FakeRpc {
   async request(method: string) {
     this.requests.push(method)
     if (method === 'thread/start') return { thread: { id: 'native-1' }, model: 'model-a' }
+    if (method === 'thread/read') {
+      if (this.missingRollout) {
+        throw new CodexRpcError(method, -32603, 'no rollout found for thread id native-1')
+      }
+      return { thread: { id: 'native-1', status: { type: this.active ? 'active' : 'idle' } } }
+    }
     if (method === 'thread/resume') {
       if (this.missingRollout) {
         throw new CodexRpcError(method, -32603, 'no rollout found for thread id native-1')
@@ -91,6 +97,43 @@ test('Native history resolution rejects ambiguity and resumes only canonical Cod
   assert.equal(state.nativeSessionId, 'native-1')
   assert.ok(rpc.requests.includes('thread/resume'))
   await adapter.dispose()
+})
+
+
+test('Desktop history resumes only after a non-subscribing native read', async () => {
+  const rpc = new FakeRpc()
+  const storage = { repositories: { sessions: {
+    listSourceSessionsByLogicalSession: async () => [{ nativeSessionId: 'native-1' }],
+    getLogicalSession: async () => ({ workspaceId: 'w1' }),
+    getWorkspace: async () => ({ path: '/repo' }),
+  } } } as unknown as StorageService
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc, undefined, storage)
+  await adapter.resume('desktop-history')
+  assert.ok(rpc.requests.indexOf('thread/read') < rpc.requests.indexOf('thread/resume'))
+  await adapter.dispose()
+})
+
+test('Unreadable or active Desktop history stays native-only, without phantom Live sessions', async () => {
+  for (const scenario of ['not-found', 'active'] as const) {
+    const rpc = new FakeRpc()
+    rpc.missingRollout = scenario === 'not-found'
+    rpc.active = scenario === 'active'
+    const storage = { repositories: { sessions: {
+      listSourceSessionsByLogicalSession: async () => [{ nativeSessionId: 'native-1' }],
+      getLogicalSession: async () => ({ workspaceId: 'w1' }),
+      getWorkspace: async () => ({ path: '/repo' }),
+    } } } as unknown as StorageService
+    const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc, undefined, storage)
+    await assert.rejects(() => adapter.resume('desktop-history'), error => {
+      const reason = error as Error & { reasonCode?: string, code?: string }
+      assert.equal(reason.code, 'live_interaction_unavailable')
+      assert.equal(reason.reasonCode, scenario === 'not-found' ? 'codex_rollout_not_found' : 'codex_thread_active')
+      return true
+    })
+    assert.equal(rpc.requests.includes('thread/resume'), false)
+    assert.equal((await adapter.list()).length, 0)
+    await adapter.dispose()
+  }
 })
 
 test('Pending Codex approval remains visible after Live SSE reconnection', async () => {

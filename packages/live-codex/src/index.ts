@@ -53,7 +53,7 @@ function isUnsupportedItemHistory(error: unknown): boolean {
 function explainCodexResumeError(error: unknown): Error {
   if (error instanceof Error && /no rollout found for thread id/i.test(error.message)) {
     return Object.assign(new Error(
-      '当前 Codex CLI 无法定位该会话的原生 rollout。请核对 Codex Desktop 与 CLI 的 CODEX_HOME、会话索引和格式兼容性；已有历史记录不会被修改。',
+      '当前 Codex CLI 无法读取该会话的原生 rollout。仍可在 AgentLens 回顾并观察本地文件更新；请在 Codex Desktop 继续操作，或使用兼容该会话的 App Server。原始数据不会被修改。',
     ), { code: 'live_interaction_unavailable', reasonCode: 'codex_rollout_not_found' })
   }
   return error instanceof Error ? error : new Error(String(error))
@@ -220,6 +220,27 @@ export class CodexLiveAdapter implements LiveAdapter {
     return this.view(session)
   }
 
+  /** A read-only App Server lookup must succeed before resuming a Desktop-created history. */
+  private async verifyHistoricalThread(nativeId: string): Promise<void> {
+    let response: Record<string, unknown>
+    try {
+      response = await this.rpc.request('thread/read', { threadId: nativeId, includeTurns: false })
+    } catch (error) {
+      throw explainCodexResumeError(error)
+    }
+    const thread = codexRecord(response.thread)
+    if (codexText(thread.id) !== nativeId) {
+      throw Object.assign(new Error(
+        '当前 Codex App Server 无法验证该历史会话。原生会话仍可在回顾中阅读；不会使用不兼容的 CLI 接管。',
+      ), { code: 'live_interaction_unavailable', reasonCode: 'codex_thread_read_unverified' })
+    }
+    if (codexText(codexRecord(thread.status).type) === 'active') {
+      throw Object.assign(new Error(
+        '该 Codex 会话仍处于运行中。请在原生客户端完成任务后再继续，避免两个运行时并发写入。',
+      ), { code: 'live_interaction_unavailable', reasonCode: 'codex_thread_active' })
+    }
+  }
+
   async resume(logicalSessionId: string): Promise<LiveRuntimeState> {
     if (!this.storage) throw new Error('Codex history continuation requires canonical storage')
     await this.hydrate()
@@ -233,6 +254,9 @@ export class CodexLiveAdapter implements LiveAdapter {
     const nativeIds = [...new Set(sources.map(source => source.nativeSessionId))]
     if (nativeIds.length !== 1) throw new Error('Ambiguous Codex native history; refusing to select a thread')
     const nativeId = nativeIds[0]!
+    // Do not mutate the CLI App Server or register an ephemeral Live session
+    // before confirming it can actually read the Desktop/CLI native thread.
+    await this.verifyHistoricalThread(nativeId)
     const workspace = logical.workspaceId
       ? await this.storage.repositories.sessions.getWorkspace(logical.workspaceId) : null
     const saved = this.sessions.get(nativeId)
@@ -243,9 +267,15 @@ export class CodexLiveAdapter implements LiveAdapter {
       channel: new LiveEventChannel(nativeId), approvals: new Map(), approvalEvents: new Map(), queuedApprovals: new Map(), toolOutput: new Map(),
     }
     if (!saved) this.sessions.set(nativeId, session)
-    await this.attach(session)
-    await this.persist(session)
-    return this.view(session)
+    try {
+      await this.attach(session)
+      await this.persist(session)
+      return this.view(session)
+    } catch (error) {
+      // No phantom Live entry when a foreign Desktop rollout cannot be resumed.
+      if (!saved) this.sessions.delete(nativeId)
+      throw error
+    }
   }
 
   async snapshot(id: string, since?: string, window?: LiveSnapshotWindow) {

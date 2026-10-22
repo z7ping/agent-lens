@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { open, readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import type { SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
+import type { AgentInstallation, SourceExecutionContext, SourceHistoryExecutionContext, SourceHistoryWindow, SourceRecord } from '@agent-lens/core'
 import { asRecord, isCompleteJson, isMissingPathError, readJsonlLines, sourceFileIdentity, type JsonlLine } from '@agent-lens/source-support'
 import {
   nativeIdForEntry,
@@ -79,6 +79,34 @@ export async function listJsonlFiles(root: string, historyWindow?: SourceHistory
   const limit = historyWindow?.sessionLimit
   return (limit === undefined ? ordered : ordered.slice(0, Math.max(0, Math.floor(limit))))
     .map(candidate => candidate.path)
+}
+
+/** Native stores belong to Codex Desktop/CLI; never create or mutate either directory. */
+export function codexHistoryRoots(installation: Pick<AgentInstallation, 'configRoot' | 'dataRoot'>): string[] {
+  const active = installation.dataRoot
+    ?? (installation.configRoot ? join(installation.configRoot, 'sessions') : undefined)
+  const archive = installation.configRoot ? join(installation.configRoot, 'archived_sessions') : undefined
+  return [...new Set([active, archive].filter((root): root is string => Boolean(root)))]
+}
+
+/** Merge native Desktop and CLI active/archived stores under one global newest-first window. */
+export async function listCodexHistoryFiles(
+  installation: Pick<AgentInstallation, 'configRoot' | 'dataRoot'>,
+  window?: SourceHistoryWindow,
+): Promise<string[]> {
+  const roots = codexHistoryRoots(installation)
+  const groups = await Promise.all(roots.map(root => listJsonlFiles(root, window)))
+  if (groups.length <= 1) return groups[0] ?? []
+  const files = [...new Set(groups.flat())]
+  const stamped = await Promise.all(files.map(async path => {
+    try { return { path, time: (await stat(path)).mtimeMs } }
+    catch (error) { if (isMissingPathError(error)) return null; throw error }
+  }))
+  const sorted = stamped.filter((entry): entry is { path: string; time: number } => entry !== null)
+    .sort((a, b) => b.time - a.time || b.path.localeCompare(a.path))
+  return (window?.sessionLimit === undefined
+    ? sorted : sorted.slice(0, Math.max(0, Math.floor(window.sessionLimit))))
+    .map(entry => entry.path)
 }
 
 function sessionIdFromFilename(filePath: string): string {
@@ -482,9 +510,7 @@ export async function* ingestCodexFile(
 }
 
 export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): AsyncIterable<SourceRecord> {
-  const sessionsDir = ctx.installation.dataRoot
-    ?? (ctx.installation.configRoot ? join(ctx.installation.configRoot, 'sessions') : undefined)
-  if (!sessionsDir) return
+  if (codexHistoryRoots(ctx.installation).length === 0) return
 
   const remembered = await ctx.checkpoint.get<string[]>(KNOWN_PROJECT_CWDS_CHECKPOINT_KEY) ?? []
   const knownCwds = new Map<string, string>()
@@ -504,7 +530,7 @@ export async function* ingestCodexHistory(ctx: SourceHistoryExecutionContext): A
   }
 
   const threadNames = await readThreadNames(ctx.installation.configRoot)
-  const files = await listJsonlFiles(sessionsDir, ctx.historyWindow)
+  const files = await listCodexHistoryFiles(ctx.installation, ctx.historyWindow)
   let processedUnits = 0
   await ctx.reportProgress?.({ phase: 'processing', discoveredUnits: files.length, processedUnits })
   for (const filePath of files) {
