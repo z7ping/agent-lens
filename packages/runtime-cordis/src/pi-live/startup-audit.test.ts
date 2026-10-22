@@ -80,7 +80,16 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
       extensions: ['example-extension'],
       themes: ['dark'],
       diagnostics: [],
+      issues: [{
+        severity: 'warning' as const,
+        category: 'skill' as const,
+        message: 'skill project-docs shadowed',
+        collision: { name: 'project-docs', winnerPath: '/user/skill', loserPath: '/project/skill' },
+      }],
     },
+    piVersionCheck: 'complete',
+    piLatestVersion: '1.4.0',
+    piVersionCheckedAt: '2026-09-11T10:00:03.000Z',
     packageUpdateCheck: 'complete',
     packageUpdates: [{ displayName: '@example/pi-extension', type: 'npm', scope: 'user' }],
     packageUpdatesCheckedAt: '2026-09-11T10:00:02.000Z',
@@ -123,7 +132,16 @@ test('Pi startup audit reuses Source detection identity and commits runtime evid
     extensions: ['example-extension'],
     themes: ['dark'],
     diagnostics: [],
+    issues: [{
+      severity: 'warning',
+      category: 'skill',
+      message: 'skill project-docs shadowed',
+      collision: { name: 'project-docs', winnerPath: '/user/skill', loserPath: '/project/skill' },
+    }],
   })
+  assert.equal(commit.candidate.payload.piVersionCheck, 'complete')
+  assert.equal(commit.candidate.payload.piLatestVersion, '1.4.0')
+  assert.equal(commit.candidate.payload.piVersionCheckedAt, '2026-09-11T10:00:03.000Z')
   assert.equal(commit.candidate.payload.packageUpdateCheck, 'complete')
   assert.deepEqual(commit.candidate.payload.packageUpdates, [
     { displayName: '@example/pi-extension', type: 'npm', scope: 'user' },
@@ -318,12 +336,16 @@ test('Pi startup audit keeps the first redaction boundary when a late package me
     packageUpdateCheck: 'complete',
     packageUpdates: [{ displayName: '@example/pi-extension', type: 'npm', scope: 'user' }],
     packageUpdatesCheckedAt: '2026-09-11T10:00:02.000Z',
+    piVersionCheck: 'complete',
+    piLatestVersion: '1.4.0',
   })
 
   assert.equal(commits.length, 2)
   const mergedResources = commits[1]?.candidate.payload.resources as { contexts?: string[] } | undefined
   assert.deepEqual(mergedResources?.contexts, ['/home/[用户]/project/AGENTS.md'])
   assert.equal(commits[1]?.candidate.payload.packageUpdateCheck, 'complete')
+  assert.equal(commits[1]?.candidate.payload.piVersionCheck, 'complete')
+  assert.equal(commits[1]?.candidate.payload.piLatestVersion, '1.4.0')
 })
 
 test('Pi startup audit does not backfill an attempt that started while the Pi Source was disabled', async () => {
