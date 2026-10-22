@@ -53,7 +53,7 @@ function isUnsupportedItemHistory(error: unknown): boolean {
 function explainCodexResumeError(error: unknown): Error {
   if (error instanceof Error && /no rollout found for thread id/i.test(error.message)) {
     return Object.assign(new Error(
-      '当前 Codex CLI 无法定位该会话的原生 rollout。请核对 Codex Desktop 与 CLI 的 CODEX_HOME、会话索引和格式兼容性；已有历史记录不会被修改。',
+      '当前 Codex CLI 无法读取该会话的原生 rollout。仍可在 AgentLens 回顾并观察本地文件更新；请在 Codex Desktop 继续操作，或使用兼容该会话的 App Server。原始数据不会被修改。',
     ), { code: 'live_interaction_unavailable', reasonCode: 'codex_rollout_not_found' })
   }
   return error instanceof Error ? error : new Error(String(error))
