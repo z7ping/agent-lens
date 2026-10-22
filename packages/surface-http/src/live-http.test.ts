@@ -301,7 +301,16 @@ class FakeLiveAdapter implements LiveAdapter {
           values: ['council-mode', 'pi-subagents'],
         }],
       },
+      diagnostics: [{
+        diagnosticId: 'resource-skill-collision',
+        severity: 'warning' as const,
+        category: 'skill' as const,
+        message: { default: 'Skill name collision' },
+        collision: { name: 'project-docs', winnerPath: '/user/SKILL.md', loserPath: '/project/SKILL.md' },
+      }],
       fields: [{
+        fieldId: 'runtime.sdk',
+        section: 'status' as const,
         label: { default: 'SDK' },
         value: '1.0.0',
       }],
@@ -733,7 +742,14 @@ test('generic Live HTTP surface controls an adapter without product-specific rou
             values: ['council-mode', 'pi-subagents'],
           }],
         },
-        fields: [{ label: { default: 'SDK' }, value: '1.0.0' }],
+        diagnostics: [{
+          diagnosticId: 'resource-skill-collision',
+          severity: 'warning',
+          category: 'skill',
+          message: { default: 'Skill name collision' },
+          collision: { name: 'project-docs', winnerPath: '/user/SKILL.md', loserPath: '/project/SKILL.md' },
+        }],
+        fields: [{ fieldId: 'runtime.sdk', section: 'status', label: { default: 'SDK' }, value: '1.0.0' }],
         actions: [{
           actionId: 'test.retry',
           label: { default: 'Retry', localizations: { 'zh-CN': '重试' } },

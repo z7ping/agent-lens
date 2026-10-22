@@ -210,6 +210,45 @@ function normalizeRuntimeLifecycle(value: unknown): LiveRuntimeLifecycleContribu
   }
 }
 
+function normalizeRuntimeDiagnostics(value: unknown): NonNullable<LiveRuntimeDisclosureContribution['diagnostics']> {
+  if (!Array.isArray(value)) return []
+  const diagnostics: NonNullable<LiveRuntimeDisclosureContribution['diagnostics']>[number][] = []
+  const seen = new Set<string>()
+  for (const candidate of value.slice(0, 80)) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
+    const row = candidate as Record<string, unknown>
+    const diagnosticId = typeof row.diagnosticId === 'string' ? row.diagnosticId.trim().slice(0, 240) : ''
+    if (!diagnosticId || seen.has(diagnosticId)) continue
+    const severity = row.severity
+    const category = row.category
+    if (severity !== 'info' && severity !== 'warning' && severity !== 'error') continue
+    if (category !== 'skill' && category !== 'extension' && category !== 'command'
+      && category !== 'tool' && category !== 'flag' && category !== 'prompt'
+      && category !== 'theme' && category !== 'resource') continue
+    const message = contributionText(row.message, MAX_LIVE_CONTRIBUTION_DESCRIPTION)
+    if (!message) continue
+    const path = typeof row.path === 'string' ? row.path.slice(0, 2_000) : undefined
+    const nativeCollision = row.collision && typeof row.collision === 'object' && !Array.isArray(row.collision)
+      ? row.collision as Record<string, unknown> : {}
+    const collision = typeof nativeCollision.name === 'string'
+      && typeof nativeCollision.winnerPath === 'string'
+      && typeof nativeCollision.loserPath === 'string'
+      ? {
+          name: nativeCollision.name.slice(0, 160),
+          winnerPath: nativeCollision.winnerPath.slice(0, 2_000),
+          loserPath: nativeCollision.loserPath.slice(0, 2_000),
+        }
+      : undefined
+    seen.add(diagnosticId)
+    diagnostics.push({
+      diagnosticId, severity, category, message,
+      ...(path ? { path } : {}),
+      ...(collision ? { collision } : {}),
+    })
+  }
+  return diagnostics
+}
+
 function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContribution[] {
   if (!Array.isArray(value)) return []
   const result: LiveRuntimeDisclosureContribution[] = []
@@ -242,6 +281,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
     if (row.defaultExpanded !== undefined && typeof row.defaultExpanded !== 'boolean') continue
     const lifecycle = row.lifecycle === undefined ? undefined : normalizeRuntimeLifecycle(row.lifecycle)
     if (row.lifecycle !== undefined && !lifecycle) continue
+    const diagnostics = normalizeRuntimeDiagnostics(row.diagnostics)
 
     const fields: LiveRuntimeContributionField[] = []
     for (const fieldCandidate of row.fields) {
@@ -260,8 +300,14 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
         : undefined
       if (field.value !== undefined && normalizedValue === null) continue
       if (!normalizedValue && !normalizedValues?.length) continue
+      const fieldId = typeof field.fieldId === 'string' && field.fieldId.trim()
+        ? field.fieldId.slice(0, 128) : undefined
+      const section = field.section === 'status' || field.section === 'performance'
+        || field.section === 'resources' || field.section === 'advanced' ? field.section : undefined
       fields.push({
         label,
+        ...(fieldId ? { fieldId } : {}),
+        ...(section ? { section } : {}),
         ...(kind ? { kind } : {}),
         ...(normalizedValue ? { value: normalizedValue } : {}),
         ...(normalizedValues?.length ? { values: normalizedValues } : {}),
@@ -312,6 +358,7 @@ function normalizeRuntimeDisclosures(value: unknown): LiveRuntimeDisclosureContr
       ...(tone ? { tone } : {}),
       ...(typeof row.defaultExpanded === 'boolean' ? { defaultExpanded: row.defaultExpanded } : {}),
       ...(lifecycle ? { lifecycle } : {}),
+      ...(diagnostics.length ? { diagnostics } : {}),
       fields,
       ...(actions.length ? { actions } : {}),
     })

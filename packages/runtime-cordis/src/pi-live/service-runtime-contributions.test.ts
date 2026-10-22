@@ -14,7 +14,7 @@ class RuntimeContributionHost implements PiRuntimeHost {
     this.sessionName = name
     this.onEvent?.({ type: 'session_info_changed', name })
   }
-  constructor(private readonly supportsCompaction = false, private readonly supportsTitle = false) {}
+  constructor(private readonly supportsCompaction = false, private readonly supportsTitle = false, private readonly startupWarnings = false) {}
 
   async start(
     runtimeSessionId: string,
@@ -48,6 +48,12 @@ class RuntimeContributionHost implements PiRuntimeHost {
         extensions: ['extension-a'],
         themes: [],
         diagnostics: ['theme directory unavailable'],
+        ...(this.startupWarnings ? { issues: [
+          { severity: 'warning' as const, category: 'skill' as const, message: 'skill name collision',
+            collision: { name: 'project-docs', winnerPath: '/user/skills/project-docs', loserPath: '/project/skills/project-docs' } },
+          { severity: 'warning' as const, category: 'command' as const, message: 'Command /mcp conflicts with built-in MCP', path: 'builtin:mcp' },
+          { severity: 'warning' as const, category: 'extension' as const, message: 'Host package must use peerDependencies', path: '/extensions/memory' },
+        ] } : {}),
       },
       packageUpdates: [{
         displayName: '@scope/pkg',
@@ -369,6 +375,26 @@ test('Runtime resource summary hides zero categories and updates in place after 
     assert.match(after?.summary?.default ?? '', /^Ready · (?:<1ms|\d+ms|\d+(?:\.\d+)?s) · Contexts 2 · Skills 1 · Extensions 2$/)
     assert.match(after?.summary?.localizations?.['zh-CN'] ?? '', /^就绪 · (?:<1ms|\d+ms|\d+(?:\.\d+)?s) · 上下文 2 · 技能 1 · 扩展 2$/)
     assert.equal(after?.summary?.default.includes('Themes'), false)
+  } finally {
+    await service.dispose()
+  }
+})
+
+test('Pi 原生 Skill/命令/扩展问题进入统一 Disclosure，Runtime 就绪仍要求提示', async () => {
+  const service = new DefaultPiLiveService(new RuntimeContributionHost(true, false, true))
+  try {
+    const started = await service.start({ cwd: '/workspace' })
+    await waitForStatus(service, started.runtimeSessionId, 'ready')
+    const item = (await service.runtimeDisclosures(started.runtimeSessionId))[0]
+    assert.equal(item?.lifecycle?.status, 'ready')
+    assert.equal(item?.tone, 'warning')
+    assert.equal(item?.defaultExpanded, true)
+    assert.deepEqual(item?.diagnostics?.map(issue => issue.category), ['skill', 'command', 'extension'])
+    assert.deepEqual(item?.diagnostics?.[0]?.collision, {
+      name: 'project-docs',
+      winnerPath: '/user/skills/project-docs',
+      loserPath: '/project/skills/project-docs',
+    })
   } finally {
     await service.dispose()
   }

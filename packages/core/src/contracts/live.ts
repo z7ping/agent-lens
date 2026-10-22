@@ -573,7 +573,17 @@ export interface LiveRuntimeLifecycleContribution {
   resources?: readonly LiveRuntimeLifecycleResourceGroupContribution[] | undefined
 }
 
+export interface LiveRuntimeDiagnosticContribution {
+  diagnosticId: string
+  severity: 'info' | 'warning' | 'error'
+  category: 'skill' | 'extension' | 'command' | 'tool' | 'flag' | 'prompt' | 'theme' | 'resource'
+  message: LiveContributionText
+  path?: string | undefined
+  collision?: { name: string; winnerPath: string; loserPath: string } | undefined
+}
+
 export interface LiveRuntimeDisclosureContribution {
+  diagnostics?: readonly LiveRuntimeDiagnosticContribution[] | undefined
   /** Adapter-owned stable id used only for UI identity. */
   contributionId: string
   title: LiveContributionText

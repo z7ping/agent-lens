@@ -33,6 +33,8 @@
   animation: live-runtime-pulse 1.4s ease-in-out infinite;
 }
 .live-runtime-disclosure.is-ready .live-runtime-summary-state { background: var(--al-success); }
+.live-runtime-disclosure.is-ready.has-startup-issues .live-runtime-summary-state { background: var(--al-warning); }
+.live-runtime-disclosure.is-ready.has-startup-errors .live-runtime-summary-state { background: var(--al-danger); }
 .live-runtime-disclosure.is-failed .live-runtime-summary-state { background: var(--al-danger); }
 .live-runtime-summary-copy { display: flex; min-width: 0; align-items: baseline; gap: 7px; overflow: hidden; white-space: nowrap; }
 .live-runtime-summary-copy b { flex: 0 0 auto; color: var(--al-ink); font-size: 12.5px; font-weight: 680; }
@@ -154,3 +156,16 @@
   .live-runtime-step-copy small { display: none; }
   .live-runtime-resource-row { grid-template-columns: 1fr; gap: 1px; }
 }
+
+/* Native startup issues live in the shared Runtime Disclosure, not an Agent-specific card. */
+.live-runtime-startup-issues { display: grid; gap: 7px; padding: 8px 0; }
+.live-runtime-startup-issues > strong { color: var(--al-ink-2); font-size: 12px; font-weight: 650; }
+.live-runtime-startup-issue-list { display: grid; gap: 7px; }
+.live-runtime-startup-issue { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 7px; color: var(--al-ink-2); font-size: 12px; line-height: 1.55; }
+.live-runtime-startup-issue > svg { margin-top: 2px; color: var(--al-muted); }
+.live-runtime-startup-issue.is-warning > svg { color: var(--al-warning); }
+.live-runtime-startup-issue.is-error > svg { color: var(--al-danger); }
+.live-runtime-startup-issue > div { display: grid; min-width: 0; gap: 2px; overflow-wrap: anywhere; }
+.live-runtime-issue-category { color: var(--al-muted); font-size: 12px; font-weight: 650; }
+.live-runtime-startup-issue small { color: var(--al-muted); font-size: 12px; overflow-wrap: anywhere; }
+.live-runtime-issue-collision { display: grid; gap: 1px; color: var(--al-muted); overflow-wrap: anywhere; }

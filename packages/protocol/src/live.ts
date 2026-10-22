@@ -448,7 +448,17 @@ export interface LiveRuntimeLifecycleContributionDto {
   resources?: LiveRuntimeLifecycleResourceGroupContributionDto[] | undefined
 }
 
+export interface LiveRuntimeDiagnosticContributionDto {
+  diagnosticId: string
+  severity: 'info' | 'warning' | 'error'
+  category: 'skill' | 'extension' | 'command' | 'tool' | 'flag' | 'prompt' | 'theme' | 'resource'
+  message: LiveContributionTextDto
+  path?: string | undefined
+  collision?: { name: string; winnerPath: string; loserPath: string } | undefined
+}
+
 export interface LiveRuntimeDisclosureContributionDto {
+  diagnostics?: LiveRuntimeDiagnosticContributionDto[] | undefined
   contributionId: string
   title: LiveContributionTextDto
   summary?: LiveContributionTextDto | undefined
