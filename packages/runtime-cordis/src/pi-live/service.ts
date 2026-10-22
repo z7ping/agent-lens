@@ -241,7 +241,7 @@ function runtimeDisclosureSummary(
 function runtimeStartupDiagnostics(state: PiLiveRuntimeState) {
   const native = state.startupResources?.issues ?? []
   const diagnostics = native.map((item, index) => ({
-    diagnosticId: `pi.startup.${index}:${item.category}:${item.path ?? item.message}`,
+    diagnosticId: `pi.startup.${index}:${item.category}`,
     severity: item.severity,
     category: item.category,
     message: contributionText(item.message, item.message),
