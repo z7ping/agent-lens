@@ -126,6 +126,46 @@ function diagnosticMessages(value) {
   return own ? [...nested, diagnostic(typeof own === 'string' ? own : JSON.stringify(own))] : nested
 }
 
+// Keep Pi's native resource severity and collision provenance. Do not infer
+// precedence by scanning the filesystem: the Pi loader is authoritative.
+function resourceIssues(value, category) {
+  const row = record(value)
+  const output = []
+  for (const [key, fallbackSeverity] of [['diagnostics', 'warning'], ['errors', 'error'], ['warnings', 'warning']]) {
+    for (const entry of Array.isArray(row[key]) ? row[key] : []) {
+      const item = record(entry)
+      const message = diagnostic(item.message ?? item.error ?? item.warning ?? (typeof entry === 'string' ? entry : ''))
+      if (!message) continue
+      const nativeCollision = record(item.collision)
+      const collisionCategory = ['skill', 'extension', 'prompt', 'theme'].includes(nativeCollision.resourceType)
+        ? nativeCollision.resourceType : undefined
+      const commandCategory = /\\bcommand\\b|\\/mcp\\b/i.test(message) && /conflict|registers|replac|already|not loaded/i.test(message)
+        ? 'command' : undefined
+      const toolCategory = /\\btool\\b/i.test(message) && /conflict/i.test(message) ? 'tool' : undefined
+      const flagCategory = /\\bflag\\b/i.test(message) && /conflict/i.test(message) ? 'flag' : undefined
+      const issue = {
+        severity: item.type === 'error' ? 'error'
+          : item.type === 'collision' ? 'warning'
+            : item.type === 'warning' ? 'warning' : fallbackSeverity,
+        category: collisionCategory ?? commandCategory ?? toolCategory ?? flagCategory ?? category,
+        message,
+        ...(typeof item.path === 'string' ? { path: diagnostic(item.path) } : {}),
+      }
+      if (typeof nativeCollision.name === 'string'
+        && typeof nativeCollision.winnerPath === 'string'
+        && typeof nativeCollision.loserPath === 'string') {
+        issue.collision = {
+          name: diagnostic(nativeCollision.name),
+          winnerPath: diagnostic(nativeCollision.winnerPath),
+          loserPath: diagnostic(nativeCollision.loserPath),
+        }
+      }
+      output.push(issue)
+    }
+  }
+  return output
+}
+
 function callResourceLoader(loader, method) {
   try {
     return loader && typeof loader[method] === 'function' ? loader[method]() : undefined
@@ -203,7 +243,17 @@ function startupResourceSnapshot(resourceLoader, cwd, extraDiagnostics, fallback
   const promptsResult = callResourceLoader(loader, 'getPrompts')
   const themesResult = callResourceLoader(loader, 'getThemes')
   const agentsResult = callResourceLoader(loader, 'getAgentsFiles')
+  const issues = [
+    ...resourceIssues(extensionsResult, 'extension'),
+    ...resourceIssues(skillsResult, 'skill'),
+    ...resourceIssues(promptsResult, 'prompt'),
+    ...resourceIssues(themesResult, 'theme'),
+    ...resourceIssues(agentsResult, 'resource'),
+  ].filter((item, index, all) => all.findIndex(other =>
+    other.category === item.category && other.path === item.path && other.message === item.message
+  ) === index).slice(0, 80)
   return {
+    issues,
     contexts: uniqueStrings(resultItems(agentsResult, 'agentsFiles').map(item => displayContextPath(item, cwd))),
     skills: uniqueStrings(resultItems(skillsResult, 'skills').map(resourceName)),
     prompts: uniqueStrings(resultItems(promptsResult, 'prompts').map(resourceName)),
