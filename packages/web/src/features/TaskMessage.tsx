@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { MarkdownContent } from '../components/MarkdownContent'
 import { CopyableCodeBlock } from '../components/CopyableCodeBlock'
 import { copyText } from '../client/clipboard'
-import { IconButton, UiIcon } from '../components/ui'
+import { Button, Disclosure, IconButton, UiIcon } from '../components/ui'
+import { presentTaskError, type TaskErrorDiagnostic } from './task-error-presentation'
 import { ImagePreview } from '../components/ImagePreview'
 
 export type TaskMessageRole = 'user' | 'assistant'
@@ -31,6 +32,7 @@ export interface TaskMessageProps {
   showContentActions?: boolean | undefined
   pending?: boolean | undefined
   error?: boolean | undefined
+  errorDiagnostic?: TaskErrorDiagnostic | undefined
   pendingLabel?: string | undefined
   className?: string | undefined
 }
@@ -50,12 +52,14 @@ export function TaskMessage({
   showContentActions = true,
   pending = false,
   error = false,
+  errorDiagnostic,
   pendingLabel,
   className = '',
 }: TaskMessageProps) {
   const { t } = useTranslation('task')
   const user = role === 'user'
   const resolvedAuthor = author ?? (user ? t('message.you') : t('message.agent'))
+  const failure = error ? presentTaskError(text, errorDiagnostic) : null
   const [view, setView] = useState<'rendered' | 'source'>('rendered')
   const [expanded, setExpanded] = useState(() => !user)
   const [canCollapse, setCanCollapse] = useState(false)
@@ -143,7 +147,27 @@ export function TaskMessage({
         {meta && <span className="task-message-context-evidence">{meta}</span>}
         {time && <time>{time}</time>}
       </div>}
-      {awaitingFirstContent ? <div
+      {failure ? <div className="task-message-failure">
+        <strong className="task-message-failure-title">{t(`message.failure.${failure.kind}`)}</strong>
+        {(failure.kind === 'quota' || failure.preview) && <p className="task-message-failure-preview">{
+          failure.kind === 'quota' ? t('message.failure.quotaHint') : failure.preview
+        }</p>}
+        <Disclosure
+          className="task-message-failure-details"
+          summary={t('message.failure.details')}
+          summaryMeta={<span className="task-message-failure-meta">{
+            [failure.statusCode ? `HTTP ${failure.statusCode}` : '', failure.code].filter(Boolean).join(' · ')
+          }</span>}
+        >
+          <pre className="task-message-failure-raw">{text}</pre>
+          <Button
+            variant="quiet"
+            size="small"
+            className="task-message-failure-copy"
+            onClick={() => void copyMessage()}
+          >{copyState === 'copied' ? t('message.copied') : copyState === 'error' ? t('message.copyFailed') : t('message.failure.copy')}</Button>
+        </Disclosure>
+      </div> : awaitingFirstContent ? <div
         className="task-message-response-pending"
         role="status"
         aria-live="polite"

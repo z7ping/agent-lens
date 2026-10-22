@@ -365,9 +365,19 @@
 .task-surface .task-message-model-meta { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 3px; color: var(--al-muted-2); font-size: var(--text-task-meta); line-height: 1.4; }
 .task-surface .task-message-context-evidence { display: inline-flex; min-width: 0; align-items: center; }
 .task-surface .task-message-model-meta b { color: var(--al-muted); font-weight: 650; }
-/* Persisted provider failures share TaskMessage markup; they are not assistant answers. */
-.task-surface .task-message-row[data-error='true'] .task-message-content { color: var(--al-danger); overflow-wrap: anywhere; }
+/* Failure facts remain separate from generated Markdown, with source evidence behind a shared disclosure. */
 .task-surface .task-message-error-status { display: inline-flex; align-items: center; gap: 5px; color: var(--al-danger); font-weight: 650; }
+.task-surface .task-message-failure { display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 4px; }
+.task-surface .task-message-failure-title { font-size: var(--text-task-body); line-height: 1.5; color: var(--al-ink); font-weight: 650; }
+.task-surface .task-message-failure-preview { margin: 0; color: var(--al-muted); font-size: var(--text-task-body); line-height: 1.55; overflow-wrap: anywhere; }
+.task-surface .task-message-failure-details.ui-disclosure { width: 100%; min-width: 0; border: 0; border-radius: 0; background: transparent; }
+.task-surface .task-message-failure-details.ui-disclosure > summary { justify-content: flex-start; min-height: 26px; gap: 6px; padding: 0; color: var(--al-muted); font-size: var(--text-task-meta); font-weight: 500; }
+.task-surface .task-message-failure-details .ui-disclosure-summary { flex: 0 1 auto; }
+.task-surface .task-message-failure-details .ui-disclosure-meta { min-width: 0; flex: 0 1 auto; overflow-wrap: anywhere; font-size: var(--text-task-meta); }
+.task-surface .task-message-failure-details .ui-disclosure-body { min-width: 0; padding: 6px 0 0; border-top: 0; }
+.task-surface .task-message-failure-raw { max-height: 240px; margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--radius-sm); background: var(--al-soft-2); color: var(--al-ink-2); font: var(--text-task-meta)/1.55 var(--font-mono); }
+.task-surface .task-message-failure-copy { margin-top: 4px; }
+
 
 .task-surface .task-message-model-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-surface .task-message-model-meta time { flex: 0 0 auto; margin-left: auto; }
