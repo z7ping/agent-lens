@@ -289,7 +289,7 @@ export const englishReviewMessages: LocaleMessagesDto = {
         resumeOnSend: 'Verify session compatibility before sending',
         sendContinue: 'Send and continue',
         preparingHistory: 'Preparing historical session',
-        readOnlyObservation: 'Read-only · session has another writer',
+        readOnlyObservation: 'Read-only · another writer',
         readOnlyObservationHint: 'Another Codex client owns this session. Observe here and continue in that client.',
         retryConnection: 'Retry connection',
         continueFailed: 'Continue failed: {{error}}',
