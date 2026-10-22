@@ -139,10 +139,10 @@ function resourceIssues(value, category) {
       const nativeCollision = record(item.collision)
       const collisionCategory = ['skill', 'extension', 'prompt', 'theme'].includes(nativeCollision.resourceType)
         ? nativeCollision.resourceType : undefined
-      const commandCategory = /\\bcommand\\b|\\/mcp\\b/i.test(message) && /conflict|registers|replac|already|not loaded/i.test(message)
+      const commandCategory = /\bcommand\b|\/mcp\b/i.test(message) && /conflict|registers|replac|already|not loaded/i.test(message)
         ? 'command' : undefined
-      const toolCategory = /\\btool\\b/i.test(message) && /conflict/i.test(message) ? 'tool' : undefined
-      const flagCategory = /\\bflag\\b/i.test(message) && /conflict/i.test(message) ? 'flag' : undefined
+      const toolCategory = /\btool\b/i.test(message) && /conflict/i.test(message) ? 'tool' : undefined
+      const flagCategory = /\bflag\b/i.test(message) && /conflict/i.test(message) ? 'flag' : undefined
       const issue = {
         severity: item.type === 'error' ? 'error'
           : item.type === 'collision' ? 'warning'
