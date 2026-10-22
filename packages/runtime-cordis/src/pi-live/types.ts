@@ -31,6 +31,7 @@ export interface PiLivePackageUpdate {
 }
 
 export type PiLivePackageUpdateCheckStatus = 'checking' | 'complete' | 'unavailable' | 'failed'
+export type PiLiveVersionCheckStatus = PiLivePackageUpdateCheckStatus
 
 export interface PiLiveStartupIssue {
   severity: 'info' | 'warning' | 'error'
@@ -118,6 +119,9 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   startupResources?: PiLiveStartupResources | undefined
   packageUpdates?: PiLivePackageUpdate[] | undefined
   packageUpdateCheck?: PiLivePackageUpdateCheckStatus | undefined
+  piVersionCheck?: PiLiveVersionCheckStatus | undefined
+  piLatestVersion?: string | undefined
+  piVersionCheckedAt?: string | undefined
   startupOutput?: string[] | undefined
   capabilities?: PiLiveRuntimeCapabilities | undefined
   error?: string | undefined
