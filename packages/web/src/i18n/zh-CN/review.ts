@@ -289,7 +289,7 @@ export const chineseReviewMessages: LocaleMessagesDto = {
         resumeOnSend: '发送前验证会话兼容性',
         sendContinue: '发送并继续',
         preparingHistory: '正在准备历史会话',
-        readOnlyObservation: '只读观察 · 会话正在其他客户端运行',
+        readOnlyObservation: '只读 · 其他客户端占用',
         readOnlyObservationHint: '已有 Codex 客户端持有会话写入权；当前只读观察，请在原客户端继续。',
         retryConnection: '重新尝试连接',
         continueFailed: '继续失败：{{error}}',
