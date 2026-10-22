@@ -226,9 +226,6 @@ async function checkPackageUpdates(cwd) {
 function startPackageUpdateCheck(cwd) {
   packageUpdateCheck = 'checking'
   packageUpdates = []
-  piVersionCheck = 'unavailable'
-  piLatestVersion = undefined
-  piVersionCheckedAt = undefined
   void checkPackageUpdates(cwd).then(result => {
     if (terminating) return
     packageUpdateCheck = result.status
@@ -1301,6 +1298,9 @@ async function initialize(input) {
   }
   packageUpdateCheck = 'checking'
   packageUpdates = []
+  piVersionCheck = 'unavailable'
+  piLatestVersion = undefined
+  piVersionCheckedAt = undefined
 
   progress('loading_sdk', '正在加载 Pi SDK')
   const sdkWasLoaded = Boolean(sdk)
