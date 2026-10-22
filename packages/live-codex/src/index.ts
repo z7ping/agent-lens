@@ -51,6 +51,12 @@ function isUnsupportedItemHistory(error: unknown): boolean {
 }
 
 function explainCodexResumeError(error: unknown): Error {
+  if (error instanceof CodexRpcError && error.method === 'thread/resume'
+    && /already has an active writer/i.test(error.message)) {
+    return Object.assign(new Error(
+      '该 Codex 会话已有其他客户端持有写入权。AgentLens 已保留只读观察，请在原 Codex 客户端继续；写入权释放后可重新尝试。',
+    ), { code: 'live_interaction_unavailable', reasonCode: 'codex_thread_active_writer' })
+  }
   if (error instanceof Error && /no rollout found for thread id/i.test(error.message)) {
     return Object.assign(new Error(
       '当前 Codex CLI 无法读取该会话的原生 rollout。仍可在 AgentLens 回顾并观察本地文件更新；请在 Codex Desktop 继续操作，或使用兼容该会话的 App Server。原始数据不会被修改。',
