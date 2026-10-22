@@ -993,6 +993,33 @@ test('generic Live HTTP surface routes history resume and fork through adapter c
   }
 })
 
+test('Live history resume exposes a bounded native active-writer reason code', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const adapter = new FakeLiveAdapter()
+  adapter.resume = async () => {
+    throw Object.assign(new Error('会话正在其他客户端中运行，请在原客户端继续。'), {
+      code: 'live_interaction_unavailable',
+      reasonCode: 'codex_thread_active_writer',
+    })
+  }
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  try {
+    const response = await fetch(`http://${surface.host}:${surface.port}/api/v1/live/test/history/logical-1/resume`, {
+      method: 'POST',
+    })
+    assert.equal(response.status, 409)
+    assert.deepEqual(await response.json(), {
+      error: 'capability_unavailable',
+      message: '会话正在其他客户端中运行，请在原客户端继续。',
+      reasonCode: 'codex_thread_active_writer',
+    })
+  } finally {
+    await surface.dispose()
+    storage.close()
+  }
+})
+
 test('generic Live HTTP surface reports unavailable LiveService without falling through', async () => {
   const storage = new SqliteStorageService({ path: ':memory:' })
   await storage.migrate()

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { HubReviewSessionSummaryDto, LiveMessageDto, ReviewNodeDto } from '@agent-lens/protocol'
 import { fetchHubReviewSessions } from '../client/hub-review'
-import { liveApi, type LiveProductMetadata } from '../client/live'
+import { liveApi, LiveRequestError, type LiveProductMetadata } from '../client/live'
 import { clearLiveComposerDraft, liveComposerDraftKey } from '../components/live-composer-session-state'
 import { useClientSnapshot } from '../client/use-client-snapshot'
 import { agentLabel } from '../components/AgentScope'
@@ -36,6 +36,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const [liveProducts, setLiveProducts] = useState<LiveProductMetadata[]>([])
   const [historyInteractionPending, setHistoryInteractionPending] = useState<'' | 'resume' | 'fork-at'>('')
   const [historyInteractionError, setHistoryInteractionError] = useState('')
+  const [historyInteractionBlocked, setHistoryInteractionBlocked] = useState(false)
   const [pathError, setPathError] = useState('')
   const sessionLoadSentinelRef = useRef<HTMLButtonElement>(null)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
@@ -145,6 +146,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     setInspect(null)
     setHistoryInteractionPending('')
     setHistoryInteractionError('')
+    setHistoryInteractionBlocked(false)
     followingTailRef.current = shouldAutoFollowReviewTail(detail)
     detailAutoLoadBaselineRef.current = readerUserRevisionRef.current
   }, [detail?.id])
@@ -540,7 +542,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   }
 
   const sendReviewMessage = async (message: LiveMessageDto) => {
-    if (!detail || !detailLiveInteraction?.canResume || !detailLiveInteraction.canSend || historyInteractionPending) return
+    if (!detail || !detailLiveInteraction?.canResume || !detailLiveInteraction.canSend || historyInteractionPending || historyInteractionBlocked) return
     const liveId = detailLiveInteraction.liveId
     const historicalId = detail.id
     setHistoryInteractionPending('resume')
@@ -551,11 +553,21 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
       clearLiveComposerDraft(liveComposerDraftKey(liveId, `history:${historicalId}`))
       navigate(taskLiveRuntimeHref({ liveId, state }))
     } catch (reason) {
-      // Do not clear the draft on failure; retry must use the same message.
+      // A competing Desktop writer cannot be safely resumed by our independent
+      // App Server. Keep the native Review live and preserve the user's draft.
+      if (reason instanceof LiveRequestError && reason.reasonCode === 'codex_thread_active_writer') {
+        setHistoryInteractionBlocked(true)
+      }
       setHistoryInteractionError(reason instanceof Error ? reason.message : String(reason))
     } finally {
       setHistoryInteractionPending('')
     }
+  }
+
+  const retryHistoryInteraction = () => {
+    // Explicit re-try only: never resend the saved draft automatically.
+    setHistoryInteractionBlocked(false)
+    setHistoryInteractionError('')
   }
 
   const forkReviewAt = async (nativeEventId: string) => {
@@ -585,6 +597,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
     liveProducts,
     historyInteractionPending,
     historyInteractionError,
+    historyInteractionBlocked,
+    retryHistoryInteraction,
     pathError,
     setPathError,
     sessionLoadSentinelRef,

@@ -22,6 +22,7 @@ class FakeRpc {
   listener: ((message: RpcMessage) => void) | undefined = undefined
   requests: string[] = []
   active = false
+  activeWriter = false
   missingRollout = false
   async available() { return true }
   subscribe(listener: (message: RpcMessage) => void) {
@@ -38,6 +39,9 @@ class FakeRpc {
       return { thread: { id: 'native-1', status: { type: this.active ? 'active' : 'idle' } } }
     }
     if (method === 'thread/resume') {
+      if (this.activeWriter) {
+        throw new CodexRpcError(method, -32600, 'thread native-1 already has an active writer')
+      }
       if (this.missingRollout) {
         throw new CodexRpcError(method, -32603, 'no rollout found for thread id native-1')
       }
@@ -206,5 +210,28 @@ test('Native rollout lookup failure is returned as a specific recoverability err
     assert.doesNotMatch(result.message, /native-1/)
     return true
   })
+  await adapter.dispose()
+})
+
+test('Desktop active writer is detected after successful read-only preflight', async () => {
+  const rpc = new FakeRpc()
+  rpc.activeWriter = true
+  const storage = { repositories: { sessions: {
+    listSourceSessionsByLogicalSession: async () => [{ nativeSessionId: 'native-1' }],
+    getLogicalSession: async () => ({ workspaceId: 'w1' }),
+    getWorkspace: async () => ({ path: '/repo' }),
+  } } } as unknown as StorageService
+  const adapter = new CodexLiveAdapter(rpc as unknown as CodexRpc, undefined, storage)
+  await assert.rejects(() => adapter.resume('desktop-history'), error => {
+    const reason = error as Error & { code?: string; reasonCode?: string }
+    assert.equal(reason.code, 'live_interaction_unavailable')
+    assert.equal(reason.reasonCode, 'codex_thread_active_writer')
+    assert.match(reason.message, /只读观察/)
+    assert.doesNotMatch(reason.message, /native-1/)
+    return true
+  })
+  assert.deepEqual(rpc.requests.filter(method => method === 'thread/read' || method === 'thread/resume'),
+    ['thread/read', 'thread/resume'], 'a successful thread/read does not prove writer ownership')
+  assert.deepEqual(await adapter.list(), [], 'failed resume must not leave a phantom Live session')
   await adapter.dispose()
 })

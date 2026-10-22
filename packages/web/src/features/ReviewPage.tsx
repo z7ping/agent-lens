@@ -32,6 +32,8 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     liveProducts,
     historyInteractionPending,
     historyInteractionError,
+    historyInteractionBlocked,
+    retryHistoryInteraction,
     pathError,
     setPathError,
     sessionLoadSentinelRef,
@@ -195,7 +197,10 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           ] : []}
           actions={<>
             {historyInteractionPending && <StatusBadge tone="accent" dot role="status">{t('local.header.preparingHistory')}</StatusBadge>}
-            {historyInteractionError && <StatusBadge tone="danger" title={historyInteractionError}>{t('local.header.continueFailed', { error: historyInteractionError })}</StatusBadge>}
+            {historyInteractionBlocked ? <>
+              <StatusBadge tone="warning" title={historyInteractionError}>{t('local.header.readOnlyObservation')}</StatusBadge>
+              <Button size="small" variant="quiet" onClick={retryHistoryInteraction}>{t('local.header.retryConnection')}</Button>
+            </> : historyInteractionError && <StatusBadge tone="danger" title={historyInteractionError}>{t('local.header.continueFailed', { error: historyInteractionError })}</StatusBadge>}
             <button className="review-audit-toggle" aria-pressed={showAllEvents} onClick={toggleEventVisibility}>{showAllEvents ? t('local.header.viewAll') : t('local.header.viewCore')}</button>
           </>}
         />}
@@ -213,7 +218,7 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
           {review.error && <div className="page-error">{review.error}</div>}
           {pathError && <div className="page-error" role="alert">{pathError}</div>}
           {!detail ? <div className="empty-state fill">{review.selectedId && review.detailLoading ? t('local.empty.loadingDetail') : t('local.empty.selectSession')}</div> : <div className="review-reader">
-            {historyInteractionError && <div className="page-error" role="alert">{historyInteractionError}</div>}
+            {historyInteractionError && !historyInteractionBlocked && <div className="page-error" role="alert">{historyInteractionError}</div>}
 
             {review.relationships?.items.length ? <details className="session-relationship-tree">
               <summary><UiIcon className="session-relationship-tree-chevron" name="chevron-right" size={14}/><span>{t('local.relationship.sessionTree', { count: review.relationships.items.length })}</span></summary>
@@ -272,14 +277,14 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
             draft={composerDraft}
             draftKey={draftKey}
             onDraftPresenceChange={setComposerHasContent}
-            canSubmit={!historyInteractionPending && !attachmentPending}
+            canSubmit={!historyInteractionPending && !historyInteractionBlocked && !attachmentPending}
             onSubmit={message => { void sendReviewMessage(message) }}
                         placeholder={t('task:live.composerPlaceholder')}
             ariaLabel={t('task:live.composerAria')}
             onAttachmentPendingChange={setAttachmentPending}
             onAttachmentError={reason => setPathError(reason instanceof Error ? reason.message : String(reason))}
-            disabled={Boolean(historyInteractionPending)}
-            connectionLabel={t('local.header.resumeOnSend')}
+            disabled={Boolean(historyInteractionPending || historyInteractionBlocked)}
+            connectionLabel={historyInteractionBlocked ? t('local.header.readOnlyObservationHint') : t('local.header.resumeOnSend')}
             pendingConnection
             controlsReady={false}
             pendingModelControl={Boolean(detailLiveInteraction?.canModelControl)}
