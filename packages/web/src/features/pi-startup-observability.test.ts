@@ -23,7 +23,6 @@ test('统一 Live 通过 Runtime Disclosure 获取各 Agent 原生启动阶段�
   assert.match(page, /runtimeDisclosures\.every\(item => !item\.lifecycle\)/)
   assert.match(runtime, /lifecycle\.stages\.map/)
   assert.match(runtime, /field\.id === 'startup.metrics'/)
-  assert.match(runtime, /field\.id === 'startup.metrics'/)
   assert.match(runtime, /lifecycle\.elapsedMs/)
 })
 
@@ -32,9 +31,7 @@ test('启动成功默认收起、失败保持详情，资源与诊断继续可�
   assert.match(runtime, /stage\.status === 'failed'/)
   assert.match(runtime, /lifecycle\.resources/)
   assert.match(runtime, /group\.groupId/)
-  assert.match(runtime, /lifecycle\.resources/)
-  assert.match(runtime, /lifecycle\.resources/)
-  assert.match(runtime, /lifecycle\.resources/)
+  assert.match(runtime, /RuntimeStartupIssues/)
 })
 
 test('启动进度与失败信息继续使用统一的样式和可访问状态', () => {
