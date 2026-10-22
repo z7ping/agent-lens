@@ -32,7 +32,16 @@ export interface PiLivePackageUpdate {
 
 export type PiLivePackageUpdateCheckStatus = 'checking' | 'complete' | 'unavailable' | 'failed'
 
+export interface PiLiveStartupIssue {
+  severity: 'info' | 'warning' | 'error'
+  category: 'skill' | 'extension' | 'command' | 'tool' | 'flag' | 'prompt' | 'theme' | 'resource'
+  message: string
+  path?: string | undefined
+  collision?: { name: string; winnerPath: string; loserPath: string } | undefined
+}
+
 export interface PiLiveStartupResources {
+  issues?: PiLiveStartupIssue[] | undefined
   contexts: string[]
   skills: string[]
   prompts: string[]
