@@ -281,6 +281,9 @@ test('Codex Desktop native history reads active and archived JSONL without a CLI
     type: 'event_msg',
     payload: { type: 'agent_message', message: 'archived desktop answer' },
   }) + '\n', 'utf8')
+  // Order must not depend on coarse Windows filesystem mtime granularity.
+  await utimes(input.path, new Date('2026-08-29T00:00:00.000Z'), new Date('2026-08-29T00:00:00.000Z'))
+  await utimes(archivePath, new Date('2026-08-30T00:00:00.000Z'), new Date('2026-08-30T00:00:00.000Z'))
   const base = context(input.sessions, checkpoints, writes)
   const ctx: SourceExecutionContext = {
     ...base,
