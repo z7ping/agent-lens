@@ -1382,8 +1382,10 @@ async function initialize(input) {
   // Package update IO waits until extension binding settles so it never competes
   // with the foreground-critical extension startup path.
   void extensionBindingPromise.finally(() => {
-    if (!terminating) startPackageUpdateCheck(input.cwd)
-    startPiVersionCheck()
+    if (!terminating) {
+      startPackageUpdateCheck(input.cwd)
+      startPiVersionCheck()
+    }
   }).catch(() => undefined)
 }
 
