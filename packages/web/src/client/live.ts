@@ -187,21 +187,32 @@ function livePath(liveId: string, suffix = ''): string {
   return `${LIVE_ROOT}/${encodeURIComponent(liveId)}${suffix}`
 }
 
-async function readError(response: Response): Promise<string> {
+export class LiveRequestError extends Error {
+  readonly reasonCode: string | undefined
+  constructor(message: string, reasonCode?: string) {
+    super(message)
+    this.name = 'LiveRequestError'
+    this.reasonCode = reasonCode
+  }
+}
+
+async function readError(response: Response): Promise<LiveRequestError> {
   try {
-    const payload = await response.json() as { message?: unknown; error?: unknown }
-    if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
-    if (typeof payload.error === 'string' && payload.error.trim()) return payload.error.trim()
+    const payload = await response.json() as { message?: unknown; error?: unknown; reasonCode?: unknown }
+    const message = typeof payload.message === 'string' && payload.message.trim()
+      ? payload.message.trim()
+      : typeof payload.error === 'string' && payload.error.trim() ? payload.error.trim() : ''
+    if (message) return new LiveRequestError(message, typeof payload.reasonCode === 'string' ? payload.reasonCode : undefined)
   } catch {
     // Fall through to the HTTP status below.
   }
-  return `Live request failed (${response.status})`
+  return new LiveRequestError(`Live request failed (${response.status})`)
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const execute = async () => {
     const response = await fetch(path, init)
-    if (!response.ok) throw new Error(await readError(response))
+    if (!response.ok) throw await readError(response)
     return await response.json() as T
   }
   const method = (init?.method ?? 'GET').toUpperCase()
