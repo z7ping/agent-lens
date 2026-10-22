@@ -21,7 +21,7 @@ import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
 import type { LiveQueueMutation } from '@agent-lens/core'
-import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
+import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupIssue, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveWarmWorkerStatus } from './types'
 
 interface OwnedRuntime {
   id: string
@@ -236,6 +236,28 @@ function runtimeDisclosureSummary(
     `${status.en} · ${fallbackDuration} · ${groups.map(item => `${item.en} ${item.count}`).join(' · ')}`,
     `${status.zh} · ${fallbackDuration} · ${groups.map(item => `${item.zh} ${item.count}`).join(' · ')}`,
   )
+}
+
+function runtimeStartupDiagnostics(state: PiLiveRuntimeState) {
+  const native = state.startupResources?.issues ?? []
+  const diagnostics = native.map((item, index) => ({
+    diagnosticId: `pi.startup.${index}:${item.category}:${item.path ?? item.message}`,
+    severity: item.severity,
+    category: item.category,
+    message: contributionText(item.message, item.message),
+    ...(item.path ? { path: item.path } : {}),
+    ...(item.collision ? { collision: item.collision } : {}),
+  }))
+  if (state.extensionBindingStatus === 'failed') {
+    const message = state.extensionBindingError || 'Pi extension binding failed'
+    diagnostics.push({
+      diagnosticId: 'pi.startup.extension-binding',
+      severity: 'error',
+      category: 'extension',
+      message: contributionText(message, message),
+    })
+  }
+  return diagnostics
 }
 
 function runtimeDisclosureFields(state: PiLiveRuntimeState): LiveRuntimeContributionField[] {
@@ -547,6 +569,40 @@ function textList(value: unknown, limit = 240): string[] {
   return [...new Set(value.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean))].slice(0, limit)
 }
 
+function startupIssues(value: unknown): PiLiveStartupIssue[] {
+  if (!Array.isArray(value)) return []
+  const issues: PiLiveStartupIssue[] = []
+  const seen = new Set<string>()
+  for (const entry of value.slice(0, 160)) {
+    const item = record(entry)
+    const severity = item.severity
+    const category = item.category
+    const message = typeof item.message === 'string' ? item.message.trim().slice(0, 1_000) : ''
+    if ((severity !== 'info' && severity !== 'warning' && severity !== 'error')
+      || !['skill', 'extension', 'command', 'tool', 'flag', 'prompt', 'theme', 'resource'].includes(String(category))
+      || !message) continue
+    const path = typeof item.path === 'string' ? item.path.slice(0, 1_000) : undefined
+    const collision = record(item.collision)
+    const validCollision = typeof collision.name === 'string'
+      && typeof collision.winnerPath === 'string'
+      && typeof collision.loserPath === 'string'
+    const key = JSON.stringify([category, message, path])
+    if (seen.has(key)) continue
+    seen.add(key)
+    issues.push({
+      severity, category: category as PiLiveStartupIssue['category'], message,
+      ...(path ? { path } : {}),
+      ...(validCollision ? { collision: {
+        name: collision.name.slice(0, 160),
+        winnerPath: collision.winnerPath.slice(0, 1_000),
+        loserPath: collision.loserPath.slice(0, 1_000),
+      } } : {}),
+    })
+    if (issues.length === 80) break
+  }
+  return issues
+}
+
 function startupResources(value: unknown): PiLiveStartupResources | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const resources = record(value)
@@ -557,6 +613,7 @@ function startupResources(value: unknown): PiLiveStartupResources | undefined {
     extensions: textList(resources.extensions),
     themes: textList(resources.themes),
     diagnostics: textList(resources.diagnostics, 80),
+    issues: startupIssues(resources.issues),
   }
 }
 
@@ -1136,6 +1193,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ?? state.initializationTimings?.reduce((sum, item) => sum + Math.max(0, item.durationMs), 0)
     const duration = contributionDuration(elapsed)
     const lifecycle = runtimeLifecycle(state)
+    const diagnostics = runtimeStartupDiagnostics(state)
+    const hasErrors = diagnostics.some(item => item.severity === 'error')
+    const hasWarnings = diagnostics.some(item => item.severity === 'warning')
     const isIdle = state.status === 'ready' && !state.isStreaming && !state.isCompacting
     // Registry-backed capability detection: only a known non-interactive
     // extension command is offered. Other /title commands may open a UI.
@@ -1171,16 +1231,17 @@ export class DefaultPiLiveService implements PiLiveService {
       contributionId: 'pi.runtime.diagnostics',
       title: contributionText('This run', '本次运行'),
       summary: runtimeDisclosureSummary(state, status, duration),
-      tone: state.status === 'failed' || state.extensionBindingStatus === 'failed'
+      tone: state.status === 'failed' || hasErrors
         ? 'danger' as const
-        : state.status === 'initializing' || state.extensionBindingStatus === 'binding'
-          ? 'info' as const
-          : 'neutral' as const,
+        : hasWarnings ? 'warning' as const
+          : state.status === 'initializing' || state.extensionBindingStatus === 'binding'
+            ? 'info' as const : 'neutral' as const,
       defaultExpanded: state.status === 'failed'
         || state.status === 'initializing'
         || state.extensionBindingStatus === 'binding'
-        || state.extensionBindingStatus === 'failed',
+        || hasErrors || hasWarnings,
       ...(lifecycle ? { lifecycle } : {}),
+      ...(diagnostics.length ? { diagnostics } : {}),
       fields: runtimeDisclosureFields(state),
       ...(actions.length ? { actions } : {}),
     }]
