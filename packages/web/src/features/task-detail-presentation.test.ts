@@ -3,6 +3,7 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TaskMessage } from './TaskMessage'
+import { presentTaskError } from './task-error-presentation'
 import { TaskEvent } from './TaskEvent'
 import { TaskRound } from './TaskRound'
 import { TaskToolGroup } from './TaskToolGroup'
@@ -254,4 +255,60 @@ test('目标提取仅来自可信输入字段，Shell cd 前缀只调整显示�
   assert.equal(taskShellCommandParts('cd "E:/my && projects" && npm test').prefix,
     'cd "E:/my && projects" &&')
   assert.equal(taskShellCommandParts('python -c "print(1)"').prefix, '')
+})
+
+
+test('错误详情按原生 code 提取配额/状态，同时保留完整诊断原文', () => {
+  const raw = '403: {"message":"user quota is not enough (request id: 123)","type":"one_api_error","code":"insufficient_user_quota"}'
+  const result = presentTaskError(raw)
+  assert.equal(result.kind, 'quota')
+  assert.equal(result.statusCode, 403)
+  assert.equal(result.code, 'insufficient_user_quota')
+  assert.match(result.preview, /user quota is not enough/)
+  const html = renderToStaticMarkup(createElement(TaskMessage, {
+    role: 'assistant', text: raw, error: true,
+  }))
+  assert.match(html, /task-message-failure-title/)
+  assert.match(html, /task-message-failure-raw/)
+  assert.match(html, /<details[^>]+task-message-failure-details/)
+  assert.match(html, /insufficient_user_quota/)
+  assert.doesNotMatch(html, /markdown-surface/)
+  assert.doesNotMatch(html, /task-message-content/)
+})
+
+test('未知错误不误判为配额，诊断字段与原文均可访问', () => {
+  const failures = [
+    ['HTTP 422: developer role is not supported', 'unknown', 422],
+    ['HTTP 401: unauthorized', 'auth', 401],
+    ['HTTP 429: too many requests', 'rateLimit', 429],
+    ['ECONNRESET: upstream disconnected', 'unknown', undefined],
+    ['HTTP 500: internal error', 'unknown', 500],
+  ] as const
+  for (const [raw, kind, status] of failures) {
+    const result = presentTaskError(raw)
+    assert.equal(result.kind, kind, raw)
+    assert.equal(result.statusCode, status, raw)
+    assert.ok(result.preview, raw)
+  }
+  assert.equal(presentTaskError('provider rejected request', { code: 'context_length_exceeded' }).kind, 'context')
+  assert.equal(presentTaskError('provider rejected request', { code: 'invalid_api_key' }).kind, 'auth')
+  assert.equal(presentTaskError('provider rejected request', { code: 'unknown_provider_failure' }).kind, 'unknown')
+
+  const raw = 'HTTP 502: <script>alert("no markdown")</script>\n{"error":"upstream"}'
+  const html = renderToStaticMarkup(createElement(TaskMessage, {
+    role: 'assistant', text: raw, error: true, errorDiagnostic: { code: 'upstream_error' },
+  }))
+  assert.match(html, /HTTP 502/)
+  assert.match(html, /upstream_error/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.doesNotMatch(html, /<script>/)
+  assert.match(html, /task-message-failure-copy/)
+})
+
+test('普通 assistant 文本不走错误详情展示', () => {
+  const html = renderToStaticMarkup(createElement(TaskMessage, {
+    role: 'assistant', text: '正常模型回答',
+  }))
+  assert.match(html, /markdown-surface/)
+  assert.doesNotMatch(html, /task-message-failure/)
 })
