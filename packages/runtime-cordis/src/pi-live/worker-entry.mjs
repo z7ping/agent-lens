@@ -121,8 +121,8 @@ function diagnosticMessages(value) {
   if (Array.isArray(value)) return value.flatMap(diagnosticMessages)
   if (typeof value === 'string' || value instanceof Error) return [diagnostic(value instanceof Error ? value.message : value)]
   const row = record(value)
-  const nested = [row.diagnostics, row.errors].flatMap(diagnosticMessages)
-  const own = row.message ?? row.error ?? row.reason
+  const nested = [row.diagnostics, row.errors, row.warnings].flatMap(diagnosticMessages)
+  const own = row.message ?? row.error ?? row.warning ?? row.reason
   return own ? [...nested, diagnostic(typeof own === 'string' ? own : JSON.stringify(own))] : nested
 }
 
@@ -143,10 +143,10 @@ function resourceIssues(value, category) {
         ? 'command' : undefined
       const toolCategory = /\btool\b/i.test(message) && /conflict/i.test(message) ? 'tool' : undefined
       const flagCategory = /\bflag\b/i.test(message) && /conflict/i.test(message) ? 'flag' : undefined
+      const conflict = item.type === 'collision' || Boolean(commandCategory || toolCategory || flagCategory)
       const issue = {
-        severity: item.type === 'error' ? 'error'
-          : item.type === 'collision' ? 'warning'
-            : item.type === 'warning' ? 'warning' : fallbackSeverity,
+        severity: conflict ? 'warning' : item.type === 'error' ? 'error'
+          : item.type === 'warning' ? 'warning' : fallbackSeverity,
         category: collisionCategory ?? commandCategory ?? toolCategory ?? flagCategory ?? category,
         message,
         ...(typeof item.path === 'string' ? { path: diagnostic(item.path) } : {}),
