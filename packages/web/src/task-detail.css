@@ -375,7 +375,7 @@
 .task-surface .task-message-failure-details .ui-disclosure-summary { flex: 0 1 auto; }
 .task-surface .task-message-failure-details .ui-disclosure-meta { min-width: 0; flex: 0 1 auto; overflow-wrap: anywhere; font-size: var(--text-task-meta); }
 .task-surface .task-message-failure-details .ui-disclosure-body { min-width: 0; padding: 6px 0 0; border-top: 0; }
-.task-surface .task-message-failure-raw { max-height: 240px; margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--al-radius-sm); background: var(--al-soft-2); color: var(--al-ink-2); font: var(--text-task-meta)/1.55 var(--font-mono); }
+.task-surface .task-message-failure-raw { max-height: 240px; margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: var(--radius-sm); background: var(--al-soft-2); color: var(--al-ink-2); font: var(--text-task-meta)/1.55 var(--font-mono); }
 .task-surface .task-message-failure-copy { margin-top: 4px; }
 
 
