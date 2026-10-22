@@ -2093,6 +2093,7 @@ export class DefaultPiLiveService implements PiLiveService {
 
     const capturedAt = runtime.startupResourcesCapturedAt ?? new Date().toISOString()
     const packageStatus = finalPackageUpdateStatus(runtime.packageUpdateCheck)
+    const piStatus = finalPackageUpdateStatus(runtime.piVersionCheck)
     const snapshot = {
       runtimeSessionId: runtime.id,
       attemptStartedAt: new Date(runtime.initializationStartedAt).toISOString(),
@@ -2106,6 +2107,9 @@ export class DefaultPiLiveService implements PiLiveService {
       ...(packageStatus && runtime.packageUpdatesCheckedAt
         ? { packageUpdatesCheckedAt: runtime.packageUpdatesCheckedAt }
         : {}),
+      ...(piStatus ? { piVersionCheck: piStatus } : {}),
+      ...(piStatus && runtime.piLatestVersion ? { piLatestVersion: runtime.piLatestVersion } : {}),
+      ...(piStatus && runtime.piVersionCheckedAt ? { piVersionCheckedAt: runtime.piVersionCheckedAt } : {}),
       ...(runtime.input.executable ? { executable: runtime.input.executable } : {}),
       ...(state.sdkVersion ?? runtime.capabilities?.sdkVersion
         ? { sdkVersion: state.sdkVersion ?? runtime.capabilities?.sdkVersion }
@@ -2119,7 +2123,7 @@ export class DefaultPiLiveService implements PiLiveService {
     let task: Promise<void>
     task = this.startupAudit.recordStartupAudit(snapshot).then(() => {
       if (runtime.startupAuditPending === attempt) runtime.startupAuditCompleted = attempt
-      if (packageStatus) runtime.startupPackageAuditCompleted = attempt
+      if (packageStatus || piStatus) runtime.startupPackageAuditCompleted = `${attempt}:${packageStatus ?? '-'}:${piStatus ?? '-'}:${runtime.piLatestVersion ?? ''}`
     }).catch(error => {
       console.warn('[AgentLens] Pi Live startup audit failed', error)
     }).finally(() => {
@@ -2153,17 +2157,21 @@ export class DefaultPiLiveService implements PiLiveService {
     const startupAuditResources = runtime.startupAuditResources
     if (!startupAudit || !startupAuditResources) return
     const packageStatus = finalPackageUpdateStatus(runtime.packageUpdateCheck)
-    if (!packageStatus || runtime.status !== 'ready' || !runtime.handle) return
+    const piStatus = finalPackageUpdateStatus(runtime.piVersionCheck)
+    if ((!packageStatus && !piStatus) || runtime.status !== 'ready' || !runtime.handle) return
 
     const attempt = `${runtime.generation}:${runtime.initializationStartedAt}`
-    if (runtime.startupPackageAuditCompleted === attempt || runtime.startupPackageAuditPending === attempt) return
+    const marker = `${attempt}:${packageStatus ?? '-'}:${piStatus ?? '-'}:${runtime.piLatestVersion ?? ''}`
+    if (runtime.startupPackageAuditCompleted === marker || runtime.startupPackageAuditPending === marker) return
 
-    runtime.startupPackageAuditPending = attempt
+    const previousTask = runtime.startupPackageAuditTask
+    runtime.startupPackageAuditPending = marker
     const handle = runtime.handle
     let task: Promise<void>
     task = (async () => {
       await runtime.startupAuditTask?.catch(() => undefined)
-      if (runtime.startupPackageAuditCompleted === attempt) return
+      await previousTask?.catch(() => undefined)
+      if (runtime.startupPackageAuditCompleted === marker) return
       if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
       const state = await handle.state()
       if (runtime.generation !== generation || runtime.status !== 'ready' || runtime.handle !== handle) return
@@ -2179,9 +2187,12 @@ export class DefaultPiLiveService implements PiLiveService {
         nativeSessionId,
         workspacePath: runtime.workspacePath,
         startupResources: copyStartupResources(startupAuditResources),
-        packageUpdateCheck: packageStatus,
-        packageUpdates: [...runtime.packageUpdates],
-        ...(runtime.packageUpdatesCheckedAt ? { packageUpdatesCheckedAt: runtime.packageUpdatesCheckedAt } : {}),
+        ...(packageStatus ? { packageUpdateCheck: packageStatus } : {}),
+        ...(packageStatus ? { packageUpdates: [...runtime.packageUpdates] } : {}),
+        ...(packageStatus && runtime.packageUpdatesCheckedAt ? { packageUpdatesCheckedAt: runtime.packageUpdatesCheckedAt } : {}),
+        ...(piStatus ? { piVersionCheck: piStatus } : {}),
+        ...(piStatus && runtime.piLatestVersion ? { piLatestVersion: runtime.piLatestVersion } : {}),
+        ...(piStatus && runtime.piVersionCheckedAt ? { piVersionCheckedAt: runtime.piVersionCheckedAt } : {}),
         ...(runtime.input.executable ? { executable: runtime.input.executable } : {}),
         ...(state.sdkVersion ?? runtime.capabilities?.sdkVersion
           ? { sdkVersion: state.sdkVersion ?? runtime.capabilities?.sdkVersion }
@@ -2190,11 +2201,11 @@ export class DefaultPiLiveService implements PiLiveService {
           ? { sessionName: state.sessionName ?? runtime.input.name }
           : {}),
       })
-      if (runtime.startupPackageAuditPending === attempt) runtime.startupPackageAuditCompleted = attempt
+      if (runtime.startupPackageAuditPending === marker) runtime.startupPackageAuditCompleted = marker
     })().catch(error => {
       console.warn('[AgentLens] Pi Live package update audit failed', error)
     }).finally(() => {
-      if (runtime.startupPackageAuditPending === attempt) runtime.startupPackageAuditPending = undefined
+      if (runtime.startupPackageAuditPending === marker) runtime.startupPackageAuditPending = undefined
       if (runtime.startupPackageAuditTask === task) runtime.startupPackageAuditTask = undefined
     })
     runtime.startupPackageAuditTask = task
