@@ -20,6 +20,7 @@ import { latestPiSessionEntryId } from './session-disk-tail'
 import type { PiLiveStartupAuditSink } from './startup-audit'
 import { WorkerPiRuntimeHost, type PiRuntimeHandle, type PiRuntimeHost } from './worker-host'
 import { PiWorkspaceFileReferenceIndex } from './workspace-files'
+import { parsePiCacheOptimizerStatus, type PiLiveCacheMetrics } from './cache-status'
 import type { LiveQueueMutation } from '@agent-lens/core'
 import type { PiLiveAvailability, PiLiveCommand, PiLiveControls, PiLiveExtensionBindingStatus, PiLiveInitializationStage, PiLiveImageInput, PiLiveInitializationTiming, PiLivePackageUpdate, PiLivePackageUpdateCheckStatus, PiLiveQueueState, PiLiveRuntimeCapabilities, PiLiveRuntimeListener, PiLiveRuntimeState, PiLiveService, PiLiveSnapshot, PiLiveStartInput, PiLiveStartupMetric, PiLiveStartupIssue, PiLiveStartupResources, PiLiveStreamingBehavior, PiLiveVersionCheckStatus, PiLiveWarmWorkerStatus } from './types'
 
@@ -85,6 +86,7 @@ interface OwnedRuntime {
   suspended: boolean
   hydrationTask?: Promise<void> | undefined
   cachedState?: PiLiveRuntimeState | undefined
+  cacheMetrics?: PiLiveCacheMetrics | undefined
   pendingExtensionRequestIds: Set<string>
 }
 
@@ -1744,6 +1746,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.handle = undefined
     runtime.suspended = false
     runtime.cachedState = undefined
+    runtime.cacheMetrics = undefined
     runtime.initializationStartedAt = now
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
@@ -1952,6 +1955,7 @@ export class DefaultPiLiveService implements PiLiveService {
       isCompacting: runtime.isCompacting,
       pendingMessageCount: runtime.queue.steering.length + runtime.queue.followUp.length,
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
+      ...(runtime.cacheMetrics ? { cacheMetrics: runtime.cacheMetrics } : {}),
     }
   }
 
@@ -2062,6 +2066,7 @@ export class DefaultPiLiveService implements PiLiveService {
       projectName: runtime.projectName,
       ...(runtime.gitBranch ? { gitBranch: runtime.gitBranch } : {}),
       ...(runtime.handle?.processId ? { processId: runtime.handle.processId } : {}),
+      ...(runtime.cacheMetrics ? { cacheMetrics: runtime.cacheMetrics } : {}),
     }
   }
 
@@ -2251,6 +2256,10 @@ export class DefaultPiLiveService implements PiLiveService {
       }
     }
 
+    if (type === 'model_changed') {
+      runtime.cacheMetrics = undefined
+      if (runtime.cachedState) runtime.cachedState = { ...runtime.cachedState, cacheMetrics: undefined }
+    }
     if (type === 'agent_start') runtime.isStreaming = true
     if (type === 'compaction_start') runtime.isCompacting = true
     if (type === 'compaction_end') runtime.isCompacting = false
@@ -2261,12 +2270,22 @@ export class DefaultPiLiveService implements PiLiveService {
       runtime.isStreaming = true
     }
     if (type === 'extension_ui_request') {
+      const cache = parsePiCacheOptimizerStatus(event)
+      if (cache !== undefined) {
+        runtime.cacheMetrics = cache ?? undefined
+        if (runtime.cachedState) runtime.cachedState = {
+          ...runtime.cachedState,
+          cacheMetrics: runtime.cacheMetrics,
+        }
+      }
       const requestId = typeof event.id === 'string'
         ? event.id
         : typeof event.requestId === 'string'
           ? event.requestId
           : ''
-      if (requestId) runtime.pendingExtensionRequestIds.add(requestId)
+      if (requestId && ['select', 'confirm', 'input', 'editor'].includes(String(event.method))) {
+        runtime.pendingExtensionRequestIds.add(requestId)
+      }
     }
 
     const publishedEvent = (type === 'message_start' || type === 'message_end')

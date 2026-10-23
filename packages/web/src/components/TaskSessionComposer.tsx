@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { LiveContextUsage, LiveModelControlDto, LiveThinkingControlDto } from '@agent-lens/protocol'
+import type { LiveCacheMetricsDto, LiveContextUsage, LiveModelControlDto, LiveThinkingControlDto } from '@agent-lens/protocol'
 import { ComposerPillSelect } from './ComposerPillSelect'
 import { LiveMarkdownComposer, type LiveMarkdownComposerHandle, type LiveMarkdownComposerProps } from './LiveMarkdownComposer'
 import { Button, IconButton, Popover, UiIcon } from './ui'
@@ -36,7 +36,7 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   responseActivity?: 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing' | null
   sendFeedback?: 'idle' | 'sending' | 'accepted' | 'queued' | 'failed'
   /** Optional Live-only metrics; Review omits this rather than implying a running native session. */
-  runtimeMetrics?: { contextUsage?: LiveContextUsage | undefined } | undefined
+  runtimeMetrics?: { contextUsage?: LiveContextUsage | undefined; cacheMetrics?: LiveCacheMetricsDto | undefined } | undefined
   sessionActions?: readonly ComposerSessionAction[] | undefined
   modelControl?: LiveModelControlDto | null
   thinking?: LiveThinkingControlDto | null
@@ -114,6 +114,12 @@ export function TaskSessionComposer({
     metricCloseTimer.current = setTimeout(() => setMetricOpen(null), 160)
   }
   const contextUsage = runtimeMetrics?.contextUsage
+  const cacheMetrics = runtimeMetrics?.cacheMetrics
+  const cacheLabel = cacheMetrics ? `${cacheMetrics.tokenHitRate.toFixed(1)}%` : '—'
+  const compatibilityLabel = !cacheMetrics ? '—'
+    : cacheMetrics.compatibility === 'warning' ? t('live.metrics.compatWarning')
+    : cacheMetrics.compatibility === 'disabled' ? t('live.metrics.compatDisabled')
+    : t('live.metrics.compatOk')
   const tokenCount = contextUsage?.tokens
   const contextLimit = contextUsage?.contextWindow
   const percent = contextUsage?.percent
@@ -278,15 +284,18 @@ export function TaskSessionComposer({
         <Button size="small" variant="quiet" aria-expanded={metricOpen === 'cache'}
           onClick={() => metricOpen === 'cache' ? setMetricOpen(null) : showMetric('cache')}>
           <UiIcon name="database" size={12}/>
-          <span>{t('live.metrics.cache')} —</span>
+          <span>{t('live.metrics.cache')} {cacheLabel}</span>
         </Button>
       </span>
       <Popover open={metricOpen === 'cache'} anchorRef={cacheMetricRef} placement="bottom-end"
         className="task-composer-menu-popover task-composer-metric-popover" onClose={() => setMetricOpen(null)}>
         <div onMouseEnter={() => showMetric('cache')} onMouseLeave={hideMetricSoon}>
           <b>{t('live.metrics.cacheDetails')}</b>
-          <div>{t('live.metrics.cacheUnknown')}</div>
-          <small>{t('live.metrics.cacheSource')}</small>
+          {cacheMetrics ? <>
+            <div>{t('live.metrics.cacheRequests')}: {cacheMetrics.hitRequests}/{cacheMetrics.totalRequests}</div>
+            <div>{t('live.metrics.cacheTokens')}: {cacheMetrics.cachedInput}/{cacheMetrics.totalInput}</div>
+            <small>{t('live.metrics.cacheNativeSource', { adapter: cacheMetrics.adapter })}</small>
+          </> : <><div>{t('live.metrics.cacheUnknown')}</div><small>{t('live.metrics.cacheSource')}</small></>}
         </div>
       </Popover>
       <span className="task-composer-metric-separator" aria-hidden="true">·</span>
@@ -295,15 +304,16 @@ export function TaskSessionComposer({
         <Button size="small" variant="quiet" aria-expanded={metricOpen === 'compat'}
           onClick={() => metricOpen === 'compat' ? setMetricOpen(null) : showMetric('compat')}>
           <UiIcon name="info" size={12}/>
-          <span>{t('live.metrics.compat')} —</span>
+          <span>{t('live.metrics.compat')} {compatibilityLabel}</span>
         </Button>
       </span>
       <Popover open={metricOpen === 'compat'} anchorRef={compatMetricRef} placement="bottom-end"
         className="task-composer-menu-popover task-composer-metric-popover" onClose={() => setMetricOpen(null)}>
         <div onMouseEnter={() => showMetric('compat')} onMouseLeave={hideMetricSoon}>
           <b>{t('live.metrics.compatDetails')}</b>
-          <div>{t('live.metrics.compatUnknown')}</div>
-          <small>{t('live.metrics.compatSource')}</small>
+          <div>{cacheMetrics ? compatibilityLabel : t('live.metrics.compatUnknown')}</div>
+          {cacheMetrics?.integrityWarning && <div>{t('live.metrics.integrityWarning')}</div>}
+          <small>{cacheMetrics ? t('live.metrics.compatNativeSource') : t('live.metrics.compatSource')}</small>
         </div>
       </Popover>
     </div>}

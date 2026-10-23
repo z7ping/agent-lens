@@ -226,7 +226,7 @@ test('Live 单条队列操作经原生变更接口，不再在浏览器清空并
 })
 
 test('Live 等待响应与停止入口只有共享 Composer 渲染', () => {
-  assert.match(taskComposer, /responseActivity && <div className="task-composer-response-hint"/)
+  assert.match(taskComposer, /\(responseActivity \|\| sendFeedback !== 'idle'\) && <div className="task-composer-response-hint"/)
   assert.match(taskComposer, /interruptAvailable && <IconButton/)
   assert.match(taskComposer, /className="task-composer-stop"/)
   assert.match(taskComposer, /hasContent && editorProps.canSubmit/)
@@ -245,15 +245,25 @@ test('Live-only 指标常驻输入区下方，悬浮与点击共用 Popover，Re
   assert.match(taskComposer, /onMouseEnter=\{\(\) => showMetric\('cache'\)\}/)
   assert.match(taskComposer, /<Popover open=\{metricOpen === 'context'\}/)
   assert.match(taskComposer, /<Popover open=\{metricOpen === 'cache'\}/)
-  assert.match(liveTask, /runtimeMetrics=\{\{ contextUsage: state\?\.contextUsage \}\}/)
+  assert.match(liveTask, /runtimeMetrics=\{\{ contextUsage: state\?\.contextUsage, cacheMetrics: state\?\.cacheMetrics \}\}/)
   assert.doesNotMatch(reviewTask, /runtimeMetrics=/)
   assert.match(composerCss, /\.task-composer-runtime-metrics \{/)
   assert.doesNotMatch(taskComposer, /DS Cache 0%|0% \/ 1M/)
 })
 
 test('兼容指标不冒充运行时兼容状态，只有可信来源才能显示警告', () => {
-  assert.match(taskComposer, /\{t\('live.metrics.compat'\)\} —/)
+  assert.match(taskComposer, /\{t\('live.metrics.compat'\)\} \{compatibilityLabel\}/)
   assert.match(taskComposer, /onMouseEnter=\{\(\) => showMetric\('compat'\)\}/)
   assert.match(taskComposer, /<Popover open=\{metricOpen === 'compat'\}/)
+  assert.doesNotMatch(taskComposer, /runtimeMode === 'compatibility'/)
+})
+
+test('缓存与兼容显示 Pi 扩展真实来源，不再硬编码缺失值', () => {
+  assert.match(taskComposer, /cacheLabel = cacheMetrics \?/)
+  assert.match(taskComposer, /tokenHitRate\.toFixed\(1\)/)
+  assert.match(taskComposer, /\{t\('live.metrics.cache'\)\} \{cacheLabel\}/)
+  assert.match(taskComposer, /compatibility === 'warning'/)
+  assert.match(taskComposer, /cacheMetrics\.hitRequests/)
+  assert.match(taskComposer, /cacheMetrics\.cachedInput/)
   assert.doesNotMatch(taskComposer, /runtimeMode === 'compatibility'/)
 })

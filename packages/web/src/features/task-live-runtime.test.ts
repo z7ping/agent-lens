@@ -129,3 +129,24 @@ test('原生上下文统计会更新并在恢复清空后撤销旧值，零值�
   assert.equal(sameLiveRuntimeState(known, state()), false)
   assert.equal(sameLiveRuntimeState(known, state({ contextUsage: { tokens: 10_000, contextWindow: 1_000_000, percent: 1 } })), false)
 })
+
+test('native cache telemetry updates runtime UI without overwriting context and can clear', () => {
+  const current = state({ contextUsage: { tokens: 1500, contextWindow: 10000, percent: 15 } })
+  const cache = {
+    source: 'pi-cache-optimizer' as const, adapter: 'DS',
+    hitRequests: 1, totalRequests: 2, cachedInput: '0.1M', totalInput: '0.2M',
+    tokenHitRate: 50, compatibility: 'warning' as const,
+  }
+  const envelope: LiveRuntimeEventDto = {
+    runtimeSessionId: current.runtimeSessionId, sequence: 1, receivedAt: new Date(0).toISOString(),
+    event: {}, normalizedEvent: { type: 'runtime.metrics.changed', cacheMetrics: cache },
+  }
+  const next = runtimeStateFromEvent(current, envelope)
+  assert.equal(next?.cacheMetrics?.compatibility, 'warning')
+  assert.equal(next?.contextUsage?.tokens, 1500)
+  assert.equal(sameLiveRuntimeState(current, next!), false)
+  const cleared = runtimeStateFromEvent(next, {
+    ...envelope, normalizedEvent: { type: 'runtime.metrics.changed', cacheMetrics: null },
+  })
+  assert.equal(cleared?.cacheMetrics, undefined)
+})

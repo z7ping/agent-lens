@@ -25,6 +25,7 @@ import {
 } from '@agent-lens/live-support'
 import { canonicalPiLiveSnapshot, isCanonicalHistoryCursor } from './canonical-history'
 import { resolvePiLiveHistoryInput } from './history-interaction'
+import { parsePiCacheOptimizerStatus } from './cache-status'
 import type {
   PiLiveImageInput,
   PiLiveRuntimeState,
@@ -313,6 +314,10 @@ export function normalizePiLiveEvent(event: Readonly<Record<string, unknown>>): 
       ? event.followUp.filter((item): item is string => typeof item === 'string')
       : []
     return { type: 'queue.update', steering, followUp }
+  }
+  if (type === 'extension_ui_request' && event.method === 'setStatus') {
+    const cache = parsePiCacheOptimizerStatus(event)
+    if (cache !== undefined) return { type: 'runtime.metrics.changed', cacheMetrics: cache }
   }
   if (type === 'extension_ui_request' && liveText(event.method) === 'notify') {
     const message = liveText(event.message).trim()

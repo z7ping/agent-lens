@@ -784,3 +784,19 @@ test('streaming native slash goes through Pi SDK prompt expansion rather than li
   await adapter.send('runtime-1', { parts: [{ type: 'text', text: 'ordinary text' }] }, { behavior: 'steer' })
   assert.deepEqual(calls, ['prompt:/skill:audit:followUp', 'steer:ordinary text'])
 })
+
+
+test('Pi native cache status is projected into a typed, agent-neutral runtime metric event', () => {
+  const raw = {
+    type: 'extension_ui_request', method: 'setStatus',
+    statusKey: 'pi-cache-stats', statusText: '· DS cache 1/2·0.1M/0.2M 50.0% ⚠️ compat',
+  }
+  const normalized = normalizePiLiveEvent(raw)
+  assert.equal(normalized?.type, 'runtime.metrics.changed')
+  if (normalized?.type === 'runtime.metrics.changed') {
+    assert.equal(normalized.cacheMetrics?.tokenHitRate, 50)
+    assert.equal(normalized.cacheMetrics?.compatibility, 'warning')
+  }
+  assert.equal(normalizePiLiveEvent({ ...raw, statusKey: 'other-extension' }), undefined)
+  assert.deepEqual(normalizePiLiveEvent({ ...raw, statusText: undefined }), { type: 'runtime.metrics.changed', cacheMetrics: null })
+})

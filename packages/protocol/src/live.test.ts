@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { liveMessagePlainTextDto, parseLiveEventDto, parseLiveMessageInputDto, parseLiveModelControlDto, parseLiveThinkingControlDto } from './live'
+import { liveMessagePlainTextDto, parseLiveCacheMetricsDto, parseLiveEventDto, parseLiveMessageInputDto, parseLiveModelControlDto, parseLiveThinkingControlDto } from './live'
 
 test('Live protocol preserves Runtime thinking values, order, and duplicates without normalization', () => {
   const parsed = parseLiveThinkingControlDto({
@@ -274,4 +274,24 @@ test('Live protocol validates adapter-neutral native notification facts', () => 
   })
   assert.equal(parseLiveEventDto({ type: 'notification', level: 'success', message: '' }), null)
   assert.equal(parseLiveEventDto({ type: 'notification', level: 'invalid', message: 'x' }), null)
+})
+
+
+test('Live cache telemetry is bounded, attributed, and propagates clears through SSE', () => {
+  const value = {
+    source: 'pi-cache-optimizer', adapter: 'OpenAI',
+    hitRequests: 2, totalRequests: 4, cachedInput: '0.2M', totalInput: '0.4M',
+    tokenHitRate: 50, compatibility: 'warning',
+  }
+  assert.deepEqual(parseLiveCacheMetricsDto(value), value)
+  assert.deepEqual(parseLiveEventDto({ type: 'runtime.metrics.changed', cacheMetrics: value }), {
+    type: 'runtime.metrics.changed', cacheMetrics: value,
+  })
+  assert.deepEqual(parseLiveEventDto({ type: 'runtime.metrics.changed', cacheMetrics: null }), {
+    type: 'runtime.metrics.changed', cacheMetrics: null,
+  })
+  assert.equal(parseLiveCacheMetricsDto({ ...value, hitRequests: 8 }), null)
+  assert.equal(parseLiveCacheMetricsDto({ ...value, tokenHitRate: 101 }), null)
+  assert.equal(parseLiveCacheMetricsDto({ ...value, source: 'unknown' }), null)
+  assert.equal(parseLiveEventDto({ type: 'runtime.metrics.changed', cacheMetrics: { ...value, compatibility: 'invented' } }), null)
 })
