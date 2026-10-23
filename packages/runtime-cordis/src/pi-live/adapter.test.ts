@@ -604,6 +604,10 @@ test('Pi Live Adapter exposes Runtime commands through generic command-discovery
   const adapter = new PiLiveAdapter(service, attachmentService())
   assert.equal(adapter.capabilities.has('command-discovery'), true)
   assert.deepEqual(await adapter.commands('runtime-1'), [
+    { value: '/new', label: '/new', description: '新建任务', group: 'builtin', action: 'new-task' },
+    { value: '/resume', label: '/resume', description: '查找历史会话', group: 'builtin', action: 'resume-task' },
+    { value: '/model', label: '/model', description: '切换模型', group: 'builtin', action: 'open-model' },
+    { value: '/compact', label: '/compact', description: '原生压缩上下文', group: 'builtin', action: 'runtime-action', runtimeActionId: 'pi.runtime.compact' },
     { value: '/review', label: '/review', description: 'Review changes', group: 'extension' },
     { value: '/explain', label: '/explain', description: 'Explain code', group: 'prompt' },
     { value: '/skill:repo-review', label: '/skill:repo-review', description: 'Review repository', group: 'skill' },
@@ -737,4 +741,46 @@ test('Pi native extension notify is normalized while status widgets remain trans
     type: 'extension_ui_request', id: 'status-1', method: 'setStatus',
     statusKey: 'sync', statusText: '42%',
   }), undefined)
+})
+
+test('Pi model default persists through the native Runtime without changing the current session', async () => {
+  let globalDefault = { provider: 'anthropic', modelId: 'sonnet' }
+  const calls: string[] = []
+  const service = {
+    controls: async () => ({ models: [
+      { provider: 'anthropic', id: 'sonnet', name: 'Sonnet' },
+      { provider: 'openai', id: 'gpt', name: 'GPT' },
+    ] }),
+    state: async () => ({ model: { provider: 'openai', id: 'gpt' } }),
+    defaultModel: async () => globalDefault,
+    setDefaultModel: async (_runtimeId: string, provider: string, modelId: string) => {
+      calls.push(provider + '/' + modelId)
+      globalDefault = { provider, modelId }
+    },
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  const currentValue = JSON.stringify(['openai', 'gpt'])
+  assert.equal((await adapter.modelControl('runtime-1'))?.value, currentValue)
+  assert.equal((await adapter.modelControl('runtime-1'))?.defaultValue, JSON.stringify(['anthropic', 'sonnet']))
+  const updated = await adapter.setDefaultModelControl('runtime-1', currentValue)
+  assert.deepEqual(calls, ['openai/gpt'])
+  assert.equal(updated?.value, currentValue)
+  assert.equal(updated?.defaultValue, currentValue)
+  await assert.rejects(adapter.setDefaultModelControl('runtime-1', JSON.stringify(['fake', 'unknown'])))
+})
+
+test('streaming native slash goes through Pi SDK prompt expansion rather than literal steering', async () => {
+  const calls: string[] = []
+  const service = {
+    commands: async () => [{ name: 'skill:audit', source: 'skill' }],
+    prompt: async (_id: string, text: string, behavior?: string) => {
+      calls.push('prompt:' + text + ':' + (behavior ?? 'normal'))
+    },
+    steer: async (_id: string, text: string) => { calls.push('steer:' + text) },
+    followUp: async (_id: string, text: string) => { calls.push('followUp:' + text) },
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: '/skill:audit' }] }, { behavior: 'follow-up' })
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: 'ordinary text' }] }, { behavior: 'steer' })
+  assert.deepEqual(calls, ['prompt:/skill:audit:followUp', 'steer:ordinary text'])
 })

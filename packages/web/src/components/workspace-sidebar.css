@@ -943,19 +943,21 @@
   gap: 5px;
   overflow-x: auto;
   scrollbar-width: none;
+  white-space: nowrap;
 }
+.workspace-sidebar-context > .task-center-rail .task-center-filter-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workspace-sidebar-context > .task-center-rail .task-center-active-filter-list::-webkit-scrollbar { display: none; }
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-chip.btn {
   height: 26px;
   min-width: 0;
   max-width: 148px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   gap: 4px;
   padding: 0 7px;
-  border-color: color-mix(in srgb, var(--al-accent) 16%, var(--al-line));
-  background: var(--al-accent-soft);
-  color: var(--al-accent);
+  border-color: transparent;
+  background: transparent;
+  color: var(--al-muted);
 }
 
 .workspace-sidebar-context > .task-center-rail .task-center-filter-clear.btn {
@@ -964,8 +966,9 @@
   padding-inline: 5px;
   border-color: transparent;
   background: transparent;
-  color: var(--al-accent);
+  color: var(--al-muted);
 }
+.workspace-sidebar-context > .task-center-rail .task-center-filter-chip.btn:hover:not(:disabled) { background: var(--al-soft); color: var(--al-ink); }
 
 .workspace-sidebar-context > .task-center-rail .task-center-scroll {
   padding: 1px 10px 12px;

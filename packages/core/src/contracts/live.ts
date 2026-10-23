@@ -13,6 +13,7 @@ export type LiveCapabilityName =
   | 'queue-mutation'
   | 'steer'
   | 'model-switching'
+  | 'model-default'
   | 'thinking-control'
   | 'extension-ui'
   | 'command-discovery'
@@ -485,6 +486,9 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   value: string
   /** Optional runtime-owned grouping key such as extension / prompt / skill. */
   group?: string | undefined
+  /** Explicit Product action declared by the Adapter; never submit as model input. */
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'runtime-action' | undefined
+  runtimeActionId?: string | undefined
 }
 
 export interface LiveWorkspaceFileReference {
@@ -613,6 +617,8 @@ export interface LiveModelControl extends LiveControlDisplayInfo {
   capability: 'model-switching'
   /** Current Runtime-owned opaque value when known. */
   value?: string | undefined
+  /** Persisted global default when supported by the native runtime. */
+  defaultValue?: string | undefined
   /** Runtime-provided model options in Runtime order. */
   options: readonly LiveControlOption[]
 }
@@ -648,6 +654,7 @@ export function isLiveModelControl(value: unknown): value is LiveModelControl {
   const control = liveControlRecord(value)
   if (!control || control.capability !== 'model-switching') return false
   if (control.value !== undefined && (typeof control.value !== 'string' || !control.value)) return false
+  if (control.defaultValue !== undefined && typeof control.defaultValue !== 'string') return false
   if (control.label !== undefined && typeof control.label !== 'string') return false
   if (control.description !== undefined && typeof control.description !== 'string') return false
   if (!validLiveControlOptions(control.options)) return false
@@ -687,6 +694,8 @@ export interface LiveAdapter {
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */
   setModelControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
+  /** Optional Pi/native preference persistence. Never inferred from model switching. */
+  setDefaultModelControl?(runtimeSessionId: string, value: string): Promise<LiveModelControl | null>
   /** Present only when the adapter declares thinking-control. */
   thinkingControl?(runtimeSessionId: string): Promise<LiveThinkingControl | null>
   /** Runtime-owned setter; value must be one returned by thinkingControl(). */

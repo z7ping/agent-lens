@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
+import type { LiveMessageDto, LiveRuntimeStateDto, TaskFileChangesResponseDto } from '@agent-lens/protocol'
 import { AgentLensApi } from '../client/api'
 import { liveApi } from '../client/live'
 import { LocalPathActions } from '../components/LocalPathActions'
@@ -16,7 +16,7 @@ import { useLiveTaskRuntime } from './use-live-task-runtime'
 import { useLiveTaskHistory } from './use-live-task-history'
 import { useLiveTaskActions } from './use-live-task-actions'
 import { type LiveQueueListItem } from './live-task-queue'
-import { messageText } from './live-task-input'
+import { messageText, resolveLiveSlash } from './live-task-input'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
 import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
@@ -49,6 +49,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   const [fileChangesFailure, setFileChangesFailure] = useState(false)
   const [progressClockMs, setProgressClockMs] = useState(() => Date.now())
   const [reconnectEpoch, setReconnectEpoch] = useState(0)
+  const [modelMenuOpenRequest, setModelMenuOpenRequest] = useState(0)
+  const [defaultModelSaving, setDefaultModelSaving] = useState(false)
   const [connectionBusy, setConnectionBusy] = useState(false)
   const [queueExpanded, setQueueExpanded] = useState(false)
   const [queueMenuOpen, setQueueMenuOpen] = useState(false)
@@ -84,6 +86,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
     runtimeActionPending,
     commands,
     modelControl,
+    setModelControl,
     thinking,
     extension,
     extensionPending,
@@ -351,9 +354,57 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onClick: () => { void runRuntimeAction(action) },
       })),
   )
+  // Runtime-advertised actions are never delivered to the language model as text.
+  // Pi extension/template/skill commands without an action remain native SDK prompts.
+  const submitLiveMessage = (message: LiveMessageDto, behavior?: 'follow-up') => {
+    const result = resolveLiveSlash(message, commands)
+    if (result.kind === 'blocked') {
+      setError(`${result.name} 不是可直接发送的消息；当前 Runtime 未提供相应 Web 操作`)
+      return
+    }
+    if (result.kind === 'action') {
+      const command = result.command
+      if (command.action === 'new-task') {
+        clearComposer()
+        navigate('/review/new')
+      } else if (command.action === 'resume-task') {
+        clearComposer()
+        navigate('/review')
+      } else if (command.action === 'open-model') {
+        if (!modelControl) { setError('当前 Runtime 没有可用的模型选择器'); return }
+        clearComposer()
+        setModelMenuOpenRequest(value => value + 1)
+      } else if (command.action === 'runtime-action') {
+        const action = runtimeDisclosures.flatMap(item => item.actions ?? [])
+          .find(item => item.actionId === command.runtimeActionId)
+        if (!action || state?.status !== 'ready' || state.isStreaming) {
+          setError('当前状态不支持执行此命令')
+          return
+        }
+        clearComposer()
+        void runRuntimeAction(action)
+      }
+      return
+    }
+    void send(message, behavior)
+  }
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
-    if (message) void send(message)
+    if (message) submitLiveMessage(message)
+  }
+  const setGlobalDefaultModel = async () => {
+    if (!current || !modelControl?.value || defaultModelSaving) return
+    setDefaultModelSaving(true)
+    setError('')
+    try {
+      const updated = await liveApi.setDefaultModelControl(current.liveId, current.runtimeSessionId, modelControl.value)
+      if (!updated || updated.defaultValue !== modelControl.value) throw new Error('Pi 没有确认默认模型已保存')
+      setModelControl(updated)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setDefaultModelSaving(false)
+    }
   }
 
   const queueItems: LiveQueueListItem[] = [
@@ -603,7 +654,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             : undefined}
           onDraftPresenceChange={setComposerHasContent}
           canSubmit={canSubmit}
-          onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
+          onSubmit={(message, mode) => submitLiveMessage(message, mode === 'followUp' ? 'follow-up' : undefined)}
           onEscape={canInterrupt ? () => { void interrupt() } : undefined}
           placeholder={t('live.composerPlaceholder')}
           ariaLabel={t('live.composerAria')}
@@ -618,9 +669,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           sessionActions={composerSessionActions}
           modelControl={modelControl}
           thinking={thinking}
-          controlsBusy={busy}
+          controlsBusy={busy || defaultModelSaving}
           controlsReady={state?.status === 'ready'}
           onModelChange={value => { void changeModel(value) }}
+          modelMenuOpenRequest={modelMenuOpenRequest}
+          onSetDefaultModel={product?.capabilities.includes('model-default') ? () => { void setGlobalDefaultModel() } : undefined}
           onThinkingChange={value => { void changeThinking(value) }}
           showStreamingModes={Boolean(product?.capabilities.includes('steer') && product.capabilities.includes('queue'))}
           streamingMode={streamingBehavior}

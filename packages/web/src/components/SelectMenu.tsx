@@ -66,6 +66,8 @@ export function SelectMenu({
   searchPlaceholder,
   onSearchChange,
   onOpen,
+  openRequest,
+  footer,
   loading = false,
   hasMore = false,
   onLoadMore,
@@ -84,6 +86,8 @@ export function SelectMenu({
   searchPlaceholder?: string
   onSearchChange?: (value: string) => void
   onOpen?: () => void
+  openRequest?: number
+  footer?: ReactNode
   loading?: boolean
   hasMore?: boolean
   onLoadMore?: () => void
@@ -101,9 +105,11 @@ export function SelectMenu({
   const listboxRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
+  useEffect(() => { if (openRequest) setOpen(true) }, [openRequest])
   const [query, setQuery] = useState('')
   const [activeValue, setActiveValue] = useState('')
   const [position, setPosition] = useState<MenuPosition | null>(null)
+  const hasFooter = Boolean(footer)
   const selected = options.find(option => option.value === value)
     ?? (selectedOption?.value === value ? selectedOption : undefined)
   const selectedLabel = selected ? selectMenuDisplayLabel(selected) : resolvedPlaceholder
@@ -126,13 +132,13 @@ export function SelectMenu({
     const rect = trigger.getBoundingClientRect()
     const width = Math.min(Math.max(rect.width, 280), Math.max(176, window.innerWidth - 16))
     const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8))
-    const footerHeight = onLoadMore && (hasMore || loadingMore) ? 38 : 0
+    const footerHeight = (onLoadMore && (hasMore || loadingMore) ? 38 : 0) + (hasFooter ? 42 : 0)
     const estimatedHeight = Math.min(360, Math.max(64, options.length * 48 + (searchable ? 54 : 12) + footerHeight))
     const openAbove = window.innerHeight - rect.bottom < Math.min(estimatedHeight, 220) && rect.top > window.innerHeight - rect.bottom
     setPosition(openAbove
       ? { left, bottom: window.innerHeight - rect.top + 8, width }
       : { left, top: rect.bottom + 8, width })
-  }, [hasMore, loadingMore, onLoadMore, options.length, searchable])
+  }, [hasMore, loadingMore, onLoadMore, options.length, searchable, hasFooter])
 
   const close = useCallback((restoreFocus = false) => {
     setOpen(false)
@@ -308,6 +314,7 @@ export function SelectMenu({
           })}
           {!filteredOptions.length && <div className="select-menu-empty">{loading ? t('selectMenu.loading') : t('selectMenu.noMatch')}</div>}
         </div>
+        {footer && <div className="select-menu-footer">{footer}</div>}
         {onLoadMore && (hasMore || loadingMore) && <div className="select-menu-footer">
           <button type="button" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? t('selectMenu.loading') : resolvedLoadMoreLabel}</button>
         </div>}

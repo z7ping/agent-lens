@@ -183,6 +183,8 @@ export interface PiLiveService {
   historyIndex(runtimeSessionId: string, query?: LiveHistoryIndexQuery): Promise<LiveHistoryIndex>
   sessionTree(runtimeSessionId: string): Promise<LiveSessionTree>
   commands(runtimeSessionId: string): Promise<PiLiveCommand[]>
+  defaultModel(runtimeSessionId: string): Promise<{ provider: string; modelId: string } | null>
+  setDefaultModel(runtimeSessionId: string, provider: string, modelId: string): Promise<void>
   workspaceFileReferences(runtimeSessionId: string, query: string, limit?: number): Promise<LiveWorkspaceFileReference[]>
   messageActions(runtimeSessionId: string): Promise<LiveMessageActionContribution[]>
   executeMessageAction(

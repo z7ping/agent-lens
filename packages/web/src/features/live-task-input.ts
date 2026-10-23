@@ -1,4 +1,4 @@
-import type { LiveInputCapabilitiesDto, LiveMessageDto } from '@agent-lens/protocol'
+import type { LiveCommandDto, LiveInputCapabilitiesDto, LiveMessageDto } from '@agent-lens/protocol'
 import { liveAttachmentPreviewUrl } from '../client/live-attachments'
 import type { LiveTaskProjectionAttachment } from './live-task-projection'
 
@@ -52,3 +52,32 @@ export function unsupportedInput(
   return null
 }
 
+
+/** A TUI-only command must never silently become an LLM prompt in Web Live. */
+const TUI_ONLY_COMMANDS = new Set([
+  '/new', '/resume', '/model', '/compact', '/settings', '/tree', '/fork',
+  '/session', '/export', '/copy', '/reload', '/name', '/login', '/logout',
+  '/scoped-models', '/share', '/quit', '/hotkeys',
+])
+
+export type LiveSlashResolution =
+  | { kind: 'action'; command: LiveCommandDto }
+  | { kind: 'blocked'; name: string }
+  | { kind: 'prompt' }
+
+/** Commands are matched against runtime-discovered actions, never against Agent ids. */
+export function resolveLiveSlash(message: LiveMessageDto, commands: readonly LiveCommandDto[]): LiveSlashResolution {
+  const text = messageText(message)
+  const name = text.split(/\s+/)[0] ?? ''
+  if (!name.startsWith('/')) return { kind: 'prompt' }
+  const nativePrompt = commands.find(item => item.value === name && !item.action)
+  if (nativePrompt) return { kind: 'prompt' }
+  const command = commands.find(item => item.value === name && item.action)
+  if (command) {
+    return text === name && message.parts.every(part => part.type === 'text')
+      ? { kind: 'action', command }
+      : { kind: 'blocked', name }
+  }
+  if (TUI_ONLY_COMMANDS.has(name)) return { kind: 'blocked', name }
+  return { kind: 'prompt' }
+}
