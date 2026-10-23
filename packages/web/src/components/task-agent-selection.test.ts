@@ -22,3 +22,9 @@ test('取消最后一个勾选得到显式空集，不暗中变回全部', () =>
 test('用户明确点击「全部」恢复 null 语义（调用方 reset），不擅自把全选列表归一化', () => {
   assert.deepEqual(nextAgentFilterSelection(['pi', 'codex'], 'hermes', detected), ['pi', 'codex', 'hermes'])
 })
+
+test('历史筛选允许选择当前未安装、但曾产生会话的智能体', () => {
+  const allHistorySourceIds = [...detected, 'uninstalled-agent']
+  assert.deepEqual(nextAgentFilterSelection(null, 'uninstalled-agent', allHistorySourceIds), ['uninstalled-agent'])
+  assert.deepEqual(nextAgentFilterSelection(['pi'], 'uninstalled-agent', allHistorySourceIds), ['pi', 'uninstalled-agent'])
+})

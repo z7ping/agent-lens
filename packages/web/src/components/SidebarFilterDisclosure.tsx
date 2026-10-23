@@ -16,6 +16,7 @@ interface SidebarFilterDisclosureProps {
   summary?: ReactNode
   agents?: AgentFacetDto[]
   agentSelection?: AgentSelection
+  onOpen?: () => void
   showAllOption?: boolean
   agentOrderManagement?: boolean
 }
@@ -25,6 +26,7 @@ export function SidebarFilterDisclosure({
   summary,
   agents = [],
   agentSelection,
+  onOpen,
   showAllOption = false,
   agentOrderManagement = false,
 }: SidebarFilterDisclosureProps) {
@@ -66,7 +68,8 @@ export function SidebarFilterDisclosure({
       </span>
     : resolvedSummary
   const orderedAgents = useOrderedAgents(agents)
-  const detectedIds = orderedAgents.filter(agent => agent.detected).map(agent => agent.sourceId)
+  // Historical sessions remain filterable even after an agent is uninstalled.
+  const selectableIds = orderedAgents.map(agent => agent.sourceId)
   const selectedIds = agentSelection?.mode === 'multiple'
     ? agentSelection.value ?? []
     : agentSelection?.value ? [agentSelection.value] : []
@@ -93,7 +96,7 @@ export function SidebarFilterDisclosure({
       disclosureRef.current?.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true })
       return
     }
-    agentSelection.onChange(nextAgentFilterSelection(agentSelection.value, sourceId, detectedIds))
+    agentSelection.onChange(nextAgentFilterSelection(agentSelection.value, sourceId, selectableIds))
   }
 
   return <Disclosure
@@ -103,7 +106,10 @@ export function SidebarFilterDisclosure({
     title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
     summaryMeta={false}
     open={open}
-    onToggle={event => setOpen(event.currentTarget.open)}
+    onToggle={event => {
+      setOpen(event.currentTarget.open)
+      if (event.currentTarget.open) onOpen?.()
+    }}
   >
     {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={typeof resolvedSummary === 'string' ? resolvedSummary : t('sidebarFilter.summary')}>
       {(agentSelection.mode === 'multiple' || showAllOption) && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}><span>{t('sidebarFilter.allAgents')}</span>{allSelected && <UiIcon name="check" size={14} aria-hidden="true"/>}</button>}
@@ -114,7 +120,7 @@ export function SidebarFilterDisclosure({
           type="button"
           className={`workspace-agent-filter-option ${selected ? 'is-selected' : ''}`}
           aria-pressed={selected}
-          disabled={!agent.detected}
+          disabled={agentSelection.mode === 'single' && !agent.detected}
           onClick={() => selectAgent(agent.sourceId)}
         >
           <AgentLogo sourceId={agent.sourceId} size="compact"/>

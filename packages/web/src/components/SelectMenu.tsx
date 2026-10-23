@@ -57,6 +57,7 @@ function selectMenuTooltip(option: SelectMenuOption | undefined): string | undef
 export function SelectMenu({
   value,
   options,
+  selectedOption,
   onChange,
   ariaLabel,
   placeholder,
@@ -64,6 +65,7 @@ export function SelectMenu({
   searchable = false,
   searchPlaceholder,
   onSearchChange,
+  onOpen,
   loading = false,
   hasMore = false,
   onLoadMore,
@@ -73,6 +75,7 @@ export function SelectMenu({
 }: {
   value: string
   options: SelectMenuOption[]
+  selectedOption?: SelectMenuOption
   onChange(value: string): void
   ariaLabel: string
   placeholder?: string
@@ -80,6 +83,7 @@ export function SelectMenu({
   searchable?: boolean
   searchPlaceholder?: string
   onSearchChange?: (value: string) => void
+  onOpen?: () => void
   loading?: boolean
   hasMore?: boolean
   onLoadMore?: () => void
@@ -101,15 +105,19 @@ export function SelectMenu({
   const [activeValue, setActiveValue] = useState('')
   const [position, setPosition] = useState<MenuPosition | null>(null)
   const selected = options.find(option => option.value === value)
+    ?? (selectedOption?.value === value ? selectedOption : undefined)
   const selectedLabel = selected ? selectMenuDisplayLabel(selected) : resolvedPlaceholder
   const selectedTooltip = title ?? selectMenuTooltip(selected)
   const filteredOptions = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
+    // When the server handles search, do not filter its result a second time:
+    // a match may be on repository identity, which is not always visible in the label.
+    if (onSearchChange) return needle && loading ? [] : options
     if (!needle) return options
     return options.filter(option => [option.label, option.description, option.keywords]
       .filter(Boolean)
       .some(text => text!.toLocaleLowerCase().includes(needle)))
-  }, [options, query])
+  }, [options, query, onSearchChange, loading])
   const enabledOptions = useMemo(() => filteredOptions.filter(option => !option.disabled), [filteredOptions])
 
   const updatePosition = useCallback(() => {
@@ -233,10 +241,11 @@ export function SelectMenu({
       aria-expanded={open}
       aria-controls={open ? listboxId : undefined}
       title={selectedTooltip}
-      onClick={() => setOpen(current => !current)}
+      onClick={() => { if (!open) onOpen?.(); setOpen(current => !current) }}
       onKeyDown={event => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault()
+          if (!open) onOpen?.()
           setOpen(true)
         }
       }}
