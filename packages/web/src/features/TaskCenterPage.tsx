@@ -486,6 +486,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         summary={agentSelectionSummary}
       
         agents={agents}
+        onOpen={() => void model.ensureFacets()}
         agentSelection={{ mode: 'multiple', value: review.filters.sourceIds, onChange: sourceIds => model.setReviewFilters({ sourceIds }) }}
       />
       <SelectMenu
@@ -496,6 +497,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
         searchable
         searchPlaceholder={t('center.history.searchProject')}
         options={projectFilterOptions}
+        onOpen={() => void model.ensureFacets()}
       />
       <IconButton
         ref={advancedFiltersAnchorRef}
