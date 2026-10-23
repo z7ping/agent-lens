@@ -271,18 +271,26 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
     return
   }
 
-  if (value.deadlineAt !== undefined && Date.now() >= value.deadlineAt) {
-    logDataRuntimeDebug('[AgentLens] Data Runtime skipped expired queued request', {
-      role,
-      method: value.method,
-      ...(safeRequestPath(value) ? { path: safeRequestPath(value) } : {}),
-      queuedMs: Math.round(performance.now() - queuedAt),
-    })
-    fail(value.requestId, 'request_expired', 'Data Runtime request expired before execution')
-    return
-  }
-
   try {
+    if (value.deadlineAt !== undefined && Date.now() >= value.deadlineAt) {
+      // 清理事务不能和普通过期查询一起丢弃。过期的 COMMIT 也只能回滚，
+      // 不能在调用方已经收到超时后继续提交。仅清理相同所有者的事务。
+      const requestedId = transactionId(value.params?.transactionId)
+      if ((value.method === 'storage.transaction.rollback' || value.method === 'storage.transaction.commit')
+        && requestedId && requestedId === activeTransactionId) {
+        requireStorage().executor.rollbackExternalTransaction()
+        activeTransactionId = null
+      }
+      logDataRuntimeDebug('[AgentLens] Data Runtime skipped expired queued request', {
+        role,
+        method: value.method,
+        ...(safeRequestPath(value) ? { path: safeRequestPath(value) } : {}),
+        queuedMs: Math.round(performance.now() - queuedAt),
+      })
+      fail(value.requestId, 'request_expired', 'Data Runtime request expired before execution')
+      return
+    }
+
     if (value.method === 'ping' || value.method === 'status') {
       reply(value.requestId, {
         ok: true,
@@ -326,9 +334,15 @@ async function handleRequest(value: unknown, queuedAt: number): Promise<void> {
       const local = requireStorage()
       if (role !== 'writer') throw new Error('Read-only Data Runtime cannot begin a write transaction')
       if (activeTransactionId) throw new Error('Data Runtime transaction is already active')
-      const id = randomUUID()
+      const id = transactionId(value.params?.transactionId) ?? randomUUID()
       await local.executor.beginExternalTransaction()
       activeTransactionId = id
+      if (value.deadlineAt !== undefined && Date.now() >= value.deadlineAt) {
+        local.executor.rollbackExternalTransaction()
+        activeTransactionId = null
+        fail(value.requestId, 'request_expired', 'Data Runtime transaction begin expired before acknowledgement')
+        return
+      }
       reply(value.requestId, { transactionId: id })
       return
     }

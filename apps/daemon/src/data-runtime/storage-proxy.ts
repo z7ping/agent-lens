@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { randomUUID } from 'node:crypto'
 import type {
   AssetInventoryReader,
   CheckpointRepository,
@@ -297,13 +298,11 @@ class RemoteStorageExecutor {
   transaction<T>(operation: () => Promise<T>): Promise<T> {
     if (this.transactionScope.getStore()?.active) return operation()
     return this.enqueueWriter(async () => {
-      const opened = await this.writer.request<{ transactionId: string }>(
-        'storage.transaction.begin',
-        undefined,
-        WRITE_TIMEOUT_MS,
-      )
-      const scope: RemoteTransactionScope = { id: opened.transactionId, active: true }
+      // BEGIN 响应也可能超时；调用方预先持有 ID，才有能力清理已打开但未确认的事务。
+      const scope: RemoteTransactionScope = { id: randomUUID(), active: false }
       try {
+        await this.writer.request('storage.transaction.begin', { transactionId: scope.id }, WRITE_TIMEOUT_MS)
+        scope.active = true
         const result = await this.transactionScope.run(scope, operation)
         // AsyncLocalStorage 会把当前上下文传给事务内创建的计时器、事件回调等。
         // 回调在 operation 完成后才执行时，已不属于这个 BEGIN/COMMIT 边界，不能携带旧事务 ID。

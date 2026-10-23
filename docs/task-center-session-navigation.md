@@ -23,6 +23,12 @@ Slowlight 原生会话 `01a1668d-ac0a-76dd-bb5f-134dc4ad5a5a` 的 JSONL 存在�
 
 通过既有 `POST /api/v1/agents/rescan?sourceId=pi` 触发补录时，接口返回 500：`Data Runtime storage call cannot cross an active transaction`。这是补录链路故障证据，尚未定位该事务的创建与未释放原因；没有清理 checkpoint、改写数据库或重启服务绕过。
 
+### 后续事务清理定位
+
+独立临时数据库已复现：打开事务 → Writer 忙碌 → 回滚请求排队过期 → Worker 通用 deadline 检查直接丢弃回滚 → `inTransaction` 长期为 true，后续普通存储调用报同样的跨事务错误。现场最初是哪次请求超时，仍需更早日志确认。
+
+修复 Worker 对过期 COMMIT/ROLLBACK 的处理：匹配当前事务所有者时执行回滚，再报告超时；不在调用方超时后提交，不清理其他所有者的事务。BEGIN 使用调用方预分配的 ID，并纳入失败清理，避免打开事务后响应丢失而无法回滚。事务提交、正常回滚、过期清理、BEGIN 响应失败及其他所有者隔离共 6 项 Worker 回归通过。修复尚不能替代正在运行进程的更新或原会话恢复验收。
+
 ## 本轮验证结果
 
 - 会话合并、会话展示、筛选与 HTTP 索引相关 38 项回归通过；新的 HTTP 身份关联用内存 SQLite 验证。

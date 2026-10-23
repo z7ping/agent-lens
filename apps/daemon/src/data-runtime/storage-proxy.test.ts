@@ -276,6 +276,56 @@ test('事务结束后执行的异步回调不会复用失效的 Writer transacti
   }
 })
 
+for (const action of ['commit', 'rollback'] as const) {
+  test(`排队过期的事务 ${action} 仍回滚并释放 Writer，不阻断后续采集`, async () => {
+    const runtime = await fixture()
+    try {
+      const opened = await runtime.writer.request<{ transactionId: string }>('storage.transaction.begin')
+      await runtime.writer.request('storage.call', {
+        path: ['repositories', 'hosts', 'put'], args: [host('expired-transaction')], transactionId: opened.transactionId,
+      })
+      const blocking = runtime.writer.request('diagnostic.block', { durationMs: 200 }, 2_000)
+      await assert.rejects(runtime.writer.request(`storage.transaction.${action}`, { transactionId: opened.transactionId }, 25), /timed out|expired/)
+      await blocking
+      const status = await runtime.writer.request<{ inTransaction: boolean }>('status')
+      assert.equal(status.inTransaction, false)
+      assert.equal(await runtime.storage.repositories.hosts.get('expired-transaction'), null)
+      await runtime.storage.repositories.hosts.put(host('after-expiry'))
+      assert.equal((await runtime.storage.repositories.hosts.get('after-expiry'))?.id, 'after-expiry')
+    } finally { await runtime.dispose() }
+  })
+}
+
+test('BEGIN 已打开但响应失败时仍使用预分配身份回滚事务', async () => {
+  const runtime = await fixture()
+  const request = runtime.writer.request.bind(runtime.writer)
+  try {
+    runtime.writer.request = (async (...args: Parameters<typeof runtime.writer.request>) => {
+      const result = await request(...args)
+      if (args[0] === 'storage.transaction.begin') throw new Error('模拟 BEGIN 响应丢失')
+      return result
+    }) as typeof runtime.writer.request
+    await assert.rejects(runtime.storage.transaction(async () => {
+      assert.fail('未确认 BEGIN 不能执行事务内容')
+    }), /模拟 BEGIN 响应丢失/)
+    assert.equal((await request<{ inTransaction: boolean }>('status')).inTransaction, false)
+    await runtime.storage.repositories.hosts.put(host('after-begin-failure'))
+  } finally { runtime.writer.request = request; await runtime.dispose() }
+})
+
+test('过期的其他所有者回滚请求不得释放当前事务', async () => {
+  const runtime = await fixture()
+  try {
+    const opened = await runtime.writer.request<{ transactionId: string }>('storage.transaction.begin')
+    const blocking = runtime.writer.request('diagnostic.block', { durationMs: 200 }, 2_000)
+    await assert.rejects(runtime.writer.request('storage.transaction.rollback', { transactionId: 'other-owner' }, 25), /timed out|expired/)
+    await blocking
+    assert.equal((await runtime.writer.request<{ inTransaction: boolean }>('status')).inTransaction, true)
+    await runtime.writer.request('storage.transaction.rollback', { transactionId: opened.transactionId })
+    assert.equal((await runtime.writer.request<{ inTransaction: boolean }>('status')).inTransaction, false)
+  } finally { await runtime.dispose() }
+})
+
 test('writer synchronous work does not block independent foreground reader queries', async () => {
   const runtime = await fixture()
   try {
