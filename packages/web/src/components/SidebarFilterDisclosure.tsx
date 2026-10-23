@@ -16,6 +16,7 @@ interface SidebarFilterDisclosureProps {
   summary?: ReactNode
   agents?: AgentFacetDto[]
   agentSelection?: AgentSelection
+  onOpen?: () => void
   showAllOption?: boolean
   agentOrderManagement?: boolean
 }
@@ -25,6 +26,7 @@ export function SidebarFilterDisclosure({
   summary,
   agents = [],
   agentSelection,
+  onOpen,
   showAllOption = false,
   agentOrderManagement = false,
 }: SidebarFilterDisclosureProps) {
@@ -104,7 +106,10 @@ export function SidebarFilterDisclosure({
     title={typeof resolvedSummary === 'string' ? resolvedSummary : undefined}
     summaryMeta={false}
     open={open}
-    onToggle={event => setOpen(event.currentTarget.open)}
+    onToggle={event => {
+      setOpen(event.currentTarget.open)
+      if (event.currentTarget.open) onOpen?.()
+    }}
   >
     {agentSelection && <div className="workspace-agent-filter-list" role="group" aria-label={typeof resolvedSummary === 'string' ? resolvedSummary : t('sidebarFilter.summary')}>
       {(agentSelection.mode === 'multiple' || showAllOption) && <button type="button" className={`workspace-agent-filter-option ${allSelected ? 'is-selected' : ''}`} aria-pressed={allSelected} onClick={selectAll}><span>{t('sidebarFilter.allAgents')}</span>{allSelected && <UiIcon name="check" size={14} aria-hidden="true"/>}</button>}
