@@ -460,6 +460,7 @@ export function preserveOptimisticImagePreviews(
     }
     const outgoingImages = source?.attachments?.filter(attachment => attachment.type === 'image') ?? []
     if (outgoingImages.length !== nativeImages.length || outgoingImages.some(image => !image.dataUrl)) continue
+    if (outgoingImages.every((image, imageIndex) => image.dataUrl === nativeImages[imageIndex]?.dataUrl)) continue
     let imageIndex = 0
     result[index] = {
       ...item,
