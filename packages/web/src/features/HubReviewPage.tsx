@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { settleReaderAtLatest } from './session-reader-positioning'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -210,6 +211,16 @@ export function HubReviewPage({ embedded = false }: { embedded?: boolean }) {
     })
     return () => { cancelled = true }
   }, [embedded, t])
+
+  // Hub records are immutable snapshots: opening any different session starts at its tail.
+  useLayoutEffect(() => {
+    if (!detail || loading) return
+    const id = sessionId
+    return settleReaderAtLatest(
+      () => document.querySelector<HTMLElement>('.hub-review-reader-pane'),
+      () => id === sessionId,
+    )
+  }, [detail, loading, sessionId])
 
   const title = useMemo(() => {
     if (!detail) return t('hub.list.remoteSession')
