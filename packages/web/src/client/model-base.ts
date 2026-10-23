@@ -198,6 +198,7 @@ export abstract class AgentLensModelBase {
   protected reviewSummaryPatchTimer: ReturnType<typeof setTimeout> | null = null
   protected reviewActive = false
   protected facetsInFlight: Promise<void> | null = null
+  protected facetsLastLoadedAt = 0
   protected agentsInFlight: Promise<void> | null = null
   protected readonly agentDetailInFlight = new Map<string, Promise<void>>()
   protected readonly agentEnrichmentInFlight = new Map<string, Promise<void>>()
@@ -337,23 +338,28 @@ export abstract class AgentLensModelBase {
     this.reviewActive = false
   }
 
-  async refreshFacets(): Promise<void> {
-    try {
-      const facets = await this.api.facets()
-      this.patch({ facets })
-    } catch {
-      // Route data can still load independently.
-    }
-  }
-
-  ensureFacets(): Promise<void> {
-    if (this.snapshot.facets) return Promise.resolve()
+  refreshFacets(): Promise<void> {
+    // Reuse the same request across route entry, manual refresh and concurrent consumers.
     if (this.facetsInFlight) return this.facetsInFlight
-    const pending = this.refreshFacets().finally(() => {
+    const pending = this.api.facets().then(
+      facets => {
+        this.facetsLastLoadedAt = Date.now()
+        this.patch({ facets })
+      },
+      () => {
+        // Route data can still load independently. A later ensureFacets may retry.
+      },
+    ).finally(() => {
       if (this.facetsInFlight === pending) this.facetsInFlight = null
     })
     this.facetsInFlight = pending
     return pending
+  }
+
+  ensureFacets(): Promise<void> {
+    // The filter catalog must not remain frozen for the entire browser session.
+    if (this.snapshot.facets && Date.now() - this.facetsLastLoadedAt < 30_000) return Promise.resolve()
+    return this.refreshFacets()
   }
 
   async refreshAgents(): Promise<void> {
