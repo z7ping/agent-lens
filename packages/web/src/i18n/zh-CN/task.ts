@@ -156,7 +156,7 @@ export const chineseTaskMessages: LocaleMessagesDto = {
         cacheTokens: '缓存输入 Token / 总输入 Token',
         cacheNativeSource: '来源：pi-cache-optimizer · {{adapter}}；原生统计按扩展设置的会话/进程/总量范围计算。',
         compatWarning: '需修复',
-        compatOk: '无修复警告',
+        compatOk: '无警告',
         compatDisabled: '已停用',
         integrityWarning: '缓存统计完整性警告',
         compatNativeSource: '来自 pi-cache-optimizer 的兼容性诊断，而非 Pi SDK Runtime 运行模式。',
