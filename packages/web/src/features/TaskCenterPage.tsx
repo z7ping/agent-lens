@@ -448,6 +448,9 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     model.setReviewFilters({ sourceIds: next })
   }
 
+  const projectFilterLabel = (selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId)
+    .split(/[\\/]/).filter(Boolean).at(-1) ?? review.filters.projectId
+
   const taskRail = <aside className="task-center-rail" aria-label={t('center.history.railAria')}>
     <div className="task-center-rail-head">
       <div className="task-center-context-brand">
@@ -564,7 +567,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
           <UiIcon name="close" size={12}/>
         </Button>)}
         {review.filters.projectId && <Button size="small" className="task-center-filter-chip" title={selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId} onClick={() => model.setReviewFilters({ projectId: '' })}>
-          {selectedProject?.name ?? selectedProject?.repositoryIdentity ?? review.filters.projectId}
+          <span className="task-center-filter-text">{projectFilterLabel}</span>
           <UiIcon name="close" size={12}/>
         </Button>}
         {advancedTimeActive && <Button size="small" className="task-center-filter-chip" onClick={() => model.setReviewFilters({ range: '7d' })}>

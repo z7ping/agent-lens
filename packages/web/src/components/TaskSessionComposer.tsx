@@ -43,6 +43,8 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   controlsBusy?: boolean
   controlsReady?: boolean
   onModelChange?(value: string): void
+  onSetDefaultModel?(): void
+  modelMenuOpenRequest?: number
   onThinkingChange?(value: string): void
   showStreamingModes?: boolean
   streamingMode?: 'steer' | 'follow-up'
@@ -75,6 +77,8 @@ export function TaskSessionComposer({
   controlsBusy = false,
   controlsReady = false,
   onModelChange,
+  onSetDefaultModel,
+  modelMenuOpenRequest,
   onThinkingChange,
   showStreamingModes = false,
   streamingMode = 'steer',
@@ -150,9 +154,19 @@ export function TaskSessionComposer({
           disabled={controlsBusy || !controlsReady || !modelControl}
           options={modelControl?.options.map(option => ({
             value: option.value, label: option.label || option.value,
-            ...(option.description ? { description: option.description } : {}),
+            ...((option.description || option.value === modelControl.defaultValue) ? {
+              description: [option.description, option.value === modelControl.defaultValue ? '全局默认' : '']
+                .filter(Boolean).join(' · '),
+            } : {}),
           })) ?? []}
           onChange={value => onModelChange?.(value)}
+          openRequest={modelMenuOpenRequest}
+          footer={onSetDefaultModel && modelControl?.value ? <Button
+            size="small"
+            variant="quiet"
+            disabled={controlsBusy || !controlsReady || modelControl.value === modelControl.defaultValue}
+            onClick={onSetDefaultModel}
+          >{modelControl.value === modelControl.defaultValue ? '已是全局默认' : '设为全局默认'}</Button> : undefined}
         />}
         {thinkingVisible && <ComposerPillSelect
           control="thinking"

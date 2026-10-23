@@ -1435,6 +1435,15 @@ export async function handleLiveRequest(
       )))
       return true
     }
+    if (action === 'model-default' && request.method === 'POST') {
+      requireCapability(adapter, 'model-default')
+      if (!adapter.setDefaultModelControl) throw httpError(409, `${adapter.manifest.displayName} does not support default-model persistence`)
+      const body = objectBody(await readJson(request))
+      const value = nonEmpty(body.value, 'value')
+      if (!adapter.modelControl || !(await adapter.modelControl(runtimeSessionId))?.options.some(option => option.value === value)) throw httpError(409, 'Default model is not an available Runtime option')
+      writeJson(response, 200, jsonValue(await adapter.setDefaultModelControl(runtimeSessionId, value)))
+      return true
+    }
     if (action === 'thinking-control' && request.method === 'GET') {
       requireCapability(adapter, 'thinking-control')
       if (!adapter.thinkingControl) throw httpError(409, `${adapter.manifest.displayName} does not expose thinking control`)
