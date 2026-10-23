@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { SelectMenu, type SelectMenuOption } from './ui'
 
 export type ComposerPillOption = SelectMenuOption
@@ -22,7 +23,7 @@ export function ComposerPillSelect({
   ariaLabel: string
   control: 'model' | 'thinking'
   onChange(value: string): void
-  footer?: React.ReactNode
+  footer?: ReactNode
   openRequest?: number
 }) {
   return <span className={`task-composer-control task-composer-control--${control}`}>
