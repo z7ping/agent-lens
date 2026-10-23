@@ -29,6 +29,7 @@ export function useLiveTaskRuntime({
     setState,
     projection,
     setProjection,
+    historyPage,
     setHistoryPage,
     historyIndex,
     setHistoryIndex,
