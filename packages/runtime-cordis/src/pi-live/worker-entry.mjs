@@ -1612,6 +1612,20 @@ async function command(name, value = {}) {
       ...(thinking ? { thinking } : {}),
     }
   }
+  if (name === 'defaultModel') {
+    const settings = session.settingsManager?.getGlobalSettings?.()
+    return settings?.defaultProvider && settings?.defaultModel
+      ? { provider: settings.defaultProvider, modelId: settings.defaultModel } : null
+  }
+  if (name === 'setDefaultModel') {
+    const settings = session.settingsManager
+    if (typeof settings?.setDefaultModelAndProvider !== 'function' || typeof settings.flush !== 'function') throw new Error('Installed Pi SDK does not support default-model persistence')
+    const models = await modelsForSelection(value.provider)
+    if (!models.some(model => model.provider === value.provider && model.id === value.modelId)) throw new Error('Pi default model is not available')
+    settings.setDefaultModelAndProvider(value.provider, value.modelId)
+    await settings.flush()
+    return
+  }
   if (name === 'setModel') { await selectModel(value.provider, value.modelId); return state() }
   if (name === 'setThinkingLevel') {
     const levels = session.getAvailableThinkingLevels()
