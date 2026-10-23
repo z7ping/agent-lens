@@ -251,6 +251,13 @@ export interface LiveRuntimeRefDto {
   productId: string
   displayName: string
   state: LiveRuntimeStateDto
+  sourceIds?: string[] | undefined
+  /** 由服务端依据 Canonical 身份关联；页面不得按标题猜测历史会话。 */
+  historySessionId?: string | undefined
+  projectId?: string | undefined
+  projectName?: string | undefined
+  startedAt?: string | undefined
+  lastActivityAt?: string | undefined
 }
 
 export type LiveEventStatusDto =

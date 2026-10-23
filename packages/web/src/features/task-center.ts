@@ -2,6 +2,12 @@ import type { LaunchableProjectDto, ProjectFacetDto, ReviewSessionSummaryDto } f
 import { translateProduct } from '../i18n/runtime'
 import { taskUserRequestText } from './task-detail-model'
 
+/** 列表只消费展示元数据；Live 入口不伪造历史计数或正文。 */
+export type TaskSessionListSummary = Pick<ReviewSessionSummaryDto,
+  'id' | 'productId' | 'sourceIds' | 'projectId' | 'projectName' | 'workspacePath' |
+  'title' | 'titleKind' | 'preview' | 'startedAt' | 'endedAt' | 'hasErrors' |
+  'sessionActivity' | 'activitySourceLabel'>
+
 /** All-project history filter: sort using the complete facet activity, never only the paginated visible sessions. */
 export function sortProjectFacetsByActivity(projects: readonly ProjectFacetDto[]): ProjectFacetDto[] {
   return [...projects].sort((left, right) => {
@@ -100,7 +106,7 @@ export function sessionListTitle(value: string | undefined, fallback: string, so
   return text
 }
 
-function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
+function userTaskTitle(item: TaskSessionListSummary): string | undefined {
   // Legacy Codex index labels are unverified: they might originate from
   // injected context rather than user rename or an agent-generated summary.
   // Only source-attested titles outrank the canonical first human request.
@@ -127,7 +133,7 @@ function userTaskTitle(item: ReviewSessionSummaryDto): string | undefined {
   return title || item.preview
 }
 
-function systemActivityTitle(item: ReviewSessionSummaryDto): string {
+function systemActivityTitle(item: TaskSessionListSummary): string {
   if (item.activitySourceLabel?.trim()) return item.activitySourceLabel.trim()
   const scope = item.projectName?.trim()
     || (item.workspacePath ? basename(item.workspacePath) : '')
@@ -140,7 +146,7 @@ function systemActivityTitle(item: ReviewSessionSummaryDto): string {
  * 活动类型和标题候选只消费 Canonical Pipeline 投影出的结构化字段，禁止根据正文猜来源。
  */
 export function historyTaskPresentation(
-  item: ReviewSessionSummaryDto,
+  item: TaskSessionListSummary,
   fallback: string,
 ): HistoryTaskPresentation {
   const activity = item.sessionActivity

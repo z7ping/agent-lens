@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, ReviewSessionSummaryDto } from '@agent-lens/protocol'
+import type { HubReadAvailability, HubReviewSessionSummaryDto, LaunchableProjectDto, LaunchableProjectsResponseDto, LiveRuntimeRefDto } from '@agent-lens/protocol'
 import type { AgentLensClientModel } from '../client/model'
 import { fetchHubReviewSessions } from '../client/hub-review'
 import { cachedLaunchableProjects, fetchLaunchableProjects, prefetchLaunchableProjects } from '../client/launchable-projects'
@@ -12,11 +12,13 @@ import { agentLabel, useOrderedAgents } from '../components/AgentScope'
 import { AgentLogo } from '../components/AgentLogo'
 import { SidebarFilterDisclosure } from '../components/SidebarFilterDisclosure'
 import { ReviewDetailSkeleton, SessionListSkeleton } from '../components/StateViews'
-import { Button, IconButton, Input, Popover, SelectMenu } from '../components/ui'
+import { Button, IconButton, Input, Popover, SelectMenu, StatusBadge } from '../components/ui'
 import { UiIcon } from '../components/UiIcon'
-import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact } from './task-center'
+import { historyTaskPresentation, launchableTaskProjectOptions, sessionListTitle, sortProjectFacetsByActivity, normalizedSessionSources, sessionTimeFact, type TaskSessionListSummary } from './task-center'
 import { LiveNewTaskPanel } from './LiveNewTaskPanel'
-import { taskLiveRuntimeHref } from './task-live-runtime'
+import { taskLiveRuntimeHref, taskLiveRuntimeStatus } from './task-live-runtime'
+import { mergeTaskCenterSessions, visibleTaskCenterSession } from './task-center-sessions'
+import { useTaskCenterRuntimes } from './use-task-center-runtimes'
 import { TaskNotificationBell, TaskNotificationBanner } from './TaskNotificationCenter'
 
 export type TaskCenterMode = 'history' | 'live' | 'new' | 'hub'
@@ -26,7 +28,7 @@ const LiveTaskPage = lazy(() => import('./LiveTaskPage').then(module => ({ defau
 const ReviewPage = lazy(() => import('./ReviewPage').then(module => ({ default: module.ReviewPage })))
 type TaskDayGroup = 'today' | 'yesterday' | 'earlier'
 type HistoryTaskEntry =
-  | { kind: 'local'; id: string; at: string; local: ReviewSessionSummaryDto }
+  | { kind: 'local'; id: string; at: string; local: TaskSessionListSummary; runtime?: LiveRuntimeRefDto | undefined }
   | { kind: 'remote'; id: string; at: string; remote: HubReviewSessionSummaryDto }
 
 function mergeLaunchableProjects(
@@ -99,7 +101,7 @@ function availabilityString(value: HubReadAvailability): string | undefined {
     : undefined
 }
 
-function localTime(item: ReviewSessionSummaryDto): string {
+function localTime(item: TaskSessionListSummary): string {
   return sessionTimeFact(item.startedAt, item.endedAt)?.at ?? ''
 }
 
@@ -139,7 +141,7 @@ function remoteVisible(
   return at >= now - days * 86_400_000
 }
 
-function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSessionSummaryDto; active: boolean; nowMs: number; onClick(): void }) {
+function HistoryTaskItem({ item, runtime, active, nowMs, onClick }: { item: TaskSessionListSummary; runtime?: LiveRuntimeRefDto | undefined; active: boolean; nowMs: number; onClick(): void }) {
   const { t, i18n } = useTranslation('task')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const sourceIds = normalizedSessionSources(item.sourceIds, item.productId)
@@ -161,6 +163,7 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
     : t('center.history.genericAgentTask', { agent: agentLabel(sourceId, item.productId) })
   const presentation = historyTaskPresentation(item, fallback)
   const displayTitle = sessionListTitle(presentation.title, fallback, sourceIds)
+  const runtimeLabel = runtime ? t(`center.runtimeStatus.${taskLiveRuntimeStatus(runtime.state)}`) : undefined
   return <button className={`session-item ${active ? 'session-item-active' : ''}`} onClick={onClick} title={displayTitle} aria-label={`${displayTitle}${presentation.activityLabel ? ` · ${presentation.activityLabel}` : ''}${item.hasErrors ? ` · ${t('center.history.withErrors')}` : ''} · ${fullSourceNames} · ${projectLabel} · ${updatedLabel}`}>
     <div className="session-item-title-row">
       <div className="session-item-title">{displayTitle}</div>
@@ -172,6 +175,7 @@ function HistoryTaskItem({ item, active, nowMs, onClick }: { item: ReviewSession
       <span className="session-item-meta-separator" aria-hidden="true">·</span>
       <span className="session-item-project" title={item.projectName ?? item.workspacePath ?? ''}>{projectLabel}</span>
       {presentation.activityLabel && <span className="session-item-activity-label" title={item.sessionActivity === 'internal-review' ? t('center.presentation.internalReviewHint') : presentation.activityLabel}>{presentation.activityLabel}</span>}
+      {runtimeLabel && <StatusBadge tone={runtime?.state.status === 'failed' ? 'danger' : runtime?.state.isStreaming ? 'accent' : 'neutral'}>{runtimeLabel}</StatusBadge>}
       <time dateTime={moment?.at} title={timeTooltip || undefined}>{updatedLabel}</time>
     </div>
   </button>
@@ -203,6 +207,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const { t: tNavigation } = useTranslation('navigation')
   const locale = i18n.resolvedLanguage ?? i18n.language ?? 'zh-CN'
   const review = useClientSnapshotField(model, 'review')
+  const runtimes = useTaskCenterRuntimes()
   const facets = useClientSnapshotField(model, 'facets')
   const location = useLocation()
   const navigate = useNavigate()
@@ -350,12 +355,14 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     projectLoadingMore,
   ])
 
-  const localSessions = review.response?.items ?? []
+  const localSessions = useMemo(() => mergeTaskCenterSessions(review.response?.items ?? [], runtimes, location.pathname)
+    .filter(row => visibleTaskCenterSession(row, review.filters, launchableProjects, nowMs)),
+  [review.response?.items, runtimes, review.filters, launchableProjects, nowMs, location.pathname])
   const projectOptions = useMemo(() => launchableTaskProjectOptions(launchableProjects), [launchableProjects, locale])
   const visibleHub = useMemo(() => hubSessions.filter(item => remoteVisible(item, review, t, nowMs)), [hubSessions, review, t, nowMs])
   const historyGroups = useMemo(() => {
     const combined: HistoryTaskEntry[] = [
-      ...localSessions.map(item => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item })),
+      ...localSessions.map(({ item, runtime }) => ({ kind: 'local' as const, id: item.id, at: localTime(item), local: item, runtime })),
       ...visibleHub.map(item => ({ kind: 'remote' as const, id: item.id, at: remoteTime(item), remote: item })),
     ].sort((left, right) => {
       const leftAt = Date.parse(left.at)
@@ -583,12 +590,12 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
     </div>}
 
     <div className="task-center-scroll">
-      {review.loading && !review.response && <SessionListSkeleton/>}
+      {review.loading && !review.response && !localSessions.length && <SessionListSkeleton/>}
 
       {historyGroups.map(group => <section className="task-center-group task-center-history-group" key={group.key}>
         <div className="task-center-group-title"><span>{group.label}</span><span>{group.items.length}{group.key === 'earlier' && review.response?.meta.hasMore ? '+' : ''}</span></div>
         {group.items.map(entry => entry.kind === 'local'
-          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} nowMs={nowMs} active={mode === 'history' && review.selectedId === entry.id} onClick={() => openHistoryTask(entry.id)}/>
+          ? <HistoryTaskItem key={`local:${entry.id}`} item={entry.local} runtime={entry.runtime} nowMs={nowMs} active={entry.runtime ? location.pathname === taskLiveRuntimeHref(entry.runtime) : mode === 'history' && review.selectedId === entry.id} onClick={() => entry.runtime ? navigate(taskLiveRuntimeHref(entry.runtime)) : openHistoryTask(entry.id)}/>
           : <RemoteTaskItem key={`remote:${entry.id}`} item={entry.remote} nowMs={nowMs} active={mode === 'hub' && location.pathname === `/review/hub/${encodeURIComponent(entry.id)}`} onClick={() => navigate(`/review/hub/${encodeURIComponent(entry.id)}`)}/>)}
       </section>)}
 

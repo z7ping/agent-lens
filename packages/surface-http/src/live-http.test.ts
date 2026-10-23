@@ -19,7 +19,30 @@ import type {
   LiveSnapshotWindow,
 } from '@agent-lens/core'
 import { SqliteStorageService } from '@agent-lens/storage-sqlite'
+import { DefaultIdentityService } from '@agent-lens/core-services'
 import { startHttpSurface } from './server'
+
+test('统一 Live 索引返回经过产品身份验证的历史关联，不暴露原生路径', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  const identity = new DefaultIdentityService(storage)
+  const host = await identity.resolveHost({ name: 'test-host' })
+  const installation = await identity.resolveInstallation({ hostId: host.id, productId: 'test-agent' })
+  const logical = await identity.resolveLogicalSession({ installationId: installation.id, nativeSessionId: 'native-1' })
+  const adapter = new FakeLiveAdapter()
+  adapter.runtimes.set('runtime-1', {
+    runtimeSessionId: 'runtime-1', logicalSessionId: logical.id,
+    status: 'ready', isStreaming: false, pendingMessageCount: 0,
+  })
+  const surface = await startHttpSurface(storage, { port: 0, lives: new FakeLiveService(adapter) })
+  try {
+    const response = await fetch(`http://${surface.host}:${surface.port}/api/v1/live/runtimes`)
+    const result = await response.json() as { items: Array<{ historySessionId?: string; state: Record<string, unknown> }> }
+    assert.equal(result.items[0]?.historySessionId, logical.id)
+    assert.equal(result.items[0]?.state.logicalSessionId, undefined)
+    assert.equal(result.items[0]?.state.sessionFile, undefined)
+  } finally { await surface.dispose(); storage.close() }
+})
 
 class FakeLiveAdapter implements LiveAdapter {
   readonly manifest: LiveAdapterManifest = {

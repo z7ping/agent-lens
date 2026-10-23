@@ -39,6 +39,7 @@ export interface LiveRuntimeListSnapshot {
   failedLiveIds: string[]
 }
 let liveRuntimeListCache: { at: number; snapshot: LiveRuntimeListSnapshot } | null = null
+let liveRuntimeListRevision = 0
 
 const LIVE_VISIBLE_FLUSH_MS = 48
 const LIVE_HIDDEN_FLUSH_MS = 250
@@ -234,6 +235,7 @@ function runtimeSuffix(runtimeSessionId: string, action = ''): string {
 }
 
 function notifyLiveStateChanged(liveId: string, runtimeSessionId?: string): void {
+  liveRuntimeListRevision += 1
   liveRuntimeListCache = null
   window.dispatchEvent(new CustomEvent('agent-lens:live-state-changed', {
     detail: { liveId, ...(runtimeSessionId ? { runtimeSessionId } : {}) },
@@ -244,6 +246,7 @@ async function readKnownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
   if (liveRuntimeListCache && Date.now() - liveRuntimeListCache.at < LIVE_RUNTIME_LIST_CACHE_MS) {
     return liveRuntimeListCache.snapshot
   }
+  const revision = liveRuntimeListRevision
   const raw = await requestJson<{ items: LiveRuntimeRefDto[]; failedLiveIds?: string[] }>(`${LIVE_ROOT}/runtimes`)
   const snapshot: LiveRuntimeListSnapshot = {
     items: raw.items,
@@ -251,7 +254,7 @@ async function readKnownRuntimeSnapshot(): Promise<LiveRuntimeListSnapshot> {
       ? raw.failedLiveIds.filter(value => typeof value === 'string' && value)
       : [],
   }
-  liveRuntimeListCache = { at: Date.now(), snapshot }
+  if (revision === liveRuntimeListRevision) liveRuntimeListCache = { at: Date.now(), snapshot }
   return snapshot
 }
 

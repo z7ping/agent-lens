@@ -24,12 +24,15 @@ import type {
   LiveSnapshotWindow,
   LiveStartCapabilities,
   LiveStartInput,
+  SourceService,
+  StorageService,
 } from '@agent-lens/core'
 import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
 import { validateHostWorkingDirectory } from './host-working-directory'
 import { browseHostWorkingDirectory } from './host-directory-browser'
+import { liveHistoryReference } from './live-history-reference'
 
 const MAX_LIVE_JSON_BYTES = 1024 * 1024
 const MAX_LIVE_MESSAGE_ACTIONS = 16
@@ -826,19 +829,24 @@ async function describeProduct(adapter: LiveAdapter): Promise<JsonValue> {
   return liveDescriptor(adapter, availability, [])
 }
 
-async function listKnownRuntimes(service: LiveService): Promise<JsonValue> {
+async function listKnownRuntimes(service: LiveService, history?: { storage: StorageService; sources?: SourceService | undefined }): Promise<JsonValue> {
   const groups = await Promise.all(service.list().map(async adapter => {
     try {
       const runtimes = await shareAdapterRead(adapter, 'runtimes', () => adapter.list())
       return {
         liveId: adapter.manifest.liveId,
         failed: false,
-        items: runtimes.map(state => ({
+        items: await Promise.all(runtimes.map(async state => ({
           liveId: adapter.manifest.liveId,
           productId: adapter.manifest.productId,
           displayName: adapter.manifest.displayName,
           state: normalizePublicRuntimeState(state),
-        })),
+          sourceIds: history?.sources?.list().filter(source => source.manifest.productId === adapter.manifest.productId)
+            .map(source => source.manifest.sourceId),
+          ...(typeof (state as { startedAt?: unknown }).startedAt === 'string'
+            ? { startedAt: (state as { startedAt?: string }).startedAt } : {}),
+          ...(history ? await liveHistoryReference(history.storage, history.sources, adapter, state).catch(() => ({})) : {}),
+        }))),
       }
     } catch {
       // A single Adapter read failure must not masquerade as an authoritative
@@ -982,6 +990,7 @@ export async function handleLiveRequest(
   url: URL,
   service: LiveService | undefined,
   selectProjectDirectory?: () => Promise<string | undefined>,
+  history?: { storage: StorageService; sources?: SourceService | undefined },
 ): Promise<boolean> {
   if (url.pathname !== '/api/v1/live' && !url.pathname.startsWith('/api/v1/live/')) return false
   if (url.pathname === '/api/v1/live/attachments' || url.pathname.startsWith('/api/v1/live/attachments/')) return false
@@ -1077,7 +1086,7 @@ export async function handleLiveRequest(
         writeJson(response, 405, { error: 'method_not_allowed' })
         return true
       }
-      writeJson(response, 200, await listKnownRuntimes(service))
+      writeJson(response, 200, await listKnownRuntimes(service, history))
       return true
     }
 
