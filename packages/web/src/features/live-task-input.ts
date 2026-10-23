@@ -14,6 +14,26 @@ export function messageHasAttachments(message: LiveMessageDto): boolean {
   return message.parts.some(part => part.type === 'image' || part.type === 'file')
 }
 
+/** Keep the same decoded source when the optimistic message becomes native history. */
+function imageDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => typeof reader.result === 'string'
+      ? resolve(reader.result)
+      : reject(new Error('Live image preview could not be read'))
+    reader.onerror = () => reject(reader.error ?? new Error('Live image preview could not be read'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function warmImagePreview(dataUrl: string): Promise<void> {
+  const image = new Image()
+  image.src = dataUrl
+  // Replacing the editor with the outgoing message must not first show an
+  // undecoded image. A corrupt preview must not block sending to the Runtime.
+  if (typeof image.decode === 'function') await image.decode().catch(() => undefined)
+}
+
 export async function optimisticMessageAttachments(
   message: LiveMessageDto,
 ): Promise<LiveTaskProjectionAttachment[]> {
@@ -32,8 +52,9 @@ export async function optimisticMessageAttachments(
     try {
       const response = await fetch(liveAttachmentPreviewUrl(part.attachmentId))
       if (!response.ok) return attachment
-      const previewUrl = URL.createObjectURL(await response.blob())
-      return { ...attachment, previewUrl }
+      const dataUrl = await imageDataUrl(await response.blob())
+      await warmImagePreview(dataUrl)
+      return { ...attachment, dataUrl }
     } catch {
       return attachment
     }
