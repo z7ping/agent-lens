@@ -93,6 +93,14 @@ export interface LiveAvailabilityDto {
 
 export type LiveRuntimeStatusDto = 'initializing' | 'ready' | 'failed' | 'terminating' | 'terminated'
 
+/** Native current context occupancy, not cumulative session token usage.
+ * A null token count is unknown (e.g. immediately after compaction). */
+export interface LiveContextUsage {
+  tokens: number | null
+  contextWindow: number
+  percent: number | null
+}
+
 export interface LiveRuntimeStateDto {
   runtimeSessionId: string
   title?: string | undefined
@@ -101,6 +109,7 @@ export interface LiveRuntimeStateDto {
   workspacePath?: string | undefined
   isStreaming: boolean
   pendingMessageCount: number
+  contextUsage?: LiveContextUsage | undefined
 }
 
 export interface LiveSnapshotDto {

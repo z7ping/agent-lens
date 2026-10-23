@@ -215,3 +215,16 @@ test('Live 等待响应与停止入口只有共享 Composer 渲染', () => {
   assert.match(composerCss, /\.task-composer-response-hint \{/)
   assert.doesNotMatch(reviewTask, /interruptAvailable=|responseActivity=/)
 })
+
+test('Live-only 指标常驻输入区下方，悬浮与点击共用 Popover，Review 不伪造', () => {
+  assert.match(taskComposer, /className="task-composer-shell"/)
+  assert.match(taskComposer, /runtimeMetrics && <div className="task-composer-runtime-metrics"/)
+  assert.match(taskComposer, /onMouseEnter=\{\(\) => showMetric\('context'\)\}/)
+  assert.match(taskComposer, /onMouseEnter=\{\(\) => showMetric\('cache'\)\}/)
+  assert.match(taskComposer, /<Popover open=\{metricOpen === 'context'\}/)
+  assert.match(taskComposer, /<Popover open=\{metricOpen === 'cache'\}/)
+  assert.match(liveTask, /runtimeMetrics=\{\{ contextUsage: state\?\.contextUsage \}\}/)
+  assert.doesNotMatch(reviewTask, /runtimeMetrics=/)
+  assert.match(composerCss, /\.task-composer-runtime-metrics \{/)
+  assert.doesNotMatch(taskComposer, /DS Cache 0%|0% \/ 1M/)
+})

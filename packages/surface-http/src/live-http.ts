@@ -401,6 +401,17 @@ function normalizeMessageActions(value: unknown): LiveMessageActionContribution[
   return result
 }
 
+function normalizeLiveContextUsage(value: unknown): LiveRuntimeState['contextUsage'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const row = value as Record<string, unknown>
+  if (!Number.isSafeInteger(row.contextWindow) || Number(row.contextWindow) <= 0) return undefined
+  const validTokens = row.tokens === null || (Number.isSafeInteger(row.tokens) && Number(row.tokens) >= 0)
+  const validPercent = row.percent === null || (typeof row.percent === 'number'
+    && Number.isFinite(row.percent) && row.percent >= 0 && row.percent <= 1_000)
+  if (!validTokens || !validPercent) return undefined
+  return { contextWindow: row.contextWindow as number, tokens: row.tokens as number | null, percent: row.percent as number | null }
+}
+
 function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw httpError(500, 'Live adapter returned an invalid runtime')
@@ -433,12 +444,14 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
   const workspacePath = typeof row.workspacePath === 'string' && row.workspacePath.trim()
     ? row.workspacePath.trim().slice(0, 4096)
     : undefined
+  const contextUsage = normalizeLiveContextUsage(row.contextUsage)
   return {
     runtimeSessionId,
     ...(title ? { title } : {}),
     status,
     ...(nativeSessionId ? { nativeSessionId } : {}),
     ...(workspacePath ? { workspacePath } : {}),
+    ...(contextUsage ? { contextUsage } : {}),
     isStreaming: row.isStreaming,
     pendingMessageCount: row.pendingMessageCount,
   }

@@ -37,6 +37,9 @@ export function sameLiveRuntimeState(previous: LiveRuntimeStateDto | null, next:
     && previous.title === next.title
     && previous.nativeSessionId === next.nativeSessionId
     && previous.workspacePath === next.workspacePath
+    && previous.contextUsage?.tokens === next.contextUsage?.tokens
+    && previous.contextUsage?.contextWindow === next.contextUsage?.contextWindow
+    && previous.contextUsage?.percent === next.contextUsage?.percent
 }
 
 /** 将 SSE 标准事件映射到运行时快照，不依赖 React 或具体 Agent。 */

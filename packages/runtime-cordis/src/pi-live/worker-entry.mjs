@@ -1437,11 +1437,15 @@ async function waitForExtensionBinding() {
 }
 
 function state() {
+  // Native Pi knows compaction boundaries; never infer occupancy from accumulated usage.
+  let contextUsage
+  try { contextUsage = session.getContextUsage?.() } catch { /* older SDK: unavailable */ }
   return {
     runtimeSessionId, status: 'ready', initializationStage: 'ready', initializationMessage: `Pi Runtime 已就绪 · ${formatElapsed(handshakeDiagnostics().initializationElapsedMs)}`,
     ...handshakeDiagnostics(),
     sdkVersion, runtimeMode, nativeSessionId: session.sessionId, ...(session.sessionFile ? { sessionFile: session.sessionFile } : {}),
     ...(session.sessionName ? { sessionName: session.sessionName } : {}), ...(session.model ? { model: session.model } : {}),
+    ...(contextUsage ? { contextUsage } : {}),
     thinkingLevel: session.thinkingLevel, isStreaming: session.isStreaming, isCompacting: session.isCompacting,
     pendingMessageCount: session.pendingMessageCount, leafId: session.sessionManager.getLeafId(), processId: process.pid,
     ...(extensionBindingStatus ? { extensionBindingStatus } : {}),

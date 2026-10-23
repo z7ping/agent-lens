@@ -253,9 +253,11 @@ class InProcessHandle implements PiRuntimeHandle {
 
   async state(): Promise<PiLiveRuntimeState> {
     const resources = runtimeResourceSnapshot(this.session)
+    let contextUsage: PiLiveRuntimeState['contextUsage']
+    try { contextUsage = this.session.getContextUsage?.() } catch { /* SDK version may not expose native usage */ }
     return { runtimeSessionId: this.id, status: 'ready', initializationStage: 'ready', capabilities: this.capabilities, nativeSessionId: this.session.sessionId,
       ...(this.session.sessionFile ? { sessionFile: this.session.sessionFile } : {}), ...(this.session.sessionName ? { sessionName: this.session.sessionName } : {}),
-      ...(this.session.model ? { model: this.session.model } : {}), thinkingLevel: this.session.thinkingLevel, isStreaming: this.session.isStreaming,
+      ...(this.session.model ? { model: this.session.model } : {}), ...(contextUsage ? { contextUsage } : {}), thinkingLevel: this.session.thinkingLevel, isStreaming: this.session.isStreaming,
       isCompacting: this.session.isCompacting, pendingMessageCount: this.session.pendingMessageCount, leafId: this.session.sessionManager.getLeafId(),
       ...(resources ? { startupResources: resources } : {}),
       packageUpdateCheck: this.packageUpdateState.status,

@@ -13,6 +13,11 @@
   background: var(--al-warning);
 }
 
+.task-composer-shell {
+  width: 100%;
+  max-width: var(--al-content-task-composer);
+  margin: 0 auto;
+}
 .task-composer {
   position: relative;
   width: 100%;
@@ -25,6 +30,24 @@
   box-shadow: 0 2px 10px rgb(16 24 40 / .06), 0 8px 24px rgb(16 24 40 / .035);
   transition: border-color .15s ease, box-shadow .15s ease;
 }
+.task-composer-runtime-metrics {
+  display: flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding-top: 3px;
+  color: var(--al-muted);
+  font-size: var(--text-task-meta);
+}
+.task-composer-metric-anchor { display: inline-flex; min-width: 0; }
+.task-composer-metric-anchor .btn { gap: 5px; color: var(--al-muted); white-space: nowrap; }
+.task-composer-metric-anchor .btn[aria-expanded='true'] { color: var(--al-accent); }
+.task-composer-metric-separator { color: var(--al-muted-2); }
+.task-composer-metric-popover { width: min(280px, calc(100vw - 24px)); }
+.task-composer-metric-popover > div { display: grid; gap: 7px; padding: 8px; color: var(--al-ink-2); font-size: var(--text-task-meta); }
+.task-composer-metric-popover b { color: var(--al-ink); font-weight: 650; }
+.task-composer-metric-popover small { color: var(--al-muted); font-size: var(--text-task-meta); }
 .task-composer-queue-slot {
   border-bottom: 1px solid var(--al-line);
   background: var(--al-soft-2);
@@ -182,6 +205,7 @@
   .task-composer.is-expanded .task-composer-editor { height: clamp(200px, 40vh, 360px); }
   .task-composer-connection-anchor:has(.task-composer-runtime:not(.task-composer-runtime-action)) { display: none; }
   .task-composer-bar { flex-wrap: wrap; gap: 6px 8px; }
+  .task-composer-runtime-metrics { flex-wrap: wrap; gap: 2px; }
   .task-composer-settings { width: 100%; flex: 1 1 100%; order: 1; }
   .task-composer-control--model { flex: 1 1 180px; }
   .task-composer-control--thinking { flex: 0 0 116px; }
