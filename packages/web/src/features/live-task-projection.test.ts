@@ -7,6 +7,7 @@ import {
   LiveTaskRoundProjector,
   liveEventChangesTaskTranscript,
   liveTaskStableRoundPrefixLength,
+  liveTaskResponseActivity,
   mergeLiveActiveProjectionItems,
   reconcileLiveSnapshotProjection,
   projectLiveInputHistory,
@@ -705,4 +706,33 @@ test('recovery repairs a tool result lost during SSE disconnect without duplicat
   assert.equal(updated[0]?.kind === 'tool' ? updated[0].status : null, 'success')
   assert.strictEqual(mergeLiveActiveProjectionItems(updated, [completed]), updated,
     'replaying the same completed tool should reuse the projection')
+})
+
+test('恢复并入历史思考后只允许最新文本阶段动画，工具仍可并行', () => {
+  const merged = mergeLiveActiveProjectionItems([
+    { id: 'u', kind: 'message', role: 'user', text: '检查代码', streaming: false },
+    { id: 't1', kind: 'thinking', text: 'DDL', streaming: true },
+    { id: 'tool1', kind: 'tool', callId: '1', name: 'grep', status: 'running' },
+  ], [
+    { id: 'tool2', kind: 'tool', callId: '2', name: 'find', status: 'running' },
+    { id: 't2', kind: 'thinking', text: '核对', streaming: true },
+  ])
+  assert.equal(merged[1]?.kind === 'thinking' && merged[1].streaming, false)
+  assert.equal(merged[2]?.kind === 'tool' && merged[2].status, 'running')
+  assert.equal(merged[3]?.kind === 'tool' && merged[3].status, 'running')
+  assert.equal(merged[4]?.kind === 'thinking' && merged[4].streaming, true)
+  const next = mergeLiveActiveProjectionItems(merged, [
+    { id: 'tool3', kind: 'tool', callId: '3', name: 'git', status: 'success' },
+  ])
+  assert.equal(next[4]?.kind === 'thinking' && next[4].streaming, false)
+})
+
+test('等待首 token、思考、工具、正文及间隙按原生事实展示', () => {
+  const user = { id: 'u', kind: 'message' as const, role: 'user' as const, text: '你好', streaming: false }
+  assert.equal(liveTaskResponseActivity([user], false), null)
+  assert.equal(liveTaskResponseActivity([user], true), 'waiting')
+  assert.equal(liveTaskResponseActivity([user, { id: 'r', kind: 'thinking', text: '分析', streaming: true }], true), 'thinking')
+  assert.equal(liveTaskResponseActivity([user, { id: 'tool', kind: 'tool', callId: 'a', name: 'read', status: 'running' }], true), 'tools')
+  assert.equal(liveTaskResponseActivity([user, { id: 'a', kind: 'message', role: 'assistant', text: '你好', streaming: true }], true), 'responding')
+  assert.equal(liveTaskResponseActivity([user, { id: 'tool', kind: 'tool', callId: 'a', name: 'read', status: 'success' }], true), 'processing')
 })

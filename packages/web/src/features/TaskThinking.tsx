@@ -84,7 +84,7 @@ export function TaskThinking({
           <span className="task-thinking-kind-mark" aria-hidden="true"><UiIcon name="thinking" size={14}/></span>
         </>}
         {(kind !== 'thinking' || !preview) && <span className="task-thinking-label">{label}</span>}
-        <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>
+        {running && <span className="task-thinking-running-mark" aria-hidden="true"><UiIcon name="loading" size={14}/></span>}
         {preview && <span className="task-thinking-preview">{preview}</span>}
       </span>
       <span className="task-thinking-summary-meta">

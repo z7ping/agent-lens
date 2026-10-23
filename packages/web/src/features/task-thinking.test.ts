@@ -84,7 +84,7 @@ test('思考片段与共享处理详情都使用统一大脑图标与折叠摘�
   assert.doesNotMatch(process, /task-thinking-kind-mark/)
   assert.match(process, /task-thinking-chevron/)
   assert.match(process, /data-task-thinking-kind="process"/)
-  assert.match(process, /task-thinking-running-mark/)
+  assert.doesNotMatch(process, /task-thinking-running-mark/)
   // 同一个 disclosure 承担摘要与展开；BrainCircuit 是现有 UiIcon.thinking。
   assert.match(running, /lucide-brain-circuit|lucide-brain|brain-circuit/i)
 })
@@ -102,4 +102,18 @@ test('思考摘要由大脑图标与两行内容构成，不额外占一行展�
   assert.match(html, /class="task-thinking-preview">先了解项目结构，然后搜索相关接口。/)
   assert.doesNotMatch(html, /class="task-thinking-label"/)
   assert.doesNotMatch(html, /原始思考 Markdown/)
+})
+
+test('历史思考有耗时也不能残留旋转图标', () => {
+  const settled = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { ...model, state: 'settled', durationMs: 15_000 },
+    children: '历史思考',
+  }))
+  assert.match(settled, /思考了 15秒/)
+  assert.doesNotMatch(settled, /task-thinking-running-mark/)
+  const active = renderToStaticMarkup(createElement(TaskThinking, {
+    model: { ...model, state: 'running' },
+    children: '当前思考',
+  }))
+  assert.match(active, /task-thinking-running-mark/)
 })

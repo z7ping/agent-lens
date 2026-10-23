@@ -56,6 +56,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  Square,
   Sun,
   SquareTerminal,
   TrendingUp,
@@ -115,6 +116,7 @@ export type UiIconName =
   | 'refresh'
   | 'search'
   | 'send'
+  | 'stop'
   | 'settings'
   | 'sliders-horizontal'
   | 'sparkles'
@@ -183,6 +185,7 @@ const icons = {
   refresh: RefreshCw,
   search: Search,
   send: Send,
+  stop: Square,
   settings: Settings,
   'sliders-horizontal': SlidersHorizontal,
   sparkles: Sparkles,
