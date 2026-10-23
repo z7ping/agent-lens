@@ -217,6 +217,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const [launchablePage, setLaunchablePage] = useState<LaunchableProjectsResponseDto['meta'] | null>(() => cachedLaunchableProjects()?.meta ?? null)
   const [projectSearch, setProjectSearch] = useState('')
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
+  const [historyLatestRequest, setHistoryLatestRequest] = useState(0)
   const advancedFiltersAnchorRef = useRef<HTMLButtonElement>(null)
   const [projectLoading, setProjectLoading] = useState(mode === 'new')
   const [projectLoadingMore, setProjectLoadingMore] = useState(false)
@@ -385,7 +386,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
   const openHistoryTask = useCallback((id: string) => {
     // One scroll owner in ReviewPage; clicking the selected row requests the latest page.
     if (model.getSnapshot().review.selectedId === id && location.pathname === `/review/${encodeURIComponent(id)}`) {
-      void model.jumpToLatestReviewDetail()
+      setHistoryLatestRequest(value => value + 1)
       return
     }
     navigate(`/review/${encodeURIComponent(id)}`)
@@ -573,7 +574,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
       <section className="task-center-main">
         <TaskNotificationBanner/>
         <Suspense fallback={<ReviewDetailSkeleton/>}>
-          {mode === 'history' && <ReviewPage model={model} embedded/>}
+          {mode === 'history' && <ReviewPage model={model} embedded latestRequest={historyLatestRequest}/>}
           {mode === 'live' && <LiveTaskPage embedded/>}
           {mode === 'hub' && <HubReviewPage embedded/>}
           {mode === 'new' && <LiveNewTaskPanel
