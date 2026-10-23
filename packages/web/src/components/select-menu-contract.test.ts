@@ -72,7 +72,7 @@ test('任务中心多选由「全部」进入单项、复选累计；高级筛�
   const agentSource = readFileSync(new URL('./SidebarFilterDisclosure.tsx', import.meta.url), 'utf8')
   const advanced = taskCenterSource.slice(taskCenterSource.indexOf('className="task-center-advanced-filter-popover"'))
   assert.doesNotMatch(taskCenterSource, /multipleSelectionBehavior/)
-  assert.match(agentSource, /nextAgentFilterSelection\(agentSelection\.value, sourceId, detectedIds\)/)
+  assert.match(agentSource, /nextAgentFilterSelection\(agentSelection\.value, sourceId, selectableIds\)/)
   assert.match(agentSource, /<UiIcon name="check" size=\{14\} aria-hidden="true"\/>/)
   assert.match(advanced, /task-center-advanced-filter-panel/)
   assert.match(advanced, /className="task-center-advanced-filter-options"/)
