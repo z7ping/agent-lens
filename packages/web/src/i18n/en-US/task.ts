@@ -153,6 +153,12 @@ export const englishTaskMessages: LocaleMessagesDto = {
         cacheUnknown: 'Cache hit rate, throughput and compatibility data are unavailable.',
         cacheSource: 'No structured cache metrics from the extension. Session totals are not context occupancy.',
       },
+      sendFeedback: {
+        sending: 'Sending…',
+        accepted: 'Accepted',
+        queued: 'Queued',
+        failed: 'Send failed; input restored',
+      },
       responseActivity: {
         waiting: 'Waiting for model response',
         thinking: 'Thinking',
