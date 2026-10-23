@@ -698,7 +698,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           onInterrupt={() => { void interrupt() }}
           responseActivity={responseActivity}
           sendFeedback={sendFeedback}
-          runtimeMetrics={{ contextUsage: state?.contextUsage }}
+          runtimeMetrics={{ contextUsage: state?.contextUsage, cacheMetrics: state?.cacheMetrics }}
           onSubmit={(message, mode) => submitLiveMessage(message, mode === 'followUp' ? 'follow-up' : undefined)}
           onEscape={canInterrupt ? () => { void interrupt() } : undefined}
           placeholder={t('live.composerPlaceholder')}
