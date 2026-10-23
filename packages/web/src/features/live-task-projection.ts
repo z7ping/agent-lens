@@ -380,6 +380,43 @@ function contentId(event: LiveEventDto, kind: 'message' | 'thinking', fallback: 
   return `${kind}:${fallback}`
 }
 
+/** Recovery may merge stale SSE stages with persisted rows. Animate only
+ * the latest textual stage; a subsequent tool/user message supersedes it.
+ * Concurrent native tools keep their own running state. */
+function settleSupersededLiveText(items: readonly LiveTaskProjectionItem[]): LiveTaskProjectionItem[] {
+  let latestStage = -1
+  for (let index = items.length - 1; index >= 0; index--) {
+    const item = items[index]!
+    if (item.kind === 'tool' || (item.kind === 'message' && item.role === 'user')) break
+    if (item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant')) {
+      if (item.streaming) latestStage = index
+      break
+    }
+  }
+  if (!items.some((item, index) =>
+    (item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant'))
+      && item.streaming && index !== latestStage)) return items as LiveTaskProjectionItem[]
+  return items.map((item, index) =>
+    (item.kind === 'thinking' || (item.kind === 'message' && item.role === 'assistant'))
+      && item.streaming && index !== latestStage ? { ...item, streaming: false } : item)
+}
+
+export type LiveTaskResponseActivity = 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing'
+
+/** Native facts only; elapsed silence is not a completion signal. */
+export function liveTaskResponseActivity(
+  items: readonly LiveTaskProjectionItem[],
+  streaming: boolean,
+): LiveTaskResponseActivity | null {
+  if (!streaming) return null
+  const last = [...items].reverse().find(item => item.kind !== 'message' || item.role !== 'user')
+  if (!last) return 'waiting'
+  if (last.kind === 'thinking' && last.streaming) return 'thinking'
+  if (last.kind === 'message' && last.role === 'assistant' && last.streaming) return 'responding'
+  if (items.some(item => item.kind === 'tool' && item.status === 'running')) return 'tools'
+  return 'processing'
+}
+
 export function mergeLiveActiveProjectionItems(
   previous: readonly LiveTaskProjectionItem[],
   incoming: readonly LiveTaskProjectionItem[],
@@ -438,9 +475,10 @@ export function mergeLiveActiveProjectionItems(
     indexes.set(item.id, merged.length)
     merged.push(item)
   }
-  return merged.length === previous.length && merged.every((item, index) => item === previous[index])
+  const normalized = settleSupersededLiveText(merged)
+  return normalized.length === previous.length && normalized.every((item, index) => item === previous[index])
     ? previous as LiveTaskProjectionItem[]
-    : merged
+    : normalized
 }
 
 /** Keep unchanged snapshot rows mounted; refreshing identical history must not flash. */

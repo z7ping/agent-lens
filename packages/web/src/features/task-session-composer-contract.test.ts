@@ -202,3 +202,16 @@ test('Live 单条队列操作经原生变更接口，不再在浏览器清空并
   assert.doesNotMatch(liveActions, /for \(const message of steering\)/)
   assert.doesNotMatch(liveActions, /for \(const message of followUp\)/)
 })
+
+test('Live 等待响应与停止入口只有共享 Composer 渲染', () => {
+  assert.match(taskComposer, /responseActivity && <div className="task-composer-response-hint"/)
+  assert.match(taskComposer, /interruptAvailable && <IconButton/)
+  assert.match(taskComposer, /className="task-composer-stop"/)
+  assert.match(taskComposer, /hasContent && editorProps.canSubmit/)
+  assert.match(liveTask, /responseActivity=\{responseActivity\}/)
+  assert.match(liveTask, /interruptAvailable=\{interruptAvailable\}/)
+  assert.match(liveTask, /document.addEventListener\('keydown', onPageEscape\)/)
+  assert.match(liveTask, /event.defaultPrevented \|\| event.isComposing/)
+  assert.match(composerCss, /\.task-composer-response-hint \{/)
+  assert.doesNotMatch(reviewTask, /interruptAvailable=|responseActivity=/)
+})

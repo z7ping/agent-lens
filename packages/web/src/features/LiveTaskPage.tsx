@@ -21,7 +21,7 @@ import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, 
 import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
 import { AgentLogo } from '../components/AgentLogo'
-import { projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
+import { liveTaskResponseActivity, projectLiveInputHistory, projectLiveSnapshotEntries } from './live-task-projection'
 import { coalesceLiveSemanticSegments } from './live-semantic-rounds'
 import { parseTaskLiveRuntimeLocation, shouldWarnLiveNoProgress, taskLiveRuntimeStatus } from './task-live-runtime'
 import { TaskHeader } from './TaskHeader'
@@ -186,6 +186,22 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
 
   const { canSubmit, canInterrupt, send, editStartupQueued, interrupt, removeQueued, editQueued, clearQueued, editRestoredQueue, removeRestoredQueue, terminate, changeModel, answerExtension, searchWorkspaceReferences, runMessageAction, runRuntimeAction, changeThinking } = useLiveTaskActions({ current, t, navigate, setComposerValue, clearComposer, session, onSendAccepted, onSendDelivered })
 
+  useEffect(() => {
+    if (!canInterrupt) return
+    const onPageEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229
+        || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return
+      // Open overlays and the Lexical editor own Escape before the page.
+      if (document.querySelector('.ui-popover, .select-menu-popover, [role="dialog"], [role="listbox"], [role="menu"]')) return
+      const target = event.target
+      if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return
+      event.preventDefault()
+      void interrupt()
+    }
+    document.addEventListener('keydown', onPageEscape)
+    return () => document.removeEventListener('keydown', onPageEscape)
+  }, [canInterrupt, interrupt])
+
   const jumpToIndexedRound = useCallback(async (item: TaskTurnRailData) => {
     if (!current || historyLoading) return
     const targetOrdinal = item.ordinal
@@ -237,6 +253,7 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   }, [state?.isStreaming, current?.runtimeSessionId])
 
   const noProgressWarning = shouldWarnLiveNoProgress(progressClockMs, lastProgressAtRef.current, state?.isStreaming ?? false)
+  const responseActivity = liveTaskResponseActivity(projection.active, state?.isStreaming ?? false)
 
   const roundSegments = useMemo(
     () => coalesceLiveSemanticSegments(roundProjectorRef.current.projectSegmented(projection.stable, projection.active)),
@@ -351,6 +368,8 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         onClick: () => { void runRuntimeAction(action) },
       })),
   )
+  const interruptAvailable = Boolean(state?.isStreaming && product?.capabilities.includes('interrupt'))
+  const interruptBusy = busy || queueMutationPending
   const submitMessage = () => {
     const message = composerRef.current?.getMessage()
     if (message) void send(message)
@@ -603,6 +622,10 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
             : undefined}
           onDraftPresenceChange={setComposerHasContent}
           canSubmit={canSubmit}
+          interruptAvailable={interruptAvailable}
+          interruptBusy={interruptBusy}
+          onInterrupt={() => { void interrupt() }}
+          responseActivity={responseActivity}
           onSubmit={(message, mode) => { void send(message, mode === 'followUp' ? 'follow-up' : undefined) }}
           onEscape={canInterrupt ? () => { void interrupt() } : undefined}
           placeholder={t('live.composerPlaceholder')}

@@ -29,6 +29,11 @@ export interface TaskSessionComposerProps extends LiveMarkdownComposerProps {
   onSyncSession?(): void
   onReconnectSession?(): void
   connectionBusy?: boolean
+  /** Native Runtime capability and activity come from the owning page. */
+  interruptAvailable?: boolean
+  interruptBusy?: boolean
+  onInterrupt?(): void
+  responseActivity?: 'waiting' | 'thinking' | 'tools' | 'responding' | 'processing' | null
   sessionActions?: readonly ComposerSessionAction[] | undefined
   modelControl?: LiveModelControlDto | null
   thinking?: LiveThinkingControlDto | null
@@ -58,6 +63,10 @@ export function TaskSessionComposer({
   onSyncSession,
   onReconnectSession,
   connectionBusy = false,
+  interruptAvailable = false,
+  interruptBusy = false,
+  onInterrupt,
+  responseActivity = null,
   sessionActions = [],
   modelControl,
   thinking,
@@ -83,7 +92,7 @@ export function TaskSessionComposer({
   const canManageConnection = Boolean(onSyncSession || onReconnectSession)
   return <div className={`task-composer ${expanded ? 'is-expanded' : ''}`}>
     {queueContent && <div className="task-composer-queue-slot">{queueContent}</div>}
-    <div className="task-composer-editor">
+    <div className={`task-composer-editor${responseActivity ? ' has-response-activity' : ''}`}>
       <div className="task-composer-editor-toolbar" aria-label={t('live.composerToolbarAria')}>
         <IconButton
           className="task-composer-editor-action"
@@ -95,6 +104,11 @@ export function TaskSessionComposer({
         </IconButton>
       </div>
       <LiveMarkdownComposer {...editorProps} ref={editorRef} inputClassName="task-composer-input"/>
+      {responseActivity && <div className="task-composer-response-hint" role="status" aria-live="polite">
+        <UiIcon name="loading" size={12}/>
+        <span>{t(`live.responseActivity.${responseActivity}`)}</span>
+        {interruptAvailable && <span className="task-composer-escape-hint">{t('live.escapeToInterrupt')}</span>}
+      </div>}
     </div>
     <div className="task-composer-bar">
       <span ref={connectionAnchorRef} className="task-composer-connection-anchor">
@@ -181,9 +195,22 @@ export function TaskSessionComposer({
           </div>
         </Popover>
       </span>}
-      <IconButton variant="primary" className="task-composer-send" disabled={!editorProps.canSubmit || !hasContent} onClick={onSendClick} aria-label={t('live.send')}>
-        <UiIcon name="send" size={20}/>
-      </IconButton>
+      {(!interruptAvailable || (hasContent && editorProps.canSubmit)) && <IconButton
+        variant={interruptAvailable ? 'default' : 'primary'}
+        className="task-composer-send"
+        disabled={!editorProps.canSubmit || !hasContent}
+        onClick={onSendClick}
+        aria-label={t('live.send')}
+      ><UiIcon name="send" size={20}/></IconButton>}
+      {interruptAvailable && <IconButton
+        variant="primary"
+        className="task-composer-stop"
+        disabled={interruptBusy}
+        aria-busy={interruptBusy || undefined}
+        onClick={onInterrupt}
+        title={t('live.interruptShortcut')}
+        aria-label={t('live.stopExecution')}
+      ><UiIcon name="stop" size={20}/></IconButton>}
     </div>
   </div>
 }
