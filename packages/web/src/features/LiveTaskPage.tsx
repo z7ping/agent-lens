@@ -16,7 +16,7 @@ import { useLiveTaskRuntime } from './use-live-task-runtime'
 import { useLiveTaskHistory } from './use-live-task-history'
 import { useLiveTaskActions } from './use-live-task-actions'
 import { type LiveQueueListItem } from './live-task-queue'
-import { messageText } from './live-task-input'
+import { messageText, resolveLiveSlash } from './live-task-input'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems } from './live-task-history-window'
 import { GenericLiveRound, StableLiveRounds, liveRoundOwnsAnswerActions } from './LiveTaskTimeline'
 import { UiIcon } from '../components/UiIcon'
@@ -357,10 +357,13 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
   // Runtime-advertised actions are never delivered to the language model as text.
   // Pi extension/template/skill commands without an action remain native SDK prompts.
   const submitLiveMessage = (message: LiveMessageDto, behavior?: 'follow-up') => {
-    const text = messageText(message)
-    const bareCommand = text.split(/\s+/)[0]
-    const command = commands.find(item => item.value === bareCommand && item.action)
-    if (command && text === bareCommand && message.parts.every(part => part.type === 'text')) {
+    const result = resolveLiveSlash(message, commands)
+    if (result.kind === 'blocked') {
+      setError(`${result.name} 不是可直接发送的消息；当前 Runtime 未提供相应 Web 操作`)
+      return
+    }
+    if (result.kind === 'action') {
+      const command = result.command
       if (command.action === 'new-task') {
         clearComposer()
         navigate('/review/new')
@@ -381,14 +384,6 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
         clearComposer()
         void runRuntimeAction(action)
       }
-      return
-    }
-    // TUI-only built-ins are not SDK prompts. Report the limitation rather than
-    // accidentally asking the model to interpret a control command.
-    const tuiOnly = new Set(['/settings', '/tree', '/fork', '/session', '/export', '/copy',
-      '/reload', '/name', '/login', '/logout', '/scoped-models', '/share', '/quit', '/hotkeys'])
-    if (tuiOnly.has(bareCommand)) {
-      setError(`${bareCommand} 尚未提供 Web 可执行入口；请使用对应 Pi TUI 操作`)
       return
     }
     void send(message, behavior)
