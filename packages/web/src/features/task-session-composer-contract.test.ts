@@ -121,17 +121,28 @@ test('发送后恢复跟随使用的 setNewRecords 必须来自 LiveTaskState，
   assert.match(liveTask, /followControllerRef\.current\.restore\(\)[\s\S]*?setNewRecords\(false\)/)
 })
 
-test('Live 输入框回车与发送按钮在发送接受后跳最新，用户主动上翻仍能退出跟随', () => {
+test('Live Enter and send share slash routing, acknowledgement, and reader intent', () => {
   assert.match(liveActions, /onSendAccepted\?\.\(\)/)
   assert.match(liveActions, /onSendDelivered\?\.\(\)/)
-  assert.match(liveActions, /if \(unsupported\) \{[\s\S]*?return[\s\S]*?onSendAccepted\?\.\(\)/)
-  assert.match(liveActions, /await liveApi\.send\(current\.liveId, current\.runtimeSessionId, message, behavior\)[\s\S]*?onSendDelivered\?\.\(\)/)
+  assert.match(liveActions, /setSendFeedback\('sending'\)/)
+  assert.match(liveActions, /setSendFeedback\('failed'\)/)
+  assert.match(liveActions, /await liveApi\.send\(current\.liveId, current\.runtimeSessionId, message, behavior\)/)
+  assert.match(liveTask, /submitLiveMessage\(message, mode === 'followUp'/)
+  assert.match(liveTask, /if \(message\) submitLiveMessage\(message\)/)
+  assert.match(liveTask, /resolveLiveSlash\(message, commands\)/)
+  assert.match(liveTask, /scrollReaderToLastUserTurn\(reader\)/)
   assert.match(liveTask, /followControllerRef\.current\.restore\(\)/)
   assert.match(liveTask, /onSendAccepted, onSendDelivered \}\)/)
-  assert.match(liveTask, /onSubmit=\{\(message, mode\) => \{ void send\(message, mode === 'followUp' \? 'follow-up' : undefined\) \}\}/)
-  assert.match(liveTask, /if \(message\) void send\(message\)/)
-  assert.match(liveTask, /onSendDelivered = useCallback\(\(\) => \{[\s\S]*?followControllerRef\.current\.isFollowing\) void jumpLatest\(\)/)
   assert.match(liveTask, /onWheel=\{event => markReaderUserIntent/)
+  assert.match(taskComposer, /sendFeedback=|'live.sendFeedback/ )
+})
+
+test('Slash and @ suggestions share a single keyboard interaction with composition and modifier guards', () => {
+  assert.match(composer, /function useComposerSuggestionKeyboard\(/)
+  assert.equal((composer.match(/useComposerSuggestionKeyboard\(/g) ?? []).length, 3)
+  assert.match(composer, /!event\.isComposing && event\.keyCode !== 229/)
+  assert.match(composer, /!event\.shiftKey && !event\.altKey && !event\.ctrlKey && !event\.metaKey/)
+  assert.match(composer, /COMMAND_PRIORITY_CRITICAL/)
 })
 
 test('共享 Composer 保留 Markdown、大文本、图片、Shift+Enter 与 Alt+Enter 语义', () => {
