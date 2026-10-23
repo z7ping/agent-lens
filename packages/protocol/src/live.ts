@@ -101,6 +101,18 @@ export interface LiveContextUsage {
   percent: number | null
 }
 
+export interface LiveCacheMetricsDto {
+  source: 'pi-cache-optimizer'
+  adapter: string
+  hitRequests: number
+  totalRequests: number
+  cachedInput: string
+  totalInput: string
+  tokenHitRate: number
+  compatibility: 'ok' | 'warning' | 'disabled'
+  integrityWarning?: boolean | undefined
+}
+
 export interface LiveRuntimeStateDto {
   runtimeSessionId: string
   title?: string | undefined
@@ -110,6 +122,7 @@ export interface LiveRuntimeStateDto {
   isStreaming: boolean
   pendingMessageCount: number
   contextUsage?: LiveContextUsage | undefined
+  cacheMetrics?: LiveCacheMetricsDto | undefined
 }
 
 export interface LiveSnapshotDto {
@@ -282,6 +295,7 @@ export type LiveEventStatusDto =
 export type LiveCompletionStatusDto = 'completed' | 'cancelled' | 'interrupted' | 'failed'
 
 export type LiveEventDto =
+  | { type: 'runtime.metrics.changed'; cacheMetrics: LiveCacheMetricsDto | null }
   | { type: 'status'; status: LiveEventStatusDto; message?: string | undefined }
   | { type: 'title.update'; title: string }
   | { type: 'control.changed'; control: 'model' | 'thinking' }
@@ -648,6 +662,11 @@ export function parseLiveEventDto(value: unknown): LiveEventDto | null {
       : null
   }
   if (type === 'runtime-disclosure.changed') return { type }
+  if (type === 'runtime.metrics.changed') {
+    const metrics = parseLiveCacheMetricsDto(event.cacheMetrics)
+    return event.cacheMetrics === null ? { type, cacheMetrics: null }
+      : metrics ? { type, cacheMetrics: metrics } : null
+  }
   if (type === 'notification') {
     const message = eventText(event.message)?.trim()
     if (!message || !['info', 'success', 'warning', 'error'].includes(String(event.level))) return null
