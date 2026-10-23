@@ -113,6 +113,28 @@ export interface LiveCacheMetricsDto {
   integrityWarning?: boolean | undefined
 }
 
+/** Parse only bounded, extension-attributed cache counters. Invalid data remains unknown. */
+export function parseLiveCacheMetricsDto(value: unknown): LiveCacheMetricsDto | null {
+  const row = record(value)
+  if (!row || row.source !== 'pi-cache-optimizer'
+    || typeof row.adapter !== 'string' || !/^[\\w-]{2,42}$/.test(row.adapter)
+    || !Number.isSafeInteger(row.hitRequests) || Number(row.hitRequests) < 0
+    || !Number.isSafeInteger(row.totalRequests) || Number(row.totalRequests) < Number(row.hitRequests)
+    || typeof row.cachedInput !== 'string' || !/^\\d+(?:\\.\\d+)?M$/.test(row.cachedInput)
+    || typeof row.totalInput !== 'string' || !/^\\d+(?:\\.\\d+)?M$/.test(row.totalInput)
+    || typeof row.tokenHitRate !== 'number' || !Number.isFinite(row.tokenHitRate)
+    || row.tokenHitRate < 0 || row.tokenHitRate > 100
+    || !['ok', 'warning', 'disabled'].includes(String(row.compatibility))) return null
+  return {
+    source: 'pi-cache-optimizer', adapter: row.adapter,
+    hitRequests: row.hitRequests as number, totalRequests: row.totalRequests as number,
+    cachedInput: row.cachedInput, totalInput: row.totalInput,
+    tokenHitRate: row.tokenHitRate,
+    compatibility: row.compatibility as LiveCacheMetricsDto['compatibility'],
+    ...(row.integrityWarning === true ? { integrityWarning: true } : {}),
+  }
+}
+
 export interface LiveRuntimeStateDto {
   runtimeSessionId: string
   title?: string | undefined
