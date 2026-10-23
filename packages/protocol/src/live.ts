@@ -353,6 +353,7 @@ export interface LiveControlOptionDto extends LiveControlDisplayInfoDto {
 export interface LiveCommandDto extends LiveControlDisplayInfoDto {
   value: string
   group?: string | undefined
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'compact-context' | undefined
 }
 
 export interface LiveCommandsResponseDto {
