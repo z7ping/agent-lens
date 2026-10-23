@@ -40,6 +40,8 @@ export function sameLiveRuntimeState(previous: LiveRuntimeStateDto | null, next:
     && previous.contextUsage?.tokens === next.contextUsage?.tokens
     && previous.contextUsage?.contextWindow === next.contextUsage?.contextWindow
     && previous.contextUsage?.percent === next.contextUsage?.percent
+    && previous.cacheMetrics?.source === next.cacheMetrics?.source
+    && previous.cacheMetrics?.adapter === next.cacheMetrics?.adapter
     && previous.cacheMetrics?.hitRequests === next.cacheMetrics?.hitRequests
     && previous.cacheMetrics?.totalRequests === next.cacheMetrics?.totalRequests
     && previous.cacheMetrics?.cachedInput === next.cacheMetrics?.cachedInput
