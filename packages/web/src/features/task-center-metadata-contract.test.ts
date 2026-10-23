@@ -71,12 +71,14 @@ test('历史会话保留无外框分隔线列表和选中/悬停状态', () => {
   assert.match(taskCss, /\.task-center-rail \.session-item-active,\s*\.task-center-rail \.session-item-active:hover \{/)
 })
 
-test('A → B → A 快速切换按轮次取消旧 RAF，卸载时释放动画和锚点', () => {
-  assert.match(page, /const revision = \+\+historyScrollRevisionRef\.current/)
-  assert.match(page, /historyScrollRevisionRef\.current !== revision/)
-  assert.match(page, /window\.cancelAnimationFrame\(historyScrollFrameRef\.current\)/)
-  assert.match(page, /useEffect\(\(\) => \(\) => \{[\s\S]*?historyScrollRevisionRef\.current \+= 1/)
-  assert.doesNotMatch(page, /historyScrollTargetRef/)
+test('快速 A → B → A 切换使用 Review 自身的滚动所有权，而不是侧栏 RAF', () => {
+  const review = readFileSync(new URL('./use-review-session.ts', import.meta.url), 'utf8')
+  const helper = readFileSync(new URL('./session-reader-positioning.ts', import.meta.url), 'utf8')
+  assert.match(page, /void model\.jumpToLatestReviewDetail\(\)/)
+  assert.doesNotMatch(page, /historyScrollFrameRef|historyScrollRevisionRef/)
+  assert.match(review, /settleReaderAtLatest\(/)
+  assert.match(helper, /isCurrent\(\)/)
+  assert.match(helper, /reader\.addEventListener\('wheel'/)
 })
 
 test('会话列表本地/远程均保留两层信息且完整标题键盘可读，筛选不重复改写', () => {
