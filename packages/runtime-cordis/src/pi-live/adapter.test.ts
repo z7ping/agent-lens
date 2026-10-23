@@ -768,3 +768,19 @@ test('Pi model default persists through the native Runtime without changing the 
   assert.equal(updated?.defaultValue, currentValue)
   await assert.rejects(adapter.setDefaultModelControl('runtime-1', JSON.stringify(['fake', 'unknown'])))
 })
+
+test('streaming native slash goes through Pi SDK prompt expansion rather than literal steering', async () => {
+  const calls: string[] = []
+  const service = {
+    commands: async () => [{ name: 'skill:audit', source: 'skill' }],
+    prompt: async (_id: string, text: string, behavior?: string) => {
+      calls.push('prompt:' + text + ':' + (behavior ?? 'normal'))
+    },
+    steer: async (_id: string, text: string) => { calls.push('steer:' + text) },
+    followUp: async (_id: string, text: string) => { calls.push('followUp:' + text) },
+  } as unknown as PiLiveService
+  const adapter = new PiLiveAdapter(service, attachmentService())
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: '/skill:audit' }] }, { behavior: 'follow-up' })
+  await adapter.send('runtime-1', { parts: [{ type: 'text', text: 'ordinary text' }] }, { behavior: 'steer' })
+  assert.deepEqual(calls, ['prompt:/skill:audit:followUp', 'steer:ordinary text'])
+})
