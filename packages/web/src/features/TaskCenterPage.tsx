@@ -477,7 +477,7 @@ export function TaskCenterPage({ model, mode, sidebarHost }: { model: AgentLensC
             aria-label={t('center.history.clearSearch')}
           ><UiIcon name="close" size={14}/></IconButton>}
         </div>
-        <IconButton size="small" className="task-center-search-refresh" onClick={() => void model.refreshReview()} title={t('center.history.refreshTasks')} aria-label={t('center.history.refreshTasks')}><UiIcon name="refresh" size={14}/></IconButton>
+        <IconButton size="small" className="task-center-search-refresh" onClick={() => { void model.refreshReview(); void model.refreshFacets() }} title={t('center.history.refreshTasks')} aria-label={t('center.history.refreshTasks')}><UiIcon name="refresh" size={14}/></IconButton>
       </div>
     </div>
 
