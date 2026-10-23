@@ -669,11 +669,11 @@ export function LiveTaskPage({ embedded = false }: { embedded?: boolean }) {
           sessionActions={composerSessionActions}
           modelControl={modelControl}
           thinking={thinking}
-          controlsBusy={busy}
+          controlsBusy={busy || defaultModelSaving}
           controlsReady={state?.status === 'ready'}
           onModelChange={value => { void changeModel(value) }}
           modelMenuOpenRequest={modelMenuOpenRequest}
-          onSetDefaultModel={product?.capabilities.includes('model-default') && !defaultModelSaving ? () => { void setGlobalDefaultModel() } : undefined}
+          onSetDefaultModel={product?.capabilities.includes('model-default') ? () => { void setGlobalDefaultModel() } : undefined}
           onThinkingChange={value => { void changeThinking(value) }}
           showStreamingModes={Boolean(product?.capabilities.includes('steer') && product.capabilities.includes('queue'))}
           streamingMode={streamingBehavior}
