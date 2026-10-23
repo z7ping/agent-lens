@@ -1436,7 +1436,7 @@ export async function handleLiveRequest(
       return true
     }
     if (action === 'model-default' && request.method === 'POST') {
-      requireCapability(adapter, 'model-switching')
+      requireCapability(adapter, 'model-default')
       if (!adapter.setDefaultModelControl) throw httpError(409, `${adapter.manifest.displayName} does not support default-model persistence`)
       const body = objectBody(await readJson(request))
       const value = nonEmpty(body.value, 'value')
