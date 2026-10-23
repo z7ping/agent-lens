@@ -56,6 +56,7 @@ export type LiveCapabilityNameDto =
   | 'queue-mutation'
   | 'steer'
   | 'model-switching'
+  | 'model-default'
   | 'thinking-control'
   | 'extension-ui'
   | 'command-discovery'
