@@ -1624,6 +1624,8 @@ async function command(name, value = {}) {
     if (!models.some(model => model.provider === value.provider && model.id === value.modelId)) throw new Error('Pi default model is not available')
     settings.setDefaultModelAndProvider(value.provider, value.modelId)
     await settings.flush()
+    const persistenceError = settings.drainErrors?.().find(item => item.scope === 'global')
+    if (persistenceError) throw persistenceError.error
     return
   }
   if (name === 'setModel') { await selectModel(value.provider, value.modelId); return state() }
