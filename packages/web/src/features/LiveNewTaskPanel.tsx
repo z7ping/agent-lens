@@ -64,6 +64,7 @@ export function LiveNewTaskPanel({
   const [productsError, setProductsError] = useState('')
   const [selectedLiveId, setSelectedLiveId] = useState('')
   const [selectedKey, setSelectedKey] = useState('')
+  const [cachedSelectedProject, setCachedSelectedProject] = useState<TaskProjectOption | null>(null)
   const projectSelectionInitializedRef = useRef(false)
   const [starting, setStarting] = useState(false)
   const [selectingDirectory, setSelectingDirectory] = useState(false)
@@ -153,7 +154,15 @@ export function LiveNewTaskPanel({
   }, [directoryPath, workspaceSupported])
   const currentDirectoryCheck = directoryCheck?.path === directoryPath ? directoryCheck : undefined
   const directoryIsVerified = currentDirectoryCheck?.valid === true
+  // Server search replaces the visible page; keep the explicit workspace selection
+  // until the user chooses another project, including while searching.
+  useEffect(() => {
+    const match = options.find(option => option.key === selectedKey)
+    if (match) setCachedSelectedProject(current =>
+      current?.key === match.key && current.cwd === match.cwd ? current : match)
+  }, [options, selectedKey])
   const selectedProject = options.find(option => option.key === selectedKey)
+    ?? (cachedSelectedProject?.key === selectedKey ? cachedSelectedProject : undefined)
   const projectOptions = useMemo(
     () => options.map(option => ({ value: option.key, label: option.label, description: option.cwd, keywords: option.cwd })),
     [options],
@@ -312,6 +321,11 @@ export function LiveNewTaskPanel({
                 <SelectMenu
                   value={selectedKey}
                   options={projectOptions}
+                  selectedOption={selectedProject ? {
+                    value: selectedProject.key,
+                    label: selectedProject.label,
+                    description: selectedProject.cwd,
+                  } : undefined}
                   onChange={setSelectedKey}
                   ariaLabel={t('center.newTask.selectProjectAria')}
                   placeholder={options.length ? t('center.newTask.selectProject') : projectLoading ? t('center.newTask.loadingProjects') : t('center.newTask.noProject')}
