@@ -144,6 +144,18 @@ export interface LiveContextUsage {
   percent: number | null
 }
 
+export interface LiveCacheMetrics {
+  source: 'pi-cache-optimizer'
+  adapter: string
+  hitRequests: number
+  totalRequests: number
+  cachedInput: string
+  totalInput: string
+  tokenHitRate: number
+  compatibility: 'ok' | 'warning' | 'disabled'
+  integrityWarning?: boolean | undefined
+}
+
 export interface LiveRuntimeState {
   runtimeSessionId: string
   /**
@@ -159,6 +171,7 @@ export interface LiveRuntimeState {
   isStreaming: boolean
   pendingMessageCount: number
   contextUsage?: LiveContextUsage | undefined
+  cacheMetrics?: LiveCacheMetrics | undefined
 }
 
 /** Every Live snapshot request is bounded independently of machine speed/memory. */
@@ -430,6 +443,7 @@ export interface LiveUiRequestEvent {
 }
 
 export type LiveEvent =
+  | { type: 'runtime.metrics.changed'; cacheMetrics: LiveCacheMetrics | null }
   | LiveStatusEvent
   | LiveTitleUpdateEvent
   | LiveControlChangedEvent
