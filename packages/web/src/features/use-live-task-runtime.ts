@@ -7,6 +7,7 @@ import { emptyLiveQueue, firstUserEntryCursor } from './live-task-queue'
 import { LIVE_TASK_SNAPSHOT_PAGE_LIMIT, historyPageBlock, aggregateHistoryPage, splitLiveProjectionItems, loadBoundedRecoverySnapshot, captureLiveReaderAnchor, restoreLiveReaderAnchor, appendUniqueLiveProjectionItems } from './live-task-history-window'
 import { projectLiveInputHistory, projectLiveSnapshotEntries, liveEventChangesTaskTranscript, mergeLiveActiveProjectionItems, reconcileLiveSnapshotProjection, reduceLiveTaskEvent } from './live-task-projection'
 import { LiveFollowController, liveFollowTextRevision } from './live-follow-controller'
+import { settleReaderAtLatest } from './session-reader-positioning'
 import { shouldRecoverLiveOnVisible, sameLiveRuntimeState, runtimeStateFromEvent } from './task-live-runtime'
 
 /** 会话初始化、SSE 对账与可见性恢复；不负责输入交互和页面渲染。 */
@@ -87,6 +88,8 @@ export function useLiveTaskRuntime({
   const manualSyncRef = useRef<(() => Promise<void>) | null>(null)
   const syncCurrentSession = useCallback(() => manualSyncRef.current?.()
     ?? Promise.reject(new Error('Live runtime is not ready for synchronization')), [])
+  const entryScrollSessionRef = useRef('')
+  const entryScrollStopRef = useRef<(() => void) | null>(null)
   const recoveryReaderAnchorRef = useRef<{ anchor: ReturnType<typeof captureLiveReaderAnchor>; scrollTop: number } | null>(null)
   // Restore before paint; recovery is a data update, not a navigation request.
   useLayoutEffect(() => {
@@ -102,6 +105,9 @@ export function useLiveTaskRuntime({
   useEffect(() => {
     let cancelled = false
     recoveryReaderAnchorRef.current = null
+    entryScrollStopRef.current?.()
+    entryScrollStopRef.current = null
+    entryScrollSessionRef.current = ''
     setProduct(null)
     setState(null)
     lastProgressAtRef.current = Date.now()
@@ -668,6 +674,22 @@ export function useLiveTaskRuntime({
     return () => window.clearTimeout(timeout)
   }, [interruptNotice])
 
+
+  // Snapshot content can appear without a text delta (virtualized rounds, old
+  // settled threads); explicitly position once when each session's first page mounts.
+  useLayoutEffect(() => {
+    const id = current?.runtimeSessionId
+    if (!id || entryScrollSessionRef.current === id || !historyPage
+      || projection.stable.length + projection.active.length === 0
+      || !historyAtLatestRef.current) return
+    entryScrollSessionRef.current = id
+    entryScrollStopRef.current?.()
+    entryScrollStopRef.current = settleReaderAtLatest(
+      () => readerRef.current,
+      () => current?.runtimeSessionId === id && followControllerRef.current.isFollowing,
+    )
+  }, [current?.runtimeSessionId, historyPage, projection.stable.length, projection.active.length])
+  useEffect(() => () => { entryScrollStopRef.current?.(); entryScrollStopRef.current = null }, [])
 
   const followTextRevision = liveFollowTextRevision(projection.stable, projection.active)
 
