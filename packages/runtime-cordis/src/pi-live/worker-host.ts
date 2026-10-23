@@ -29,7 +29,7 @@ const WORKER_TERMINATE_GRACE_MS = 1_000
 type SnapshotTransferCommand = 'snapshotBegin' | 'snapshotChunk'
 
 type WorkerCommand =
-  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'setThinkingLevel'
+  | 'state' | SnapshotTransferCommand | 'entry' | 'historyIndex' | 'sessionTree' | 'commands' | 'controls' | 'setModel' | 'defaultModel' | 'setDefaultModel' | 'setThinkingLevel'
   | 'navigateTree' | 'compact' | 'regenerateTitle'
   | 'prompt' | 'steer' | 'followUp' | 'clearQueue' | 'mutateQueue' | 'abort'
   | 'extensionResponse' | 'terminate'
@@ -76,6 +76,8 @@ export interface PiRuntimeHandle {
   regenerateTitle?(): Promise<void>
   controls(): Promise<PiLiveControls>
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState>
+  defaultModel(): Promise<{ provider: string; modelId: string } | null>
+  setDefaultModel(provider: string, modelId: string): Promise<void>
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState>
   prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void>
   steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void>
@@ -382,6 +384,8 @@ class WorkerPiRuntimeHandle implements PiRuntimeHandle {
   regenerateTitle(): Promise<void> { return this.request('regenerateTitle') }
   controls(): Promise<PiLiveControls> { return this.request('controls') }
   setModel(provider: string, modelId: string): Promise<PiLiveRuntimeState> { return this.request('setModel', { provider, modelId }) }
+  defaultModel(): Promise<{ provider: string; modelId: string } | null> { return this.request('defaultModel') }
+  setDefaultModel(provider: string, modelId: string): Promise<void> { return this.request('setDefaultModel', { provider, modelId }) }
   setThinkingLevel(level: string): Promise<PiLiveRuntimeState> { return this.request('setThinkingLevel', { level }) }
   prompt(message: string, behavior?: PiLiveStreamingBehavior, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('prompt', { message, behavior, images }) }
   steer(message: string, images?: readonly PiLiveImageInput[]): Promise<void> { return this.request('steer', { message, images }) }
