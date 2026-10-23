@@ -78,3 +78,14 @@ test('新建实时任务的目录选择只回填路径，启动前校验路径�
   assert.match(browser, /\.directories/)
 
 })
+
+test('Live 服务端搜索期间保留已有项目的选中值，不在客户端二次过滤搜索结果', async () => {
+  const [panel, select] = await Promise.all([
+    readFile(newTaskPanelPath, 'utf8'),
+    readFile(fileURLToPath(new URL('../components/SelectMenu.tsx', import.meta.url)), 'utf8'),
+  ])
+  assert.match(panel, /cachedSelectedProject\?\.key === selectedKey/)
+  assert.match(panel, /selectedOption=\{selectedProject \? \{/)
+  assert.match(select, /selectedOption\?\.value === value/)
+  assert.match(select, /if \(onSearchChange\) return needle && loading \? \[\] : options/)
+})
