@@ -59,6 +59,9 @@ export function runtimeStateFromEvent(
   if (event.type === 'runtime.metrics.changed') {
     return { ...current, cacheMetrics: event.cacheMetrics ?? undefined }
   }
+  if (event.type === 'control.changed' && event.control === 'model') {
+    return { ...current, cacheMetrics: undefined }
+  }
   if (event.type === 'title.update') {
     return current.title === event.title ? current : { ...current, title: event.title }
   }
