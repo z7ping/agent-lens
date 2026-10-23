@@ -43,6 +43,7 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   const detailLoadSentinelRef = useRef<HTMLDivElement>(null)
   const readerPaneRef = useRef<HTMLDivElement>(null)
   const readerPositionsRef = useRef(new Map<string, ReviewReaderPosition>())
+  const entryPositionedSessionRef = useRef('')
   const pendingReaderAnchorRef = useRef<{ position: ReviewReaderPosition; userRevision: number } | null>(null)
   const readerUserRevisionRef = useRef(0)
   const detailAutoLoadBaselineRef = useRef(0)
@@ -172,6 +173,8 @@ export function useReviewSession(model: AgentLensClientModel, embedded: boolean)
   useLayoutEffect(() => {
     if (!detail || review.detailLoading || detail.page.filter !== 'all' || detail.page.direction !== 'backward') return
     const id = detail.id
+    if (entryPositionedSessionRef.current === id) return
+    entryPositionedSessionRef.current = id
     const userRevision = readerUserRevisionRef.current
     followingTailRef.current = true
     model.acknowledgeReviewNewData()
