@@ -1409,9 +1409,9 @@ export class DefaultPiLiveService implements PiLiveService {
     return (await this.readyRuntime(id)).handle!.defaultModel?.() ?? null
   }
   async setDefaultModel(id: string, provider: string, modelId: string): Promise<void> {
-    const save = (await this.readyRuntime(id)).handle!.setDefaultModel
-    if (!save) throw new Error('Pi Runtime does not support global model defaults')
-    await save.call((await this.readyRuntime(id)).handle!, provider, modelId)
+    const handle = (await this.readyRuntime(id)).handle!
+    if (!handle.setDefaultModel) throw new Error('Pi Runtime does not support global model defaults')
+    await handle.setDefaultModel(provider, modelId)
   }
   async commands(id: string): Promise<PiLiveCommand[]> {
     const runtime = await this.readyRuntime(id)
