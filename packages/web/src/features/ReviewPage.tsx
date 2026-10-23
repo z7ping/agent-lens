@@ -19,7 +19,7 @@ import { TaskFileChangesDisclosure } from './TaskFileChangesDisclosure'
 import type { AgentLensClientModel } from '../client/model'
 import { useReviewSession } from './use-review-session'
 
-export function ReviewPage({ model, embedded = false }: { model: AgentLensClientModel; embedded?: boolean }) {
+export function ReviewPage({ model, embedded = false, latestRequest = 0 }: { model: AgentLensClientModel; embedded?: boolean; latestRequest?: number }) {
   const {
     t,
     sessionId,
@@ -67,6 +67,10 @@ export function ReviewPage({ model, embedded = false }: { model: AgentLensClient
     sendReviewMessage,
     forkReviewAt
   } = useReviewSession(model, embedded)
+
+  useEffect(() => {
+    if (latestRequest > 0) void jumpToLatest()
+  }, [latestRequest])
 
   const composerRef = useRef<LiveMarkdownComposerHandle>(null)
   const [composerExpanded, setComposerExpanded] = useState(false)
