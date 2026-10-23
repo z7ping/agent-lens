@@ -27,7 +27,7 @@ import type {
   SourceService,
   StorageService,
 } from '@agent-lens/core'
-import { parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
+import { parseLiveCacheMetricsDto, parseLiveMessageInputDto, type JsonValue } from '@agent-lens/protocol'
 import { httpError, readJsonBody, writeJson } from './http-utils'
 import { readHostProjectDirectory } from './project-directory-host'
 import { validateHostWorkingDirectory } from './host-working-directory'
@@ -445,6 +445,7 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
     ? row.workspacePath.trim().slice(0, 4096)
     : undefined
   const contextUsage = normalizeLiveContextUsage(row.contextUsage)
+  const cacheMetrics = parseLiveCacheMetricsDto(row.cacheMetrics)
   return {
     runtimeSessionId,
     ...(title ? { title } : {}),
@@ -452,6 +453,7 @@ function normalizePublicRuntimeState(value: unknown): LiveRuntimeState {
     ...(nativeSessionId ? { nativeSessionId } : {}),
     ...(workspacePath ? { workspacePath } : {}),
     ...(contextUsage ? { contextUsage } : {}),
+    ...(cacheMetrics ? { cacheMetrics } : {}),
     isStreaming: row.isStreaming,
     pendingMessageCount: row.pendingMessageCount,
   }
