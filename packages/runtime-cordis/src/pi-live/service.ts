@@ -1746,6 +1746,7 @@ export class DefaultPiLiveService implements PiLiveService {
     runtime.handle = undefined
     runtime.suspended = false
     runtime.cachedState = undefined
+    runtime.cacheMetrics = undefined
     runtime.initializationStartedAt = now
     runtime.stageStartedAt = now
     runtime.initializationElapsedMs = 0
