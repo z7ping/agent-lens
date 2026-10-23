@@ -54,6 +54,8 @@ export interface PiSdkSession {
   readonly sessionFile: AgentSession['sessionFile']
   readonly sessionName: AgentSession['sessionName']
   readonly model: PiSdkModel | undefined
+  /** Pi's native context window occupancy, independent of cumulative token totals. */
+  getContextUsage?(): { tokens: number | null; contextWindow: number; percent: number | null } | undefined
   readonly thinkingLevel: AgentSession['thinkingLevel']
   readonly isStreaming: AgentSession['isStreaming']
   readonly isCompacting: AgentSession['isCompacting']

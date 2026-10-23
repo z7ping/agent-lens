@@ -139,6 +139,7 @@ export interface PiLiveRuntimeState extends LiveRuntimeState {
   projectName?: string | undefined
   gitBranch?: string | undefined
   model?: unknown
+  contextUsage?: { tokens: number | null; contextWindow: number; percent: number | null } | undefined
   thinkingLevel?: string | undefined
   isStreaming: boolean
   isCompacting: boolean

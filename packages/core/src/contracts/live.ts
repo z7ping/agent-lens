@@ -136,6 +136,14 @@ export type LiveRuntimeStatus =
   | 'terminating'
   | 'terminated'
 
+/** Native current context occupancy, not cumulative session token usage.
+ * A null token count is unknown (e.g. immediately after compaction). */
+export interface LiveContextUsage {
+  tokens: number | null
+  contextWindow: number
+  percent: number | null
+}
+
 export interface LiveRuntimeState {
   runtimeSessionId: string
   /**
@@ -150,6 +158,7 @@ export interface LiveRuntimeState {
   workspacePath?: string
   isStreaming: boolean
   pendingMessageCount: number
+  contextUsage?: LiveContextUsage | undefined
 }
 
 /** Every Live snapshot request is bounded independently of machine speed/memory. */

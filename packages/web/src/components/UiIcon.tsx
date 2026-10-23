@@ -1,6 +1,8 @@
 import type { SVGProps } from 'react'
 import {
   type LucideIcon,
+  Activity,
+  Database,
   ArchiveRestore,
   Brain,
   Bell,
@@ -67,7 +69,9 @@ import {
 } from 'lucide-react'
 
 export type UiIconName =
+  | 'activity'
   | 'agent'
+  | 'database'
   | 'backup'
   | 'bell'
   | 'thinking'
@@ -136,6 +140,8 @@ export type UiIconName =
   | 'upload'
 
 const icons = {
+  activity: Activity,
+  database: Database,
   agent: Bot,
   backup: ArchiveRestore,
   bell: Bell,

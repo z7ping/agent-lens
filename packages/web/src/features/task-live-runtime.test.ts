@@ -121,3 +121,11 @@ test('Live 只有运行中连续 60 秒没有实际进展才提示检查，不�
   assert.equal(shouldWarnLiveNoProgress(started + LIVE_NO_PROGRESS_WARNING_MS, Number.NaN, true), false)
   assert.equal(shouldWarnLiveNoProgress(started + 1_000, started + 500, true), false)
 })
+
+test('原生上下文统计会更新并在恢复清空后撤销旧值，零值不同于未知', () => {
+  const known = state({ contextUsage: { tokens: 0, contextWindow: 1_000_000, percent: 0 } })
+  assert.equal(sameLiveRuntimeState(known, { ...known }), true)
+  assert.equal(sameLiveRuntimeState(known, state({ contextUsage: { tokens: null, contextWindow: 1_000_000, percent: null } })), false)
+  assert.equal(sameLiveRuntimeState(known, state()), false)
+  assert.equal(sameLiveRuntimeState(known, state({ contextUsage: { tokens: 10_000, contextWindow: 1_000_000, percent: 1 } })), false)
+})
