@@ -134,7 +134,7 @@ test('Live Enter and send share slash routing, acknowledgement, and reader inten
   assert.match(liveTask, /followControllerRef\.current\.restore\(\)/)
   assert.match(liveTask, /onSendAccepted, onSendDelivered \}\)/)
   assert.match(liveTask, /onWheel=\{event => markReaderUserIntent/)
-  assert.match(taskComposer, /live\\.sendFeedback/)
+  assert.match(taskComposer, /live\.sendFeedback/)
 })
 
 test('Slash and @ suggestions share a single keyboard interaction with composition and modifier guards', () => {
