@@ -625,3 +625,36 @@ test('当前会话尾部增量只从最后 ordinal 开始并合并新增轮次',
   assert.equal(model.getSnapshot().review.detailHasNewData, false)
   model.stop()
 })
+
+test('facets 在途请求去重，缓存命中不重复加载，显式刷新获取新目录', async () => {
+  let release!: (value: Awaited<ReturnType<AgentLensApi['facets']>>) => void
+  const pending = new Promise<Awaited<ReturnType<AgentLensApi['facets']>>>(resolve => { release = resolve })
+  let calls = 0
+  class FacetApi extends AgentLensApi {
+    override facets(): ReturnType<AgentLensApi['facets']> {
+      calls += 1
+      return calls === 1 ? pending : Promise.resolve({
+        agents: [],
+        projects: [{ id: 'new-project', name: 'New Project' }],
+        dateRange: {},
+        meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
+      })
+    }
+  }
+  const model = new AgentLensClientModel(new FacetApi())
+  const first = model.ensureFacets()
+  const second = model.refreshFacets()
+  assert.equal(calls, 1)
+  release({
+    agents: [],
+    projects: [{ id: 'old-project' }],
+    dateRange: {},
+    meta: { protocolVersion: AGENT_LENS_PROTOCOL_VERSION, generatedAt: new Date().toISOString() },
+  })
+  await Promise.all([first, second])
+  await model.ensureFacets()
+  assert.equal(calls, 1)
+  await model.refreshFacets()
+  assert.equal(calls, 2)
+  assert.deepEqual(model.getSnapshot().facets?.projects.map(item => item.id), ['new-project'])
+})
