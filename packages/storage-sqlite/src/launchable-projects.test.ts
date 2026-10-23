@@ -473,3 +473,130 @@ test('launchable project index can be rebuilt idempotently from canonical rows',
     storage.close()
   }
 })
+
+test('launchable project activity follows the latest observed session summary instead of the stale logical end', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'recent-activity',
+      projectName: 'Recent Activity',
+      workspaceId: 'recent-workspace',
+      workspacePath: '/workspace/recent-activity',
+      sessionId: 'recent-session',
+      endedAt: isoMinute(1),
+    })
+    seedSession(storage, {
+      projectId: 'old-folder',
+      projectName: 'Old Folder',
+      workspaceId: 'old-workspace',
+      workspacePath: '/workspace/old-folder',
+      sessionId: 'old-session',
+      endedAt: isoMinute(5),
+    })
+    assert.equal((await storage.launchableProjects.query({ limit: 5 })).items[0]?.projectId, 'old-folder')
+
+    // A continuing agent session emits new observations without changing
+    // the logical_sessions.ended_at date established when it first opened.
+    storage.db.prepare(`
+      UPDATE session_summary_projection
+      SET ended_at = ?
+      WHERE logical_session_id = 'recent-session'
+    `).run(isoMinute(20))
+    const result = await storage.launchableProjects.query({ limit: 5 })
+    assert.deepEqual(result.items.map(item => item.projectId), ['recent-activity', 'old-folder'])
+    assert.equal(result.items[0]?.lastSeenAt, isoMinute(20))
+    assert.equal(result.items[0]?.workspaces[0]?.lastSeenAt, isoMinute(20))
+  } finally {
+    storage.close()
+  }
+})
+
+test('fallback workspace identity is read after SQLite triggers and remains launchable', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    await storage.repositories.sessions.putWorkspace({
+      id: 'workspace-fallback',
+      hostId: 'host-local',
+      path: '/workspace/fallback',
+    })
+    await storage.repositories.sessions.putLogicalSession({
+      id: 'session-fallback',
+      installationId: 'install-pi',
+      workspaceId: 'workspace-fallback',
+      startedAt: isoMinute(1),
+      endedAt: isoMinute(1),
+    })
+
+    const row = storage.db.prepare(
+      "SELECT project_id FROM logical_sessions WHERE id = 'session-fallback'",
+    ).get() as { project_id: string }
+    const first = await storage.launchableProjects.query({ limit: 5 })
+    assert.equal(first.items[0]?.projectId, row.project_id)
+    assert.equal(first.items[0]?.workspaces[0]?.workspacePath, '/workspace/fallback')
+
+    await storage.repositories.sessions.putProject({
+      id: 'project-explicit',
+      name: 'Explicit Project',
+      repositoryIdentity: 'z7ping/explicit',
+      createdAt: BASE_TIME,
+      lastSeenAt: isoMinute(1),
+    })
+    await storage.repositories.sessions.putWorkspace({
+      id: 'workspace-fallback',
+      hostId: 'host-local',
+      projectId: 'project-explicit',
+      path: '/workspace/fallback',
+    })
+
+    const upgraded = await storage.launchableProjects.query({ limit: 5 })
+    assert.deepEqual(upgraded.items.map(item => item.projectId), ['project-explicit'])
+    assert.equal(upgraded.items[0]?.projectName, 'Explicit Project')
+  } finally {
+    storage.close()
+  }
+})
+
+test('migration 33 reconciles pre-existing project activity and retains valid workspace cache', async () => {
+  const storage = new SqliteStorageService({ path: ':memory:' })
+  await storage.migrate()
+  try {
+    seedBase(storage)
+    seedSession(storage, {
+      projectId: 'migration-recent',
+      workspaceId: 'migration-workspace',
+      workspacePath: '/workspace/recent',
+      sessionId: 'migration-session',
+      endedAt: isoMinute(1),
+    })
+    storage.db.prepare(
+      "UPDATE session_summary_projection SET ended_at = ? WHERE logical_session_id = 'migration-session'",
+    ).run(isoMinute(30))
+    await storage.launchableProjects.recordWorkspaceValidation?.({
+      workspaceId: 'migration-workspace',
+      workspacePath: '/workspace/recent',
+      status: 'valid',
+      validatedAt: isoMinute(2),
+    })
+
+    // Simulate a catalog produced by the old logical-session-only index.
+    storage.db.prepare(
+      "UPDATE launchable_workspace_index SET last_seen_at = ? WHERE workspace_id = 'migration-workspace'",
+    ).run(isoMinute(1))
+    storage.db.prepare(
+      "UPDATE launchable_project_index SET last_seen_at = ? WHERE project_key = 'migration-recent'",
+    ).run(isoMinute(1))
+    storage.db.prepare('DELETE FROM schema_migrations WHERE version = 33').run()
+    await storage.migrate()
+
+    const projects = await storage.launchableProjects.query({ limit: 5 })
+    assert.equal(projects.items[0]?.lastSeenAt, isoMinute(30))
+    assert.equal(projects.items[0]?.workspaces[0]?.lastSeenAt, isoMinute(30))
+    assert.equal(projects.items[0]?.workspaces[0]?.validationStatus, 'valid')
+  } finally {
+    storage.close()
+  }
+})

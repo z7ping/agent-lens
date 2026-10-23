@@ -25,12 +25,14 @@ function refreshWorkspacePair(
     SELECT
       workspace.id AS workspace_id,
       workspace.path AS workspace_path,
-      MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '${EPOCH}')) AS last_seen_at
+      MAX(MAX(COALESCE(summary.ended_at, '${EPOCH}'), COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '${EPOCH}'))) AS last_seen_at
     FROM logical_sessions AS logical
     JOIN workspaces AS workspace
       ON workspace.id = logical.workspace_id
     LEFT JOIN projects AS project
       ON project.id = logical.project_id
+    LEFT JOIN session_summary_projection AS summary
+      ON summary.logical_session_id = logical.id
     WHERE logical.workspace_id = ?
       AND ${condition}
       AND TRIM(workspace.path) <> ''
@@ -245,7 +247,7 @@ export function rebuildLaunchableProjectIndex(db: Database.Database): void {
       COALESCE(logical.project_id, 'workspace:' || workspace.id) AS project_key,
       workspace.id AS workspace_id,
       workspace.path AS workspace_path,
-      MAX(COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z')) AS last_seen_at,
+      MAX(MAX(COALESCE(summary.ended_at, '1970-01-01T00:00:00.000Z'), COALESCE(logical.ended_at, logical.started_at, project.last_seen_at, '1970-01-01T00:00:00.000Z'))) AS last_seen_at,
       'unknown' AS validation_status,
       NULL AS validated_at,
       NULL AS validated_path
@@ -254,6 +256,8 @@ export function rebuildLaunchableProjectIndex(db: Database.Database): void {
       ON workspace.id = logical.workspace_id
     LEFT JOIN projects AS project
       ON project.id = logical.project_id
+    LEFT JOIN session_summary_projection AS summary
+      ON summary.logical_session_id = logical.id
     WHERE TRIM(workspace.path) <> ''
     GROUP BY
       COALESCE(logical.project_id, 'workspace:' || workspace.id),
