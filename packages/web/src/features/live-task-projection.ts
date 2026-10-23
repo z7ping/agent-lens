@@ -417,6 +417,51 @@ export function liveTaskResponseActivity(
   return 'processing'
 }
 
+/**
+ * Hand off already decoded outgoing previews to their persisted counterparts.
+ * Keep Pi/Codex/Hermes session facts authoritative: only match an actual
+ * native image, never manufacture attachments missing from the native row.
+ */
+export function preserveOptimisticImagePreviews(
+  previous: readonly LiveTaskProjectionItem[],
+  incoming: readonly LiveTaskProjectionItem[],
+): LiveTaskProjectionItem[] {
+  const pending = previous.filter(item =>
+    item.kind === 'message' && item.role === 'user' && item.id.startsWith('user:')
+    && item.attachments?.some(attachment => attachment.type === 'image' && attachment.dataUrl),
+  )
+  if (!pending.length) return incoming as LiveTaskProjectionItem[]
+
+  const used = new Set<number>()
+  const result = [...incoming]
+  // Match from the tail: identical prompts in older history cannot steal a
+  // preview from the message that was just submitted.
+  for (let index = result.length - 1; index >= 0; index -= 1) {
+    const item = result[index]
+    if (!item || item.kind !== 'message' || item.role !== 'user' || item.id.startsWith('user:')) continue
+    const nativeImages = item.attachments?.filter(attachment => attachment.type === 'image') ?? []
+    if (!nativeImages.length) continue
+
+    for (let oldIndex = pending.length - 1; oldIndex >= 0; oldIndex -= 1) {
+      const old = pending[oldIndex]
+      if (used.has(oldIndex) || old?.kind !== 'message' || old.text !== item.text) continue
+      const outgoingImages = old.attachments?.filter(attachment => attachment.type === 'image') ?? []
+      if (outgoingImages.length !== nativeImages.length || outgoingImages.some(image => !image.dataUrl)) continue
+      used.add(oldIndex)
+      let imageIndex = 0
+      result[index] = {
+        ...item,
+        attachments: item.attachments!.map(attachment =>
+          attachment.type === 'image'
+            ? { ...attachment, dataUrl: outgoingImages[imageIndex++]!.dataUrl }
+            : attachment),
+      }
+      break
+    }
+  }
+  return result
+}
+
 export function mergeLiveActiveProjectionItems(
   previous: readonly LiveTaskProjectionItem[],
   incoming: readonly LiveTaskProjectionItem[],
@@ -466,7 +511,7 @@ export function mergeLiveActiveProjectionItems(
       )
       if (optimisticIndex >= 0) {
         indexes.delete(merged[optimisticIndex]!.id)
-        merged[optimisticIndex] = item
+        merged[optimisticIndex] = preserveOptimisticImagePreviews([merged[optimisticIndex]!], [item])[0] ?? item
         indexes.set(item.id, optimisticIndex)
         continue
       }
@@ -517,10 +562,15 @@ export function reconcileLiveSnapshotProjection(
   incoming: { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] },
   streaming: boolean,
 ): { stable: LiveTaskProjectionItem[]; active: LiveTaskProjectionItem[] } {
-  const stable = reuseLiveSnapshotRows(previous.stable, incoming.stable)
+  const carried = preserveOptimisticImagePreviews(
+    [...previous.stable, ...previous.active],
+    [...incoming.stable, ...incoming.active],
+  )
+  const stable = reuseLiveSnapshotRows(previous.stable, carried.slice(0, incoming.stable.length))
+  const nextActive = carried.slice(incoming.stable.length)
   const incomingActive = streaming
-    ? mergeLiveActiveProjectionItems(previous.active, incoming.active)
-    : incoming.active
+    ? mergeLiveActiveProjectionItems(previous.active, nextActive)
+    : nextActive
   const active = reuseLiveSnapshotRows(previous.active, incomingActive)
   return stable === previous.stable && active === previous.active ? previous : { stable, active }
 }
