@@ -485,6 +485,8 @@ export interface LiveCommand extends LiveControlDisplayInfo {
   value: string
   /** Optional runtime-owned grouping key such as extension / prompt / skill. */
   group?: string | undefined
+  /** Explicit Product action declared by the Adapter; never submit as model input. */
+  action?: 'new-task' | 'resume-task' | 'open-model' | 'compact-context' | undefined
 }
 
 export interface LiveWorkspaceFileReference {
@@ -687,6 +689,8 @@ export interface LiveAdapter {
   modelControl?(runtimeSessionId: string): Promise<LiveModelControl | null>
   /** Runtime-owned setter; value must be one returned by modelControl(). */
   setModelControl?(runtimeSessionId: string, value: string): Promise<LiveRuntimeState>
+  /** Optional Pi/native preference persistence. Never inferred from model switching. */
+  setDefaultModelControl?(runtimeSessionId: string, value: string): Promise<LiveModelControl | null>
   /** Present only when the adapter declares thinking-control. */
   thinkingControl?(runtimeSessionId: string): Promise<LiveThinkingControl | null>
   /** Runtime-owned setter; value must be one returned by thinkingControl(). */
